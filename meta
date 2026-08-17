@@ -1,0 +1,3 @@
+title: coverage --baseline freezes a garbage floor and can never raise a row back
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
