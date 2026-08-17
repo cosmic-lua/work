@@ -1,0 +1,4 @@
+title: untriaged findings occupy plan's WIP slots: capture should never consume a refinement slot
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
+pr: 1248
