@@ -1,0 +1,6 @@
+title: eval suite v1: score, checks, verdict
+parent: 3HyEEgwbqZ6MKZnjrggi2XJjoo9
+target: cosmic-lua/cosmic
+pr: 1209
+verdict: accept
+verdict_head: f9444e1
