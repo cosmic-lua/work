@@ -1,0 +1,6 @@
+title: multi-token --- reads: declaration is a silent no-op; env_vars_test never re-runs
+parent: 3HyRdGk0liOSXEXjHRReYYEUxdi
+target: cosmic-lua/cosmic
+pr: 1241
+verdict: accept
+verdict_head: e23cc4a
