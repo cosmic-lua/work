@@ -4,3 +4,4 @@ target: cosmic-lua/cosmic
 pr: 1241
 verdict: accept
 verdict_head: e23cc4a
+resolution: completed
