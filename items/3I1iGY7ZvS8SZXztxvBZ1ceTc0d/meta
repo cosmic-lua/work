@@ -1,0 +1,3 @@
+title: rand: a seedable, explicitly-non-crypto generator, separate from the CSPRNG surface
+parent: 3HyRck1p5rpapP45GRGJ9anmT6e
+target: cosmic-lua/cosmic
