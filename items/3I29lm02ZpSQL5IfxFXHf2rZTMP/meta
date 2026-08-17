@@ -1,0 +1,3 @@
+title: move N check must refuse a head whose CI has already concluded failure
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
