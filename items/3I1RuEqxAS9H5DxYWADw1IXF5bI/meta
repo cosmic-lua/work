@@ -1,3 +1,4 @@
 title: a test that reads the tree without declaring it: perf_test replays a cached PASS over 16 changed bench modules
 parent: 3HyRdGk0liOSXEXjHRReYYEUxdi
 target: cosmic-lua/cosmic
+claim: claude-scheduled-wua6n3
