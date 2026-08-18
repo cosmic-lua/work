@@ -2,3 +2,4 @@ title: sandbox: one Landlock ABI probe — unveil.available() and quicksand.prob
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: claude-scheduled-wua6n3
+pr: 1278
