@@ -1,1 +1,2 @@
 title: move verb: a label change can silently revert under concurrent sessions, no audit trail
+resolution: not-planned
