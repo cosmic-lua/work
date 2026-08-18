@@ -1,1 +1,2 @@
 title: nested implementer worktrees fail --make ci: COSMIC_MAKE_ROOT leaks into spawned test children
+resolution: completed
