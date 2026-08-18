@@ -3,3 +3,5 @@ parent: 3HyArM3A3zHuRxn3VYCvKmUZ7KW
 target: cosmic-lua/cosmic
 claim: orchestrator-1787047328-wave1
 pr: 1267
+verdict: accept
+verdict_head: 3dd6b259cec28a4cd024056fe5576a845b402f09
