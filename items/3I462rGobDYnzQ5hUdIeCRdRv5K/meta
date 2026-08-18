@@ -2,3 +2,4 @@ title: COSMIC_MAKE_ROOT leaks into check_test.tl/main_handlers_test.tl fixture s
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: claude-scheduled-wua6n3
+pr: 1280
