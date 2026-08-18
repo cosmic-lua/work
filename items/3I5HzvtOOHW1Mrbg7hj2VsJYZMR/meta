@@ -1,0 +1,3 @@
+title: landlock.tl: intersect each rule's access with handled, not just the ABI mask
+parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
+target: cosmic-lua/cosmic
