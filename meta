@@ -1,1 +1,2 @@
 title: board items: 28 imported specs carry HTML-entity-corrupted text, breaking check's literal fact execution
+resolution: completed
