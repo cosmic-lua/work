@@ -2,3 +2,4 @@ title: landlock.tl: intersect each rule's access with handled, not just the ABI 
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: auto-work-2026-08-18
+pr: 1268
