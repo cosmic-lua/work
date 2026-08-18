@@ -2,3 +2,4 @@ title: rand: a seedable, explicitly-non-crypto generator, separate from the CSPR
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
 claim: claude-scheduled-wua6n3
+pr: 1277
