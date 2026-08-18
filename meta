@@ -1,1 +1,3 @@
 title: land has no already-merged branch: a PR merged by another route cannot be landed
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
