@@ -2,3 +2,4 @@ title: sandbox: race-free fs.optional — ENOENT tolerated at rule open, the exi
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: claude-board-zp2vyq
+pr: 1283
