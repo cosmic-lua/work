@@ -3,3 +3,5 @@ parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
 claim: claude-board-zp2vyq
 pr: 1285
+verdict: accept
+verdict_head: ad21aa294918a8b2af7f86af4dff89f095bbed5c
