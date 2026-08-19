@@ -2,3 +2,4 @@ title: fuzz child 2: a draw-recording source — the driver drops global math.ra
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
 target: cosmic-lua/cosmic
 claim: claude-scheduled-3ewjg2
+pr: 1290
