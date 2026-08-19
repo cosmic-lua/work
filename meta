@@ -3,3 +3,5 @@ parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: claude-scheduled-3ewjg2
 pr: 1286
+verdict: request changes
+verdict_head: 34ddf7aaeaca294e3797488031fb811a08cfa101
