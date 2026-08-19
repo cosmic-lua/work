@@ -2,3 +2,4 @@ title: land has no already-merged branch: a PR merged by another route cannot be
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: claude-board-zp2vyq
+pr: 1284
