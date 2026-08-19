@@ -1,1 +1,2 @@
 title: gitboard land 403s on protected-branch merges instead of detecting an already-merged PR
+resolution: not-planned
