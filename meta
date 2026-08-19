@@ -1,0 +1,1 @@
+title: a --make writer lock: concurrent builds in one tree serialize via o/.make.lock instead of corrupting o/
