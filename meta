@@ -4,4 +4,4 @@ target: cosmic-lua/cosmic
 claim: dji1my
 pr: 1295
 verdict: request changes
-verdict_head: bfc4f4962f1bd5def071804f7646020c33ea4f8e
+verdict_head: 07ac88c42516b1ebec838ef81568bce604de484a
