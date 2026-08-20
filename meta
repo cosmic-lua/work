@@ -3,3 +3,5 @@ parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
 target: cosmic-lua/cosmic
 claim: zealous-hypatia
 pr: 1297
+verdict: request changes
+verdict_head: 4ec56c6a9788d298dc053a2cc30f16bb1ec2d724
