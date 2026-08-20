@@ -1,0 +1,1 @@
+title: fuzz: shrink_structure doubles granularity past the sequence length, skipping the finest deletion pass
