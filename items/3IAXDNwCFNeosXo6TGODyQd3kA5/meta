@@ -1,0 +1,3 @@
+title: fuzz child 5: crash isolation via cosmic.child, so a C-layer fault is attributed to its input
+parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
+target: cosmic-lua/cosmic
