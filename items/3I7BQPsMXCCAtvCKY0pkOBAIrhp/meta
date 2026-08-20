@@ -5,3 +5,4 @@ claim: claude-scheduled-5pb82f
 pr: 1293
 verdict: accept
 verdict_head: 35e27a74713c7daec2576516462000f8f84e125f
+resolution: completed
