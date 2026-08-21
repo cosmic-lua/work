@@ -1,1 +1,3 @@
 title: fuzz: shrink_structure doubles granularity past the sequence length, skipping the finest deletion pass
+parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
+target: cosmic-lua/cosmic
