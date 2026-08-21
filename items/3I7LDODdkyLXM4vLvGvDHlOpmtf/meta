@@ -1,4 +1,4 @@
 title: cosmopolitan bindings wave 1: Landlock ABI 4 — handled_access_net, NET_PORT rules, size-gated create_ruleset
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: cosmic-lua/cosmic
+target: whilp/cosmopolitan
 claim: claude-17l3yr
