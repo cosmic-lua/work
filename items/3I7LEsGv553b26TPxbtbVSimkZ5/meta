@@ -1,4 +1,4 @@
 title: cosmopolitan bindings wave 2: Landlock ABI 5-9 — ioctl-dev, scoped, audit/TSYNC flags, uapi-verbatim
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: cosmic-lua/cosmic
+target: whilp/cosmopolitan
 claim: claude-3gubgy
