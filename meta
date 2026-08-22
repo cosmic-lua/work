@@ -5,3 +5,4 @@ claim: sched-l2q1e4
 pr: 1307
 verdict: accept
 verdict_head: 72b7261c708e7802a9625e807d4c07b081f6bb93
+resolution: completed
