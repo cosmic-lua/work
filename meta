@@ -1,1 +1,3 @@
 title: fuzz driver: use cosmo.cov's budget so the hang protection holds under --make coverage
+parent: 3I9mIYjYmuf4Tg314guEhvh5iA3
+target: cosmic-lua/cosmic
