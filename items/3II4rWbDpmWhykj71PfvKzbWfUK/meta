@@ -1,0 +1,1 @@
+title: cmd_new declares spec as string but every internal caller passes nil, and two graph verbs carry no doc comment
