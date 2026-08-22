@@ -2,3 +2,4 @@ title: fuzz: shrink reruns check with the budget disarmed — a looping property
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
 target: cosmic-lua/cosmic
 claim: sched-8vk2qm
+pr: 1310
