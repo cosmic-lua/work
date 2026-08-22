@@ -1,0 +1,1 @@
+title: cosmopolitan: an introduction bar for new C binding code (EINTR, no malloc across raises, bounds, error-path tests, rel-mode measurement)
