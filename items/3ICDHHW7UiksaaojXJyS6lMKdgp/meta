@@ -5,3 +5,4 @@ claim: sched-bmbm6d
 pr: 1312
 verdict: accept
 verdict_head: e47e04128d51556bb283c0522a8298cc7bf11862
+resolution: completed
