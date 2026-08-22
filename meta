@@ -2,3 +2,4 @@ title: gitboard: an accept whose PR is already merged completes the item instead
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: workflow-3q9w2x
+pr: 1322
