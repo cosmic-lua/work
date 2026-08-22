@@ -3,3 +3,5 @@ parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: workflow-3q9w2x
 pr: 1317
+verdict: accept
+verdict_head: 5489e6a4606aa82bc9a467ce731744639b10eca6
