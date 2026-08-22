@@ -3,5 +3,5 @@ parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
 target: cosmic-lua/cosmic
 claim: @sched-s542rw
 pr: 1308
-verdict: request changes
-verdict_head: 4ec56c6a9788d298dc053a2cc30f16bb1ec2d724
+verdict: reject
+verdict_head: 28a3fe3ee75c2bc40c4c94f8ccd2ce710fc2dc28
