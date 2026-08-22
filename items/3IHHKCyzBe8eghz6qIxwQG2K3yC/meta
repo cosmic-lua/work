@@ -1,0 +1,1 @@
+title: release artifacts after the gate change: perf.json is a record not an input, and one measure run feeds nothing
