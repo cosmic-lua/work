@@ -1,1 +1,3 @@
 title: PR bodies are HTML-sanitized in transit: tag-shaped text is deleted and quotes are entity-escaped, in code blocks too
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
