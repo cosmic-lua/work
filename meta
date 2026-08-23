@@ -2,4 +2,5 @@ title: quicksand proxy rules: parse_rule and match declare a non-nilable port an
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: claude-sched-2026-08-23T2036
+pr: 1333
 builders: claude-sched-2026-08-23T2036
