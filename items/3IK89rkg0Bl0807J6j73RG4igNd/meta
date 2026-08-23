@@ -1,1 +1,3 @@
 title: literal.format at json speed: EncodeLua already in the fork, 1.2x json, round-trips literal.parse — needs a strict guard
+parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
+target: cosmic-lua/cosmic
