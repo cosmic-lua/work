@@ -2,4 +2,5 @@ title: literal.format at json speed: EncodeLua already in the fork, 1.2x json, r
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: claude-sched-2026-08-23T1838
+pr: 1346
 builders: claude-sched-2026-08-23T1838
