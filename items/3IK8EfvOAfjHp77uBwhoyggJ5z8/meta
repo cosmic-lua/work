@@ -1,1 +1,3 @@
 title: fs.visit: d_type descent + lazy Entry.stat — the pass #469 deferred, -62% probed for stat-free visitors
+parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
+target: cosmic-lua/cosmic
