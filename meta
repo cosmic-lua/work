@@ -5,4 +5,5 @@ claim: sched-pcoatp
 pr: 1328
 verdict: accept
 verdict_head: f9661f6a213b1f274e2f434354c54a9c3f8ff115
+resolution: completed
 builders: sched-pcoatp
