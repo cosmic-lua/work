@@ -2,4 +2,5 @@ title: cosmopolitan: header edits never rebuild — o//depend is never generated
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: whilp/cosmopolitan
 claim: claude-sched-2026-08-23T1638
+pr: 270
 builders: claude-sched-2026-08-23T1638
