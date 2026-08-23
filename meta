@@ -1,0 +1,1 @@
+title: zip extract: per-file Lua dispatch and syscalls, not zlib churn — C-side bulk extract, guard invariant decides
