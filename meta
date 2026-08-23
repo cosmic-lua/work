@@ -2,4 +2,5 @@ title: cast wave 4: cosmic.string.to_integer, the two testrun.tl default-fallbac
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: sched-pcoatp
+pr: 1328
 builders: sched-pcoatp
