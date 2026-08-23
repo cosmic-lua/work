@@ -5,4 +5,5 @@ claim: claude-sched-2026-08-23
 pr: 1331
 verdict: accept
 verdict_head: 01f906b61e11a53b9497a7633b1d2b054bed8ae5
+resolution: completed
 builders: claude-sched-2026-08-23
