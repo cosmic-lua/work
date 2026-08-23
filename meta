@@ -1,0 +1,1 @@
+title: literal.format writes one table deeper than literal.parse reads: an all-scalar leaf skips the depth check
