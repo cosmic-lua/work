@@ -3,4 +3,5 @@ parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: claude-sched-2026-08-23T1438
 verdict: accept
+resolution: completed
 builders: claude-sched-2026-08-23T1438
