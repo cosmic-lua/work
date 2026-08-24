@@ -2,4 +2,5 @@ title: docs: guide + example for querying executables with sqlite
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: 881222fd-9a27-5a97-939d-2ff71f1bb67b
+pr: 1360
 builders: 881222fd-9a27-5a97-939d-2ff71f1bb67b
