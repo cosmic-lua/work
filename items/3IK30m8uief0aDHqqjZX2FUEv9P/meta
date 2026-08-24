@@ -5,4 +5,5 @@ claim: magical-bell
 pr: 1356
 verdict: accept
 verdict_head: 4ee7eef433e3590e2f216d6412d9cad895eb2e33
+resolution: completed
 builders: magical-bell
