@@ -1,0 +1,3 @@
+title: fs.find pays a stat(2) per entry just to ask is_dir — drain find_iter's d_type engine instead
+parent: 3IK8EfvOAfjHp77uBwhoyggJ5z8
+target: cosmic-lua/cosmic
