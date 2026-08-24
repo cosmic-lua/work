@@ -1,3 +1,5 @@
 title: sqlite docs model the db:close() the discarded-fallible-return check rejects
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
+claim: magical-bell
+builders: magical-bell
