@@ -3,4 +3,5 @@ parent: 3IK8GFHjEDon4Ni4GNkwzCtGI0o
 target: whilp/cosmopolitan
 claim: claude-sched-2026-08-24T0038
 verdict: accept
+resolution: completed
 builders: claude-sched-2026-08-24T0038
