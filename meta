@@ -3,4 +3,6 @@ parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: magical-bell
 pr: 1351
+verdict: accept
+verdict_head: 1ae2d890010f4fbf4549592ff73fbae96daf0513
 builders: magical-bell
