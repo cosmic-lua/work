@@ -2,4 +2,5 @@ title: boot: 15 modules opened twice by the stock searcher probe — a /zip sear
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: magical-bell
+pr: 1352
 builders: magical-bell
