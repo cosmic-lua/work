@@ -3,4 +3,6 @@ parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: 881222fd-9a27-5a97-939d-2ff71f1bb67b
 pr: 1360
+verdict: request changes
+verdict_head: 6b9f64a0026772d9c4eddaffbc3f70edf3367e8a
 builders: 881222fd-9a27-5a97-939d-2ff71f1bb67b
