@@ -1,3 +1,5 @@
 title: zipos: recycle the fixed-size stored-member handle through a 4-slot lock-free array
 parent: 3IK8GFHjEDon4Ni4GNkwzCtGI0o
 target: whilp/cosmopolitan
+claim: claude-sched-2026-08-24T0238
+builders: claude-sched-2026-08-24T0238
