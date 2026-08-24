@@ -2,4 +2,5 @@ title: literal.parse reads a \\ddd string escape as octal: format writes byte 11
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
 claim: a1e5d766-e80d-56f2-8904-277f34a32ce9
+pr: 1359
 builders: a1e5d766-e80d-56f2-8904-277f34a32ce9
