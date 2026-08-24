@@ -3,6 +3,6 @@ parent: 3IK8GFHjEDon4Ni4GNkwzCtGI0o
 target: whilp/cosmopolitan
 claim: qmnmv1
 pr: 272
-verdict: request changes
-verdict_head: d74bd7db693511c6260278a289eb7516a0a36427
+verdict: accept
+verdict_head: 5b062a7acd3fa89b461693cf5e4b791a4b56f3d4
 builders: claude-sched-2026-08-24T0238 qmnmv1
