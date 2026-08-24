@@ -2,4 +2,5 @@ title: adopt the C literal parser behind cosmic.literal.parse, differentially fu
 parent: 3IK8E4XFNSEMc6fXtc6qbUxiLVO
 target: cosmic-lua/cosmic
 claim: 426b3897-c70a-5b25-8311-2ccd7b0f0922
+pr: 1362
 builders: 426b3897-c70a-5b25-8311-2ccd7b0f0922
