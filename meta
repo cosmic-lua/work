@@ -2,4 +2,5 @@ title: first ci run predictably fails on fmt/lint; the build trailer hint arrive
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: magical-bell
+pr: 1351
 builders: magical-bell
