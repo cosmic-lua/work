@@ -1,3 +1,5 @@
 title: compact layout writes byte 27 as the fork escape \e, which literal.parse refuses: format_file writes what parse_file cannot read
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
+claim: 4295140e-823b-584b-8ba8-cfba90153dc6
+builders: 4295140e-823b-584b-8ba8-cfba90153dc6
