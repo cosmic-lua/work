@@ -2,4 +2,5 @@ title: fuzzy.find_similar: reuse DP rows + early abort — -39% probed, identica
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: magical-bell
+pr: 1350
 builders: magical-bell
