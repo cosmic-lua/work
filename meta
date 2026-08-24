@@ -1,0 +1,1 @@
+title: literal: a long bracket keeps CR bytes Lua normalizes, in both the Teal and the C reader
