@@ -2,4 +2,5 @@ title: re.gsub/split: fuse the find loop — all_matches builds Spans nobody rea
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: claude-sched-2026-08-24T0238
+pr: 1349
 builders: claude-sched-2026-08-24T0238
