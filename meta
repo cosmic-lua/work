@@ -1,0 +1,1 @@
+title: literal refuses a \z that crosses a newline, which load accepts
