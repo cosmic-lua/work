@@ -1,0 +1,1 @@
+title: two of parse_table's refusals are unreachable: the $EOF$ sentinel gets there first
