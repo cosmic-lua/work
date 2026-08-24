@@ -1,3 +1,4 @@
 title: zipos open/close is 8.7x a kernel open: fresh mmap handle, fcntl, six sigprocmask per pair — recycle handles
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
+resolution: completed
