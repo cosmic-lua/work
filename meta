@@ -1,8 +1,8 @@
 title: cosmo.DecodeLua: the C literal parser in tool/net, beside ljson.c
 parent: 3IK8E4XFNSEMc6fXtc6qbUxiLVO
 target: whilp/cosmopolitan
-claim: 931e78b5-bbf4-5886-9bf0-76f62cce36c7
+claim: 881222fd-9a27-5a97-939d-2ff71f1bb67b
 pr: 274
 verdict: request changes
 verdict_head: 2435c594cea332fd282ef5ae39329859b74baef4
-builders: 931e78b5-bbf4-5886-9bf0-76f62cce36c7
+builders: 931e78b5-bbf4-5886-9bf0-76f62cce36c7 881222fd-9a27-5a97-939d-2ff71f1bb67b
