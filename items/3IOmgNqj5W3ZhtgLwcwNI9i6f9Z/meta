@@ -5,4 +5,5 @@ claim: fe3b1d86-cb64-535a-95aa-8be88712c47d
 pr: 1380
 verdict: accept
 verdict_head: 812ee4d0b5e2b0d73728317f250f843d9e48a3bb
+resolution: completed
 builders: fe3b1d86-cb64-535a-95aa-8be88712c47d
