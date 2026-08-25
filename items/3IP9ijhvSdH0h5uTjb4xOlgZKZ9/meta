@@ -1,1 +1,3 @@
 title: call-after-define lint miscounts a nested record or enum: their end closes the function's block
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
