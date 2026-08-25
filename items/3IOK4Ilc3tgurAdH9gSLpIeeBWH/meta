@@ -5,4 +5,5 @@ claim: 32b1737c-76aa-5e69-b536-01404c9c3648
 pr: 1371
 verdict: accept
 verdict_head: 83caa21ba765b3c2bffcbc65117f7212c74f6d38
+resolution: completed
 builders: 32b1737c-76aa-5e69-b536-01404c9c3648
