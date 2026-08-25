@@ -1,0 +1,1 @@
+both slices regenerate _build/casts_baseline.tl, so landing them in parallel guarantees a conflict in that generated file; this one's regen is clean only once 3IOK542Q's rows have landed
