@@ -1,3 +1,5 @@
 title: casts lint counts a -- cast: inside a string literal, so the baseline carries a row for fixture text
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: 2b784d51-f281-51f3-9291-6047eaef9411
+builders: 2b784d51-f281-51f3-9291-6047eaef9411
