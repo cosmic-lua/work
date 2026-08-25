@@ -2,4 +2,5 @@ title: casts: render the positional-struct annotation gentype degrades to any, a
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: b40d5aa8-3577-5790-bd40-0638632db5a9
+pr: 1372
 builders: b40d5aa8-3577-5790-bd40-0638632db5a9
