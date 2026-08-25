@@ -1,0 +1,3 @@
+title: casts: close the 21 validating-decode sites in the eval, pin, config, doc and fetch tests
+parent: 3IOegofMj4ewlWfVCFTkOrT1Kox
+target: cosmic-lua/cosmic
