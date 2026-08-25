@@ -1,0 +1,3 @@
+title: fetch opens a fresh connection per request: keep-alive across retries, redirects, and calls
+parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
+target: cosmic-lua/cosmic
