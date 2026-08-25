@@ -5,4 +5,5 @@ claim: df22ed61-bbfc-55ea-a8dd-527935441eaf
 pr: 1369
 verdict: accept
 verdict_head: b3de658d70a9f3406bd4708ed178363881e86cc9
+resolution: completed
 builders: df22ed61-bbfc-55ea-a8dd-527935441eaf
