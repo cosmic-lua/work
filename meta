@@ -1,0 +1,3 @@
+title: cosmic.time.now() declares integer over a clock binding that returns integer | nil
+parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
+target: cosmic-lua/cosmic
