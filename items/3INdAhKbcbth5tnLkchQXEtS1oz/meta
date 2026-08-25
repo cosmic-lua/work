@@ -1,1 +1,3 @@
 title: the board worktree lives in o/, which --make clean deletes
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
