@@ -3,4 +3,6 @@ parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
 target: cosmic-lua/cosmic
 claim: 29896fcf-c494-5d80-a7e8-0f10f26debda
 pr: 1375
+verdict: request changes
+verdict_head: faf54789d73f57d208ef408942de9da631dc0b10
 builders: 29896fcf-c494-5d80-a7e8-0f10f26debda
