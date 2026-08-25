@@ -1,0 +1,1 @@
+title: call-after-define lint miscounts a nested record or enum: their end closes the function's block
