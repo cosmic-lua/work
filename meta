@@ -5,4 +5,5 @@ claim: 2b784d51-f281-51f3-9291-6047eaef9411
 pr: 1374
 verdict: accept
 verdict_head: bc4eb8db0b369b1d948eff1f61afadcb103fe5c1
+resolution: completed
 builders: 2b784d51-f281-51f3-9291-6047eaef9411
