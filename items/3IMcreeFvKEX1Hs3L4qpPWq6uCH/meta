@@ -1,3 +1,5 @@
 title: sqlite: test suite pinning zipfile over cosmic executables
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
+claim: 11a3c050-954f-5a2a-b3ad-76e6419527ce
+builders: 11a3c050-954f-5a2a-b3ad-76e6419527ce
