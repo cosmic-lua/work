@@ -5,4 +5,5 @@ claim: 11660de0-a661-585c-8c09-2190d09fb848
 pr: 275
 verdict: accept
 verdict_head: 3e5c4cec8777c9f347572c5662eedc69a9835ff5
+resolution: completed
 builders: 11660de0-a661-585c-8c09-2190d09fb848
