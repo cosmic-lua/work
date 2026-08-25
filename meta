@@ -1,3 +1,5 @@
 title: cosmopolitan: o//test/tool/net cannot build on master — lfuncs.c uses CLOCK_MONOTONIC without its header
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: whilp/cosmopolitan
+claim: 11660de0-a661-585c-8c09-2190d09fb848
+builders: 11660de0-a661-585c-8c09-2190d09fb848
