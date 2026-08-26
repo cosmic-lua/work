@@ -2,4 +2,5 @@ title: lint: the -- assert: justification convention D23 introduced has no enfor
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 7614b81b-c1ce-5559-a344-440ce38a0565
+pr: 1401
 builders: 7614b81b-c1ce-5559-a344-440ce38a0565
