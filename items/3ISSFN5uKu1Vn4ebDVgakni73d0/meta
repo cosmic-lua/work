@@ -1,0 +1,3 @@
+title: or-fallback casts in _cli/build/init_test.tl are stale: the patch already narrows their shape
+parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
+target: cosmic-lua/cosmic
