@@ -1,1 +1,3 @@
 title: lint cache: a doc-citation PASS goes stale when the cited file changes — no dependency edge from doc to cited source
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
