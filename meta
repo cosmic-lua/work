@@ -1,7 +1,7 @@
 title: cosmic.test: the in-process runner — ordered cases, continue past failure, the 0/2/fail grammar
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
-claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+claim: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
 pr: 1405
 verdict: reject
 verdict_head: d26319d678205199909923a124303abb11594c72
