@@ -2,4 +2,5 @@ title: perf: the compact literal layout has no _perf scenario, so its hypothesis
 parent: 3IOFN9bnvMQn8DrCiGQdrmOzNNR
 target: cosmic-lua/cosmic
 claim: 10cfd4c2-a2d7-551d-bea6-d49227f4394c
+pr: 1400
 builders: 10cfd4c2-a2d7-551d-bea6-d49227f4394c
