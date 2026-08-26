@@ -5,4 +5,5 @@ claim: 6cc6e54c-fe11-50d2-a398-c1a870c6bc57
 pr: 1404
 verdict: accept
 verdict_head: ba3bbe083f8b50ebe6c093101f3ff44216175109
+resolution: completed
 builders: 6cc6e54c-fe11-50d2-a398-c1a870c6bc57
