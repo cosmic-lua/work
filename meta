@@ -2,4 +2,5 @@ title: cosmopolitan: clock_gettime raises on an invalid or unsupported clock —
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: whilp/cosmopolitan
 claim: 13571aad-150e-5056-92a4-43d5c41b362e
+pr: 277
 builders: 13571aad-150e-5056-92a4-43d5c41b362e
