@@ -2,4 +2,5 @@ title: an evidence-only slice cannot hand over: check requires a PR, and decompo
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 35ba7161-3dfb-5d17-83df-1f0a82a00b1b
+pr: 1417
 builders: 35ba7161-3dfb-5d17-83df-1f0a82a00b1b
