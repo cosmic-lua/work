@@ -1,1 +1,3 @@
 title: gitboard: an item cannot name its PR's base branch, so non-main targets are prose-only and ungated
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
