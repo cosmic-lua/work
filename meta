@@ -1,0 +1,1 @@
+title: merging is blocked when a pull_request run is lost: only workflow_dispatch checks land, and the ruleset does not count them
