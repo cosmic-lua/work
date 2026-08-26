@@ -1,1 +1,3 @@
 title: lint diagnostics print file:line twice: every rule message repeats the prefix lint_render already emits
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
