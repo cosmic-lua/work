@@ -5,4 +5,5 @@ claim: 1a4ec1ad-3414-5339-98d2-1d5b2e3879e9
 pr: 1385
 verdict: accept
 verdict_head: d37e0557cdb8b1f40492c9ac28278ea5f3ccee49
+resolution: completed
 builders: 1a4ec1ad-3414-5339-98d2-1d5b2e3879e9
