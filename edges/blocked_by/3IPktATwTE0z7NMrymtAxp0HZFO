@@ -1,0 +1,1 @@
+cosmo.path.join's 26 unreachable-nil sites are flagged by the strict checker until they close
