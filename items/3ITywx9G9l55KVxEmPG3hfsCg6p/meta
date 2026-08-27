@@ -2,5 +2,6 @@ title: cosmic/teal_narrowing_test.tl is 15 lines under the cap with the narrow-*
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
 claim: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
+reviewer: 3f616956-66af-5d35-82b3-9ab54b187eb2
 pr: 1448
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
