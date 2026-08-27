@@ -1,4 +1,5 @@
 title: pin bump: bin/cosmic.pin to the first release carrying narrow-pack-n (post-2026-08-26)
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
-builders: d0c48f36-d8a8-5b7a-866d-d5c87d1c0467
+claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+builders: d0c48f36-d8a8-5b7a-866d-d5c87d1c0467 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
