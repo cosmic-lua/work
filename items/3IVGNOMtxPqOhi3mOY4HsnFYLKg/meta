@@ -2,8 +2,7 @@ title: release.yml measures a free full-suite A/A control pair every release and
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: e532d9f6-4b7d-5145-9534-7c6759ebc0d8
-reviewer: 0b13d2b4-bb26-5bc1-8635-407acd85452c
 pr: 1464
-verdict: request changes
-verdict_head: 9fed7ebd7185ff6c7203f92ab3978a2c9cb893df
+verdict: accept
+verdict_head: 22fd7de29f8ab804cf048db1ef51ad064c7e0c96
 builders: e532d9f6-4b7d-5145-9534-7c6759ebc0d8
