@@ -3,4 +3,6 @@ parent: 3ITVR6Ku8HQUosVXVzbpdRmldKf
 target: whilp/cosmopolitan
 claim: 965dd12a-4bec-534c-951a-182bad2a4c2e
 pr: 281
+verdict: accept
+verdict_head: d8185fc9a65835f86c1bb3cdb501eade904d2a8f
 builders: 965dd12a-4bec-534c-951a-182bad2a4c2e
