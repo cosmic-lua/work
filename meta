@@ -2,4 +2,5 @@ title: tl patch: the metatable is-dispatch rescue is inline-only — a named ali
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+pr: 1477
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
