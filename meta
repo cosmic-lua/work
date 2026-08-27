@@ -2,4 +2,5 @@ title: tl patch: carry is-fact narrowing into closures via an enclosing-body ass
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
 claim: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+pr: 1442
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
