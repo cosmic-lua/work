@@ -1,1 +1,0 @@
-the skew guard checks the tree's _perf/gate.tl and _perf/run.tl against the PINNED release's _perf/compare.tl, so widening compare.format fails ci on the very PR that introduces it; route 2 of the bounce fixes the guard first and lands this unchanged as one PR
