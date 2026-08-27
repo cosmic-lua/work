@@ -1,0 +1,1 @@
+title: testrun's .tests sidecar uses a naive grep, so a test file with test_* in a string loses its per-case statuses
