@@ -1,0 +1,3 @@
+title: compile seam misses --make check: a runner-mode test file fails the checker in any project that has not built
+parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
+target: cosmic-lua/cosmic
