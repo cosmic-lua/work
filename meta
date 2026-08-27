@@ -2,4 +2,5 @@ title: the checker accepts return nil from a bare non-nil declared return, so an
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
 target: cosmic-lua/cosmic
 claim: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
+pr: 1471
 builders: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
