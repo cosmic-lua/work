@@ -1,0 +1,3 @@
+title: migrate to runner mode, batch 4/7: cosmic/{sqlite,quicksand,fetch,net,doc}
+parent: 3IOCdooEOElQSPH42nr5xOrAQVn
+target: cosmic-lua/cosmic
