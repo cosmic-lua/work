@@ -2,4 +2,5 @@ title: literal_bench calls the two-arg literal.format, which the previous releas
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+pr: 1420
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
