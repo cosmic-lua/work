@@ -5,4 +5,5 @@ claim: 99ab8363-15f9-521d-84ee-bea371b7ac6c
 pr: 1462
 verdict: accept
 verdict_head: 946badeb7db727878d61488072c4dfdba8619f24
+resolution: completed
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
