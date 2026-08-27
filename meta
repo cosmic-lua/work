@@ -1,3 +1,5 @@
 title: tl patch: is-dispatch over metatable<T> against table-kinded targets — sketch validated
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
+claim: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
