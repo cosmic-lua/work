@@ -1,3 +1,5 @@
 title: tl patch: the closure boundary widens the enclosing continuation too, so a guard then a lambda then a use fails where stock passed
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
