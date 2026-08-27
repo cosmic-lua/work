@@ -2,4 +2,5 @@ title: formatter miscounts a function type in an if-condition: 'if x is function
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+pr: 1431
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
