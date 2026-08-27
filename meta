@@ -2,6 +2,7 @@ title: compile seam: runner-mode test files get the generated tail, in the check
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
 claim: 0177c77f-81b5-5fbc-9731-86abcfb395ca
-reviewer: e831e06e-2f80-53d1-84e9-8198069f90ed
 pr: 1446
+verdict: accept
+verdict_head: 3a0450176befc9f28048d8520a271b0a12fc8a66
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
