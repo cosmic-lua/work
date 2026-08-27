@@ -2,5 +2,6 @@ title: pin bump: a release carrying #1455 (discover extent fix), unblocking the 
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 claim: 05f7c552-0c90-51cb-99b3-e018759c6ed5
+reviewer: 0b13d2b4-bb26-5bc1-8635-407acd85452c
 pr: 1457
 builders: 05f7c552-0c90-51cb-99b3-e018759c6ed5
