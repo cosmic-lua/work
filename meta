@@ -3,4 +3,5 @@ parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
 claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
 pr: 1423
+verdict: accept
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
