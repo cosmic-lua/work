@@ -1,0 +1,1 @@
+the accepted bisect (3ITOUv0w) names cosmos 354c17e08 as what holds codec_base64_roundtrip_64k +20% and the release gate red; no post-2026-08-26 release can publish until 3ITVR6Ku's fix lands in cosmopolitan and ships in a cosmos the release consumes
