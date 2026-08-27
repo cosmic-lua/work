@@ -2,4 +2,5 @@ title: gitboard verdict's own-build refusal reads claim only, so a rework's orig
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 99ab8363-15f9-521d-84ee-bea371b7ac6c
+pr: 1474
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
