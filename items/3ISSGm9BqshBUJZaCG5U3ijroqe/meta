@@ -1,3 +1,4 @@
 title: carried nil-narrowing crosses closures past reassignment: an unsound acceptance to close
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
+resolution: not-planned
