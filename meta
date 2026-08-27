@@ -1,1 +1,3 @@
 title: resolve _make/project.tl's copy of glob_to_pattern so the dup-body gate can scan cosmic
+parent: 3HyRcrR35sYRwZl3guddvOBhFoK
+target: cosmic-lua/cosmic
