@@ -2,4 +2,5 @@ title: two of parse_table's refusals are unreachable: the $EOF$ sentinel gets th
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
 claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+pr: 1435
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
