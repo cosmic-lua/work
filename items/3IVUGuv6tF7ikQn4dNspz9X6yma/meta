@@ -1,1 +1,3 @@
 title: a verdict can record a verdict_head that is not the PR head it judged, and land depends on that field
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
