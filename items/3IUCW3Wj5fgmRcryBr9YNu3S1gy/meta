@@ -1,0 +1,3 @@
+title: test filter flag: --filter is blocked by two files at the 500-line cap, and COSMIC_TEST_FILTER never invalidates the graph
+parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
+target: cosmic-lua/cosmic
