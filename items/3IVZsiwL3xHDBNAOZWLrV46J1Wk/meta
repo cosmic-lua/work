@@ -2,4 +2,5 @@ title: tl patch: the closure boundary widens the enclosing continuation too, so 
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+pr: 1478
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
