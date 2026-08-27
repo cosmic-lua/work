@@ -2,5 +2,6 @@ title: gitboard spec is last-write-wins: a concurrent refinement replaced a read
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
+reviewer: e532d9f6-4b7d-5145-9534-7c6759ebc0d8
 pr: 1461
 builders: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
