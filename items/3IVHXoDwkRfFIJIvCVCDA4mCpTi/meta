@@ -5,4 +5,4 @@ claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
 pr: 1471
 verdict: request changes
 verdict_head: 844da8a99ee89509ab3d6e60c3b19bc9c897b862
-builders: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
+builders: 9e51ea3a-3544-5795-b441-cd8aba4b7aee 0b13d2b4-bb26-5bc1-8635-407acd85452c
