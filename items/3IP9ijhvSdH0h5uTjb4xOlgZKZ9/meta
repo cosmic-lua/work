@@ -5,4 +5,5 @@ claim: 0177c77f-81b5-5fbc-9731-86abcfb395ca
 pr: 1455
 verdict: accept
 verdict_head: f5a06dcb4a64cb765c8562255e4c7b80b6b37b0e
+resolution: completed
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
