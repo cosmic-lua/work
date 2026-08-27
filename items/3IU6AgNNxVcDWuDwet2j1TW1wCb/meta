@@ -4,4 +4,5 @@ target: cosmic-lua/cosmic
 claim: 05f7c552-0c90-51cb-99b3-e018759c6ed5
 pr: 1459
 verdict: accept
+resolution: completed
 builders: 05f7c552-0c90-51cb-99b3-e018759c6ed5
