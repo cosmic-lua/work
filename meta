@@ -1,1 +1,3 @@
 title: a claim written into ready by a same-phase move is never cleared, and pullables has no lease to free it
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
