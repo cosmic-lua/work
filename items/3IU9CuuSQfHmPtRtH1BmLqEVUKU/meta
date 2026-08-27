@@ -2,4 +2,5 @@ title: gitboard next: candidate lists, seeded fan-out, fused claim (--take), sta
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 3f616956-66af-5d35-82b3-9ab54b187eb2
+pr: 1454
 builders: 3f616956-66af-5d35-82b3-9ab54b187eb2
