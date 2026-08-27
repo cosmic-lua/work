@@ -1,5 +1,4 @@
 title: pin bump: bin/cosmic.pin to the first release carrying the patch-directory mechanism
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
-claim: 0177c77f-81b5-5fbc-9731-86abcfb395ca
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
