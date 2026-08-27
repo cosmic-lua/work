@@ -2,4 +2,5 @@ title: coverage: retire the pack-n cast once the pinned checker carries narrow-p
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
 claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+pr: 1423
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
