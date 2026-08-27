@@ -2,6 +2,7 @@ title: refine has no claim: next hands concurrent sessions the same plan item, a
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 99ab8363-15f9-521d-84ee-bea371b7ac6c
-reviewer: 0b13d2b4-bb26-5bc1-8635-407acd85452c
 pr: 1465
+verdict: request changes
+verdict_head: 6b0ab7e09a42113638fcd8a365f2b30dff4b3a57
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
