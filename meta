@@ -2,5 +2,6 @@ title: publish re-asks only the WIP guard after a lost race: cross-item precondi
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 99ab8363-15f9-521d-84ee-bea371b7ac6c
+reviewer: e532d9f6-4b7d-5145-9534-7c6759ebc0d8
 pr: 1466
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
