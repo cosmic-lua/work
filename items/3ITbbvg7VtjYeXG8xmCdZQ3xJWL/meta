@@ -5,4 +5,5 @@ claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
 pr: 1428
 verdict: accept
 verdict_head: 31c28cf8aef6d764766257c29a69c607ad7dd312
+resolution: completed
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
