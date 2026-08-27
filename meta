@@ -2,4 +2,5 @@ title: literal: a long bracket keeps CR bytes Lua normalizes, in both the Teal a
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
 claim: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
+pr: 1447
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81 0177c77f-81b5-5fbc-9731-86abcfb395ca
