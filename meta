@@ -4,5 +4,5 @@ target: cosmic-lua/cosmic
 claim: 99ab8363-15f9-521d-84ee-bea371b7ac6c
 pr: 1465
 verdict: accept
-verdict_head: d8fb3612fac03a6601c6e0ed084c9cb93ad990f4
+verdict_head: 9195ae29158829001fff1d4dfcf13eda9fdf4f0e
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
