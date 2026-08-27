@@ -1,1 +1,0 @@
-pull-time gate failed: the pin (2026-08-27-6b88a0d) predates c78504bd, so these sources would fail the cold-build guard; opens on the next release + pin bump
