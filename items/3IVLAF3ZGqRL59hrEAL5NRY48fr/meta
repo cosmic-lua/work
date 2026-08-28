@@ -5,4 +5,5 @@ claim: 05f7c552-0c90-51cb-99b3-e018759c6ed5
 pr: 1486
 verdict: accept
 verdict_head: 2a29c4d3981e9a8fadf8d9833862c67a65d25e09
+resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c 05f7c552-0c90-51cb-99b3-e018759c6ed5
