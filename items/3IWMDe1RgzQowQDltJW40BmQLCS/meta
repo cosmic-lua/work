@@ -2,6 +2,7 @@ title: the tl patch probe pointer lives only in _make/patch.tl, where a session 
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
-reviewer: 05f7c552-0c90-51cb-99b3-e018759c6ed5
 pr: 1482
+verdict: accept
+verdict_head: d7cbb15d00c490322e96186a52a31193b45803a0
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
