@@ -4,4 +4,5 @@ target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYPq8Sx
 pr: 1491
 verdict: accept
+resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYPq8Sx
