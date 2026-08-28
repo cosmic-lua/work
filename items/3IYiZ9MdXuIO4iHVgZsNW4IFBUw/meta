@@ -2,8 +2,7 @@ title: review distance moves to the procedure: the review runs in a fresh-contex
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYiZ9Md
-reviewer: review-3IYiZ9Md-20260828T225646Z-rev2
 pr: 1494
-verdict: request changes
-verdict_head: 68f9fba2efd0ebab499562b6c0699275b743f727
+verdict: accept
+verdict_head: 28cfe511be530b8fbe0ee25498568ac2a97a6e4f
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYiZ9Md
