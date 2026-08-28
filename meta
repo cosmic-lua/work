@@ -2,4 +2,5 @@ title: tl patch: the metatable is-rescue hands the target's VALUE type to the na
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+pr: 1481
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
