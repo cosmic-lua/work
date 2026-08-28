@@ -2,6 +2,6 @@ title: docs/design/make/resolution.md cites _perf/run.tl:163 for a call that liv
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYPq8Sx
-reviewer: 05f7c552-0c90-51cb-99b3-e018759c6ed5
 pr: 1491
+verdict: accept
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYPq8Sx
