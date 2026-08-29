@@ -1,9 +1,6 @@
 title: _work/gitverbs_test.tl is 10 lines under the 500-line cap, and it is where the next verb refusal wants to go
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
 pr: 1470
-verdict: accept
-verdict_head: 66a0325ea0ba7a1efe26e292d9ef36341a39ed7a
 resolution: completed
 builders: 9e51ea3a-3544-5795-b441-cd8aba4b7aee
