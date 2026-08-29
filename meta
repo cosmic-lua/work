@@ -2,6 +2,8 @@ title: board ids are visually indistinct: derived display layers (chunking, petn
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave4-b-1788022877
-reviewer: review-3Ib6u3Df-1788023568
 pr: 1513
+verdict: request changes
+verdict_head: 008e94d296cf2b3c2a1f7c342cc77b1f92235d48
+verdict_spec: dcd92b6a70ce3d23e668a87473a6effa76c800cf68581073c848c018b24d9296
 builders: wave4-b-1788022877
