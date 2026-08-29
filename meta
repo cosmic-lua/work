@@ -2,4 +2,5 @@ title: a verdict can record a verdict_head that is not the PR head it judged, an
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave-w3-1788018501
+pr: 1503
 builders: wave-w3-1788018501
