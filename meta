@@ -1,3 +1,5 @@
 title: cmd_sync discards lanes errors into _-locals, and the sync lanes: subject grammar is unpinned
 parent: 3IHDCJ3oQeyZ0ls0mN5THQwjg63
 target: cosmic-lua/cosmic
+claim: wave11-b-1788033445
+builders: wave11-b-1788033445
