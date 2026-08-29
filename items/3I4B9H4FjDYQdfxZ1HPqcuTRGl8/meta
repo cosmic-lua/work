@@ -1,8 +1,5 @@
 title: a spec-stated per-file line cap has no mechanical check: PR #1264 shipped two files 14-73% over its 200-line cap unnoticed until review
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: claude-scheduled-3ewjg2
 pr: 1288
-verdict: accept
-verdict_head: a0140ef9950b18e14c2085aa585e3f0eefcd6277
 resolution: completed
