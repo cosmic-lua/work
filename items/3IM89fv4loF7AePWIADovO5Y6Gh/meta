@@ -1,9 +1,6 @@
 title: formatter emit: buffer a line and concat once, instead of ~4000 fragments in one accumulator
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
-claim: magical-bell
 pr: 1355
-verdict: accept
-verdict_head: 6e3af83155d1b02ffd1c1334beb60d97c6ac80c2
 resolution: completed
 builders: magical-bell
