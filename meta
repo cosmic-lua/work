@@ -2,6 +2,8 @@ title: sync observes scheduled lanes and mints one idempotent repair item per re
 parent: 3IHDCJ3oQeyZ0ls0mN5THQwjg63
 target: cosmic-lua/cosmic
 claim: wave10-a-1788030416
-reviewer: review-3IbPgcnT-1788031261
 pr: 1521
+verdict: accept
+verdict_head: b8da5b48bc2081336651e375c59f47e90e172149
+verdict_spec: a518ba57f243635eb9255aa6cabe873342d465e889bf99e14eae16c1f47ea4f7
 builders: wave10-a-1788030416
