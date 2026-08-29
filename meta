@@ -2,5 +2,6 @@ title: board commits are Unverified: store.tl hardcodes board@cosmic as committe
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave11-a-1788033443
+reviewer: review-3IbNO569-1788034450
 pr: 1526
 builders: wave11-a-1788033443
