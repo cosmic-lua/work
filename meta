@@ -2,8 +2,8 @@ title: the ready bar measures file facts but not behavioural ones: a spec may as
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
-reviewer: review-3IZ0nP5R-1787983384-rev2
 pr: 1497
-verdict: request changes
+verdict: accept
 verdict_head: 5364cc217cbc4377966dd16dcbd981d91686b5ba
+verdict_spec: d244c2e538f53b0fd02fb895ec7f234e9d3fdad065360559e40d87b421344af7
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
