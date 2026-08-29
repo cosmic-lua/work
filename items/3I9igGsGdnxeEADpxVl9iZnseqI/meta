@@ -2,5 +2,6 @@ title: a PR shared by two in-flight items couples their verdicts: move --pr N ac
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave4-c-1788022879
+reviewer: review-3I9igGsG-1788023156
 pr: 1512
 builders: wave4-c-1788022879
