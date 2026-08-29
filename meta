@@ -1,9 +1,9 @@
 title: machinery id docs predate the tail handle: gitboard.tl, store.tl comments and README omit it
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: wave9-a-1788028741
 pr: 1519
 verdict: accept
 verdict_head: 7c600b2fa9d61ddeb0df8a497a768060da892429
 verdict_spec: 785892e2f5e0e98ae91c6c419b9140b2e7f0c42ef75ad8e9a5bfffbd75f958aa
+resolution: completed
 builders: wave9-a-1788028741
