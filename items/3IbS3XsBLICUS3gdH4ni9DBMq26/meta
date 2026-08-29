@@ -2,5 +2,6 @@ title: cmd_sync discards lanes errors into _-locals, and the sync lanes: subject
 parent: 3IHDCJ3oQeyZ0ls0mN5THQwjg63
 target: cosmic-lua/cosmic
 claim: wave11-b-1788033445
+reviewer: review-3IbS3xsB-1788033981
 pr: 1525
 builders: wave11-b-1788033445
