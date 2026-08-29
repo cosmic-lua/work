@@ -1,8 +1,5 @@
 title: G1: stand up the agent-eval instrument
 parent: 3HyRdGk0liOSXEXjHRReYYEUxdi
 target: cosmic-lua/cosmic
-claim: orchestrator-20260817
 pr: 1263
-verdict: accept
-verdict_head: df3f944beefca26b4121e505ada99d16c5168c4b
 resolution: completed
