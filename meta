@@ -1,9 +1,6 @@
 title: testrun and report: per-test statuses in .tests, totals by test, --filter passthrough
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
-claim: 05f7c552-0c90-51cb-99b3-e018759c6ed5
 pr: 1456
-verdict: accept
-verdict_head: 334b20a1
 resolution: completed
 builders: 05f7c552-0c90-51cb-99b3-e018759c6ed5
