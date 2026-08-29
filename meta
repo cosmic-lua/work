@@ -3,7 +3,6 @@ parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave9-b-1788028743
 pr: 1518
-verdict: request changes
 verdict_head: 980ee964a0cf34ffba8168eaba2c274c54a26d5c
 verdict_spec: 0acec3bd8b613bc042e5ac20df58ac63b3539fae13940e3b0671ef847c64ed3f
 builders: wave9-b-1788028743
