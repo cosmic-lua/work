@@ -1,9 +1,6 @@
 title: release compare skew class: CI type-checks _perf/** under the pinned bootstrap binary so a new-API use fails the PR, not the lane
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
 pr: 1427
-verdict: accept
-verdict_head: b26323eb8012c17fd4d92db83b331dc2c15b8473
 resolution: completed
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
