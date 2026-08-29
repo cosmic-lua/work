@@ -1,1 +1,0 @@
-PR 1519's comments promise handles in every id slot; false until secondary slots resolve them — same overpromise 1518 bounced on, cured by the tool change, not by weaker prose
