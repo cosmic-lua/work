@@ -1,1 +1,3 @@
 title: AGENTS.md CI section is one trigger short: pr.yml now declares merge_group
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
