@@ -2,6 +2,8 @@ title: merging is blocked when a pull_request run is lost: only workflow_dispatc
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave10-c-1788031670
-reviewer: review-3ISgL3e7-1788032761
 pr: 1522
+verdict: accept
+verdict_head: b0be76896e61cd53fafc6704195a579ce6df04d1
+verdict_spec: 721b437ae6d8c80f016e17bf9d79f070f0534d971879b69493d17c5e22c6a8a7
 builders: wave10-c-1788031670
