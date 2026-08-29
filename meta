@@ -2,5 +2,6 @@ title: session identities enter item fields unvalidated: a mangled argv records 
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: handoff-b1-1788045000
+reviewer: review-3Ibl0e0T-1788045499
 pr: 1536
 builders: wave15-b-1788042780 handoff-b1-1788045000
