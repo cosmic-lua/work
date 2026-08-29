@@ -2,6 +2,4 @@ title: cosmic.literal: a stated duplicate-key contract, so a committed floor can
 parent: 3I1IoF4k4xEZz3fd6VMKpIfXaNr
 target: cosmic-lua/cosmic
 pr: 1242
-verdict: accept
-verdict_head: 425ae05
 resolution: completed
