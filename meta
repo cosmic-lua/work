@@ -1,8 +1,5 @@
 title: scheduled deep-fuzz: the same properties at depth, on a cadence
 parent: 3HyEE7RJtMNPYTEwmXQpZzNfxtt
 target: cosmic-lua/cosmic
-claim: orchestrator-20260817
 pr: 1262
-verdict: accept
-verdict_head: 3b16367c5a1d0bf1e9540b771f292139fd3c0d71
 resolution: completed
