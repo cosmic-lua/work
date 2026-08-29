@@ -2,4 +2,5 @@ title: perf gate: a disagreeing baseline pair has no tiebreak, so no formula can
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+pr: 1498
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
