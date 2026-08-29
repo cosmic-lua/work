@@ -1,9 +1,6 @@
 title: tl patch: metatable<T> is-dispatch never matches records — the table_kinded entries are dead
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
 pr: 1468
-verdict: accept
-verdict_head: ad3bc4b41440df2ff2adb23e47f57b0207ca4c84
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
