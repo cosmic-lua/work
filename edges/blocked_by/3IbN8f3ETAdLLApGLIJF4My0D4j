@@ -1,1 +1,0 @@
-PR 1518's sentence promises handles in every id slot; it is false until secondary slots resolve them, so the rework lands after the tool change
