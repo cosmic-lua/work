@@ -2,6 +2,8 @@ title: titles accept newlines: a multiline title injects fake lines into the boa
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave15-a-1788042778
-reviewer: review-3IbhHpG9-1788043076
 pr: 1532
+verdict: accept
+verdict_head: f0d8176f4ecb1aca784ce173d1f1a6faf998fccf
+verdict_spec: cbf6e5f40d63f0b6c492cd97176eb78f495bff5dce5606fdd3ca50fe6ae2203a
 builders: wave15-a-1788042778
