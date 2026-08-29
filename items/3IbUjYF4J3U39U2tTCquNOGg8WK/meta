@@ -2,4 +2,5 @@ title: gate-status curl lacks --fail: a rejected status POST goes green with not
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave11-c-1788033447
+pr: 1524
 builders: wave11-c-1788033447
