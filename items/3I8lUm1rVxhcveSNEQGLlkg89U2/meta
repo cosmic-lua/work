@@ -1,9 +1,6 @@
 title: gitboard land cannot merge protected branches with its own token
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: workflow-3q9w2x
 pr: 1326
-verdict: accept
-verdict_head: 5a8e5626911408bccbad3d855f34a410c27ad0ea
 resolution: completed
 builders: workflow-3q9w2x
