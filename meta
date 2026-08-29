@@ -1,8 +1,5 @@
 title: coverage: one module's o/ and /zip chunk spellings still race the merge, and o/ chunks drop init.tl modules
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
-claim: nvxxcc
 pr: 1318
-verdict: accept
-verdict_head: 4d7121012580942a3d708ee6ed7273abe46f37de
 resolution: completed
