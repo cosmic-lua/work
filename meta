@@ -1,9 +1,9 @@
 title: lane-repair items are admitted at the bound, offered ahead of pulls, and lanes render on show
 parent: 3IHDCJ3oQeyZ0ls0mN5THQwjg63
 target: cosmic-lua/cosmic
-claim: wave10-b-1788031582
 pr: 1523
 verdict: accept
 verdict_head: 38c6e20830f5eef68d37e5e7a9ae86ce733d26ba
 verdict_spec: 1c5cac8df5379eafa179eef88f43baebd93c53a1a7e7e6cd9e240df1d043bf20
+resolution: completed
 builders: wave10-b-1788031582
