@@ -1,3 +1,5 @@
 title: sync observes scheduled lanes and mints one idempotent repair item per red lane
 parent: 3IHDCJ3oQeyZ0ls0mN5THQwjg63
 target: cosmic-lua/cosmic
+claim: wave10-a-1788030416
+builders: wave10-a-1788030416
