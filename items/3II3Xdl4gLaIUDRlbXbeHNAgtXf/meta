@@ -1,9 +1,6 @@
 title: split gitverbs.tl along the graph/phase seam: it is 15 lines from the cap and gates six open items
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: workflow-3q9w2x
 pr: 1327
-verdict: accept
-verdict_head: ed54352a08abd8667c91eda693b02276f888bc14
 resolution: completed
 builders: workflow-3q9w2x
