@@ -1,9 +1,6 @@
 title: Teal admits T|nil everywhere except an index, so the honest-nil doctrine is only half enforced
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: claude-sched-2026-08-23T1238
 pr: 1334
-verdict: accept
-verdict_head: a8743990ab34e204653146b1cf9b601eb22aeadf
 resolution: completed
 builders: claude-sched-2026-08-23T1238
