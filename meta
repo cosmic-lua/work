@@ -1,9 +1,9 @@
 title: board pin predates cosmic.shape: bump bin/cosmic.pin to main's release
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: wave2-pin-1788020428
 pr: 1505
 verdict: accept
 verdict_head: 771c70e22f2a918b4c692b4a12467d73ed47dfca
 verdict_spec: f276820c89887c94cc48998a7becac66766fd559b289370a3dc26b137367c531
+resolution: completed
 builders: wave2-pin-1788020428
