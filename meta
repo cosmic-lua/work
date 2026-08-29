@@ -4,4 +4,4 @@ target: cosmic-lua/cosmic
 claim: wave15-d-1788043044
 pr: 1534
 builders: wave15-d-1788043044
-speccers: wave15-d-1788043044
+speccers: wave15-d-1788043044 6a2e9d71-e166-59f3-9fc2-389928bb6f3e
