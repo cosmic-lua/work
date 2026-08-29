@@ -1,9 +1,6 @@
 title: probing the tl patch via package.path silently measures the shipped checker and inverts the conclusion
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
 pr: 1479
-verdict: accept
-verdict_head: 8269ff425fdccdf1218ab058f1e3fac94af63dfb
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
