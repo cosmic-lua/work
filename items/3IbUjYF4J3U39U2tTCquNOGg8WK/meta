@@ -1,0 +1,3 @@
+title: gate-status curl lacks --fail: a rejected status POST goes green with nothing posted
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
