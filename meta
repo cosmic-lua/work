@@ -2,5 +2,6 @@ title: board pin predates cosmic.shape: bump bin/cosmic.pin to main's release
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave2-pin-1788020428
+reviewer: review-3Ib5S8KI-1788020732
 pr: 1505
 builders: wave2-pin-1788020428
