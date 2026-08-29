@@ -2,6 +2,8 @@ title: item.decode hand-coerces 14 fields the new cosmic.shape validates declara
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave2-wa2-1788020861
-reviewer: review-3Ib4KH0q-1788021201
 pr: 1507
+verdict: accept
+verdict_head: 0fdbcd7c39858347cd3749160fe6cb9815377a1a
+verdict_spec: 74c7189d96f4bc730003684000e476c3bf2602460bed0fcceac428cbb6a459fa
 builders: wave2-wa-1788020175 wave2-wa2-1788020861
