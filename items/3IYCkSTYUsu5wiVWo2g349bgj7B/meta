@@ -2,6 +2,7 @@ title: perf gate: a disagreeing baseline pair has no tiebreak, so no formula can
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: 0b13d2b4-bb26-5bc1-8635-407acd85452c
-reviewer: review-3IYCkSTY-20260829-055711-rev1
 pr: 1498
+verdict: accept
+verdict_head: 086f87934e3e06272e06bdd0ba360c5ad707d7de
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
