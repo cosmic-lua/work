@@ -2,6 +2,8 @@ title: a bounced item snaps back to pullable with its gap only in the log
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave2-wb-1788020177
-reviewer: review-3Ib4KbOE-1788020597
 pr: 1504
+verdict: accept
+verdict_head: 125a135b1be529f029a955f3e8a8323eeadeb6c8
+verdict_spec: 2350e9c3c1142a87c2f46db22d54c6a8d24b52a176ab07ae30e3b9071ee10bb6
 builders: wave2-wb-1788020177
