@@ -1,9 +1,6 @@
 title: cmd_new's WIP gate is dead code: a filed child always enters unbounded backlog, so the gate, its vacated read, and its --force escape can never fire
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: 99ab8363-15f9-521d-84ee-bea371b7ac6c
 pr: 1476
-verdict: accept
-verdict_head: 7eaf349d7eb8c9f251062ebc98eee2feea525cf1
 resolution: completed
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
