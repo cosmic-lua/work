@@ -1,0 +1,3 @@
+title: a dirty _work/** worktree blocks every board mutation: the sync's git pull --rebase refuses over paths no mutation commits
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
