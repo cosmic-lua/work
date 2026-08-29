@@ -1,9 +1,9 @@
 title: a dirty _work/** worktree blocks every board mutation: the sync's git pull --rebase refuses over paths no mutation commits
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: wave12-b-1788035760
 pr: 1528
 verdict: accept
 verdict_head: f359415e78f663cc984981acad9bcd5b172a2c61
 verdict_spec: a08e79110eaa5de5b5e14acc0c52d32f920c2b1a58a1d65c257750b0b8e8bfc2
+resolution: completed
 builders: wave12-b-1788035760
