@@ -1,3 +1,4 @@
 title: an Acceptance grep whose stated baseline is wrong passes without discriminating, and the ready bar cannot see it
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
+resolution: not-planned
