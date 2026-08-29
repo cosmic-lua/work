@@ -1,9 +1,6 @@
 title: cosmopolitan: header edits never rebuild — o//depend is never generated, staling every incremental C measurement
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: whilp/cosmopolitan
-claim: claude-sched-2026-08-23T1638
 pr: 270
-verdict: accept
-verdict_head: 4de988fa0197d5986a935bdb43c00c04427d4c4d
 resolution: completed
 builders: claude-sched-2026-08-23T1638
