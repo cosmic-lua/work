@@ -1,9 +1,6 @@
 title: 3p/tl/tl_patch.tl is 1 line under the cap and the mechanism allows only one patch file, so no further carried entry can land
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
-claim: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
 pr: 1424
-verdict: accept
-verdict_head: 4aabf9022
 resolution: completed
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
