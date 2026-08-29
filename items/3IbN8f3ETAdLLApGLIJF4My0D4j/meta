@@ -2,6 +2,8 @@ title: secondary id slots (attach PARENT, compare OTHER, block BLOCKER, new --pa
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave9-c-1788029168
-reviewer: review-3IbN8f3E-1788029448
 pr: 1520
+verdict: accept
+verdict_head: 4a7b601657b0f57d6fd355ed1f990930b401dc0f
+verdict_spec: 734080465c2adfbbfb0be73f39acc5120b519d6d8041aa564bbfc40822b20550
 builders: wave9-c-1788029168
