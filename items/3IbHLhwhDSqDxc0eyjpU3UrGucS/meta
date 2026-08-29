@@ -2,5 +2,6 @@ title: bare show's triage lines still render the head-8; flip to the tail chunk
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave7-a-1788027023
+reviewer: review-3IbHLhwh-1788027295
 pr: 1516
 builders: wave7-a-1788027023
