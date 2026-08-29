@@ -1,3 +1,5 @@
 title: gitboard: spec rewrites an item another session has already built and handed to review, with no claim or phase check
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
+claim: wave-w1-1788018497
+builders: wave-w1-1788018497
