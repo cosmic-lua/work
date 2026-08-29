@@ -1,9 +1,6 @@
 title: gitboard: publish's post-rebase revalidate re-checks only the WIP arrival — force, attach re-parents, and the block invariant are lost
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: workflow-3q9w2x
 pr: 1325
-verdict: accept
-verdict_head: dd717bf84cbfcad9d23980a446e0a21c91e8d26b
 resolution: completed
 builders: workflow-3q9w2x
