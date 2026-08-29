@@ -1,3 +1,4 @@
 title: parallel.md still describes publish as rebase-and-recheck, so an orchestrator reads a lost race as a landed claim
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
+resolution: not-planned
