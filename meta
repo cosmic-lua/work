@@ -1,1 +1,3 @@
 title: runner mode leaves three test files printing 'tests passed' at module load, before any case runs
+parent: 3IOCdooEOElQSPH42nr5xOrAQVn
+target: cosmic-lua/cosmic
