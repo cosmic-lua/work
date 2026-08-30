@@ -2,4 +2,5 @@ title: cosmo.DecodeLua accepts a raw \r inside a short string, which load refuse
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmopolitan
 claim: wk6-b3-ca143d92-7e34-569b-b008-1f69817ffff5
+pr: 287
 builders: wk6-b3-ca143d92-7e34-569b-b008-1f69817ffff5
