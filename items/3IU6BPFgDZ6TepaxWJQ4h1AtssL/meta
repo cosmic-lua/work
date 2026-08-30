@@ -2,5 +2,6 @@ title: migrate to runner mode, batch 5/7: cosmic/*_test.tl, _literal_format thro
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 claim: wk5-a2-ca143d92-7e34-569b-b008-1f69817ffff5
+reviewer: review-4h1AtssL-1788061235
 pr: 1560
 builders: wk5-a2-ca143d92-7e34-569b-b008-1f69817ffff5
