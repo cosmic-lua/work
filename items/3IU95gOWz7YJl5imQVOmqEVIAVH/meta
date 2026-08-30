@@ -1,9 +1,9 @@
 title: runner-mode end state: flip the prose and prove the tree is all-runner
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
-claim: wk9-b2-1788106264
 pr: 1569
 verdict: accept
 verdict_head: c4989b4a6144afab3bad334cb850233c5e975ced
 verdict_spec: 1791d3d986e8dddb9cfc94eb723744a7643822b5b9c2562d0c8837153bac3479
+resolution: completed
 builders: wk7-a1-ca143d92-7e34-569b-b008-1f69817ffff5 wk9-b2-1788106264
