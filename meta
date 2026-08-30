@@ -1,5 +1,4 @@
 title: salvage cosmo.unix.setenv/unsetenv/clearenv tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-claim: scout-2
 builders: scout-2
