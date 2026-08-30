@@ -3,4 +3,4 @@ parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 claim: wave18-a2-1788064500
 builders: wave18-a-1788060000 wave18-a2-1788064500
-speccers: orchestrator-w18
+speccers: orchestrator-w18 wave18-a2-1788064500
