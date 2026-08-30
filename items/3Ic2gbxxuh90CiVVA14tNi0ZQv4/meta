@@ -1,0 +1,1 @@
+title: flagged items are read past silently: wire store.flagged_summary into show and next renders
