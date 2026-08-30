@@ -4,7 +4,7 @@ target: cosmic-lua/cosmic
 claim: review-3IHwkB1z-1788049700-rev2
 pr: 1538
 verdict: request changes
-verdict_head: 2096e0503f2d70dbbac95e331626b75f96ab8553
-verdict_spec: ea95b39efb0b4d5c4ec474bafb6d581fdb1999bee3ffde8de4381c459fee7832
+verdict_head: 274c6f974d20c3344b1372b7233fc85420abc4e8
+verdict_spec: f9bb25fb0561bd08f10af9caaf079541fd127e3929f40e380d4510533c8742d4
 builders: wave16-c-1788048600 review-3IHwkB1z-1788049700-rev2
 speccers: 6a2e9d71-e166-59f3-9fc2-389928bb6f3e
