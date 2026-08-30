@@ -2,4 +2,5 @@ title: runner-mode drift: 5 test files written in legacy self-call mode after th
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 claim: wk7-a5-ca143d92-7e34-569b-b008-1f69817ffff5
+pr: 1566
 builders: wk7-a5-ca143d92-7e34-569b-b008-1f69817ffff5
