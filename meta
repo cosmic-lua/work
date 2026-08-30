@@ -1,10 +1,10 @@
 title: problems() gates decode: a multiline title from a pre-fix binary bricks list/show for fixed binaries
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: wave16-g-1788048600
 pr: 1544
 verdict: accept
 verdict_head: 62ea68a59fddbd43a11f4f9f7da39abb6e405381
 verdict_spec: fdcfed3c7ece209970ab717fbc7bab38adac973a3ceff6336676a5d7cbed4e66
+resolution: completed
 builders: wave16-g-1788048600
 speccers: 6a2e9d71-e166-59f3-9fc2-389928bb6f3e
