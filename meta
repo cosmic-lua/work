@@ -1,5 +1,4 @@
 title: salvage the JSONTestSuite + json.org corpus into tool/lua
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-claim: scout-1
 builders: scout-1
