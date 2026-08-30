@@ -2,5 +2,6 @@ title: migrate to runner mode, batch 6/7: cosmic/*_test.tl, html through sse
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 claim: wave18-b-1788060000
+reviewer: review-q6ZRbM4l-1788061900
 pr: 1556
 builders: wave18-b-1788060000
