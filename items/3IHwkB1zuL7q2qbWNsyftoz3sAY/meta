@@ -1,10 +1,10 @@
 title: PR bodies are HTML-sanitized in transit: tag-shaped text is deleted and quotes are entity-escaped, in code blocks too
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: review-3IHwkB1z-1788049700-rev2
 pr: 1538
 verdict: request changes
 verdict_head: 274c6f974d20c3344b1372b7233fc85420abc4e8
 verdict_spec: f9bb25fb0561bd08f10af9caaf079541fd127e3929f40e380d4510533c8742d4
+resolution: not-planned
 builders: wave16-c-1788048600 review-3IHwkB1z-1788049700-rev2
 speccers: 6a2e9d71-e166-59f3-9fc2-389928bb6f3e
