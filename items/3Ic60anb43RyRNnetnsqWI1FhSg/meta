@@ -1,1 +1,3 @@
 title: the ETag cache replays a syntactically-valid corrupted body on a 304: no integrity check
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
