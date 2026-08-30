@@ -1,0 +1,1 @@
+title: the ETag cache replays a syntactically-valid corrupted body on a 304: no integrity check
