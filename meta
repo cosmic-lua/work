@@ -2,6 +2,7 @@ title: done ends a PR-less item with no review gate: research items never reach 
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave17-k-1788053000
+reviewer: review-3Ibzvvhp-1788056018
 pr: 1555
 builders: wave17-k-1788053000
 speccers: 6a2e9d71-e166-59f3-9fc2-389928bb6f3e
