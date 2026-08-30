@@ -2,6 +2,8 @@ title: migrate to runner mode, batch 4/7: cosmic/{sqlite,quicksand,fetch,net,doc
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 claim: wk5-a1-ca143d92-7e34-569b-b008-1f69817ffff5
-reviewer: review-uMjkdGGh-1788060538
 pr: 1559
+verdict: accept
+verdict_head: ef003a7030e53d197829ab0577e03df3e19f0ecd
+verdict_spec: c8ba4006ec9a0957e21295c544e1e1db8244a56b83836937be9933cb7e3f463e
 builders: ca143d92-7e34-569b-b008-1f69817ffff5 wk5-a1-ca143d92-7e34-569b-b008-1f69817ffff5
