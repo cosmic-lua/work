@@ -1,3 +1,3 @@
 title: cosmopolitan pr.yml lacks the merge_group trigger: the enabled queue times out every merge to master
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmopolitan
