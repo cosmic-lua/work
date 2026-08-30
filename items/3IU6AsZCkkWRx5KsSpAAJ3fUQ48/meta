@@ -2,3 +2,4 @@ title: migrate to runner mode, batch 3/7: cosmic/{fs,child,format,flags,coverage
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
 builders: wave18-a-1788060000
+speccers: orchestrator-w18
