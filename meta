@@ -1,4 +1,5 @@
 title: runner-mode end state: flip the prose and prove the tree is all-runner
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
-builders: wk7-a1-ca143d92-7e34-569b-b008-1f69817ffff5
+claim: wk9-b2-1788106264
+builders: wk7-a1-ca143d92-7e34-569b-b008-1f69817ffff5 wk9-b2-1788106264
