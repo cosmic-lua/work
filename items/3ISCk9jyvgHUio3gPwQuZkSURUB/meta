@@ -2,5 +2,7 @@ title: cosmopolitan salvage inventory: one row per test/tool/net check — surfa
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
 claim: wk9-a1-1788105432
+verdict: accept
+verdict_spec: b244e0c3c5b08a2ae95fbd8ca6951be78d26a45ada4e45dffdfefafbccd50226
 builders: wk9-a1-1788105432
 speccers: ca143d92-7e34-569b-b008-1f69817ffff5 wk9-a1-1788105432
