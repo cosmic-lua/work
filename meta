@@ -1,3 +1,4 @@
 title: cosmic/fs/glob_test.tl brackets its cases with a top-level fixture, so runner mode tears it down before any case runs
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
 target: cosmic-lua/cosmic
+speccers: orchestrator-w18
