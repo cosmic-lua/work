@@ -1,3 +1,5 @@
 title: salvage cosmo.EncodeJson/EncodeLua default-mode formatting tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
+claim: work9-agent-3
+builders: work9-agent-3
