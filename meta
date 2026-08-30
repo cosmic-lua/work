@@ -1,4 +1,6 @@
 title: gitboard block refuses to restate an existing edge's reason, and a stale reason is the common case
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
+claim: wave16-j-1788048600
+builders: wave16-j-1788048600
 speccers: 6a2e9d71-e166-59f3-9fc2-389928bb6f3e
