@@ -1,3 +1,5 @@
 title: salvage cosmo.unix.getlogin/uname/tcattr tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
+claim: scout-4
+builders: scout-4
