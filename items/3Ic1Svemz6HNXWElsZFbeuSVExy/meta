@@ -1,3 +1,5 @@
 title: cosmopolitan pr.yml lacks the merge_group trigger: the enabled queue times out every merge to master
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmopolitan
+claim: wave16-h-1788048600
+builders: wave16-h-1788048600
