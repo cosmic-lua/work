@@ -2,6 +2,7 @@ title: fs.find pays a stat(2) per entry just to ask is_dir — drain find_iter's
 parent: 3IK8EfvOAfjHp77uBwhoyggJ5z8
 target: cosmic-lua/cosmic
 claim: wk9-b1-1788106264
+reviewer: review-3ILxmuNE-1788107229
 pr: 1568
 builders: 7f36c898-4cc9-563e-850d-ceafecd74025 wk9-b1-1788106264
 speccers: d453b471-2a09-5300-8651-425990fc97cd
