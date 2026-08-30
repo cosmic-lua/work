@@ -1,3 +1,5 @@
 title: check.must sweep: the 14 non-cosmic test sites (_tool, _make, _build, _perf, _fuzz, 3p)
 parent: 3IPXQ1Zw1xfRYx4dV1zwASNhQ3N
 target: cosmic-lua/cosmic
+claim: work9-agent-2
+builders: work9-agent-2
