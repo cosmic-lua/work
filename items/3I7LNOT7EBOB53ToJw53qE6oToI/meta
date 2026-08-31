@@ -1,4 +1,5 @@
 title: quicksand: Box consumes the landlock net tier where netns cannot start
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
-builders: orch9-hold-5
+claim: orch9-7-3qE6
+builders: orch9-hold-5 orch9-7-3qE6
