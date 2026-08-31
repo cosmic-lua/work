@@ -1,5 +1,6 @@
 title: salvage cosmo.path/readlink/Slurp-range tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-builders: work9c-agent-3 orch-peek8 work9-peek1 orch-peek3 orch-scout9-4
+claim: orch-scout9-23
+builders: work9c-agent-3 orch-peek8 work9-peek1 orch-peek3 orch-scout9-4 orch-scout9-23
 speccers: orch-refine-skK4
