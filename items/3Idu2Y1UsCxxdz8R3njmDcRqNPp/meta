@@ -1,4 +1,5 @@
 title: salvage lsqlite3 readonly() tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-builders: work9-agent-scout orch-peek4 work9-peek2 orch-peek1 orch-scout9-5 orch-scout9-24 orch-scout9-44
+claim: orch-2-mDcRqNPp
+builders: work9-agent-scout orch-peek4 work9-peek2 orch-peek1 orch-scout9-5 orch-scout9-24 orch-scout9-44 orch-2-mDcRqNPp
