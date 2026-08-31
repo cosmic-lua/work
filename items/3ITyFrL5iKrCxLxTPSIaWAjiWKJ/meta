@@ -3,7 +3,6 @@ parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
 claim: work9-agent-4
 pr: 1588
-verdict: request changes
 verdict_head: b0d1df66dc7f16774fd8f6596b0e05aaaf835aa9
 verdict_spec: 4be35671ebef12199e72c819854c1d66b6e019945e8904e330e7486c06e79d10
 builders: work9-agent-4
