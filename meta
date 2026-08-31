@@ -1,10 +1,10 @@
 title: sandbox: honest per-section report — full/degraded/skipped, strict, the handled drop, and the R8 decision record
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
-claim: orch-scout9-9
 pr: 1591
 verdict: accept
 verdict_head: 7349b0559890f8576d632b22cd465c13af01c1c4
 verdict_spec: bc1c4d32aa14fd2c058bc2e9debd9dd42a354ed628de1f79dba5a39404c3cc94
+resolution: completed
 builders: orch-scout9-9
 speccers: 1cf84c21-0a63-58e4-b689-43f289adad00
