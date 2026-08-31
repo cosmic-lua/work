@@ -3,7 +3,6 @@ parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: orch-scout9-9
 pr: 1591
-verdict: request changes
 verdict_head: 51040a24d6d67686017255debe251f63402e6cb6
 verdict_spec: bc1c4d32aa14fd2c058bc2e9debd9dd42a354ed628de1f79dba5a39404c3cc94
 builders: orch-scout9-9
