@@ -2,5 +2,6 @@ title: resolve _make/project.tl's copy of glob_to_pattern so the dup-body gate c
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
 claim: work9-agent-5
+pr: 1586
 builders: work9-agent-5
 speccers: e277faa5-ee02-55c9-8d7e-4d688b76f501
