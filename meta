@@ -1,5 +1,5 @@
 title: sandbox: net section — per-port TCP policy via landlock ABI 4 (R7)
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
-claim: orch9-hold-6
-builders: orch9-hold-6
+claim: orch9-build-net
+builders: orch9-hold-6 orch9-build-net
