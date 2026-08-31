@@ -1,3 +1,5 @@
 title: cosmic: store exactly the measured boot set, deflate the rest of the embedded .lua payload
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
+claim: orch-scout9-30
+builders: orch-scout9-30
