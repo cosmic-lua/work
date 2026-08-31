@@ -2,6 +2,8 @@ title: salvage cosmo encoding/escaping primitive value-correctness tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
 claim: orch9-build-2
-reviewer: orch9-review-uzbb2
 pr: 300
+verdict: accept
+verdict_head: 7defd8de5a534e8d9f71c16e7dd1cf16299172bb
+verdict_spec: f10aa783d37514b566014b2673bbf4663a6d23f6b0796c9cd0ea60590ce1c8ce
 builders: scout work9-agent-scout orch-peek3 work9-peek4 orch-scout9-3 orch-scout9-27 orch-scout9-47 orch9-hold-4 orch9-build-2
