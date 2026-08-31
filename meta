@@ -1,3 +1,5 @@
 title: embed policy: store exactly the measured boot set, deflate the rest
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
+claim: work9-agent-6
+builders: work9-agent-6
