@@ -1,5 +1,4 @@
 title: concurrent --make in one tree yields a payload-less o/bin/cosmic that exits 0 as bare Lua
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: orch9-9-PxMM
 builders: orch9-9-PxMM
