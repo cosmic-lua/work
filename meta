@@ -1,4 +1,5 @@
 title: salvage cosmo encoding/escaping primitive value-correctness tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
+claim: orch-peek3
 builders: scout work9-agent-scout orch-peek3 work9-peek4
