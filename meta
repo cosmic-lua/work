@@ -3,7 +3,6 @@ parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: orch9-build-net
 pr: 1596
-verdict: request changes
 verdict_head: b1a148690bfd022e0c777b7876ecccf380052f7c
 verdict_spec: d0ed1c3c0ad776398c1460e1ce0ffbf7c603122ab307fb7a215b9bc6ebe6c0bd
 builders: orch9-hold-6 orch9-build-net
