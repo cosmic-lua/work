@@ -1,9 +1,9 @@
 title: sandbox: net section — per-port TCP policy via landlock ABI 4 (R7)
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
-claim: orch9-build-net
 pr: 1596
 verdict: accept
 verdict_head: 86c56d5a9287ef50e89ff5bb5900fc991d8f481a
 verdict_spec: d0ed1c3c0ad776398c1460e1ce0ffbf7c603122ab307fb7a215b9bc6ebe6c0bd
+resolution: completed
 builders: orch9-hold-6 orch9-build-net
