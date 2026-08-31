@@ -2,5 +2,6 @@ title: decide whether the fork's vendored Lua test suite is live, then make it s
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmopolitan
 claim: orch9-build-3
+reviewer: orch9-review-LoXr
 pr: 301
 builders: orch9-build-3
