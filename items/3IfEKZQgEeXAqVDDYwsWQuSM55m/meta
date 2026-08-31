@@ -1,0 +1,3 @@
+title: path_test.lua's join(nil) assertions contradict the frozen join() contract — how should the port adapt them?
+parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
+target: cosmic-lua/cosmopolitan
