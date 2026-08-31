@@ -1,4 +1,6 @@
 title: casts: the 26 type-defeating test probes behind two named helpers — check.refuses, and one for absent surfaces
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: work9c-agent-1
+builders: work9c-agent-1
 speccers: 6c2afc8a-db7e-5772-90f9-63faf496a1d7
