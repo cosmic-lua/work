@@ -2,4 +2,5 @@ title: prototype a type-decided cast rule in the tl patch set, and census what i
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: work9-agent-1
+pr: 1589
 builders: work9c-agent-2 work9-agent-1
