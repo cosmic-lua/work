@@ -1,0 +1,1 @@
+the blob representation decides what a UDF argument's Teal type is, so the wrapper cannot be typed until it lands
