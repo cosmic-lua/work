@@ -1,4 +1,6 @@
 title: cosmic.template: compile templates to typed Teal, escaping enforced by a SafeHtml type
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
+claim: orch9-5-jABk
+builders: orch9-5-jABk
 speccers: e277faa5-ee02-55c9-8d7e-4d688b76f501
