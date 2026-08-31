@@ -2,5 +2,6 @@ title: sandbox: honest per-section report — full/degraded/skipped, strict, the
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: orch-scout9-9
+pr: 1591
 builders: orch-scout9-9
 speccers: 1cf84c21-0a63-58e4-b689-43f289adad00
