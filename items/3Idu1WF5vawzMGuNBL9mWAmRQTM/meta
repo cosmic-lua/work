@@ -1,4 +1,5 @@
 title: salvage cosmo.Fetch's HTTP-proxy contract tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-builders: scout-6
+claim: work9-agent-scout
+builders: scout-6 work9-agent-scout
