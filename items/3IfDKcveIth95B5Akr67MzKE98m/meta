@@ -1,5 +1,6 @@
 title: third_party/lua: pristine sources + numbered patches, and land 5.4.9 with it
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmopolitan
-builders: work9c-agent-4
+claim: work9-agent-2
+builders: work9c-agent-4 work9-agent-2
 speccers: e277faa5-ee02-55c9-8d7e-4d688b76f501
