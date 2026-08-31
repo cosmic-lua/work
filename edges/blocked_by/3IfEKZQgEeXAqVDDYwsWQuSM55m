@@ -1,1 +1,0 @@
-path_test.lua's two join(nil[, nil]) assertions contradict the current frozen join() contract (raises, not nil); the port cannot proceed verbatim as specified
