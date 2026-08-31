@@ -2,6 +2,8 @@ title: salvage cosmo.EncodeJson/EncodeLua default-mode formatting tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
 claim: orch-1-3g5OV2tF
-reviewer: review-3g5OV2tF-1
 pr: 297
+verdict: accept
+verdict_head: fa0f633f7f7d105250cfca1eac8e10b0d75876ab
+verdict_spec: af6da6bf916d318b882d13aca51c23b2ef454847d17f232a56b85da604030141
 builders: work9-agent-3 work9-agent-scout orch-2-3g5OV2tF orch-peek5 work9-peek5 orch-1-3g5OV2tF
