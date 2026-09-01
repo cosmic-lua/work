@@ -2,5 +2,6 @@ title: cosmopolitan: unix.localtime gets its first test, against the new table s
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave8-1-localtimetest
+pr: 323
 builders: wave8-1-localtimetest
 speccers: 4d89c837-e662-53f2-91fc-28226ce8d8d4
