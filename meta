@@ -1,3 +1,4 @@
 title: lunix.c: LuaUnixGetpgrp's C comment and LuaUnixRc0 body still describe the failure tuple #336 retired
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+resolution: not-planned
