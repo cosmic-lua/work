@@ -1,0 +1,3 @@
+title: sandbox.merge() silently drops the scope section (same class as the net drop 3IhTfAF5 fixed)
+parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
+target: cosmic-lua/cosmic
