@@ -2,6 +2,7 @@ title: salvage cosmo.Fetch's HTTP-proxy contract tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
 claim: wave5-1-mWAm
+reviewer: review-mWAm-4d89c837
 pr: 314
 builders: scout-6 work9-agent-scout orch-peek2 orch-scout9-6 orch-scout9-22 orch-scout9-42 orch9-scout-mWAm_RQTM orch9-hold-3 orch9-8-mWAm wave5-1-mWAm
 speccers: 0d674b1b-fa97-52d5-a96a-31867b975228
