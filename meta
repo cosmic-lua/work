@@ -2,4 +2,5 @@ title: cosmopolitan: unix.Dir:fd's doc comment claims a stale EOPNOTSUPP failure
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave11-3-dirfddoc
+pr: 326
 builders: wave11-3-dirfddoc
