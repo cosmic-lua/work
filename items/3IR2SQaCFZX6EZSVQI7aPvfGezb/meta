@@ -1,6 +1,6 @@
 title: cosmopolitan census: unix process, exec and scheduling — 12 nil-admitting bindings
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
-claim: wave3-6-aPvf
-builders: wave3-6-aPvf
+claim: wave4-14-hold-aPvf
+builders: wave3-6-aPvf wave4-14-hold-aPvf
 speccers: wave3-6-aPvf
