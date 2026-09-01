@@ -1,3 +1,5 @@
 title: cosmopolitan: unix.sigpending drops its unreachable nil — unix.Sigset|nil becomes unix.Sigset
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave6-2-sigpending
+builders: wave6-2-sigpending
