@@ -2,4 +2,5 @@ title: cosmo.unix.getrlimit: soft/hard success pair shares slot 2 with the failu
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave9-3-getrlimit
+pr: 324
 builders: wave9-3-getrlimit
