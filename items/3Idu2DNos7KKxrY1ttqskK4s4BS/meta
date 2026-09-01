@@ -2,6 +2,7 @@ title: salvage cosmo.path/readlink/Slurp-range tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
 claim: orch9-1-skK4
+reviewer: review-skK4-2
 pr: 303
 verdict: request changes
 verdict_head: 833618eb8d60c07ffb0ec2935348fa7450650b08
