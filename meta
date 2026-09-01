@@ -2,5 +2,6 @@ title: cosmo.unix: getpgrp cannot fail — retype it exact
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave-lok152-0Osh
+reviewer: review-0Osh_nsk7-lok152
 pr: 336
 builders: wave-lok152-0Osh
