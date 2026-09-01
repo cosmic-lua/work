@@ -1,5 +1,4 @@
 title: cosmo.Fetch: too_large error's %I format specifier never renders the byte limit
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmic
-claim: wave-test-probe
 builders: wave-test-probe
