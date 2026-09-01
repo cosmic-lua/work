@@ -1,0 +1,1 @@
+title: cosmopolitan: unix.readlink's dirfd param doc is stale — it's actually a buffer size
