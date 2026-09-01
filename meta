@@ -1,0 +1,3 @@
+title: definitions coverage check 9: parse_union accepts a dangling '|' followed by whitespace, so a malformed union passes the gate
+parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
+target: cosmic-lua/cosmopolitan
