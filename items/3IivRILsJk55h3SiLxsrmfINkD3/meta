@@ -1,3 +1,4 @@
 title: cosmo.unix: localtime's failure tuple shares slots 2-3 (mon, mday) with success — nanosleep-family
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+resolution: not-planned
