@@ -2,4 +2,5 @@ title: unix.tiocgwinsz: cols slot doubles as error string on failure
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave20-1-tiocgwinsz
+pr: 335
 builders: wave20-1-tiocgwinsz
