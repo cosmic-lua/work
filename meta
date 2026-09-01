@@ -1,5 +1,5 @@
 title: cosmopolitan: editing tool/net/fetch.inc never rebuilds lfetch.o — mkdeps misses the excluded source's headers
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmopolitan
 claim: wave18-1-fetchinc
 builders: wave18-1-fetchinc
