@@ -2,5 +2,7 @@ title: cosmopolitan census: unix signals, time and environment — 13 nil-admitt
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave5-3-7Gbq
+verdict: request changes
+verdict_spec: ab97f3602efba8da28f87761b7b37402f30b4babae4ae5e9d0d938cc5378da5c
 builders: wave3-7-7Gbq wave5-3-7Gbq
 speccers: wave3-7-7Gbq wave5-3-7Gbq
