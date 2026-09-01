@@ -1,0 +1,1 @@
+title: cosmopolitan: unix.sigpending drops its unreachable nil — unix.Sigset|nil becomes unix.Sigset
