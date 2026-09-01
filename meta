@@ -1,0 +1,1 @@
+title: unix.pipe: writer slot doubles as error string on failure
