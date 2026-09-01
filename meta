@@ -2,6 +2,7 @@ title: cosmo.cov: an optional one-shot instruction budget on the collector's own
 parent: 3I9mIYjYmuf4Tg314guEhvh5iA3
 target: cosmic-lua/cosmopolitan
 claim: orch9-3-NclT
+reviewer: review-NclT-2
 pr: 304
 verdict: request changes
 verdict_head: 359c345f34410c7e713df52ca2a88fc740f942da
