@@ -2,6 +2,7 @@ title: ConvertLuaArrayToStringList frees uninitialized memory on a bad argv/envp
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-3-9kMa
+reviewer: review-9kMa_JTLB-r2
 pr: 312
 verdict: request changes
 verdict_head: df1334ba4660e2ac58d4b24ff0073cbdafc25c8c
