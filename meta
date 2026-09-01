@@ -1,3 +1,5 @@
 title: cosmo.re: re.Regex:match's slot 2 shares the captures table with the error string
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave4-22-rematch
+builders: wave4-22-rematch
