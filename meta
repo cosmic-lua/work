@@ -1,0 +1,1 @@
+title: cosmo.Fetch/FetchStream: dual-shape return mixes headers/body with error/kind across success and failure
