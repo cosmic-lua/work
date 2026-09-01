@@ -1,3 +1,5 @@
 title: unix.pipe: writer slot doubles as error string on failure
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave12-1-pipe
+builders: wave12-1-pipe
