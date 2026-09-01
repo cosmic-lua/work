@@ -1,3 +1,4 @@
 title: cosmo.unix: unix.raise's only failure (EINVAL) is a degenerate signal number — raise-candidate
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+resolution: not-planned
