@@ -1,0 +1,3 @@
+title: tool/lua/BUILD.mk: a .ok test rule that loses its @touch re-runs forever and no gate notices
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmopolitan
