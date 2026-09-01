@@ -1,4 +1,5 @@
 title: cosmo.re: re.search's slot 2 shares the captures table with the error string
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
-builders: wave4-21-remsearch
+claim: wave4-23-remsearch
+builders: wave4-21-remsearch wave4-23-remsearch
