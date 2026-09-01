@@ -3,3 +3,4 @@ parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-5-kPjH
 builders: wave2-8-kPjH wave4-5-kPjH
+speccers: wave4-5-kPjH
