@@ -2,4 +2,5 @@ title: cosmo.unix: setfsuid/setfsgid silently report success on a refused privil
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave2-5-TLb0
+pr: 308
 builders: wave2-5-TLb0
