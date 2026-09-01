@@ -2,4 +2,5 @@ title: cosmo.unix: nanosleep's failure tuple shares slots with the EINTR remaini
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-11-0YFj
+pr: 315
 builders: wave4-11-0YFj
