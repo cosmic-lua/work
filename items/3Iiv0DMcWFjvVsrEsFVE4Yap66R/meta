@@ -1,0 +1,3 @@
+title: cosmo.lsqlite3: Database:serialize segfaults — free() on an sqlite3_malloc buffer
+parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
+target: cosmic-lua/cosmic
