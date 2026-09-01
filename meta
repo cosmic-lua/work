@@ -3,3 +3,4 @@ parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave13-1-fsnscensus
 builders: orchestrator-5-builder-tg7l-mgDq wave13-1-fsnscensus
+speccers: wave13-1-fsnscensus
