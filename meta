@@ -1,3 +1,5 @@
 title: cosmopolitan: tool/net/demo/unix-dir.lua still destructures unix.localtime positionally, broken by #321
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave15-2-unixdirdemo
+builders: wave15-2-unixdirdemo
