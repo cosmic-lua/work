@@ -2,4 +2,5 @@ title: cosmo.re: re.Regex:find's slot 2 shares the stop offset with the error st
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-20-refind
+pr: 318
 builders: wave4-20-refind
