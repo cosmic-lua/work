@@ -3,3 +3,4 @@ parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave10-2-fdcensus
 builders: orchestrator-5-builder-b8CT-qoDU wave10-2-fdcensus
+speccers: wave10-2-fdcensus
