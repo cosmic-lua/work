@@ -1,3 +1,5 @@
 title: cosmo.lsqlite3: wal_checkpoint's error slot is a numeric code, not a string
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave19-1-walcheckpoint
+builders: wave19-1-walcheckpoint
