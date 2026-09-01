@@ -1,3 +1,3 @@
-title: cosmopolitan: unix.sigaction's failure tuple gets an honest annotation
+title: cosmopolitan: unix.sigaction returns one table instead of sharing slots with errors
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
