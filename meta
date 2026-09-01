@@ -1,0 +1,1 @@
+title: unix.Dir:read: distinguish end-of-directory from a readdir() failure
