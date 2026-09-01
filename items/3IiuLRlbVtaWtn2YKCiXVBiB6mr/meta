@@ -2,5 +2,6 @@ title: cosmo.re: re.Regex:match's slot 2 shares the captures table with the erro
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-22-rematch
+reviewer: review-research-r1
 pr: 319
 builders: wave4-22-rematch
