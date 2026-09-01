@@ -1,3 +1,5 @@
 title: cosmo.unix: setfsuid/setfsgid silently report success on a refused privilege change
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: whilp/cosmopolitan
+claim: wave2-5-TLb0
+builders: wave2-5-TLb0
