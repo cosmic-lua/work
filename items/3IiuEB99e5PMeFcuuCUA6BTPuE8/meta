@@ -2,4 +2,5 @@ title: cosmo.re: re.Regex:search's slot 2 shares the captures table with the err
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-19-research
+pr: 319
 builders: wave4-19-research
