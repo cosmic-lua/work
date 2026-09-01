@@ -3,3 +3,4 @@ parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmic
 claim: wave21-1-pinbump
 builders: wave21-1-pinbump
+speccers: wave21-1-pinbump
