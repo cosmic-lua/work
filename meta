@@ -1,0 +1,3 @@
+title: cosmo.getopt: getopt.parse's nil is reachable only via caller argument-shape errors
+parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
+target: cosmic-lua/cosmic
