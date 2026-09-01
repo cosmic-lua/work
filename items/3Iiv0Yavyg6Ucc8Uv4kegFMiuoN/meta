@@ -2,4 +2,5 @@ title: cosmo.lsqlite3: open/open_memory put the numeric error code before the me
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-18-sqliteopen
+pr: 316
 builders: wave4-18-sqliteopen
