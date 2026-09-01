@@ -1,3 +1,3 @@
 title: cosmo.unix: sigaction's failure tuple shares slots 2-3 (flags, mask) with success — nanosleep-family
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmopolitan
