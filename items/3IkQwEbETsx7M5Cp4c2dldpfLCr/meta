@@ -1,0 +1,3 @@
+title: tool/net/help.txt drifts from definitions.lua on every contract PR and no gate reads it — getpgrp's entry still shows the retired failure tuple
+parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
+target: cosmic-lua/cosmopolitan
