@@ -2,5 +2,6 @@ title: lsqlite3: let a Lua UDF be marked SQLITE_DETERMINISTIC
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: wave-lok152-Jzdq
+reviewer: review-Jzdq_xLdM-lok152
 pr: 337
 builders: wave-lok152-Jzdq
