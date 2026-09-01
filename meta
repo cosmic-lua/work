@@ -1,5 +1,4 @@
 title: salvage: test_response_too_large_error_message is miscategorized as network-free
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-claim: research-verify-MiDx-1
 builders: wave2-9-MiDx wave4-4-MiDx research-verify-MiDx-1
