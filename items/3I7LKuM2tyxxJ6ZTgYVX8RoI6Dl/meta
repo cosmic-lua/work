@@ -1,10 +1,10 @@
 title: sandbox: the facade reaches ABI 9 — ioctl, scopes, TSYNC, audit (vocabulary open)
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
-claim: orch9-6-X8Ro
 pr: 1600
 verdict: accept
 verdict_head: b6af16e62c32702096c55eadceac53bdb8d9e668
 verdict_spec: d0ed0992c1a4d745a17565c27c16ff97a53ea5e6574bd3e77cb71bd58e2d1684
+resolution: completed
 builders: orch9-6-X8Ro
 speccers: review-X8Ro-2
