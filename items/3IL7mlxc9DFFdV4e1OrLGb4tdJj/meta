@@ -1,3 +1,5 @@
 title: ready bar: a spec may name a repository the session cannot read, and nothing catches it until the claim
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
+claim: wave2-3-LGb4
+builders: wave2-3-LGb4
