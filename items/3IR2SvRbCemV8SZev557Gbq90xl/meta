@@ -1,8 +1,8 @@
 title: cosmopolitan census: unix signals, time and environment — 13 nil-admitting bindings
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
-claim: wave5-3-7Gbq
 verdict: accept
 verdict_spec: 64ea081a458f5d266c4f0e8b43be4ce8e09dd959081613f2e28fb1a6abf39b09
+resolution: completed
 builders: wave3-7-7Gbq wave5-3-7Gbq
 speccers: wave3-7-7Gbq wave5-3-7Gbq
