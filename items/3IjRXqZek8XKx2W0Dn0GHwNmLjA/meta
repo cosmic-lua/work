@@ -3,5 +3,8 @@ parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave9-1-raise
 pr: 324
+verdict: accept
+verdict_head: 2153aba1f8b48146d4dbf4ff57fcc3bd443effd3
+verdict_spec: 08e6ca849e771db91bfd3edca3c3b5e3942bbb7b6454b9bdae43407446960ce6
 builders: wave9-1-raise
 speccers: 4d89c837-e662-53f2-91fc-28226ce8d8d4
