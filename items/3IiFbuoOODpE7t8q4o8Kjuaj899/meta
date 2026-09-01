@@ -2,5 +2,6 @@ title: unix.openpty: sfd/name slots double as error/errno on failure
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-10-Kjua
+reviewer: review-Kjua_j899-r1
 pr: 311
 builders: wave3-4-Kjua wave4-10-Kjua
