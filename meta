@@ -2,5 +2,6 @@ title: cosmo.getopt: getopt.parse's nil is reachable only via caller argument-sh
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-17-getopt
+reviewer: review-2b0B_BOCI-r1
 pr: 317
 builders: wave4-17-getopt
