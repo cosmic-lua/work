@@ -1,1 +1,3 @@
 title: cosmo.DecodeLua: third return slot is a byte offset, not errno
+parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
+target: cosmic-lua/cosmic
