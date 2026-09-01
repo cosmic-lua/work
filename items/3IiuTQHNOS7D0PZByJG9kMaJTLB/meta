@@ -1,9 +1,9 @@
 title: ConvertLuaArrayToStringList frees uninitialized memory on a bad argv/envp element (spawn/spawnp/exec* crash)
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
-claim: wave4-3-9kMa
 pr: 312
 verdict: accept
 verdict_head: 561c3c93caf32b8ee5c5d4605c7233a6dc27c67e
 verdict_spec: 7a3f407d22fa90cd1add7c40f072cb36e2e97acd2455e4dd02f39f688ef3023d
+resolution: completed
 builders: wave4-3-9kMa
