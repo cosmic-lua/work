@@ -2,4 +2,5 @@ title: cosmo.Fetch: too_large error's %I format specifier never renders the byte
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
 claim: wave4-8-YmGK
+pr: 310
 builders: wave-test-probe wave3-1-YmGK wave4-8-YmGK
