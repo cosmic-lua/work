@@ -3,3 +3,4 @@ parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave7-2-sandboxcensus
 builders: wave7-2-sandboxcensus
+speccers: wave7-2-sandboxcensus
