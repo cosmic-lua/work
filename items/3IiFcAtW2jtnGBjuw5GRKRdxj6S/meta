@@ -1,3 +1,4 @@
 title: unix.isatty: EBADF/EPERM silently collapse to false, contradicting its own doc and declared type
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: whilp/cosmopolitan
+speccers: review-95kn-1
