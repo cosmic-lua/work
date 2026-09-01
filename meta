@@ -1,0 +1,3 @@
+title: cosmic/time.tl: sleep_remaining_ms needs rewriting for unix.nanosleep's new return shape (cosmopolitan PR #315, once pinned)
+parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
+target: cosmic-lua/cosmic
