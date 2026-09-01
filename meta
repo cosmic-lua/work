@@ -2,5 +2,6 @@ title: sandbox.merge() silently drops the net and scope sections from its result
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: wave2-1-dDNs
+pr: 1602
 builders: wave2-1-dDNs
 speccers: d6d4a5ca-5feb-579c-b294-e39c72bf3099
