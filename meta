@@ -2,5 +2,6 @@ title: cosmopolitan: retire test/tool/net — 40 checks in no workflow, assertin
 parent: 3INxo51I1cPI8KgP0ThIpafGnut
 target: cosmic-lua/cosmopolitan
 claim: wave11-1-retiretestnet
+pr: 327
 builders: wave11-1-retiretestnet
 speccers: wave11-1-retiretestnet
