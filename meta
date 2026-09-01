@@ -2,5 +2,6 @@ title: sandbox.merge() silently drops the scope section (same class as the net d
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
 target: cosmic-lua/cosmic
 claim: wave4-9-8ZSW
+reviewer: review-8ZSW_ZTYl-r1
 pr: 1604
 builders: wave3-2-8ZSW wave4-9-8ZSW
