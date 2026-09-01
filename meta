@@ -2,5 +2,7 @@ title: cosmopolitan census: zip — 14 nil-admitting bindings
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave4-5-kPjH
+verdict: accept
+verdict_spec: bd67938118a8e2ea3d56b3777dc0e9c419b5af366d0f6f7970ed0dd460e1b3c7
 builders: wave2-8-kPjH wave4-5-kPjH
 speccers: wave4-5-kPjH
