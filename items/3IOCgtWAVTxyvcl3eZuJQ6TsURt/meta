@@ -1,3 +1,5 @@
 title: cosmopolitan: retire test/tool/net — 40 checks in no workflow, asserting contracts the fork replaced
 parent: 3INxo51I1cPI8KgP0ThIpafGnut
 target: cosmic-lua/cosmopolitan
+claim: wave11-1-retiretestnet
+builders: wave11-1-retiretestnet
