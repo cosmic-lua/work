@@ -1,3 +1,5 @@
 title: cosmo.unix: nanosleep's failure tuple shares slots with the EINTR remaining-time success values (the cited archetype, itself uncaptured)
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave4-11-0YFj
+builders: wave4-11-0YFj
