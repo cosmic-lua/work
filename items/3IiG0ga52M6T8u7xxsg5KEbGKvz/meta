@@ -1,0 +1,1 @@
+title: cosmo.DecodeLua: third return slot is a byte offset, not errno
