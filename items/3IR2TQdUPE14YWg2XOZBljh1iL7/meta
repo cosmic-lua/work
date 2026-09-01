@@ -1,8 +1,8 @@
 title: cosmopolitan census: the top-level cosmo surface — 22 nil-admitting bindings
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: whilp/cosmopolitan
-claim: review-Bljh-1
 verdict: accept
 verdict_spec: c6916a2f17cbc070378e600f9422962735b3e8f19e3c6e1e2e71b850ede9d181
+resolution: completed
 builders: orch9-11-Bljh review-Bljh-1
 speccers: d6d4a5ca-5feb-579c-b294-e39c72bf3099 review-Bljh-1
