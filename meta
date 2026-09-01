@@ -1,0 +1,1 @@
+title: unix.openpty: sfd/name slots double as error/errno on failure
