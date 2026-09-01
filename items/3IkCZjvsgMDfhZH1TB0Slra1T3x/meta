@@ -2,4 +2,5 @@ title: cosmo.unix.getsockopt: SO_LINGER overload silently drops the seconds retu
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave17-1-solinger
+pr: 332
 builders: wave17-1-solinger
