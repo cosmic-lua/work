@@ -2,5 +2,6 @@ title: cosmopolitan: unix.sigpending drops its unreachable nil — unix.Sigset|n
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: b69eb093-c2d4-5f3a-b5dd-826817f161b7
+reviewer: review-57rZ-4d89c837
 pr: 321
 builders: wave6-2-sigpending b69eb093-c2d4-5f3a-b5dd-826817f161b7
