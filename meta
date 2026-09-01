@@ -1,4 +1,5 @@
 title: salvage cosmo.unix.getlogin/uname/tcattr tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
 target: cosmic-lua/cosmopolitan
-builders: scout-4 work9-agent-scout orch-3-P6spfh7o orch-peek6 work9-peek3 orch-peek3 orch-scout9-2 orch-scout9-26 orch-scout9-46 orch9-scout-P6sp_fh7o orch9-hold-2
+claim: wave2-4-P6sp
+builders: scout-4 work9-agent-scout orch-3-P6spfh7o orch-peek6 work9-peek3 orch-peek3 orch-scout9-2 orch-scout9-26 orch-scout9-46 orch9-scout-P6sp_fh7o orch9-hold-2 wave2-4-P6sp
