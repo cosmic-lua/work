@@ -1,8 +1,8 @@
 title: cosmopolitan census: unix ids, credentials and sessions — 15 nil-admitting bindings
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: whilp/cosmopolitan
-claim: review-0Km2-2
 verdict: accept
 verdict_spec: 40da9ea380058e4cdce6898d40864da5238b5e2ed9a572bf463097e9bf6190d3
+resolution: completed
 builders: orch9-10-0Km2 review-0Km2-1 review-0Km2-2
 speccers: d6d4a5ca-5feb-579c-b294-e39c72bf3099 review-0Km2-1
