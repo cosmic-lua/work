@@ -1,3 +1,5 @@
 title: cosmopolitan census: unix sandboxing, namespaces and limits — 16 nil-admitting bindings
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave7-2-sandboxcensus
+builders: wave7-2-sandboxcensus
