@@ -3,4 +3,7 @@ parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave7-1-prepare
 pr: 322
+verdict: accept
+verdict_head: b3eb8b68ac3337b279e1f92aa7941bf87896675e
+verdict_spec: 93ff4bafce9dc03585e8f0bb9553ce763515f51703a72c43c35d23a1d85f0250
 builders: wave7-1-prepare
