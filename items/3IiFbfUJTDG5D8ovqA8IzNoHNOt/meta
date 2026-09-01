@@ -1,0 +1,1 @@
+title: unix.tiocgwinsz: cols slot doubles as error string on failure
