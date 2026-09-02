@@ -1,0 +1,1 @@
+the mode and floor depend on which instrumentation the toolchain can actually produce; the feasibility slice's Result re-cuts this spec
