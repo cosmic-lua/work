@@ -1,3 +1,5 @@
 title: cosmo.Fetch/FetchStream: dual-shape return mixes headers/body with error/kind across success and failure
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave9-3b3d2a18-a60d-4db8-aacb-94866053d38c-aXJl
+builders: wave9-3b3d2a18-a60d-4db8-aacb-94866053d38c-aXJl
