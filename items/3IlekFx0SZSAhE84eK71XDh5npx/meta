@@ -3,5 +3,8 @@ parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
 claim: wave9-63e964e1-1XDh
 pr: 1641
+verdict: accept
+verdict_head: 16d0aff2832b395bf60c984296439b3d7465513e
+verdict_spec: 39b4111991b6a0f9d35d617ad5d7032670cc60afa13d8564585a0bea97782d2f
 builders: 1d4829cc-f00e-5d15-be81-281e86c6c454 7019a67a-89f8-5ed7-bd1c-6d260093b01b wave9-63e964e1-1XDh
 speccers: 1d4829cc-f00e-5d15-be81-281e86c6c454
