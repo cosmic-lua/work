@@ -1,5 +1,6 @@
 title: G9 verification: read the win condition against the release history and declare held or the gaps
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
-builders: wave9-727215df-XZh1
+claim: wave9-d7ef6110-XZh1
+builders: wave9-727215df-XZh1 wave9-d7ef6110-XZh1
 speccers: wave9-727215df-XZh1
