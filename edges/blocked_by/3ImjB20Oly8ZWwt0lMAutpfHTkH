@@ -1,0 +1,1 @@
+the FTS5 module is absent from the currently pinned cosmos release; the spec's premise (FTS5 compiled into the library) does not hold until the pin is bumped past d88e994fc, which requires an unrelated main_handlers.tl fix
