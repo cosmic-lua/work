@@ -2,4 +2,5 @@ title: tool/lua's lua.main.o is compiled at a path mkdeps does not derive, so it
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmopolitan
 claim: wave9-f86565fb-SG6i
+pr: 366
 builders: wave9-f86565fb-SG6i
