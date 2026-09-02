@@ -2,5 +2,6 @@ title: _work/*_test.tl to runner mode (D29): delete the 335 self-call lines acro
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: wave4-lok152-AhWr
+reviewer: review-AhWr-lok152
 pr: 1617
 builders: wave4-lok152-AhWr
