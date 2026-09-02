@@ -2,6 +2,7 @@ title: feasibility: can cosmocc instrument for gcov and does an APE binary write
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: wave5-lok152-noW6
+reviewer: review-noW6-lok152
 result: 7bccaf419e6b134c81b87e9a02f0f83a177a7c0999fce355f9fa946c839b1b16
 builders: wave5-lok152-noW6
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
