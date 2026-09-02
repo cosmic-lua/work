@@ -1,0 +1,3 @@
+title: help.txt: the unix.Stat:birthtim() example has an unclosed format string and computes seconds where it wants minutes
+parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
+target: cosmic-lua/cosmopolitan
