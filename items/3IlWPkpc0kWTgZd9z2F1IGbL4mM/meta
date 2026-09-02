@@ -1,3 +1,5 @@
 title: check.must sweep: cosmic/fs/** — 10 sites in 4 files
 parent: 3IQfJ1tnwZOiJrWvDOgIxsjLrBt
 target: cosmic-lua/cosmic
+claim: wave6-lok152-c1
+builders: wave6-lok152-c1
