@@ -2,6 +2,8 @@ title: unix.wait: success tuple (pid, wstatus, rusage) shares slots 2-3 with the
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: b7dfbc3b-03ab-5a88-8aa5-22f286e0bd64
-reviewer: review-D6dk_oFOQ-lok152
 pr: 340
+verdict: request changes
+verdict_head: 7a09acc2bc892611a2d6d697d894065e4a467bca
+verdict_spec: 1320b6ce08edb8ba5806301824c351d7e59388ca2786590e69ac21682421f318
 builders: b7dfbc3b-03ab-5a88-8aa5-22f286e0bd64
