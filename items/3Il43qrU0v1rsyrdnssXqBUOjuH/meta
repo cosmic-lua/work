@@ -2,5 +2,6 @@ title: MODE=cov: an in-tree .gcda writer so -fprofile-arcs yields C line coverag
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: wave6-lok152-XqBU
+pr: 359
 builders: wave6-lok152-XqBU
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
