@@ -2,5 +2,6 @@ title: docs: a backtick path reference that names a moved or missing file surviv
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: wave5-lok152-sPu1
+reviewer: review-sPu1-lok152
 pr: 1622
 builders: wave5-lok152-sPu1
