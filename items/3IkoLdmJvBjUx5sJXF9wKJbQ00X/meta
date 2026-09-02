@@ -1,5 +1,4 @@
 title: spawned-binary tests keep a stale PASS record across an engine edit: _make/fixtures_test.tl's prerequisites never include o/bin/cosmic
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
-claim: 727215df-c268-5cf0-b590-7442b1af8878
 builders: 727215df-c268-5cf0-b590-7442b1af8878
