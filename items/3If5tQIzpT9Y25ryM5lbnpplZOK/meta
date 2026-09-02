@@ -1,5 +1,4 @@
 title: cosmic.sqlite: an extensions option on open, ensure-or-fail, empty by default
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
-claim: builder-bnpp_lZOK-orch9
 builders: builder-bnpp_lZOK-orch9
