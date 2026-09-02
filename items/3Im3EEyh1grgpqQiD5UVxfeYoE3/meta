@@ -1,0 +1,3 @@
+title: does testrun_dep already invalidate spawned-binary tests on an engine rebuild, making the per-file reads: o/bin/cosmic declaration redundant?
+parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
+target: cosmic-lua/cosmic
