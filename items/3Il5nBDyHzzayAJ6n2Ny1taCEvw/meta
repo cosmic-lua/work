@@ -2,4 +2,5 @@ title: a rename inside a declared reads: tree keeps the cached test verdict on a
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
 claim: wave9-d7ef6110-y1ta
+pr: 1628
 builders: 3fe19194-5ccf-542b-840c-0337ae8f65ac wave9-d7ef6110-y1ta
