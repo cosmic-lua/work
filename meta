@@ -1,10 +1,10 @@
 title: make's dependency tracking misses .inc files: editing one silently reuses the stale .o
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmopolitan
-claim: wave6-lok152-kAIc
 pr: 355
 verdict: accept
 verdict_head: e9a432cb1b2780086c053f1f0fd78b77c6211edf
 verdict_spec: e4b869de9f159953fa0eb0c879835f73002081d130a783c585666012f9a4f649
+resolution: completed
 builders: wave6-lok152-kAIc
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
