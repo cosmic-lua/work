@@ -1,9 +1,9 @@
 title: check.must sweep: cosmic/fs/** — 10 sites in 4 files
 parent: 3IQfJ1tnwZOiJrWvDOgIxsjLrBt
 target: cosmic-lua/cosmic
-claim: wave6-lok152-c1
 pr: 1632
 verdict: accept
 verdict_head: 9eae93881e420752137427f52aeb183e9b851d08
 verdict_spec: c31b1cd5393fa55db592ed1d1ca80328fc9e951318efec5fcca95316bea44c89
+resolution: completed
 builders: wave6-lok152-c1
