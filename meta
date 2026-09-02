@@ -2,7 +2,9 @@ title: definitions coverage check 9: parse_union accepts a dangling '|' followed
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave2-lok152-vJzp
-reviewer: review-vJzp_0nTS-lok152
 pr: 344
+verdict: accept
+verdict_head: 1e8116e323844545f266acb494770f80752b8b18
+verdict_spec: 190e0353c95dd0f325af320b1ed5bd889028af8bd1b1f99b14a38b1c31c3806f
 builders: wave2-lok152-vJzp
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
