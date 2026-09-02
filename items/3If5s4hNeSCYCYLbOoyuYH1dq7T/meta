@@ -1,5 +1,4 @@
 title: lsqlite3: BLOB and TEXT are indistinguishable at the Lua value boundary
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
-claim: wave6-lok152-uYH1
 builders: wave6-lok152-uYH1
