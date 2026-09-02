@@ -2,5 +2,6 @@ title: test_unix_misc.lua dies of SIGSYS under --ftrace: the pledged child's tra
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: wave9-0d2b3e13-9794-4836-8792-92a108937a25-KX0P
+reviewer: 1d4829cc-f00e-5d15-be81-281e86c6c454
 pr: 358
 builders: wave9-0d2b3e13-9794-4836-8792-92a108937a25-KX0P
