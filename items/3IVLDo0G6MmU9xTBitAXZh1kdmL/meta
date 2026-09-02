@@ -2,6 +2,7 @@ title: G9 verification: read the win condition against the release history and d
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
 claim: wave9-d7ef6110-XZh1
+reviewer: review-XZh1_kdmL-d7ef6110
 result: 97225848cbf6d5f3bdbf8c943a1df6b1d9f8021e156fe3ae3e2a5291edb173ef
 builders: wave9-727215df-XZh1 wave9-d7ef6110-XZh1
 speccers: wave9-727215df-XZh1
