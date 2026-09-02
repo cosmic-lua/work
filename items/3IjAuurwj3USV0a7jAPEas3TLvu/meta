@@ -2,5 +2,6 @@ title: release perf-gate: embed_extract_tree flagged +15.8% (outside its own ret
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: orchestrator-Eas3-recovery
+result: 334447608baceb30431be034659de84e1487956ca12e4f8f6552fc4843e87254
 builders: wave10--Eas3 orchestrator-Eas3-recovery
 speccers: wave10--Eas3 orchestrator-Eas3-recovery
