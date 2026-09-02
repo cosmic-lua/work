@@ -1,3 +1,5 @@
 title: test_unix_misc.lua fails when TMPDIR is unset (same pattern as #363)
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
+claim: builder-KIke_IRLc-orch9
+builders: builder-KIke_IRLc-orch9
