@@ -2,4 +2,5 @@ title: lsqlite3: register a sqlite extension by name, per connection
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: wave9-wqwl-sqlite
+pr: 364
 builders: wave9-wqwl-sqlite
