@@ -2,5 +2,6 @@ title: check.must sweep: cosmic/net/** and cosmic/quicksand/** — 11 sites in 5
 parent: 3IQfJ1tnwZOiJrWvDOgIxsjLrBt
 target: cosmic-lua/cosmic
 claim: wave6-lok152-c3
+reviewer: review-c3-lok152
 pr: 1630
 builders: wave6-lok152-c3
