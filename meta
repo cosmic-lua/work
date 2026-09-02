@@ -2,5 +2,6 @@ title: definitions coverage: a binding that loses its slot-1 @return line stays 
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave9-727215df-yRgy
+reviewer: review-yRgy-727215df-1
 pr: 348
 builders: wave9-727215df-yRgy
