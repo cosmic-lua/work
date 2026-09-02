@@ -2,6 +2,7 @@ title: gitboard brief review refuses a claimed PR-less research item, contradict
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: wave5-lok152-ISwv
+reviewer: review-ISwv-lok152-r2
 pr: 1624
 verdict: request changes
 verdict_head: 61c20182e1c8a2939eb37165d7cef2edbd187a7d
