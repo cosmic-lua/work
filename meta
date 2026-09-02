@@ -2,5 +2,6 @@ title: sqlite update.sh refreshes shell.c but not the extracted extension units 
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: wave10-5722-bcSj
+reviewer: review-bcSj-13692
 pr: 367
 builders: wave10-5722-bcSj
