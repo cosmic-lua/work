@@ -1,3 +1,5 @@
 title: unix.wait: success tuple (pid, wstatus, rusage) shares slots 2-3 with the (nil, error, errno) failure tuple
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: b7dfbc3b-03ab-5a88-8aa5-22f286e0bd64
+builders: b7dfbc3b-03ab-5a88-8aa5-22f286e0bd64
