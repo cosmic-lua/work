@@ -1,5 +1,6 @@
 title: spawned-binary tests: audit _tool/*_test.tl files for the same missing engine dependency (_make/_cli already covered by #1636)
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
-builders: 1d4829cc-f00e-5d15-be81-281e86c6c454
+claim: 7019a67a-89f8-5ed7-bd1c-6d260093b01b
+builders: 1d4829cc-f00e-5d15-be81-281e86c6c454 7019a67a-89f8-5ed7-bd1c-6d260093b01b
 speccers: 1d4829cc-f00e-5d15-be81-281e86c6c454
