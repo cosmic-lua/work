@@ -1,1 +1,3 @@
 title: fallible-returns lint scans only the function keyword: a macroexp declaring three slots past the error is never diagnosed
+parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
+target: cosmic-lua/cosmic
