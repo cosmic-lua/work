@@ -1,3 +1,5 @@
 title: check's 'already proved' cache accepts the seam's compile for a runner-mode test file the raw checker rejects — verdict depends on whether test ran first
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
+claim: wave2-lok152-DqPC
+builders: wave2-lok152-DqPC
