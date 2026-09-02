@@ -2,5 +2,6 @@ title: does testrun_dep already invalidate spawned-binary tests on an engine reb
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
 claim: 1d4829cc-f00e-5d15-be81-281e86c6c454
+result: c1e67d7f22df2c030e5b543bc3da47e3afd66553c3f6c282c85b526597b4d49b
 builders: 1d4829cc-f00e-5d15-be81-281e86c6c454
 speccers: 1d4829cc-f00e-5d15-be81-281e86c6c454
