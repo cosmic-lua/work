@@ -1,3 +1,5 @@
 title: a test that reads a git ref (origin/board) has no reads: form for it, so a warm cache replays its verdict across a board-branch rename
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
+claim: wave6-lok152-GLhS
+builders: wave6-lok152-GLhS
