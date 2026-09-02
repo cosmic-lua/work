@@ -1,3 +1,5 @@
 title: MODE=cov: the .gcda writer does not merge across the ~65 test processes, so the per-file line numbers are the last process's only
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
+claim: wave9-6384ecf1-381d-4160-8f61-01b0fdcad6c1-7Y4J
+builders: wave9-6384ecf1-381d-4160-8f61-01b0fdcad6c1-7Y4J
