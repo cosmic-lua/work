@@ -2,6 +2,7 @@ title: tool/net/help.txt drifts from definitions.lua on every contract PR and no
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave2-lok152-dldp
+reviewer: review-dldp_fLCr-lok152
 pr: 345
 builders: wave2-lok152-dldp
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
