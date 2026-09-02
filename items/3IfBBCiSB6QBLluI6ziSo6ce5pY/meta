@@ -1,5 +1,4 @@
 title: cosmic.doc.search: move --docs off substring matching onto FTS5 and bm25
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
-claim: builder-So6c_e5pY-orch9
 builders: builder-So6c_e5pY-orch9
