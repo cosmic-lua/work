@@ -1,5 +1,4 @@
 title: decision: how a SQLite BLOB is told from TEXT at the Lua boundary (representation and scope) for lsqlite3
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
-claim: c3166793-5886-5fa0-8f44-66f7df2ae6f2
 builders: c3166793-5886-5fa0-8f44-66f7df2ae6f2
