@@ -2,4 +2,5 @@ title: test_definitions_*.lua produce unbounded ftrace output (25GB), so the fun
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: wave9-edf43e55-ZbeZ
+pr: 365
 builders: wave9-edf43e55-ZbeZ
