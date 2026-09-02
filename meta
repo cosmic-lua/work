@@ -1,0 +1,3 @@
+title: decision: how a SQLite BLOB is told from TEXT at the Lua boundary (representation and scope) for lsqlite3
+parent: 3If5rH0SOReSfHsOihMU6yDoYLO
+target: cosmic-lua/cosmic
