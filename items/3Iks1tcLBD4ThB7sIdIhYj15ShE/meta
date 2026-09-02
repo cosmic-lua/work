@@ -1,3 +1,5 @@
 title: definitions coverage check 9: three more shapes gentype misreads still pass — 'fun() ?:', a spaced typed-vararg colon, and a depth-0 fun return list with a comma
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+claim: wave6-lok152-hYj1
+builders: wave6-lok152-hYj1
