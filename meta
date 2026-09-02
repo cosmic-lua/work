@@ -2,5 +2,6 @@ title: fallible-returns lint scans only the function keyword: a macroexp declari
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
 target: cosmic-lua/cosmic
 claim: wave4-lok152-Ojwq
+reviewer: review-Ojwq-lok152
 pr: 1619
 builders: wave4-lok152-Ojwq
