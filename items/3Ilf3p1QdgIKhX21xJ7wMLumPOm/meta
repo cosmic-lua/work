@@ -1,3 +1,5 @@
 title: zip tests' os.execute('rm -rf') hits a builtin rm without -r, leaking every temp directory
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
+claim: builder-wMLu_mPOm-orch9
+builders: builder-wMLu_mPOm-orch9
