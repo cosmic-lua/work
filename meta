@@ -2,6 +2,8 @@ title: lunix.c/help.txt: the 66 unix.<Type>:<method>() shape blocks are ungated 
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave9-727215df-HQmx
-reviewer: review-HQmx-727215df-1
 pr: 349
+verdict: accept
+verdict_head: 6ef6431a93423a88afb874174a82317bb18e94ab
+verdict_spec: a3ebe5571f2480f2eec87e80890c666fdfffe4002dbf3c81d122e651abbe27bb
 builders: wave9-727215df-HQmx
