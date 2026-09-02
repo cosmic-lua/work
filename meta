@@ -1,9 +1,9 @@
 title: docs/goals.md:7 points the paired-comparison method at skills/work/SKILL.md; D25 and decompose.md place it in skills/work/decompose.md
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: wave4-lok152-EFdf
 pr: 1618
 verdict: accept
 verdict_head: e187e074c63e60c5744e1bde14b3c8713c1766c5
 verdict_spec: d3460be949390a8b90089c87c0eea7d617e2d5b6a4a9d1a40885a1e710f9624f
+resolution: completed
 builders: wave4-lok152-EFdf
