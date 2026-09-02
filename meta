@@ -1,5 +1,5 @@
 title: _work/publish_test.tl and publish_race_test.tl: a module-scope 'all tests passed' banner now prints before any case runs (runner mode, #1617)
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+target: cosmic-lua/work@main
 claim: wave5-lok152-xSER
 builders: wave5-lok152-xSER
