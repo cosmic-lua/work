@@ -2,6 +2,7 @@ title: nilreturn walk: the name-follows tell for record/enum/interface/macroexp 
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
 target: cosmic-lua/cosmic
 claim: wave5-lok152-eQkX
+reviewer: review-eQkX-lok152-r2
 pr: 1623
 verdict: request changes
 verdict_head: 7535bb942d34c63773d4d91ca18fc8a9aa4fbe96
