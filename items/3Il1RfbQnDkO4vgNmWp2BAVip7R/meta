@@ -1,0 +1,3 @@
+title: MODE=cov: instrument the binding sources, commit a per-file floor, and gate o/cov/tool/lua/test on it
+parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
+target: cosmic-lua/cosmopolitan
