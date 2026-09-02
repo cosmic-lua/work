@@ -2,5 +2,6 @@ title: a test that reads a git ref (origin/board) has no reads: form for it, so 
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
 target: cosmic-lua/cosmic
 claim: wave6-lok152-GLhS
+pr: 1635
 builders: wave6-lok152-GLhS
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
