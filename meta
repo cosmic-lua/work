@@ -1,5 +1,4 @@
 title: test_slurp_ranges.lua fails when TMPDIR is unset
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
-claim: 7019a67a-89f8-5ed7-bd1c-6d260093b01b
 builders: 7019a67a-89f8-5ed7-bd1c-6d260093b01b
