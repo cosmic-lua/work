@@ -1,5 +1,6 @@
 title: release perf-gate: embed_extract_tree flagged +15.8% (outside its own retry noise band) in the 2026-09-01 release run — confirm reproduction and bisect the 8-commit window
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-builders: wave10--Eas3
+claim: orchestrator-Eas3-recovery
+builders: wave10--Eas3 orchestrator-Eas3-recovery
 speccers: wave10--Eas3 orchestrator-Eas3-recovery
