@@ -2,6 +2,7 @@ title: make's dependency tracking misses .inc files: editing one silently reuses
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmopolitan
 claim: wave6-lok152-kAIc
+reviewer: review-kAIc-lok152
 pr: 355
 builders: wave6-lok152-kAIc
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
