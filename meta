@@ -2,6 +2,8 @@ title: shape gate (#345/#347): a mis-indented branch line drops its block from t
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: wave5-lok152-W7lE
-reviewer: review-W7lE-lok152
 pr: 352
+verdict: accept
+verdict_head: 8fd6ecf9eae1b6df2e54374081618418bcb2fbd6
+verdict_spec: a10e138aecb49bfabba92f2b6df1e7a2d67ba64506b272c238a4799784273526
 builders: wave5-lok152-W7lE
