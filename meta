@@ -2,4 +2,5 @@ title: _work/publish_test.tl and publish_race_test.tl: a module-scope 'all tests
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: wave5-lok152-xSER
+pr: 1620
 builders: wave5-lok152-xSER
