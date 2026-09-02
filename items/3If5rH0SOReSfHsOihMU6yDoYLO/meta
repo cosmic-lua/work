@@ -2,5 +2,6 @@ title: sqlite: extract the vendored ext/misc extensions into a named registry
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: wave6-lok152-U6yD
+reviewer: review-U6yD-lok152
 pr: 356
 builders: wave6-lok152-U6yD
