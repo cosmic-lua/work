@@ -2,6 +2,7 @@ title: next's review reason and the verdict guidance still say 'a PR awaits' and
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: wave6-lok152-1WOX
+reviewer: review-1WOX-lok152
 pr: 1625
 builders: wave6-lok152-1WOX
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
