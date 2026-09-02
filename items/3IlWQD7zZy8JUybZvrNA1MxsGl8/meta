@@ -2,5 +2,6 @@ title: check.must sweep: cosmic/fetch/** — 18 sites in 5 files
 parent: 3IQfJ1tnwZOiJrWvDOgIxsjLrBt
 target: cosmic-lua/cosmic
 claim: wave6-lok152-c2
+reviewer: review-c2-lok152
 pr: 1634
 builders: wave6-lok152-c2
