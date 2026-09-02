@@ -2,4 +2,5 @@ title: check.must sweep: cosmic/ flat files A (embed_*, time_parse) — 32 sites
 parent: 3IQfJ1tnwZOiJrWvDOgIxsjLrBt
 target: cosmic-lua/cosmic
 claim: wave6-lok152-c4
+pr: 1631
 builders: wave6-lok152-c4
