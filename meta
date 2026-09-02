@@ -2,5 +2,6 @@ title: ready bar: an item's own repo field may name a repository the session can
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: wave6-lok152-qnEx
+pr: 1629
 builders: wave6-lok152-qnEx
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
