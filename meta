@@ -1,6 +1,6 @@
 title: next's review reason and the verdict guidance still say 'a PR awaits' and '--pr N --head SHA' for a research handover (after #1624)
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+target: cosmic-lua/work@main
 claim: wave6-lok152-1WOX
 builders: wave6-lok152-1WOX
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
