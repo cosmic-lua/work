@@ -1,10 +1,10 @@
 title: tool/net/demo: unix-subprocess.lua and unix-unix.lua pass sigaction's saved table back as a handler once #338 lands
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
-claim: wave2-lok152-FhYf
 pr: 341
 verdict: accept
 verdict_head: 218801d55abedf2d21c83a03e203822198b6ce32
 verdict_spec: 3fe53ed931308849976d66b3e95900daf4d07b80f94cc041ea6c244262896955
+resolution: completed
 builders: wave2-lok152-FhYf
 speccers: 6a371436-ec61-55f6-9c33-690c48f35726
