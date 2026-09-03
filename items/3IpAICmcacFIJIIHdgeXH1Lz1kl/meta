@@ -2,4 +2,5 @@ title: decide: record that generation 1 seeds cosmo.* declarations from the tree
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-XH1L_z1kl-obs1
+pr: 1657
 builders: build-XH1L_z1kl-obs1
