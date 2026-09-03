@@ -1,0 +1,3 @@
+title: make run: refuse instead of assert when the target vanishes between resolve() and file_of()
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
