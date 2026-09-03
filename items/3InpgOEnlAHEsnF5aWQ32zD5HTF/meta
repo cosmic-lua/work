@@ -2,4 +2,5 @@ title: sqlite extension registry batch 3: extract sqlar, stmtrand, uint
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: orchestrate9-h38H-b3
+pr: 371
 builders: orchestrate9-h38H-b3
