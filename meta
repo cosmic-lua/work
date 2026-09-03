@@ -1,5 +1,4 @@
 title: casts: record-field narrowing — the tl patch closing 5 record-union-after-guard sites
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
-claim: build-FePr_L4FB-e5f6
 builders: build-FePr_L4FB-e5f6
