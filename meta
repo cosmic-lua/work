@@ -2,7 +2,8 @@ title: sqlite extension registry batch 1: dbdata (ext/recover marker) and base64
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: research-E6CI_Bbi4-orch9
-reviewer: review-E6CI_Bbi4-verdict
 result: 015d2444e56bdf801cde64eb57224cb1ccdfb035dd563333f6027e70d410e63c
+verdict: accept
+verdict_spec: 015d2444e56bdf801cde64eb57224cb1ccdfb035dd563333f6027e70d410e63c
 builders: research-E6CI_Bbi4-orch9
 speccers: research-E6CI_Bbi4-orch9
