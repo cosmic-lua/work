@@ -2,4 +2,5 @@ title: test_definitions_help: compare a shape block's slot-1 class name with def
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmopolitan
 claim: build-1uIl_Pnic-o9a1
+pr: 376
 builders: build-1uIl_Pnic-o9a1
