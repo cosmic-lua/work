@@ -1,3 +1,5 @@
 title: template: {{url}} refuses javascript: and protocol-relative URLs, attribute-escapes at the splice
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: build-YB4G_9jp0
+builders: build-YB4G_9jp0
