@@ -1,0 +1,3 @@
+title: gitboard new: refuse a mint that duplicates an open item or one ended in the last 14 days, by title and by the binding it names
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/cosmic
