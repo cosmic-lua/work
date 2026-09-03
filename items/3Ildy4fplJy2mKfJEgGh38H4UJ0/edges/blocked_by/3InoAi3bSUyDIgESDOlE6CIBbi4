@@ -1,0 +1,1 @@
+batch 1 (appendvfs base64 base85 completion dbdata) cannot land as specified: dbdata's shell.c marker is under ext/recover/ not ext/misc/, and base64/base85's init declarations are wrapped in #ifndef SQLITE_SHELL_EXTFUNCS, breaking the test's literal substring checks — needs a decision on extending the extraction rule/test
