@@ -2,3 +2,4 @@ title: cosmic needs an adaptation pass for cosmopolitan's PRs #308-#362 binding-
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
 builders: 15925051-9a03-506a-af49-a6b214eeb796 builder-A3HK_gamw-orch9
+speccers: 617186a3-6ded-5f05-a74a-6054c4631945
