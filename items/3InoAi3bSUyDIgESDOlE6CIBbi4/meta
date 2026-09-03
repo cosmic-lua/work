@@ -1,3 +1,5 @@
 title: sqlite extension registry batch 1: dbdata (ext/recover marker) and base64/base85 (#ifndef-wrapped init) don't fit the extraction rule as specified
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
+claim: research-E6CI_Bbi4-orch9
+builders: research-E6CI_Bbi4-orch9
