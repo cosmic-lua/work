@@ -1,0 +1,3 @@
+title: guide.make: list COSMIC_COVERAGE_ENV, and ratchet the public table against the build's reads
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
