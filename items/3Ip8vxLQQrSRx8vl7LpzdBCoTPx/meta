@@ -2,5 +2,6 @@ title: D20: amend the rule-11 note — an iterator's terminating payload is read
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-zdBC_oTPx
+reviewer: review-zdBC_oTPx-1
 pr: 1651
 builders: build-zdBC_oTPx
