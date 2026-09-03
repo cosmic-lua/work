@@ -2,4 +2,5 @@ title: lsqlite3: ~600 lines of session/changeset/rebaser code are permanently de
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
 claim: wave-Dy0G-build
+pr: 373
 builders: wave-Dy0G-build
