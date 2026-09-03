@@ -1,0 +1,1 @@
+any pin bump reaching 405d8840 inherits 3IkSSqvH's generation-phase deadlock in full (d88e994f and b2a49c60 are both ancestors of 405d8840); confirmed via git merge-base
