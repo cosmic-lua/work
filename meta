@@ -2,4 +2,5 @@ title: definitions.lua: fallible bindings' @overload arms declare `true`, hiding
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmopolitan
 claim: build-lNuQ_u063-i9j0
+pr: 377
 builders: build-lNuQ_u063-i9j0
