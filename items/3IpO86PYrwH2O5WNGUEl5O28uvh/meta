@@ -2,4 +2,5 @@ title: make: the seed dir is removed on every exit of sources(), not only after 
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-l5O2_8uvh-o9a1
+pr: 1661
 builders: build-l5O2_8uvh-o9a1
