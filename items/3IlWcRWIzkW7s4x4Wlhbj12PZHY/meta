@@ -3,3 +3,4 @@ parent: 3IPXQ1Zw1xfRYx4dV1zwASNhQ3N
 target: cosmic-lua/cosmic
 claim: 7019a67a-89f8-5ed7-bd1c-6d260093b01b
 builders: builder-bj12_PZHY-orch9 7019a67a-89f8-5ed7-bd1c-6d260093b01b
+speccers: 7019a67a-89f8-5ed7-bd1c-6d260093b01b
