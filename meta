@@ -2,4 +2,5 @@ title: docs: sweep help.txt, redbean demo and AGENTS.md for shapes the bundling 
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmopolitan
 claim: build-e2c2_GEaY
+pr: 375
 builders: build-e2c2_GEaY
