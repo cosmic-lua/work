@@ -3,3 +3,4 @@ parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: build-c5wU_p1n9
 builders: build-c5wU_p1n9
+speccers: build-c5wU_p1n9
