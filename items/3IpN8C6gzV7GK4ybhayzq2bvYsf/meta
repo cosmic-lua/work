@@ -1,3 +1,3 @@
 title: gitboard drop/spec: a refusal on a minted claim says to pass --session, not that the builder drops their own work
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmic@board
