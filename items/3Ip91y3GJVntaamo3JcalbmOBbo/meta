@@ -2,6 +2,7 @@ title: js: escape backtick, $, { and the double quote as \uXXXX so SafeJs cannot
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-albm_OBbo
+reviewer: review-albm_OBbo-2
 pr: 1654
 verdict: request changes
 verdict_head: 613521542e49e756627efa33432db616bd634951
