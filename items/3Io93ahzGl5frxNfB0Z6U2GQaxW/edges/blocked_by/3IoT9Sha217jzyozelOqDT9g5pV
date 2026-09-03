@@ -1,0 +1,1 @@
+regression case mandated by this item's own Change requires a live registered SQLITE_OK_LOAD_PERMANENTLY extension, and none exists in the registry yet (batch-1 landing PR not filed) — sequencing needs a decision
