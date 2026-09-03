@@ -3,3 +3,4 @@ parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
 claim: orchestrate9-sYEp_31Y1
 builders: c3166793-5886-5fa0-8f44-66f7df2ae6f2 builder-sYEp_31Y1-orch9 orchestrate9-sYEp_31Y1
+speccers: orchestrate9-sYEp_31Y1
