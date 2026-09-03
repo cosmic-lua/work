@@ -1,3 +1,4 @@
 title: tl: enum subtyping — a subset enum is a subtype, every enum is a string, and 11 cast sites wait on it
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+speccers: 48a92156-b7f4-5273-b993-ba9f946ffb80
