@@ -1,0 +1,1 @@
+spec's is_a-comparison rule shape would be a near no-op and stays silent on its own motivating example — narrowed_declaration launders number to integer before any patched comparison runs; needs a decision on re-scoping to the narrowing machinery or closing as resolved-by-non-issue
