@@ -1,0 +1,3 @@
+title: make: add the o/bin/cosmic test prerequisite only when the project builds cmd/cosmic
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
