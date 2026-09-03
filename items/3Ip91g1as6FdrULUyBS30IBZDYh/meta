@@ -2,4 +2,5 @@ title: css: document that the hex-escape allowlist decodes inside url() and sele
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-30IB_ZDYh-obs1
+pr: 1658
 builders: build-30IB_ZDYh-obs1
