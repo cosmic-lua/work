@@ -2,4 +2,5 @@ title: template: {{url}} refuses javascript: and protocol-relative URLs, attribu
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-YB4G_9jp0
+pr: 1653
 builders: build-YB4G_9jp0
