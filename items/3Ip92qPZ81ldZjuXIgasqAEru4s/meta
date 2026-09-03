@@ -1,3 +1,5 @@
 title: types: run tlast_gen's bytecode dump without cosmic.child in the generator's closure
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: build-sqAE_ru4s
+builders: build-sqAE_ru4s
