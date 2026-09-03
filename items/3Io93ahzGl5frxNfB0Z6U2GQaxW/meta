@@ -1,0 +1,3 @@
+title: lsqlite3: db_register_extension rejects SQLITE_OK_LOAD_PERMANENTLY (appendvfs) as a failure
+parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
+target: cosmic-lua/cosmopolitan
