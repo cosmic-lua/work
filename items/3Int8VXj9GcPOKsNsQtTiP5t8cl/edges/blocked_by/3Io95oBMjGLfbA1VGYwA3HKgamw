@@ -1,0 +1,1 @@
+cannot verify the cosmic.sqlite.Blob implementation against value_type/column_type until cosmic's 3p/cosmos pin can actually be bumped past the current binding-contract-shape break; the sqlite-side implementation itself is already drafted, uncommitted, in the item's worktree
