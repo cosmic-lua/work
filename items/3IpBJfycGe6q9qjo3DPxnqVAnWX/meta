@@ -2,4 +2,5 @@ title: casts: sqlite row column read — 2 sites close through Row's typed colum
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
 claim: build-xnqV_AnWX-o9a1
+pr: 1659
 builders: build-xnqV_AnWX-o9a1
