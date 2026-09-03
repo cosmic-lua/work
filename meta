@@ -1,4 +1,6 @@
 title: tl: publish AST node types — the 18 tl-compiler-surface casts are hand-typed map views over an erased surface
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: 48a92156-b7f4-5273-b993-ba9f946ffb80
+builders: 48a92156-b7f4-5273-b993-ba9f946ffb80
 speccers: 48a92156-b7f4-5273-b993-ba9f946ffb80
