@@ -1,5 +1,6 @@
 title: sqlite extension registry: extract the remaining fifteen ext/misc units in three batches
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmopolitan
-builders: builder-h38H_4UJ0-orch9
+claim: orchestrate9-h38H_4UJ0
+builders: builder-h38H_4UJ0-orch9 orchestrate9-h38H_4UJ0
 speccers: c3166793-5886-5fa0-8f44-66f7df2ae6f2
