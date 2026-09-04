@@ -2,4 +2,5 @@ title: sqlite3: drop -DSQLITE_ENABLE_SESSION and PREUPDATE_HOOK, and the empty s
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmopolitan
 claim: build-CRn8_vfb0-1
+pr: 382
 builders: build-CRn8_vfb0-1
