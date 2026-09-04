@@ -1,3 +1,4 @@
 title: gitboard read verbs: one ref snapshot per run — show takes two snapshots, show ID reads the spec twice, 6 and 12 git processes where 4 and 5 suffice
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+speccers: 32638265-cf26-5d58-a274-cc23010d498c
