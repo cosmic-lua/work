@@ -54,8 +54,8 @@ local record Item
   base: string
   --- The scheduled workflow file this item repairs; "" for ordinary
   --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN
-  --- item may carry a given lane.
-  lane: string
+  --- item may carry a given key.
+  key: string
   --- Items this one is ranked ABOVE, each by id: the priority
   --- relation, recorded on the winner of a comparison. Stored as one
   --- "id id" string — the literal domain has no lists. Any item may
@@ -70,6 +70,13 @@ local record Item
   --- later session judge whether the edge still holds. Entries whose
   --- blocker left `blocked_by` are pruned on the next write.
   block_reason: {string: string}
+  --- Edge kinds this reader does not interpret, carried opaquely so a
+  --- tree written by a newer reader round-trips unchanged: kind -> id
+  --- -> content (the reason, possibly ""). Never rendered by any verb
+  --- and never validated here; `_work.itemtree` is the only reader and
+  --- writer of it, and `gitboard fsck` is the only verb that reports
+  --- on it at all.
+  other_edges: {string: {string: string}} | nil
   --- The session that claimed it; "" when unclaimed.
   claim: string
   --- Every session that has held the claim, oldest first. Stored as
@@ -146,7 +153,7 @@ local SPEC < const > = shape.record({
     parent = shape.optional(shape.string),
     repo = shape.optional(shape.string),
     base = shape.optional(shape.string),
-    lane = shape.optional(shape.string),
+    key = shape.optional(shape.string),
     beats = shape.optional(shape.string),
     blocked_by = shape.optional(shape.string),
     block_reason = shape.optional(shape.map(shape.string)),
@@ -173,7 +180,7 @@ local record Raw
   parent: string | nil
   repo: string | nil
   base: string | nil
-  lane: string | nil
+  key: string | nil
   beats: string | nil
   blocked_by: string | nil
   block_reason: {string: string} | nil
@@ -364,7 +371,7 @@ local function decode(t: {string: any}): Item | nil, string
     parent = raw.parent or "",
     repo = raw.repo or "",
     base = raw.base or "",
-    lane = raw.lane or "",
+    key = raw.key or "",
     beats = beats,
     blocked_by = blocked,
     block_reason = reasons,
@@ -409,7 +416,7 @@ local function encode(it: Item): {string: any}
   if (it.parent or "") ~= "" then t.parent = it.parent end
   if (it.repo or "") ~= "" then t.repo = it.repo end
   if (it.base or "") ~= "" then t.base = it.base end
-  if (it.lane or "") ~= "" then t.lane = it.lane end
+  if (it.key or "") ~= "" then t.key = it.key end
   if #(it.beats or {}) > 0 then
     t.beats = table.concat(it.beats, " ")
   end
