@@ -2,4 +2,5 @@ title: release publishes regardless of the perf compare; the measurement moves t
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: 259ba306-c053-56fc-b9ad-784a9d4ed050
+pr: 1687
 builders: 259ba306-c053-56fc-b9ad-784a9d4ed050
