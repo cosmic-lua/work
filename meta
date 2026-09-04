@@ -2,5 +2,6 @@ title: review brief: name the GitHub MCP access path and the board-branch diff-s
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-mzpu_OKna-d6f1cc41
+pr: 1707
 builders: build-mzpu_OKna-d6f1cc41
 speccers: 07d7b9b9-4374-5aae-9149-46fdff7aa81e
