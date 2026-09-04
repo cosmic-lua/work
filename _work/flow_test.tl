@@ -203,7 +203,7 @@ local function test_unified_ranks_stage_before_priority()
   local reworking = make({parent = goal.id, claim = "s3", pr = 6,
       verdict = "request changes"})
   local building = make({parent = goal.id, claim = "s4"})
-  local repair = make({parent = goal.id, lane = "release.yml"})
+  local repair = make({parent = goal.id, key = "release.yml"})
   local hot = make({parent = goal.id})
   -- The todo item outranks EVERYTHING in the comparison order…
   hot.beats = {accepted.id, reviewable.id, reworking.id, building.id,

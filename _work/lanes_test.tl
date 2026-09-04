@@ -42,10 +42,11 @@ local RED: {string: string} = {["release.yml"] = "failure",
 local GREEN: {string: string} = {["release.yml"] = "success",
   ["fuzz.yml"] = "success", ["docs.yml"] = "success"}
 
---- The one open repair item carrying `lane`, nil when there is none.
+--- The one open repair item carrying `lane` as its `key`, nil when
+--- there is none.
 local function repair_for(all: {item.Item}, lane: string): item.Item
   for _, it in ipairs(all) do
-    if item.is_open(it) and it.lane == lane then
+    if item.is_open(it) and it.key == lane then
       return it
     end
   end
@@ -73,7 +74,7 @@ local function test_mint_is_idempotent_per_lane()
   local all = check.must(store.list(s))
   local count = 0
   for _, it in ipairs(all) do
-    if it.lane == "release.yml" then count = count + 1 end
+    if it.key == "release.yml" then count = count + 1 end
   end
   assert(count == 1,
     "a second red observation mints nothing new: " .. tostring(count))

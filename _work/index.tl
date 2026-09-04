@@ -16,15 +16,20 @@
 --- is `WITHOUT ROWID` so the key itself is the row's identity, foreign
 --- keys are ON for the whole connection, and a closed vocabulary
 --- (`verdict`, `resolution`, ...) is a `CHECK IN (...)` naming it
---- rather than trusted free text.
+--- rather than trusted free text. `parent` and an edge's `to_id` are
+--- the deliberate exceptions: neither carries a foreign key, so a
+--- dangling one is a `problems()` QUERY finding rather than a load-time
+--- refusal — the tree itself may carry a dangling reference (a hand
+--- edit, a partial import), and this index has to load it anyway to
+--- report on it.
 local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
 
 local type Item = item.Item
 
---- The schema: item fields, the priority and blocker edges, and the
---- views every reader queries instead of re-deriving role and state by
---- hand. `dominates` is here (not in `_work.index_priority`) because
+--- The schema: item fields, the edge relation, and the views every
+--- reader queries instead of re-deriving role and state by hand.
+--- `dominates` is here (not in `_work.index_priority`) because
 --- `problems` needs it for the priority-cycle finding; the rest of the
 --- priority apparatus (`own`, `band`, `ancestors`, `unplaced`) is
 --- layered on top by `_work.index_priority`, which this module does
@@ -33,10 +38,10 @@ local DDL < const > = [[
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL CHECK(length(title) > 0),
-  parent TEXT REFERENCES items(id),
+  parent TEXT NOT NULL DEFAULT '',
   repo TEXT NOT NULL DEFAULT '',
   base TEXT NOT NULL DEFAULT '',
-  lane TEXT NOT NULL DEFAULT '',
+  key TEXT NOT NULL DEFAULT '',
   claim TEXT NOT NULL DEFAULT '',
   reviewer TEXT NOT NULL DEFAULT '',
   pr INTEGER NOT NULL DEFAULT 0,
@@ -48,17 +53,17 @@ CREATE TABLE items (
   held INTEGER NOT NULL DEFAULT 0 CHECK(held IN (0, 1))
 ) STRICT, WITHOUT ROWID;
 
-CREATE TABLE beats (
-  winner TEXT REFERENCES items(id),
-  loser TEXT REFERENCES items(id),
-  PRIMARY KEY(winner, loser)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE blocked_by (
-  item TEXT REFERENCES items(id),
-  blocker TEXT REFERENCES items(id),
+-- Every edge this build carries, of any kind: `beats` (the priority
+-- relation), `blocked_by` (a reason per entry), and any OTHER kind an
+-- item's tree names, which this index loads exactly like the two it
+-- interprets. `to_id` deliberately carries no foreign key — see the
+-- module header.
+CREATE TABLE edges (
+  kind TEXT NOT NULL,
+  from_id TEXT NOT NULL REFERENCES items(id),
+  to_id TEXT NOT NULL,
   reason TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY(item, blocker)
+  PRIMARY KEY(kind, from_id, to_id)
 ) STRICT, WITHOUT ROWID;
 
 CREATE TABLE builders (
@@ -75,14 +80,14 @@ CREATE TABLE speccers (
   PRIMARY KEY(item, seq)
 ) STRICT, WITHOUT ROWID;
 
-CREATE UNIQUE INDEX one_open_item_per_lane
-  ON items(lane) WHERE lane <> '' AND resolution = '';
+CREATE UNIQUE INDEX one_open_item_per_key
+  ON items(key) WHERE key <> '' AND resolution = '';
 
 CREATE VIEW open_items AS
   SELECT * FROM items WHERE resolution = '';
 
 CREATE VIEW roots AS
-  SELECT * FROM items WHERE parent IS NULL;
+  SELECT * FROM items WHERE parent = '';
 
 -- An item with an open child, whether or not the item itself is open
 -- — matches `_work.flow.has_open_children`, which asks nothing about
@@ -93,7 +98,7 @@ CREATE VIEW containers AS
 
 CREATE VIEW workable AS
   SELECT i.* FROM open_items i
-  WHERE i.parent IS NOT NULL
+  WHERE i.parent <> ''
   AND NOT EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
 
 -- Mirrors `_work.flow.is_doing` and the resolution rule exactly; it
@@ -122,26 +127,26 @@ CREATE VIEW substate AS
     END AS substate
   FROM items;
 
--- The transitive closure of `beats`: every (winner, loser) pair one
--- item outranks, directly or through the chain. A self-pair
+-- The transitive closure of the `beats` kind: every (winner, loser)
+-- pair one item outranks, directly or through the chain. A self-pair
 -- (winner = loser) means the edges cycle through that item — the same
--- test `_work.priority.cycle_problems` runs in Lua.
+-- test `_work.priority.cycle_problems` runs in Lua. A dangling beats
+-- edge (its `to_id` names no item) never enters the walk — matching
+-- `_work.priority.walk`'s own `index[b] ~= nil` guard — so it counts
+-- as a `dangling_edges` finding, never as standing: joined against
+-- `items` at both the base case and every recursive step, since a
+-- later hop can be the one that goes dangling.
 CREATE VIEW dominates AS
   WITH RECURSIVE dom(winner, loser) AS (
-    SELECT winner, loser FROM beats
+    SELECT e.from_id, e.to_id FROM edges e
+    JOIN items i ON i.id = e.to_id
+    WHERE e.kind = 'beats'
     UNION
-    SELECT d.winner, b.loser FROM dom d JOIN beats b ON d.loser = b.winner
+    SELECT d.winner, e.to_id FROM dom d
+    JOIN edges e ON d.loser = e.from_id AND e.kind = 'beats'
+    JOIN items i ON i.id = e.to_id
   )
   SELECT winner, loser FROM dom;
-
--- Items whose row landed with `parent` left NULL because the parent it
--- actually named does not exist — as opposed to a genuine root, which
--- never named one. `broken_chains` treats only the latter as a chain's
--- valid end; walking through one of these is still broken, the same
--- way `_work.flow.root_of` never treats a nonexistent parent as a root.
-CREATE TABLE refused_parent (
-  id TEXT PRIMARY KEY
-) STRICT, WITHOUT ROWID;
 ]]
 
 --- The open connection plus the per-load problem strings `open`
@@ -181,77 +186,47 @@ local function try(db: sqlite.Database, sql: string, params: table,
   return false
 end
 
---- Every item's row, in two passes so a valid parent never depends on
---- INSERT order: pass one writes every item with `parent` left NULL —
---- which foreign keys never check — and pass two sets it, by which
---- point every item that loaded at all already has a row. Only a
---- GENUINELY dangling or malformed parent fails pass two, and its
---- message is written to match `_work.flow.item_problems`'s own
---- wording exactly, so the two are trivially comparable in the ratchet
---- test. Immediate (non-deferred) foreign-key checking is deliberate:
---- `PRAGMA defer_foreign_keys` pushes a violation to COMMIT, where it
---- would roll back the WHOLE transaction — exactly the abort-on-one-
---- bad-row outcome this load must not have.
+--- Every item's row, in ONE pass — `parent` carries no foreign key
+--- (see the module header), so nothing here has to defer or repair a
+--- dangling one: a bogus parent lands verbatim, and `dangling_parents`
+--- reports it live, queried, exactly like a dangling edge is.
 --- @param db sqlite.Database The connection
 --- @param items {Item} Every item to load
 --- @param problems {string} Problem lines, appended to on any refusal
 local function load_items(db: sqlite.Database, items: {Item}, problems: {string})
-  local by_id: {string: Item} = {}
   for _, it in ipairs(items) do
-    by_id[it.id] = it
-  end
-  local landed: {string: boolean} = {}
-  for _, it in ipairs(items) do
-    landed[it.id] = try(db, [[
-      INSERT INTO items(id, title, repo, base, lane, claim, reviewer, pr,
-        result, verdict, verdict_head, verdict_spec, resolution, held)
-      VALUES (:id, :title, :repo, :base, :lane, :claim, :reviewer, :pr,
-        :result, :verdict, :verdict_head, :verdict_spec, :resolution, :held)
+    local landed = try(db, [[
+      INSERT INTO items(id, title, parent, repo, base, key, claim, reviewer,
+        pr, result, verdict, verdict_head, verdict_spec, resolution, held)
+      VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :reviewer,
+        :pr, :result, :verdict, :verdict_head, :verdict_spec, :resolution, :held)
     ]], {
-        id = it.id, title = it.title, repo = it.repo or "", base = it.base or "",
-        lane = it.lane or "", claim = it.claim or "", reviewer = it.reviewer or "",
+        id = it.id, title = it.title, parent = it.parent or "",
+        repo = it.repo or "", base = it.base or "", key = it.key or "",
+        claim = it.claim or "", reviewer = it.reviewer or "",
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",
         verdict_head = it.verdict_head or "", verdict_spec = it.verdict_spec or "",
         resolution = it.resolution or "", held = it.is_held and 1 or 0,
       }, nil, problems, it.id)
-  end
-  for _, it in ipairs(items) do
-    if landed[it.id] and (it.parent or "") ~= "" then
-      -- A refused parent leaves the row rootless rather than
-      -- dangling on an id no other row carries: every view still
-      -- reads it, just as an (incorrectly) parentless item rather
-      -- than one pointing nowhere. `refused_parent` remembers WHICH
-      -- rootless rows are this — refused, not genuinely rootless — so
-      -- `broken_chains` can tell the two apart.
-      local ok = try(db, "UPDATE items SET parent = :parent WHERE id = :id",
-        {parent = it.parent, id = it.id},
-        ("%s: parent %s does not exist"):format(it.id, it.parent),
-        problems, it.id)
-      if not ok then
-        assert(db:exec("INSERT INTO refused_parent(id) VALUES (?)", {it.id}))
-      end
-    end
-  end
-  for _, it in ipairs(items) do
-    if landed[it.id] then
+    if landed then
       for _, b in ipairs(it.beats or {}) do
-        if by_id[b] == nil then
-          problems[#problems + 1] = ("%s: beats names %s, not on the board "
-            .. "(dangling edge)"):format(it.id, b)
-        elseif landed[b] then
-          try(db, "INSERT OR IGNORE INTO beats(winner, loser) VALUES (?, ?)",
-            {it.id, b}, nil, problems, it.id)
-        end
+        try(db, [[
+          INSERT OR IGNORE INTO edges(kind, from_id, to_id, reason)
+          VALUES ('beats', ?, ?, '')
+        ]], {it.id, b}, nil, problems, it.id)
       end
       for _, b in ipairs(it.blocked_by or {}) do
-        if by_id[b] == nil then
-          problems[#problems + 1] = ("%s: blocked_by names %s, not on the "
-            .. "board (dangling edge)"):format(it.id, b)
-        elseif landed[b] then
+        try(db, [[
+          INSERT OR IGNORE INTO edges(kind, from_id, to_id, reason)
+          VALUES ('blocked_by', ?, ?, ?)
+        ]], {it.id, b, (it.block_reason or {})[b] or ""}, nil, problems, it.id)
+      end
+      for kind, idmap in pairs(it.other_edges or {}) do
+        for eid, reason in pairs(idmap) do
           try(db, [[
-            INSERT OR IGNORE INTO blocked_by(item, blocker, reason)
-            VALUES (?, ?, ?)
-          ]], {it.id, b, (it.block_reason or {})[b] or ""}, nil, problems, it.id)
+            INSERT OR IGNORE INTO edges(kind, from_id, to_id, reason)
+            VALUES (?, ?, ?, ?)
+          ]], {kind, it.id, eid, reason or ""}, nil, problems, it.id)
         end
       end
       for seq, name in ipairs(it.builders or {}) do
@@ -302,20 +277,53 @@ local function open(items: {Item}, specs?: {string: string}): Index | nil, strin
   return {db = db, specs = specs or {}, load_problems = problems}
 end
 
---- Items sharing one non-empty lane while both are open — always empty
---- given `one_open_item_per_lane`'s unique index already refuses the
+--- Items sharing one non-empty key while both are open — always empty
+--- given `one_open_item_per_key`'s unique index already refuses the
 --- second such row at load; kept as a live, queried check on the
 --- invariant rather than trusted to the index definition alone.
 --- @param self Index The index
 --- @return {string} Problem lines, possibly empty
-local function lane_duplicates(self: Index): {string}
+local function key_duplicates(self: Index): {string}
   local out: {string} = {}
   for row in assert(self.db:query([[
-      SELECT lane, COUNT(*) AS n FROM open_items
-      WHERE lane <> '' GROUP BY lane HAVING COUNT(*) > 1
+      SELECT key, COUNT(*) AS n FROM open_items
+      WHERE key <> '' GROUP BY key HAVING COUNT(*) > 1
     ]])) do
-    out[#out + 1] = ("lane %s is claimed by %d open items at once"):format(
-      row.lane, math.tointeger(row.n) or 0)
+    out[#out + 1] = ("key %s is claimed by %d open items at once"):format(
+      row.key, math.tointeger(row.n) or 0)
+  end
+  return out
+end
+
+--- Items whose `parent` names no row in `items` — a dangling parent,
+--- queried live since the column carries no foreign key.
+--- @param self Index The index
+--- @return {string} Problem lines, possibly empty
+local function dangling_parents(self: Index): {string}
+  local out: {string} = {}
+  for row in assert(self.db:query([[
+      SELECT id, parent FROM items i
+      WHERE i.parent <> ''
+      AND NOT EXISTS (SELECT 1 FROM items p WHERE p.id = i.parent)
+    ]])) do
+    out[#out + 1] = ("%s: parent %s does not exist"):format(row.id, row.parent)
+  end
+  return out
+end
+
+--- Edges whose `to_id` names no row in `items` — a dangling `beats`,
+--- `blocked_by`, or other-kind edge, queried live since the column
+--- carries no foreign key.
+--- @param self Index The index
+--- @return {string} Problem lines, possibly empty
+local function dangling_edges(self: Index): {string}
+  local out: {string} = {}
+  for row in assert(self.db:query([[
+      SELECT kind, from_id, to_id FROM edges e
+      WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.id = e.to_id)
+    ]])) do
+    out[#out + 1] = ("%s: %s %s, which is not an item"):format(
+      row.from_id, row.kind, row.to_id)
   end
   return out
 end
@@ -323,7 +331,11 @@ end
 --- Open items whose ancestor walk, bounded the same 16 hops
 --- `_work.priority`/`_work.flow` use, never reaches a root — a broken
 --- or cyclic parent chain past the immediate parent, which the load's
---- own per-row check (a missing DIRECT parent) cannot see.
+--- own per-row check (a missing DIRECT parent) cannot see. A chain
+--- that walks into a dangling parent id simply has no row to join
+--- against and so never reaches a `parent = ''` row either — the same
+--- outcome a genuinely cyclic chain gets, with no extra bookkeeping
+--- needed to tell the two apart.
 --- @param self Index The index
 --- @return {string} Problem lines, possibly empty
 local function broken_chains(self: Index): {string}
@@ -334,14 +346,13 @@ local function broken_chains(self: Index): {string}
         UNION ALL
         SELECT c.id, i.parent, c.depth + 1
         FROM chain c JOIN items i ON i.id = c.cur
-        WHERE i.parent IS NOT NULL AND c.depth < 16
+        WHERE i.parent <> '' AND c.depth < 16
       )
       SELECT DISTINCT o.id AS id FROM open_items o
       WHERE o.id NOT IN (
         SELECT c.id FROM chain c
         JOIN items r ON r.id = c.cur
-        WHERE r.parent IS NULL
-        AND r.id NOT IN (SELECT id FROM refused_parent)
+        WHERE r.parent = ''
       )
     ]])) do
     out[#out + 1] = ("%s: parent chain is broken or cyclic"):format(row.id)
@@ -366,8 +377,9 @@ local function priority_cycles(self: Index): {string}
 end
 
 --- Every problem the index knows about: the row refusals `open`
---- collected, plus the dangling-edge, lane-duplicate, broken-chain and
---- priority-cycle findings queried live from the loaded tables.
+--- collected, plus the dangling-parent, dangling-edge, broken-chain,
+--- priority-cycle and key-duplicate findings queried live from the
+--- loaded tables.
 --- @param self Index The index
 --- @return {string} Problem lines, possibly empty
 local function problems(self: Index): {string}
@@ -375,13 +387,19 @@ local function problems(self: Index): {string}
   for _, p in ipairs(self.load_problems) do
     out[#out + 1] = p
   end
+  for _, p in ipairs(dangling_parents(self)) do
+    out[#out + 1] = p
+  end
   for _, p in ipairs(broken_chains(self)) do
+    out[#out + 1] = p
+  end
+  for _, p in ipairs(dangling_edges(self)) do
     out[#out + 1] = p
   end
   for _, p in ipairs(priority_cycles(self)) do
     out[#out + 1] = p
   end
-  for _, p in ipairs(lane_duplicates(self)) do
+  for _, p in ipairs(key_duplicates(self)) do
     out[#out + 1] = p
   end
   return out

@@ -321,7 +321,7 @@ end
 local function test_lane_repair_outranks_ordinary_pulls()
   local items: {Item} = {}
   local root = placed_root(items)
-  local repair = make({parent = root.id, lane = "release.yml"})
+  local repair = make({parent = root.id, key = "release.yml"})
   local ordinary = make({parent = root.id})
   items[#items + 1] = repair
   items[#items + 1] = ordinary
@@ -339,7 +339,7 @@ local function test_a_pending_merge_still_outranks_the_repair()
   local root = placed_root(items)
   local accepted = make({parent = root.id, claim = "who", pr = 1,
       verdict = "accept"})
-  local repair = make({parent = root.id, lane = "release.yml"})
+  local repair = make({parent = root.id, key = "release.yml"})
   items[#items + 1] = accepted
   items[#items + 1] = repair
   local specs = ready_specs(items)
@@ -358,7 +358,7 @@ local function test_a_pending_review_still_outranks_the_repair()
   local items: {Item} = {}
   local root = placed_root(items)
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
-  local repair = make({parent = root.id, lane = "release.yml"})
+  local repair = make({parent = root.id, key = "release.yml"})
   items[#items + 1] = reviewable
   items[#items + 1] = repair
   local specs = ready_specs(items)
@@ -378,7 +378,7 @@ local function test_lane_repair_is_admitted_at_the_doing_bound()
     items[#items + 1] = make({parent = root.id,
         claim = ("wake-%d"):format(k)})
   end
-  local repair = make({parent = root.id, lane = "fuzz.yml"})
+  local repair = make({parent = root.id, key = "fuzz.yml"})
   items[#items + 1] = repair
   assert(flow.doing_refusal(items) ~= nil,
     "the bound still refuses an ordinary take")
@@ -396,7 +396,7 @@ local function test_a_blocked_repair_does_not_jump_its_blocker()
   local items: {Item} = {}
   local root = placed_root(items)
   local blocker = make({parent = root.id, claim = "other"})
-  local repair = make({parent = root.id, lane = "release.yml",
+  local repair = make({parent = root.id, key = "release.yml",
       blocked_by = blocker.id})
   items[#items + 1] = blocker
   items[#items + 1] = repair

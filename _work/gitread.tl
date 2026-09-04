@@ -27,45 +27,100 @@ local record Board
   seq_sha: string
 end
 
---- Build one item from its tip's `meta`/`beats`/`blocked_by` — shared
---- by `load` (one item, its own two processes) and `list` (the whole
---- board, in two processes total) so the tree-to-Item translation is
---- written once. `batch` and `reasons` are the caller's already-read
---- `cat-file --batch` results; nothing here starts a process.
+--- Every `edges/<kind>` subtree an item's `sha:edges` entry names, as
+--- `kind name -> subtree sha` — the shas a following batch must fetch
+--- to learn each kind's own ids.
+--- @param edges_content string The `edges` tree's raw bytes
+--- @return {string: string} Kind name -> subtree sha
+local function edge_kinds(edges_content: string): {string: string}
+  local out: {string: string} = {}
+  for _, e in ipairs(gitobj.parse_tree(edges_content)) do
+    out[e.name] = e.sha
+  end
+  return out
+end
+
+--- Every blob sha whose CONTENT a kind's own ids need — every
+--- `blocked_by` and other-kind entry (the reason), never a `beats`
+--- entry (an unread marker) — across whichever kinds `kinds` names.
+--- @param kinds {string: string} Kind name -> subtree sha
+--- @param kind_batch {string: gitobj.BatchEntry} Each subtree's own content
+--- @return {string} Blob shas to fetch
+local function content_blob_shas(kinds: {string: string},
+    kind_batch: {string: gitobj.BatchEntry}): {string}
+  local out: {string} = {}
+  for kind, sha in pairs(kinds) do
+    if kind ~= "beats" then
+      local entry = kind_batch[sha]
+      if entry ~= nil then
+        for _, e in ipairs(gitobj.parse_tree(entry.content)) do
+          out[#out + 1] = e.sha
+        end
+      end
+    end
+  end
+  return out
+end
+
+--- Build one item from its tip's `meta`/`held`/`edges` — shared by
+--- `load` (one item, its own processes) and `list` (the whole board,
+--- in a fixed handful of processes total) so the tree-to-Item
+--- translation is written once. `batch`, `kind_batch` and
+--- `blob_batch` are the caller's already-read `cat-file --batch`
+--- results; nothing here starts a process.
 --- @param id string The item id
 --- @param sha string The tip commit this item's tree came from
---- @param batch {string: gitobj.BatchEntry} The meta/beats/blocked_by batch
---- @param reasons {string: gitobj.BatchEntry} Blocker reason blobs, by sha
+--- @param batch {string: gitobj.BatchEntry} The meta/held/edges batch
+--- @param kind_batch {string: gitobj.BatchEntry} Each edge kind's own
+--- subtree content, by subtree sha
+--- @param blob_batch {string: gitobj.BatchEntry} Every content blob
+--- (a blocked_by or other-kind reason), by blob sha
 --- @return item.Item | nil The item
 --- @return string Error message; set only when `meta` itself is missing
 local function build_item(id: string, sha: string,
     batch: {string: gitobj.BatchEntry},
-    reasons: {string: gitobj.BatchEntry}): item.Item | nil, string
+    kind_batch: {string: gitobj.BatchEntry},
+    blob_batch: {string: gitobj.BatchEntry}): item.Item | nil, string
   local meta_entry = batch[sha .. ":meta"]
   if meta_entry == nil then
     return nil, ("%s: no meta at %s"):format(id, sha)
   end
   local meta = itemtree.parse_meta(meta_entry.content)
+  local held = batch[sha .. ":held"] ~= nil
   local beats: {string} = {}
-  local beats_entry = batch[sha .. ":beats"]
-  if beats_entry ~= nil then
-    for _, e in ipairs(gitobj.parse_tree(beats_entry.content)) do
-      beats[#beats + 1] = e.name
-    end
-  end
   local blocked_by: {string} = {}
   local block_reason: {string: string} = {}
-  local blocked_entry = batch[sha .. ":blocked_by"]
-  if blocked_entry ~= nil then
-    for _, e in ipairs(gitobj.parse_tree(blocked_entry.content)) do
-      blocked_by[#blocked_by + 1] = e.name
-      local re = reasons[e.sha]
-      if re ~= nil and re.content ~= "" then
-        block_reason[e.name] = re.content
+  local other_edges: {string: {string: string}} = {}
+  local edges_entry = batch[sha .. ":edges"]
+  if edges_entry ~= nil then
+    for kind, ksha in pairs(edge_kinds(edges_entry.content)) do
+      local kind_entry = kind_batch[ksha]
+      if kind_entry ~= nil then
+        local ids = gitobj.parse_tree(kind_entry.content)
+        if kind == "beats" then
+          for _, e in ipairs(ids) do
+            beats[#beats + 1] = e.name
+          end
+        elseif kind == "blocked_by" then
+          for _, e in ipairs(ids) do
+            blocked_by[#blocked_by + 1] = e.name
+            local blob = blob_batch[e.sha]
+            if blob ~= nil and blob.content ~= "" then
+              block_reason[e.name] = blob.content
+            end
+          end
+        else
+          local idmap: {string: string} = {}
+          for _, e in ipairs(ids) do
+            local blob = blob_batch[e.sha]
+            idmap[e.name] = blob ~= nil and blob.content or ""
+          end
+          other_edges[kind] = idmap
+        end
       end
     end
   end
-  return itemtree.to_item(id, meta, beats, blocked_by, block_reason)
+  return itemtree.to_item(id, meta, held, beats, blocked_by, block_reason, other_edges)
 end
 
 --- Load one item by id, looking in `refs/items` then `refs/ended`.
@@ -83,22 +138,29 @@ local function load_item(root: string, id: string): Loaded | nil, string
   end
   local ref, sha = found[1].refname, found[1].sha
   local batch, berr = gitobj.cat_file_batch(root,
-    {sha .. ":meta", sha .. ":beats", sha .. ":blocked_by"})
+    {sha .. ":meta", sha .. ":held", sha .. ":edges"})
   if batch == nil then
     return nil, berr
   end
-  local blocked_entry = batch[sha .. ":blocked_by"]
-  local reason_queries: {string} = {}
-  if blocked_entry ~= nil then
-    for _, e in ipairs(gitobj.parse_tree(blocked_entry.content)) do
-      reason_queries[#reason_queries + 1] = e.sha
-    end
+  local edges_entry = batch[sha .. ":edges"]
+  local kinds: {string: string} = {}
+  if edges_entry ~= nil then
+    kinds = edge_kinds(edges_entry.content)
   end
-  local reasons, rerr = gitobj.cat_file_batch(root, reason_queries)
-  if reasons == nil then
+  local kind_queries: {string} = {}
+  for _, ksha in pairs(kinds) do
+    kind_queries[#kind_queries + 1] = ksha
+  end
+  local kind_batch, kerr = gitobj.cat_file_batch(root, kind_queries)
+  if kind_batch == nil then
+    return nil, kerr
+  end
+  local blob_batch, rerr = gitobj.cat_file_batch(root,
+    content_blob_shas(kinds, kind_batch))
+  if blob_batch == nil then
     return nil, rerr
   end
-  local it, ierr = build_item(id, sha, batch, reasons)
+  local it, ierr = build_item(id, sha, batch, kind_batch, blob_batch)
   if it == nil then
     return nil, ierr
   end
@@ -107,12 +169,13 @@ end
 
 --- Every item in the store, done ones included: one `for-each-ref`
 --- (also reading `refs/board/seq`'s and `refs/board/format`'s tips),
---- one `cat-file --batch` for every item's `meta`/`beats`/`blocked_by`
---- PLUS the format marker's own blob, and one more for every
---- blocker's reason blob — three processes total, never one per item.
---- The format check happens here, once, rather than in every reader:
---- a board on a layout this tool cannot trust is refused before
---- anything else it read alongside the marker is believed.
+--- one `cat-file --batch` for every item's `meta`/`held`/`edges` PLUS
+--- the format marker's own blob, one more for every edge kind's own
+--- subtree content, and one more for every content blob (a
+--- `blocked_by` or other-kind reason) — four processes total, never
+--- one per item. The format check happens here, once, rather than in
+--- every reader: a board on a layout this tool cannot trust is refused
+--- before anything else it read alongside the marker is believed.
 --- @param root string The repository root
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
@@ -140,8 +203,8 @@ local function list(root: string): Board | nil, string
   end
   for _, r in ipairs(item_refs) do
     queries[#queries + 1] = r.sha .. ":meta"
-    queries[#queries + 1] = r.sha .. ":beats"
-    queries[#queries + 1] = r.sha .. ":blocked_by"
+    queries[#queries + 1] = r.sha .. ":held"
+    queries[#queries + 1] = r.sha .. ":edges"
   end
   local batch, berr = gitobj.cat_file_batch(root, queries)
   if batch == nil then
@@ -158,17 +221,33 @@ local function list(root: string): Board | nil, string
   if frefusal ~= nil then
     return nil, frefusal
   end
-  local reason_queries: {string} = {}
+  local kinds_by_id: {string: {string: string}} = {}
+  local kind_queries: {string} = {}
   for _, r in ipairs(item_refs) do
-    local blocked_entry = batch[r.sha .. ":blocked_by"]
-    if blocked_entry ~= nil then
-      for _, e in ipairs(gitobj.parse_tree(blocked_entry.content)) do
-        reason_queries[#reason_queries + 1] = e.sha
+    local edges_entry = batch[r.sha .. ":edges"]
+    if edges_entry ~= nil then
+      local kinds = edge_kinds(edges_entry.content)
+      kinds_by_id[r.refname] = kinds
+      for _, ksha in pairs(kinds) do
+        kind_queries[#kind_queries + 1] = ksha
       end
     end
   end
-  local reasons, rerr = gitobj.cat_file_batch(root, reason_queries)
-  if reasons == nil then
+  local kind_batch, kerr = gitobj.cat_file_batch(root, kind_queries)
+  if kind_batch == nil then
+    return nil, kerr
+  end
+  local blob_queries: {string} = {}
+  for _, r in ipairs(item_refs) do
+    local kinds = kinds_by_id[r.refname]
+    if kinds ~= nil then
+      for _, sha in ipairs(content_blob_shas(kinds, kind_batch)) do
+        blob_queries[#blob_queries + 1] = sha
+      end
+    end
+  end
+  local blob_batch, rerr = gitobj.cat_file_batch(root, blob_queries)
+  if blob_batch == nil then
     return nil, rerr
   end
   local items: {item.Item} = {}
@@ -176,7 +255,7 @@ local function list(root: string): Board | nil, string
   local shas_by_id: {string: string} = {}
   for _, r in ipairs(item_refs) do
     local id = r.refname:match("^refs/items/(.+)$") or r.refname:match("^refs/ended/(.+)$")
-    local it, ierr = build_item(id, r.sha, batch, reasons)
+    local it, ierr = build_item(id, r.sha, batch, kind_batch, blob_batch)
     if it == nil then
       return nil, ierr
     end

@@ -405,7 +405,7 @@ local function test_set_refuses_every_flow_field_flag()
     {"--verdict", "accept"},
     {"--parent", leaf},
     {"--resolution", "completed"},
-    {"--lane", "release.yml"},
+    {"--key", "release.yml"},
   }
   for _, pair in ipairs(flow_flags) do
     local flag, value = pair[1], pair[2]
@@ -419,7 +419,7 @@ local function test_set_refuses_every_flow_field_flag()
   assert(after.parent == before.parent, "parent untouched: " .. after.parent)
   assert(after.resolution == before.resolution,
     "resolution untouched: " .. after.resolution)
-  assert(after.lane == before.lane, "lane untouched: " .. after.lane)
+  assert(after.key == before.key, "key untouched: " .. after.key)
 end
 
 -- The derived order is a closure over `beats` across EVERY item, open,

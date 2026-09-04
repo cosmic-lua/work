@@ -214,7 +214,7 @@ end
 --- @return string | nil The refusal
 local function review_debt_refusal(items: {item.Item}, session: string,
     taking: item.Item): string | nil
-  if (taking.lane or "") ~= "" then
+  if (taking.key or "") ~= "" then
     return nil
   end
   local debt = review_debt(items, session)

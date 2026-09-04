@@ -177,12 +177,21 @@ local function test_strict_refuses_a_wrong_typed_column()
   check.must(idxmod.close(idx))
 end
 
-local function test_foreign_key_refuses_a_nonexistent_parent()
+local function test_dangling_parent_is_reported_by_problems_not_refused()
   local idx = check.must(idxmod.open({make({})}))
   local ok, err = idx.db:exec(
     "INSERT INTO items(id, title, parent) VALUES ('zzz', 'x', 'nope')")
-  assert(not ok, "a parent naming no item must be refused")
-  assert(err:find("FOREIGN KEY", 1, true), err)
+  assert(ok, "parent carries no foreign key — the insert must succeed: "
+    .. tostring(err))
+  local problems = idxmod.problems(idx)
+  local found = false
+  for _, p in ipairs(problems) do
+    if p:find("zzz", 1, true) and p:find("parent nope does not exist", 1, true) then
+      found = true
+    end
+  end
+  assert(found, "a dangling parent is a problems() finding: "
+    .. table.concat(problems, "; "))
   check.must(idxmod.close(idx))
 end
 
@@ -225,13 +234,13 @@ local function test_roots_containers_and_workable()
   check.must(idxmod.close(idx))
 end
 
-local function test_lane_uniqueness_refuses_a_second_open_claim()
-  local a = make({lane = "release.yml"})
-  local b = make({lane = "release.yml"})
+local function test_key_uniqueness_refuses_a_second_open_claim()
+  local a = make({key = "release.yml"})
+  local b = make({key = "release.yml"})
   local idx = check.must(idxmod.open({a, b}))
   local problems = idxmod.problems(idx)
   local text = table.concat(problems, "\n")
-  assert(text:find("lane", 1, true) and text:find(b.id, 1, true), text)
+  assert(text:find("key", 1, true) and text:find(b.id, 1, true), text)
   local n = check.must(idx.db:query_one("SELECT COUNT(*) AS n FROM items"))
   assert(n.n == 1, "only the first claimant's row lands")
   check.must(idxmod.close(idx))

@@ -269,7 +269,7 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "[ID] [options]", flags = {dir_flag()}}},
     {name = "sync", summary = "rebase onto the remote's state",
       spec = {flags = {dir_flag()}}},
-    {name = "fsck", summary = "read-only board audit: edges, trees, lanes, flags",
+    {name = "fsck", summary = "read-only board audit: edges, trees, keys, flags",
       spec = {flags = {dir_flag()}}},
     {name = "find", summary = "full-text search over titles and specs, "
       .. "ranked, a snippet per hit",

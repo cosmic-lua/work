@@ -312,7 +312,7 @@ local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
         acts[#acts + 1] = {
           kind = "pull",
           item = i,
-          reason = ("lane repair: %s"):format(i.lane),
+          reason = ("lane repair: %s"):format(i.key),
         }
       end
     elseif room <= 0 then
