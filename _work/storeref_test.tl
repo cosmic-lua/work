@@ -233,8 +233,10 @@ end
 
 -- `list` runs a FIXED number of git processes regardless of board
 -- size: one `for-each-ref`, one `cat-file --batch` for every item's
--- meta/beats/blocked_by, and one more for the blocker reason blobs —
--- never one process per item. Counted by racing `git` itself: a
+-- meta/held/edges, one more for every edge kind's own subtree
+-- content, and one more for every content blob (a blocked_by or
+-- other-kind reason) — never one process per item. Counted by racing
+-- `git` itself: a
 -- counting wrapper ahead of the real binary on PATH, so every
 -- invocation `_work.refs`/`_work.gitobj` make is caught, not just the
 -- ones this test happens to know the argv for.
@@ -252,8 +254,8 @@ local function test_list_process_count_is_constant_as_items_grow()
       ("#!/bin/sh\nprintf x >> '%s'\nexec '%s' \"$@\"\n"):format(counter_file, real_git)))
   assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
 
-  --- File one item with a blocker, so `list`'s third process (reason
-  --- blobs) actually runs.
+  --- File one item with a blocker, so `list`'s edge-kind and
+  --- content-blob processes actually run.
   local function seed(n: integer)
     local ids: {string} = {}
     for i = 1, n do
@@ -288,7 +290,7 @@ local function test_list_process_count_is_constant_as_items_grow()
   assert(small == big,
     ("list's process count must not grow with item count: %d (3 items) vs "
       .. "%d (15 items)"):format(small, big))
-  assert(small <= 3, ("at most 3 processes: got %d"):format(small))
+  assert(small <= 4, ("at most 4 processes: got %d"):format(small))
 end
 
 --- The whole-board render (`gitboard show`, bare) reads every open
