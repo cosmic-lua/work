@@ -134,7 +134,9 @@ end
 --- @param s store.Store The store
 --- @param bad item.Item An item whose `item.problems` may be non-empty
 local function write_unchecked(s: store.Store, bad: item.Item)
-  local tree_sha = check.must(itemtree.build_tree(s.root, bad, store.read_spec(s, bad.id)))
+  -- `true`: the tree must actually exist for `commit_tree` below to
+  -- build on it.
+  local tree_sha = check.must(itemtree.build_tree(s.root, bad, store.read_spec(s, bad.id), true))
   local ref = s.leased_ref[bad.id] or ("refs/heads/items/" .. bad.id)
   local parent_sha = s.leased_sha[bad.id] or refs.ZERO_SHA
   local parents: {string} = {}
