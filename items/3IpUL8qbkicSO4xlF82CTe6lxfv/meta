@@ -2,5 +2,6 @@ title: doctrine: a Change whose start depends on a fact outside the tree states 
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic@board
 claim: build-CTe6_lxfv-7f9141e2
+pr: 1693
 builders: build-CTe6_lxfv-7f9141e2
 speccers: 617186a3-6ded-5f05-a74a-6054c4631945
