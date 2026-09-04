@@ -1,3 +1,5 @@
 title: make: split _make/generate.tl before it hits the 500-line cap — one line of headroom after the seed pass landed
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
+claim: build-DGBV_ust0
+builders: build-DGBV_ust0
