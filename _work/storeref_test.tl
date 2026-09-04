@@ -10,6 +10,7 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local flow = require("_work.flow")
 local fs = require("cosmic.fs")
+local gitshow = require("_work.gitshow")
 local gitview = require("_work.gitview")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -335,4 +336,56 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
   assert(small == big,
     ("show's process count must not grow with item count: %d (3 items) vs "
       .. "%d (15 items)"):format(small, big))
+end
+
+--- `show ID` reads every OTHER open item's spec sidecar too, for
+--- `_work.overlap`'s Change-section collision check — one batch
+--- (`store.read_specs`), not one `cat-file -p` per sibling, so the
+--- process count `gitshow.cmd_show` spends on one item must stay flat
+--- as the number of siblings around it grows.
+local function test_show_one_item_process_count_is_constant_as_siblings_grow()
+  local root = init_state_repo("show-id-process-count")
+  local s = check.must(store.open(root))
+  local real_git = check.must(child.run({"sh", "-c", "command -v git"})).stdout
+  real_git = (real_git:gsub("%s+$", ""))
+  local wrapdir = fs.join(tmpdir, "storeref-show-id-git-wrap")
+  assert(fs.remove_all(wrapdir))
+  assert(fs.make_dirs(wrapdir))
+  local counter_file = fs.join(tmpdir, "storeref-show-id-git-count.txt")
+  assert(fs.write(counter_file, ""))
+  assert(fs.write(fs.join(wrapdir, "git"),
+      ("#!/bin/sh\nprintf x >> '%s'\nexec '%s' \"$@\"\n"):format(counter_file, real_git)))
+  assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
+
+  local target = make_item()
+  assert(store.save(s, target, "seed target", "## Change\ndo the thing\n"))
+
+  --- Add `n` further open siblings, each with its own spec.
+  local function seed_siblings(n: integer)
+    for i = 1, n do
+      local it = make_item()
+      assert(store.save(s, it, ("seed sibling %d"):format(i),
+          ("## Change\nsibling change %d\n"):format(i)))
+    end
+  end
+
+  --- How many `git` invocations one `gitshow.cmd_show` on `target`
+  --- makes, with the wrapper ahead of the real binary on PATH.
+  local function show_id_process_count(): integer
+    assert(fs.write(counter_file, ""))
+    local old_path = os.getenv("PATH") or ""
+    assert(env.set("PATH", wrapdir .. ":" .. old_path, true))
+    gitshow.cmd_show(s, target.id)
+    assert(env.set("PATH", old_path, true))
+    return #(fs.read(counter_file) or "")
+  end
+
+  seed_siblings(3)
+  local small = show_id_process_count()
+  seed_siblings(12)
+  local big = show_id_process_count()
+  assert(small > 0, "the wrapper caught at least one invocation")
+  assert(small == big,
+    ("show <id>'s process count must not grow with sibling count: %d (4 "
+      .. "items) vs %d (16 items)"):format(small, big))
 end
