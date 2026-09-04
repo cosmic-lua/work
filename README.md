@@ -9,23 +9,37 @@ break every checkout's push-as-compare-and-swap at once.
 ## What lives here
 
 ```
-items/       the board: one <ksuid>.tl per item (cosmic.literal data)
-             with its spec prose in the matching <ksuid>.md; every verb
-             and render addresses it by the 8-character handle (bare or
-             wrapped, either divider, case-tolerant) or an unambiguous prefix
+(no items/ directory — every item is a git ref, not a file)
 _work/       the machinery: gitboard (CLI), gitverbs (mutations),
              gitcompare (the priority relation as a verb), gitview
              (reads), gitgate (the spec bar, the doing bound, and the
              commit-and-publish every mutation goes through), store
-             (git-backed persistence), flow (the derived states and
-             graph rules), priority (the comparison relation and the
-             order derived from it), spec (the spec bar's section
-             grammar), item (the record), ksuid (ids)
+             (git-backed persistence over the ref layout — gitobj,
+             refs, gitread, gitwrite and itemtree are its object,
+             ref, read and canonical-tree layers), import (the
+             one-time move off the old items/<id>.tl layout, replayed
+             into refs), flow (the derived states and graph rules),
+             priority (the comparison relation and the order derived
+             from it), spec (the spec bar's section grammar), item
+             (the record), ksuid (ids)
 cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
 ```
 
-A workable item's state is DERIVED from the facts its file carries,
+Every item is a git ref — `refs/items/<ksuid>` while open,
+`refs/ended/<ksuid>` once resolved — whose tip commit's tree carries
+its fields (a `meta` blob of `key: value` lines) and its spec prose
+(`spec.md`, present only when it has one); `refs/board/lanes` and
+`refs/board/seq` hold board-wide state the same way, outside the
+per-item namespace. Nothing here is a file in the working tree: a read
+is `git for-each-ref`/`cat-file --batch` against the ref layout, and a
+write is `git hash-object`/`mktree`/`commit-tree` plus an
+`update-ref` — `_work/store.tl` and the modules beside it are the
+whole of that mechanism. Every verb and render still addresses an item
+by the 8-character handle (bare or wrapped, either divider,
+case-tolerant) or an unambiguous prefix.
+
+A workable item's state is DERIVED from the facts its ref carries,
 never declared: open, unclaimed, and PR-less is `todo` (pullable once
 its spec passes the bar `show ID` prints); a claim or a PR makes it
 `doing`; a resolution ends it. Which claim a `take` makes is derived
@@ -98,31 +112,34 @@ neither, so every `--make` verb here runs under the pinned release.
 The pin therefore decides which fence the tests execute inside, which
 is why `bin/cosmic.pin` matters here beyond reproducibility.
 
-Every mutation is ONE commit here, and publishing it is a push. A
-rejected push is the compare half of a compare-and-swap FAILING: the
-mutation's gates were decided against a board somebody else just
-moved, so the tool drops its own commit whole, re-syncs onto the
-winner's state, and refuses, naming the recovery — run the same verb
-again, and it decides afresh with EVERY gate applied to the merged
-board, not a replayed commit whose preconditions may no longer hold.
-A mutation never half-lands, and the checkout is always left clean
-and current. Reads need no network and no token.
+Every item a mutation touches lands as its OWN commit on its own ref
+— `it` and each `also` item alike — and publishing them is ONE atomic
+push, leased against the tip each was observed at. A rejected push is
+the compare half of a compare-and-swap FAILING: some ref's lease
+didn't hold because a board somebody else just moved, so the tool
+drops every commit the mutation made, whole — neither ref lands, not
+just the contested one — re-syncs onto the winner's state, and
+refuses, naming the recovery — run the same verb again, and it decides
+afresh with EVERY gate applied to the merged board, not a replayed
+commit whose preconditions may no longer hold. A mutation never
+half-lands. Reads need no network and no token, and touch no working
+tree — a read is `for-each-ref`/`cat-file --batch`, a write is
+`hash-object`/`mktree`/`commit-tree` plus `update-ref`.
 
-A mutation syncs by `git fetch` plus a fast-forward-only merge, which
-tolerates an unrelated dirty file anywhere in the checkout and only
-refuses, naming the file, when a local edit overlaps the incoming
-commit — so a session editing `_work/**` here does not lock every
-other session sharing this checkout out of the board. That slice of
-work still belongs in its OWN clone, though: another
-`git clone https://github.com/cosmic-lua/work` plus `--dir` is how the
-machinery itself gets edited, built and tested without racing the
-mutations running against the shared `o/board` checkout. And `git
-stash` is never the escape in a SHARED checkout — a `git worktree add`
-off `o/board` (rather than a fresh clone) shares `o/board`'s own stash
-stack, so a push from one session can pop and destroy another
-session's in-progress edit there; a plain clone has its own stash, one
-more reason to reach for a private clone rather than a linked worktree
-when editing the machinery.
+A mutation syncs by `git fetch --prune` against the three ref
+namespaces (`refs/items`, `refs/ended`, `refs/board`) — never a
+merge, and never a path under the working tree, so it cannot conflict
+with or disturb anything there. `_work/**` — the machinery's own
+source, checked out on this repository's ordinary branch — is
+untouched by any of it; editing it is still its own slice of work,
+best done from another clone (`git clone
+https://github.com/cosmic-lua/work` plus `--dir`) so building and
+testing it never races a mutation running against the shared `o/board`
+checkout, and so `git stash` — never the escape in a SHARED checkout,
+since a `git worktree add` off `o/board` shares `o/board`'s own stash
+stack and a push from one session can pop and destroy another
+session's in-progress edit there — stays out of the picture; a plain
+clone has its own stash regardless.
 
 Run `bin/cosmic --make ci` before pushing machinery changes; the
 `board` workflow runs the same gate on every push here.
