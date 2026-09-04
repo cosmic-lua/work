@@ -2,4 +2,5 @@ title: gitboard new: the roots-carry-no-repo refusal says to add --parent (or at
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic@board
 claim: build-nwzb_73yW-d6f1cc41
+pr: 1711
 builders: build-nwzb_73yW-d6f1cc41
