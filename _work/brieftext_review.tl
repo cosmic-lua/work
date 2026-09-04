@@ -64,7 +64,7 @@ agent's worktree.
 ## Recording your verdict
 
 Three verdicts: `accept`, `request-changes`, `reject`. gitboard is
-already built in the board worktree; this review is claimed under
+already built in the board checkout; this review is claimed under
 session `<REVIEW_SESSION>` — you MUST use that exact string. Export
 SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 
@@ -146,7 +146,7 @@ reads well.
 ## Recording your verdict
 
 Three verdicts: `accept`, `request-changes`, `reject`. gitboard is
-already built in the board worktree; this review is claimed under
+already built in the board checkout; this review is claimed under
 session `<REVIEW_SESSION>` — you MUST use that exact string. Export
 SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 

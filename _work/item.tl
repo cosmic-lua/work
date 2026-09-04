@@ -22,7 +22,8 @@
 --- what makes one more important than another is a committed
 --- comparison (`beats`), never a field asserting its own rank. The
 --- outcome prose that gives the tree its meaning lives in
---- `docs/goals.md` on `main` and is read by people, not by this.
+--- `docs/goals.md` on cosmic's own `main` and is read by people, not
+--- by this.
 local identity = require("_work.identity")
 local ksuid = require("_work.ksuid")
 local shape = require("cosmic.shape")
