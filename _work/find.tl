@@ -9,6 +9,20 @@
 --- `_work.cache` is the only production caller of any of this —
 --- `find` and `new`'s duplicate check both go through its persistent
 --- connection now, never a fresh `index.open` of their own.
+---
+--- `SIMILAR_RATIO` is measured, not guessed, against the production
+--- board (914 items, loaded the way `_work.cache.rebuild` does): four
+--- known duplicate/overlap title pairs — one pair with identical
+--- titles, three phrased differently about the same underlying
+--- binding — score their true match at a best-to-match bm25 ratio of
+--- 1.00, 0.62, 0.40, and 0.27; twenty unrelated titles' own closest
+--- OTHER title on the board ranges 0.21 to 0.91 (mean 0.57). The two
+--- spreads overlap over their entire range — a title-only bag-of-words
+--- ratio cannot tell a true duplicate from two items that are merely
+--- topically related (a series of near-identical fuzz-harness titles,
+--- for one) — so no threshold separates them; `SIMILAR_RATIO` is left
+--- at its prior value rather than moved to a boundary the data does
+--- not support.
 local index = require("_work.index")
 local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
@@ -16,8 +30,34 @@ local sqlite = require("cosmic.sqlite")
 local type Index = index.Index
 
 --- The search table: `id` rides along unindexed (never matched, only
---- returned), `title` and `spec` are the searched columns.
-local FTS_DDL < const > = "CREATE VIRTUAL TABLE search USING fts5(id UNINDEXED, title, spec)"
+--- returned), `title` and `spec` are the searched columns. `porter
+--- unicode61` stems both — "refuse"/"refusing"/"refused" and
+--- "duplicate"/"duplicates" collapse to the same token — so a query
+--- and a title phrased in different inflections of the same words
+--- still match; `unicode61` (FTS5's default) is named explicitly
+--- because `tokenize` takes no default once any option is given.
+local FTS_DDL < const > =
+"CREATE VIRTUAL TABLE search USING fts5(id UNINDEXED, title, spec, "
+.. "tokenize = 'porter unicode61')"
+
+--- `bm25()`'s per-column weights. FTS5 binds them by COLUMN POSITION,
+--- `id` (position 0) included even though it is `UNINDEXED` and never
+--- scores — so a caller after `title`'s and `spec`'s weights must
+--- still supply one for `id` to reach them; 1.0 is inert here since
+--- `id` carries no matched terms to weight in the first place.
+local BM25_WEIGHT_ID < const > = 1.0
+--- A query word in the title should outrank the same word appearing a
+--- handful of times in another item's spec — the title is what a
+--- session scans a hit list by. At equal weight, bm25's own length
+--- normalization already favors a single title hit over a lone spec
+--- hit (the title is the shorter document), but a word repeated even
+--- a few times in the spec overtakes it; 4.0 restores the title's lead
+--- against a spec repeating the word several times over, without
+--- needing an implausibly large weight.
+local BM25_WEIGHT_TITLE < const > = 4.0
+--- The spec's own weight — left at `bm25()`'s default so a spec-only
+--- match (nothing in the title) still ranks by its ordinary relevance.
+local BM25_WEIGHT_SPEC < const > = 1.0
 
 --- Tokens a snippet shows around a match, and the marker either side
 --- of an elision.
@@ -33,10 +73,9 @@ local SIMILAR_LIMIT < const > = 3
 --- more negative meaning a better match, so this is a ratio of
 --- magnitudes — a hit scoring at least half as strongly as the best
 --- match is kept; a title with nothing close to it returns no lines
---- rather than padding out to three with weak, unrelated matches.
---- Chosen by inspection of real title-collision pairs during
---- development, not tuned against a labeled set; a later pass with
---- real false-positive/negative counts may want to move it.
+--- rather than padding out to three with weak, unrelated matches. Left
+--- at 0.5 — see the module header for why the production measurement
+--- could not move it to a better-supported value.
 local SIMILAR_RATIO < const > = 0.5
 
 --- One search hit.
@@ -139,10 +178,11 @@ local function ranked_rows(idx: Index, q: string, limit: integer): {Row} | nil, 
   local rows, err = idx.db:query([[
       SELECT s.id AS id, s.title AS title, st.state AS state,
         snippet(search, -1, '', '', ?, ?) AS snip,
-        bm25(search) AS rank
+        bm25(search, ?, ?, ?) AS rank
       FROM search s JOIN state st ON st.id = s.id
       WHERE search MATCH ? ORDER BY rank LIMIT ?
-    ]], {SNIPPET_ELLIPSIS, SNIPPET_TOKENS, q, limit})
+    ]], {SNIPPET_ELLIPSIS, SNIPPET_TOKENS, BM25_WEIGHT_ID, BM25_WEIGHT_TITLE,
+      BM25_WEIGHT_SPEC, q, limit})
   if rows == nil then
     return nil, err
   end

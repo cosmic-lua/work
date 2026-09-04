@@ -34,7 +34,7 @@ local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 
 local type Cache = cachedb.Cache
-local SCHEMA_VERSION < const > = cachedb.SCHEMA_VERSION
+local SCHEMA_VERSION < const > = cachedb.SCHEMA_VERSION + 1
 
 --- Cold-build the cache file from scratch: every item and spec this
 --- root's board carries, `_work.index`'s tables, `_work.find`'s

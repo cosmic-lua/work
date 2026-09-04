@@ -83,6 +83,16 @@ CREATE TABLE speccers (
 CREATE UNIQUE INDEX one_open_item_per_key
   ON items(key) WHERE key <> '' AND resolution = '';
 
+-- `parent` and an edge's `to_id` carry no foreign key (see the module
+-- header), so nothing here forces their use — but both are join/filter
+-- keys on every read: `containers` and `workable` filter items by
+-- parent, `broken_chains`' walk searches for roots by `parent = ''`
+-- at every recursive step, and `dangling_edges` scans the whole
+-- `edges` table looking for a `to_id` no item claims. `EXPLAIN QUERY
+-- PLAN` confirms SQLite picks these over a full scan for all four.
+CREATE INDEX items_parent ON items(parent);
+CREATE INDEX edges_to ON edges(to_id);
+
 CREATE VIEW open_items AS
   SELECT * FROM items WHERE resolution = '';
 
@@ -91,10 +101,14 @@ CREATE VIEW roots AS
 
 -- An item with an open child, whether or not the item itself is open
 -- — matches `_work.flow.has_open_children`, which asks nothing about
--- the container's own state.
+-- the container's own state. Written as EXISTS rather than a
+-- JOIN+DISTINCT: each `i` is wanted at most once regardless of how
+-- many open children it has, and EXISTS gets there without a
+-- deduplicating temp b-tree, searching `items_parent` for the child
+-- check.
 CREATE VIEW containers AS
-  SELECT DISTINCT i.* FROM items i
-  JOIN open_items c ON c.parent = i.id;
+  SELECT i.* FROM items i
+  WHERE EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
 
 CREATE VIEW workable AS
   SELECT i.* FROM open_items i
