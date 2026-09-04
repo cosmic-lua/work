@@ -2,5 +2,6 @@ title: AGENTS.md: say in its first lines that CLAUDE.md is a symlink to it, so a
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
 claim: build-arYr_TKlS-1
+reviewer: review-arYr_TKlS-1
 pr: 1675
 builders: build-arYr_TKlS-1
