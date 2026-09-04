@@ -1,0 +1,3 @@
+title: build: the fallback base is the assimilated bootstrap, so every downstream artifact is a host-only ELF
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
