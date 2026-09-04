@@ -1,3 +1,3 @@
 title: board worktree: does 'coverage --baseline' refuse without COSMIC_COVERAGE_ENV=1 the way AGENTS.md documents for main?
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmic@board
