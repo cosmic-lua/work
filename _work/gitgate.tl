@@ -95,9 +95,9 @@ local function base_refusal(current: string, base: string,
     return ("REFUSED: %s already has a spec — pass --base FILE holding the "
       .. "text you read; a write with no base is last-write-wins"):format(id8)
   end
-  return ("REFUSED: %s's spec changed since you read it — re-read "
-    .. "items/%s.md, re-apply your edit, and pass the re-read text as "
-    .. "--base (the trail is `gitboard show %s`)"):format(id8, id, id8)
+  return ("REFUSED: %s's spec changed since you read it — re-read it "
+    .. "(`gitboard show %s`), re-apply your edit, and pass the re-read "
+    .. "text as --base"):format(id8, id8)
 end
 
 --- The refusal a foreign session's spec write earns on an item that is
@@ -279,15 +279,31 @@ end
 --- mutation dropped and the checkout synced, and the verb is run
 --- again — which re-applies EVERY gate it decided with against the
 --- merged board.
+---
+--- `verb` names the `Op:` trailer `save` adds to every commit this
+--- call makes. `session`, when the caller has one, is threaded to
+--- `save` as the write's author, through the store rather than
+--- `save`'s own fixed signature. `bounded` marks a mutation whose
+--- gates read the whole board before deciding (today: a NEW take
+--- against the doing bound, and a lane mint) — `save` also advances
+--- and leases `refs/board/seq` for one of these, so two racing
+--- bounded mutations cannot both land.
 --- @param s store.Store The store
 --- @param it item.Item The mutated item
 --- @param body string Replacement spec markdown, or nil to leave the sidecar alone
 --- @param message string Commit subject
+--- @param verb string The verb name, recorded as the `Op:` trailer
 --- @param also {item.Item} Further items the same mutation writes
+--- @param session string | nil The session to credit as author, when known
+--- @param bounded boolean | nil Whether this is a BOUNDED mutation
 --- @return boolean True once committed (and pushed, given a remote), or a no-op
 --- @return string Error; `store.LOST_RACE` for a lost race, `store.is_noop` for a no-op
 local function commit_and_publish(s: store.Store, it: item.Item, body: string,
-    message: string, also?: {item.Item}): boolean, string
+    message: string, verb: string, also?: {item.Item}, session?: string,
+    bounded?: boolean): boolean, string
+  store.set_session(s, session or "")
+  store.set_op(s, verb)
+  store.set_bounded(s, bounded or false)
   local saved, serr = store.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then
     return saved, serr
@@ -467,7 +483,8 @@ local record gitgate
   second_claim_refusal: function(s: store.Store, all: {item.Item},
   id: string, session: string): string
   commit_and_publish: function(s: store.Store, it: item.Item, body: string,
-  message: string, also?: {item.Item}): boolean, string
+  message: string, verb: string, also?: {item.Item}, session?: string,
+  bounded?: boolean): boolean, string
   containered: function(parent: item.Item): {item.Item}
   handover_refusal: function(s: store.Store, id: string,
   number: integer, repo: string | nil, base: string | nil): string

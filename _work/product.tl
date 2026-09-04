@@ -16,10 +16,18 @@
 --- product repo has to say so.
 local record product
   REPO: string
+  --- This board's own repository — where the machinery itself lands
+  --- a PR, as opposed to `REPO`, where the work it tracks does.
+  --- `_work.import`'s repo-default rule is the one place this is read:
+  --- an imported item whose `base` names the board's old home
+  --- (`"board"`, the branch it lived on before this repository
+  --- existed) targets this repo's `main` instead.
+  BOARD_REPO: string
 end
 
 local M: product = {
   REPO = "cosmic-lua/cosmic",
+  BOARD_REPO = "cosmic-lua/work",
 }
 
 return M

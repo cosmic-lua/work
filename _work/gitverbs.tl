@@ -247,7 +247,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("take %s by %s%s%s"):format(id:sub(1, 8), session,
       (pr or 0) ~= 0 and (" pr:%d"):format(pr) or "",
-      gate.forced_suffix(force, why)))
+      gate.forced_suffix(force, why)), "take", nil, session, was_todo)
   if not ok then
     return gate.verdict_line("take", false, err)
   end
@@ -308,7 +308,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   and (it.claim or "") ~= (session or "") then
     it.reviewer = ""
     local rok, rerr = gate.commit_and_publish(s, it, nil,
-      ("drop %s review: %s"):format(id:sub(1, 8), why))
+      ("drop %s review: %s"):format(id:sub(1, 8), why), "drop", nil, session)
     if not rok then
       return gate.verdict_line("drop", false, rerr)
     end
@@ -331,7 +331,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   it.verdict_head = ""
   it.verdict_spec = ""
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("drop %s: %s"):format(id:sub(1, 8), why))
+    ("drop %s: %s"):format(id:sub(1, 8), why), "drop", nil, session)
   if not ok then
     return gate.verdict_line("drop", false, err)
   end
@@ -432,7 +432,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   it.resolution = reason
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("done %s %s (from %s)%s"):format(id:sub(1, 8), reason, from,
-      gate.forced_suffix(force, why)))
+      gate.forced_suffix(force, why)), "done")
   if not ok then
     return gate.verdict_line("done", false, err)
   end

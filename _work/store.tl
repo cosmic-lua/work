@@ -1,24 +1,44 @@
---- The item store: a checkout of the state repository, where each
---- `items/<id>.tl` is one work item, its prose spec (when it has one)
---- is the sidecar `items/<id>.md`, and git backs every write — one
---- mutation is one commit, staged and committed here. Reading that
---- history back, publishing it to a remote, and the compare-and-swap a
---- lost push race resolves with live in `_work.publish`, which calls
---- back into `git`/`git_ok` here for the same deterministic git
---- identity every store call uses.
+--- The item store: every item lives as a git ref — `refs/items/<id>`
+--- while open, `refs/ended/<id>` once resolved — whose tip commit's
+--- tree is the item's current state (`_work.itemtree`'s canonical
+--- shape) and whose parent chain is its history. There is no working
+--- tree to hold them: `open` needs only a git repository, and a
+--- mutation writes git objects and moves refs directly, never a file.
+--- Publishing that to a remote, and reading the log back, live in
+--- `_work.publish`, which calls back into `git`/`git_ok` here for the
+--- same deterministic tool identity every store call uses.
+---
+--- The read and write mechanics are `_work.gitread`/`_work.gitwrite`,
+--- split out to keep this file under its line cap; this module is the
+--- orchestration — which lease each write compares against, and what
+--- a verb sets through `set_session`/`set_op`/`set_bounded` before it
+--- calls `save`, whose own signature carries none of that.
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local gitread = require("_work.gitread")
+local gitwrite = require("_work.gitwrite")
 local item = require("_work.item")
-local literal = require("cosmic.literal")
+local refs = require("_work.refs")
 
---- One open state repository.
+--- One open state repository. Every field but `root` is working state
+--- a single verb invocation accumulates: the session and `Op:` trailer
+--- the next `save` should credit, whether it is bounded, the lease
+--- (ref + tip) each id was last observed at, `refs/board/seq`'s own
+--- observed tip, and the refs a completed `save` still owes `publish`
+--- a push for.
 local record Store
-  --- Checkout root; `items/` sits directly under it.
   root: string
+  session: string
+  op: string
+  bounded: boolean
+  leased_ref: {string: string}
+  leased_sha: {string: string}
+  observed_seq: string
+  pending: {refs.PushSpec}
 end
 
---- The refusal a lost push race earns, exported so a verb can tell
---- it from a terminal failure; compared by identity, never matched.
+--- The refusal a lost push race earns, exported so a verb can tell it
+--- from a terminal failure; compared by identity, never matched.
 local LOST_RACE < const > = "lost the push race — the mutation was dropped "
 .. "whole and the checkout re-synced; re-run the verb against the "
 .. "current board"
@@ -29,24 +49,18 @@ local LOST_RACE < const > = "lost the push race — the mutation was dropped "
 local NOOP_PREFIX < const > = "nothing to record: "
 
 --- Whether an outcome from `save` (or a caller built on it, like
---- `_work.gitgate.commit_and_publish`) is the no-op success: the
---- mutation asked for is the state the board already holds, so
---- nothing was staged and nothing committed. The verb layer prints
---- `detail` as-is on this path rather than composing its own success
---- text, so the same "nothing to record" line reaches the operator
---- regardless of which verb hit it.
+--- `_work.gitgate.commit_and_publish`) is the no-op success.
 --- @param detail string The message returned alongside a truthy `save`
 --- @return boolean True on a no-op success
 local function is_noop(detail: string): boolean
   return (detail or ""):sub(1, #NOOP_PREFIX) == NOOP_PREFIX
 end
 
---- Git defaults for every store call: a deterministic committer, so a
---- state commit is attributable to the board tool rather than the
---- host's git config, and rename-based object finalization —
---- link-based finalization fails with EXDEV on the overlay/bind
---- mounts CI containers run tests on, and `-c` propagates this to the
---- local receive-pack a file:// push spawns.
+--- Git defaults for the ad hoc commands this module and `_work.publish`
+--- still run directly (`remote`, `push`, `fetch`, ...): a deterministic
+--- identity for anything that happens to create an object, and
+--- rename-based object finalization — link-based finalization fails
+--- with EXDEV on the overlay/bind mounts CI containers run tests on.
 local GIT_DEFAULTS: {string} = {
   "-c", "user.email=noreply@anthropic.com", "-c", "user.name=Claude",
   "-c", "core.createObject=rename",
@@ -79,8 +93,6 @@ local function git_ok(s: Store, argv: {string}): child.Result | nil, string
     return nil, err
   end
   if not r.ok then
-    -- Git reports some refusals on stdout ("nothing to commit"), so a
-    -- stderr-only message would be an empty one.
     local detail = (r.stderr or ""):gsub("%s+$", "")
     if detail == "" then
       detail = (r.stdout or ""):gsub("%s+$", "")
@@ -90,10 +102,24 @@ local function git_ok(s: Store, argv: {string}): child.Result | nil, string
   return r
 end
 
---- Create a state repository at `dir`: a git worktree (initialized
---- when none is there yet) holding an `items/` directory with a
---- `.gitkeep`, so a repo with no items yet still has something for
---- git to track. What `open` requires already exists after this.
+--- The three mirror refspecs every clone of the board repository
+--- fetches with, so a `fetch --prune` is the whole lost-race recovery.
+local FETCH_REFSPECS < const >: {string} = {
+  "+refs/items/*:refs/items/*",
+  "+refs/ended/*:refs/ended/*",
+  "+refs/board/*:refs/board/*",
+}
+
+--- Create a state repository at `dir`: a git repository (initialized
+--- when none is there yet), with the mirror refspecs ADDED to
+--- `remote.origin.fetch` when it already has an `origin` and does not
+--- already carry them. `git clone` already gave `origin` its own
+--- default refspec for the checked-out branch (how the machinery
+--- itself stays pullable) — this only adds the three item-ref
+--- patterns beside it, never replacing what was there, so a plain
+--- `git pull` on the branch keeps working. There is no `items/`
+--- directory to create — every item lives as a ref, not a file — so a
+--- fresh repository with nothing filed yet needs nothing else here.
 --- @param dir string The directory to prepare
 --- @return boolean True on success
 --- @return string Error message
@@ -104,75 +130,69 @@ local function init_repo(dir: string): boolean, string
       return false, err or (r and r.stderr) or "git init failed"
     end
   end
-  local made, merr = fs.make_dirs(fs.join(dir, "items"))
-  if not made then
-    return false, merr
-  end
-  local kept, kerr = fs.write(fs.join(dir, "items", ".gitkeep"), "")
-  if not kept then
-    return false, kerr
+  local has_origin = child.run({"git", "remote"}, {cwd = dir})
+  if has_origin ~= nil and has_origin.ok
+  and has_origin.stdout:find("origin", 1, true) ~= nil then
+    local current = child.run({"git", "config", "--get-all", "remote.origin.fetch"},
+      {cwd = dir})
+    local have = (current ~= nil and current.ok) and current.stdout or ""
+    for _, spec in ipairs(FETCH_REFSPECS) do
+      if have:find(spec, 1, true) == nil then
+        local added = child.run({"git", "config", "--add", "remote.origin.fetch", spec},
+          {cwd = dir})
+        if added == nil or not added.ok then
+          return false, ("could not set remote.origin.fetch %s"):format(spec)
+        end
+      end
+    end
   end
   return true
 end
 
---- Open a state repository checkout. The root must be a git worktree
---- holding an `items/` directory — `gitboard init` (`init_repo`)
---- creates both.
+--- Open a state repository checkout. The root must be a git
+--- repository — `gitboard init` (`init_repo`) creates one.
 --- @param root string Checkout root
 --- @return Store | nil The store
 --- @return string Error message
 local function open(root: string): Store | nil, string
-  -- A linked worktree's .git is a FILE pointing at the real gitdir,
-  -- not a directory — a shape this store never assumes away, even
-  -- though the board's own canonical home is a plain clone (a
-  -- directory `.git`) rather than a linked worktree of another
-  -- checkout, so presence, not directory-ness, is the test.
   if not fs.is_present(fs.join(root, ".git")) then
     return nil, ("not a git repository: %s"):format(root)
   end
-  if not fs.is_dir(fs.join(root, "items")) then
-    return nil, ("no items/ directory in %s (run init)"):format(root)
-  end
-  return {root = root}
+  return {root = root, session = "", op = "", bounded = false, leased_ref = {},
+    leased_sha = {}, observed_seq = "", pending = {}}
 end
 
---- The file an item lives in.
+--- Record the session `save` should credit as author for whatever it
+--- writes next — the identity a verb that knows its caller threads
+--- through the store rather than through `save`'s own signature, which
+--- stays fixed. Sticks until changed; a verb that never calls this
+--- leaves every write of its own attributed to the tool identity.
 --- @param s Store The store
---- @param id string Item id
---- @return string Path under the store root
-local function item_path(s: Store, id: string): string
-  return fs.join(s.root, "items", id .. ".tl")
+--- @param session string The session's identity, "" for none
+local function set_session(s: Store, session: string)
+  s.session = session or ""
 end
 
---- The sidecar an item's prose spec lives in.
+--- Record the `Op:` trailer `save` should add to its next commit(s).
 --- @param s Store The store
---- @param id string Item id
---- @return string Path under the store root
-local function spec_path(s: Store, id: string): string
-  return fs.join(s.root, "items", id .. ".md")
+--- @param op string The verb name, "" for none
+local function set_op(s: Store, op: string)
+  s.op = op or ""
 end
 
---- Load one item.
+--- Mark the next `save` as a BOUNDED mutation: it also advances and
+--- leases `refs/board/seq`, so two bounded mutations racing each
+--- other cannot both land. Consumed by `save`, which resets it.
 --- @param s Store The store
---- @param id string Item id
---- @return item.Item | nil The item
---- @return string Error message; "no item <id>" when absent
-local function load_item(s: Store, id: string): item.Item | nil, string
-  local path = item_path(s, id)
-  if not fs.is_file(path) then
-    return nil, ("no item %s"):format(id)
-  end
-  local t, perr = literal.parse_file(path)
-  if t == nil then
-    return nil, perr
-  end
-  return item.decode(t)
+--- @param bounded boolean Whether the next save is bounded
+local function set_bounded(s: Store, bounded: boolean)
+  s.bounded = bounded or false
 end
 
---- The full id a unique prefix names — KSUIDs are 27 characters, so verbs accept any
---- unambiguous prefix the way git accepts short hashes, or the 8-character render
---- handle `_work.tail` resolves separately (bare or wrapped, either divider,
---- case-tolerant). An exact-length id resolves without touching the directory.
+--- The full id a unique prefix names, resolved against the refs
+--- directly — `for-each-ref` treats a full ref name as a pattern that
+--- also matches any glob suffixed onto it, so one call covers both an
+--- exact id and a genuine prefix.
 --- @param s Store The store
 --- @param prefix string An id or a prefix of one
 --- @return string | nil The full id
@@ -181,24 +201,25 @@ local function resolve(s: Store, prefix: string): string | nil, string
   if prefix == nil or prefix == "" or prefix:match("^%w+$") == nil then
     return nil, ("not an id prefix: %s"):format(tostring(prefix))
   end
-  if fs.is_file(item_path(s, prefix)) then
-    return prefix
-  end
-  local found, ferr = fs.find(fs.join(s.root, "items"),
-    {glob = prefix .. "*.tl", max_depth = 1, sorted = true})
+  local found, ferr = refs.for_each_ref(s.root,
+    {"refs/items/" .. prefix .. "*", "refs/ended/" .. prefix .. "*"})
   if found == nil then
     return nil, ferr
   end
   local matches: {string} = {}
-  for _, path in ipairs(found) do
-    matches[#matches + 1] = fs.basename(path):gsub("%.tl$", "")
+  local seen: {string: boolean} = {}
+  for _, r in ipairs(found) do
+    local id = r.refname:match("^refs/items/(.+)$") or r.refname:match("^refs/ended/(.+)$")
+    if id and not seen[id] then
+      seen[id] = true
+      matches[#matches + 1] = id
+    end
   end
   if #matches == 0 then
     return nil, ("no item matches %s"):format(prefix)
   end
   if #matches > 1 then
-    return nil, ("%s is ambiguous: %s"):format(prefix,
-      table.concat(matches, " "))
+    return nil, ("%s is ambiguous: %s"):format(prefix, table.concat(matches, " "))
   end
   return matches[1]
 end
@@ -208,45 +229,49 @@ end
 --- @param id string Item id
 --- @return string The spec markdown, possibly empty
 local function read_spec(s: Store, id: string): string
-  local body = fs.read(spec_path(s, id))
-  return body or ""
+  local ref = s.leased_ref[id]
+  if ref ~= nil then
+    return gitread.read_spec(s.root, {ref})
+  end
+  return gitread.read_spec(s.root, {"refs/items/" .. id, "refs/ended/" .. id})
 end
 
---- Every item in the store, done ones included, sorted by id. An item
---- `item.decode` flags with content problems (a multiline title from
---- an older, less careful writer; any other `item.problems` failure)
---- is included anyway, `.decode_problems` and all — one bad record no
---- longer aborts the whole read, only a genuinely corrupt one does
---- (unparseable literal, wrong field type). `flagged_summary` renders
---- what this returned into the one line a caller prints.
+--- Load one item, remembering its ref and tip as the lease `save`
+--- writes against next.
+--- @param s Store The store
+--- @param id string Item id
+--- @return item.Item | nil The item
+--- @return string Error message; "no item <id>" when absent
+local function load_item(s: Store, id: string): item.Item | nil, string
+  local loaded, err = gitread.load(s.root, id)
+  if loaded == nil then
+    return nil, err
+  end
+  s.leased_ref[id], s.leased_sha[id] = loaded.ref, loaded.sha
+  return loaded.it
+end
+
+--- Every item in the store, done ones included, sorted by id. Three
+--- git processes for the whole board, whatever its size — never one
+--- per item; see `_work.gitread.list`.
 --- @param s Store The store
 --- @return {item.Item} | nil The items, some possibly flagged
 --- @return string Error message naming the first genuinely corrupt item
 local function list(s: Store): {item.Item} | nil, string
-  local found, ferr = fs.find(fs.join(s.root, "items"),
-    {glob = "*.tl", max_depth = 1, sorted = true})
-  if found == nil then
-    return nil, ferr
+  local board, err = gitread.list(s.root)
+  if board == nil then
+    return nil, err
   end
-  local out: {item.Item} = {}
-  for _, path in ipairs(found) do
-    local t, perr = literal.parse_file(path)
-    if t == nil then
-      return nil, ("%s: %s"):format(path, perr)
-    end
-    local it, derr = item.decode(t)
-    if it == nil then
-      return nil, ("%s: %s"):format(path, derr)
-    end
-    out[#out + 1] = it
+  for id, ref in pairs(board.refs_by_id) do
+    s.leased_ref[id] = ref
+    s.leased_sha[id] = board.shas_by_id[id]
   end
-  return out
+  s.observed_seq = board.seq_sha
+  return board.items
 end
 
 --- One line summarizing every item `list` flagged, in list order; ""
---- when nothing was. A caller decides whether and where to print
---- it — this only formats what `list` already returned, so surfacing
---- it never needs a second read of the store.
+--- when nothing was.
 --- @param items {item.Item} Items from `list`
 --- @return string "N unreadable/flagged: <id8> — <reason>[; ...]", or ""
 local function flagged_summary(items: {item.Item}): string
@@ -263,80 +288,101 @@ local function flagged_summary(items: {item.Item}): string
   return ("%d unreadable/flagged: %s"):format(#parts, table.concat(parts, "; "))
 end
 
---- Write one item and its spec sidecar, and stage both.
+--- Queue one ref for the next `publish`, merging with whatever this
+--- checkout already owes it a push for. A second unpublished write to
+--- a ref this session already queued (`save` called again before
+--- `publish` — a fixture writing straight past a verb, say) must
+--- still lease against the tip the REMOTE last agreed to, not the
+--- intermediate value this checkout only ever held locally, so the
+--- existing entry's `old` wins; only `delete` — whether the ref ends
+--- up moved or removed — reflects the latest write.
+--- @param s Store The store
+--- @param p refs.PushSpec The ref to push
+local function add_pending(s: Store, p: refs.PushSpec)
+  for _, existing in ipairs(s.pending) do
+    if existing.ref == p.ref then
+      existing.delete = p.delete
+      return
+    end
+  end
+  s.pending[#s.pending + 1] = p
+end
+
+--- Validate an item well enough to write. `save` calls this itself
+--- for `it` and every `also` item before touching any object; kept as
+--- its own function since it is also how a caller checks a hand-built
+--- record without writing it.
 --- @param s Store The store
 --- @param it item.Item The item
---- @param spec string Replacement spec markdown; nil leaves the sidecar alone
---- @return boolean True on success
+--- @param _spec string | nil Unused; kept for signature compatibility
+--- @return boolean True when the item may be written
 --- @return string Error message
-local function stage(s: Store, it: item.Item, spec?: string): boolean, string
+local function stage(_s: Store, it: item.Item, _spec?: string): boolean, string
   local bad = item.problems(it)
   if #bad > 0 then
     return false, table.concat(bad, "; ")
   end
-  local ok, werr = literal.format_file(item_path(s, it.id), item.encode(it))
-  if not ok then
-    return false, werr
-  end
-  if spec ~= nil then
-    local wrote, serr = fs.write(spec_path(s, it.id), spec)
-    if not wrote then
-      return false, serr
-    end
-  end
-  local add: {string} = {"add", fs.join("items", it.id .. ".tl")}
-  if fs.is_file(spec_path(s, it.id)) then
-    add[#add + 1] = fs.join("items", it.id .. ".md")
-  end
-  local _, aerr = git_ok(s, add)
-  if aerr then
-    return false, aerr
-  end
-  return true
+  return true, ""
 end
 
---- Write an item (and, when given, its spec sidecar and further items
---- the same mutation touches) and commit them as ONE commit. Every
---- board mutation is exactly one commit, which is what lets `publish`
---- undo a refused one by dropping a single commit: a decomposition
---- that de-phases a parent while filing its child writes both here,
---- so the pair can never half-land.
+--- Write one item (and, when given, further items the same mutation
+--- touches) as one commit PER item, moved locally, and left for
+--- `publish` to push together in one atomic transaction — the
+--- multi-ref replacement for "every mutation is one commit": the
+--- atomicity now lives at the push, not at the git commit object.
+--- Each item's new tree is compared against the one its observed tip
+--- already carries; the whole call is the no-op success only when
+--- NOTHING moved.
 --- @param s Store The store
 --- @param it item.Item The item
---- @param message string Commit subject, e.g. "move fetch-retry ready -> do"
---- @param spec string Replacement spec markdown; omitted leaves the sidecar alone
---- @param also {item.Item} Further items to write into the same commit
+--- @param message string Commit subject, shared by every commit this
+--- call makes
+--- @param spec string Replacement spec markdown for `it`; nil leaves
+--- its sidecar exactly as observed
+--- @param also {item.Item} Further items to write in the same mutation
 --- @return boolean True on success — a no-op mutation succeeds too
 --- @return string "" on an ordinary success; on a no-op, the
 --- `is_noop`-testable "nothing to record: ..." message; the failure
 --- detail otherwise
 local function save(s: Store, it: item.Item, message: string,
     spec?: string, also?: {item.Item}): boolean, string
-  local ok, err = stage(s, it, spec)
-  if not ok then
-    return false, err
-  end
+  local batch: {item.Item} = {it}
   for _, other in ipairs(also or {}) do
-    local staged, serr = stage(s, other, nil)
-    if not staged then
-      return false, serr
+    batch[#batch + 1] = other
+  end
+  for _, x in ipairs(batch) do
+    local ok, err = stage(s, x)
+    if not ok then
+      return false, err
     end
   end
-  -- A mutation that changes nothing stages nothing, and `git commit`
-  -- reports that on STDOUT while exiting non-zero. That reads as a
-  -- failure unless it is caught here — but the state the caller asked
-  -- for is the state the board already holds, so this is a SUCCESS,
-  -- not a refusal: the mutation's own idempotence, not a fresh commit.
-  local clean = git(s, {"diff", "--cached", "--quiet"})
-  if clean ~= nil and clean.ok then
-    return true, NOOP_PREFIX .. ("%s leaves the board unchanged"):format(
-      message)
+  local function read_current_spec(id: string): string
+    return read_spec(s, id)
   end
-  local _, cerr = git_ok(s, {"commit", "-q", "-m", message})
-  if cerr then
-    return false, cerr
+  local outcome, oerr = gitwrite.save_batch({
+      root = s.root, items = batch, message = message, session = s.session,
+      op = s.op, spec_for_first = spec, leased_ref = s.leased_ref,
+      leased_sha = s.leased_sha, bounded = s.bounded, seq_sha = s.observed_seq,
+      read_spec = read_current_spec,
+    })
+  if outcome == nil then
+    return false, oerr
   end
-  return true
+  s.bounded = false
+  if not outcome.changed then
+    return true, NOOP_PREFIX .. ("%s leaves the board unchanged"):format(message)
+  end
+  for id, ref in pairs(outcome.new_ref) do
+    s.leased_ref[id] = ref
+    s.leased_sha[id] = outcome.new_sha[id]
+  end
+  if outcome.seq_changed then
+    s.observed_seq = outcome.new_seq_sha
+  end
+  for _, p in ipairs(outcome.pushes) do
+    add_pending(s, p)
+  end
+  return true, ""
 end
 
 local record store
@@ -347,8 +393,10 @@ local record store
   git_ok: function(s: Store, argv: {string}): child.Result | nil, string
   init_repo: function(dir: string): boolean, string
   open: function(root: string): Store | nil, string
-  item_path: function(s: Store, id: string): string
-  spec_path: function(s: Store, id: string): string
+  set_session: function(s: Store, session: string)
+  set_op: function(s: Store, op: string)
+  set_bounded: function(s: Store, bounded: boolean)
+  add_pending: function(s: Store, p: refs.PushSpec)
   load: function(s: Store, id: string): item.Item | nil, string
   resolve: function(s: Store, prefix: string): string | nil, string
   read_spec: function(s: Store, id: string): string
@@ -366,8 +414,10 @@ local M: store = {
   git_ok = git_ok,
   init_repo = init_repo,
   open = open,
-  item_path = item_path,
-  spec_path = spec_path,
+  set_session = set_session,
+  set_op = set_op,
+  set_bounded = set_bounded,
+  add_pending = add_pending,
   load = load_item,
   resolve = resolve,
   read_spec = read_spec,

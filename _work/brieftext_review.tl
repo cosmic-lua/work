@@ -130,8 +130,9 @@ reads well.
    and pasted output; a claim with neither is inference, and a gap
    to quote.
 3. The captures landed: for each item the spec says it filed
-   (`new`/`attach`/`block`), find it on the board (`show`, or `grep
-   -ril '<phrase>' items/` in the board checkout) and check that it
+   (`new`/`attach`/`block`), find it on the board (`show`, or `git
+   grep -il '<phrase>' $(git for-each-ref --format='%(refname)'
+   refs/items refs/ended)` in the board checkout) and check that it
    sits under the parent the spec names, carries the blocker edge it
    names, and meets the bar (`help bar`).
 4. The walls held: every `## Non-goals` line honored — no product
