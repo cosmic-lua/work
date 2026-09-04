@@ -2,7 +2,7 @@
 -- A mutating verb is independent of the checked-out branch's state at
 -- every path — not just the paths it does not own, but ALL of them,
 -- now that items are refs rather than files: `sync` is exactly `git
--- fetch --prune` against `refs/items`, `refs/ended` and `refs/board`,
+-- fetch --prune` against `refs/heads/items`, `refs/heads/ended` and `refs/heads/board`,
 -- which never reads, merges into, or otherwise touches the working
 -- tree; neither does a mutation's own commit, or the lost-race
 -- recovery. A `_work/**` file mid-edit in the shared checkout —
@@ -75,8 +75,8 @@ end
 
 --- Bring the checked-out branch's working tree level with `origin`,
 --- the way a developer would `git pull` the machinery by hand — never
---- `publish.sync`'s job, which only ever fetches `refs/items`,
---- `refs/ended` and `refs/board` and touches no working tree at all.
+--- `publish.sync`'s job, which only ever fetches `refs/heads/items`,
+--- `refs/heads/ended` and `refs/heads/board` and touches no working tree at all.
 --- @param root string Checkout root
 local function pull_branch(root: string)
   local branch = check.must(child.run({"git", "symbolic-ref", "--short", "HEAD"},
@@ -91,7 +91,7 @@ end
 -- checkout must not block a sync that has real work to pull in, and a
 -- mutation's own commit(s) must never touch it either: `sync` is
 -- `fetch --prune` against three ref namespaces, and `save` writes git
--- objects and moves `refs/items/*` directly — neither ever reads or
+-- objects and moves `refs/heads/items/*` directly — neither ever reads or
 -- writes the working tree, so there is no mechanism left that COULD
 -- disturb an unrelated dirty file, unlike the old fast-forward merge
 -- this reasoned about a refusal for.

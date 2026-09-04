@@ -17,7 +17,7 @@ local TOOL_EMAIL < const > = "noreply@anthropic.com"
 --- write them under, the lease each was last observed at, a snapshot
 --- of each as OBSERVED (`leased_item` — the fast-import diff's
 --- baseline; nil for an item never loaded, read as "brand new"), and
---- — for a BOUNDED mutation — `refs/board/seq`'s own observed tip.
+--- — for a BOUNDED mutation — `refs/heads/board/seq`'s own observed tip.
 local record Request
   root: string
   items: {item.Item}
@@ -40,7 +40,7 @@ end
 --- What `save_batch` did: the refs to push, each item's new ref and
 --- tip (for the caller to update its own lease table with), whether
 --- anything changed at all, and — for a bounded mutation — whether
---- `refs/board/seq` moved and its new tip.
+--- `refs/heads/board/seq` moved and its new tip.
 local record Outcome
   pushes: {refs.PushSpec}
   new_ref: {string: string}
@@ -52,10 +52,10 @@ end
 
 --- One item's commit as planned, plus the bookkeeping the post-import
 --- verification and the ended-ref move need: the ref it targets (the
---- ref it was already on — `refs/ended/<id>` for an item already
---- ended being corrected, same as `refs/items/<id>` otherwise), the
+--- ref it was already on — `refs/heads/ended/<id>` for an item already
+--- ended being corrected, same as `refs/heads/items/<id>` otherwise), the
 --- tip it was observed at, and whether this write ends it (moves it
---- from `refs/items` to `refs/ended`).
+--- from `refs/heads/items` to `refs/heads/ended`).
 local record Planned
   id: string
   ref: string
@@ -75,7 +75,7 @@ end
 local function plan_one(req: Request, it: item.Item,
     spec_replacement: string | nil, now: string):
   fastimport.CommitPlan | nil, Planned | nil
-  local ref = req.leased_ref[it.id] or ("refs/items/" .. it.id)
+  local ref = req.leased_ref[it.id] or ("refs/heads/items/" .. it.id)
   local old_sha = req.leased_sha[it.id] or refs.ZERO_SHA
   local old = req.leased_item[it.id]
   local old_spec = ""
@@ -99,15 +99,15 @@ local function plan_one(req: Request, it: item.Item,
     author_date = now, committer_name = TOOL_NAME, committer_email = TOOL_EMAIL,
     committer_date = now, message = req.message, op = req.op or "", ops = ops,
   }
-  local ends = (it.resolution or "") ~= "" and ref:sub(1, 11) == "refs/items/"
+  local ends = (it.resolution or "") ~= "" and ref:sub(1, #"refs/heads/items/") == "refs/heads/items/"
   return plan, {id = it.id, ref = ref, old_sha = old_sha, ends = ends}
 end
 
 --- Write every item in `req.items`, each as its own commit when its
 --- diff found anything to move, and — when `req.bounded` — advance
---- `refs/board/seq` too, ALL of it in one `git fast-import` stream;
---- items ending in this save (`refs/items/<id>` moving to
---- `refs/ended/<id>`) then get one more `update-ref --stdin`
+--- `refs/heads/board/seq` too, ALL of it in one `git fast-import` stream;
+--- items ending in this save (`refs/heads/items/<id>` moving to
+--- `refs/heads/ended/<id>`) then get one more `update-ref --stdin`
 --- transaction, batched across however many ended, since fast-import
 --- itself has no way to delete a ref. Every write staged locally is
 --- left in `Outcome.pushes` for `publish` to push together.
@@ -144,7 +144,7 @@ local function save_batch(req: Request): Outcome | nil, string
       from = seq_old
     end
     commits[#commits + 1] = {
-      ref = "refs/board/seq", from = from, author_name = TOOL_NAME,
+      ref = "refs/heads/board/seq", from = from, author_name = TOOL_NAME,
       author_email = TOOL_EMAIL, author_date = now, committer_name = TOOL_NAME,
       committer_email = TOOL_EMAIL, committer_date = now, message = req.message,
       op = req.op or "", ops = {},
@@ -162,7 +162,7 @@ local function save_batch(req: Request): Outcome | nil, string
     patterns[#patterns + 1] = p.ref
   end
   if req.bounded then
-    patterns[#patterns + 1] = "refs/board/seq"
+    patterns[#patterns + 1] = "refs/heads/board/seq"
   end
   local found, ferr = refs.for_each_ref(req.root, patterns)
   if found == nil then
@@ -187,10 +187,10 @@ local function save_batch(req: Request): Outcome | nil, string
     end
     if p.ends then
       ended[#ended + 1] = {id = p.id, sha = new_sha}
-      out.pushes[#out.pushes + 1] = {ref = "refs/ended/" .. p.id, old = "", delete = false}
+      out.pushes[#out.pushes + 1] = {ref = "refs/heads/ended/" .. p.id, old = "", delete = false}
       out.pushes[#out.pushes + 1] =
-      {ref = "refs/items/" .. p.id, old = p.old_sha, delete = true}
-      out.new_ref[p.id], out.new_sha[p.id] = "refs/ended/" .. p.id, new_sha
+      {ref = "refs/heads/items/" .. p.id, old = p.old_sha, delete = true}
+      out.new_ref[p.id], out.new_sha[p.id] = "refs/heads/ended/" .. p.id, new_sha
     else
       out.pushes[#out.pushes + 1] = {ref = p.ref, old = p.old_sha, delete = false}
       out.new_ref[p.id], out.new_sha[p.id] = p.ref, new_sha
@@ -201,12 +201,12 @@ local function save_batch(req: Request): Outcome | nil, string
     return nil, merr
   end
   if req.bounded then
-    local new_seq = new_sha_of["refs/board/seq"]
+    local new_seq = new_sha_of["refs/heads/board/seq"]
     if new_seq == nil or new_seq == seq_old then
-      return nil, "fast-import did not fast-forward refs/board/seq — refused "
+      return nil, "fast-import did not fast-forward refs/heads/board/seq — refused "
       .. "(unexpected local state)"
     end
-    out.pushes[#out.pushes + 1] = {ref = "refs/board/seq", old = seq_old, delete = false}
+    out.pushes[#out.pushes + 1] = {ref = "refs/heads/board/seq", old = seq_old, delete = false}
     out.seq_changed, out.new_seq_sha = true, new_seq
   end
   out.changed = true

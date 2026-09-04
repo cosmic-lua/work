@@ -61,7 +61,7 @@ local function test_mktree_sorts_entries()
 end
 
 -- Zero entries builds the well-known empty tree — the shape a bounded
--- mutation's `refs/board/seq` marker commit needs.
+-- mutation's `refs/heads/board/seq` marker commit needs.
 local function test_mktree_of_nothing_is_the_empty_tree()
   local root = fresh_repo("mktree-empty")
   local sha = check.must(gitobj.mktree(root, {}))

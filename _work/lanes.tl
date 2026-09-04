@@ -247,7 +247,7 @@ local function file_repair(s: store.Store, lane: string): boolean, string
   end
   -- Bounded: `mint` (the only caller) reads the whole board with
   -- `store.list` before deciding whether this lane already has an
-  -- open repair, so filing one advances and leases `refs/board/seq`
+  -- open repair, so filing one advances and leases `refs/heads/board/seq`
   -- too — the same protection a new take gets against the doing
   -- bound, here against two red observations racing each other into
   -- two repair items for the same lane.

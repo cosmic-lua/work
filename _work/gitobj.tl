@@ -69,7 +69,7 @@ end
 --- Build one tree from its entries and return its sha. `git mktree`
 --- sorts the entries itself, so callers never have to; zero entries
 --- is legal and gives back the well-known empty tree, which a bounded
---- mutation's `refs/board/seq` marker commit is built on.
+--- mutation's `refs/heads/board/seq` marker commit is built on.
 --- @param root string The repository root
 --- @param entries {TreeEntry} The tree's entries, possibly empty
 --- @return string | nil The tree's sha

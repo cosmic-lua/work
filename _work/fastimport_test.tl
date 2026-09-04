@@ -192,7 +192,7 @@ end
 -- makes that failure legible instead of a raw git parse error.
 local function test_build_stream_for_a_known_item()
   local plan: fastimport.CommitPlan = {
-    ref = "refs/items/known01", from = "aaaa000011112222333344445555666677778888",
+    ref = "refs/heads/items/known01", from = "aaaa000011112222333344445555666677778888",
     author_name = "session-a", author_email = "session-a@board",
     author_date = "1700000000 +0000", committer_name = "Claude",
     committer_email = "noreply@anthropic.com", committer_date = "1700000000 +0000",
@@ -205,7 +205,7 @@ local function test_build_stream_for_a_known_item()
   }
   local stream = fastimport.build_stream({plan})
   local expected = table.concat({
-      "commit refs/items/known01\n",
+      "commit refs/heads/items/known01\n",
       "author session-a <session-a@board> 1700000000 +0000\n",
       "committer Claude <noreply@anthropic.com> 1700000000 +0000\n",
       "data 36\n",
@@ -231,7 +231,7 @@ end
 -- chains do.
 local function test_build_stream_omits_mark_when_unset()
   local plan: fastimport.CommitPlan = {
-    ref = "refs/items/x", from = nil,
+    ref = "refs/heads/items/x", from = nil,
     author_name = "Claude", author_email = "noreply@anthropic.com",
     author_date = "1700000000 +0000", committer_name = "Claude",
     committer_email = "noreply@anthropic.com", committer_date = "1700000000 +0000",

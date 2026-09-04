@@ -337,7 +337,7 @@ local function test_force_states_its_reason_and_the_log_keeps_it()
 end
 
 -- A take of NEW work is bounded — it advances and leases
--- `refs/board/seq`, the same protection the doing bound needs — so
+-- `refs/heads/board/seq`, the same protection the doing bound needs — so
 -- two takes of two DIFFERENT items still race each other on that one
 -- shared ref, even though each writes its own item's ref independently.
 -- The loser is refused with LOST_RACE and lands on the re-run against
@@ -350,7 +350,7 @@ local function test_a_take_survives_a_lost_race()
   give_spec(a, other)
   assert(publish.sync(b))
   -- b's take of a DIFFERENT item is the first to advance
-  -- refs/board/seq, so a's take below — decided before it saw that —
+  -- refs/heads/board/seq, so a's take below — decided before it saw that —
   -- loses the lease it never knew had moved.
   assert(verbs.cmd_take(b, other, "session-b", 0, false, "") == 0)
   assert(verbs.cmd_take(a, leaf, "session-a", 0, false, "") ~= 0,

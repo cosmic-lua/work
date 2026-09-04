@@ -285,7 +285,7 @@ end
 --- `save`'s own fixed signature. `bounded` marks a mutation whose
 --- gates read the whole board before deciding (today: a NEW take
 --- against the doing bound, and a lane mint) — `save` also advances
---- and leases `refs/board/seq` for one of these, so two racing
+--- and leases `refs/heads/board/seq` for one of these, so two racing
 --- bounded mutations cannot both land.
 --- @param s store.Store The store
 --- @param it item.Item The mutated item

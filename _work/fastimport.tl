@@ -5,7 +5,7 @@
 --- moved, in-process, against no git at all) and the stream-building
 --- half (`build_stream`/`run`), which turns that diff into ONE
 --- `commit <ref>` block per item plus, for a bounded mutation, one
---- more for `refs/board/seq` — fed to a single `git fast-import`
+--- more for `refs/heads/board/seq` — fed to a single `git fast-import`
 --- process regardless of how many items or paths are touched.
 ---
 --- `from <observed tip>` on an existing item's commit means only the

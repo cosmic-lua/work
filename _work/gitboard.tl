@@ -6,7 +6,7 @@
 --- crosses the kanban. Which items matter more is a recorded
 --- comparison (`compare`), derived into an order by `_work.priority`,
 --- never a number an item asserts about itself. Each item is a git ref,
---- `refs/items/<ksuid>` (or `refs/ended/<ksuid>` once resolved), whose
+--- `refs/heads/items/<ksuid>` (or `refs/heads/ended/<ksuid>` once resolved), whose
 --- tip commit's tree carries its fields and spec prose (`_work.store`);
 --- the flow rules are `_work.flow`. Pull requests
 --- stay on GitHub and carry the fix; issues shrink to an inbound
@@ -62,7 +62,7 @@ local show = require("_work.gitshow")
 local view = require("_work.gitview")
 
 --- The verbs whose save may be BOUNDED — advancing and leasing
---- `refs/board/seq` (`_work.store.set_bounded`), so two of them racing
+--- `refs/heads/board/seq` (`_work.store.set_bounded`), so two of them racing
 --- each other need to see the SAME seq tip: `take` (a NEW claim, the
 --- doing bound) and `block` (the add path only — see
 --- `_work.gitgraph.cmd_block`'s own comment). Only these fetch the

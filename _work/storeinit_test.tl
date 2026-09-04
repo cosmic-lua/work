@@ -73,9 +73,9 @@ local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   local r = check.must(child.run({"git", "config", "--get-all", "remote.origin.fetch"},
       {cwd = dir}))
   assert(r.ok, "git config failed: " .. r.stderr)
-  assert(r.stdout:find("refs/items/%*:refs/items/%*") ~= nil, r.stdout)
-  assert(r.stdout:find("refs/ended/%*:refs/ended/%*") ~= nil, r.stdout)
-  assert(r.stdout:find("refs/board/%*:refs/board/%*") ~= nil, r.stdout)
+  assert(r.stdout:find("refs/heads/items/%*:refs/heads/items/%*") ~= nil, r.stdout)
+  assert(r.stdout:find("refs/heads/ended/%*:refs/heads/ended/%*") ~= nil, r.stdout)
+  assert(r.stdout:find("refs/heads/board/%*:refs/heads/board/%*") ~= nil, r.stdout)
   -- ADDED, not substituted: the clone's own default refspec for its
   -- checked-out branch survives, so a plain `git pull` on the
   -- machinery keeps working after `init_repo` runs.
@@ -88,21 +88,21 @@ local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   assert(r2.stdout == r.stdout, "a second init_repo adds nothing new")
 end
 
--- `init_repo` writes `refs/board/format` on a fresh repository — the
+-- `init_repo` writes `refs/heads/board/format` on a fresh repository — the
 -- exact blob `_work.format.blob` gives, at the one path `format`.
 local function test_init_repo_writes_the_format_marker()
   local root = fs.join(tmpdir, "init-format")
   assert(fs.remove_all(root))
   assert(store.init_repo(root))
-  local r = check.must(child.run({"git", "cat-file", "-p", "refs/board/format:format"},
+  local r = check.must(child.run({"git", "cat-file", "-p", "refs/heads/board/format:format"},
       {cwd = root}))
   assert(r.ok, "the marker blob reads back: " .. r.stderr)
   assert(r.stdout == format.blob(), "got: " .. r.stdout)
 end
 
---- The `refs/board/format` sha, "" when the ref does not exist.
+--- The `refs/heads/board/format` sha, "" when the ref does not exist.
 local function format_sha(root: string): string
-  local r = child.run({"git", "rev-parse", "--verify", "-q", "refs/board/format"},
+  local r = child.run({"git", "rev-parse", "--verify", "-q", "refs/heads/board/format"},
     {cwd = root})
   if r == nil or not r.ok then
     return ""
@@ -110,7 +110,7 @@ local function format_sha(root: string): string
   return (r.stdout:gsub("%s+$", ""))
 end
 
---- Hand-write `refs/board/format`'s `format` blob to `text` — plumbing
+--- Hand-write `refs/heads/board/format`'s `format` blob to `text` — plumbing
 --- a real reader (`gitread.list`) would meet on a board this tool
 --- disagrees with, never `_work.store`'s own writer.
 --- @param root string The state repository
@@ -133,7 +133,7 @@ local function rewrite_format(root: string, text: string)
   end
   local commit = check.must(child.run(argv, {cwd = root}))
   assert(commit.ok, "commit-tree failed: " .. commit.stderr)
-  git(root, {"update-ref", "refs/board/format", (commit.stdout:gsub("%s+$", ""))})
+  git(root, {"update-ref", "refs/heads/board/format", (commit.stdout:gsub("%s+$", ""))})
 end
 
 --- One filed item, so a format check has a board that "already
@@ -169,7 +169,7 @@ local function test_list_refuses_a_missing_marker_with_items_present()
   assert(store.init_repo(root))
   local s = check.must(store.open(root))
   seed_one_item(s)
-  git(root, {"update-ref", "-d", "refs/board/format"})
+  git(root, {"update-ref", "-d", "refs/heads/board/format"})
   local all, lerr = store.list(s)
   assert(all == nil, "a board with items and no marker is refused")
   assert(lerr:find("format", 1, true) ~= nil, "got: " .. lerr)
@@ -183,7 +183,7 @@ local function test_list_accepts_a_missing_marker_on_an_empty_board()
   local root = fs.join(tmpdir, "format-missing-empty")
   assert(fs.remove_all(root))
   assert(store.init_repo(root))
-  git(root, {"update-ref", "-d", "refs/board/format"})
+  git(root, {"update-ref", "-d", "refs/heads/board/format"})
   local s = check.must(store.open(root))
   local all = check.must(store.list(s))
   assert(#all == 0, "an empty board with no marker still reads: " .. #all)

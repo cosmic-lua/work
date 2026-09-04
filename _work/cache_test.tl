@@ -49,7 +49,7 @@ local function test_a_hand_moved_ref_forces_a_rebuild()
         author_name = "test", author_email = "test@example.com",
         committer_name = "test", committer_email = "test@example.com",
       }))
-  assert(store.git_ok(s, {"update-ref", "refs/items/" .. id, commit_sha}))
+  assert(store.git_ok(s, {"update-ref", "refs/heads/items/" .. id, commit_sha}))
 
   local c = check.must(cache.open(s.root))
   local row = check.must(c.db:query_one("SELECT title FROM items WHERE id = ?", {id}))
@@ -154,11 +154,11 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   assert(publish.sync(b))
 
   -- 1) BOUNDED: a fresh take against the doing bound leases and
-  -- advances refs/board/seq.
+  -- advances refs/heads/board/seq.
   assert(verbs.cmd_take(a, leaf_a, "session-a", 0, false, "") == 0)
   assert_cache_matches_cold_rebuild(a, "after a bounded take")
 
-  -- 2) ENDED: the item's ref moves from refs/items to refs/ended.
+  -- 2) ENDED: the item's ref moves from refs/heads/items to refs/heads/ended.
   assert(verbs.cmd_done(a, leaf_a, "completed", true, "test: no PR to review") == 0)
   assert_cache_matches_cold_rebuild(a, "after an ended move")
 

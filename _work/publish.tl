@@ -36,8 +36,8 @@ end
 
 --- Pull concurrent state: a store with no origin is local-only and
 --- syncs trivially; one with an origin fetches with `--prune`, which
---- resets every mirrored ref (`refs/items`, `refs/ended`,
---- `refs/board`) to what the remote holds. There is no working tree
+--- resets every mirrored ref (`refs/heads/items`, `refs/heads/ended`,
+--- `refs/heads/board`) to what the remote holds. There is no working tree
 --- to merge into, so this is the whole of sync.
 --- @param s store.Store The store
 --- @return boolean True on success
@@ -102,10 +102,10 @@ local function publish(s: store.Store): boolean, string
   -- landed, not whatever `s.observed_seq` held before it — otherwise a
   -- re-run's own bounded save would lease against a value the remote
   -- has already moved past, losing a race against itself.
-  local seq_found, sferr = refs.for_each_ref(s.root, {"refs/board/seq"})
+  local seq_found, sferr = refs.for_each_ref(s.root, {"refs/heads/board/seq"})
   if seq_found == nil then
     return false, ("lost the push race — the mutation was dropped whole, "
-      .. "and refs/board/seq could not be re-read: %s"):format(sferr)
+      .. "and refs/heads/board/seq could not be re-read: %s"):format(sferr)
   end
   s.observed_seq = ""
   if #seq_found > 0 then
@@ -127,7 +127,7 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
     local ref = s.leased_ref[id]
     if ref == nil then
       local found, ferr = refs.for_each_ref(s.root,
-        {"refs/items/" .. id, "refs/ended/" .. id})
+        {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
       if found == nil then
         return nil, ferr
       end
@@ -138,7 +138,7 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
     end
     argv[#argv + 1] = ref
   else
-    local found, ferr = refs.for_each_ref(s.root, {"refs/items", "refs/ended"})
+    local found, ferr = refs.for_each_ref(s.root, {"refs/heads/items", "refs/heads/ended"})
     if found == nil then
       return nil, ferr
     end
@@ -174,11 +174,11 @@ local function touched_at(s: store.Store, id: string): integer | nil, string
   if ref ~= nil then
     return refs.committer_date_unix(s.root, ref)
   end
-  local t, terr = refs.committer_date_unix(s.root, "refs/items/" .. id)
+  local t, terr = refs.committer_date_unix(s.root, "refs/heads/items/" .. id)
   if t ~= nil then
     return t
   end
-  local t2, terr2 = refs.committer_date_unix(s.root, "refs/ended/" .. id)
+  local t2, terr2 = refs.committer_date_unix(s.root, "refs/heads/ended/" .. id)
   if t2 ~= nil then
     return t2
   end

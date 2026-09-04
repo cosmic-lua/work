@@ -30,7 +30,7 @@ local file_item = fixture.file_item
 -- blocks in each other's way UNLESS blocking is bounded — which the
 -- add path is, exactly because `flow.waits_on`'s cycle check is a
 -- whole-board read the same way the doing bound's is: it advances and
--- leases `refs/board/seq`, so the second, stale block is the one that
+-- leases `refs/heads/board/seq`, so the second, stale block is the one that
 -- loses that lease and is refused with LOST_RACE. Its re-run — reading
 -- the winner's edge — refuses as the deadlock it is. No cycle at any
 -- point.
@@ -88,7 +88,7 @@ local function test_concurrent_done_of_the_last_two_children_both_land()
     "the parent is workable again — derived fresh, nothing to have lost")
 end
 
--- `set` never touches `refs/board/seq` (it is not in `gitboard.tl`'s
+-- `set` never touches `refs/heads/board/seq` (it is not in `gitboard.tl`'s
 -- FETCH_FIRST set), so the CLI dispatch builds and pushes it straight
 -- against this checkout's own local refs, with no fetch first. Racing
 -- it against the SAME item from a checkout that never synced past a's

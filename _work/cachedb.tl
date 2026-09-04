@@ -34,7 +34,7 @@ local DB_FILENAME < const > = "board.db"
 --- too, for a reader that would rather query it than read the
 --- connection's own `PRAGMA user_version`), and `lanes`, the
 --- scheduled-lane observation `_work.lanes` now reads and writes here
---- instead of committing `refs/board/lanes`.
+--- instead of committing `refs/heads/board/lanes`.
 local EXTRA_DDL < const > = [[
 CREATE TABLE cache_meta (
   k TEXT PRIMARY KEY,
@@ -50,7 +50,7 @@ CREATE TABLE lanes (
 
 --- The three ref namespaces the digest and the incremental patchers
 --- watch — every ref a mutation or a fetch can move.
-local WATCH_PATTERNS < const >: {string} = {"refs/items", "refs/ended", "refs/board"}
+local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}
 
 --- The cache file's path for a given store root.
 --- @param root string The store's root
@@ -97,11 +97,11 @@ local function fresh_digest(root: string): string | nil, string
 end
 
 --- Every watched ref's sha, keyed by ITEM id rather than refname — an
---- id's ref namespace can change (`refs/items/<id>` moving to
---- `refs/ended/<id>`) without the id itself changing, so keying this
+--- id's ref namespace can change (`refs/heads/items/<id>` moving to
+--- `refs/heads/ended/<id>`) without the id itself changing, so keying this
 --- way makes an ended-move read as "this id's sha changed" exactly
 --- like an ordinary edit, never as one id disappearing and a
---- different one appearing. `refs/board/*` entries carry no id and
+--- different one appearing. `refs/heads/board/*` entries carry no id and
 --- are dropped here — `_work.cache.around_fetch` diffs those through
 --- the whole digest instead.
 --- @param entries {refs.RefEntry} A ref listing
@@ -109,7 +109,7 @@ end
 local function shas_by_item(entries: {refs.RefEntry}): {string: string}
   local out: {string: string} = {}
   for _, e in ipairs(entries) do
-    local id = e.refname:match("^refs/items/(.+)$") or e.refname:match("^refs/ended/(.+)$")
+    local id = e.refname:match("^refs/heads/items/(.+)$") or e.refname:match("^refs/heads/ended/(.+)$")
     if id then
       out[id] = e.sha
     end

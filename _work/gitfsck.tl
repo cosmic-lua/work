@@ -121,15 +121,15 @@ local function tree_problem(s: store.Store, it: item.Item, spec_body: string): s
   return nil
 end
 
---- The stale `refs/board/lanes` finding: nothing writes it any more —
+--- The stale `refs/heads/board/lanes` finding: nothing writes it any more —
 --- the lane observation lives in the cache database instead — but a
 --- board carried over from before that move may still have one.
 --- @param s store.Store The store
 --- @return string | nil The problem, nil when the ref is not there
 local function stale_lanes_ref_problem(s: store.Store): string | nil
-  local found = refs.for_each_ref(s.root, {"refs/board/lanes"})
+  local found = refs.for_each_ref(s.root, {"refs/heads/board/lanes"})
   if found ~= nil and #found > 0 then
-    return "refs/board/lanes: stale — lane observations now live in "
+    return "refs/heads/board/lanes: stale — lane observations now live in "
     .. "the cache database (o/board.db), not a committed ref; delete it"
   end
   return nil

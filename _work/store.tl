@@ -1,5 +1,5 @@
---- The item store: every item lives as a git ref — `refs/items/<id>`
---- while open, `refs/ended/<id>` once resolved — whose tip commit's
+--- The item store: every item lives as a git ref — `refs/heads/items/<id>`
+--- while open, `refs/heads/ended/<id>` once resolved — whose tip commit's
 --- tree is the item's current state (`_work.itemtree`'s canonical
 --- shape) and whose parent chain is its history. There is no working
 --- tree to hold them: `open` needs only a git repository, and a
@@ -28,7 +28,7 @@ local refs = require("_work.refs")
 --- item as observed (`leased_item` — independent of whatever a caller
 --- goes on to mutate `load`'s/`list`'s own returned `item.Item`
 --- into, since `save`'s fast-import diff needs the ORIGINAL fields to
---- compare against), `refs/board/seq`'s own observed tip, and the
+--- compare against), `refs/heads/board/seq`'s own observed tip, and the
 --- refs a completed `save` still owes `publish` a push for.
 local record Store
   root: string
@@ -110,15 +110,15 @@ end
 --- The three mirror refspecs every clone of the board repository
 --- fetches with, so a `fetch --prune` is the whole lost-race recovery.
 local FETCH_REFSPECS < const >: {string} = {
-  "+refs/items/*:refs/items/*",
-  "+refs/ended/*:refs/ended/*",
-  "+refs/board/*:refs/board/*",
+  "+refs/heads/items/*:refs/heads/items/*",
+  "+refs/heads/ended/*:refs/heads/ended/*",
+  "+refs/heads/board/*:refs/heads/board/*",
 }
 
 --- Create a state repository at `dir`: a git repository (initialized
 --- when none is there yet), with the mirror refspecs ADDED to
 --- `remote.origin.fetch` when it already has an `origin` and does not
---- already carry them, and `refs/board/format` created (and
+--- already carry them, and `refs/heads/board/format` created (and
 --- best-effort pushed) when this repository has none yet
 --- (`format.ensure`). `git clone` already gave `origin` its own
 --- default refspec for the checked-out branch (how the machinery
@@ -192,7 +192,7 @@ local function set_op(s: Store, op: string)
 end
 
 --- Mark the next `save` as a BOUNDED mutation: it also advances and
---- leases `refs/board/seq`, so two bounded mutations racing each
+--- leases `refs/heads/board/seq`, so two bounded mutations racing each
 --- other cannot both land. Consumed by `save`, which resets it.
 --- @param s Store The store
 --- @param bounded boolean Whether the next save is bounded
@@ -213,14 +213,14 @@ local function resolve(s: Store, prefix: string): string | nil, string
     return nil, ("not an id prefix: %s"):format(tostring(prefix))
   end
   local found, ferr = refs.for_each_ref(s.root,
-    {"refs/items/" .. prefix .. "*", "refs/ended/" .. prefix .. "*"})
+    {"refs/heads/items/" .. prefix .. "*", "refs/heads/ended/" .. prefix .. "*"})
   if found == nil then
     return nil, ferr
   end
   local matches: {string} = {}
   local seen: {string: boolean} = {}
   for _, r in ipairs(found) do
-    local id = r.refname:match("^refs/items/(.+)$") or r.refname:match("^refs/ended/(.+)$")
+    local id = r.refname:match("^refs/heads/items/(.+)$") or r.refname:match("^refs/heads/ended/(.+)$")
     if id and not seen[id] then
       seen[id] = true
       matches[#matches + 1] = id
@@ -244,7 +244,7 @@ local function read_spec(s: Store, id: string): string
   if ref ~= nil then
     return gitread.read_spec(s.root, {ref})
   end
-  return gitread.read_spec(s.root, {"refs/items/" .. id, "refs/ended/" .. id})
+  return gitread.read_spec(s.root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
 end
 
 --- Every named item's spec sidecar in one batch, "" for one with
