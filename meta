@@ -1,3 +1,5 @@
 title: teal: say at the two `env as tl.Env` casts why they survive generation 1, until the pin bump retires them
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: build-FeC7_Ri35-1
+builders: build-FeC7_Ri35-1
