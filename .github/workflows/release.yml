@@ -1,0 +1,82 @@
+name: release
+
+# Every push to main publishes the gitboard binary that commit builds,
+# so any commit on main is pinnable from a consumer's trust root
+# (cosmic's `bin/gitboard.pin`) the way cosmic's own releases are. The
+# binary is built by the pinned cosmic from this tree, the same build
+# the `board` workflow gates, and ships with its sha256 beside it.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Workflow-level permissions stay read-only; the one job that
+# publishes elevates itself to `contents: write`.
+permissions:
+  contents: read
+
+# One release at a time, never cancelled mid-run: two publishes for
+# the same tag would race `gh release create`.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      # The store's tests and the build both run git in this checkout,
+      # whose ownership differs from the runner's.
+      - name: trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: name the release
+        id: tag
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -eux
+          echo "tag=$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # `bin/cosmic` fetches the one pinned cosmic, verifies its sha256,
+      # and execs it; `--make build` produces o/bin/gitboard.
+      - name: build
+        shell: bash
+        run: |
+          set -eux
+          bin/cosmic --make fetch
+          bin/cosmic --make build
+          test -x o/bin/gitboard
+          # A fat APE, not the assimilated ELF the trust root runs: the
+          # first two bytes are MZ.
+          test "$(head -c 2 o/bin/gitboard)" = MZ
+
+      # The binary answers before it is published: help renders from the
+      # CLI it embeds, and fsck on an empty board is the read path.
+      - name: the binary says what it is
+        shell: bash
+        run: |
+          set -eux
+          o/bin/gitboard help | grep -F "gitboard <command>"
+
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -eux
+          mkdir -p release
+          cp o/bin/gitboard release/gitboard
+          chmod +x release/gitboard
+          (cd release && sha256sum gitboard > SHA256SUMS && cat SHA256SUMS)
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "gitboard built from ${GITHUB_SHA} by the pinned cosmic ($(sed -n 's/^url = .*download\/\([^/]*\)\/.*/\1/p' bin/cosmic.pin))." \
+            release/gitboard release/SHA256SUMS
