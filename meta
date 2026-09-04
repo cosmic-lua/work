@@ -2,5 +2,6 @@ title: make: add the o/bin/cosmic test prerequisite only when the project builds
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
 claim: build-DkPc_u6TG-1
+reviewer: review-DkPc_u6TG-1
 pr: 1676
 builders: build-DkPc_u6TG-1
