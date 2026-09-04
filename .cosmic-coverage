@@ -7,6 +7,7 @@ return {
   ["_work/brieftext_review.tl"] = {["covered"] = 4, ["total"] = 6},
   ["_work/decision.tl"] = {["covered"] = 7, ["total"] = 7},
   ["_work/doctrine.tl"] = {["covered"] = 41, ["total"] = 41},
+  ["_work/fastimport.tl"] = {["covered"] = 107, ["total"] = 113},
   ["_work/fixture.tl"] = {["covered"] = 102, ["total"] = 104},
   ["_work/flow.tl"] = {["covered"] = 184, ["total"] = 198},
   ["_work/flowstats.tl"] = {["covered"] = 143, ["total"] = 177},

@@ -47,6 +47,7 @@ local proc = require("cosmic.proc")
 local brief = require("_work.brief")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
+local gate = require("_work.gitgate")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local import = require("_work.import")
@@ -308,7 +309,16 @@ local function main(...: string): integer
     return 0
   end
   if d.command == "init" then
-    return verbs.cmd_init(d.parsed.values["dir"] or ".")
+    -- Inlined rather than a `verbs.cmd_init` wrapper: the mechanics
+    -- are `store.init_repo`'s, alongside `open`, and nothing else
+    -- needs its own copy of this two-line verdict.
+    local dir = d.parsed.values["dir"] or "."
+    local ok, err = store.init_repo(dir)
+    if not ok then
+      return gate.verdict_line("init", false, err)
+    end
+    return gate.verdict_line("init", true,
+      ("state repository ready at %s"):format(dir))
   end
   local s, serr = store.open(d.parsed.values["dir"] or ".")
   if s == nil then

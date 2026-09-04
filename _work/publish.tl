@@ -81,6 +81,13 @@ local function publish(s: store.Store): boolean, string
   s.pending = {}
   s.leased_ref = {}
   s.leased_sha = {}
+  -- A cleared lease means "unobserved" to the fast-import diff too
+  -- (`_work.gitwrite.plan_one` reads `leased_item[id]`): a snapshot
+  -- surviving this reset would go on comparing a re-run's item
+  -- against a ref `fetch_prune` may have just pruned out from under
+  -- it, silently treating real fields as unchanged and skipping the
+  -- `meta` write a brand-new root commit still needs.
+  s.leased_item = {}
   local synced, serr = refs.fetch_prune(s.root)
   if not synced then
     return false, ("lost the push race — the mutation was dropped whole, "

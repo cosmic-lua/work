@@ -123,8 +123,24 @@ refuses, naming the recovery — run the same verb again, and it decides
 afresh with EVERY gate applied to the merged board, not a replayed
 commit whose preconditions may no longer hold. A mutation never
 half-lands. Reads need no network and no token, and touch no working
-tree — a read is `for-each-ref`/`cat-file --batch`, a write is
-`hash-object`/`mktree`/`commit-tree` plus `update-ref`.
+tree — a read is `for-each-ref`/`cat-file --batch`, a write is one
+`git fast-import` stream per save (every item it touches as its own
+`commit refs/items/<id>`, `from` its observed tip so unchanged paths
+carry over) plus, only for the rare item that just ENDED, one
+`update-ref --stdin` transaction to move it from `refs/items` to
+`refs/ended` — fast-import cannot delete a ref itself.
+
+A mutation's PUSH is always the compare-and-swap, leased against each
+ref's observed tip — so only a BOUNDED mutation (one whose gate reads
+the whole board before deciding, today `take`ing NEW work and the
+add half of `block`, both against a shared `refs/board/seq` lease)
+fetches the remote's state before it builds anything: two of those
+racing each other need to see the same seq tip, or the lease decides
+nothing. Every other mutation never touches `refs/board/seq`, so it
+builds straight against this checkout's own local refs and pushes —
+a stale lease is simply refused as `LOST_RACE` by the push itself,
+recovered exactly as any lost race is, costing the extra round trip
+only when a race actually happened rather than on every call.
 
 A mutation syncs by `git fetch --prune` against the three ref
 namespaces (`refs/items`, `refs/ended`, `refs/board`) — never a

@@ -21,18 +21,8 @@ local publish = require("_work.publish")
 local review = require("_work.review")
 local store = require("_work.store")
 
---- init: prepare a state repository at `dir` — the mechanics live in
---- `store.init_repo`, alongside `open`; this is just its verdict line.
---- @param dir string The directory to prepare
---- @return integer Exit code
-local function cmd_init(dir: string): integer
-  local ok, err = store.init_repo(dir)
-  if not ok then
-    return gate.verdict_line("init", false, err)
-  end
-  return gate.verdict_line("init", true,
-    ("state repository ready at %s"):format(dir))
-end
+-- `init` lives in `_work.gitboard` now — a two-line `store.init_repo`
+-- wrapper nothing else needed, moved to keep this file under its cap.
 
 --- take: claim an item, record its handover, or claim its review —
 --- which one is derived from the item's own facts, never declared.
@@ -80,11 +70,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
   if bad_session then
     return gate.verdict_line("take", false, "REFUSED: " .. bad_session)
   end
-  -- One `store.list` rather than a `store.load` followed by one: the
-  -- whole-board read already carries this item's lease (`_work.store`
-  -- populates `leased_ref`/`leased_sha` for every item `list` finds),
-  -- so a second, item-scoped read would only re-fetch what `list`
-  -- already has.
+  -- `store.list` alone: the board read already carries this item's lease.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("take", false, aerr)
@@ -298,10 +284,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
       .. "'<the worker-side reason>'. An ITEM that cannot proceed is "
       .. "not dropped bare: `new` the question and `block` on it first")
   end
-  -- One `store.list` for the whole call: it carries this item's own
-  -- lease (as `store.load` would) and the board `flow.is_blocked`
-  -- needs below, at the read cost of `list` alone rather than `load`
-  -- plus a second `list` after the write.
+  -- One `store.list`: it carries this item's lease too.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("drop", false, aerr)
@@ -351,10 +334,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   -- Which queue the released item lands in decides the line: blocked
   -- items wait on their question, bare todo is re-offered as-is, and
   -- the bare line names the block-first recovery while the dropping
-  -- session still has the context to file the question. `drop` never
-  -- touches `blocked_by` (its own or any other item's), so the board
-  -- read above still answers this without a second `list` after the
-  -- write.
+  -- session still has the context to file the question.
   if flow.is_blocked(it, flow.by_id(all)) then
     return gate.verdict_line("drop", true,
       ("%s released — it waits on its open blocker(s), not the queue")
@@ -375,8 +355,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   if reason ~= "completed" and reason ~= "not-planned" then
     return gate.verdict_line("done", false, ("unknown reason: %s"):format(reason))
   end
-  -- One `store.list` rather than a `store.load` followed by one: see
-  -- `cmd_take`'s own comment above.
+  -- `store.list` alone: same as `cmd_take` above.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("done", false, aerr)
@@ -496,7 +475,6 @@ local function cmd_sync(s: store.Store): integer
 end
 
 local record gitverbs
-  cmd_init: function(dir: string): integer
   cmd_take: function(s: store.Store, id: string, session: string,
   pr: integer, force: boolean, why: string, result?: boolean): integer
   cmd_drop: function(s: store.Store, id: string, session: string,
@@ -507,7 +485,6 @@ local record gitverbs
 end
 
 local M: gitverbs = {
-  cmd_init = cmd_init,
   cmd_take = cmd_take,
   cmd_drop = cmd_drop,
   cmd_done = cmd_done,
