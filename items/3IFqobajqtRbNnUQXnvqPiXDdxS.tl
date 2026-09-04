@@ -3,5 +3,6 @@ return {
   ["blocked_by"] = "3IFqha5Yo5aqSxl0YbvNclTOD3E 3IkMf7BY1UOxBTAIwbNFQwRZJDA",
   ["id"] = "3IFqobajqtRbNnUQXnvqPiXDdxS",
   ["parent"] = "3I9mIYjYmuf4Tg314guEhvh5iA3",
+  ["repo"] = "cosmic-lua/cosmic",
   ["title"] = "fuzz driver: use cosmo.cov's budget so the hang protection holds under --make coverage",
 }

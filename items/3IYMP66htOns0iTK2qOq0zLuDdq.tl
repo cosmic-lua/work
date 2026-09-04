@@ -4,6 +4,7 @@ return {
   ["builders"] = "build-q0zL_uDdq-g7h8 build-q0zL_uDdq-q7r8",
   ["id"] = "3IYMP66htOns0iTK2qOq0zLuDdq",
   ["parent"] = "3HyRcW05wBip6Wqcz145bUQBTyj",
+  ["repo"] = "cosmic-lua/cosmic",
   ["speccers"] = "617186a3-6ded-5f05-a74a-6054c4631945",
   ["title"] = "casts: _make's verb registry returns a typed Verb, closing the 8 dynamic-name-lookup sites",
 }

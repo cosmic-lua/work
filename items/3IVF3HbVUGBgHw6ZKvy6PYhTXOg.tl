@@ -3,6 +3,7 @@ return {
   ["id"] = "3IVF3HbVUGBgHw6ZKvy6PYhTXOg",
   ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
   ["pr"] = 1480,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "_perf/skew_test.tl checks siblings against the pinned release's _perf, not the tree's — every _perf signature change is unlandable in one PR",
 }

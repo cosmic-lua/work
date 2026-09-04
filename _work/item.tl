@@ -22,7 +22,8 @@
 --- what makes one more important than another is a committed
 --- comparison (`beats`), never a field asserting its own rank. The
 --- outcome prose that gives the tree its meaning lives in
---- `docs/goals.md` on `main` and is read by people, not by this.
+--- `docs/goals.md` on cosmic's own `main` and is read by people, not
+--- by this.
 local identity = require("_work.identity")
 local ksuid = require("_work.ksuid")
 local shape = require("cosmic.shape")
@@ -33,12 +34,20 @@ local record Item
   title: string
   --- The id this item decomposes; "" for roots.
   parent: string
-  --- The owner/name the item's PR lands in; "" = the board's origin.
+  --- The owner/name the item's PR lands in. Roots carry no repo at
+  --- all (`problems` refuses one that does); every workable item
+  --- should name one explicitly — most target `_work.product.REPO`,
+  --- the product repo this board exists to move work on, and an item
+  --- whose PR targets this board repository's own machinery instead
+  --- names it explicitly too. "" reads as unset, never as "the
+  --- board's own origin" the way it once did before the board moved
+  --- out of cosmic's `board` branch into its own repository history.
   repo: string
   --- The branch the item's PR targets; "" = ungated — no verb checks
-  --- it and no PR is refused for disagreeing. Set it once a non-`board`
-  --- (or non-default) target is known; `gitgate.handover_refusal`
-  --- compares it against the PR's own base ref.
+  --- it and no PR is refused for disagreeing. Set it once a non-default
+  --- target is known — an item touching this board repository's own
+  --- machinery names its `main`; `gitgate.handover_refusal` compares
+  --- it against the PR's own base ref.
   base: string
   --- The scheduled workflow file this item repairs; "" for ordinary
   --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN

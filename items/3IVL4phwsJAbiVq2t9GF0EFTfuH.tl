@@ -3,6 +3,7 @@ return {
   ["id"] = "3IVL4phwsJAbiVq2t9GF0EFTfuH",
   ["parent"] = "3HyRcW05wBip6Wqcz145bUQBTyj",
   ["pr"] = 1468,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "tl patch: metatable<T> is-dispatch never matches records — the table_kinded entries are dead",
 }

@@ -5,6 +5,7 @@ return {
   ["id"] = "3IYMLZd75tCEpmFSpZGLGNLuEWF",
   ["parent"] = "3HyRcW05wBip6Wqcz145bUQBTyj",
   ["pr"] = 1646,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["speccers"] = "40adde77-85e6-58e6-8a4e-4b659bb320d8",
   ["title"] = "casts: the 12 proved-value narrowing sites — check.must in tests, and delete what the patch already narrows",

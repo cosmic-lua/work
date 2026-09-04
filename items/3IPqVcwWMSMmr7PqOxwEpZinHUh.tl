@@ -3,6 +3,7 @@ return {
   ["id"] = "3IPqVcwWMSMmr7PqOxwEpZinHUh",
   ["parent"] = "3IOegofMj4ewlWfVCFTkOrT1Kox",
   ["pr"] = 1390,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "casts: the 17 json and literal test sites whose subject is the dynamic decode — a truer reason, not a validator",
 }

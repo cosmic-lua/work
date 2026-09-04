@@ -4,6 +4,7 @@ return {
   ["id"] = "3IK8ACfAuD0n9UNyEG1PP0O1EXB",
   ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
   ["pr"] = 1349,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "re.gsub/split: fuse the find loop — all_matches builds Spans nobody reads, -38% probed byte-identical",
 }

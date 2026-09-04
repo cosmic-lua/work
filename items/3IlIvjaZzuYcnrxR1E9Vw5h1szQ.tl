@@ -1,9 +1,10 @@
 return {
-  ["base"] = "board",
+  ["base"] = "main",
   ["builders"] = "wave9-vw5h-meta",
   ["id"] = "3IlIvjaZzuYcnrxR1E9Vw5h1szQ",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1639,
+  ["repo"] = "cosmic-lua/work",
   ["resolution"] = "completed",
   ["title"] = "take refusal, accept outcome, finish note and show's verdict line still speak PR-only for a research handover (after #1625)",
   ["verdict"] = "accept",

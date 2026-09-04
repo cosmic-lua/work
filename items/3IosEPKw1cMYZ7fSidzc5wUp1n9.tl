@@ -4,6 +4,7 @@ return {
   ["builders"] = "build-c5wU_p1n9 1e1a9125-9fe7-5933-bfa6-da600fedba86 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff",
   ["id"] = "3IosEPKw1cMYZ7fSidzc5wUp1n9",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["speccers"] = "build-c5wU_p1n9 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff",
   ["title"] = "perf: cf416d85's hot-path assert in cosmic.re.match adds ~3-7% to re_match_log_line — confirm cross-session and fix or accept",

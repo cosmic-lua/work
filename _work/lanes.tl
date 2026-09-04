@@ -14,10 +14,10 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
-local gh = require("_work.gh")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local literal = require("cosmic.literal")
+local product = require("_work.product")
 local publish = require("_work.publish")
 local store = require("_work.store")
 local time = require("cosmic.time")
@@ -157,20 +157,25 @@ local function observe_one(slug: string, lane: string, root: string): string | n
   return tostring(first["conclusion"] or "")
 end
 
---- Fetch each required lane's last completed conclusion. `sync`
---- treats a nil here as "lanes unknown" and never as red — a token or
+--- Fetch each required lane's last completed conclusion, from
+--- `_work.product.REPO` — the scheduled workflows this board tracks
+--- are cosmic's, regardless of what this checkout's own `origin`
+--- happens to point at. A checkout with no `origin` remote at all is
+--- treated as local-only (a test fixture, a scratch clone with
+--- nothing to observe FOR) and never reaches the network — the same
+--- waiver `_work.gitgate.handover_refusal` uses. `sync` treats a nil
+--- return here as "lanes unknown" and never as red — a token or
 --- network failure says nothing about whether the lanes are healthy.
 --- @param s store.Store The store
 --- @return {string: string} | nil One conclusion per lane in LANES
 --- @return string Error message
 local function observe(s: store.Store): {string: string} | nil, string
-  local slug, serr = gh.slug(s, nil)
-  if slug == nil then
-    return nil, serr
+  if not publish.has_origin(s) then
+    return nil, "no origin remote: local-only board has nothing to observe against"
   end
   local facts: {string: string} = {}
   for _, lane in ipairs(LANES) do
-    local c, oerr = observe_one(slug, lane, s.root)
+    local c, oerr = observe_one(product.REPO, lane, s.root)
     if c == nil then
       return nil, ("%s: %s"):format(lane, oerr)
     end

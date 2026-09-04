@@ -3,6 +3,7 @@ return {
   ["id"] = "3IVDirCOYXKSM7ggSXxywrLCM6s",
   ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
   ["pr"] = 1460,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "perf gate sensitivity is level-dependent: the same delta reads ~2x larger at the fast level",
 }

@@ -2,10 +2,11 @@
 --- prints one of these pages, and the overview help lists them. The
 --- pages carry DOCTRINE — what the verbs are for, the ordering, the
 --- bars, and the judgment around them — while `help <verb>` stays the
---- mechanics. The `work` skill on main is only the bootstrap and
---- delegates everything else here, so the one source for how to
---- operate the board is the binary a session has already built, and a
---- doctrine change ships to every session with the next sync.
+--- mechanics. The `work` skill, on cosmic's own `main`, is only the
+--- bootstrap and delegates everything else here, so the one source
+--- for how to operate the board is the binary a session has already
+--- built, and a doctrine change ships to every session with the next
+--- sync.
 ---
 --- Pure data: no git, no filesystem. `_work/doctrine_test.tl` pins
 --- that every listed topic renders and that no topic shadows a verb.
@@ -22,13 +23,14 @@ local PAGES < const >: {Page} = {
 
   {name = "system", title = "the board: states, order, exits, rules",
     body = [[
-One prioritized queue of items on the `board` branch, operated only
-through gitboard verbs. An item's ROLE is its position in the graph: a
-parentless item is a root (an outcome, or a captured finding awaiting
-triage), an item with open children is a container being decomposed,
-and a parented leaf is workable. Importance is a RELATION, not a
-field: `compare A B` commits "A outranks B", every rendered order
-derives from the accumulated edges, and age is the last word among
+One prioritized queue of items in this repository (cosmic-lua/work),
+operated only through gitboard verbs. An item's ROLE is its position
+in the graph: a parentless item is a root (an outcome, or a captured
+finding awaiting triage), an item with open children is a container
+being decomposed, and a parented leaf is workable. Importance is a
+RELATION, not a field: `compare A B` commits "A outranks B", every
+rendered order derives from the accumulated edges, and age is the
+last word among
 items no comparison separates. An item no edge reaches (at any
 height) is unplaced — invisible to every queue and refused by `take`
 — so triage it: attach it under the outcome its evidence serves,
@@ -39,8 +41,8 @@ A comparison that would put NEW work above existing work belongs to
 the goal owner — it answers "which is the better cosmic". Post the
 pair (in chat, or in the session's report when nobody is watching)
 and keep working; the answer lands as a `compare` whenever it
-arrives. Outcome prose lives in docs/goals.md on main; reordering
-outcomes is comparisons plus a goals.md PR.
+arrives. Outcome prose lives in docs/goals.md on cosmic's own main;
+reordering outcomes is comparisons plus a goals.md PR.
 
 An open workable leaf is in exactly one of two states; everything
 finer derives from facts the item already carries:
@@ -267,8 +269,9 @@ Mutation-test at least one guard the change adds: break what it
 guards, watch the test go red, restore it. A gate that cannot be
 shown to fail is decoration.
 
-Three verdicts. `accept` — merge (a main-repo PR lands by enabling
-auto-merge; a board PR merges directly), then `done ID`. `request
+Three verdicts. `accept` — merge (a PR against the product repo lands
+by enabling auto-merge; a PR against this board repository itself
+merges directly), then `done ID`. `request
 changes` — the concrete gaps quoted on the PR; the claimant reworks
 on the same PR. `reject` — the approach is wrong: close the PR,
 record what was learned, clear the claim. A reject that reopens a
@@ -295,7 +298,7 @@ children's — then end it.
     body = [[
 One orchestrator, N builders, and the board stays with the
 orchestrator — agents never run board verbs, so no agent needs this
-worktree or push rights to `board`:
+checkout or push rights to this board repository:
 
 - Claim first, then spawn. Claim each item yourself, one at a time,
   reading each verdict line, with a distinct minted session name per

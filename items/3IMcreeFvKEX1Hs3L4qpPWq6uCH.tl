@@ -3,6 +3,7 @@ return {
   ["id"] = "3IMcreeFvKEX1Hs3L4qpPWq6uCH",
   ["parent"] = "3HyRck1p5rpapP45GRGJ9anmT6e",
   ["pr"] = 1365,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "sqlite: test suite pinning zipfile over cosmic executables",
 }

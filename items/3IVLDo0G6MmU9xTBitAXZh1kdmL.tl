@@ -4,6 +4,7 @@ return {
   ["builders"] = "wave9-727215df-XZh1 wave9-d7ef6110-XZh1",
   ["id"] = "3IVLDo0G6MmU9xTBitAXZh1kdmL",
   ["parent"] = "3HyRcrR35sYRwZl3guddvOBhFoK",
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["result"] = "97225848cbf6d5f3bdbf8c943a1df6b1d9f8021e156fe3ae3e2a5291edb173ef",
   ["speccers"] = "wave9-727215df-XZh1",

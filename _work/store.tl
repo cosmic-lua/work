@@ -122,9 +122,11 @@ end
 --- @return Store | nil The store
 --- @return string Error message
 local function open(root: string): Store | nil, string
-  -- A linked worktree's .git is a FILE pointing at the real gitdir —
-  -- and the board's canonical home is exactly such a worktree — so
-  -- presence, not directory-ness, is the test.
+  -- A linked worktree's .git is a FILE pointing at the real gitdir,
+  -- not a directory — a shape this store never assumes away, even
+  -- though the board's own canonical home is a plain clone (a
+  -- directory `.git`) rather than a linked worktree of another
+  -- checkout, so presence, not directory-ness, is the test.
   if not fs.is_present(fs.join(root, ".git")) then
     return nil, ("not a git repository: %s"):format(root)
   end

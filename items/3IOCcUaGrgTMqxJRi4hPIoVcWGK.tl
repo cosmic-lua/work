@@ -3,6 +3,7 @@ return {
   ["id"] = "3IOCcUaGrgTMqxJRi4hPIoVcWGK",
   ["parent"] = "3IOCIBGeYoISEhI0VJPwZmqduSZ",
   ["pr"] = 1404,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "test runner decision record: discovery by name, a generated tail, all-or-nothing dispatch",
 }

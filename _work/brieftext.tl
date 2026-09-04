@@ -206,7 +206,7 @@ refiner running right now; `sync` before you write.
 
 ## Where to work
 
-gitboard is already built in the board worktree. Export
+gitboard is already built in the board checkout. Export
 SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 
 ```
@@ -269,7 +269,7 @@ refiner/decomposer running right now; `sync` before you write.
 
 ## Where to work
 
-gitboard is already built in the board worktree. Export
+gitboard is already built in the board checkout. Export
 SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 
 ```

@@ -3,6 +3,7 @@ return {
   ["id"] = "3Ib6tlfynNsK8vfWOs1MmlzNxKb",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1511,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "flowstats skips reject verdicts, undercounting rework on rejected-then-completed items",
   ["verdict"] = "accept",

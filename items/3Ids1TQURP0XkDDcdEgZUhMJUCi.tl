@@ -3,6 +3,7 @@ return {
   ["id"] = "3Ids1TQURP0XkDDcdEgZUhMJUCi",
   ["parent"] = "3HyRcrR35sYRwZl3guddvOBhFoK",
   ["pr"] = 1590,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "embed policy: store exactly the measured boot set, deflate the rest",
   ["verdict"] = "accept",

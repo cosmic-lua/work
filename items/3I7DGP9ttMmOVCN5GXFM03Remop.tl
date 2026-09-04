@@ -4,6 +4,7 @@ return {
   ["id"] = "3I7DGP9ttMmOVCN5GXFM03Remop",
   ["parent"] = "3HyRcrR35sYRwZl3guddvOBhFoK",
   ["pr"] = 1574,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "AGENTS.md Language and Conventions shrinks toward the gates that enforce it, and the cap decision gets its record",
   ["verdict"] = "accept",

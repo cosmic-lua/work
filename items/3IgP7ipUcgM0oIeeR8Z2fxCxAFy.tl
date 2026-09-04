@@ -4,6 +4,7 @@ return {
   ["lane"] = "release.yml",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1593,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "lane repair: release.yml is red",
   ["verdict"] = "accept",

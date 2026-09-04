@@ -32,6 +32,7 @@ return {
   ["_work/lanes.tl"] = {["covered"] = 155, ["total"] = 192},
   ["_work/overlap.tl"] = {["covered"] = 71, ["total"] = 71},
   ["_work/priority.tl"] = {["covered"] = 166, ["total"] = 180},
+  ["_work/product.tl"] = {["covered"] = 3, ["total"] = 3},
   ["_work/publish.tl"] = {["covered"] = 119, ["total"] = 136},
   ["_work/review.tl"] = {["covered"] = 71, ["total"] = 74},
   ["_work/session.tl"] = {["covered"] = 44, ["total"] = 44},

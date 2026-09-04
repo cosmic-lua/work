@@ -4,6 +4,7 @@ return {
   ["id"] = "3IQgClLoZWULsYecdD3WOmDZwXf",
   ["parent"] = "3IPXQuYuMp4cgz8Q98id6zXhql2",
   ["pr"] = 1580,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "library latent-nil: the cosmic/** sites outside fs/ and time.tl",
   ["verdict"] = "accept",

@@ -3,6 +3,7 @@ return {
   ["id"] = "3Ibl0e0TCxFv7DnkWZGkx8mvKPb",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1536,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "session identities enter item fields unvalidated: a mangled argv records --session as a builder",
   ["verdict"] = "accept",

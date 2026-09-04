@@ -2,5 +2,6 @@ return {
   ["beats"] = "3ICDKIrlmieL9tinYaGDceM0QOs 3IOGXIBquCyDhIY8ckvVJvvqAA7",
   ["id"] = "3ICDKhO3jMQvMwzvJLFGslp9xqq",
   ["parent"] = "3HyRck1p5rpapP45GRGJ9anmT6e",
+  ["repo"] = "cosmic-lua/cosmic",
   ["title"] = "literal.format: a flat table at depth 33 renders inline past the cap parse refuses — the round-trip contract breaks",
 }

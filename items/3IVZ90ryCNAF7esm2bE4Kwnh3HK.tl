@@ -3,5 +3,6 @@ return {
   ["blocked_by"] = "3IVZ8ZoFdXZ5sbrhe4baWLspwIQ",
   ["id"] = "3IVZ90ryCNAF7esm2bE4Kwnh3HK",
   ["parent"] = "3IODJgkObjfhsxqMPEgFPIM6RHR",
+  ["repo"] = "cosmic-lua/cosmic",
   ["title"] = "make the checker refuse a return nil under a non-nil declared return, once the floor is zero",
 }

@@ -1,20 +1,20 @@
 name: board
 
-# The board branch carries the machinery that moves every work item,
-# and main's workflows are filtered to main — so without this lane the
-# board's own tests run only when someone remembers to run them. It
-# gates what it can gate: the whole `--make ci` (fmt, check, lint,
-# coverage-with-tests) over this branch's tree.
+# This repository carries the board and the machinery that moves
+# every work item — its own history, separate from cosmic-lua/cosmic,
+# so this lane is this repo's whole CI, not a branch-scoped slice of
+# cosmic's. It gates what it can gate: the whole `--make ci` (fmt,
+# check, lint, coverage-with-tests) over this repo's tree.
 #
 # The gate is cheap here — a few seconds of tests plus the pinned
-# cosmic download — so this lane skips main's fence, cache and
-# fixpoint lanes. There is no artifact to reproduce: nothing on this
-# branch builds a binary.
+# cosmic download — so this lane skips cosmic's fence, cache and
+# fixpoint lanes. There is no artifact to reproduce: this job builds
+# no binary.
 on:
   push:
-    branches: [board]
+    branches: [main]
   pull_request:
-    branches: [board]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -30,10 +30,11 @@ jobs:
     # A green run takes well under a minute; anything near this is a hang.
     timeout-minutes: 10
     # This job IS the .cosmic-coverage recording environment for this
-    # branch (see README.md). The refusal itself ships from `main`'s
-    # `_make/policy.tl`, embedded in whatever release `bin/cosmic.pin`
-    # resolves to here — this marker is inert until that pin carries
-    # it, and load-bearing from the moment it does.
+    # repo (see README.md). The refusal itself ships from
+    # cosmic-lua/cosmic's `main`'s `_make/policy.tl`, embedded in
+    # whatever release `bin/cosmic.pin` resolves to here — this marker
+    # is inert until that pin carries it, and load-bearing from the
+    # moment it does.
     env:
       COSMIC_COVERAGE_ENV: "1"
     steps:

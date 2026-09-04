@@ -13,7 +13,7 @@
 --- `git`/`git_ok`.
 ---
 --- Sync and the lost-race recovery both leave paths outside their own
---- mutation untouched, on purpose: the shared board worktree often
+--- mutation untouched, on purpose: the shared board checkout often
 --- carries an unrelated `_work/**` edit mid-flight, and a mutation
 --- must not block on it, or destroy it recovering from a lost race.
 --- `git fetch` plus `git merge --ff-only` never touches the working

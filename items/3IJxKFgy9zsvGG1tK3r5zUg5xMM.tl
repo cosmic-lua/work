@@ -4,6 +4,7 @@ return {
   ["id"] = "3IJxKFgy9zsvGG1tK3r5zUg5xMM",
   ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
   ["pr"] = 1348,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "optimize: measurement.md has no cross-session rule, so a one-session tight-loop regression reads as conclusive",
 }

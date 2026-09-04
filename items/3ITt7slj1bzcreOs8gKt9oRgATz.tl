@@ -3,6 +3,7 @@ return {
   ["id"] = "3ITt7slj1bzcreOs8gKt9oRgATz",
   ["parent"] = "3HyRcW05wBip6Wqcz145bUQBTyj",
   ["pr"] = 1432,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "release perf gate: no flag reproduces across attempts — a different scenario crosses its floor each roll",
 }

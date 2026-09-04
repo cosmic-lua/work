@@ -4,6 +4,7 @@ return {
   ["id"] = "3IQfILPQRk7RK9I9tIkuhXqW8D2",
   ["parent"] = "3IPXQ1Zw1xfRYx4dV1zwASNhQ3N",
   ["pr"] = 1579,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["speccers"] = "review-uhXq_W8D2-1",
   ["title"] = "check.must sweep: the 14 non-cosmic test sites (_tool, _make, _build, _perf, _fuzz, 3p)",

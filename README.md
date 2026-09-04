@@ -1,10 +1,10 @@
 # board
 
-The board branch: cosmic's board and the machinery that operates it,
-together, on an orphan history. This branch shares no files with
-`main` — it is append-only, never rebased, never force-pushed;
-rewriting published state history would break every checkout's
-push-as-compare-and-swap at once.
+cosmic's board and the machinery that operates it, together, in their
+own repository history — this repo, cosmic-lua/work. It shares no
+files with cosmic-lua/cosmic's `main` — it is append-only, never
+rebased, never force-pushed; rewriting published state history would
+break every checkout's push-as-compare-and-swap at once.
 
 ## What lives here
 
@@ -21,7 +21,7 @@ _work/       the machinery: gitboard (CLI), gitverbs (mutations),
              graph rules), priority (the comparison relation and the
              order derived from it), spec (the spec bar's section
              grammar), item (the record), ksuid (ids)
-cmd/gitboard the binary this branch builds: `o/bin/gitboard`
+cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
 ```
 
@@ -54,8 +54,9 @@ is reported, never averaged away: it means the comparison question was
 ambiguous, so the pair is restated and re-asked.
 
 The outcome prose those roots stand for lives in `docs/goals.md` on
-`main`. It is context a planner reads to interpret and adjust the
-tree — nothing here derives from it, and nothing checks it.
+cosmic-lua/cosmic's `main`. It is context a planner reads to interpret
+and adjust the tree — nothing here derives from it, and nothing checks
+it.
 
 What the verbs ARE lives here and only here: `gitboard help` lists
 them, `gitboard help <verb>` gives one its options, and both are
@@ -65,32 +66,34 @@ pages (`_work/doctrine.tl`) — the states and their exits, the spec
 bar, building, review, orchestration — and `gitboard brief` emits
 the subagent prompts with the board's own facts filled
 (`_work/brief.tl`), so a brief cannot drift from the item it is
-about. The `work` skill on `main` is only the bootstrap: it points
-here and restates none of this, so a verb, topic, or brief changed
-here needs no edit there and reaches every session on its next
-sync.
+about. The `work` skill, on cosmic-lua/cosmic's `main`, is only the
+bootstrap: it points here and restates none of this, so a verb,
+topic, or brief changed here needs no edit there and reaches every
+session on its next sync.
 
 ## Using it from a cosmic checkout
 
-The machinery lives HERE, not on main, so the verbs run from this
-worktree — `--dir` then defaults to it and needs no argument:
+The machinery lives HERE, in this repository, not in cosmic-lua/cosmic
+— so the verbs run from a clone of this repo, obtained from inside a
+cosmic checkout at the conventional path `o/board`, which is what
+`--dir` then defaults to, needing no argument:
 
 ```
-git worktree add o/board board     # once per checkout
+git clone https://github.com/cosmic-lua/work o/board   # once per checkout
 cd o/board
-bin/cosmic --make build            # once, on a cold worktree
+bin/cosmic --make build            # once, on a cold clone
 o/bin/gitboard show
 o/bin/gitboard next
 ```
 
 `o/bin/gitboard` is an ordinary cosmic binary carrying `_work/**`, so
 a verb is one process and its output is only the verdict line. Before
-the branch has built, `bin/cosmic --make run _work/gitboard.tl <verb>`
+`o/board` has built, `bin/cosmic --make run _work/gitboard.tl <verb>`
 runs the same CLI through make.
 
 Building a binary is not the same as building the TOOLCHAIN. A gate
 re-execs into what the tree built only for a project that defines
-`cosmic/**` and ships a binary called `cosmic`; this branch does
+`cosmic/**` and ships a binary called `cosmic`; this repository does
 neither, so every `--make` verb here runs under the pinned release.
 The pin therefore decides which fence the tests execute inside, which
 is why `bin/cosmic.pin` matters here beyond reproducibility.
@@ -109,35 +112,40 @@ A mutation syncs by `git fetch` plus a fast-forward-only merge, which
 tolerates an unrelated dirty file anywhere in the checkout and only
 refuses, naming the file, when a local edit overlaps the incoming
 commit — so a session editing `_work/**` here does not lock every
-other session sharing this worktree out of the board. That slice of
-work still belongs in its OWN clone, though: `git worktree add` (or a
-plain `git clone`) plus `--dir` is how the machinery itself gets
-edited, built and tested without racing the mutations running against
-the shared checkout. And `git stash` is never the escape here — the
-stash stack is shared across every worktree of this repo, so a push
-from one session can pop and destroy another session's in-progress
-edit; reach for a private clone instead.
+other session sharing this checkout out of the board. That slice of
+work still belongs in its OWN clone, though: another
+`git clone https://github.com/cosmic-lua/work` plus `--dir` is how the
+machinery itself gets edited, built and tested without racing the
+mutations running against the shared `o/board` checkout. And `git
+stash` is never the escape in a SHARED checkout — a `git worktree add`
+off `o/board` (rather than a fresh clone) shares `o/board`'s own stash
+stack, so a push from one session can pop and destroy another
+session's in-progress edit there; a plain clone has its own stash, one
+more reason to reach for a private clone rather than a linked worktree
+when editing the machinery.
 
 Run `bin/cosmic --make ci` before pushing machinery changes; the
-`board` workflow runs the same gate on every push to this branch.
+`board` workflow runs the same gate on every push here.
 
 **`.cosmic-coverage` is recorded in the `board` workflow's `ci` job**
 (`.github/workflows/board.yml`: a plain `ubuntu-latest` runner, no
-pinned container, no elevated privilege — this branch's own tests need
-neither), not in a developer's clone or worktree. The coverage
-machinery itself lives on `main` (`_make/policy.tl`, embedded in
-whatever release `bin/cosmic.pin` here resolves to), not in this tree,
-so `--make coverage --baseline` run from a private clone still rewrites
-the whole floor with THIS machine's measurement — nine rows on five
-files a change never touched, on one reported run, none of them in the
-diff. Prefer hand-editing the one row your change actually moved
+pinned container, no elevated privilege — this repository's own tests
+need neither), not in a developer's clone. The coverage machinery
+itself lives on cosmic-lua/cosmic's `main` (`_make/policy.tl`, embedded
+in whatever release `bin/cosmic.pin` here resolves to), not in this
+tree, so `--make coverage --baseline` run from a private clone still
+rewrites the whole floor with THIS machine's measurement — nine rows on
+five files a change never touched, on one reported run, none of them in
+the diff. Prefer hand-editing the one row your change actually moved
 (`covered`/`total` in `.cosmic-coverage`) over running `--baseline`
 here at all; once `bin/cosmic.pin` carries a release built from a
-`main` that refuses `--baseline` outside `COSMIC_COVERAGE_ENV=1`
-(cosmic-lua/cosmic's `AGENTS.md` coverage paragraph), the same refusal
-applies here automatically, and `board.yml`'s `ci` job already sets
-that marker for itself so a whole-floor rewrite stays possible from
-the one place it should be.
+cosmic-lua/cosmic `main` that refuses `--baseline` outside
+`COSMIC_COVERAGE_ENV=1` (cosmic-lua/cosmic's `AGENTS.md` coverage
+paragraph), the same refusal applies here automatically, and
+`board.yml`'s `ci` job already sets that marker for itself so a
+whole-floor rewrite stays possible from the one place it should be.
 
-GitHub keeps two jobs: pull requests carry fixes and their review;
-issues are the inbound queue, imported here as findings at triage.
+GitHub keeps two jobs: pull requests (against the repo an item's own
+`repo` field names — most often cosmic-lua/cosmic) carry fixes and
+their review; cosmic-lua/cosmic's issues are the inbound queue,
+imported here as findings at triage.

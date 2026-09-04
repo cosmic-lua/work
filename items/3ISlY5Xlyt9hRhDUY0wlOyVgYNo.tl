@@ -3,6 +3,7 @@ return {
   ["id"] = "3ISlY5Xlyt9hRhDUY0wlOyVgYNo",
   ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
   ["pr"] = 1419,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "release perf gate: json_decode_large fails its own A/A by +12.6%, so a quiet triage pass turns machine variance into a held release",
 }
