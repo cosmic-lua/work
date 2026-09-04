@@ -20,6 +20,7 @@
 --- Priority is the other half of triage and has its own verb,
 --- `compare`, because an item can be placed without being adopted and
 --- adopted without being compared.
+local find = require("_work.find")
 local flow = require("_work.flow")
 local friction = require("_work.gitfriction")
 local gate = require("_work.gitgate")
@@ -97,6 +98,11 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   local foreign = owner.repo_problem(s, it.repo, spec or "", "")
   if foreign then
     return gate.verdict_line("new", false, "REFUSED: " .. foreign)
+  end
+  -- Warning only, never a refusal — printed before the mint verdict so
+  -- a session sees a likely duplicate before it commits to a new id.
+  for _, line in ipairs(find.similar_lines(s, title)) do
+    print(line)
   end
   -- No gate: a filed child always enters `todo`, which is unbounded
   -- by design — the queue intake writes into can always accept,

@@ -47,6 +47,7 @@ local proc = require("cosmic.proc")
 local brief = require("_work.brief")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
+local find = require("_work.find")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
 local graph = require("_work.gitgraph")
@@ -272,6 +273,10 @@ local CSPEC: flags.CommandSpec = {
     {name = "fsck", summary = "read-only board audit: dangling edges, "
       .. "canonical-tree drift, lane collisions, flagged items",
       spec = {flags = {dir_flag()}}},
+    {name = "find", summary = "full-text search over titles and specs; "
+      .. "prints each hit's handle, state, title and a snippet, then a "
+      .. "hit count",
+      spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
   },
 }
 
@@ -352,6 +357,9 @@ local function main(...: string): integer
   end
   if d.command == "fsck" then
     return fsck.cmd_fsck(s)
+  end
+  if d.command == "find" then
+    return find.cmd_find(s, table.concat(d.parsed.args, " "))
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
   -- with every other id-taking verb.
