@@ -2,6 +2,7 @@ title: board pin predates the coverage --baseline COSMIC_COVERAGE_ENV guard: bum
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-sxzp_M1yR-d6f1cc41
+reviewer: review-sxzp_M1yR-d6f1cc41
 pr: 1706
 builders: build-sxzp_M1yR-d6f1cc41
 speccers: 07d7b9b9-4374-5aae-9149-46fdff7aa81e
