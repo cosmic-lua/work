@@ -19,18 +19,16 @@ calibrates iterations, takes samples, reports median wall ns with a spread,
 and `_perf/gate.tl compare BASE CUR SELF` is the noise-aware regression gate;
 `_perf/run.tl` discovers `_perf/bench/*_bench.tl` relative to the working
 directory (`BENCH_DIR` at run.tl:174, `fs.find(BENCH_DIR, {glob =
-"*_bench.tl"})`) and requires each by module name. The process-count
-RATCHET is a separate change (`_work/procs_test.tl`, deterministic, in
-`--make ci`); this item is the wall-clock half, which is noise-bound and
-therefore observed, never gated.
+"*_bench.tl"})`) and requires each by module name. Process counts are the
+diagnosis a slow reading points at (`strace -f -e trace=execve`), not a
+gate: this item observes wall time and gates nothing.
 
 ## Change
 
 Wall-clock scenarios for gitboard in cosmic's shape, measured against a
 generated fixture, compared release-against-main daily, blocking nothing.
 
-1. Ready when: `bin/cosmic --make test _work/procs_test.tl` passes on
-   main (the ratchet's fixture-board builder is what this reuses).
+1. No ready-when: nothing here waits on another change.
 2. `_perf/fixture.tl`: build a board of N synthetic items (default 1,000;
    `GITBOARD_PERF_N` overrides) in a local bare origin plus a clone under a
    temp dir, deterministic ids/titles/specs so two runs measure the same
@@ -60,9 +58,8 @@ generated fixture, compared release-against-main daily, blocking nothing.
    run `_perf/gate.tl compare`; a `perf-compare: FAIL` turns the lane red
    and blocks nothing (cosmic's D44 applies). Readings are the run's
    artifacts. The workflow's shape is cosmic's `.github/workflows/perf.yml`.
-6. README: one paragraph naming the two halves — the ratchet gates process
-   counts, the scenarios observe wall time — and the command to run
-   scenarios locally.
+6. README: one paragraph saying what the scenarios measure, that they
+   gate nothing, and the command to run them locally.
 
 ## Non-goals
 
