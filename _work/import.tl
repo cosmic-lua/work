@@ -76,25 +76,53 @@ local function split_log_line(line: string): string, string, string
   return line:sub(1, a - 1), line:sub(a + 1, b - 1), line:sub(b + 1)
 end
 
---- One item's whole history, oldest first: every commit that touched
---- either of its two old-layout files.
+--- Opens every commit's header line in `commits_by_id`'s walk — a
+--- control byte no commit subject or file path can produce, so a
+--- header is found by searching for this, never by counting lines
+--- against `--name-only`'s own blank-line separators.
+local COMMIT_MARK < const > = "\1commit\1"
+
+--- Every historical commit that touched anything under `items/` at
+--- `rev`, grouped by the item id(s) its changed paths named — ONE
+--- `git log --reverse --name-only` process for the WHOLE move,
+--- instead of one process per item: once the local write became a
+--- single fast-import stream, this walk was what a real move's cost
+--- was left standing on.
 --- @param from_root string The old-layout git directory
 --- @param rev string The revision to walk from
---- @param id string The item id
---- @return {Commit} | nil The commits, oldest first
+--- @return {string: {Commit}} | nil Each touched item's commits, oldest first
 --- @return string Error message
-local function log_for(from_root: string, rev: string, id: string): {Commit} | nil, string
-  local r = child.run({"git", "log", "--reverse", "--format=%H%x00%at%x00%s", rev,
-      "--", "items/" .. id .. ".tl", "items/" .. id .. ".md"}, {cwd = from_root})
+local function commits_by_id(from_root: string, rev: string): {string: {Commit}} | nil, string
+  local r = child.run({"git", "log", "--reverse", "--name-only",
+      "--format=" .. COMMIT_MARK .. "%H%x00%at%x00%s", rev, "--", "items/"},
+    {cwd = from_root})
   if r == nil or not r.ok then
     return nil, ("git log failed: %s"):format(r and r.stderr or "could not start")
   end
-  local out: {Commit} = {}
-  for line in r.stdout:gmatch("([^\n]+)") do
-    local sha, at, subject = split_log_line(line)
-    out[#out + 1] = {sha = sha, at = math.tointeger(tonumber(at)) or 0, subject = subject}
+  local by_id: {string: {Commit}} = {}
+  local cur: Commit = nil
+  for line in (r.stdout .. "\n"):gmatch("([^\n]*)\n") do
+    if line:sub(1, #COMMIT_MARK) == COMMIT_MARK then
+      local sha, at, subject = split_log_line(line:sub(#COMMIT_MARK + 1))
+      cur = {sha = sha, at = math.tointeger(tonumber(at)) or 0, subject = subject}
+    elseif line ~= "" and cur ~= nil then
+      local id = line:match("^items/([^/]+)%.tl$") or line:match("^items/([^/]+)%.md$")
+      if id ~= nil then
+        local list = by_id[id]
+        if list == nil then
+          list = {}
+          by_id[id] = list
+        end
+        -- A commit touching BOTH `<id>.tl` and `<id>.md` names it
+        -- twice in `--name-only`'s list; the second name-only line
+        -- for the SAME commit must not enter the chain again.
+        if #list == 0 or list[#list].sha ~= cur.sha then
+          list[#list + 1] = cur
+        end
+      end
+    end
   end
-  return out
+  return by_id
 end
 
 --- The session a replayed commit's subject names, "" when none does —
@@ -137,30 +165,19 @@ end
 --- `refs/items/<id>` to transition off of here — this writes a
 --- brand-new ref from nothing, so the right final name can be chosen
 --- up front and never has to move.
---- @param from_root string The old-layout git directory
---- @param rev string The revision to read history at
 --- @param id string The item id
+--- @param commits {Commit} Its own commits, oldest first (`commits_by_id`)
+--- @param batch {string: gitobj.BatchEntry} Every commit's `.tl`/`.md`
+--- content, already read for the WHOLE import in one batch
 --- @param mark_seq {integer} A shared, mutable one-element mark
 --- counter, advanced across every item's chain so marks stay unique
 --- over the WHOLE stream `run` builds
 --- @return {fastimport.CommitPlan} | nil The chain, empty when the
 --- item has no history to replay
 --- @return string Error message
-local function build_item_chain(from_root: string, rev: string, id: string,
+local function build_item_chain(id: string, commits: {Commit},
+    batch: {string: gitobj.BatchEntry},
     mark_seq: {integer}): {fastimport.CommitPlan} | nil, string
-  local commits, lerr = log_for(from_root, rev, id)
-  if commits == nil then
-    return nil, lerr
-  end
-  local queries: {string} = {}
-  for _, c in ipairs(commits) do
-    queries[#queries + 1] = c.sha .. ":items/" .. id .. ".tl"
-    queries[#queries + 1] = c.sha .. ":items/" .. id .. ".md"
-  end
-  local batch, berr = gitobj.cat_file_batch(from_root, queries)
-  if batch == nil then
-    return nil, berr
-  end
   local plans: {fastimport.CommitPlan} = {}
   local prev_it: item.Item = nil
   local prev_spec = ""
@@ -217,7 +234,10 @@ local function build_item_chain(from_root: string, rev: string, id: string,
 end
 
 --- Import every item under `items/` at `rev` in `from_root` into `s`:
---- every item's whole history built into ONE fast-import stream (one
+--- the WHOLE history read in one `git log` process
+--- (`commits_by_id`), every commit's old-layout content read in one
+--- more `cat-file --batch` across every item at once, then every
+--- item's whole history built into ONE fast-import stream (one
 --- process, whatever the import's size), read back in one more, then
 --- pushed one item at a time in id order — the local write no longer
 --- costs a process per historical commit, but a long import still
@@ -241,11 +261,26 @@ local function run(s: store.Store, from_root: string, rev: string): integer | ni
   if ids == nil then
     return nil, ierr
   end
+  local history, herr = commits_by_id(from_root, rev)
+  if history == nil then
+    return nil, herr
+  end
+  local queries: {string} = {}
+  for _, id in ipairs(ids) do
+    for _, c in ipairs(history[id] or {}) do
+      queries[#queries + 1] = c.sha .. ":items/" .. id .. ".tl"
+      queries[#queries + 1] = c.sha .. ":items/" .. id .. ".md"
+    end
+  end
+  local batch, berr = gitobj.cat_file_batch(from_root, queries)
+  if batch == nil then
+    return nil, berr
+  end
   local mark_seq: {integer} = {0}
   local all_plans: {fastimport.CommitPlan} = {}
   local chain_of: {string: {fastimport.CommitPlan}} = {}
   for _, id in ipairs(ids) do
-    local plans, perr = build_item_chain(from_root, rev, id, mark_seq)
+    local plans, perr = build_item_chain(id, history[id] or {}, batch, mark_seq)
     if plans == nil then
       return nil, ("%s: %s"):format(id, perr)
     end
