@@ -1,0 +1,1 @@
+the 09-04 release run fails earlier than the perf gate: doc_paths_test's board check cannot read origin/board in release.yml (no includeIf strip, no board fetch) — a second cause for the same red lane
