@@ -59,16 +59,24 @@ local vrd = require("_work.gitverdict")
 local show = require("_work.gitshow")
 local view = require("_work.gitview")
 
---- The verbs that write. Each one publishes, so each needs the
---- remote's state before it reads the board at all: mutating a stale
---- checkout produces a change computed against items someone else has
---- already moved. Reads stay local and offline, and are as current as
---- the last sync.
-local MUTATES: {string: boolean} = {
-  ["new"] = true, ["attach"] = true, ["block"] = true, ["unblock"] = true,
-  ["spec"] = true, ["take"] = true, ["drop"] = true, ["verdict"] = true,
-  ["done"] = true, ["compare"] = true, ["set"] = true, ["hold"] = true,
-  ["unhold"] = true,
+--- The verbs whose save may be BOUNDED — advancing and leasing
+--- `refs/board/seq` (`_work.store.set_bounded`), so two of them
+--- racing each other need to see the SAME seq tip or the lease is
+--- worthless: `take` (a NEW claim, against the doing bound) and
+--- `block` (the add path only — see `_work.gitgraph.cmd_block`'s own
+--- comment on why the remove path stays unbounded) are the only two
+--- whose gates read the whole board before deciding, so only these
+--- fetch the remote's state before mutating at all. Every other
+--- write verb here never touches `refs/board/seq`, so it can build
+--- its commit(s) against this checkout's own local refs and push
+--- straight away: a stale lease is simply refused as `LOST_RACE` by
+--- the push itself (`_work.publish.publish`, which re-syncs on
+--- rejection) — a second round trip only when a race actually
+--- happened, instead of paying for one on every call. `sync` and lane
+--- minting fetch on their own, outside this dispatch, and are
+--- unaffected either way.
+local FETCH_FIRST: {string: boolean} = {
+  ["take"] = true, ["block"] = true,
 }
 
 local function dir_flag(): flags.Flag
@@ -322,7 +330,7 @@ local function main(...: string): integer
     print(("gitboard-import: imported %d item(s) from %s at %s"):format(n, from, rev))
     return 0
   end
-  if MUTATES[d.command] then
+  if FETCH_FIRST[d.command] then
     local synced, syerr = publish.sync(s)
     if not synced then
       io.stderr:write(("gitboard-%s: could not sync before mutating: %s\n")
