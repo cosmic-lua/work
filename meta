@@ -1,5 +1,6 @@
 title: perf: cf416d85's hot-path assert in cosmic.re.match adds ~3-7% to re_match_log_line — confirm cross-session and fix or accept
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-builders: build-c5wU_p1n9
+claim: 1e1a9125-9fe7-5933-bfa6-da600fedba86
+builders: build-c5wU_p1n9 1e1a9125-9fe7-5933-bfa6-da600fedba86
 speccers: build-c5wU_p1n9
