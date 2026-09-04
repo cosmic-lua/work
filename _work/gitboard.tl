@@ -77,8 +77,8 @@ local FETCH_FIRST: {string: boolean} = {
 }
 
 local function dir_flag(): flags.Flag
-  return {long = "dir", arg = "DIR", default = ".",
-    help = "state repository checkout"}
+  return {long = "dir", arg = "DIR", default = os.getenv("GITBOARD_DIR") or ".",
+    help = "state repository checkout (default: $GITBOARD_DIR, else .)"}
 end
 
 --- Resolve one id-taking argument, whatever position it sits in: an
