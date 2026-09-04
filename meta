@@ -1,3 +1,4 @@
 title: release artifacts after the gate change: perf.json is a record not an input, and one measure run feeds nothing
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
+resolution: not-planned
