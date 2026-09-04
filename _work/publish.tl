@@ -12,6 +12,7 @@
 --- identity every call runs under, and the `Store` it runs against,
 --- live in `_work.store`; every git command here goes back through
 --- its `git`/`git_ok`.
+local cache = require("_work.cache")
 local store = require("_work.store")
 local refs = require("_work.refs")
 
@@ -45,7 +46,9 @@ local function sync(s: store.Store): boolean, string
   if not has_origin(s) then
     return true
   end
-  return refs.fetch_prune(s.root)
+  return cache.around_fetch(s.root, function(): boolean, string
+      return refs.fetch_prune(s.root)
+    end)
 end
 
 --- Publish every ref the pending saves touched, in one atomic push
@@ -88,7 +91,9 @@ local function publish(s: store.Store): boolean, string
   -- it, silently treating real fields as unchanged and skipping the
   -- `meta` write a brand-new root commit still needs.
   s.leased_item = {}
-  local synced, serr = refs.fetch_prune(s.root)
+  local synced, serr = cache.around_fetch(s.root, function(): boolean, string
+      return refs.fetch_prune(s.root)
+    end)
   if not synced then
     return false, ("lost the push race — the mutation was dropped whole, "
       .. "and the re-sync then stopped: %s"):format(serr)
