@@ -194,7 +194,12 @@ local function list(root: string): Board | nil, string
     elseif r.refname == "refs/heads/board/format" then
       format_sha = r.sha
     elseif r.refname:sub(1, #"refs/heads/items/") == "refs/heads/items/" or r.refname:sub(1, #"refs/heads/ended/") == "refs/heads/ended/" then
-      item_refs[#item_refs + 1] = r
+      -- Only a KSUID-shaped tail is an item; anything else under the
+      -- namespace is a stray branch `fsck` names and every read skips.
+      local tail = r.refname:match("/([^/]+)$") or ""
+      if #tail == 27 and tail:match("^%w+$") then
+        item_refs[#item_refs + 1] = r
+      end
     end
   end
   local queries: {string} = {}
