@@ -13,8 +13,9 @@ name: board
 on:
   push:
     branches: [main]
+  # Every pull request, whatever its base: a change stacked on another
+  # branch is gated the same as one against main.
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
