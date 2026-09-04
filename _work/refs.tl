@@ -102,23 +102,37 @@ local function update_ref(root: string, ref: string, new_sha: string,
   return true
 end
 
---- Move an item from `refs/items/<id>` to `refs/ended/<id>` locally,
---- in one transaction: the create and the delete either both land or
---- neither does, so an interrupted move never leaves the item in both
---- places or neither.
+--- One item's ended-ref move: `refs/items/<id>` becomes
+--- `refs/ended/<id>`, both at `sha` — the value fast-import (or
+--- whatever wrote the item's new commit) already left at
+--- `refs/items/<id>`, so it is also the delete's own compare value,
+--- not the tip observed before that write.
+local record EndedMove
+  id: string
+  sha: string
+end
+
+--- Move every ended item in `moves` from `refs/items/<id>` to
+--- `refs/ended/<id>` in ONE local transaction, regardless of how many
+--- — every create and every delete either all land or none does, so
+--- an interrupted move never leaves an item in both places or
+--- neither, and a batch of several never costs more than one process.
 --- @param root string The repository root
---- @param id string The item id
---- @param new_sha string The ended ref's new tip
---- @param old_sha string The open ref's current tip
---- @return boolean True on success
+--- @param moves {EndedMove} The items ending in this save, possibly empty
+--- @return boolean True on success (including an empty `moves`)
 --- @return string Error message
-local function move_to_ended(root: string, id: string, new_sha: string,
-    old_sha: string): boolean, string
-  local stdin = ("create refs/ended/%s %s\ndelete refs/items/%s %s\n"):format(
-    id, new_sha, id, old_sha)
+local function move_many_to_ended(root: string, moves: {EndedMove}): boolean, string
+  if #moves == 0 then
+    return true
+  end
+  local lines: {string} = {}
+  for _, m in ipairs(moves) do
+    lines[#lines + 1] = ("create refs/ended/%s %s\n"):format(m.id, m.sha)
+    lines[#lines + 1] = ("delete refs/items/%s %s\n"):format(m.id, m.sha)
+  end
   local r, err = child.run(
     {"git", "-c", "core.createObject=rename", "update-ref", "--stdin"},
-    {cwd = root, stdin = stdin})
+    {cwd = root, stdin = table.concat(lines)})
   if r == nil then
     return false, err
   end
@@ -198,12 +212,12 @@ local record refs
   ZERO_SHA: string
   type RefEntry = RefEntry
   type PushSpec = PushSpec
+  type EndedMove = EndedMove
   for_each_ref: function(root: string, patterns: {string}): {RefEntry} | nil, string
   committer_date_unix: function(root: string, ref: string): integer | nil, string
   update_ref: function(root: string, ref: string, new_sha: string,
   old_sha: string): boolean, string
-  move_to_ended: function(root: string, id: string, new_sha: string,
-  old_sha: string): boolean, string
+  move_many_to_ended: function(root: string, moves: {EndedMove}): boolean, string
   push_atomic: function(root: string, specs: {PushSpec}): boolean, boolean, string
   fetch_prune: function(root: string): boolean, string
 end
@@ -213,7 +227,7 @@ local M: refs = {
   for_each_ref = for_each_ref,
   committer_date_unix = committer_date_unix,
   update_ref = update_ref,
-  move_to_ended = move_to_ended,
+  move_many_to_ended = move_many_to_ended,
   push_atomic = push_atomic,
   fetch_prune = fetch_prune,
 }

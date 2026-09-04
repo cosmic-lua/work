@@ -9,6 +9,7 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
+local fastimport = require("_work.fastimport")
 local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
@@ -170,4 +171,36 @@ local function test_spec_md_is_omitted_when_empty_or_nil()
   local nil_tree = check.must(itemtree.build_tree(root, it, nil))
   local empty_tree = check.must(itemtree.build_tree(root, it, ""))
   assert(nil_tree == empty_tree, "nil and \"\" build the same tree")
+end
+
+-- `_work.gitwrite` builds every item's commit through
+-- `_work.fastimport` instead of this file's `hash-object`/`mktree`
+-- chain — the property the whole switch rests on is that BOTH paths
+-- land the identical tree sha for the same item, since a git tree is
+-- canonical (the same final (mode, name, blob) entries hash the same
+-- regardless of how they were assembled). A brand-new item — `old`
+-- nil, every path "added" — is the fullest exercise of `diff_item`.
+local function test_fast_import_tree_matches_mktree_tree()
+  local root = fresh_repo("fastimport-roundtrip")
+  local it = full_item()
+  local spec = "## Change\nDo it.\n"
+  local mktree_sha = check.must(itemtree.build_tree(root, it, spec))
+
+  local ops = fastimport.diff_item(nil, it, spec, "")
+  assert(#ops > 0, "a brand-new item has paths to write")
+  local plan: fastimport.CommitPlan = {
+    ref = "refs/fastimport-check/x", from = nil,
+    author_name = "Test", author_email = "test@example.com",
+    author_date = "1700000000 +0000", committer_name = "Claude",
+    committer_email = "noreply@anthropic.com", committer_date = "1700000000 +0000",
+    message = "check", op = "", ops = ops,
+  }
+  assert(fastimport.run(root, {plan}))
+  local r = check.must(child.run(
+      {"git", "rev-parse", "refs/fastimport-check/x^{tree}"}, {cwd = root}))
+  assert(r.ok, "git rev-parse failed: " .. r.stderr)
+  local fi_tree = (r.stdout:gsub("%s+$", ""))
+  assert(fi_tree == mktree_sha,
+    ("fast-import's tree must match mktree's byte for byte: %s vs %s")
+    :format(fi_tree, mktree_sha))
 end

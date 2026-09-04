@@ -7,10 +7,22 @@
 --- exactly as they would have if the ref had existed from the start.
 --- This is also how the tests build fixture history: a small git
 --- directory in the old layout, imported into a scratch store.
+---
+--- The whole replay is ONE `git fast-import` stream (`_work.fastimport`):
+--- every item's own chain of commits, oldest first, each one's path
+--- changes computed the same way an ordinary save's are
+--- (`fastimport.diff_item` against the PREVIOUS revision decoded, nil
+--- for the first), `from` the previous commit's own mark rather than a
+--- real sha, since it does not have one yet. One `for-each-ref` then
+--- learns every chain's actual tip, and each item still pushes on its
+--- own, in id order — the local write is one process regardless of
+--- history size, but the visible, resumable progress a long import's
+--- push loop gives stays exactly as it was.
 local child = require("cosmic.child")
+local fastimport = require("_work.fastimport")
+local format = require("_work.format")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
-local itemtree = require("_work.itemtree")
 local literal = require("cosmic.literal")
 local product = require("_work.product")
 local publish = require("_work.publish")
@@ -21,6 +33,14 @@ local store = require("_work.store")
 --- commit, and the author too when a subject names no session.
 local TOOL_NAME < const > = "Claude"
 local TOOL_EMAIL < const > = "noreply@anthropic.com"
+
+--- How many items' refs one push covers: a compromise between "one
+--- atomic push for the whole import" (the fastest shape, but one
+--- push large enough to strain argv limits or a real remote's own
+--- request-size limits) and "one push per item" (907 processes' worth
+--- of `has_origin`/push overhead on a real move, once every read and
+--- the local write were already batched).
+local PUSH_CHUNK < const > = 200
 
 --- One historical commit that touched an item's pair of files.
 local record Commit
@@ -64,25 +84,53 @@ local function split_log_line(line: string): string, string, string
   return line:sub(1, a - 1), line:sub(a + 1, b - 1), line:sub(b + 1)
 end
 
---- One item's whole history, oldest first: every commit that touched
---- either of its two old-layout files.
+--- Opens every commit's header line in `commits_by_id`'s walk — a
+--- control byte no commit subject or file path can produce, so a
+--- header is found by searching for this, never by counting lines
+--- against `--name-only`'s own blank-line separators.
+local COMMIT_MARK < const > = "\1commit\1"
+
+--- Every historical commit that touched anything under `items/` at
+--- `rev`, grouped by the item id(s) its changed paths named — ONE
+--- `git log --reverse --name-only` process for the WHOLE move,
+--- instead of one process per item: once the local write became a
+--- single fast-import stream, this walk was what a real move's cost
+--- was left standing on.
 --- @param from_root string The old-layout git directory
 --- @param rev string The revision to walk from
---- @param id string The item id
---- @return {Commit} | nil The commits, oldest first
+--- @return {string: {Commit}} | nil Each touched item's commits, oldest first
 --- @return string Error message
-local function log_for(from_root: string, rev: string, id: string): {Commit} | nil, string
-  local r = child.run({"git", "log", "--reverse", "--format=%H%x00%at%x00%s", rev,
-      "--", "items/" .. id .. ".tl", "items/" .. id .. ".md"}, {cwd = from_root})
+local function commits_by_id(from_root: string, rev: string): {string: {Commit}} | nil, string
+  local r = child.run({"git", "log", "--reverse", "--name-only",
+      "--format=" .. COMMIT_MARK .. "%H%x00%at%x00%s", rev, "--", "items/"},
+    {cwd = from_root})
   if r == nil or not r.ok then
     return nil, ("git log failed: %s"):format(r and r.stderr or "could not start")
   end
-  local out: {Commit} = {}
-  for line in r.stdout:gmatch("([^\n]+)") do
-    local sha, at, subject = split_log_line(line)
-    out[#out + 1] = {sha = sha, at = math.tointeger(tonumber(at)) or 0, subject = subject}
+  local by_id: {string: {Commit}} = {}
+  local cur: Commit = nil
+  for line in (r.stdout .. "\n"):gmatch("([^\n]*)\n") do
+    if line:sub(1, #COMMIT_MARK) == COMMIT_MARK then
+      local sha, at, subject = split_log_line(line:sub(#COMMIT_MARK + 1))
+      cur = {sha = sha, at = math.tointeger(tonumber(at)) or 0, subject = subject}
+    elseif line ~= "" and cur ~= nil then
+      local id = line:match("^items/([^/]+)%.tl$") or line:match("^items/([^/]+)%.md$")
+      if id ~= nil then
+        local list = by_id[id]
+        if list == nil then
+          list = {}
+          by_id[id] = list
+        end
+        -- A commit touching BOTH `<id>.tl` and `<id>.md` names it
+        -- twice in `--name-only`'s list; the second name-only line
+        -- for the SAME commit must not enter the chain again.
+        if #list == 0 or list[#list].sha ~= cur.sha then
+          list[#list + 1] = cur
+        end
+      end
+    end
   end
-  return out
+  return by_id
 end
 
 --- The session a replayed commit's subject names, "" when none does —
@@ -114,113 +162,212 @@ local function apply_repo_default(it: item.Item)
   end
 end
 
---- Replay one item's whole history into the store as a fresh commit
---- chain, then push it — one item at a time, so a long import leaves
---- real, visible progress if it is interrupted partway.
---- @param s store.Store The target store
---- @param from_root string The old-layout git directory
---- @param rev string The revision to read history at
+--- Build one item's replayed commit chain as fast-import `CommitPlan`s
+--- — one per historical commit that touched either of its old-layout
+--- files, oldest first, each diffed against the PREVIOUS revision the
+--- same way an ordinary save diffs against `Store.leased_item`
+--- (`fastimport.diff_item`; nil for the very first, so it carries
+--- every field). Every commit in the chain targets the SAME ref,
+--- decided once the chain's own final resolution is known: unlike an
+--- ordinary mutation's ended-item move, there is no EXISTING
+--- `refs/items/<id>` to transition off of here — this writes a
+--- brand-new ref from nothing, so the right final name can be chosen
+--- up front and never has to move.
 --- @param id string The item id
---- @return boolean True on success
+--- @param commits {Commit} Its own commits, oldest first (`commits_by_id`)
+--- @param batch {string: gitobj.BatchEntry} Every commit's `.tl`/`.md`
+--- content, already read for the WHOLE import in one batch
+--- @param mark_seq {integer} A shared, mutable one-element mark
+--- counter, advanced across every item's chain so marks stay unique
+--- over the WHOLE stream `run` builds
+--- @return {fastimport.CommitPlan} | nil The chain, empty when the
+--- item has no history to replay
 --- @return string Error message
-local function import_item(s: store.Store, from_root: string, rev: string,
-    id: string): boolean, string
-  local commits, lerr = log_for(from_root, rev, id)
-  if commits == nil then
-    return false, lerr
-  end
-  local queries: {string} = {}
-  for _, c in ipairs(commits) do
-    queries[#queries + 1] = c.sha .. ":items/" .. id .. ".tl"
-    queries[#queries + 1] = c.sha .. ":items/" .. id .. ".md"
-  end
-  local batch, berr = gitobj.cat_file_batch(from_root, queries)
-  if batch == nil then
-    return false, berr
-  end
-  local parent_sha = refs.ZERO_SHA
+local function build_item_chain(id: string, commits: {Commit},
+    batch: {string: gitobj.BatchEntry},
+    mark_seq: {integer}): {fastimport.CommitPlan} | nil, string
+  local plans: {fastimport.CommitPlan} = {}
+  local prev_it: item.Item = nil
+  local prev_spec = ""
+  local prev_mark = ""
   local ended = false
   for _, c in ipairs(commits) do
     local tl_entry = batch[c.sha .. ":items/" .. id .. ".tl"]
     if tl_entry ~= nil then
       local raw, perr = literal.parse(tl_entry.content)
       if raw == nil then
-        return false, ("%s@%s: %s"):format(id, c.sha:sub(1, 7), perr)
+        return nil, ("%s@%s: %s"):format(id, c.sha:sub(1, 7), perr)
       end
       local it, derr = item.decode(raw)
       if it == nil then
-        return false, ("%s@%s: %s"):format(id, c.sha:sub(1, 7), derr)
+        return nil, ("%s@%s: %s"):format(id, c.sha:sub(1, 7), derr)
       end
       apply_repo_default(it)
-      local spec_body: string | nil = nil
+      local spec_body = ""
       local md_entry = batch[c.sha .. ":items/" .. id .. ".md"]
       if md_entry ~= nil then
         spec_body = md_entry.content
       end
-      local tree_sha, terr = itemtree.build_tree(s.root, it, spec_body)
-      if tree_sha == nil then
-        return false, terr
-      end
+      local ops = fastimport.diff_item(prev_it, it, spec_body, prev_spec)
       local session_name = session_of(c.subject)
       local author_name, author_email = TOOL_NAME, TOOL_EMAIL
       if session_name ~= "" then
         author_name, author_email = session_name, session_name .. "@board"
       end
       local when = ("%d +0000"):format(c.at)
-      local parents: {string} = {}
-      if parent_sha ~= refs.ZERO_SHA then
-        parents = {parent_sha}
+      mark_seq[1] = mark_seq[1] + 1
+      local mark = ":" .. tostring(mark_seq[1])
+      local from: string = nil
+      if prev_mark ~= "" then
+        from = prev_mark
       end
-      local commit_sha, cerr = gitobj.commit_tree(s.root, {
-          tree = tree_sha, parents = parents, message = c.subject,
-          author_name = author_name, author_email = author_email,
-          author_date = when, committer_name = TOOL_NAME,
-          committer_email = TOOL_EMAIL, committer_date = when, op = "import",
-        })
-      if commit_sha == nil then
-        return false, cerr
-      end
-      parent_sha = commit_sha
+      plans[#plans + 1] = {
+        ref = "refs/items/" .. id, from = from, mark = mark,
+        author_name = author_name, author_email = author_email,
+        author_date = when, committer_name = TOOL_NAME,
+        committer_email = TOOL_EMAIL, committer_date = when,
+        message = c.subject, op = "import", ops = ops,
+      }
+      prev_it, prev_spec, prev_mark = it, spec_body, mark
       ended = (it.resolution or "") ~= ""
     end
   end
-  if parent_sha == refs.ZERO_SHA then
-    return true, ""
+  if #plans > 0 and ended then
+    local final_ref = "refs/ended/" .. id
+    for _, p in ipairs(plans) do
+      p.ref = final_ref
+    end
   end
-  local ref = "refs/items/" .. id
-  if ended then
-    ref = "refs/ended/" .. id
-  end
-  local moved, uerr = refs.update_ref(s.root, ref, parent_sha, refs.ZERO_SHA)
-  if not moved then
-    return false, uerr
-  end
-  s.pending[#s.pending + 1] = {ref = ref, old = "", delete = false}
-  return true, ""
+  return plans, ""
 end
 
---- Import every item under `items/` at `rev` in `from_root` into `s`,
---- replaying each one's full history and pushing it before moving to
---- the next.
+--- Import every item under `items/` at `rev` in `from_root` into `s`:
+--- the WHOLE history read in one `git log` process
+--- (`commits_by_id`), every commit's old-layout content read in one
+--- more `cat-file --batch` across every item at once, then every
+--- item's whole history built into ONE fast-import stream (one
+--- process, whatever the import's size), read back in one more, then
+--- pushed one item at a time in id order — the local write no longer
+--- costs a process per historical commit, but a long import still
+--- leaves real, visible, resumable progress if it is interrupted
+--- partway through the push loop.
 --- @param s store.Store The target store
 --- @param from_root string The old-layout git directory
 --- @param rev string The revision to read history at
 --- @return integer | nil The number of items imported
 --- @return string Error message
 local function run(s: store.Store, from_root: string, rev: string): integer | nil, string
+  -- The board this writes into may never have had anything filed on
+  -- it before, so this is as good a place as `init_repo`'s own to
+  -- make sure `refs/board/format` exists (and is pushed, when there
+  -- is an origin to push it to) before the first item lands.
+  local ensured, eerr = format.ensure(s.root)
+  if not ensured then
+    return nil, eerr
+  end
   local ids, ierr = list_ids(from_root, rev)
   if ids == nil then
     return nil, ierr
   end
+  local history, herr = commits_by_id(from_root, rev)
+  if history == nil then
+    return nil, herr
+  end
+  local queries: {string} = {}
   for _, id in ipairs(ids) do
-    local ok, err = import_item(s, from_root, rev, id)
+    for _, c in ipairs(history[id] or {}) do
+      queries[#queries + 1] = c.sha .. ":items/" .. id .. ".tl"
+      queries[#queries + 1] = c.sha .. ":items/" .. id .. ".md"
+    end
+  end
+  local batch, berr = gitobj.cat_file_batch(from_root, queries)
+  if batch == nil then
+    return nil, berr
+  end
+  local mark_seq: {integer} = {0}
+  local all_plans: {fastimport.CommitPlan} = {}
+  local chain_of: {string: {fastimport.CommitPlan}} = {}
+  for _, id in ipairs(ids) do
+    local plans, perr = build_item_chain(id, history[id] or {}, batch, mark_seq)
+    if plans == nil then
+      return nil, ("%s: %s"):format(id, perr)
+    end
+    if #plans > 0 then
+      chain_of[id] = plans
+      for _, p in ipairs(plans) do
+        all_plans[#all_plans + 1] = p
+      end
+    end
+  end
+  if #all_plans > 0 then
+    local ok, ferr = fastimport.run(s.root, all_plans)
     if not ok then
-      return nil, ("%s: %s"):format(id, err)
+      return nil, ("fast-import: %s"):format(ferr)
+    end
+  end
+  local patterns: {string} = {}
+  for _, id in ipairs(ids) do
+    local plans = chain_of[id]
+    if plans ~= nil then
+      patterns[#patterns + 1] = plans[#plans].ref
+    end
+  end
+  local tip_of: {string: string} = {}
+  if #patterns > 0 then
+    local found, rerr = refs.for_each_ref(s.root, patterns)
+    if found == nil then
+      return nil, ("could not read back the imported refs: %s"):format(rerr)
+    end
+    for _, r in ipairs(found) do
+      tip_of[r.refname] = r.sha
+    end
+  end
+  -- One push per PUSH_CHUNK items rather than one per item: each of
+  -- `publish.publish`'s own calls costs two processes on top of the
+  -- push itself (`has_origin`'s `git remote` check, then the push),
+  -- which dominated a real import's remaining cost once its reads and
+  -- its local write were already down to a handful of processes each.
+  -- Still chunked, not one giant push, so an import large enough to
+  -- strain a single `git push --atomic`'s argv stays working; a
+  -- rejected chunk still names which items landed before it and which
+  -- did not, close to as legible as one-at-a-time was.
+  local landed = 0
+  local chunk: {string} = {}
+  local function flush_chunk(): boolean, string
+    if #chunk == 0 then
+      return true, ""
+    end
+    for _, ref in ipairs(chunk) do
+      store.add_pending(s, {ref = ref, old = "", delete = false})
     end
     local pushed, perr = publish.publish(s)
     if not pushed then
-      return nil, ("%s: publish: %s"):format(id, perr)
+      return false, perr
     end
+    landed = landed + #chunk
+    chunk = {}
+    return true, ""
+  end
+  for _, id in ipairs(ids) do
+    local plans = chain_of[id]
+    if plans ~= nil then
+      local ref = plans[#plans].ref
+      local tip = tip_of[ref]
+      if tip == nil then
+        return nil, ("%s: fast-import did not create %s"):format(id, ref)
+      end
+      chunk[#chunk + 1] = ref
+      if #chunk >= PUSH_CHUNK then
+        local ok, perr = flush_chunk()
+        if not ok then
+          return nil, ("%d item(s) pushed, then: %s"):format(landed, perr)
+        end
+      end
+    end
+  end
+  local ok, perr = flush_chunk()
+  if not ok then
+    return nil, ("%d item(s) pushed, then: %s"):format(landed, perr)
   end
   return #ids, ""
 end

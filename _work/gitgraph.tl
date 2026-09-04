@@ -59,15 +59,19 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- `--session` flag — unlike `take`/`drop`/`spec`/`verdict` — so this
   -- resolved identity is for the friction check alone, never for
   -- commit authorship: every `new` commits under the tool identity.
+  -- Listed once, before the friction check below: `store.list` is
+  -- what populates `s`'s per-item lease (`leased_sha`), which is what
+  -- lets `friction.friction_refusal` batch its past-filing spec reads
+  -- through `store.read_specs` instead of one `read_spec` per filing.
+  local all, aerr = store.list(s)
+  if all == nil then
+    return gate.verdict_line("new", false, aerr)
+  end
   if not frc and title:sub(1, 9) == "friction:" then
     local refusal = friction.friction_refusal(s, session.resolve(nil), spec or "")
     if refusal then
       return gate.verdict_line("new", false, refusal)
     end
-  end
-  local all, aerr = store.list(s)
-  if all == nil then
-    return gate.verdict_line("new", false, aerr)
   end
   local index = flow.by_id(all)
   local parent_item: item.Item = nil

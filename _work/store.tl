@@ -14,6 +14,7 @@
 --- a verb sets through `set_session`/`set_op`/`set_bounded` before it
 --- calls `save`, whose own signature carries none of that.
 local child = require("cosmic.child")
+local format = require("_work.format")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
 local gitwrite = require("_work.gitwrite")
@@ -23,9 +24,12 @@ local refs = require("_work.refs")
 --- One open state repository. Every field but `root` is working state
 --- a single verb invocation accumulates: the session and `Op:` trailer
 --- the next `save` should credit, whether it is bounded, the lease
---- (ref + tip) each id was last observed at, `refs/board/seq`'s own
---- observed tip, and the refs a completed `save` still owes `publish`
---- a push for.
+--- (ref + tip) each id was last observed at, a SNAPSHOT of each id's
+--- item as observed (`leased_item` — independent of whatever a caller
+--- goes on to mutate `load`'s/`list`'s own returned `item.Item`
+--- into, since `save`'s fast-import diff needs the ORIGINAL fields to
+--- compare against), `refs/board/seq`'s own observed tip, and the
+--- refs a completed `save` still owes `publish` a push for.
 local record Store
   root: string
   session: string
@@ -33,6 +37,7 @@ local record Store
   bounded: boolean
   leased_ref: {string: string}
   leased_sha: {string: string}
+  leased_item: {string: item.Item}
   observed_seq: string
   pending: {refs.PushSpec}
 end
@@ -113,7 +118,9 @@ local FETCH_REFSPECS < const >: {string} = {
 --- Create a state repository at `dir`: a git repository (initialized
 --- when none is there yet), with the mirror refspecs ADDED to
 --- `remote.origin.fetch` when it already has an `origin` and does not
---- already carry them. `git clone` already gave `origin` its own
+--- already carry them, and `refs/board/format` created (and
+--- best-effort pushed) when this repository has none yet
+--- (`format.ensure`). `git clone` already gave `origin` its own
 --- default refspec for the checked-out branch (how the machinery
 --- itself stays pullable) — this only adds the three item-ref
 --- patterns beside it, never replacing what was there, so a plain
@@ -146,6 +153,10 @@ local function init_repo(dir: string): boolean, string
       end
     end
   end
+  local ensured, eerr = format.ensure(dir)
+  if not ensured then
+    return false, eerr
+  end
   return true
 end
 
@@ -159,7 +170,7 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, observed_seq = "", pending = {}}
+    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}}
 end
 
 --- Record the session `save` should credit as author for whatever it
@@ -247,8 +258,28 @@ local function read_specs(s: Store, ids: {string}): {string: string}
   return gitread.read_specs(s.root, s.leased_sha, ids)
 end
 
+--- An independent copy of `it`, sharing no table with it — `encode`
+--- then `decode` round-trips through fresh tables at every level
+--- (`_work.item`'s own tested inverse pair), so this is cheaper to
+--- lean on than a bespoke deep-copy function. Used only to snapshot
+--- an item as OBSERVED, before any caller goes on to mutate the
+--- object `load`/`list` handed back — `decode`'s own tolerance means
+--- this can only fail on an item already flagged unreadable, in which
+--- case the snapshot is skipped rather than surfaced as an error: the
+--- fast-import diff (`_work.fastimport.diff_item`) treats a missing
+--- snapshot as "unobserved", which only costs it writing every path
+--- unconditionally for that one item, never a wrong answer.
+--- @param it item.Item The item to copy
+--- @return item.Item | nil The copy, nil when re-decoding it failed
+local function snapshot_item(it: item.Item): item.Item | nil
+  local copy, _err = item.decode(item.encode(it))
+  return copy
+end
+
 --- Load one item, remembering its ref and tip as the lease `save`
---- writes against next.
+--- writes against next, and a snapshot of its fields as observed —
+--- the baseline `save`'s fast-import diff compares the mutated item
+--- against.
 --- @param s Store The store
 --- @param id string Item id
 --- @return item.Item | nil The item
@@ -259,6 +290,7 @@ local function load_item(s: Store, id: string): item.Item | nil, string
     return nil, err
   end
   s.leased_ref[id], s.leased_sha[id] = loaded.ref, loaded.sha
+  s.leased_item[id] = snapshot_item(loaded.it)
   return loaded.it
 end
 
@@ -276,6 +308,9 @@ local function list(s: Store): {item.Item} | nil, string
   for id, ref in pairs(board.refs_by_id) do
     s.leased_ref[id] = ref
     s.leased_sha[id] = board.shas_by_id[id]
+  end
+  for _, it in ipairs(board.items) do
+    s.leased_item[it.id] = snapshot_item(it)
   end
   s.observed_seq = board.seq_sha
   return board.items
@@ -373,7 +408,8 @@ local function save(s: Store, it: item.Item, message: string,
   local outcome, oerr = gitwrite.save_batch({
       root = s.root, items = batch, message = message, session = s.session,
       op = s.op, spec_for_first = spec, leased_ref = s.leased_ref,
-      leased_sha = s.leased_sha, bounded = s.bounded, seq_sha = s.observed_seq,
+      leased_sha = s.leased_sha, leased_item = s.leased_item,
+      bounded = s.bounded, seq_sha = s.observed_seq,
       read_spec = read_current_spec,
     })
   if outcome == nil then
@@ -383,9 +419,20 @@ local function save(s: Store, it: item.Item, message: string,
   if not outcome.changed then
     return true, NOOP_PREFIX .. ("%s leaves the board unchanged"):format(message)
   end
+  local written_by_id: {string: item.Item} = {}
+  for _, x in ipairs(batch) do
+    written_by_id[x.id] = x
+  end
   for id, ref in pairs(outcome.new_ref) do
     s.leased_ref[id] = ref
     s.leased_sha[id] = outcome.new_sha[id]
+    -- A later save in the same store handle (another `also` batch, a
+    -- second verb call) has to diff against what THIS save just
+    -- wrote, not the state it was leased against a moment ago.
+    local written = written_by_id[id]
+    if written ~= nil then
+      s.leased_item[id] = snapshot_item(written)
+    end
   end
   if outcome.seq_changed then
     s.observed_seq = outcome.new_seq_sha
