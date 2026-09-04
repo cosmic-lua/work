@@ -14,6 +14,7 @@
 --- a verb sets through `set_session`/`set_op`/`set_bounded` before it
 --- calls `save`, whose own signature carries none of that.
 local child = require("cosmic.child")
+local format = require("_work.format")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
 local gitwrite = require("_work.gitwrite")
@@ -117,7 +118,9 @@ local FETCH_REFSPECS < const >: {string} = {
 --- Create a state repository at `dir`: a git repository (initialized
 --- when none is there yet), with the mirror refspecs ADDED to
 --- `remote.origin.fetch` when it already has an `origin` and does not
---- already carry them. `git clone` already gave `origin` its own
+--- already carry them, and `refs/board/format` created (and
+--- best-effort pushed) when this repository has none yet
+--- (`format.ensure`). `git clone` already gave `origin` its own
 --- default refspec for the checked-out branch (how the machinery
 --- itself stays pullable) — this only adds the three item-ref
 --- patterns beside it, never replacing what was there, so a plain
@@ -149,6 +152,10 @@ local function init_repo(dir: string): boolean, string
         end
       end
     end
+  end
+  local ensured, eerr = format.ensure(dir)
+  if not ensured then
+    return false, eerr
   end
   return true
 end

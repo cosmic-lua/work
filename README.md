@@ -29,15 +29,25 @@ bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
 Every item is a git ref — `refs/items/<ksuid>` while open,
 `refs/ended/<ksuid>` once resolved — whose tip commit's tree carries
 its fields (a `meta` blob of `key: value` lines) and its spec prose
-(`spec.md`, present only when it has one); `refs/board/lanes` and
-`refs/board/seq` hold board-wide state the same way, outside the
-per-item namespace. Nothing here is a file in the working tree: a read
-is `git for-each-ref`/`cat-file --batch` against the ref layout, and a
-write is `git hash-object`/`mktree`/`commit-tree` plus an
-`update-ref` — `_work/store.tl` and the modules beside it are the
-whole of that mechanism. Every verb and render still addresses an item
-by the 8-character handle (bare or wrapped, either divider,
-case-tolerant) or an unambiguous prefix.
+(`spec.md`, present only when it has one); `refs/board/lanes`,
+`refs/board/seq` and `refs/board/format` hold board-wide state the
+same way, outside the per-item namespace. `refs/board/format`'s tree
+holds one blob, `format`, naming the layout version every reader
+checks before trusting anything else it read alongside it
+(`_work/format.tl`) — a board on a version this tool does not know, or
+missing the marker while it already carries items, is refused rather
+than silently misread; `gitboard init` writes the marker on a board
+that has neither yet. Nothing here is a file in the working tree: a
+read is `git for-each-ref`/`cat-file --batch` against the ref layout,
+and a write is one `git fast-import` stream (`_work/fastimport.tl`) —
+`_work/store.tl` and the modules beside it are the whole of that
+mechanism. Every verb and render still addresses an item by the
+8-character handle (bare or wrapped, either divider, case-tolerant) or
+an unambiguous prefix. `gitboard fsck` is the read-only, offline
+whole-board audit no single verb ever asks: dangling
+`parent`/`beats`/`blocked_by` edges, an item's tree not re-encoding to
+what it was read from, two open items sharing a lane, a root carrying
+a `repo`, and anything the store's own tolerant decode had to flag.
 
 A workable item's state is DERIVED from the facts its ref carries,
 never declared: open, unclaimed, and PR-less is `todo` (pullable once

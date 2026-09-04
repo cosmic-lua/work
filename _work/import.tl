@@ -20,6 +20,7 @@
 --- push loop gives stays exactly as it was.
 local child = require("cosmic.child")
 local fastimport = require("_work.fastimport")
+local format = require("_work.format")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local literal = require("cosmic.literal")
@@ -228,6 +229,14 @@ end
 --- @return integer | nil The number of items imported
 --- @return string Error message
 local function run(s: store.Store, from_root: string, rev: string): integer | nil, string
+  -- The board this writes into may never have had anything filed on
+  -- it before, so this is as good a place as `init_repo`'s own to
+  -- make sure `refs/board/format` exists (and is pushed, when there
+  -- is an origin to push it to) before the first item lands.
+  local ensured, eerr = format.ensure(s.root)
+  if not ensured then
+    return nil, eerr
+  end
   local ids, ierr = list_ids(from_root, rev)
   if ids == nil then
     return nil, ierr

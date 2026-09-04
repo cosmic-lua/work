@@ -36,12 +36,12 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
---- A fresh local-only state repo.
+--- A fresh local-only state repo, with its `refs/board/format` marker.
 local function init_state_repo(name: string): string
   local root = fs.join(tmpdir, "storeref-" .. name)
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
-  git(root, {"init", "-q"})
+  assert(store.init_repo(root))
   return root
 end
 
