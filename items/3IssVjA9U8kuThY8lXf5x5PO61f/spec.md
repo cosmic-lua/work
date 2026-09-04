@@ -30,9 +30,10 @@ else is the same snapshot and the same load, repeated: a `new` spends about
 ## Change
 
 A mutation verb takes ONE ref snapshot and ONE load before it writes, and
-re-reads only the refs it wrote. Ready when: `_work/procs_test.tl` (the
-process ratchet) is on main — `bin/cosmic --make test _work/procs_test.tl`
-passes — so the new counts are recorded, not asserted by hand.
+re-reads only the refs it wrote. Ready when: «cwi5_ntHB» (the read verbs'
+single snapshot, same store/cache seam) is merged — `git log --oneline
+origin/main | grep -c 3IssPSUD` prints 1 — so this lands on top of it
+instead of colliding with it in `_work/store.tl` and `_work/cache.tl`.
 
 1. Find every `refs.for_each_ref` and `gitread.load` call reachable from
    `new`/`compare`/`block`/`take`/`done` (start at `_work/gitverbs.tl`,
@@ -51,12 +52,19 @@ passes — so the new counts are recorded, not asserted by hand.
 3. `remote get-url origin` and `remote` (the push's remote listing) are read
    once per process and memoized on the store; they are the same two facts
    `show ID` reads.
-4. Target counts, recorded in the ratchet table when they hold: `new` at 6
+4. Tests, in the diff: for `new` and `compare` on a fixture with a local
+   bare origin, a case that counts calls to `refs.for_each_ref` and
+   `gitread.load` (swap each on its module table for a counting stub, restore
+   after) and asserts one snapshot and one load before the write plus one
+   read-back of the written refs after; and a case that `new` never asks for
+   `<new-id>:spec.md` (stub `gitobj`'s `cat-file -p` path to fail, `new`
+   still succeeds). Expected after the change, for the builder's own check
+   with the strace command above (not recorded in the tree): `new` at 6
    gitboard-spawned git processes (one glob lookup, one snapshot, three
-   `cat-file --batch`, `fast-import`, the ref read-back, `push` — fewer if
-   the load's three batches merge), `compare` at 7. Output unchanged: the
-   `gitboard-new:`/`gitboard-compare:` lines and every refusal string are
-   frozen; `_work/gitcompare_test.tl` and the verb tests must pass unedited.
+   `cat-file --batch`, `fast-import`, the ref read-back, `push`), `compare`
+   at 7. Output unchanged: the `gitboard-new:`/`gitboard-compare:` lines and
+   every refusal string are frozen; `_work/gitcompare_test.tl` and the verb
+   tests must pass unedited.
 
 ## Non-goals
 
