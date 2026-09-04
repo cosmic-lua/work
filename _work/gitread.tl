@@ -6,11 +6,15 @@
 --- pushing credential landed the create half of an old-style
 --- namespace move and lost the delete half (it can create and update
 --- a branch but never delete one). `load` and `list` each keep
---- exactly one entry per id when that happens (`pick_duplicate`);
+--- exactly one entry per id when that happens (`pick_duplicate`,
+--- exported for `_work.gitreadmany.load_many` to reuse the same rule);
 --- `list` also reports every duplicate it found in `Board.duplicates`
 --- so `_work.gitfsck` can name it for a human to clear. Split out of
 --- `_work.store` so that module stays under its line cap;
---- `_work.store` is the only caller outside tests.
+--- `_work.store` is the only caller of `load`/`list` outside tests —
+--- `_work.gitreadmany.load_many`, a named-id-set batch `_work.cache`'s
+--- fetch-path refresh uses, is split into its own file for the same
+--- line-cap reason, built on the helpers this module exports below.
 local child = require("cosmic.child")
 local format = require("_work.format")
 local gitobj = require("_work.gitobj")
@@ -433,6 +437,16 @@ local record gitread
   read_spec: function(root: string, candidates: {string}): string
   read_specs: function(root: string, shas_by_id: {string: string},
   ids: {string}): {string: string}
+  -- Exported only for `_work.gitreadmany.load_many` to reuse without
+  -- duplicating this module's own read-path primitives.
+  edge_kinds: function(edges_content: string): {string: string}
+  content_blob_shas: function(kinds: {string: string},
+  kind_batch: {string: gitobj.BatchEntry}): {string}
+  build_item: function(id: string, sha: string,
+  batch: {string: gitobj.BatchEntry}, kind_batch: {string: gitobj.BatchEntry},
+  blob_batch: {string: gitobj.BatchEntry}): item.Item | nil, string
+  pick_duplicate: function(root: string, items_e: refs.RefEntry,
+  ended_e: refs.RefEntry): refs.RefEntry, refs.RefEntry
 end
 
 local M: gitread = {
@@ -440,6 +454,10 @@ local M: gitread = {
   list = list,
   read_spec = read_spec,
   read_specs = read_specs,
+  edge_kinds = edge_kinds,
+  content_blob_shas = content_blob_shas,
+  build_item = build_item,
+  pick_duplicate = pick_duplicate,
 }
 
 return M

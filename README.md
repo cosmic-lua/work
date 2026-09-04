@@ -42,13 +42,19 @@ SQLite file under a checkout's own `o/`, gitignored, carrying
 observation `_work.lanes` now reads and writes there instead of
 committing `refs/heads/board/lanes`. It is never truth and never shared —
 each clone rebuilds its own from `store.list`/`store.read_specs`
-whenever the file is missing, its schema version does not match, or a
-fresh `for-each-ref` digest over `refs/heads/items`/`refs/heads/ended`/`refs/heads/board`
-disagrees with what the file last recorded (a hand-moved ref, or
-simply a clone that has never built one yet); every ordinary save and
-fetch instead patches just the rows the refs that moved own, so a
-session's second `find` or `sync` costs a handful of small queries
-against an already-open file rather than a fresh whole-board read.
+whenever the file is missing, its schema version or fingerprint does
+not match, or a fresh `for-each-ref` digest over
+`refs/heads/items`/`refs/heads/ended`/`refs/heads/board` disagrees with
+what the file last recorded (a hand-moved ref, or simply a clone that
+has never built one yet); every ordinary save patches straight from
+the items it just wrote, with no git read at all, and a fetch patches
+every id it moved in one batch, so a session's second `find` or `sync`
+costs a handful of small queries against an already-open file rather
+than a fresh whole-board read. The file opens WAL with
+`synchronous = OFF` — it is disposable, so a torn write from a crash
+is simply a rebuild — and any genuine SQLite error hit while using an
+already-open file (not merely a stale digest) wipes it and rebuilds
+once rather than surfacing the corruption.
 
 Every item is a git ref — `refs/heads/items/<ksuid>` — whose tip commit's
 tree carries its fields (a `meta` blob of `key: value` lines,
