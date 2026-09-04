@@ -22,12 +22,21 @@ local index = require("_work.index")
 local type Index = index.Index
 
 --- The extra views, added to an index already carrying `_work.index`'s
---- own DDL (`items`, `beats`, `dominates`, ...).
+--- own DDL (`items`, `edges`, `dominates`, ...).
 local EXTRA_DDL < const > = [[
+-- An item counts as "has an edge" only when the OTHER end is a real
+-- item too — a dangling beats edge (`_work.index.dominates`'s own
+-- join) never places its source, matching
+-- `_work.priority.has_out_edge`'s `index[b] ~= nil` guard. The
+-- `to_id` branch needs no extra join: `id` is already constrained to
+-- an existing item by the outer `items` scan.
 CREATE VIEW has_edge AS
-  SELECT id FROM items WHERE id IN (SELECT winner FROM beats)
+  SELECT id FROM items WHERE id IN
+    (SELECT e.from_id FROM edges e
+     JOIN items i ON i.id = e.to_id WHERE e.kind = 'beats')
   UNION
-  SELECT id FROM items WHERE id IN (SELECT loser FROM beats);
+  SELECT id FROM items WHERE id IN
+    (SELECT to_id FROM edges WHERE kind = 'beats');
 
 CREATE VIEW own AS
   SELECT i.id AS id, COUNT(d.loser) AS n
@@ -40,11 +49,11 @@ CREATE VIEW own AS
 -- `_work.priority.positions` searches in.
 CREATE VIEW ancestors AS
   WITH RECURSIVE anc(id, anc_id, depth) AS (
-    SELECT id, parent, 1 FROM items WHERE parent IS NOT NULL
+    SELECT id, parent, 1 FROM items WHERE parent <> ''
     UNION ALL
     SELECT a.id, i.parent, a.depth + 1
     FROM anc a JOIN items i ON i.id = a.anc_id
-    WHERE i.parent IS NOT NULL AND a.depth < 16
+    WHERE i.parent <> '' AND a.depth < 16
   )
   SELECT id, anc_id, depth FROM anc;
 
