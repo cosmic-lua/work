@@ -1,7 +1,0 @@
-return {
-  ["beats"] = "3IK8ETKVxVDbst7JRjpUm5y9Nkn",
-  ["id"] = "3IK8Gkq1mLQuGsDS0CQER8gWTnv",
-  ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
-  ["repo"] = "cosmic-lua/cosmic",
-  ["title"] = "zip extract: per-file Lua dispatch and syscalls, not zlib churn — C-side bulk extract, guard invariant decides",
-}

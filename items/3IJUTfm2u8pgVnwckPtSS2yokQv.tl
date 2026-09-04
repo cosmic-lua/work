@@ -1,8 +1,0 @@
-return {
-  ["beats"] = "3IEv60qjwUoj2bvCxSytMkkXrhh",
-  ["id"] = "3IJUTfm2u8pgVnwckPtSS2yokQv",
-  ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
-  ["repo"] = "cosmic-lua/cosmic",
-  ["resolution"] = "not-planned",
-  ["title"] = "gitboard land: the merge call is 403 by construction from a scheduled session, so every land needs an out-of-band merge first",
-}

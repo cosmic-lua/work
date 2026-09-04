@@ -1,7 +1,0 @@
-return {
-  ["id"] = "3II0VYuYepn4oqqOth6TyDHK1GG",
-  ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
-  ["repo"] = "cosmic-lua/cosmic",
-  ["resolution"] = "not-planned",
-  ["title"] = "an Acceptance grep whose stated baseline is wrong passes without discriminating, and the ready bar cannot see it",
-}

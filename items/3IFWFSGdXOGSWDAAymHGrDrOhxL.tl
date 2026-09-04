@@ -1,9 +1,0 @@
-return {
-  ["builders"] = "claude-sched-2026-08-23T2036",
-  ["id"] = "3IFWFSGdXOGSWDAAymHGrDrOhxL",
-  ["parent"] = "3HyRcW05wBip6Wqcz145bUQBTyj",
-  ["pr"] = 1333,
-  ["repo"] = "cosmic-lua/cosmic",
-  ["resolution"] = "completed",
-  ["title"] = "quicksand proxy rules: parse_rule and match declare a non-nilable port and pass nil through it",
-}
