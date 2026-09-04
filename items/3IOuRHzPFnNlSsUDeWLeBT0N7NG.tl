@@ -3,6 +3,7 @@ return {
   ["id"] = "3IOuRHzPFnNlSsUDeWLeBT0N7NG",
   ["parent"] = "3IOK4SZHTfplEh895Dm35KQtKq0",
   ["pr"] = 1382,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "casts: one typed cosmic._version lookup, closing the 6 pcall-require sites across 5 files",
 }

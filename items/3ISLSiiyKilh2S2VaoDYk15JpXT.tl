@@ -3,6 +3,7 @@ return {
   ["id"] = "3ISLSiiyKilh2S2VaoDYk15JpXT",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1502,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "gitboard: spec rewrites an item another session has already built and handed to review, with no claim or phase check",
   ["verdict"] = "accept",

@@ -2,6 +2,7 @@ return {
   ["id"] = "3I0L7g16MU0L5OrqTGvOZPuMPAx",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1247,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "the feedback half emits prose, not issues: four countermeasures went unfiled today",
 }

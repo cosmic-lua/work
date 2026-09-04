@@ -4,5 +4,6 @@ return {
   ["builders"] = "builder-So6c_e5pY-orch9",
   ["id"] = "3IfBBCiSB6QBLluI6ziSo6ce5pY",
   ["parent"] = "3HyRdY4sPAYZ6xkwrXCh5BnsH7B",
+  ["repo"] = "cosmic-lua/cosmic",
   ["title"] = "cosmic.doc.search: move --docs off substring matching onto FTS5 and bm25",
 }

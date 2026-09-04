@@ -4,6 +4,7 @@ return {
   ["id"] = "3IK30UQAPCw4apUOSYoc2bodLFj",
   ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
   ["pr"] = 1354,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "sqlite docs model the db:close() the discarded-fallible-return check rejects",
 }

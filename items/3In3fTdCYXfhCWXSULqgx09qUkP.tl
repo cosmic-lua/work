@@ -4,6 +4,7 @@ return {
   ["builders"] = "orchestrate9-gx09_qUkP",
   ["id"] = "3In3fTdCYXfhCWXSULqgx09qUkP",
   ["parent"] = "3HyRdY4sPAYZ6xkwrXCh5BnsH7B",
+  ["repo"] = "cosmic-lua/cosmic",
   ["speccers"] = "orchestrate9-gx09_qUkP",
   ["title"] = "cosmos pin needs register_extension (405d8840) for bnpp_lZOK's extensions option to build against",
 }

@@ -2,6 +2,7 @@ return {
   ["id"] = "3I7LGcLaE6xqOwmNxcdBvRtT6Ft",
   ["parent"] = "3I1IfJ228vyPoO9rhbHhc6RjxJB",
   ["pr"] = 1301,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "cosmos pin bump: first release carrying the ABI-4 bindings",
 }

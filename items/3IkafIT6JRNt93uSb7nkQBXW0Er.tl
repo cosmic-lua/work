@@ -1,9 +1,10 @@
 return {
-  ["base"] = "board",
+  ["base"] = "main",
   ["builders"] = "wave3-lok152-kQBX",
   ["id"] = "3IkafIT6JRNt93uSb7nkQBXW0Er",
   ["parent"] = "3IVLDSY6kqzXqSftpa2TU9RIvL2",
   ["pr"] = 1612,
+  ["repo"] = "cosmic-lua/work",
   ["resolution"] = "completed",
   ["title"] = "hold marker: item.problems accepts a done item that still carries is_held — the invariant holds at the verbs, not the item",
   ["verdict"] = "accept",

@@ -1,9 +1,10 @@
 return {
-  ["base"] = "board",
+  ["base"] = "main",
   ["builders"] = "wave3-lok152-1tMo",
   ["id"] = "3IkbfeGcKl5uzRSmN9Y1tMouIyI",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1613,
+  ["repo"] = "cosmic-lua/work",
   ["resolution"] = "completed",
   ["speccers"] = "6a371436-ec61-55f6-9c33-690c48f35726",
   ["title"] = "board pin predates the check seam (#1561): bump bin/cosmic.pin to main's release and regenerate .cosmic-coverage",

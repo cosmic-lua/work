@@ -3,5 +3,6 @@ return {
   ["blocked_by"] = "3If5rr2G9zZurErMCTTJzdqxLdM 3If5s4hNeSCYCYLbOoyuYH1dq7T 3Int8VXj9GcPOKsNsQtTiP5t8cl",
   ["id"] = "3If5tfhKFddBtGv2wqkEs2aEOny",
   ["parent"] = "3HyRdY4sPAYZ6xkwrXCh5BnsH7B",
+  ["repo"] = "cosmic-lua/cosmic",
   ["title"] = "cosmic.sqlite: expose create_function, create_aggregate and create_collation",
 }

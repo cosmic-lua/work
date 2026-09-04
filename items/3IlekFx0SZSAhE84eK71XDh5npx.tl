@@ -5,6 +5,7 @@ return {
   ["id"] = "3IlekFx0SZSAhE84eK71XDh5npx",
   ["parent"] = "3IOCIBGeYoISEhI0VJPwZmqduSZ",
   ["pr"] = 1641,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["speccers"] = "1d4829cc-f00e-5d15-be81-281e86c6c454",
   ["title"] = "spawned-binary tests: audit _tool/*_test.tl files for the same missing engine dependency (_make/_cli already covered by #1636)",

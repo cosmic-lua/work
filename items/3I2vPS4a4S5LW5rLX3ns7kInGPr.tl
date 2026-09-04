@@ -3,6 +3,7 @@ return {
   ["id"] = "3I2vPS4a4S5LW5rLX3ns7kInGPr",
   ["parent"] = "3HyRcrR35sYRwZl3guddvOBhFoK",
   ["pr"] = 1567,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "coverage report should derive its exclusions from .cosmicignore",
   ["verdict"] = "accept",

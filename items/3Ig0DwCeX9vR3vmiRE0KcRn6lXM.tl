@@ -1,9 +1,10 @@
 return {
-  ["base"] = "board",
+  ["base"] = "main",
   ["builders"] = "wave-lok152-KcRn",
   ["id"] = "3Ig0DwCeX9vR3vmiRE0KcRn6lXM",
   ["parent"] = "3IVLDSY6kqzXqSftpa2TU9RIvL2",
   ["pr"] = 1607,
+  ["repo"] = "cosmic-lua/work",
   ["resolution"] = "completed",
   ["title"] = "hold marker: is_held, gitcompare's hold/unhold, and the gitgraph derived-order test",
   ["verdict"] = "accept",

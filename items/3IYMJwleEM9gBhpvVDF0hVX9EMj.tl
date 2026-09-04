@@ -5,6 +5,7 @@ return {
   ["id"] = "3IYMJwleEM9gBhpvVDF0hVX9EMj",
   ["parent"] = "3HyRcW05wBip6Wqcz145bUQBTyj",
   ["pr"] = 1605,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["speccers"] = "b69eb093-c2d4-5f3a-b5dd-826817f161b7",
   ["title"] = "casts: the 22 userdata-boundary sites down to one per handle type — declare each method table's self",

@@ -3,6 +3,7 @@ return {
   ["id"] = "3IlWQD7zZy8JUybZvrNA1MxsGl8",
   ["parent"] = "3IQfJ1tnwZOiJrWvDOgIxsjLrBt",
   ["pr"] = 1634,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "check.must sweep: cosmic/fetch/** — 18 sites in 5 files",
   ["verdict"] = "accept",

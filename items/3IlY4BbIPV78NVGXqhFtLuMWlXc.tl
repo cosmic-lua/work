@@ -3,6 +3,7 @@ return {
   ["id"] = "3IlY4BbIPV78NVGXqhFtLuMWlXc",
   ["parent"] = "3IOCIBGeYoISEhI0VJPwZmqduSZ",
   ["pr"] = 1637,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "coverage --baseline rewrites 173 unrelated rows locally: the committed floor is recorded in an environment a developer's tree does not match",
   ["verdict"] = "accept",

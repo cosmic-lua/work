@@ -4,6 +4,7 @@ return {
   ["id"] = "3I7LKuM2tyxxJ6ZTgYVX8RoI6Dl",
   ["parent"] = "3I1IfJ228vyPoO9rhbHhc6RjxJB",
   ["pr"] = 1600,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["speccers"] = "review-X8Ro-2",
   ["title"] = "sandbox: the facade reaches ABI 9 — ioctl, scopes, TSYNC, audit (vocabulary open)",

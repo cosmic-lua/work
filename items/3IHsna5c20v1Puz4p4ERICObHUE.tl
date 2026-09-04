@@ -1,6 +1,7 @@
 return {
   ["id"] = "3IHsna5c20v1Puz4p4ERICObHUE",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "not-planned",
   ["title"] = "three in-flight slices each measured gitverbs.tl's headroom correctly and together overflow the 500-line cap",
 }

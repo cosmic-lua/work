@@ -4,6 +4,7 @@ return {
   ["id"] = "3IYEw1MVYs67BC1oSKWxaziy7lE",
   ["parent"] = "3HyRdT1JQS7pCPgF3sZi2Deo66q",
   ["pr"] = 1509,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "compare between two inherited-band leaves lowers both: the placement walk stops at self on any edge, contradicting priority.tl's own contract",
   ["verdict"] = "accept",

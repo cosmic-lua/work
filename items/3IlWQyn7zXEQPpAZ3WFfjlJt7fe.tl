@@ -3,6 +3,7 @@ return {
   ["id"] = "3IlWQyn7zXEQPpAZ3WFfjlJt7fe",
   ["parent"] = "3IQfJ1tnwZOiJrWvDOgIxsjLrBt",
   ["pr"] = 1633,
+  ["repo"] = "cosmic-lua/cosmic",
   ["resolution"] = "completed",
   ["title"] = "check.must sweep: cosmic/ flat files B (the other 11) — 32 sites in 11 files",
   ["verdict"] = "accept",
