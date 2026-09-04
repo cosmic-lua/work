@@ -162,8 +162,8 @@ local function list(root: string): Board | nil, string
     shas_by_id[id] = r.sha
   end
   table.sort(items, function(a: item.Item, b: item.Item): boolean
-    return a.id < b.id
-  end)
+      return a.id < b.id
+    end)
   return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id, seq_sha = seq_sha}
 end
 

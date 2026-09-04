@@ -11,6 +11,7 @@
 --- on without capturing stdout.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local gitready = require("_work.gitready")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local overlap = require("_work.overlap")
@@ -202,7 +203,7 @@ local function cmd_show(s: store.Store, id: string): integer
   local problems: {string} = {}
   local overlaps: {string} = {}
   if item.is_open(it) then
-    problems = gate.ready_problems(s, it, all)
+    problems = gitready.ready_problems(s, it, all)
     -- Every OTHER open item's spec, read once, so `_work.overlap` can
     -- compare Change-section paths against this one's.
     local bodies: {string: string} = {[it.id] = body}

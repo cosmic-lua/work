@@ -13,6 +13,7 @@ local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local gitready = require("_work.gitready")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
 local item = require("_work.item")
@@ -208,7 +209,7 @@ end
 -- naming the field, the value and the repair, and the take is refused.
 local function test_a_foreign_owner_repo_misses_the_bar()
   local s, leaf = foreign_leaf("foreign", fixture.READY_SPEC)
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 1, "one problem: " .. table.concat(problems, "; "))
   assert(problems[1]:find("repo: whilp/cosmopolitan", 1, true)
@@ -225,7 +226,7 @@ local function test_a_same_owner_repo_passes_the_bar()
   local s, leaf = foreign_leaf("same", fixture.READY_SPEC)
   assert(graph.cmd_set(s, leaf, nil, "cosmic-lua/cosmopolitan", nil) == 0,
     "the repair the problem names is accepted")
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 0, "a same-owner repo is no problem: "
     .. table.concat(problems, "; "))
@@ -237,7 +238,7 @@ end
 -- `## Access`, and the field is accepted as stated.
 local function test_a_foreign_owner_declared_under_access_passes_the_bar()
   local s, leaf = foreign_leaf("declared", ACCESS_SPEC)
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 0, "a declared cross-owner repo is no problem: "
     .. table.concat(problems, "; "))
@@ -255,7 +256,7 @@ local function test_a_board_with_no_origin_skips_the_owner_rule()
   it.repo = "whilp/cosmopolitan"
   assert(store.save(s, it, "fixture: a repo on a local-only board"))
   assert(owner.board_owner(s) == nil, "no origin, no owner")
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 0, "nothing to compare against: "
     .. table.concat(problems, "; "))

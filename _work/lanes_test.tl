@@ -14,7 +14,7 @@ local api = require("_work.api")
 local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
-local gate = require("_work.gitgate")
+local gitready = require("_work.gitready")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
@@ -223,7 +223,7 @@ end
 
 -- A minted repair is coherent with the two verbs that decide its
 -- fate: `next` (`_work.action.next_action`) offers it, and `take`
--- (`_work.gitgate.ready_problems` plus `flow.doing_refusal`, the exact
+-- (`_work.gitready.ready_problems` plus `flow.doing_refusal`, the exact
 -- pair `cmd_take` calls) admits it. Placed the way the real repair
 -- parent (G8) already is on the live board — one comparison on the
 -- parent, inherited by every child minted under it — so the only
@@ -251,7 +251,7 @@ local function test_a_minted_repair_is_offered_and_admitted()
     "next offers the minted repair: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
 
-  local problems = gate.ready_problems(s, repair, all)
+  local problems = gitready.ready_problems(s, repair, all)
   assert(#problems == 0,
     "take admits it too: " .. table.concat(problems, "; "))
   assert(flow.doing_refusal(all, repair) == nil,

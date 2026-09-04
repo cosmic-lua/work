@@ -49,7 +49,7 @@ local record Item
   --- The branch the item's PR targets; "" = ungated — no verb checks
   --- it and no PR is refused for disagreeing. Set it once a non-default
   --- target is known — an item touching this board repository's own
-  --- machinery names its `main`; `gitgate.handover_refusal` compares
+  --- machinery names its `main`; `gitready.handover_refusal` compares
   --- it against the PR's own base ref.
   base: string
   --- The scheduled workflow file this item repairs; "" for ordinary

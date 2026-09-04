@@ -183,7 +183,7 @@ local function head_state(runs: {review.CheckRun}): string
 end
 
 --- Composes `pull` and `checks` in ONE call each — the same one-read
---- discipline `gitverdict.cmd_verdict` and `gitgate.handover_refusal`
+--- discipline `gitverdict.cmd_verdict` and `gitready.handover_refusal`
 --- already hold. Fails exactly when either underlying read does — no
 --- origin, no token, a network or API error — and a caller reads that
 --- the same way it always could: nil is "unknown", never "red".

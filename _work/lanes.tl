@@ -182,7 +182,7 @@ end
 --- happens to point at. A checkout with no `origin` remote at all is
 --- treated as local-only (a test fixture, a scratch clone with
 --- nothing to observe FOR) and never reaches the network — the same
---- waiver `_work.gitgate.handover_refusal` uses. `sync` treats a nil
+--- waiver `_work.gitready.handover_refusal` uses. `sync` treats a nil
 --- return here as "lanes unknown" and never as red — a token or
 --- network failure says nothing about whether the lanes are healthy.
 --- @param s store.Store The store

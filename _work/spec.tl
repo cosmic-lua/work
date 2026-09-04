@@ -96,7 +96,7 @@ end
 --- in `## Evidence`, a fixture in `## Acceptance`. This is "reaches",
 --- not "needs": the item's own `repo` and any self-mention are not
 --- filtered out here, because that judgment needs the item — see
---- `_work.gitgate.undeclared_repos`.
+--- `_work.gitready.undeclared_repos`.
 --- @param body string The spec sidecar's markdown
 --- @return {string} Repo slugs, deduplicated, in first-seen order
 local function reached_repos(body: string): {string}
