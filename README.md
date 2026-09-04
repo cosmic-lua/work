@@ -203,6 +203,13 @@ paragraph), the same refusal applies here automatically, and
 `board.yml`'s `ci` job already sets that marker for itself so a
 whole-floor rewrite stays possible from the one place it should be.
 
+Every push to `main` publishes a release (`.github/workflows/release.yml`):
+the `gitboard` binary that commit builds, with its sha256 in `SHA256SUMS`,
+tagged `YYYY-MM-DD-<sha7>`. A consumer pins one release by url and sha256
+the way cosmic pins its own toolchain, so a session needs the binary and
+a refs-only clone of this repository, never the machinery's tree; the
+tree is for changing the machinery.
+
 GitHub keeps two jobs: pull requests (against the repo an item's own
 `repo` field names — most often cosmic-lua/cosmic) carry fixes and
 their review; cosmic-lua/cosmic's issues are the inbound queue,
