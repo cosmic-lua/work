@@ -26,6 +26,7 @@
 --- identity, so the subject is the only place the log can record who
 --- judged. The one refusal on it is shape (`item.identity_refusal`):
 --- a dash-led name is a flag a mangled argv absorbed, not a session.
+local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
 local item = require("_work.item")
@@ -99,9 +100,16 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
         .. "(request-changes and rework are aliases) and reject "
         .. "(claim and PR clear; the item is todo again)"):format(kind))
   end
-  local it, lerr = store.load(s, id)
+  -- One `store.list` rather than a `store.load` followed by one:
+  -- `list`'s fixed-process board read already carries this item's own
+  -- lease, so a second, item-scoped read would only re-fetch it.
+  local all, aerr = store.list(s)
+  if all == nil then
+    return gate.verdict_line("verdict", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
   if it == nil then
-    return gate.verdict_line("verdict", false, lerr)
+    return gate.verdict_line("verdict", false, ("no item %s"):format(id))
   end
   -- The distance guard, same predicate the review-claim derivation
   -- refuses on — here with `--force --why` as the audited repair
@@ -112,10 +120,6 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
     if distance then
       return gate.verdict_line("verdict", false, distance)
     end
-  end
-  local all, aerr = store.list(s)
-  if all == nil then
-    return gate.verdict_line("verdict", false, aerr)
   end
   if (it.verdict or "") == "accept" then
     return gate.verdict_line("verdict", false,

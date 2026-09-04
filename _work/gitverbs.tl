@@ -80,13 +80,18 @@ local function cmd_take(s: store.Store, id: string, session: string,
   if bad_session then
     return gate.verdict_line("take", false, "REFUSED: " .. bad_session)
   end
-  local it, lerr = store.load(s, id)
-  if it == nil then
-    return gate.verdict_line("take", false, lerr)
-  end
+  -- One `store.list` rather than a `store.load` followed by one: the
+  -- whole-board read already carries this item's lease (`_work.store`
+  -- populates `leased_ref`/`leased_sha` for every item `list` finds),
+  -- so a second, item-scoped read would only re-fetch what `list`
+  -- already has.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("take", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
+  if it == nil then
+    return gate.verdict_line("take", false, ("no item %s"):format(id))
   end
   local r = flow.role(it, all)
   if r ~= "work" then
@@ -293,9 +298,17 @@ local function cmd_drop(s: store.Store, id: string, session: string,
       .. "'<the worker-side reason>'. An ITEM that cannot proceed is "
       .. "not dropped bare: `new` the question and `block` on it first")
   end
-  local it, lerr = store.load(s, id)
+  -- One `store.list` for the whole call: it carries this item's own
+  -- lease (as `store.load` would) and the board `flow.is_blocked`
+  -- needs below, at the read cost of `list` alone rather than `load`
+  -- plus a second `list` after the write.
+  local all, aerr = store.list(s)
+  if all == nil then
+    return gate.verdict_line("drop", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
   if it == nil then
-    return gate.verdict_line("drop", false, lerr)
+    return gate.verdict_line("drop", false, ("no item %s"):format(id))
   end
   if not flow.is_doing(it) then
     return gate.verdict_line("drop", false,
@@ -338,9 +351,11 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   -- Which queue the released item lands in decides the line: blocked
   -- items wait on their question, bare todo is re-offered as-is, and
   -- the bare line names the block-first recovery while the dropping
-  -- session still has the context to file the question.
-  local all, _lerr = store.list(s)
-  if all ~= nil and flow.is_blocked(it, flow.by_id(all)) then
+  -- session still has the context to file the question. `drop` never
+  -- touches `blocked_by` (its own or any other item's), so the board
+  -- read above still answers this without a second `list` after the
+  -- write.
+  if flow.is_blocked(it, flow.by_id(all)) then
     return gate.verdict_line("drop", true,
       ("%s released — it waits on its open blocker(s), not the queue")
       :format(id:sub(1, 8)))
@@ -360,13 +375,15 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   if reason ~= "completed" and reason ~= "not-planned" then
     return gate.verdict_line("done", false, ("unknown reason: %s"):format(reason))
   end
-  local it, lerr = store.load(s, id)
-  if it == nil then
-    return gate.verdict_line("done", false, lerr)
-  end
+  -- One `store.list` rather than a `store.load` followed by one: see
+  -- `cmd_take`'s own comment above.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("done", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
+  if it == nil then
+    return gate.verdict_line("done", false, ("no item %s"):format(id))
   end
   -- An open PR is work mid-review: ending the item under it makes the
   -- diff vanish from the board while it still exists on GitHub. An
