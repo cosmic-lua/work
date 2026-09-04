@@ -28,7 +28,9 @@ local verbs = require("_work.gitverbs")
 --- @param s store.Store The store, already holding a lease on `it.id`
 --- @param it item.Item The item to write, unvalidated
 local function write_raw(s: store.Store, it: item.Item)
-  local tree_sha = check.must(itemtree.build_tree(s.root, it, store.read_spec(s, it.id)))
+  -- `true`: the tree must actually exist for `commit_tree` below to
+  -- build on it.
+  local tree_sha = check.must(itemtree.build_tree(s.root, it, store.read_spec(s, it.id), true))
   local parent_sha = s.leased_sha[it.id]
   local commit_sha = check.must(gitobj.commit_tree(s.root, {
         tree = tree_sha, parents = {parent_sha}, message = "hand-edit",

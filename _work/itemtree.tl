@@ -204,11 +204,15 @@ end
 --- content; "" writes the empty marker
 --- @param empty_blob function(): string | nil, string The shared empty
 --- blob sha, written at most once per tree
+--- @param hash_object_fn function(root: string, content: string):
+--- string | nil, string Either `gitobj.hash_object` (pure, the
+--- default) or `gitobj.hash_object_write`, chosen once by `build_tree`
 --- @return {gitobj.TreeEntry} The kind's own entries
 --- @return string Error message
 local function kind_entries(root: string, ids: {string},
     content_of: function(id: string): string,
-    empty_blob: function(): string | nil, string):
+    empty_blob: function(): string | nil, string,
+    hash_object_fn: function(root: string, content: string): string | nil, string):
   {gitobj.TreeEntry} | nil, string
   local out: {gitobj.TreeEntry} = {}
   for _, id in ipairs(ids) do
@@ -221,7 +225,7 @@ local function kind_entries(root: string, ids: {string},
       end
       sha = eb
     else
-      local bsha, berr = gitobj.hash_object(root, content)
+      local bsha, berr = hash_object_fn(root, content)
       if bsha == nil then
         return nil, berr
       end
@@ -241,10 +245,19 @@ end
 --- @param it item.Item The item
 --- @param empty_blob function(): string | nil, string The shared empty
 --- blob sha
+--- @param hash_object_fn function(root: string, content: string):
+--- string | nil, string Either `gitobj.hash_object` (pure, the
+--- default) or `gitobj.hash_object_write`, chosen once by `build_tree`
+--- @param mktree_fn function(root: string, entries: {gitobj.TreeEntry}):
+--- string | nil, string Either `gitobj.mktree` (pure, the default) or
+--- `gitobj.mktree_write`, chosen once by `build_tree`
 --- @return string | nil The `edges` tree's sha, "" when it has nothing
 --- @return string Error message
 local function build_edges_tree(root: string, it: item.Item,
-    empty_blob: function(): string | nil, string): string | nil, string
+    empty_blob: function(): string | nil, string,
+    hash_object_fn: function(root: string, content: string): string | nil, string,
+    mktree_fn: function(root: string, entries: {gitobj.TreeEntry}): string | nil, string):
+  string | nil, string
   local subtrees: {gitobj.TreeEntry} = {}
   local function add_kind(name: string, ids: {string},
       content_of?: function(id: string): string): string
@@ -257,11 +270,11 @@ local function build_edges_tree(root: string, it: item.Item,
         return ""
       end
     end
-    local entries, eerr = kind_entries(root, ids, get_content, empty_blob)
+    local entries, eerr = kind_entries(root, ids, get_content, empty_blob, hash_object_fn)
     if entries == nil then
       return eerr
     end
-    local sha, terr = gitobj.mktree(root, entries)
+    local sha, terr = mktree_fn(root, entries)
     if sha == nil then
       return terr
     end
@@ -301,29 +314,40 @@ local function build_edges_tree(root: string, it: item.Item,
   if #subtrees == 0 then
     return "", ""
   end
-  return gitobj.mktree(root, subtrees)
+  return mktree_fn(root, subtrees)
 end
 
 --- Build an item's git tree: `meta`, `spec.md` when given, `held` when
---- the item is held, and `edges` when it carries any. Every blob and
---- subtree this needs is written first — a handful of small objects,
---- at most — then the root tree is built from whichever entries
---- actually apply.
+--- the item is held, and `edges` when it carries any. `write` chooses
+--- between the two forms every blob and subtree this needs goes
+--- through: pure (the default — no process, nothing written, for a
+--- caller only comparing the resulting sha against one it already
+--- has, `_work.gitfsck`'s whole-board audit) or writing (a handful of
+--- small objects actually landed in the odb, for a caller that
+--- follows this with `commit_tree` against the sha it gets back).
 --- @param root string The repository root
 --- @param it item.Item The item
 --- @param spec_body string | nil The spec sidecar; nil or "" omits `spec.md`
+--- @param write boolean | nil True to actually write the objects;
+--- false or nil computes the id only
 --- @return string | nil The item's tree sha
 --- @return string Error message
 local function build_tree(root: string, it: item.Item,
-    spec_body: string | nil): string | nil, string
+    spec_body: string | nil, write?: boolean): string | nil, string
+  local hash_object_fn = gitobj.hash_object
+  local mktree_fn = gitobj.mktree
+  if write then
+    hash_object_fn = gitobj.hash_object_write
+    mktree_fn = gitobj.mktree_write
+  end
   local entries: {gitobj.TreeEntry} = {}
-  local meta_sha, merr = gitobj.hash_object(root, encode_meta(it))
+  local meta_sha, merr = hash_object_fn(root, encode_meta(it))
   if meta_sha == nil then
     return nil, merr
   end
   entries[#entries + 1] = {mode = "100644", otype = "blob", sha = meta_sha, name = "meta"}
   if (spec_body or "") ~= "" then
-    local spec_sha, serr = gitobj.hash_object(root, spec_body)
+    local spec_sha, serr = hash_object_fn(root, spec_body)
     if spec_sha == nil then
       return nil, serr
     end
@@ -332,15 +356,16 @@ local function build_tree(root: string, it: item.Item,
   end
   -- The empty blob every marker (a `beats` entry, a reason-less
   -- `blocked_by`/other entry, the `held` marker itself) points at has
-  -- to actually exist in THIS repository's object database before
-  -- `mktree` will link to it — `git hash-object -w` on "" always
-  -- resolves to the same well-known sha, so writing it here is
+  -- to actually exist in THIS repository's object database before a
+  -- WRITING `mktree_fn` will link to it — `git hash-object -w` on ""
+  -- always resolves to the same well-known sha, so writing it here is
   -- idempotent and cheap, and it is written at most once per tree even
-  -- when several entries need it.
+  -- when several entries need it. The pure form just recomputes that
+  -- same well-known sha, equally cheaply.
   local empty_sha: string = nil
   local function empty_blob(): string | nil, string
     if empty_sha == nil then
-      local sha, eerr = gitobj.hash_object(root, "")
+      local sha, eerr = hash_object_fn(root, "")
       if sha == nil then
         return nil, eerr
       end
@@ -355,14 +380,14 @@ local function build_tree(root: string, it: item.Item,
     end
     entries[#entries + 1] = {mode = "100644", otype = "blob", sha = eb, name = "held"}
   end
-  local edges_sha, eerr2 = build_edges_tree(root, it, empty_blob)
+  local edges_sha, eerr2 = build_edges_tree(root, it, empty_blob, hash_object_fn, mktree_fn)
   if edges_sha == nil then
     return nil, eerr2
   end
   if edges_sha ~= "" then
     entries[#entries + 1] = {mode = "40000", otype = "tree", sha = edges_sha, name = "edges"}
   end
-  return gitobj.mktree(root, entries)
+  return mktree_fn(root, entries)
 end
 
 local record itemtree
@@ -375,7 +400,7 @@ local record itemtree
   beats: {string}, blocked_by: {string}, block_reason: {string: string},
   other_edges: {string: {string: string}}): item.Item
   build_tree: function(root: string, it: item.Item,
-  spec_body: string | nil): string | nil, string
+  spec_body: string | nil, write?: boolean): string | nil, string
 end
 
 local M: itemtree = {

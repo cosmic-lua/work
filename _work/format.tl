@@ -73,11 +73,15 @@ local function ensure(dir: string): boolean, string
     return false, ferr
   end
   if #found == 0 then
-    local blob_sha, berr = gitobj.hash_object(dir, blob())
+    -- The blob and tree this commit points at must actually exist in
+    -- the odb before `commit_tree`/the push below can use them — the
+    -- writing forms, not the pure id computation `_work.gitobj` uses
+    -- everywhere an id only needs comparing, never creating.
+    local blob_sha, berr = gitobj.hash_object_write(dir, blob())
     if blob_sha == nil then
       return false, berr
     end
-    local tree_sha, terr = gitobj.mktree(dir,
+    local tree_sha, terr = gitobj.mktree_write(dir,
       {{mode = "100644", otype = "blob", sha = blob_sha, name = "format"}})
     if tree_sha == nil then
       return false, terr

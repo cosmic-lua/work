@@ -8,7 +8,9 @@
 
 local check = require("cosmic.check")
 local child = require("cosmic.child")
+local env = require("cosmic.env")
 local fixture = require("_work.fixture")
+local fs = require("cosmic.fs")
 local fsck = require("_work.gitfsck")
 local gitboard = require("_work.gitboard")
 local index = require("_work.index")
@@ -16,6 +18,8 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
 local tail = require("_work.tail")
+
+local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
 local init_state_repo = fixture.init_state_repo
 local root_with_leaf = fixture.root_with_leaf
@@ -220,4 +224,68 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
   assert(printed:find("refs/heads/ended/" .. id, 1, true) ~= nil, printed)
   assert(printed:find("git push origin --delete refs/heads/items/" .. id, 1, true) ~= nil,
     printed)
+end
+
+--- `fsck`'s `tree_problem` used to spend one `git rev-parse` PER item
+--- reading its observed tree, plus a `hash-object`/`mktree` process
+--- chain per item re-encoding it. Both are gone: the tree lookup is
+--- one batched `git rev-parse` for the whole board
+--- (`gitobj.tree_of_batch`), and the re-encode is a pure Lua hash with
+--- no process at all — so the whole audit's process count must stay
+--- flat as the board grows. Counted by racing `git` itself: a
+--- counting wrapper ahead of the real binary on PATH, so every
+--- invocation `_work.gitobj`/`_work.refs`/`_work.store` make is
+--- caught, not just the ones this test happens to know the argv for.
+---
+--- The wrapper is installed by editing THIS process's own `PATH`
+--- (`env.set`), never by spawning `gitboard` as a fresh subprocess:
+--- `cosmic.child`'s PATH lookup (`unix.commandv`, underneath every
+--- spawn) resolves `"git"` against the CALLING process's own
+--- environment, so an in-process `fsck.cmd_fsck(s)` call already runs
+--- every nested `git` invocation through whatever this process's PATH
+--- says at that moment.
+local function test_fsck_process_count_is_constant_as_items_grow()
+  local real_git = check.must(child.run({"sh", "-c", "command -v git"})).stdout
+  real_git = (real_git:gsub("%s+$", ""))
+  local wrapdir = fs.join(tmpdir, "fsck-git-wrap")
+  assert(fs.remove_all(wrapdir))
+  assert(fs.make_dirs(wrapdir))
+  local counter_file = fs.join(tmpdir, "fsck-git-count.txt")
+  assert(fs.write(counter_file, ""))
+  assert(fs.write(fs.join(wrapdir, "git"),
+      ("#!/bin/sh\nprintf x >> '%s'\nexec '%s' \"$@\"\n"):format(counter_file, real_git)))
+  assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
+
+  --- A fresh board with `n` plain workable items, each its own root —
+  --- enough for `fsck` to have real trees and specs to re-check.
+  --- @param name string This board's own scratch directory
+  --- @param n integer How many items to file
+  --- @return store.Store The store
+  local function seed(name: string, n: integer): store.Store
+    local s = init_state_repo(name)
+    for i = 1, n do
+      fixture.file_item(s, ("item %d"):format(i), "")
+    end
+    return s
+  end
+
+  --- How many `git` invocations one `fsck.cmd_fsck` makes, with the
+  --- wrapper ahead of the real binary on PATH for this call alone.
+  --- @param s store.Store The store to audit
+  --- @return integer Invocation count
+  local function fsck_process_count(s: store.Store): integer
+    assert(fs.write(counter_file, ""))
+    local old_path = os.getenv("PATH") or ""
+    assert(env.set("PATH", wrapdir .. ":" .. old_path, true))
+    fsck.cmd_fsck(s)
+    assert(env.set("PATH", old_path, true))
+    return #(fs.read(counter_file) or "")
+  end
+
+  local small = fsck_process_count(seed("fsck-procs-small", 3))
+  local big = fsck_process_count(seed("fsck-procs-big", 12))
+  assert(small > 0, "the wrapper caught at least one invocation")
+  assert(small == big,
+    ("fsck's process count must not grow with item count: %d (3 items) vs "
+      .. "%d (12 items)"):format(small, big))
 end

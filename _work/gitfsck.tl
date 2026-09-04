@@ -99,19 +99,26 @@ end
 --- round trip `_work/itemtree_test.tl` tests for one item, asked here
 --- of every item on the board. nil when the item carries no observed
 --- lease at all (unreachable through `store.list`, kept only so this
---- stays total).
+--- stays total). `itemtree.build_tree` here is the pure, non-writing
+--- form (no `write` argument) — this is a read-only audit, so nothing
+--- it computes needs to actually exist in the odb, only to hash the
+--- same as what is already there.
 --- @param s store.Store The store
 --- @param it item.Item The item
 --- @param spec_body string Its spec sidecar, "" when it has none
+--- @param observed_trees {string: string} Every observed commit sha
+--- (`s.leased_sha`) mapped to its tree sha, from ONE
+--- `gitobj.tree_of_batch` call over the whole board
 --- @return string | nil The problem
-local function tree_problem(s: store.Store, it: item.Item, spec_body: string): string
+local function tree_problem(s: store.Store, it: item.Item, spec_body: string,
+    observed_trees: {string: string}): string
   local observed_sha = s.leased_sha[it.id]
   if observed_sha == nil or observed_sha == "" then
     return nil
   end
-  local observed_tree, oerr = gitobj.tree_of(s.root, observed_sha)
+  local observed_tree = observed_trees[observed_sha]
   if observed_tree == nil then
-    return ("%s: could not read its observed tree: %s"):format(it.id:sub(1, 8), oerr)
+    return ("%s: could not read its observed tree"):format(it.id:sub(1, 8))
   end
   local rebuilt, berr = itemtree.build_tree(s.root, it, spec_body)
   if rebuilt == nil then
@@ -184,13 +191,26 @@ local function cmd_fsck(s: store.Store): integer
     return gate.verdict_line("fsck", false, "1 problem(s)")
   end
   local ids: {string} = {}
+  local observed_shas: {string} = {}
   for _, it in ipairs(all) do
     ids[#ids + 1] = it.id
+    local sha = s.leased_sha[it.id]
+    if sha ~= nil and sha ~= "" then
+      observed_shas[#observed_shas + 1] = sha
+    end
   end
   local specs = store.read_specs(s, ids)
   local problems = structural_problems(all)
+  -- One process for every item's observed tree, whatever the board's
+  -- size — the batched form of `gitobj.tree_of`, which used to cost
+  -- one `git rev-parse` PER item here.
+  local observed_trees, terr = gitobj.tree_of_batch(s.root, observed_shas)
+  if observed_trees == nil then
+    problems[#problems + 1] = ("could not read observed trees: %s"):format(terr)
+    observed_trees = {}
+  end
   for _, it in ipairs(all) do
-    local p = tree_problem(s, it, specs[it.id] or "")
+    local p = tree_problem(s, it, specs[it.id] or "", observed_trees)
     if p ~= nil then
       problems[#problems + 1] = p
     end
