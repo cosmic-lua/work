@@ -1,3 +1,5 @@
 title: release publishes regardless of the perf compare; the measurement moves to a daily non-blocking perf lane (perf.yml) against the latest release
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
+claim: 259ba306-c053-56fc-b9ad-784a9d4ed050
+builders: 259ba306-c053-56fc-b9ad-784a9d4ed050
