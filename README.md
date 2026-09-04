@@ -16,9 +16,7 @@ _work/       the machinery: gitboard (CLI), gitverbs (mutations),
              commit-and-publish every mutation goes through), store
              (git-backed persistence over the ref layout — gitobj,
              refs, gitread, gitwrite and itemtree are its object,
-             ref, read and canonical-tree layers), import (the
-             one-time move off the old items/<id>.tl layout, replayed
-             into refs), flow (the derived states and graph rules),
+             ref, read and canonical-tree layers), flow (the derived states and graph rules),
              priority (the comparison relation and the order derived
              from it), spec (the spec bar's section grammar), item
              (the record), ksuid (ids)

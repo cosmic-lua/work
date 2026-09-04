@@ -174,6 +174,30 @@ end
 -- still dirty) no longer refuses at all: sync succeeds, and the dirty
 -- edit is left exactly as it was, because nothing about it was ever
 -- in sync's way to begin with.
+-- A plain `git clone` carries only the branch's refspec; the first
+-- `sync` adds the mirror refspecs itself, so a session that never ran
+-- `init` still reads the whole board.
+local function test_sync_adds_the_mirror_refspecs_to_a_plain_clone()
+  local a = init_shared("plain-clone-sync")
+  file_item(a, "seen from a plain clone", "")
+  local base = fs.dirname(a.root)
+  local plain = fs.join(base, "plain")
+  local cloned = child.run({"git", "clone", "-q", fs.join(base, "remote.git"), plain})
+  assert(cloned ~= nil and cloned.ok, "clone failed")
+  local p = check.must(store.open(plain))
+  assert(#check.must(store.list(p)) == 0, "a plain clone sees no items before sync")
+  assert(publish.sync(p))
+  local remote_items = child.run({"git", "for-each-ref", "refs/heads/items"},
+    {cwd = fs.join(base, "remote.git")})
+  local expected = 0
+  for _ in (remote_items and remote_items.stdout or ""):gmatch("[^\n]+") do
+    expected = expected + 1
+  end
+  assert(expected > 0, "the remote holds the filed item")
+  assert(#check.must(store.list(p)) == expected,
+    "after sync the plain clone lists every remote item")
+end
+
 local function test_an_overlapping_dirty_file_no_longer_blocks_sync()
   local a, b = init_shared("dirty-overlap")
   assert(fs.make_dirs(fs.join(a.root, "_work")))

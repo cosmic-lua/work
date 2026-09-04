@@ -139,6 +139,22 @@ end
 --- verdict line every other verb ends with.
 --- @param s store.Store The store
 --- @return integer Exit code
+--- Branches under the item namespaces whose tail is not a KSUID: not
+--- items, skipped by every read, and worth deleting.
+--- @param s store.Store The store
+--- @return {string} One line per stray ref
+local function stray_ref_problems(s: store.Store): {string}
+  local out: {string} = {}
+  local found = refs.for_each_ref(s.root, {"refs/heads/items", "refs/heads/ended"})
+  for _, r in ipairs(found or {}) do
+    local tail = r.refname:match("/([^/]+)$") or ""
+    if not (#tail == 27 and tail:match("^%w+$")) then
+      out[#out + 1] = ("stray ref %s: not an item id; delete the branch"):format(r.refname)
+    end
+  end
+  return out
+end
+
 local function cmd_fsck(s: store.Store): integer
   local all, lerr = store.list(s)
   if all == nil then
@@ -160,6 +176,9 @@ local function cmd_fsck(s: store.Store): integer
   local lanes_p = stale_lanes_ref_problem(s)
   if lanes_p ~= nil then
     problems[#problems + 1] = lanes_p
+  end
+  for _, p in ipairs(stray_ref_problems(s)) do
+    problems[#problems + 1] = p
   end
   for _, p in ipairs(problems) do
     print(p)

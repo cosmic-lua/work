@@ -208,8 +208,47 @@ local function fetch_prune(root: string): boolean, string
   return true
 end
 
+--- The three mirror refspecs every clone of the board repository
+--- fetches with, so a `fetch --prune` is the whole lost-race recovery.
+local FETCH_REFSPECS < const >: {string} = {
+  "+refs/heads/items/*:refs/heads/items/*",
+  "+refs/heads/ended/*:refs/heads/ended/*",
+  "+refs/heads/board/*:refs/heads/board/*",
+}
+
+--- Add the mirror refspecs to `remote.origin.fetch` when the clone has
+--- an `origin` that lacks them. A plain `git clone` fetches only the
+--- checked-out branch's refs, so a fresh clone that runs `sync` before
+--- any `init` needs this to see the board at all. Existing refspecs are
+--- never replaced, so a `git pull` on the branch keeps working; a
+--- repository without `origin` needs nothing.
+--- @param root string The repository root
+--- @return boolean True once the refspecs are present
+--- @return string Error message
+local function ensure_refspecs(root: string): boolean, string
+  local has_origin = child.run({"git", "remote"}, {cwd = root})
+  if has_origin == nil or not has_origin.ok
+  or has_origin.stdout:find("origin", 1, true) == nil then
+    return true
+  end
+  local current = child.run({"git", "config", "--get-all", "remote.origin.fetch"},
+    {cwd = root})
+  local have = (current ~= nil and current.ok) and current.stdout or ""
+  for _, spec in ipairs(FETCH_REFSPECS) do
+    if have:find(spec, 1, true) == nil then
+      local added = child.run({"git", "config", "--add", "remote.origin.fetch", spec},
+        {cwd = root})
+      if added == nil or not added.ok then
+        return false, ("could not set remote.origin.fetch %s"):format(spec)
+      end
+    end
+  end
+  return true
+end
+
 local record refs
   ZERO_SHA: string
+  ensure_refspecs: function(root: string): boolean, string
   type RefEntry = RefEntry
   type PushSpec = PushSpec
   type EndedMove = EndedMove
@@ -224,6 +263,7 @@ end
 
 local M: refs = {
   ZERO_SHA = ZERO_SHA,
+  ensure_refspecs = ensure_refspecs,
   for_each_ref = for_each_ref,
   committer_date_unix = committer_date_unix,
   update_ref = update_ref,

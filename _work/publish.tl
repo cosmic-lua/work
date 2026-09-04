@@ -46,6 +46,10 @@ local function sync(s: store.Store): boolean, string
   if not has_origin(s) then
     return true
   end
+  local specs_ok, serr = refs.ensure_refspecs(s.root)
+  if not specs_ok then
+    return false, serr
+  end
   return cache.around_fetch(s.root, function(): boolean, string
       return refs.fetch_prune(s.root)
     end)

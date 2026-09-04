@@ -107,18 +107,10 @@ local function git_ok(s: Store, argv: {string}): child.Result | nil, string
   return r
 end
 
---- The three mirror refspecs every clone of the board repository
---- fetches with, so a `fetch --prune` is the whole lost-race recovery.
-local FETCH_REFSPECS < const >: {string} = {
-  "+refs/heads/items/*:refs/heads/items/*",
-  "+refs/heads/ended/*:refs/heads/ended/*",
-  "+refs/heads/board/*:refs/heads/board/*",
-}
-
 --- Create a state repository at `dir`: a git repository (initialized
 --- when none is there yet), with the mirror refspecs ADDED to
---- `remote.origin.fetch` when it already has an `origin` and does not
---- already carry them, and `refs/heads/board/format` created (and
+--- `remote.origin.fetch` (`refs.ensure_refspecs`; `sync` adds them too,
+--- so a plain clone needs no `init` to read the board), and `refs/heads/board/format` created (and
 --- best-effort pushed) when this repository has none yet
 --- (`format.ensure`). `git clone` already gave `origin` its own
 --- default refspec for the checked-out branch (how the machinery
@@ -137,21 +129,9 @@ local function init_repo(dir: string): boolean, string
       return false, err or (r and r.stderr) or "git init failed"
     end
   end
-  local has_origin = child.run({"git", "remote"}, {cwd = dir})
-  if has_origin ~= nil and has_origin.ok
-  and has_origin.stdout:find("origin", 1, true) ~= nil then
-    local current = child.run({"git", "config", "--get-all", "remote.origin.fetch"},
-      {cwd = dir})
-    local have = (current ~= nil and current.ok) and current.stdout or ""
-    for _, spec in ipairs(FETCH_REFSPECS) do
-      if have:find(spec, 1, true) == nil then
-        local added = child.run({"git", "config", "--add", "remote.origin.fetch", spec},
-          {cwd = dir})
-        if added == nil or not added.ok then
-          return false, ("could not set remote.origin.fetch %s"):format(spec)
-        end
-      end
-    end
+  local specs_ok, serr = refs.ensure_refspecs(dir)
+  if not specs_ok then
+    return false, serr
   end
   local ensured, eerr = format.ensure(dir)
   if not ensured then

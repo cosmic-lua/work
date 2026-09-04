@@ -37,7 +37,6 @@ return {
   ["_work/guidance.tl"] = {["covered"] = 95, ["total"] = 96},
   ["_work/health.tl"] = {["covered"] = 43, ["total"] = 46},
   ["_work/identity.tl"] = {["covered"] = 19, ["total"] = 19},
-  ["_work/import.tl"] = {["covered"] = 111, ["total"] = 126},
   ["_work/index.tl"] = {["covered"] = 115, ["total"] = 129},
   ["_work/index_priority.tl"] = {["covered"] = 37, ["total"] = 38},
   ["_work/intake.tl"] = {["covered"] = 46, ["total"] = 46},

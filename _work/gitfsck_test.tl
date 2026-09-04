@@ -52,6 +52,19 @@ end
 -- own dangling-blocker check is a TAKE gate, never a write gate — is
 -- exactly what `fsck` exists to catch: nothing else on the board ever
 -- asks this question.
+-- A branch under the item namespace that is not a KSUID is a stray:
+-- every read skips it and fsck names it.
+local function test_a_stray_branch_under_items_is_named_and_skipped()
+  local s = fixture.init_state_repo("fsck-stray")
+  fixture.file_item(s, "a real item", "")
+  local before = #check.must(store.list(s))
+  fixture.git(s.root, {"update-ref", "refs/heads/items/not-an-id", "refs/heads/board/format"})
+  assert(#check.must(store.list(s)) == before, "a stray branch is not an item")
+  local code, out = fsck_and_capture(s)
+  assert(code ~= 0, "fsck refuses a board with a stray branch")
+  assert(out:find("stray ref refs/heads/items/not-an-id", 1, true), out)
+end
+
 local function test_a_dangling_beats_edge_is_caught()
   local s = init_state_repo("fsck-dangling-beats")
   local root, _leaf = root_with_leaf(s)
