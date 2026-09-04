@@ -2,6 +2,7 @@ title: gitboard: minted session labels carry the orchestrator, the brief fills t
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-RxN2_253n
+reviewer: review-RxN2_253n-1e1a9125
 pr: 1685
 builders: build-RxN2_253n
 speccers: 617186a3-6ded-5f05-a74a-6054c4631945
