@@ -7,11 +7,15 @@
 -- gate, not a write gate, so this never touches them).
 
 local check = require("cosmic.check")
+local child = require("cosmic.child")
 local fixture = require("_work.fixture")
 local fsck = require("_work.gitfsck")
+local gitboard = require("_work.gitboard")
+local index = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
+local tail = require("_work.tail")
 
 local init_state_repo = fixture.init_state_repo
 local root_with_leaf = fixture.root_with_leaf
@@ -156,4 +160,64 @@ local function test_a_flagged_item_is_a_problem()
   local problems = fsck.structural_problems({flagged})
   assert(#problems == 1 and problems[1]:find("a made-up content problem", 1, true) ~= nil,
     table.concat(problems, "; "))
+end
+
+-- The residue of a half-landed resolution from before this rule: the
+-- pushing credential landed the create half of an old-style
+-- items -> ended move and lost the delete half, leaving one id filed
+-- under BOTH namespaces at once. `list` must keep exactly one entry
+-- for it — the descendant commit, here the one hand-filed under
+-- refs/heads/ended — so every other reader built on `list` sees one
+-- item, never two, and `fsck` names the leftover for a human with
+-- delete rights to clear.
+local function test_a_duplicated_id_dedupes_and_fsck_names_it()
+  local s = fixture.init_state_repo("fsck-duplicate")
+  local id = fixture.file_item(s, "an item filed twice", "")
+  local items_sha = (check.must(child.run(
+        {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
+    :gsub("%s+$", ""))
+
+  -- Resolve it — under the fix this is an ordinary save that STAYS on
+  -- refs/heads/items — then hand-file the resulting commit under
+  -- refs/heads/ended too, and roll refs/heads/items back to the
+  -- pre-resolution sha: exactly the shape a lost delete leaves, with
+  -- ended/ holding the newer, descendant commit.
+  local it = check.must(store.load(s, id))
+  it.resolution = "completed"
+  assert(store.save(s, it, "done " .. id:sub(1, 8)))
+  local done_sha = (check.must(child.run(
+        {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
+    :gsub("%s+$", ""))
+  fixture.git(s.root, {"update-ref", "refs/heads/ended/" .. id, done_sha})
+  fixture.git(s.root, {"update-ref", "refs/heads/items/" .. id, items_sha})
+
+  local all = check.must(store.list(s))
+  local matches = 0
+  local seen: item.Item = nil
+  for _, x in ipairs(all) do
+    if x.id == id then
+      matches = matches + 1
+      seen = x
+    end
+  end
+  assert(matches == 1, ("exactly one Item for the duplicated id: got %d"):format(matches))
+  assert(seen.resolution == "completed",
+    "the kept entry is the descendant — the done commit's state")
+
+  -- `show`/`resolve` of its handle is unambiguous.
+  assert(gitboard.main("show", tail.handle(id), "--dir", s.root) == 0,
+    "show resolves the duplicated handle without ambiguity")
+
+  -- `find`'s index builds — the UNIQUE constraint this bug used to
+  -- trip lived in `_work.index`'s `items` table, one row per id.
+  assert(check.must(index.open(all)), "the index builds with one row per id")
+
+  -- `fsck` names the duplicate and the exact command to clear it.
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "a duplicated id is an fsck problem: " .. printed)
+  assert(printed:find("filed under both", 1, true) ~= nil, printed)
+  assert(printed:find("refs/heads/items/" .. id, 1, true) ~= nil, printed)
+  assert(printed:find("refs/heads/ended/" .. id, 1, true) ~= nil, printed)
+  assert(printed:find("git push origin --delete refs/heads/items/" .. id, 1, true) ~= nil,
+    printed)
 end

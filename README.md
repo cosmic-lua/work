@@ -50,15 +50,19 @@ fetch instead patches just the rows the refs that moved own, so a
 session's second `find` or `sync` costs a handful of small queries
 against an already-open file rather than a fresh whole-board read.
 
-Every item is a git ref — `refs/heads/items/<ksuid>` while open,
-`refs/heads/ended/<ksuid>` once resolved — whose tip commit's tree carries
-its fields (a `meta` blob of `key: value` lines, `repo`/`base`
-collapsed into one `target` line), its spec prose (`spec.md`, present
-only when it has one), a `held` marker (present only when the item is
-held), and its edges (one blob per related item under
-`edges/<kind>/<id>` — `beats`, `blocked_by`, and any other kind a
+Every item is a git ref — `refs/heads/items/<ksuid>` — whose tip commit's
+tree carries its fields (a `meta` blob of `key: value` lines,
+`repo`/`base` collapsed into one `target` line), its spec prose
+(`spec.md`, present only when it has one), a `held` marker (present
+only when the item is held), and its edges (one blob per related item
+under `edges/<kind>/<id>` — `beats`, `blocked_by`, and any other kind a
 newer writer names, carried opaquely by an older reader); the tree
-shape is `_work/itemtree.tl`, the ONE place it is written.
+shape is `_work/itemtree.tl`, the ONE place it is written. Resolving an
+item sets its `resolution` field on that same ref, an ordinary write
+like any other — `refs/heads/ended/<ksuid>` is the layout new items were
+filed under before this rule; every reader still reads it, but nothing
+writes a new entry there any more, so a resolved item stays exactly
+where it already was.
 `refs/heads/board/seq` and `refs/heads/board/format` hold board-wide state the
 same way, outside the per-item namespace — scheduled-lane health used
 to be a third such ref (`refs/heads/board/lanes`) but now lives only in the
@@ -79,8 +83,14 @@ read-only, offline whole-board audit no single verb ever asks:
 dangling `parent` or `edges/<kind>/<id>` references, an edge kind this
 build does not interpret, an item's tree not re-encoding to what it
 was read from, two open items sharing a key, a root carrying a `repo`,
-a stale `refs/heads/board/lanes` ref left over from before lane health moved
-to the cache, and anything the store's own tolerant decode had to flag.
+an id filed under both `refs/heads/items` and `refs/heads/ended` at
+once (the pushing credential can create and update a branch but never
+delete one, so an id can end up in both places only by hand, never by
+an ordinary save — `fsck` names both refs and the exact
+`git push origin --delete` a credential with delete rights runs to
+clear the leftover one), a stale `refs/heads/board/lanes` ref left over
+from before lane health moved to the cache, and anything the store's
+own tolerant decode had to flag.
 
 A workable item's state is DERIVED from the facts its ref carries,
 never declared: open, unclaimed, and PR-less is `todo` (pullable once
@@ -169,10 +179,12 @@ commit whose preconditions may no longer hold. A mutation never
 half-lands. Reads need no network and no token, and touch no working
 tree — a read is `for-each-ref`/`cat-file --batch`, a write is one
 `git fast-import` stream per save (every item it touches as its own
-`commit refs/heads/items/<id>`, `from` its observed tip so unchanged paths
-carry over) plus, only for the rare item that just ENDED, one
-`update-ref --stdin` transaction to move it from `refs/heads/items` to
-`refs/heads/ended` — fast-import cannot delete a ref itself.
+commit on whichever ref it is already on — `refs/heads/items/<id>`
+stays `refs/heads/items/<id>` even when the write sets `resolution` —
+`from` its observed tip so unchanged paths carry over). A resolution
+is never a ref move: the pushing credential can create and update a
+branch but never delete one, so nothing here ever asks the remote for
+a deletion.
 
 A mutation's PUSH is always the compare-and-swap, leased against each
 ref's observed tip — so only a BOUNDED mutation (one whose gate reads

@@ -1,9 +1,17 @@
 --- The store's read path: loading one item (or a named SET of them,
 --- `load_many`) and listing the whole board, each in a fixed number of
---- git processes regardless of how many items exist. Split out of
---- `_work.store` so that module stays under its line cap; `_work.store`
---- and `_work.cache` (`load_many`, for its fetch-path refresh) are the
---- callers outside tests.
+--- git processes regardless of how many items exist, and tolerating
+--- the one shape a half-landed resolution can leave behind: an id
+--- filed under BOTH `refs/heads/items` and `refs/heads/ended` at once,
+--- because the pushing credential landed the create half of an
+--- old-style namespace move and lost the delete half (it can create
+--- and update a branch but never delete one). `load`, `load_many`, and
+--- `list` each keep exactly one entry per id when that happens
+--- (`pick_duplicate`); `list` also reports every duplicate it found in
+--- `Board.duplicates` so `_work.gitfsck` can name it for a human to
+--- clear. Split out of `_work.store` so that module stays under its
+--- line cap; `_work.store` and `_work.cache` (`load_many`, for its
+--- fetch-path refresh) are the callers outside tests.
 local child = require("cosmic.child")
 local format = require("_work.format")
 local gitobj = require("_work.gitobj")
@@ -19,14 +27,29 @@ local record Loaded
   sha: string
 end
 
+--- One id found under both `refs/heads/items` and `refs/heads/ended` —
+--- the residue of a resolution whose atomic push landed the create
+--- half of an old-style namespace move and lost the delete half.
+--- `kept` is the ref `list`/`load` actually used; `dropped` is the
+--- other one, still sitting on the remote, still worth clearing.
+local record Duplicate
+  id: string
+  kept_ref: string
+  kept_sha: string
+  dropped_ref: string
+  dropped_sha: string
+end
+
 --- The whole board as `list` found it: every item, its ref and tip
---- (`refs_by_id`/`shas_by_id` — the write lease for each), and
---- `refs/heads/board/seq`'s own tip, "" when the ref does not exist yet.
+--- (`refs_by_id`/`shas_by_id` — the write lease for each),
+--- `refs/heads/board/seq`'s own tip, "" when the ref does not exist yet,
+--- and every id `list` found filed under both namespaces at once.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
   shas_by_id: {string: string}
   seq_sha: string
+  duplicates: {Duplicate}
 end
 
 --- Every `edges/<kind>` subtree an item's `sha:edges` entry names, as
@@ -125,7 +148,32 @@ local function build_item(id: string, sha: string,
   return itemtree.to_item(id, meta, held, beats, blocked_by, block_reason, other_edges)
 end
 
---- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`.
+--- Which of two refs for the same id — one under `refs/heads/items`, one
+--- under `refs/heads/ended` — a reader should use: the one whose commit
+--- descends from the other's, since that is the one still moving
+--- forward; when neither descends from the other (a genuine fork, or
+--- the ancestor check itself could not run), `ended/` wins, since a
+--- resolved state is the safer default to read than a stale open one.
+--- @param root string The repository root
+--- @param items_e refs.RefEntry The refs/heads/items/<id> entry
+--- @param ended_e refs.RefEntry The refs/heads/ended/<id> entry
+--- @return refs.RefEntry The entry to keep
+--- @return refs.RefEntry The entry to drop
+local function pick_duplicate(root: string, items_e: refs.RefEntry,
+    ended_e: refs.RefEntry): refs.RefEntry, refs.RefEntry
+  if refs.is_ancestor(root, items_e.sha, ended_e.sha) then
+    return ended_e, items_e
+  end
+  if refs.is_ancestor(root, ended_e.sha, items_e.sha) then
+    return items_e, ended_e
+  end
+  return ended_e, items_e
+end
+
+--- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`
+--- — and, on the rare board where one id lives under both at once,
+--- picking the winner `pick_duplicate` names rather than whichever
+--- `for-each-ref` happened to list first.
 --- @param root string The repository root
 --- @param id string Item id
 --- @return Loaded | nil The item, its ref and its tip
@@ -139,6 +187,14 @@ local function load_item(root: string, id: string): Loaded | nil, string
     return nil, ("no item %s"):format(id)
   end
   local ref, sha = found[1].refname, found[1].sha
+  if #found > 1 then
+    local items_e, ended_e = found[1], found[2]
+    if items_e.refname ~= "refs/heads/items/" .. id then
+      items_e, ended_e = ended_e, items_e
+    end
+    local kept = pick_duplicate(root, items_e, ended_e)
+    ref, sha = kept.refname, kept.sha
+  end
   local batch, berr = gitobj.cat_file_batch(root,
     {sha .. ":meta", sha .. ":held", sha .. ":edges"})
   if batch == nil then
@@ -175,9 +231,12 @@ end
 --- the format marker's own blob, one more for every edge kind's own
 --- subtree content, and one more for every content blob (a
 --- `blocked_by` or other-kind reason) — four processes total, never
---- one per item. The format check happens here, once, rather than in
---- every reader: a board on a layout this tool cannot trust is refused
---- before anything else it read alongside the marker is believed.
+--- one per item, PLUS one `merge-base --is-ancestor` for every id this
+--- pass finds filed under both namespaces at once — rare, so it never
+--- shows up in the fixed-process-count tests. The format check happens
+--- here, once, rather than in every reader: a board on a layout this
+--- tool cannot trust is refused before anything else it read alongside
+--- the marker is believed.
 --- @param root string The repository root
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
@@ -187,7 +246,8 @@ local function list(root: string): Board | nil, string
   if found == nil then
     return nil, ferr
   end
-  local item_refs: {refs.RefEntry} = {}
+  local items_by_id: {string: refs.RefEntry} = {}
+  local ended_by_id: {string: refs.RefEntry} = {}
   local seq_sha = ""
   local format_sha = ""
   for _, r in ipairs(found) do
@@ -195,15 +255,48 @@ local function list(root: string): Board | nil, string
       seq_sha = r.sha
     elseif r.refname == "refs/heads/board/format" then
       format_sha = r.sha
-    elseif r.refname:sub(1, #"refs/heads/items/") == "refs/heads/items/" or r.refname:sub(1, #"refs/heads/ended/") == "refs/heads/ended/" then
-      -- Only a KSUID-shaped tail is an item; anything else under the
-      -- namespace is a stray branch `fsck` names and every read skips.
-      local tail = r.refname:match("/([^/]+)$") or ""
-      if #tail == 27 and tail:match("^%w+$") then
-        item_refs[#item_refs + 1] = r
+    else
+      local is_items = r.refname:sub(1, #"refs/heads/items/") == "refs/heads/items/"
+      local is_ended = r.refname:sub(1, #"refs/heads/ended/") == "refs/heads/ended/"
+      if is_items or is_ended then
+        -- Only a KSUID-shaped tail is an item; anything else under the
+        -- namespace is a stray branch `fsck` names and every read skips.
+        local tail = r.refname:match("/([^/]+)$") or ""
+        if #tail == 27 and tail:match("^%w+$") then
+          if is_items then
+            items_by_id[tail] = r
+          else
+            ended_by_id[tail] = r
+          end
+        end
       end
     end
   end
+  -- Dedupe: an id present in both maps is the residue of a half-landed
+  -- resolution (see the module doc) — keep the one `pick_duplicate`
+  -- names and record the pair so `fsck` can report it; an id in only
+  -- one map passes through untouched.
+  local item_refs: {refs.RefEntry} = {}
+  local duplicates: {Duplicate} = {}
+  for id, items_e in pairs(items_by_id) do
+    local ended_e = ended_by_id[id]
+    if ended_e == nil then
+      item_refs[#item_refs + 1] = items_e
+    else
+      local kept, dropped = pick_duplicate(root, items_e, ended_e)
+      item_refs[#item_refs + 1] = kept
+      duplicates[#duplicates + 1] = {id = id, kept_ref = kept.refname, kept_sha = kept.sha,
+        dropped_ref = dropped.refname, dropped_sha = dropped.sha}
+    end
+  end
+  for id, ended_e in pairs(ended_by_id) do
+    if items_by_id[id] == nil then
+      item_refs[#item_refs + 1] = ended_e
+    end
+  end
+  table.sort(duplicates, function(a: Duplicate, b: Duplicate): boolean
+      return a.id < b.id
+    end)
   local queries: {string} = {}
   if format_sha ~= "" then
     queries[#queries + 1] = format_sha .. ":format"
@@ -273,7 +366,8 @@ local function list(root: string): Board | nil, string
   table.sort(items, function(a: item.Item, b: item.Item): boolean
       return a.id < b.id
     end)
-  return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id, seq_sha = seq_sha}
+  return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id, seq_sha = seq_sha,
+    duplicates = duplicates}
 end
 
 --- Load a specific set of items by id, in the same fixed handful of
@@ -282,7 +376,10 @@ end
 --- moved never costs one `load` per id. An id present in neither
 --- namespace (a locally pruned ref) is simply absent from the result,
 --- never an error: the caller reads that the same way `patch_item`
---- always has, as "genuinely gone."
+--- always has, as "genuinely gone." An id present under BOTH — the
+--- same half-landed-resolution residue `list` tolerates — is resolved
+--- through the same `pick_duplicate` rule, never by which of the two
+--- `for-each-ref` happened to return last.
 --- @param root string The repository root
 --- @param ids {string} Item ids to read, in any order
 --- @return {string: Loaded} | nil Loaded items by id, only those found
@@ -301,8 +398,33 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
   if found == nil then
     return nil, ferr
   end
-  local queries: {string} = {}
+  local items_by_id: {string: refs.RefEntry} = {}
+  local ended_by_id: {string: refs.RefEntry} = {}
   for _, r in ipairs(found) do
+    local id = r.refname:match("^refs/heads/items/(.+)$")
+    if id ~= nil then
+      items_by_id[id] = r
+    else
+      id = r.refname:match("^refs/heads/ended/(.+)$")
+      if id ~= nil then
+        ended_by_id[id] = r
+      end
+    end
+  end
+  local resolved: {refs.RefEntry} = {}
+  for _, id in ipairs(ids) do
+    local items_e, ended_e = items_by_id[id], ended_by_id[id]
+    if items_e ~= nil and ended_e ~= nil then
+      local kept = pick_duplicate(root, items_e, ended_e)
+      resolved[#resolved + 1] = kept
+    elseif items_e ~= nil then
+      resolved[#resolved + 1] = items_e
+    elseif ended_e ~= nil then
+      resolved[#resolved + 1] = ended_e
+    end
+  end
+  local queries: {string} = {}
+  for _, r in ipairs(resolved) do
     queries[#queries + 1] = r.sha .. ":meta"
     queries[#queries + 1] = r.sha .. ":held"
     queries[#queries + 1] = r.sha .. ":edges"
@@ -313,7 +435,7 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
   end
   local kinds_by_ref: {string: {string: string}} = {}
   local kind_queries: {string} = {}
-  for _, r in ipairs(found) do
+  for _, r in ipairs(resolved) do
     local edges_entry = batch[r.sha .. ":edges"]
     if edges_entry ~= nil then
       local kinds = edge_kinds(edges_entry.content)
@@ -328,7 +450,7 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
     return nil, kerr
   end
   local blob_queries: {string} = {}
-  for _, r in ipairs(found) do
+  for _, r in ipairs(resolved) do
     local kinds = kinds_by_ref[r.refname]
     if kinds ~= nil then
       for _, sha in ipairs(content_blob_shas(kinds, kind_batch)) do
@@ -340,7 +462,7 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
   if blob_batch == nil then
     return nil, rerr
   end
-  for _, r in ipairs(found) do
+  for _, r in ipairs(resolved) do
     local id = r.refname:match("^refs/heads/items/(.+)$") or r.refname:match("^refs/heads/ended/(.+)$")
     if id ~= nil then
       local it, ierr = build_item(id, r.sha, batch, kind_batch, blob_batch)
@@ -411,6 +533,7 @@ end
 local record gitread
   type Loaded = Loaded
   type Board = Board
+  type Duplicate = Duplicate
   load: function(root: string, id: string): Loaded | nil, string
   load_many: function(root: string, ids: {string}): {string: Loaded} | nil, string
   list: function(root: string): Board | nil, string

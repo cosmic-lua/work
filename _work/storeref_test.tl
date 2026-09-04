@@ -190,11 +190,15 @@ local function item_refnames(root: string): {string}
   return out
 end
 
--- A resolution MOVES the ref: `refs/heads/items/<id>` stops existing and
--- `refs/heads/ended/<id>` starts, in one local transaction — never both at
--- once, never neither.
-local function test_resolution_moves_the_ref_from_items_to_ended()
-  local root = init_state_repo("ended-move")
+-- A resolution SETS `resolution` on whatever ref the item is already
+-- on — it never moves the ref. The pushing credential every session
+-- carries can create and update a branch but never delete one, so an
+-- ended-move (create `refs/heads/ended/<id>`, delete
+-- `refs/heads/items/<id>`, one push) could land the create half and
+-- lose the delete half, leaving the id filed under both namespaces;
+-- not moving the ref at all is what makes that impossible.
+local function test_resolution_stays_on_the_items_ref_and_sets_resolution()
+  local root = init_state_repo("no-move")
   local s = check.must(store.open(root))
   local it = make_item()
   assert(store.save(s, it, "new item"))
@@ -219,16 +223,54 @@ local function test_resolution_moves_the_ref_from_items_to_ended()
       now_ended = true
     end
   end
-  assert(not still_open, "refs/heads/items no longer names it")
-  assert(now_ended, "refs/heads/ended now does")
+  assert(still_open, "refs/heads/items still names it — a resolution never moves the ref")
+  assert(not now_ended, "refs/heads/ended gains no new entry")
   local loaded = check.must(store.load(s, it.id))
   assert(loaded.resolution == "completed", "load still finds it, resolved")
-  -- The move is one local transaction: `_work.refs.move_to_ended`'s
-  -- `update-ref --stdin`, not two independent updates a crash could
-  -- catch between.
+  -- Both commits landed on the SAME ref — its own history, never split
+  -- across two refs the way an ended-move would have.
   local events = check.must(publish.history(s, it.id))
-  assert(#events == 2, "the ref's own history still holds both commits: "
+  assert(#events == 2, "the ref's own history holds both commits: "
     .. #events)
+end
+
+-- A legacy item — filed under `refs/heads/ended/<id>` before this rule,
+-- the way the cutover import's 722 items are — stays there when it is
+-- resolved (or corrected) again: `ended/` is read, and written in
+-- place when an item already there changes, but a resolution never
+-- files a NEW entry under it.
+local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
+  local root = init_state_repo("legacy-ended")
+  local s = check.must(store.open(root))
+  local it = make_item()
+  assert(store.save(s, it, "new item"))
+  local sha = (check.must(child.run(
+        {"git", "rev-parse", "refs/heads/items/" .. it.id}, {cwd = root})).stdout
+    :gsub("%s+$", ""))
+  -- Hand-file it under refs/heads/ended, the way the pre-cutover
+  -- layout did, before this test ever resolves it.
+  git(root, {"update-ref", "refs/heads/ended/" .. it.id, sha})
+  git(root, {"update-ref", "-d", "refs/heads/items/" .. it.id})
+
+  local s2 = check.must(store.open(root))
+  local loaded = check.must(store.load(s2, it.id))
+  loaded.resolution = "completed"
+  assert(store.save(s2, loaded, "done " .. it.id:sub(1, 8)))
+
+  local after = item_refnames(root)
+  local still_ended, now_items = false, false
+  for _, r in ipairs(after) do
+    if r == "refs/heads/ended/" .. it.id then
+      still_ended = true
+    end
+    if r == "refs/heads/items/" .. it.id then
+      now_items = true
+    end
+  end
+  assert(still_ended, "the legacy item stays under refs/heads/ended")
+  assert(not now_items, "resolving it never creates a refs/heads/items entry")
+  local reloaded = check.must(store.load(s2, it.id))
+  assert(reloaded.resolution == "completed", "the resolution field is set")
 end
 
 -- `list` runs a FIXED number of git processes regardless of board

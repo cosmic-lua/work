@@ -1,8 +1,16 @@
 --- The store's write path: turning one mutation's items into ONE
---- `git fast-import` stream (`_work.fastimport`), moving their refs
---- locally, leaving the push itself to `_work.publish`. Split out of
---- `_work.store` so that module stays under its line cap;
---- `_work.store` is the only caller outside tests.
+--- `git fast-import` stream (`_work.fastimport`), writing each item's
+--- commit to whatever ref it is already on — `refs/heads/items/<id>`
+--- stays `refs/heads/items/<id>` even when the write sets
+--- `resolution`; a legacy item already under `refs/heads/ended/<id>`
+--- stays there too. A resolution never moves a ref: the pushing
+--- credential can create and update a branch but never delete one, so
+--- a save that tried to create `refs/heads/ended/<id>` and delete
+--- `refs/heads/items/<id>` in the same push could land the create and
+--- lose the delete, leaving one id filed under both namespaces —
+--- `_work.gitread` is where a reader tolerates and dedupes that.
+--- Split out of `_work.store` so that module stays under its line
+--- cap; `_work.store` is the only caller outside tests.
 local fastimport = require("_work.fastimport")
 local item = require("_work.item")
 local refs = require("_work.refs")
@@ -51,16 +59,14 @@ local record Outcome
 end
 
 --- One item's commit as planned, plus the bookkeeping the post-import
---- verification and the ended-ref move need: the ref it targets (the
---- ref it was already on — `refs/heads/ended/<id>` for an item already
---- ended being corrected, same as `refs/heads/items/<id>` otherwise), the
---- tip it was observed at, and whether this write ends it (moves it
---- from `refs/heads/items` to `refs/heads/ended`).
+--- verification needs: the ref it targets — the ref it was already
+--- on, `refs/heads/ended/<id>` for a legacy item being corrected in
+--- place, `refs/heads/items/<id>` otherwise, resolution or not — and
+--- the tip it was observed at.
 local record Planned
   id: string
   ref: string
   old_sha: string
-  ends: boolean
 end
 
 --- One item's diff, planned as a fast-import `CommitPlan` when it
@@ -99,18 +105,16 @@ local function plan_one(req: Request, it: item.Item,
     author_date = now, committer_name = TOOL_NAME, committer_email = TOOL_EMAIL,
     committer_date = now, message = req.message, op = req.op or "", ops = ops,
   }
-  local ends = (it.resolution or "") ~= "" and ref:sub(1, #"refs/heads/items/") == "refs/heads/items/"
-  return plan, {id = it.id, ref = ref, old_sha = old_sha, ends = ends}
+  return plan, {id = it.id, ref = ref, old_sha = old_sha}
 end
 
 --- Write every item in `req.items`, each as its own commit when its
 --- diff found anything to move, and — when `req.bounded` — advance
---- `refs/heads/board/seq` too, ALL of it in one `git fast-import` stream;
---- items ending in this save (`refs/heads/items/<id>` moving to
---- `refs/heads/ended/<id>`) then get one more `update-ref --stdin`
---- transaction, batched across however many ended, since fast-import
---- itself has no way to delete a ref. Every write staged locally is
---- left in `Outcome.pushes` for `publish` to push together.
+--- `refs/heads/board/seq` too, ALL of it in one `git fast-import` stream.
+--- Every commit lands on the ref its item was already leased on —
+--- setting `resolution` is an ordinary field write, never a ref move —
+--- so there is nothing else to do locally afterward. Every write
+--- staged is left in `Outcome.pushes` for `publish` to push together.
 --- @param req Request The save request
 --- @return Outcome | nil What moved
 --- @return string Error message
@@ -173,7 +177,6 @@ local function save_batch(req: Request): Outcome | nil, string
   for _, r in ipairs(found) do
     new_sha_of[r.refname] = r.sha
   end
-  local ended: {refs.EndedMove} = {}
   for _, p in ipairs(planned) do
     local new_sha = new_sha_of[p.ref]
     -- fast-import silently refuses a non-fast-forward `from` instead
@@ -185,20 +188,8 @@ local function save_batch(req: Request): Outcome | nil, string
       return nil, ("fast-import did not fast-forward %s — refused (unexpected "
         .. "local state)"):format(p.ref)
     end
-    if p.ends then
-      ended[#ended + 1] = {id = p.id, sha = new_sha}
-      out.pushes[#out.pushes + 1] = {ref = "refs/heads/ended/" .. p.id, old = "", delete = false}
-      out.pushes[#out.pushes + 1] =
-      {ref = "refs/heads/items/" .. p.id, old = p.old_sha, delete = true}
-      out.new_ref[p.id], out.new_sha[p.id] = "refs/heads/ended/" .. p.id, new_sha
-    else
-      out.pushes[#out.pushes + 1] = {ref = p.ref, old = p.old_sha, delete = false}
-      out.new_ref[p.id], out.new_sha[p.id] = p.ref, new_sha
-    end
-  end
-  local moved, merr = refs.move_many_to_ended(req.root, ended)
-  if not moved then
-    return nil, merr
+    out.pushes[#out.pushes + 1] = {ref = p.ref, old = p.old_sha}
+    out.new_ref[p.id], out.new_sha[p.id] = p.ref, new_sha
   end
   if req.bounded then
     local new_seq = new_sha_of["refs/heads/board/seq"]
@@ -206,7 +197,7 @@ local function save_batch(req: Request): Outcome | nil, string
       return nil, "fast-import did not fast-forward refs/heads/board/seq — refused "
       .. "(unexpected local state)"
     end
-    out.pushes[#out.pushes + 1] = {ref = "refs/heads/board/seq", old = seq_old, delete = false}
+    out.pushes[#out.pushes + 1] = {ref = "refs/heads/board/seq", old = seq_old}
     out.seq_changed, out.new_seq_sha = true, new_seq
   end
   out.changed = true

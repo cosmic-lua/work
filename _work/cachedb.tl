@@ -34,14 +34,16 @@ local sqlite = require("cosmic.sqlite")
 --- after the table it seeds (`_work.find`'s `search`) is filled.
 local type Cache = index.Index
 
---- The schema version this build writes and expects, bumped by hand
---- for a shape change worth naming explicitly. `schema_fingerprint`
---- (below) now catches an UNNAMED shape change too — any edit to the
---- DDL this module, `_work.index`, or `_work.find` actually run — so
---- a mismatch on either one is treated exactly like a missing file:
---- `_work.cache.open` rebuilds rather than reading rows a different
---- shape wrote.
-local SCHEMA_VERSION < const > = 1
+--- The schema version this build writes and expects. `schema_fingerprint`
+--- (below) now catches every shape change on its own — any edit to
+--- the DDL this module, `_work.index`, or `_work.find` actually run —
+--- so a mismatch on either one is treated exactly like a missing
+--- file: `_work.cache.open` rebuilds rather than reading rows a
+--- different shape wrote. A further hand bump of this constant is
+--- therefore redundant for a DDL change specifically; it stays only
+--- as an escape hatch for forcing every clone to rebuild for a reason
+--- the fingerprint cannot see (a bug in how a row was interpreted, say).
+local SCHEMA_VERSION < const > = 2
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -151,20 +153,38 @@ local function fresh_digest(root: string): string | nil, string
   return digest_of(entries), ""
 end
 
---- Every watched ref's sha, keyed by ITEM id rather than refname — an
---- id's ref namespace can change (`refs/heads/items/<id>` moving to
---- `refs/heads/ended/<id>`) without the id itself changing, so keying this
---- way makes an ended-move read as "this id's sha changed" exactly
---- like an ordinary edit, never as one id disappearing and a
---- different one appearing. `refs/heads/board/*` entries carry no id and
---- are dropped here — `_work.cache.around_fetch` diffs those through
---- the whole digest instead.
+--- Every watched ref's sha, keyed by ITEM id rather than refname — a
+--- legacy id can still be filed under BOTH `refs/heads/items/<id>` and
+--- `refs/heads/ended/<id>` at once (`_work.gitread`'s module header:
+--- the residue of a resolution whose atomic push landed the create
+--- half of an old-style namespace move and lost the delete half; a
+--- resolution never moves a ref at all any more, so this is legacy
+--- data, never something today's write path creates). Two passes,
+--- `items/` first and `ended/` second so the second always overwrites
+--- the first, make `ended/` the deterministic winner for such an id
+--- regardless of `for-each-ref`'s own listing order — the safe
+--- default `_work.gitread.pick_duplicate` also falls back to when it
+--- cannot prove ancestry, though this function takes no `root` and so
+--- never runs the `merge-base` check pick_duplicate can. The two can
+--- therefore disagree on the rare id where `items/` truly is the
+--- descendant; the consequence is bounded to this module's OWN
+--- change-detection (an extra or slightly delayed patch), never to
+--- the item data itself, which `_work.gitread.load_many`/`list`
+--- always resolve with the real ancestry check. `refs/heads/board/*`
+--- entries carry no id and are dropped here — `_work.cache.around_fetch`
+--- diffs those through the whole digest instead.
 --- @param entries {refs.RefEntry} A ref listing
 --- @return {string: string} Item id -> sha
 local function shas_by_item(entries: {refs.RefEntry}): {string: string}
   local out: {string: string} = {}
   for _, e in ipairs(entries) do
-    local id = e.refname:match("^refs/heads/items/(.+)$") or e.refname:match("^refs/heads/ended/(.+)$")
+    local id = e.refname:match("^refs/heads/items/(.+)$")
+    if id then
+      out[id] = e.sha
+    end
+  end
+  for _, e in ipairs(entries) do
+    local id = e.refname:match("^refs/heads/ended/(.+)$")
     if id then
       out[id] = e.sha
     end

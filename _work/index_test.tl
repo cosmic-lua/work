@@ -12,6 +12,7 @@ local flow = require("_work.flow")
 local idxmod = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
+local sqlite = require("cosmic.sqlite")
 
 local counter = 0
 
@@ -232,6 +233,81 @@ local function test_roots_containers_and_workable()
   assert(workable[leaf.id] and not workable[mid.id] and not workable[top.id],
     "workable is open, parented, and childless")
   check.must(idxmod.close(idx))
+end
+
+-- Secondary indexes: `EXPLAIN QUERY PLAN` names them by name, pinned
+-- against the real connection rather than trusted to the DDL comment.
+
+--- Every `detail` line an `EXPLAIN QUERY PLAN` over `sql` reports,
+--- concatenated with newlines — one string a caller can `:find` an
+--- index name in without hand-rolling the loop each time.
+--- @param db sqlite.Database The connection
+--- @param sql string A statement to explain (an `EXPLAIN QUERY PLAN
+--- ...` prefix is added by the caller's own query, not this helper)
+--- @return string Every plan line, newline-joined
+local function plan_of(db: sqlite.Database, sql: string): string
+  local lines: {string} = {}
+  for row in assert(db:query("EXPLAIN QUERY PLAN " .. sql)) do
+    lines[#lines + 1] = row.detail as string -- cast: from any (sqlite row)
+  end
+  return table.concat(lines, "\n")
+end
+
+local function test_workable_view_uses_the_parent_index()
+  local idx = check.must(idxmod.open({make({})}))
+  local plan = plan_of(idx.db, "SELECT * FROM workable")
+  assert(plan:find("items_parent", 1, true),
+    "workable's plan does not name items_parent:\n" .. plan)
+  check.must(idxmod.close(idx))
+end
+
+local function test_dangling_edge_query_uses_the_edges_index()
+  local idx = check.must(idxmod.open({make({})}))
+  local plan = plan_of(idx.db, [[
+      SELECT kind, from_id, to_id FROM edges e
+      WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.id = e.to_id)
+    ]])
+  assert(plan:find("edges_to", 1, true),
+    "the dangling-edge query's plan does not name edges_to:\n" .. plan)
+  check.must(idxmod.close(idx))
+end
+
+-- Vocabulary equality: the DDL's `verdict`/`resolution` CHECK lists
+-- must name exactly `_work.item`'s vocabularies, so a new word cannot
+-- become a refused row without both being updated together.
+
+--- The quoted values inside `column`'s `CHECK(column IN (...))` clause
+--- in `idxmod.DDL`, as a set.
+--- @param column string The column name (`verdict` or `resolution`)
+--- @return {string: boolean} The values the DDL admits
+local function ddl_check_values(column: string): {string: boolean}
+  local list = idxmod.DDL:match("CHECK%(" .. column .. " IN %((.-)%)%)")
+  assert(list, ("no CHECK IN(...) clause found for %s in the DDL"):format(column))
+  local out: {string: boolean} = {}
+  for v in list:gmatch("'([^']*)'") do
+    out[v] = true
+  end
+  return out
+end
+
+--- Assert two vocabularies name exactly the same values.
+--- @param got {string: boolean} What the DDL admits
+--- @param want {string: boolean} What `_work.item` admits
+--- @param label string Named in a mismatch's message
+local function assert_same_vocabulary(got: {string: boolean},
+    want: {string: boolean}, label: string)
+  for v in pairs(got) do
+    assert(want[v], ("DDL %s admits %q, which item.tl does not"):format(label, v))
+  end
+  for v in pairs(want) do
+    assert(got[v], ("item.tl %s admits %q, which the DDL does not"):format(label, v))
+  end
+end
+
+local function test_ddl_verdict_and_resolution_match_item_vocabularies()
+  assert_same_vocabulary(ddl_check_values("verdict"), item.VERDICTS, "verdict")
+  assert_same_vocabulary(ddl_check_values("resolution"), item.RESOLUTIONS,
+    "resolution")
 end
 
 local function test_key_uniqueness_refuses_a_second_open_claim()
