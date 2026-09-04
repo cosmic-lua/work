@@ -11,6 +11,7 @@
 --- refuses — re-running the verb re-applies every gate against the merged board.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local gitready = require("_work.gitready")
 local gh = require("_work.gh")
 local gittake = require("_work.gittake")
 local health = require("_work.health")
@@ -21,8 +22,7 @@ local review = require("_work.review")
 local store = require("_work.store")
 
 --- init: prepare a state repository at `dir` — the mechanics live in
---- `store.init_repo`, alongside `open`, the other half of the same
---- contract; this is just its verdict line.
+--- `store.init_repo`, alongside `open`; this is just its verdict line.
 --- @param dir string The directory to prepare
 --- @return integer Exit code
 local function cmd_init(dir: string): integer
@@ -38,7 +38,7 @@ end
 --- which one is derived from the item's own facts, never declared.
 ---
 --- A take of TODO work (no claim, no PR) is the pull, and it is where
---- the two quality gates bind: the spec bar (`gate.ready_problems`)
+--- the two quality gates bind: the spec bar (`gitready.ready_problems`)
 --- and the doing bound (`flow.doing_refusal`). A take of an item
 --- AWAITING A VERDICT by a session that is not its builder is the
 --- review claim (`gittake.take_review`). Everything else `take` does
@@ -47,9 +47,9 @@ end
 --- flight and asks neither gate.
 ---
 --- Recording a PR is the handover to review: the number must be free
---- (no other OPEN item already carries it — `gate.pr_collision_refusal`),
+--- (no other OPEN item already carries it — `gitready.pr_collision_refusal`),
 --- the request is read (open, not draft, `Board:` line, on the item's
---- own `base` when it names one, CI not failing — `gate.handover_refusal`),
+--- own `base` when it names one, CI not failing — `gitready.handover_refusal`),
 --- and a standing `request changes` verdict clears, because the new
 --- push is a new head to judge. `--result` is the same handover for
 --- a research slice, whose deliverable is the spec rather than a diff
@@ -175,7 +175,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
           table.concat(blocked, " ")))
     end
     if not force then
-      local problems = gate.ready_problems(s, it, all)
+      local problems = gitready.ready_problems(s, it, all)
       if #problems > 0 then
         for _, p in ipairs(problems) do
           print("  " .. p)
@@ -222,11 +222,11 @@ local function cmd_take(s: store.Store, id: string, session: string,
           .. "diff or board state, never both"):format(id:sub(1, 8)))
     end
     if not already_recorded and not force then
-      local collision = gate.pr_collision_refusal(all, id, pr)
+      local collision = gitready.pr_collision_refusal(all, id, pr)
       if collision then
         return gate.verdict_line("take", false, "REFUSED: " .. collision)
       end
-      local refusal = gate.handover_refusal(s, id, pr, it.repo, it.base)
+      local refusal = gitready.handover_refusal(s, id, pr, it.repo, it.base)
       if refusal then
         return gate.verdict_line("take", false, "REFUSED: " .. refusal)
       end
@@ -247,7 +247,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("take %s by %s%s%s"):format(id:sub(1, 8), session,
       (pr or 0) ~= 0 and (" pr:%d"):format(pr) or "",
-      gate.forced_suffix(force, why)))
+      gate.forced_suffix(force, why)), "take", nil, session, was_todo)
   if not ok then
     return gate.verdict_line("take", false, err)
   end
@@ -308,7 +308,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   and (it.claim or "") ~= (session or "") then
     it.reviewer = ""
     local rok, rerr = gate.commit_and_publish(s, it, nil,
-      ("drop %s review: %s"):format(id:sub(1, 8), why))
+      ("drop %s review: %s"):format(id:sub(1, 8), why), "drop", nil, session)
     if not rok then
       return gate.verdict_line("drop", false, rerr)
     end
@@ -331,7 +331,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   it.verdict_head = ""
   it.verdict_spec = ""
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("drop %s: %s"):format(id:sub(1, 8), why))
+    ("drop %s: %s"):format(id:sub(1, 8), why), "drop", nil, session)
   if not ok then
     return gate.verdict_line("drop", false, err)
   end
@@ -432,7 +432,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   it.resolution = reason
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("done %s %s (from %s)%s"):format(id:sub(1, 8), reason, from,
-      gate.forced_suffix(force, why)))
+      gate.forced_suffix(force, why)), "done")
   if not ok then
     return gate.verdict_line("done", false, err)
   end

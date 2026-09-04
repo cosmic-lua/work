@@ -41,7 +41,7 @@ end
 --- `f` fails an assertion — a fixture PR in each of the four states,
 --- the way `_work.gitreview_test`'s own `with_ci_state` covers `take`.
 --- `gh.pull`/`gh.checks` cover the handover-recording path (`take
---- --pr`, which reads through `gitgate.handover_refusal`); `_work.gh`'s
+--- --pr`, which reads through `gitready.handover_refusal`); `_work.gh`'s
 --- own `head_checks` is a closure over its OWN `pull`/`checks` upvalues
 --- rather than the `gh` table's fields, so faking those two does not
 --- reach it — it needs its own stub, given the same fixture data.

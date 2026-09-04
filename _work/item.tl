@@ -1,9 +1,12 @@
---- One work item as a committed file: `items/<ksuid>.tl` in the state
---- repository, read/written through `cosmic.literal`, with its prose
---- spec (the spec-bar sections) in a markdown sidecar
---- `items/<ksuid>.md`. There is ONE record and no kind field — an
---- item's role emerges from where it sits in the dependency graph,
---- the same way a file's role in cosmic emerges from its position:
+--- One work item: a git ref, its tip commit's tree holding the fields
+--- here and its prose spec (`_work.itemtree` is that shape). The
+--- decode/encode this file itself carries — the literal-table form,
+--- through `cosmic.literal` — is the OLD `items/<ksuid>.tl` layout;
+--- `_work.import` is its only remaining caller, replaying a git
+--- directory's history at the move into the ref layout. There is ONE
+--- record and no kind field — an item's role emerges from where it
+--- sits in the dependency graph, the same way a file's role in cosmic
+--- emerges from its position:
 ---
 ---   a root
 ---     with open children is a container being decomposed
@@ -46,7 +49,7 @@ local record Item
   --- The branch the item's PR targets; "" = ungated — no verb checks
   --- it and no PR is refused for disagreeing. Set it once a non-default
   --- target is known — an item touching this board repository's own
-  --- machinery names its `main`; `gitgate.handover_refusal` compares
+  --- machinery names its `main`; `gitready.handover_refusal` compares
   --- it against the PR's own base ref.
   base: string
   --- The scheduled workflow file this item repairs; "" for ordinary
@@ -314,21 +317,19 @@ end
 --- An item from the table `cosmic.literal` parsed, with zero values
 --- filled in and every field shape-checked. Unknown keys are ignored,
 --- so a file carrying retired fields still reads — and sheds them on
---- its next write.
+--- its next write. The OLD `items/<id>.tl` layout's decode:
+--- `_work.import` is the one remaining caller, reading a historical
+--- commit's file content on its way into the ref layout;
+--- `_work.itemtree.to_item` is the live decode every read (`store.load`,
+--- `store.list`) actually goes through.
 ---
 --- This fails hard only on genuine corruption: an unparseable literal
---- (the caller's `literal.parse_file`) or a field of the wrong type
---- (`shape.into` against `SPEC`, below). A CONTENT problem —
---- `problems(it)` non-empty: a multiline title, a claimed root, a
+--- or a field of the wrong type (`shape.into` against `SPEC`, below).
+--- A CONTENT problem — `problems(it)` non-empty: a claimed root, a
 --- repeated blocker, and so on — does not fail the decode; the
 --- constructed `Item` comes back with `problems(it)` attached at
---- `.decode_problems` instead (`is_flagged` reads it). A store with
---- one such record, written by an older or less careful writer, still
---- decodes every item, and the bad one can still be corrected in
---- place (`gitboard set --title ...` loads through this same decode).
---- The write path is unaffected: `store.stage` and `cmd_new` call
---- `problems(it)` directly and refuse there, before a bad record is
---- ever committed.
+--- `.decode_problems` instead (`is_flagged` reads it) — a historical
+--- commit written by an older or less careful writer still replays.
 --- @param t {string: any} Parsed literal table
 --- @return Item | nil The item, present even with content problems
 --- @return string Error message; set only when the literal is corrupt
@@ -395,10 +396,11 @@ local function is_flagged(it: Item): boolean
   return #(it.decode_problems or {}) > 0
 end
 
---- The literal table an item writes: zero values omitted, so the file
---- carries only what is set and a diff shows only what moved.
+--- The literal table form of an item: zero values omitted, so a diff
+--- of it shows only what moved. `decode`'s inverse; together they are
+--- what `_work.import` round-trips a historical commit through.
 --- @param it Item The item
---- @return {string: any} Table for `cosmic.literal.format_file`
+--- @return {string: any} Table for `cosmic.literal.format`/`format_file`
 local function encode(it: Item): {string: any}
   local t: {string: any} = {
     id = it.id,

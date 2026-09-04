@@ -62,7 +62,7 @@ local function take_review(s: store.Store, it: item.Item, session: string,
   it.reviewer = session
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("review %s claimed by %s%s"):format(id8, session,
-      gate.forced_suffix(force, why)))
+      gate.forced_suffix(force, why)), "take", nil, session)
   if not ok then
     return gate.verdict_line("take", false, err)
   end
@@ -141,7 +141,8 @@ local function take_result(s: store.Store, it: item.Item, session: string,
     standing = "awaiting review"
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("take %s by %s result:%s"):format(id8, session, digest:sub(1, 7)))
+    ("take %s by %s result:%s"):format(id8, session, digest:sub(1, 7)),
+    "take", nil, session)
   if not ok then
     return gate.verdict_line("take", false, err)
   end

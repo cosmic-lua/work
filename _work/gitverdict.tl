@@ -286,7 +286,7 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("verdict %s %s%s%s%s"):format(id:sub(1, 8), kind, by, landed,
-      gate.forced_suffix(frc, rsn)), also)
+      gate.forced_suffix(frc, rsn)), "verdict", also, session)
   if not ok then
     return gate.verdict_line("verdict", false, err)
   end

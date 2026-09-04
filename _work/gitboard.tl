@@ -6,9 +6,10 @@
 --- triage, and a parented leaf is workable: the only thing that
 --- crosses the kanban. Which items matter more is a recorded
 --- comparison (`compare`), derived into an order by `_work.priority`,
---- never a number an item asserts about itself. Each item is `items/<ksuid>.tl`
---- in a git checkout (`_work.store`), its spec prose the sidecar
---- `items/<ksuid>.md`; the flow rules are `_work.flow`. Pull requests
+--- never a number an item asserts about itself. Each item is a git ref,
+--- `refs/items/<ksuid>` (or `refs/ended/<ksuid>` once resolved), whose
+--- tip commit's tree carries its fields and spec prose (`_work.store`);
+--- the flow rules are `_work.flow`. Pull requests
 --- stay on GitHub and carry the fix; issues shrink to an inbound
 --- queue. Ids are KSUIDs; renders lead with the handle, the id's last
 --- 8 characters (e.g. «d0x1_37YJ»); every verb accepts that handle,
@@ -48,6 +49,7 @@ local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
+local import = require("_work.import")
 local publish = require("_work.publish")
 local session = require("_work.session")
 local store = require("_work.store")
@@ -106,8 +108,14 @@ local CSPEC: flags.CommandSpec = {
   .. "everywhere; item branches are named\nby the id's first 8 characters — a "
   .. "different string from the handle.",
   commands = {
-    {name = "init", summary = "create items/ (and a git repo if needed)",
+    {name = "init", summary = "prepare a state repository (a git repo, if needed)",
       spec = {flags = {dir_flag()}}},
+    {name = "import", summary = "move the old items/<id>.tl layout at "
+      .. "--from/--rev into refs, replaying every item's history",
+      spec = {flags = {dir_flag(),
+          {long = "from", arg = "DIR", help = "a git directory holding the "
+            .. "old items/<id>.tl + items/<id>.md layout"},
+          {long = "rev", arg = "REV", help = "the revision to read it at"}}}},
     {name = "new", summary = "open an item titled TITLE; role comes from the graph",
       spec = {usage = "TITLE [options]",
         summary = "open an item titled TITLE; role comes from the graph.\n\n"
@@ -298,6 +306,21 @@ local function main(...: string): integer
   if s == nil then
     io.stderr:write(tostring(serr) .. "\n")
     return 1
+  end
+  if d.command == "import" then
+    local from = d.parsed.values["from"] or ""
+    local rev = d.parsed.values["rev"] or ""
+    if from == "" or rev == "" then
+      io.stderr:write("import needs --from DIR and --rev REV\n")
+      return 1
+    end
+    local n, ierr = import.run(s, from, rev)
+    if n == nil then
+      print(("gitboard-import: %s"):format(ierr))
+      return 1
+    end
+    print(("gitboard-import: imported %d item(s) from %s at %s"):format(n, from, rev))
+    return 0
   end
   if MUTATES[d.command] then
     local synced, syerr = publish.sync(s)

@@ -91,7 +91,7 @@ local function cmd_compare(s: store.Store, winner: string,
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("compare %s over %s%s"):format(winner:sub(1, 8), loser:sub(1, 8), note),
-    also)
+    "compare", also)
   if not ok then
     return gate.verdict_line("compare", false, err)
   end
@@ -144,7 +144,7 @@ local function cmd_hold(s: store.Store, id: string, reason: string): integer
   end
   it.is_held = true
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("hold %s %s"):format(id:sub(1, 8), reason))
+    ("hold %s %s"):format(id:sub(1, 8), reason), "hold")
   if not ok then
     return gate.verdict_line("hold", false, err)
   end
@@ -174,7 +174,7 @@ local function cmd_unhold(s: store.Store, id: string): integer
   end
   it.is_held = false
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("unhold %s"):format(id:sub(1, 8)))
+    ("unhold %s"):format(id:sub(1, 8)), "unhold")
   if not ok then
     return gate.verdict_line("unhold", false, err)
   end

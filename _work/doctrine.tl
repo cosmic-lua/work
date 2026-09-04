@@ -215,12 +215,13 @@ a skill — gates transfer to every future session; prose does not.
    your own: the verdict comes from a fresh-context review.
 
 Out-of-scope findings (a real defect, a stale doc, a gap the item
-sits next to but does not own): search first — the board is a git
-checkout of text files, so `grep -ril '<phrase>' items/` answers
-"already filed?" — and cite the existing item rather than duplicate
-it; else `new "title" --spec-file F` with one paragraph of
-evidence, unparented. Filing is never refused. Then back to the
-item: never widen the diff to cover a finding.
+sits next to but does not own): search first — every item is a ref, so
+`git grep -il '<phrase>' $(git for-each-ref --format='%(refname)'
+refs/items refs/ended)` in the board checkout answers "already
+filed?" — and cite the existing item rather than duplicate it; else
+`new "title" --spec-file F` with one paragraph of evidence, unparented.
+Filing is never refused. Then back to the item: never widen the diff
+to cover a finding.
 ]]},
 
   {name = "review", title = "the fresh-context review and its verdicts",

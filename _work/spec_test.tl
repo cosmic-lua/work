@@ -5,6 +5,7 @@
 -- pasted template is the failure mode this exists to catch. There is
 -- no Acceptance section to lint: the CI gate is the one acceptance,
 -- so the bar has nothing to say about how an item proves itself.
+local child = require("cosmic.child")
 local spec = require("_work.spec")
 
 --- A minimal bar-complete body for tests. Non-goals is optional
@@ -63,14 +64,33 @@ local function test_acceptance_is_not_judged()
     .. table.concat(gaps, ", "))
 end
 
--- A revision is a content digest: same text, same revision; any edit,
--- a different one; and no sidecar at all is a stable constant.
+-- A revision is the git blob sha `spec.md` itself would carry: same
+-- text, same revision; any edit, a different one; and no sidecar at
+-- all is a stable constant.
 local function test_revision_is_a_content_digest()
   local a = spec.revision(READY_BODY)
   assert(a == spec.revision(READY_BODY), "two readings agree")
-  assert(#a == 64 and a:match("^[0-9a-f]+$"), "64 hex characters: " .. a)
+  assert(#a == 40 and a:match("^[0-9a-f]+$"), "40 hex characters: " .. a)
   assert(a ~= spec.revision(READY_BODY .. "moved\n"), "any edit moves it")
   assert(spec.revision("") == spec.revision(""), "no sidecar is stable")
+end
+
+-- The revision is not just A digest, it is the SAME sha
+-- `git hash-object` gives that exact blob — `_work.store` writes
+-- `spec.md` through `git hash-object -w --stdin`, so a caller
+-- comparing against `spec.revision` has to be comparing against what
+-- is actually in the tree.
+local function test_revision_matches_git_hash_object()
+  local body = READY_BODY
+  local r = child.run({"git", "hash-object", "--stdin"}, {stdin = body})
+  if r == nil or not r.ok then
+    -- No git on PATH in this environment: skip rather than fail a
+    -- test of git's own behavior on a machine that lacks git.
+    return
+  end
+  assert(spec.revision(body) == (r.stdout:gsub("%s+$", "")),
+    "spec.revision agrees with git hash-object: " .. spec.revision(body)
+    .. " vs " .. r.stdout)
 end
 
 -- `reached_repos` reads a `github.com` URL wherever it sits, HTTPS or

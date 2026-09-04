@@ -96,7 +96,7 @@ end
 --- in `## Evidence`, a fixture in `## Acceptance`. This is "reaches",
 --- not "needs": the item's own `repo` and any self-mention are not
 --- filtered out here, because that judgment needs the item — see
---- `_work.gitgate.undeclared_repos`.
+--- `_work.gitready.undeclared_repos`.
 --- @param body string The spec sidecar's markdown
 --- @return {string} Repo slugs, deduplicated, in first-seen order
 local function reached_repos(body: string): {string}
@@ -130,15 +130,19 @@ local function declared_repos(body: string): {string: boolean}
   return out
 end
 
---- The revision of a spec sidecar: a content digest of its body, so
---- two readings of the same text are the same revision and any edit is
---- a different one. A body of "" — an item with no sidecar — hashes to
---- a stable constant, which is the right answer rather than a case to
---- special-case: an item that has never had a spec has not changed one.
+--- The revision of a spec sidecar: the git blob sha `spec.md` itself
+--- carries in the item's tree, computed here without touching git —
+--- the same `sha1("blob " .. #body .. "\0" .. body)` `git hash-object`
+--- would give the identical bytes, so a revision recorded here always
+--- matches what `_work.store` actually wrote. Two readings of the same
+--- text give the same revision, and any edit gives a different one; a
+--- body of "" — an item with no sidecar — hashes to a stable constant,
+--- which is the right answer rather than a case to special-case: an
+--- item that has never had a spec has not changed one.
 --- @param body string The spec sidecar's markdown, "" when it has none
---- @return string The revision, 64 lowercase hex characters
+--- @return string The revision, 40 lowercase hex characters
 local function revision(body: string): string
-  return hash.sha256_hex(body)
+  return hash.digest_hex("sha1", ("blob %d\0%s"):format(#body, body))
 end
 
 local record spec

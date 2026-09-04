@@ -22,9 +22,17 @@ local init_shared = fixture.init_shared
 local file_item = fixture.file_item
 
 -- Reciprocal `block` from two checkouts used to merge cleanly and
--- land a cycle no verb's own check ever saw. Now the loser is
--- refused with LOST_RACE, and its re-run — reading the winner's edge
--- — refuses as the deadlock it is. No cycle at any point.
+-- land a cycle no verb's own check ever saw, back when a single
+-- shared branch meant EVERY mutation contended with every other. Each
+-- side's edge now lives on its own item's ref (x's block writes only
+-- x's ref, y's only y's), so nothing puts two DIFFERENT items'
+-- blocks in each other's way UNLESS blocking is bounded — which the
+-- add path is, exactly because `flow.waits_on`'s cycle check is a
+-- whole-board read the same way the doing bound's is: it advances and
+-- leases `refs/board/seq`, so the second, stale block is the one that
+-- loses that lease and is refused with LOST_RACE. Its re-run — reading
+-- the winner's edge — refuses as the deadlock it is. No cycle at any
+-- point.
 local function test_a_lost_block_race_cannot_land_a_cycle()
   local a, b = init_shared("race-block")
   local x = file_item(a, "x, the one that waits", "")
@@ -48,12 +56,16 @@ local function test_a_lost_block_race_cannot_land_a_cycle()
     "the winner's edge stands alone")
 end
 
--- Concurrent `done` of a container's last two children: each session
--- read the other's child as still open. The loser re-runs against the
--- merged state, sees it is closing the LAST open child, and its
--- verdict line says the parent is workable again — no write needed,
--- because state is derived, but the fact must not be lost.
-local function test_a_lost_done_race_reopens_the_parent()
+-- Concurrent `done` of a container's last two children, each read as
+-- still open by the OTHER session: under a single shared branch this
+-- used to race — the loser's stale run could not see the parent
+-- becoming workable, and the miss used to merge cleanly. `done` is
+-- unbounded and each child ends on its OWN ref (`c1`'s commit never
+-- touches `c2`'s), so under the ref layout there is no race to lose
+-- at all: both closes land independently, and the parent's role —
+-- DERIVED, never stored — reads as workable again the moment both
+-- children are read together, with nothing to have been lost.
+local function test_concurrent_done_of_the_last_two_children_both_land()
   local a, b = init_shared("race-done")
   local root = file_item(a, "an outcome", "")
   local parent = file_item(a, "a slice being decomposed", root)
@@ -62,20 +74,15 @@ local function test_a_lost_done_race_reopens_the_parent()
   assert(publish.sync(b))
 
   assert(verbs.cmd_done(a, c1, "completed", false, "") == 0)
-  -- b still sees c1 open, so its stale run would not see the parent
-  -- becoming workable — the miss that used to merge cleanly.
-  assert(verbs.cmd_done(b, c2, "completed", false, "") ~= 0,
-    "the losing done is refused, not replayed")
-  assert(item.is_open(check.must(store.load(b, c2))),
-    "the dropped close is undone whole")
-  -- The re-run closes the last open child; the parent is workable
-  -- again by derivation.
+  -- b still sees c1 open when it decides, but c2's ref never
+  -- overlaps c1's — the close lands on its own, no LOST_RACE.
   assert(verbs.cmd_done(b, c2, "completed", false, "") == 0,
-    "the re-run lands against the merged state")
+    "an unbounded done on a different item never contends")
+  assert(not item.is_open(check.must(store.load(b, c2))), "c2 is closed")
   assert(publish.sync(a))
-  assert(not item.is_open(check.must(store.load(a, c2))), "c2 is closed")
+  assert(not item.is_open(check.must(store.load(a, c2))), "and reaches a too")
   local all = check.must(store.list(a))
   local back = check.must(store.load(a, parent))
   assert(flow.role(back, all) == "work",
-    "the parent is workable again instead of stranding off the board")
+    "the parent is workable again — derived fresh, nothing to have lost")
 end

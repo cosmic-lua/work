@@ -14,14 +14,28 @@ local api = require("_work.api")
 local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
-local fs = require("cosmic.fs")
-local gate = require("_work.gitgate")
+local gitready = require("_work.gitready")
+local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
 local spec = require("_work.spec")
 local store = require("_work.store")
 
 local init_state_repo = fixture.init_state_repo
+
+--- How many commits `refs/board/lanes` carries, 0 before it exists —
+--- `fixture.commits` only counts `refs/items`/`refs/ended`, since a
+--- lanes sync is not an item write.
+--- @param s store.Store The store
+--- @return integer The count
+local function lanes_commits(s: store.Store): integer
+  local r = check.must(child.run(
+      {"git", "rev-list", "--count", "refs/board/lanes"}, {cwd = s.root}))
+  if not r.ok then
+    return 0
+  end
+  return math.tointeger(tonumber((r.stdout:gsub("%s+$", "")))) or -1
+end
 
 local RED: {string: string} = {["release.yml"] = "failure",
   ["fuzz.yml"] = "success", ["docs.yml"] = "success"}
@@ -105,29 +119,29 @@ local function test_record_commits_only_on_change()
   local s = init_state_repo("record-change")
   local facts: {string: string} = {["release.yml"] = "success",
     ["fuzz.yml"] = "success", ["docs.yml"] = "success"}
-  local before = fixture.commits(s)
+  local before = lanes_commits(s)
   assert(lanes.record(s, facts), "the first observation is new, and commits")
-  assert(fixture.commits(s) == before + 1, "exactly one commit")
+  assert(lanes_commits(s) == before + 1, "exactly one commit")
 
   local ok, err = lanes.record(s, facts)
   assert(not ok, "an unchanged observation records nothing")
   assert(err == "", "and carries no error — this is a no-op, not a failure")
-  assert(fixture.commits(s) == before + 1, "so the commit count does not move")
+  assert(lanes_commits(s) == before + 1, "so the commit count does not move")
 
   facts["fuzz.yml"] = "failure"
   assert(lanes.record(s, facts), "a real change commits again")
-  assert(fixture.commits(s) == before + 2)
+  assert(lanes_commits(s) == before + 2)
 end
 
 -- record's commit subject is a grammar other code will eventually
--- parse (a future consumer of `lanes_state.tl`'s history): pin the
+-- parse (a future consumer of `refs/board/lanes`'s history): pin the
 -- exact string — `sync lanes: <lane>=<conclusion> ...`, space-joined
 -- in LANES order — so the format cannot drift silently before that
 -- consumer exists to notice.
 local function test_record_commit_subject_is_exact()
   local s = init_state_repo("record-subject")
   assert(lanes.record(s, RED), "a new observation commits")
-  local r = check.must(child.run({"git", "log", "-1", "--format=%s"},
+  local r = check.must(child.run({"git", "log", "-1", "--format=%s", "refs/board/lanes"},
       {cwd = s.root}))
   assert(r.ok, "git log failed: " .. r.stderr)
   local subject = r.stdout:gsub("%s+$", "")
@@ -154,13 +168,15 @@ end
 -- `report` is what `cmd_sync` calls (via `at_sync`) after a real
 -- `observe` returns facts; a `record` failure must show up in its
 -- lines rather than vanish the way `cmd_sync` used to discard it.
--- Forced by a directory sitting where `record` wants to write its
--- state FILE — an EISDIR even root cannot bypass, unlike a chmod,
--- which a root-run test (as this one may be) would sail through.
+-- Forced by a namespace collision no chmod (or root) can bypass: a
+-- real ref already sits where `refs/board/lanes` itself would need to
+-- be a plain ref, so `update-ref` refuses it structurally, the same
+-- way a directory once sat where the state FILE needed to be.
 local function test_report_surfaces_a_record_failure()
   local s = init_state_repo("report-record-fails")
-  assert(fs.make_dirs(fs.join(s.root, "lanes_state.tl")),
-    "a directory in the way makes record's write fail with EISDIR")
+  local blocker_sha = check.must(gitobj.hash_object(s.root, ""))
+  assert(store.git_ok(s, {"update-ref", "refs/board/lanes/blocker", blocker_sha}),
+    "a real ref under the same path makes refs/board/lanes un-creatable")
   local lines = lanes.report(s, RED)
   local found = false
   for _, line in ipairs(lines) do
@@ -170,15 +186,21 @@ local function test_report_surfaces_a_record_failure()
     .. table.concat(lines, " | "))
 end
 
--- Symmetric case: `items/` replaced by a plain file makes `mint`'s
--- `store.list` fail with ENOTDIR (opendir on a non-directory, also
--- root-proof) without touching `record`, which writes at the store
--- root instead. `report` must surface this one too.
+-- Symmetric case: an item ref whose tip commit carries no `meta` blob
+-- at all makes `mint`'s `store.list` fail (the one shape `list`
+-- treats as genuine corruption, `_work/gitread.tl`'s `build_item`),
+-- without touching `record`, which writes to a different ref
+-- entirely. `report` must surface this one too.
 local function test_report_surfaces_a_mint_failure()
   local s = init_state_repo("report-mint-fails")
-  local items_dir = fs.join(s.root, "items")
-  assert(fs.remove_all(items_dir))
-  assert(fs.write(items_dir, "not a directory"))
+  local id = fixture.file_item(s, "a corrupt item", "")
+  local empty_tree = check.must(gitobj.mktree(s.root, {}))
+  local bogus_sha = check.must(gitobj.commit_tree(s.root, {
+        tree = empty_tree, parents = {}, message = "corrupt: no meta",
+        author_name = "test", author_email = "test@example.com",
+        committer_name = "test", committer_email = "test@example.com",
+      }))
+  assert(store.git_ok(s, {"update-ref", "refs/items/" .. id, bogus_sha}))
   local lines = lanes.report(s, RED)
   local found = false
   for _, line in ipairs(lines) do
@@ -201,7 +223,7 @@ end
 
 -- A minted repair is coherent with the two verbs that decide its
 -- fate: `next` (`_work.action.next_action`) offers it, and `take`
--- (`_work.gitgate.ready_problems` plus `flow.doing_refusal`, the exact
+-- (`_work.gitready.ready_problems` plus `flow.doing_refusal`, the exact
 -- pair `cmd_take` calls) admits it. Placed the way the real repair
 -- parent (G8) already is on the live board — one comparison on the
 -- parent, inherited by every child minted under it — so the only
@@ -229,7 +251,7 @@ local function test_a_minted_repair_is_offered_and_admitted()
     "next offers the minted repair: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
 
-  local problems = gate.ready_problems(s, repair, all)
+  local problems = gitready.ready_problems(s, repair, all)
   assert(#problems == 0,
     "take admits it too: " .. table.concat(problems, "; "))
   assert(flow.doing_refusal(all, repair) == nil,

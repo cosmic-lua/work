@@ -1,6 +1,0 @@
-return {
-  ["id"] = "3IOIgCXMKGltNC0IxcfuQsIQ5CM",
-  ["parent"] = "3HyRcd9FVIczIYW5swnw2IXbnGA",
-  ["repo"] = "cosmic-lua/cosmic",
-  ["title"] = "fetch opens a fresh connection per request: keep-alive across retries, redirects, and calls",
-}

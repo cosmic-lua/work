@@ -49,19 +49,20 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
---- A fresh local-only state repo with one seed commit.
+--- A fresh local-only state repo: a bare git init, nothing filed yet
+--- — every item lives as a ref, so there is nothing to seed.
 local function init_state_repo(name: string): store.Store
   local root = fs.join(tmpdir, "verbs-" .. name)
   assert(fs.remove_all(root))
-  assert(fs.make_dirs(fs.join(root, "items")))
+  assert(fs.make_dirs(root))
   git(root, {"init", "-q"})
-  assert(fs.write(fs.join(root, "items", ".gitkeep"), ""))
-  git(root, {"add", "-A"})
-  git(root, {"commit", "-q", "-m", "init"})
   return check.must(store.open(root))
 end
 
---- A bare "remote" seeded with an empty items/ tree, plus two clones.
+--- A bare "remote" with nothing filed yet, plus two clones — each
+--- carrying the mirror refspecs `store.init_repo` writes once it sees
+--- their `origin`, the same way a real `gitboard init` after a clone
+--- would.
 local function init_shared(name: string): store.Store, store.Store
   local base = fs.join(tmpdir, "verbs-shared-" .. name)
   assert(fs.remove_all(base))
@@ -69,18 +70,12 @@ local function init_shared(name: string): store.Store, store.Store
   local bare = fs.join(base, "remote.git")
   git(base, {"init", "-q", "--bare", bare})
   git(bare, {"config", "core.createObject", "rename"})
-  local seed = fs.join(base, "seed")
-  git(base, {"clone", "-q", bare, seed})
-  assert(fs.make_dirs(fs.join(seed, "items")))
-  assert(fs.write(fs.join(seed, "items", ".gitkeep"), ""))
-  git(seed, {"add", "-A"})
-  git(seed, {"commit", "-q", "-m", "init"})
-  git(seed, {"push", "-q", "origin", "HEAD"})
   local out: {store.Store} = {}
   for i = 1, 2 do
     local dir = fs.join(base, ("clone%d"):format(i))
     git(base, {"clone", "-q", bare, dir})
     git(dir, {"config", "core.createObject", "rename"})
+    assert(store.init_repo(dir))
     out[#out + 1] = check.must(store.open(dir))
   end
   return out[1], out[2]
@@ -126,23 +121,66 @@ local function file_item(s: store.Store, title: string,
   error("new filed nothing: " .. title)
 end
 
---- How many commits a store's checkout carries.
-local function commits(s: store.Store): integer
-  local r = check.must(child.run({"git", "rev-list", "--count", "HEAD"},
+--- Every ref name under `refs/items` and `refs/ended` in a store.
+--- @param s store.Store The store
+--- @return {string} The refnames
+local function item_refnames(s: store.Store): {string}
+  local r = check.must(child.run(
+      {"git", "for-each-ref", "--format=%(refname)", "refs/items", "refs/ended"},
       {cwd = s.root}))
+  assert(r.ok, "git for-each-ref failed: " .. r.stderr)
+  local out: {string} = {}
+  for line in r.stdout:gmatch("([^\n]+)") do
+    out[#out + 1] = line
+  end
+  return out
+end
+
+--- How many DISTINCT commits the whole board carries, across every
+--- item and ended ref — every save makes at least one brand-new
+--- commit object per item it touches, so this is "how many item
+--- writes has the board seen" the way a single working-tree HEAD's
+--- commit count once was. A mutation that touches `also` items now
+--- contributes one commit PER item it writes, not one commit overall
+--- — the atomicity moved from the git commit object to the push.
+--- @param s store.Store The store
+--- @return integer The count, 0 for an empty board
+local function commits(s: store.Store): integer
+  local refnames = item_refnames(s)
+  if #refnames == 0 then
+    return 0
+  end
+  local argv: {string} = {"rev-list", "--count"}
+  for _, r in ipairs(refnames) do
+    argv[#argv + 1] = r
+  end
+  local r = check.must(child.run({"git", table.unpack(argv)}, {cwd = s.root}))
   assert(r.ok, "git rev-list failed: " .. r.stderr)
   return math.tointeger(tonumber((r.stdout:gsub("%s+$", "")))) or -1
 end
 
---- HEAD's committer-recorded author email — what a reader (GitHub's
---- verified badge, a `git log`) actually sees a board commit as.
+--- The most recently committed item (or lanes) mutation's author
+--- email — what a reader (GitHub's verified badge, a `git log`)
+--- actually sees a board commit as, whichever ref it landed on.
 --- @param s store.Store The store
---- @return string The author email HEAD carries
+--- @return string The author email of the newest commit on the board
 local function commit_author_email(s: store.Store): string
-  local r = check.must(child.run({"git", "log", "-1", "--format=%ae"},
-      {cwd = s.root}))
-  assert(r.ok, "git log failed: " .. r.stderr)
-  return (r.stdout:gsub("%s+$", ""))
+  local r = check.must(child.run(
+      {"git", "for-each-ref", "--format=%(refname)", "refs/items", "refs/ended",
+        "refs/board"}, {cwd = s.root}))
+  assert(r.ok, "git for-each-ref failed: " .. r.stderr)
+  local refnames: {string} = {}
+  for line in r.stdout:gmatch("([^\n]+)") do
+    refnames[#refnames + 1] = line
+  end
+  assert(#refnames > 0, "no commits on the board yet")
+  local argv: {string} = {"log", "-1", "--format=%ae"}
+  for _, ref in ipairs(refnames) do
+    argv[#argv + 1] = ref
+  end
+  local log = check.must(child.run({"git", table.unpack(argv)}, {cwd = s.root}))
+  assert(log.ok, "git log failed: " .. log.stderr)
+  return (log.stdout:gsub("%s+$", ""))
 end
 
 --- A spec sidecar meeting the ready bar, through the spec verb.
@@ -165,9 +203,10 @@ local function root_with_leaf(s: store.Store): string, string
   return root, file_item(s, "a workable slice", root)
 end
 
--- A decomposition writes the child AND the parent it de-phases, and
--- they are one commit: half of it reaching the board would leave a
--- parent off the board with nothing decomposing it.
+-- A decomposition writes the child AND the parent it de-phases —
+-- each its own commit now, but one atomic push, so half of it
+-- reaching the board would never leave a parent off the board with
+-- nothing decomposing it.
 
 local record fixture
   READY_SPEC: string

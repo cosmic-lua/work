@@ -31,9 +31,9 @@ local session = require("_work.session")
 local store = require("_work.store")
 
 --- File a new item into the graph, todo if it has a parent and triage
---- otherwise. `spec` is nil to leave the sidecar file unwritten — an
---- empty string would instead write an empty `items/<id>.md`, which is
---- a different, visible outcome.
+--- otherwise. `spec` is nil to leave the tree with no `spec.md` at
+--- all — an empty string would instead write an EMPTY `spec.md`,
+--- which is a different, visible outcome.
 --- @param s store.Store The store
 --- @param title string The item's title
 --- @param parent string The parent id, or "" to file it without one
@@ -55,7 +55,10 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- A friction log names every agent this session claimed work under
   -- since the pass began, or the filing is refused: the only thing
   -- that used to distinguish a full roll call from an empty one was
-  -- prose, and nothing refused the thinner log.
+  -- prose, and nothing refused the thinner log. `new` carries no
+  -- `--session` flag — unlike `take`/`drop`/`spec`/`verdict` — so this
+  -- resolved identity is for the friction check alone, never for
+  -- commit authorship: every `new` commits under the tool identity.
   if not frc and title:sub(1, 9) == "friction:" then
     local refusal = friction.friction_refusal(s, session.resolve(nil), spec or "")
     if refusal then
@@ -101,7 +104,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
-    also)
+    "new", also)
   if not ok then
     return gate.verdict_line("new", false, err)
   end
@@ -161,7 +164,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string): integer
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("attach %s under %s"):format(id:sub(1, 8), parent:sub(1, 8)),
-    gate.containered(parent_item))
+    "attach", gate.containered(parent_item))
   if not ok then
     return gate.verdict_line("attach", false, err)
   end
@@ -282,8 +285,16 @@ local function cmd_block(s: store.Store, id: string, blocker: string,
         .. "releases it"):format(id:sub(1, 8))
     end
   end
+  -- Bounded on the add path only: `flow.waits_on` just decided this
+  -- edge deadlocks nothing against the board THIS checkout read, and
+  -- two reciprocal blocks from two checkouts touch two DIFFERENT
+  -- items' refs — nothing else would put them in each other's way, so
+  -- without the seq lease both could land and the pair would cycle.
+  -- Removing an edge can never create one, so `unblock` stays
+  -- unbounded, contending only with another writer of the same item.
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("%s %s on %s"):format(verb, id:sub(1, 8), blocker:sub(1, 8)))
+    ("%s %s on %s"):format(verb, id:sub(1, 8), blocker:sub(1, 8)), verb, nil,
+    nil, not remove)
   if not ok then
     return gate.verdict_line(verb, false, err)
   end
@@ -373,7 +384,7 @@ local function cmd_set(s: store.Store, id: string, title: string | nil,
     return gate.verdict_line("set", false, table.concat(bad, "; "))
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("set %s %s"):format(id:sub(1, 8), table.concat(fields, " ")))
+    ("set %s %s"):format(id:sub(1, 8), table.concat(fields, " ")), "set")
   if not ok then
     return gate.verdict_line("set", false, err)
   end

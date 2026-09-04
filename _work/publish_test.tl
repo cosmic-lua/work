@@ -1,14 +1,17 @@
 #!/usr/bin/env cosmic
--- A mutating verb is independent of the shared worktree's state at
--- paths it does not own. `sync`/`rebase_onto_remote`'s `git fetch` +
--- `git merge --ff-only` tolerates an unrelated dirty file and refuses
--- by name on an overlapping one; `publish`'s lost-race recovery drops
--- the mutation whole via `reset --mixed` plus a targeted checkout of
--- only its own paths, leaving a dirty file elsewhere byte-identical —
--- the regression test for the `reset --hard` hazard that mechanism
--- replaces. `git stash list` stays empty throughout: the machinery
--- must never reach for the stack, which is shared across every
--- worktree of this repo.
+-- A mutating verb is independent of the checked-out branch's state at
+-- every path — not just the paths it does not own, but ALL of them,
+-- now that items are refs rather than files: `sync` is exactly `git
+-- fetch --prune` against `refs/items`, `refs/ended` and `refs/board`,
+-- which never reads, merges into, or otherwise touches the working
+-- tree; neither does a mutation's own commit, or the lost-race
+-- recovery. A `_work/**` file mid-edit in the shared checkout —
+-- machinery a developer is changing while a verb runs against the
+-- same clone — is therefore untouched by any of the three, always,
+-- by construction rather than by a targeted fast-forward and a
+-- careful reset. `git stash list` stays empty throughout: the
+-- machinery must never reach for the stack, which is shared across
+-- every worktree of this repo.
 
 local check = require("cosmic.check")
 local child = require("cosmic.child")
@@ -53,27 +56,12 @@ local function stash_list(root: string): string
   return (r.stdout:gsub("%s+$", ""))
 end
 
---- The paths a commit touched, newest first — how a test reads back
---- what a mutation actually staged.
---- @param root string Checkout root
---- @return {string} File paths
-local function commit_paths(root: string): {string}
-  local r = check.must(child.run(
-      {"git", "show", "--name-only", "--format=", "HEAD"}, {cwd = root}))
-  assert(r.ok, "git show failed: " .. r.stderr)
-  local out: {string} = {}
-  for line in r.stdout:gmatch("([^\n]+)") do
-    out[#out + 1] = line
-  end
-  return out
-end
-
---- Commit and push a `_work/**` file so a later unstaged edit to it is
---- a MODIFICATION of a path git already tracks — the shape the actual
---- hazard needs. A freshly created untracked file does not exercise
---- it: git already tolerates those, on both the old `pull --rebase`
---- and `reset --hard`, so a test dirtying one would pass whether or
---- not the fix under test does anything at all.
+--- Commit and push a `_work/**` file on the checked-out branch, so a
+--- later unstaged edit to it is a MODIFICATION of a path git already
+--- tracks — the shape that would have been the hazard under the old
+--- single-branch design. Items no longer share that branch at all,
+--- but the file still has to exist and be tracked for `git status` to
+--- have an opinion about it being dirty.
 --- @param root string Checkout root
 --- @param path string File path relative to root, e.g. "_work/x.tl"
 --- @param content string Content
@@ -85,16 +73,32 @@ local function seed_tracked_file(root: string, path: string, content: string)
   fixture.git(root, {"push", "-q", "origin", "HEAD"})
 end
 
--- A modified-but-unrelated `_work/**` file sitting dirty in the
+--- Bring the checked-out branch's working tree level with `origin`,
+--- the way a developer would `git pull` the machinery by hand — never
+--- `publish.sync`'s job, which only ever fetches `refs/items`,
+--- `refs/ended` and `refs/board` and touches no working tree at all.
+--- @param root string Checkout root
+local function pull_branch(root: string)
+  local branch = check.must(child.run({"git", "symbolic-ref", "--short", "HEAD"},
+      {cwd = root}))
+  assert(branch.ok, "git symbolic-ref failed: " .. branch.stderr)
+  fixture.git(root, {"fetch", "-q", "origin"})
+  fixture.git(root, {"merge", "-q", "--ff-only",
+      "origin/" .. (branch.stdout:gsub("%s+$", ""))})
+end
+
+-- A modified-but-uncommitted `_work/**` file sitting dirty in the
 -- checkout must not block a sync that has real work to pull in, and a
--- mutation's own commit must carry exactly the item's files — nothing
--- from the dirty path leaks in, and the dirty path is not disturbed by
--- either. Against the pre-fix whole-tree `git pull --rebase`, both the
--- sync and the mutation below refuse outright the moment the file is
--- dirty, regardless of what path the incoming commit touches.
+-- mutation's own commit(s) must never touch it either: `sync` is
+-- `fetch --prune` against three ref namespaces, and `save` writes git
+-- objects and moves `refs/items/*` directly — neither ever reads or
+-- writes the working tree, so there is no mechanism left that COULD
+-- disturb an unrelated dirty file, unlike the old fast-forward merge
+-- this reasoned about a refusal for.
 local function test_a_dirty_unrelated_file_does_not_block_a_mutation()
   local a, b = init_shared("dirty-unrelated")
   seed_tracked_file(a.root, fs.join("_work", "x.tl"), "-- base\n")
+  pull_branch(b.root)
   assert(publish.sync(b))
   file_item(a, "a's item, for b to pull in", "")
 
@@ -107,26 +111,24 @@ local function test_a_dirty_unrelated_file_does_not_block_a_mutation()
     "the dirty file is byte-identical after a real sync")
 
   local id = file_item(b, "a workable slice filed over dirt", "")
-  local paths = commit_paths(b.root)
-  assert(#paths == 1 and paths[1] == fs.join("items", id .. ".tl"),
-    "the commit is exactly the item's file: " .. table.concat(paths, ", "))
+  assert(check.must(store.load(b, id)).id == id, "the item itself landed")
   local after_mutation = fs.read(dirty_path)
   assert(after_mutation == "-- an in-progress machinery edit\n",
     "the dirty file is byte-identical after the mutation")
   assert(stash_list(b.root) == "", "the shared stash stack is untouched")
 end
 
--- The regression test for the `reset --hard` hazard: a lost push race
--- with an unrelated `_work/**` file dirty must still drop the losing
--- mutation and refuse LOST_RACE, WITHOUT destroying that file. Against
--- the pre-fix `reset --hard HEAD~1`, this fails — the hard reset wipes
--- every uncommitted MODIFICATION in the checkout, tracked paths
--- included, the moment the drop runs, whether or not the mutation
--- itself ever touched that path. `reset --mixed` plus a checkout of
--- only the dropped commit's own paths must not.
+-- A lost push race, with an unrelated `_work/**` file dirty, must
+-- still drop the losing mutation and refuse LOST_RACE — dropping it
+-- is a local `git update-ref` on the one item ref that lost its lease
+-- plus a `fetch --prune`, neither of which is a working-tree
+-- operation, so the old `reset --hard` hazard (every uncommitted
+-- MODIFICATION in the checkout wiped, tracked paths included) has no
+-- analog left to regress on.
 local function test_a_lost_race_preserves_unrelated_dirt()
   local a, b = init_shared("race-dirt")
   seed_tracked_file(a.root, fs.join("_work", "y.tl"), "-- base\n")
+  pull_branch(b.root)
   -- A common base both checkouts hold before either mutates, so b's
   -- own commit below is built against state the winner's push makes
   -- stale rather than one that already contains it.
@@ -138,19 +140,23 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   local dirty_path = fs.join(b.root, "_work", "y.tl")
   assert(fs.write(dirty_path, "-- precious uncommitted work\n"))
 
-  -- a wins the race, publishing from the same base b still holds.
-  local winner = make_item()
-  assert(store.save(a, winner, "a wins the race"))
+  -- a wins the race, editing the SAME base item and publishing first —
+  -- two brand-new, otherwise-unrelated items would never contend
+  -- under the ref layout, so the race needs one shared ref.
+  local wa = check.must(store.load(a, base.id))
+  wa.title = "a's edit wins"
+  assert(store.save(a, wa, "a wins the race"))
   assert(publish.publish(a))
 
-  -- b's commit, built and pushed against the now-stale base, loses.
-  local loser = make_item()
-  assert(store.save(b, loser, "b loses the race"))
+  -- b's edit of the same item, built and pushed against the now-stale
+  -- base, loses.
+  local wb = check.must(store.load(b, base.id))
+  wb.title = "b's edit loses"
+  assert(store.save(b, wb, "b loses the race"))
   local ok, err = publish.publish(b)
   assert(not ok and err == store.LOST_RACE,
     "the losing mutation must refuse LOST_RACE: " .. tostring(err))
-  assert(store.load(b, loser.id) == nil, "the dropped mutation is gone whole")
-  assert(check.must(store.load(b, winner.id)).id == winner.id,
+  assert(check.must(store.load(b, base.id)).title == "a's edit wins",
     "the checkout holds the winner's state")
   local after = fs.read(dirty_path)
   assert(after == "-- precious uncommitted work\n",
@@ -158,18 +164,24 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   assert(stash_list(b.root) == "", "the shared stash stack is untouched")
 end
 
--- An incoming `_work/**` commit that overlaps a local uncommitted edit
--- to the SAME path is the one case a fast-forward cannot silently
--- resolve: it must refuse, naming the file, with no conflict markers
--- and no stash entry — never a resolved merge.
-local function test_an_overlapping_dirty_file_refuses_by_name()
+-- The overlapping case is the clearest sign of what moved: under the
+-- old single branch, an incoming `_work/**` commit that touched the
+-- SAME path as a local uncommitted edit was the one shape a
+-- fast-forward could not silently resolve, and `sync` refused it by
+-- name. `sync` no longer merges anything — it moves three ref
+-- namespaces the working tree has no path under — so the exact same
+-- setup (two sides editing `_work/z.tl`, one committed and pushed, one
+-- still dirty) no longer refuses at all: sync succeeds, and the dirty
+-- edit is left exactly as it was, because nothing about it was ever
+-- in sync's way to begin with.
+local function test_an_overlapping_dirty_file_no_longer_blocks_sync()
   local a, b = init_shared("dirty-overlap")
-  local shared_path = fs.join("_work", "z.tl")
   assert(fs.make_dirs(fs.join(a.root, "_work")))
   assert(fs.write(fs.join(a.root, "_work", "z.tl"), "-- base\n"))
   fixture.git(a.root, {"add", "-A"})
   fixture.git(a.root, {"commit", "-q", "-m", "seed _work/z.tl"})
   fixture.git(a.root, {"push", "-q", "origin", "HEAD"})
+  pull_branch(b.root)
   assert(publish.sync(b))
 
   assert(fs.write(fs.join(a.root, "_work", "z.tl"), "-- a's change\n"))
@@ -179,22 +191,15 @@ local function test_an_overlapping_dirty_file_refuses_by_name()
 
   local dirty_path = fs.join(b.root, "_work", "z.tl")
   assert(fs.write(dirty_path, "-- b's uncommitted change\n"))
-  local ok, err = publish.sync(b)
-  assert(not ok, "an overlapping sync must be refused")
-  assert(err:find(shared_path, 1, true), "the refusal names the file: " .. err)
-  assert(err:find("--dir", 1, true),
-    "the refusal points at the --dir remedy: " .. err)
-  assert(not fs.is_present(fs.join(b.root, ".git", "rebase-merge")),
-    "no conflict markers are ever staged")
+  assert(publish.sync(b), "sync no longer reads the working tree at all")
   local after = fs.read(dirty_path)
   assert(after == "-- b's uncommitted change\n",
-    "the overlapping edit is preserved, not merged")
+    "the overlapping edit is preserved — sync never reached it")
   assert(stash_list(b.root) == "", "the shared stash stack is untouched")
 end
 
--- An unreadable remote — the fetch itself fails, not the merge — is a
--- clean refusal too, never a crash, and it must not touch the checkout
--- at all: unlike a fast-forward refusal, there is nothing to name.
+-- An unreadable remote — the fetch itself fails — is a clean refusal
+-- too, never a crash.
 local function test_an_unreachable_remote_refuses_cleanly()
   local a = init_shared("unreachable")
   fixture.git(a.root, {"remote", "set-url", "origin",

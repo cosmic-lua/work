@@ -8,7 +8,7 @@
 
 local check = require("cosmic.check")
 local flow = require("_work.flow")
-local gate = require("_work.gitgate")
+local gitready = require("_work.gitready")
 local gitspec = require("_work.gitspec")
 local fs = require("cosmic.fs")
 local publish = require("_work.publish")
@@ -40,7 +40,7 @@ local function test_the_spec_bar_is_the_items_own()
   assert(store.save(s, stray, "hand-edited parent"))
   local all = check.must(store.list(s))
   assert(#flow.graph_problems(all) > 0, "the board does have a problem")
-  assert(#gate.ready_problems(s, check.must(store.load(s, leaf)), all) == 0,
+  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf)), all) == 0,
     "a sound item meets the bar while another item is broken")
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
     "and it may be taken")
@@ -129,7 +129,7 @@ local function test_spec_bar_names_a_blocker_that_is_not_an_item()
   local it = check.must(store.load(s, leaf))
   it.blocked_by = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
   assert(store.save(s, it, "hand-edited blocker"))
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 1 and problems[1]:find("not an item", 1, true),
     "the bar names it: " .. table.concat(problems, "; "))
@@ -160,7 +160,7 @@ local function test_spec_bar_names_an_undeclared_repo()
   local _, leaf = root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0)
   assert(gitspec.cmd_spec(s, leaf, spec_file("upstream", UPSTREAM_CLONE)) == 0)
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   local found = false
   for _, p in ipairs(problems) do
@@ -181,7 +181,7 @@ local function test_declaring_the_repo_clears_the_bar()
   local declared = UPSTREAM_CLONE
   .. "\n## Access\n- jart/cosmopolitan (read-only, upstream history)\n"
   assert(gitspec.cmd_spec(s, leaf, spec_file("declared", declared)) == 0)
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 0, "a declared repo clears the bar: "
     .. table.concat(problems, "; "))
@@ -196,7 +196,7 @@ local function test_the_items_own_repo_needs_no_declaring()
   local _, leaf = root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "jart/cosmopolitan", nil) == 0)
   assert(gitspec.cmd_spec(s, leaf, spec_file("self", UPSTREAM_CLONE)) == 0)
-  local problems = gate.ready_problems(s, check.must(store.load(s, leaf)),
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 0, "the item's own repo is not a gap: "
     .. table.concat(problems, "; "))
@@ -311,10 +311,10 @@ local function test_spec_records_the_speccer_in_the_same_commit()
   assert(#it.speccers == 1 and it.speccers[1] == "refiner-a",
     "the speccer is recorded")
   local shown = check.must(store.git(s, {"show", "--name-only",
-        "--pretty=format:", "HEAD"}))
-  assert(shown.stdout:find(fs.join("items", leaf .. ".tl"), 1, true) ~= nil
-    and shown.stdout:find(fs.join("items", leaf .. ".md"), 1, true) ~= nil,
-    "the item and the sidecar land in the one commit: " .. shown.stdout)
+        "--pretty=format:", s.leased_ref[leaf]}))
+  assert(shown.stdout:find("meta", 1, true) ~= nil
+    and shown.stdout:find("spec.md", 1, true) ~= nil,
+    "the item's meta and its spec sidecar land in the one commit: " .. shown.stdout)
 
   local second = spec_file("speccer-second",
     (READY_SPEC:gsub("Not that.", "Refined again.")))

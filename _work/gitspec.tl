@@ -56,7 +56,8 @@ local function cmd_spec(s: store.Store, id: string, file: string,
     end
   end
   local ok, err = gate.commit_and_publish(s, it, body,
-    ("spec %s%s"):format(id:sub(1, 8), gate.forced_suffix(frc, rsn)))
+    ("spec %s%s"):format(id:sub(1, 8), gate.forced_suffix(frc, rsn)),
+    "spec", nil, session)
   if not ok then
     return gate.verdict_line("spec", false, err)
   end

@@ -1,8 +1,0 @@
-return {
-  ["id"] = "3I3mjNFiv9rLUWFvTc3QI9okmq7",
-  ["parent"] = "3HyRcrR35sYRwZl3guddvOBhFoK",
-  ["pr"] = 1282,
-  ["repo"] = "cosmic-lua/cosmic",
-  ["resolution"] = "completed",
-  ["title"] = "AGENTS.md sits exactly at the hard 500-line cap with no slack for future doc additions",
-}
