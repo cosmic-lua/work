@@ -48,6 +48,8 @@ local brief = require("_work.brief")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
 local find = require("_work.find")
+local fsck = require("_work.gitfsck")
+local gate = require("_work.gitgate")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local import = require("_work.import")
@@ -60,16 +62,19 @@ local vrd = require("_work.gitverdict")
 local show = require("_work.gitshow")
 local view = require("_work.gitview")
 
---- The verbs that write. Each one publishes, so each needs the
---- remote's state before it reads the board at all: mutating a stale
---- checkout produces a change computed against items someone else has
---- already moved. Reads stay local and offline, and are as current as
---- the last sync.
-local MUTATES: {string: boolean} = {
-  ["new"] = true, ["attach"] = true, ["block"] = true, ["unblock"] = true,
-  ["spec"] = true, ["take"] = true, ["drop"] = true, ["verdict"] = true,
-  ["done"] = true, ["compare"] = true, ["set"] = true, ["hold"] = true,
-  ["unhold"] = true,
+--- The verbs whose save may be BOUNDED — advancing and leasing
+--- `refs/board/seq` (`_work.store.set_bounded`), so two of them racing
+--- each other need to see the SAME seq tip: `take` (a NEW claim, the
+--- doing bound) and `block` (the add path only — see
+--- `_work.gitgraph.cmd_block`'s own comment). Only these fetch the
+--- remote's state before mutating; every other write verb builds
+--- against this checkout's own local refs and pushes straight away —
+--- a stale lease is refused as `LOST_RACE` by the push itself
+--- (`_work.publish.publish`, which re-syncs on rejection), costing a
+--- round trip only when a race actually happened. `sync` and lane
+--- minting fetch on their own, outside this dispatch.
+local FETCH_FIRST: {string: boolean} = {
+  ["take"] = true, ["block"] = true,
 }
 
 local function dir_flag(): flags.Flag
@@ -265,6 +270,9 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "[ID] [options]", flags = {dir_flag()}}},
     {name = "sync", summary = "rebase onto the remote's state",
       spec = {flags = {dir_flag()}}},
+    {name = "fsck", summary = "read-only board audit: dangling edges, "
+      .. "canonical-tree drift, lane collisions, flagged items",
+      spec = {flags = {dir_flag()}}},
     {name = "find", summary = "full-text search over titles and specs; "
       .. "prints each hit's handle, state, title and a snippet, then a "
       .. "hit count",
@@ -305,7 +313,12 @@ local function main(...: string): integer
     return 0
   end
   if d.command == "init" then
-    return verbs.cmd_init(d.parsed.values["dir"] or ".")
+    local dir = d.parsed.values["dir"] or "."
+    local ok, err = store.init_repo(dir)
+    if not ok then
+      return gate.verdict_line("init", false, err)
+    end
+    return gate.verdict_line("init", true, ("state repository ready at %s"):format(dir))
   end
   local s, serr = store.open(d.parsed.values["dir"] or ".")
   if s == nil then
@@ -327,7 +340,7 @@ local function main(...: string): integer
     print(("gitboard-import: imported %d item(s) from %s at %s"):format(n, from, rev))
     return 0
   end
-  if MUTATES[d.command] then
+  if FETCH_FIRST[d.command] then
     local synced, syerr = publish.sync(s)
     if not synced then
       io.stderr:write(("gitboard-%s: could not sync before mutating: %s\n")
@@ -341,6 +354,9 @@ local function main(...: string): integer
   end
   if d.command == "sync" then
     return verbs.cmd_sync(s)
+  end
+  if d.command == "fsck" then
+    return fsck.cmd_fsck(s)
   end
   if d.command == "find" then
     return find.cmd_find(s, table.concat(d.parsed.args, " "))

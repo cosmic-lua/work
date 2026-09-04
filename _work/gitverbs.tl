@@ -21,18 +21,8 @@ local publish = require("_work.publish")
 local review = require("_work.review")
 local store = require("_work.store")
 
---- init: prepare a state repository at `dir` — the mechanics live in
---- `store.init_repo`, alongside `open`; this is just its verdict line.
---- @param dir string The directory to prepare
---- @return integer Exit code
-local function cmd_init(dir: string): integer
-  local ok, err = store.init_repo(dir)
-  if not ok then
-    return gate.verdict_line("init", false, err)
-  end
-  return gate.verdict_line("init", true,
-    ("state repository ready at %s"):format(dir))
-end
+-- `init` lives in `_work.gitboard` now — a two-line `store.init_repo`
+-- wrapper nothing else needed, moved to keep this file under its cap.
 
 --- take: claim an item, record its handover, or claim its review —
 --- which one is derived from the item's own facts, never declared.
@@ -80,13 +70,14 @@ local function cmd_take(s: store.Store, id: string, session: string,
   if bad_session then
     return gate.verdict_line("take", false, "REFUSED: " .. bad_session)
   end
-  local it, lerr = store.load(s, id)
-  if it == nil then
-    return gate.verdict_line("take", false, lerr)
-  end
+  -- `store.list` alone: the board read already carries this item's lease.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("take", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
+  if it == nil then
+    return gate.verdict_line("take", false, ("no item %s"):format(id))
   end
   local r = flow.role(it, all)
   if r ~= "work" then
@@ -293,9 +284,14 @@ local function cmd_drop(s: store.Store, id: string, session: string,
       .. "'<the worker-side reason>'. An ITEM that cannot proceed is "
       .. "not dropped bare: `new` the question and `block` on it first")
   end
-  local it, lerr = store.load(s, id)
+  -- One `store.list`: it carries this item's lease too.
+  local all, aerr = store.list(s)
+  if all == nil then
+    return gate.verdict_line("drop", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
   if it == nil then
-    return gate.verdict_line("drop", false, lerr)
+    return gate.verdict_line("drop", false, ("no item %s"):format(id))
   end
   if not flow.is_doing(it) then
     return gate.verdict_line("drop", false,
@@ -339,8 +335,7 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   -- items wait on their question, bare todo is re-offered as-is, and
   -- the bare line names the block-first recovery while the dropping
   -- session still has the context to file the question.
-  local all, _lerr = store.list(s)
-  if all ~= nil and flow.is_blocked(it, flow.by_id(all)) then
+  if flow.is_blocked(it, flow.by_id(all)) then
     return gate.verdict_line("drop", true,
       ("%s released — it waits on its open blocker(s), not the queue")
       :format(id:sub(1, 8)))
@@ -360,13 +355,14 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   if reason ~= "completed" and reason ~= "not-planned" then
     return gate.verdict_line("done", false, ("unknown reason: %s"):format(reason))
   end
-  local it, lerr = store.load(s, id)
-  if it == nil then
-    return gate.verdict_line("done", false, lerr)
-  end
+  -- `store.list` alone: same as `cmd_take` above.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("done", false, aerr)
+  end
+  local it = flow.by_id(all)[id]
+  if it == nil then
+    return gate.verdict_line("done", false, ("no item %s"):format(id))
   end
   -- An open PR is work mid-review: ending the item under it makes the
   -- diff vanish from the board while it still exists on GitHub. An
@@ -479,7 +475,6 @@ local function cmd_sync(s: store.Store): integer
 end
 
 local record gitverbs
-  cmd_init: function(dir: string): integer
   cmd_take: function(s: store.Store, id: string, session: string,
   pr: integer, force: boolean, why: string, result?: boolean): integer
   cmd_drop: function(s: store.Store, id: string, session: string,
@@ -490,7 +485,6 @@ local record gitverbs
 end
 
 local M: gitverbs = {
-  cmd_init = cmd_init,
   cmd_take = cmd_take,
   cmd_drop = cmd_drop,
   cmd_done = cmd_done,

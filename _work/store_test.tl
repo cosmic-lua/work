@@ -47,13 +47,14 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
---- A fresh local-only state repo: a bare git init — every item is a
---- ref, so there is nothing to seed.
+--- A fresh local-only state repo: `store.init_repo` (a bare git init
+--- plus the `refs/board/format` marker) — every item is a ref, so
+--- there is nothing else to seed.
 local function init_state_repo(name: string): string
   local root = fs.join(tmpdir, "store-" .. name)
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
-  git(root, {"init", "-q"})
+  assert(store.init_repo(root))
   return root
 end
 

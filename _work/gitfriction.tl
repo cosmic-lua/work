@@ -116,13 +116,23 @@ local function friction_refusal(s: store.Store, session_id: string,
   if #agents == 0 then
     return nil
   end
+  -- Resolved first, then read in one batch (`store.read_specs`) rather
+  -- than one `cat-file -p` per past filing — the caller (`cmd_new`)
+  -- has already called `store.list` before reaching here, so every
+  -- id's lease is already known and this costs no extra process per
+  -- filing, however many the log holds.
   local accounted_for: {string: boolean} = {}
+  local full_ids: {string} = {}
   for _, short_id in ipairs(past_filing_ids) do
     local full_id = store.resolve(s, short_id)
     if full_id then
-      for key in pairs(named_headings(store.read_spec(s, full_id))) do
-        accounted_for[key] = true
-      end
+      full_ids[#full_ids + 1] = full_id
+    end
+  end
+  local bodies = store.read_specs(s, full_ids)
+  for _, full_id in ipairs(full_ids) do
+    for key in pairs(named_headings(bodies[full_id])) do
+      accounted_for[key] = true
     end
   end
   -- Outstanding: this orchestrator's own claims no past filing has

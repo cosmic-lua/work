@@ -38,15 +38,25 @@ pre-mint duplicate-title check.
 Every item is a git ref — `refs/items/<ksuid>` while open,
 `refs/ended/<ksuid>` once resolved — whose tip commit's tree carries
 its fields (a `meta` blob of `key: value` lines) and its spec prose
-(`spec.md`, present only when it has one); `refs/board/lanes` and
-`refs/board/seq` hold board-wide state the same way, outside the
-per-item namespace. Nothing here is a file in the working tree: a read
-is `git for-each-ref`/`cat-file --batch` against the ref layout, and a
-write is `git hash-object`/`mktree`/`commit-tree` plus an
-`update-ref` — `_work/store.tl` and the modules beside it are the
-whole of that mechanism. Every verb and render still addresses an item
-by the 8-character handle (bare or wrapped, either divider,
-case-tolerant) or an unambiguous prefix.
+(`spec.md`, present only when it has one); `refs/board/lanes`,
+`refs/board/seq` and `refs/board/format` hold board-wide state the
+same way, outside the per-item namespace. `refs/board/format`'s tree
+holds one blob, `format`, naming the layout version every reader
+checks before trusting anything else it read alongside it
+(`_work/format.tl`) — a board on a version this tool does not know, or
+missing the marker while it already carries items, is refused rather
+than silently misread; `gitboard init` writes the marker on a board
+that has neither yet. Nothing here is a file in the working tree: a
+read is `git for-each-ref`/`cat-file --batch` against the ref layout,
+and a write is one `git fast-import` stream (`_work/fastimport.tl`) —
+`_work/store.tl` and the modules beside it are the whole of that
+mechanism. Every verb and render still addresses an item by the
+8-character handle (bare or wrapped, either divider, case-tolerant) or
+an unambiguous prefix. `gitboard fsck` is the read-only, offline
+whole-board audit no single verb ever asks: dangling
+`parent`/`beats`/`blocked_by` edges, an item's tree not re-encoding to
+what it was read from, two open items sharing a lane, a root carrying
+a `repo`, and anything the store's own tolerant decode had to flag.
 
 A workable item's state is DERIVED from the facts its ref carries,
 never declared: open, unclaimed, and PR-less is `todo` (pullable once
@@ -132,8 +142,24 @@ refuses, naming the recovery — run the same verb again, and it decides
 afresh with EVERY gate applied to the merged board, not a replayed
 commit whose preconditions may no longer hold. A mutation never
 half-lands. Reads need no network and no token, and touch no working
-tree — a read is `for-each-ref`/`cat-file --batch`, a write is
-`hash-object`/`mktree`/`commit-tree` plus `update-ref`.
+tree — a read is `for-each-ref`/`cat-file --batch`, a write is one
+`git fast-import` stream per save (every item it touches as its own
+`commit refs/items/<id>`, `from` its observed tip so unchanged paths
+carry over) plus, only for the rare item that just ENDED, one
+`update-ref --stdin` transaction to move it from `refs/items` to
+`refs/ended` — fast-import cannot delete a ref itself.
+
+A mutation's PUSH is always the compare-and-swap, leased against each
+ref's observed tip — so only a BOUNDED mutation (one whose gate reads
+the whole board before deciding, today `take`ing NEW work and the
+add half of `block`, both against a shared `refs/board/seq` lease)
+fetches the remote's state before it builds anything: two of those
+racing each other need to see the same seq tip, or the lease decides
+nothing. Every other mutation never touches `refs/board/seq`, so it
+builds straight against this checkout's own local refs and pushes —
+a stale lease is simply refused as `LOST_RACE` by the push itself,
+recovered exactly as any lost race is, costing the extra round trip
+only when a race actually happened rather than on every call.
 
 A mutation syncs by `git fetch --prune` against the three ref
 namespaces (`refs/items`, `refs/ended`, `refs/board`) — never a

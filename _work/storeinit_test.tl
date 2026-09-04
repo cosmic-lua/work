@@ -6,7 +6,10 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
+local format = require("_work.format")
 local fs = require("cosmic.fs")
+local item = require("_work.item")
+local ksuid = require("_work.ksuid")
 local store = require("_work.store")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
@@ -83,4 +86,105 @@ local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   local r2 = check.must(child.run({"git", "config", "--get-all", "remote.origin.fetch"},
       {cwd = dir}))
   assert(r2.stdout == r.stdout, "a second init_repo adds nothing new")
+end
+
+-- `init_repo` writes `refs/board/format` on a fresh repository — the
+-- exact blob `_work.format.blob` gives, at the one path `format`.
+local function test_init_repo_writes_the_format_marker()
+  local root = fs.join(tmpdir, "init-format")
+  assert(fs.remove_all(root))
+  assert(store.init_repo(root))
+  local r = check.must(child.run({"git", "cat-file", "-p", "refs/board/format:format"},
+      {cwd = root}))
+  assert(r.ok, "the marker blob reads back: " .. r.stderr)
+  assert(r.stdout == format.blob(), "got: " .. r.stdout)
+end
+
+--- The `refs/board/format` sha, "" when the ref does not exist.
+local function format_sha(root: string): string
+  local r = child.run({"git", "rev-parse", "--verify", "-q", "refs/board/format"},
+    {cwd = root})
+  if r == nil or not r.ok then
+    return ""
+  end
+  return (r.stdout:gsub("%s+$", ""))
+end
+
+--- Hand-write `refs/board/format`'s `format` blob to `text` — plumbing
+--- a real reader (`gitread.list`) would meet on a board this tool
+--- disagrees with, never `_work.store`'s own writer.
+--- @param root string The state repository
+--- @param text string The blob content to write
+local function rewrite_format(root: string, text: string)
+  local blob = check.must(child.run({"git", "hash-object", "-w", "--stdin"},
+      {cwd = root, stdin = text}))
+  assert(blob.ok, "hash-object failed: " .. blob.stderr)
+  local blob_sha = (blob.stdout:gsub("%s+$", ""))
+  local tree = check.must(child.run({"git", "mktree"},
+      {cwd = root, stdin = ("100644 blob %s\tformat\n"):format(blob_sha)}))
+  assert(tree.ok, "mktree failed: " .. tree.stderr)
+  local tree_sha = (tree.stdout:gsub("%s+$", ""))
+  local argv: {string} = {"git", "-c", "user.email=test@example.com",
+    "-c", "user.name=test", "commit-tree", tree_sha, "-m", "hand-edited format"}
+  local old = format_sha(root)
+  if old ~= "" then
+    argv[#argv + 1] = "-p"
+    argv[#argv + 1] = old
+  end
+  local commit = check.must(child.run(argv, {cwd = root}))
+  assert(commit.ok, "commit-tree failed: " .. commit.stderr)
+  git(root, {"update-ref", "refs/board/format", (commit.stdout:gsub("%s+$", ""))})
+end
+
+--- One filed item, so a format check has a board that "already
+--- carries items" to be asked about.
+--- @param s store.Store The store to file into
+local function seed_one_item(s: store.Store)
+  local id = check.must(ksuid.encode(1700000000, ("\0"):rep(16)))
+  local it = check.must(item.decode({id = id, title = "a seeded item"}))
+  assert(store.save(s, it, "seed"))
+end
+
+-- A board whose marker names a version other than the one this tool
+-- knows is refused by the whole-board read — naming both versions, so
+-- the message alone says which side is behind.
+local function test_list_refuses_a_wrong_format_version()
+  local root = fs.join(tmpdir, "format-wrong-version")
+  assert(fs.remove_all(root))
+  assert(store.init_repo(root))
+  local s = check.must(store.open(root))
+  seed_one_item(s)
+  rewrite_format(root, "2\n")
+  local all, lerr = store.list(s)
+  assert(all == nil, "a board on a version this tool does not know is refused")
+  assert(lerr:find("2", 1, true) ~= nil and lerr:find(format.CURRENT, 1, true) ~= nil,
+    "the refusal names both versions: " .. lerr)
+end
+
+-- A board with items but NO format marker at all reads as the old
+-- layout it is — refused, never silently trusted.
+local function test_list_refuses_a_missing_marker_with_items_present()
+  local root = fs.join(tmpdir, "format-missing")
+  assert(fs.remove_all(root))
+  assert(store.init_repo(root))
+  local s = check.must(store.open(root))
+  seed_one_item(s)
+  git(root, {"update-ref", "-d", "refs/board/format"})
+  local all, lerr = store.list(s)
+  assert(all == nil, "a board with items and no marker is refused")
+  assert(lerr:find("format", 1, true) ~= nil, "got: " .. lerr)
+end
+
+-- The same board, empty (nothing ever filed), with no marker either:
+-- `init_repo` is what writes one, and a scratch repo before that has
+-- run has nothing else to be inconsistent with — so this is fine, not
+-- a refusal.
+local function test_list_accepts_a_missing_marker_on_an_empty_board()
+  local root = fs.join(tmpdir, "format-missing-empty")
+  assert(fs.remove_all(root))
+  assert(store.init_repo(root))
+  git(root, {"update-ref", "-d", "refs/board/format"})
+  local s = check.must(store.open(root))
+  local all = check.must(store.list(s))
+  assert(#all == 0, "an empty board with no marker still reads: " .. #all)
 end

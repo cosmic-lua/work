@@ -3,6 +3,7 @@
 --- many items exist. Split out of `_work.store` so that module stays
 --- under its line cap; `_work.store` is the only caller outside tests.
 local child = require("cosmic.child")
+local format = require("_work.format")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
@@ -105,12 +106,17 @@ local function load_item(root: string, id: string): Loaded | nil, string
 end
 
 --- Every item in the store, done ones included: one `for-each-ref`
---- (also reading `refs/board/seq`'s tip), one `cat-file --batch` for
---- every item's `meta`/`beats`/`blocked_by`, and one more for every
+--- (also reading `refs/board/seq`'s and `refs/board/format`'s tips),
+--- one `cat-file --batch` for every item's `meta`/`beats`/`blocked_by`
+--- PLUS the format marker's own blob, and one more for every
 --- blocker's reason blob — three processes total, never one per item.
+--- The format check happens here, once, rather than in every reader:
+--- a board on a layout this tool cannot trust is refused before
+--- anything else it read alongside the marker is believed.
 --- @param root string The repository root
 --- @return Board | nil The board
---- @return string Error message naming the first genuinely corrupt item
+--- @return string Error message naming the first genuinely corrupt
+--- item, or the format refusal
 local function list(root: string): Board | nil, string
   local found, ferr = refs.for_each_ref(root, {"refs/items", "refs/ended", "refs/board"})
   if found == nil then
@@ -118,14 +124,20 @@ local function list(root: string): Board | nil, string
   end
   local item_refs: {refs.RefEntry} = {}
   local seq_sha = ""
+  local format_sha = ""
   for _, r in ipairs(found) do
     if r.refname == "refs/board/seq" then
       seq_sha = r.sha
+    elseif r.refname == "refs/board/format" then
+      format_sha = r.sha
     elseif r.refname:sub(1, 11) == "refs/items/" or r.refname:sub(1, 11) == "refs/ended/" then
       item_refs[#item_refs + 1] = r
     end
   end
   local queries: {string} = {}
+  if format_sha ~= "" then
+    queries[#queries + 1] = format_sha .. ":format"
+  end
   for _, r in ipairs(item_refs) do
     queries[#queries + 1] = r.sha .. ":meta"
     queries[#queries + 1] = r.sha .. ":beats"
@@ -134,6 +146,17 @@ local function list(root: string): Board | nil, string
   local batch, berr = gitobj.cat_file_batch(root, queries)
   if batch == nil then
     return nil, berr
+  end
+  local format_content = ""
+  if format_sha ~= "" then
+    local entry = batch[format_sha .. ":format"]
+    if entry ~= nil then
+      format_content = entry.content
+    end
+  end
+  local frefusal = format.refusal(format_content, #item_refs > 0)
+  if frefusal ~= nil then
+    return nil, frefusal
   end
   local reason_queries: {string} = {}
   for _, r in ipairs(item_refs) do
