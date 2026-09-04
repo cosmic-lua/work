@@ -2,6 +2,8 @@ title: gitboard show/next: surface when two open items' Change sections name the
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-HKdD_OAYN-41598fb4
-reviewer: review-HKdD_OAYN-41598fb4
 pr: 1698
+verdict: accept
+verdict_head: ce0113a866f09b302013a507b84172bb2d520117
+verdict_spec: fd3fe3ce9eb1b6851285b24b6e36b10ebcf678dde3d0003f93ccb19fa3c38f91
 builders: build-HKdD_OAYN-41598fb4
