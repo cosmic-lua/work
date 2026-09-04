@@ -1,0 +1,1 @@
+D44 (PR #1687) removes perf.json, selfcheck.json and compare.txt from the release entirely; once it lands this item's question has no subject and it is ended
