@@ -1,6 +1,6 @@
 title: cold build: the interpreted searcher resolves cosmo.* against the bootstrap's bundled declarations, not the D43 seed — main_handlers.tl/tty.tl both reproduce
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmic
-claim: 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff
+resolution: completed
 builders: 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff
 speccers: 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff
