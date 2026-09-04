@@ -1,3 +1,5 @@
 title: sqlite3: drop -DSQLITE_ENABLE_SESSION and PREUPDATE_HOOK, and the empty session constants header
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmopolitan
+claim: build-CRn8_vfb0-1
+builders: build-CRn8_vfb0-1
