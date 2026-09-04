@@ -2,4 +2,5 @@ title: ci: builder can't read the actions/checkout credential includeIf, so any 
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
 claim: build-djEO_SQWp-1
+pr: 1674
 builders: build-djEO_SQWp-1
