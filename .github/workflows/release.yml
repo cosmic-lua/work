@@ -50,8 +50,12 @@ jobs:
         shell: bash
         run: |
           set -eux
+          bin/cosmic --make fetch
           bin/cosmic --make build
           test -x o/bin/gitboard
+          # A fat APE, not the assimilated ELF the trust root runs: the
+          # first two bytes are MZ.
+          test "$(head -c 2 o/bin/gitboard)" = MZ
 
       # The binary answers before it is published: help renders from the
       # CLI it embeds, and fsck on an empty board is the read path.

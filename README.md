@@ -120,6 +120,7 @@ cosmic checkout at the conventional path `o/board`, which is what
 ```
 git clone https://github.com/cosmic-lua/work o/board   # once per checkout
 cd o/board
+bin/cosmic --make fetch            # once: the runtime gitboard is built onto
 bin/cosmic --make build            # once, on a cold clone
 o/bin/gitboard show
 o/bin/gitboard next

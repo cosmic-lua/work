@@ -53,4 +53,6 @@ jobs:
       # sha256, and execs it; `--make ci` ends with a PASS/FAIL verdict
       # line and signals through its exit code.
       - name: gate
-        run: bin/cosmic --make ci
+        run: |
+          bin/cosmic --make fetch
+          bin/cosmic --make ci
