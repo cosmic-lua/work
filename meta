@@ -1,3 +1,3 @@
 title: gitboard: a mutation that changes nothing because the board already says so exits 0, not 1
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmic@board
