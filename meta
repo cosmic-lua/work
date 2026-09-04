@@ -1,3 +1,5 @@
 title: workflows ratchet: every lane that runs --make ci as builder strips includeIf.gitdir and fetches origin/board — the drift #1688 fixed was invisible to every gate
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
+claim: build-kHQO_XvLX-7f9141e2
+builders: build-kHQO_XvLX-7f9141e2
