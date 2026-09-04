@@ -1,3 +1,5 @@
 title: AGENTS.md: say in its first lines that CLAUDE.md is a symlink to it, so an edit lands on the target
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
+claim: build-arYr_TKlS-1
+builders: build-arYr_TKlS-1
