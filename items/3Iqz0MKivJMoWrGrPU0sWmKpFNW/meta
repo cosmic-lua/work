@@ -2,5 +2,6 @@ title: gitboard next: wire live CI state into action.tl's already-correct runnin
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-sWmK_pFNW-41598fb4
+reviewer: review-sWmK_pFNW-41598fb4
 pr: 1696
 builders: build-sWmK_pFNW-41598fb4
