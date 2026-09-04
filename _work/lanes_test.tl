@@ -1,19 +1,19 @@
 #!/usr/bin/env cosmic
 -- Lane health as board state: mint's idempotency and auto-close
--- guards, record's change-gated commit, and observe's offline path.
--- The network call itself (`observe_one`'s GET) is exercised only
--- live, against a real GitHub token; these tests drive `record` and
--- `mint` with a fake facts table, the way `cmd_sync` would after a
--- real `observe` returned one.
+-- guards, record's change-gated write to the cache's `lanes` table,
+-- and observe's offline path. The network call itself (`observe_one`'s
+-- GET) is exercised only live, against a real GitHub token; these
+-- tests drive `record` and `mint` with a fake facts table, the way
+-- `cmd_sync` would after a real `observe` returned one.
 
 local check = require("cosmic.check")
-local child = require("cosmic.child")
 local env = require("cosmic.env")
 local action = require("_work.action")
 local api = require("_work.api")
 local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
+local fs = require("cosmic.fs")
 local gitready = require("_work.gitready")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
@@ -22,20 +22,6 @@ local spec = require("_work.spec")
 local store = require("_work.store")
 
 local init_state_repo = fixture.init_state_repo
-
---- How many commits `refs/board/lanes` carries, 0 before it exists —
---- `fixture.commits` only counts `refs/items`/`refs/ended`, since a
---- lanes sync is not an item write.
---- @param s store.Store The store
---- @return integer The count
-local function lanes_commits(s: store.Store): integer
-  local r = check.must(child.run(
-      {"git", "rev-list", "--count", "refs/board/lanes"}, {cwd = s.root}))
-  if not r.ok then
-    return 0
-  end
-  return math.tointeger(tonumber((r.stdout:gsub("%s+$", "")))) or -1
-end
 
 local RED: {string: string} = {["release.yml"] = "failure",
   ["fuzz.yml"] = "success", ["docs.yml"] = "success"}
@@ -112,72 +98,47 @@ local function test_a_claimed_repair_is_left_alone_on_green()
   assert(still.claim == "session-a", "and the claim is untouched")
 end
 
--- record writes and commits ONLY when the facts changed from what is
--- already recorded; a re-observation that agrees with the last one
--- commits nothing, so the log records a fact CHANGING, not a fact
--- being re-confirmed every sync.
-local function test_record_commits_only_on_change()
+-- record writes ONLY when the facts changed from what is already
+-- recorded; a re-observation that agrees with the last one writes
+-- nothing, so the cache records a fact CHANGING, not a fact being
+-- re-confirmed every sync.
+local function test_record_writes_only_on_change()
   local s = init_state_repo("record-change")
   local facts: {string: string} = {["release.yml"] = "success",
     ["fuzz.yml"] = "success", ["docs.yml"] = "success"}
-  local before = lanes_commits(s)
-  assert(lanes.record(s, facts), "the first observation is new, and commits")
-  assert(lanes_commits(s) == before + 1, "exactly one commit")
+  assert(lanes.record(s, facts), "the first observation is new, and writes")
+  assert(lanes.read_state(s)["fuzz.yml"] == "success")
 
   local ok, err = lanes.record(s, facts)
   assert(not ok, "an unchanged observation records nothing")
   assert(err == "", "and carries no error — this is a no-op, not a failure")
-  assert(lanes_commits(s) == before + 1, "so the commit count does not move")
 
   facts["fuzz.yml"] = "failure"
-  assert(lanes.record(s, facts), "a real change commits again")
-  assert(lanes_commits(s) == before + 2)
-end
-
--- record's commit subject is a grammar other code will eventually
--- parse (a future consumer of `refs/board/lanes`'s history): pin the
--- exact string — `sync lanes: <lane>=<conclusion> ...`, space-joined
--- in LANES order — so the format cannot drift silently before that
--- consumer exists to notice.
-local function test_record_commit_subject_is_exact()
-  local s = init_state_repo("record-subject")
-  assert(lanes.record(s, RED), "a new observation commits")
-  local r = check.must(child.run({"git", "log", "-1", "--format=%s", "refs/board/lanes"},
-      {cwd = s.root}))
-  assert(r.ok, "git log failed: " .. r.stderr)
-  local subject = r.stdout:gsub("%s+$", "")
-  assert(subject == "sync lanes: release.yml=failure "
-    .. "fuzz.yml=success docs.yml=success", "got: " .. subject)
+  assert(lanes.record(s, facts), "a real change writes again")
+  assert(lanes.read_state(s)["fuzz.yml"] == "failure")
 end
 
 -- Every board mutation commits under the bot identity, not the host's
--- ambient git config or a name GitHub renders "Unverified" — item
--- mutations (`store.tl`'s shared GIT_DEFAULTS) and lane syncs
--- (`record`'s own `git -c` pair) commit through two separate call
--- sites, so this checks both: a revert of either one must turn this
--- red, not just the site nobody happened to touch.
+-- ambient git config or a name GitHub renders "Unverified" —
+-- `store.tl`'s shared GIT_DEFAULTS. A lane sync no longer commits at
+-- all (it writes the cache's local `lanes` table), so this now checks
+-- only the one call site left that does.
 local function test_board_commits_carry_the_claude_identity()
   local s = init_state_repo("identity")
   fixture.file_item(s, "an outcome", "")
   assert(fixture.commit_author_email(s) == "noreply@anthropic.com",
     "item mutation author: " .. fixture.commit_author_email(s))
-  assert(lanes.record(s, RED), "a new observation commits")
-  assert(fixture.commit_author_email(s) == "noreply@anthropic.com",
-    "lane sync author: " .. fixture.commit_author_email(s))
 end
 
 -- `report` is what `cmd_sync` calls (via `at_sync`) after a real
 -- `observe` returns facts; a `record` failure must show up in its
 -- lines rather than vanish the way `cmd_sync` used to discard it.
--- Forced by a namespace collision no chmod (or root) can bypass: a
--- real ref already sits where `refs/board/lanes` itself would need to
--- be a plain ref, so `update-ref` refuses it structurally, the same
--- way a directory once sat where the state FILE needed to be.
+-- Forced the same way `_work/cache_test.tl` forces a rebuild failure:
+-- a plain FILE sits where the cache's `o/` directory needs to be, so
+-- `rebuild`'s own `make_dirs` refuses it structurally.
 local function test_report_surfaces_a_record_failure()
   local s = init_state_repo("report-record-fails")
-  local blocker_sha = check.must(gitobj.hash_object(s.root, ""))
-  assert(store.git_ok(s, {"update-ref", "refs/board/lanes/blocker", blocker_sha}),
-    "a real ref under the same path makes refs/board/lanes un-creatable")
+  assert(fs.write(fs.join(s.root, "o"), "blocker"))
   local lines = lanes.report(s, RED)
   local found = false
   for _, line in ipairs(lines) do
