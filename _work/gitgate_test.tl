@@ -56,7 +56,7 @@ local function test_a_lost_race_drops_the_mutation_and_refuses()
   -- `a` moves the remote forward, so `b`'s push below is rejected
   -- against a remote it has not seen. Bounded, standing for a real
   -- take of new work: two brand-new items never share a ref on their
-  -- own, so the shared refs/board/seq lease every bounded save
+  -- own, so the shared refs/heads/board/seq lease every bounded save
   -- advances is what puts them in each other's way here.
   local touched = make_item()
   store.set_bounded(a, true)

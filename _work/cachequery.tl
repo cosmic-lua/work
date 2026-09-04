@@ -1,7 +1,7 @@
 --- The board cache's read-side convenience wrappers, built on
 --- `_work.cache`'s guarded `open`: the scheduled-lane observation
 --- `_work.lanes` now reads and writes here instead of committing
---- `refs/board/lanes`, and the whole open/query/close cycle behind
+--- `refs/heads/board/lanes`, and the whole open/query/close cycle behind
 --- `new`'s pre-mint duplicate check and the `find` verb. Split out of
 --- `_work.cache` so that module (the guard, `rebuild`, and the
 --- incremental save/fetch paths) stays under the repo's line cap.
@@ -12,7 +12,7 @@ local tail = require("_work.tail")
 
 --- Every observed lane's last recorded conclusion, "" for a lane never
 --- recorded — `_work.lanes`' `read_state`, backed by the cache's
---- `lanes` table instead of the committed `refs/board/lanes`. A board
+--- `lanes` table instead of the committed `refs/heads/board/lanes`. A board
 --- that has never synced (no cache file, or one `open` cannot even
 --- build) has no observation, matching the ref-based behavior it
 --- replaces.

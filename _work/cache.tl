@@ -12,8 +12,8 @@
 --- against an already-open file rather than a fresh whole-board read.
 ---
 --- `open` is the guard every reader goes through: a fresh
---- `for-each-ref` digest over `refs/items`, `refs/ended` and
---- `refs/board`, compared against what the file last recorded, decides
+--- `for-each-ref` digest over `refs/heads/items`, `refs/heads/ended` and
+--- `refs/heads/board`, compared against what the file last recorded, decides
 --- reuse or a cold `rebuild`. `guard`/`after_save` and `around_fetch`
 --- are the incremental half: a mutation or a fetch that moves refs
 --- patches exactly the items whose refs moved, rather than paying for

@@ -1,5 +1,5 @@
---- Ref plumbing: reading `refs/items/*`, `refs/ended/*` and
---- `refs/board/*` with `for-each-ref`, moving one ref with
+--- Ref plumbing: reading `refs/heads/items/*`, `refs/heads/ended/*` and
+--- `refs/heads/board/*` with `for-each-ref`, moving one ref with
 --- `update-ref` (a single compare-and-swap, or a `--stdin`
 --- transaction for the ended-item move), and pushing every ref one
 --- save touched in a single atomic, leased push. `_work.gitobj` is
@@ -28,10 +28,10 @@ end
 
 --- List every ref under the given patterns, with its current object.
 --- One process for however many patterns are given — `store.list`
---- passes `refs/items` and `refs/ended` together so the whole board
+--- passes `refs/heads/items` and `refs/heads/ended` together so the whole board
 --- comes back from a single `for-each-ref`.
 --- @param root string The repository root
---- @param patterns {string} Ref path prefixes, e.g. "refs/items"
+--- @param patterns {string} Ref path prefixes, e.g. "refs/heads/items"
 --- @return {RefEntry} | nil The refs found, possibly empty
 --- @return string Error message
 local function for_each_ref(root: string, patterns: {string}): {RefEntry} | nil, string
@@ -102,18 +102,18 @@ local function update_ref(root: string, ref: string, new_sha: string,
   return true
 end
 
---- One item's ended-ref move: `refs/items/<id>` becomes
---- `refs/ended/<id>`, both at `sha` — the value fast-import (or
+--- One item's ended-ref move: `refs/heads/items/<id>` becomes
+--- `refs/heads/ended/<id>`, both at `sha` — the value fast-import (or
 --- whatever wrote the item's new commit) already left at
---- `refs/items/<id>`, so it is also the delete's own compare value,
+--- `refs/heads/items/<id>`, so it is also the delete's own compare value,
 --- not the tip observed before that write.
 local record EndedMove
   id: string
   sha: string
 end
 
---- Move every ended item in `moves` from `refs/items/<id>` to
---- `refs/ended/<id>` in ONE local transaction, regardless of how many
+--- Move every ended item in `moves` from `refs/heads/items/<id>` to
+--- `refs/heads/ended/<id>` in ONE local transaction, regardless of how many
 --- — every create and every delete either all land or none does, so
 --- an interrupted move never leaves an item in both places or
 --- neither, and a batch of several never costs more than one process.
@@ -127,8 +127,8 @@ local function move_many_to_ended(root: string, moves: {EndedMove}): boolean, st
   end
   local lines: {string} = {}
   for _, m in ipairs(moves) do
-    lines[#lines + 1] = ("create refs/ended/%s %s\n"):format(m.id, m.sha)
-    lines[#lines + 1] = ("delete refs/items/%s %s\n"):format(m.id, m.sha)
+    lines[#lines + 1] = ("create refs/heads/ended/%s %s\n"):format(m.id, m.sha)
+    lines[#lines + 1] = ("delete refs/heads/items/%s %s\n"):format(m.id, m.sha)
   end
   local r, err = child.run(
     {"git", "-c", "core.createObject=rename", "update-ref", "--stdin"},

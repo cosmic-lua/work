@@ -50,7 +50,7 @@ local function git(cwd: string, argv: {string})
 end
 
 --- A fresh local-only state repo: `store.init_repo` (a bare git init
---- plus the `refs/board/format` marker every board now carries),
+--- plus the `refs/heads/board/format` marker every board now carries),
 --- nothing filed yet — every item lives as a ref, so there is nothing
 --- else to seed.
 local function init_state_repo(name: string): store.Store
@@ -123,12 +123,12 @@ local function file_item(s: store.Store, title: string,
   error("new filed nothing: " .. title)
 end
 
---- Every ref name under `refs/items` and `refs/ended` in a store.
+--- Every ref name under `refs/heads/items` and `refs/heads/ended` in a store.
 --- @param s store.Store The store
 --- @return {string} The refnames
 local function item_refnames(s: store.Store): {string}
   local r = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/items", "refs/ended"},
+      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended"},
       {cwd = s.root}))
   assert(r.ok, "git for-each-ref failed: " .. r.stderr)
   local out: {string} = {}
@@ -168,8 +168,8 @@ end
 --- @return string The author email of the newest commit on the board
 local function commit_author_email(s: store.Store): string
   local r = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/items", "refs/ended",
-        "refs/board"}, {cwd = s.root}))
+      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended",
+        "refs/heads/board"}, {cwd = s.root}))
   assert(r.ok, "git for-each-ref failed: " .. r.stderr)
   local refnames: {string} = {}
   for line in r.stdout:gmatch("([^\n]+)") do

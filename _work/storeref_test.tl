@@ -36,7 +36,7 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
---- A fresh local-only state repo, with its `refs/board/format` marker.
+--- A fresh local-only state repo, with its `refs/heads/board/format` marker.
 local function init_state_repo(name: string): string
   local root = fs.join(tmpdir, "storeref-" .. name)
   assert(fs.remove_all(root))
@@ -86,7 +86,7 @@ end
 -- the ref layout that alone is no longer a collision — unrelated
 -- items live on unrelated refs, and an unbounded take of one never
 -- contends with a take of the other. What still makes them race is
--- `refs/board/seq`: `take`ing NEW work is a BOUNDED mutation (its gate
+-- `refs/heads/board/seq`: `take`ing NEW work is a BOUNDED mutation (its gate
 -- read the whole board first, to judge the doing bound), so its save
 -- ALSO advances and leases seq — the one shared ref that puts two
 -- otherwise-unrelated takes back in each other's way, exactly the way
@@ -177,10 +177,10 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
     .. after.title .. " / " .. after.claim)
 end
 
---- Every ref name under `refs/items`/`refs/ended`.
+--- Every ref name under `refs/heads/items`/`refs/heads/ended`.
 local function item_refnames(root: string): {string}
   local r = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/items", "refs/ended"},
+      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended"},
       {cwd = root}))
   assert(r.ok, "git for-each-ref failed: " .. r.stderr)
   local out: {string} = {}
@@ -190,8 +190,8 @@ local function item_refnames(root: string): {string}
   return out
 end
 
--- A resolution MOVES the ref: `refs/items/<id>` stops existing and
--- `refs/ended/<id>` starts, in one local transaction — never both at
+-- A resolution MOVES the ref: `refs/heads/items/<id>` stops existing and
+-- `refs/heads/ended/<id>` starts, in one local transaction — never both at
 -- once, never neither.
 local function test_resolution_moves_the_ref_from_items_to_ended()
   local root = init_state_repo("ended-move")
@@ -201,26 +201,26 @@ local function test_resolution_moves_the_ref_from_items_to_ended()
   local before = item_refnames(root)
   local found_open = false
   for _, r in ipairs(before) do
-    if r == "refs/items/" .. it.id then
+    if r == "refs/heads/items/" .. it.id then
       found_open = true
     end
   end
-  assert(found_open, "the item starts on refs/items")
+  assert(found_open, "the item starts on refs/heads/items")
 
   it.resolution = "completed"
   assert(store.save(s, it, "done " .. it.id:sub(1, 8)))
   local after = item_refnames(root)
   local still_open, now_ended = false, false
   for _, r in ipairs(after) do
-    if r == "refs/items/" .. it.id then
+    if r == "refs/heads/items/" .. it.id then
       still_open = true
     end
-    if r == "refs/ended/" .. it.id then
+    if r == "refs/heads/ended/" .. it.id then
       now_ended = true
     end
   end
-  assert(not still_open, "refs/items no longer names it")
-  assert(now_ended, "refs/ended now does")
+  assert(not still_open, "refs/heads/items no longer names it")
+  assert(now_ended, "refs/heads/ended now does")
   local loaded = check.must(store.load(s, it.id))
   assert(loaded.resolution == "completed", "load still finds it, resolved")
   -- The move is one local transaction: `_work.refs.move_to_ended`'s

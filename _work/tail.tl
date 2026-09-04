@@ -6,8 +6,8 @@
 --- distinguishes one item from its neighbors — and they are pure
 --- entropy, and a literal substring of the id, so the rendered handle
 --- greps branch logs and PR bodies directly. Measured against the
---- live board (`git for-each-ref --format='%(refname)' refs/items
---- refs/ended`), `id:sub(20)` is collision-free across every item,
+--- live board (`git for-each-ref --format='%(refname)' refs/heads/items
+--- refs/heads/ended`), `id:sub(20)` is collision-free across every item,
 --- exact and case-folded.
 local item = require("_work.item")
 

@@ -1,6 +1,6 @@
 --- The one-time move off the old layout: `items/<id>.tl` +
 --- `items/<id>.md` files in a git directory, at a given revision,
---- become `refs/items/<id>`/`refs/ended/<id>` refs in the CURRENT
+--- become `refs/heads/items/<id>`/`refs/heads/ended/<id>` refs in the CURRENT
 --- store — with every commit that ever touched an item replayed, in
 --- order, under the original author date and the session its subject
 --- named, so `gitboard show <id>` and `git log` on its ref read
@@ -170,7 +170,7 @@ end
 --- every field). Every commit in the chain targets the SAME ref,
 --- decided once the chain's own final resolution is known: unlike an
 --- ordinary mutation's ended-item move, there is no EXISTING
---- `refs/items/<id>` to transition off of here — this writes a
+--- `refs/heads/items/<id>` to transition off of here — this writes a
 --- brand-new ref from nothing, so the right final name can be chosen
 --- up front and never has to move.
 --- @param id string The item id
@@ -222,7 +222,7 @@ local function build_item_chain(id: string, commits: {Commit},
         from = prev_mark
       end
       plans[#plans + 1] = {
-        ref = "refs/items/" .. id, from = from, mark = mark,
+        ref = "refs/heads/items/" .. id, from = from, mark = mark,
         author_name = author_name, author_email = author_email,
         author_date = when, committer_name = TOOL_NAME,
         committer_email = TOOL_EMAIL, committer_date = when,
@@ -233,7 +233,7 @@ local function build_item_chain(id: string, commits: {Commit},
     end
   end
   if #plans > 0 and ended then
-    local final_ref = "refs/ended/" .. id
+    local final_ref = "refs/heads/ended/" .. id
     for _, p in ipairs(plans) do
       p.ref = final_ref
     end
@@ -259,7 +259,7 @@ end
 local function run(s: store.Store, from_root: string, rev: string): integer | nil, string
   -- The board this writes into may never have had anything filed on
   -- it before, so this is as good a place as `init_repo`'s own to
-  -- make sure `refs/board/format` exists (and is pushed, when there
+  -- make sure `refs/heads/board/format` exists (and is pushed, when there
   -- is an origin to push it to) before the first item lands.
   local ensured, eerr = format.ensure(s.root)
   if not ensured then

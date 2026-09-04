@@ -9,28 +9,28 @@ local cachedb = require("_work.cachedb")
 
 local function test_digest_of_is_order_independent()
   local a = cachedb.digest_of({
-      {refname = "refs/items/a", sha = "1"},
-      {refname = "refs/items/b", sha = "2"},
+      {refname = "refs/heads/items/a", sha = "1"},
+      {refname = "refs/heads/items/b", sha = "2"},
     })
   local b = cachedb.digest_of({
-      {refname = "refs/items/b", sha = "2"},
-      {refname = "refs/items/a", sha = "1"},
+      {refname = "refs/heads/items/b", sha = "2"},
+      {refname = "refs/heads/items/a", sha = "1"},
     })
   assert(a == b, "sorted before hashing, so listing order never matters")
   assert(#a == 64, "sha256 hex is 64 characters: " .. tostring(#a))
 end
 
 local function test_digest_of_changes_when_a_sha_changes()
-  local a = cachedb.digest_of({{refname = "refs/items/a", sha = "1"}})
-  local b = cachedb.digest_of({{refname = "refs/items/a", sha = "2"}})
+  local a = cachedb.digest_of({{refname = "refs/heads/items/a", sha = "1"}})
+  local b = cachedb.digest_of({{refname = "refs/heads/items/a", sha = "2"}})
   assert(a ~= b, "a moved ref is a different digest")
 end
 
 local function test_shas_by_item_keys_by_id_across_namespaces()
   local m = cachedb.shas_by_item({
-      {refname = "refs/items/abc", sha = "1"},
-      {refname = "refs/ended/xyz", sha = "2"},
-      {refname = "refs/board/seq", sha = "3"},
+      {refname = "refs/heads/items/abc", sha = "1"},
+      {refname = "refs/heads/ended/xyz", sha = "2"},
+      {refname = "refs/heads/board/seq", sha = "3"},
     })
   assert(m["abc"] == "1", tostring(m["abc"]))
   assert(m["xyz"] == "2", tostring(m["xyz"]))

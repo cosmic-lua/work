@@ -1,4 +1,4 @@
---- The board's layout version: `refs/board/format`'s tree holds one
+--- The board's layout version: `refs/heads/board/format`'s tree holds one
 --- blob, `format`, carrying this text — the marker `gitread.list`
 --- checks before trusting anything else it read alongside it, so a
 --- board on a layout this tool cannot safely read (or, someday, a
@@ -44,16 +44,16 @@ local function refusal(found: string, has_items: boolean): string | nil
     if not has_items then
       return nil
     end
-    return ("refs/board/format is missing on a board that already carries "
+    return ("refs/heads/board/format is missing on a board that already carries "
       .. "items — this is an old layout this tool predates; expected format "
       .. "%s (run `gitboard init` to write the marker, once every other "
       .. "clone of this board has moved past whatever changed it)"):format(CURRENT)
   end
-  return ("refs/board/format is %s, this tool expects %s — it cannot safely "
+  return ("refs/heads/board/format is %s, this tool expects %s — it cannot safely "
     .. "read or write this board"):format(trimmed, CURRENT)
 end
 
---- Create `refs/board/format` locally when this repository has none
+--- Create `refs/heads/board/format` locally when this repository has none
 --- yet, and best-effort push it to `origin` when one exists, so the
 --- very first clone of a brand-new board is also the one that puts
 --- the marker on the remote for every later clone to fetch. A
@@ -68,7 +68,7 @@ end
 --- @return boolean True on success
 --- @return string Error message
 local function ensure(dir: string): boolean, string
-  local found, ferr = refs.for_each_ref(dir, {"refs/board/format"})
+  local found, ferr = refs.for_each_ref(dir, {"refs/heads/board/format"})
   if found == nil then
     return false, ferr
   end
@@ -91,7 +91,7 @@ local function ensure(dir: string): boolean, string
       return false, cerr
     end
     local moved, uerr =
-    refs.update_ref(dir, "refs/board/format", commit_sha, refs.ZERO_SHA)
+    refs.update_ref(dir, "refs/heads/board/format", commit_sha, refs.ZERO_SHA)
     if not moved then
       return false, uerr
     end
@@ -103,7 +103,7 @@ local function ensure(dir: string): boolean, string
     -- push already landed the marker, which the next ordinary fetch
     -- picks up the same way it picks up any other stale ref.
     local _pushed, _perr = child.run({"git", "-c", "push.negotiate=false", "push",
-        "origin", "refs/board/format"}, {cwd = dir})
+        "origin", "refs/heads/board/format"}, {cwd = dir})
   end
   return true
 end

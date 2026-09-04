@@ -162,7 +162,7 @@ local function test_report_surfaces_a_mint_failure()
         author_name = "test", author_email = "test@example.com",
         committer_name = "test", committer_email = "test@example.com",
       }))
-  assert(store.git_ok(s, {"update-ref", "refs/items/" .. id, bogus_sha}))
+  assert(store.git_ok(s, {"update-ref", "refs/heads/items/" .. id, bogus_sha}))
   local lines = lanes.report(s, RED)
   local found = false
   for _, line in ipairs(lines) do

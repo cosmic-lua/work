@@ -19,7 +19,7 @@ end
 
 --- The whole board as `list` found it: every item, its ref and tip
 --- (`refs_by_id`/`shas_by_id` — the write lease for each), and
---- `refs/board/seq`'s own tip, "" when the ref does not exist yet.
+--- `refs/heads/board/seq`'s own tip, "" when the ref does not exist yet.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
@@ -123,13 +123,13 @@ local function build_item(id: string, sha: string,
   return itemtree.to_item(id, meta, held, beats, blocked_by, block_reason, other_edges)
 end
 
---- Load one item by id, looking in `refs/items` then `refs/ended`.
+--- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`.
 --- @param root string The repository root
 --- @param id string Item id
 --- @return Loaded | nil The item, its ref and its tip
 --- @return string Error message; "no item <id>" when absent
 local function load_item(root: string, id: string): Loaded | nil, string
-  local found, ferr = refs.for_each_ref(root, {"refs/items/" .. id, "refs/ended/" .. id})
+  local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
   if found == nil then
     return nil, ferr
   end
@@ -168,7 +168,7 @@ local function load_item(root: string, id: string): Loaded | nil, string
 end
 
 --- Every item in the store, done ones included: one `for-each-ref`
---- (also reading `refs/board/seq`'s and `refs/board/format`'s tips),
+--- (also reading `refs/heads/board/seq`'s and `refs/heads/board/format`'s tips),
 --- one `cat-file --batch` for every item's `meta`/`held`/`edges` PLUS
 --- the format marker's own blob, one more for every edge kind's own
 --- subtree content, and one more for every content blob (a
@@ -181,7 +181,7 @@ end
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
 local function list(root: string): Board | nil, string
-  local found, ferr = refs.for_each_ref(root, {"refs/items", "refs/ended", "refs/board"})
+  local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
   if found == nil then
     return nil, ferr
   end
@@ -189,11 +189,11 @@ local function list(root: string): Board | nil, string
   local seq_sha = ""
   local format_sha = ""
   for _, r in ipairs(found) do
-    if r.refname == "refs/board/seq" then
+    if r.refname == "refs/heads/board/seq" then
       seq_sha = r.sha
-    elseif r.refname == "refs/board/format" then
+    elseif r.refname == "refs/heads/board/format" then
       format_sha = r.sha
-    elseif r.refname:sub(1, 11) == "refs/items/" or r.refname:sub(1, 11) == "refs/ended/" then
+    elseif r.refname:sub(1, #"refs/heads/items/") == "refs/heads/items/" or r.refname:sub(1, #"refs/heads/ended/") == "refs/heads/ended/" then
       item_refs[#item_refs + 1] = r
     end
   end
@@ -254,7 +254,7 @@ local function list(root: string): Board | nil, string
   local refs_by_id: {string: string} = {}
   local shas_by_id: {string: string} = {}
   for _, r in ipairs(item_refs) do
-    local id = r.refname:match("^refs/items/(.+)$") or r.refname:match("^refs/ended/(.+)$")
+    local id = r.refname:match("^refs/heads/items/(.+)$") or r.refname:match("^refs/heads/ended/(.+)$")
     local it, ierr = build_item(id, r.sha, batch, kind_batch, blob_batch)
     if it == nil then
       return nil, ierr
@@ -271,7 +271,7 @@ end
 
 --- An item's spec sidecar, "" when absent, tried against every
 --- candidate ref in order — `_work.store` passes the observed ref
---- alone when known, or both `refs/items/<id>` and `refs/ended/<id>`
+--- alone when known, or both `refs/heads/items/<id>` and `refs/heads/ended/<id>`
 --- otherwise.
 --- @param root string The repository root
 --- @param candidates {string} Ref names to try, in order

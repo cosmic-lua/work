@@ -48,7 +48,7 @@ local function git(cwd: string, argv: {string})
 end
 
 --- A fresh local-only state repo: `store.init_repo` (a bare git init
---- plus the `refs/board/format` marker) — every item is a ref, so
+--- plus the `refs/heads/board/format` marker) — every item is a ref, so
 --- there is nothing else to seed.
 local function init_state_repo(name: string): string
   local root = fs.join(tmpdir, "store-" .. name)
@@ -89,7 +89,7 @@ end
 --- object (one per item it touches) held together only by the push.
 local function commit_count(cwd: string): integer
   local names = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/items", "refs/ended"},
+      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended"},
       {cwd = cwd}))
   assert(names.ok, "git for-each-ref failed: " .. names.stderr)
   local refnames: {string} = {}
@@ -135,7 +135,7 @@ end
 --- @param bad item.Item An item whose `item.problems` may be non-empty
 local function write_unchecked(s: store.Store, bad: item.Item)
   local tree_sha = check.must(itemtree.build_tree(s.root, bad, store.read_spec(s, bad.id)))
-  local ref = s.leased_ref[bad.id] or ("refs/items/" .. bad.id)
+  local ref = s.leased_ref[bad.id] or ("refs/heads/items/" .. bad.id)
   local parent_sha = s.leased_sha[bad.id] or refs.ZERO_SHA
   local parents: {string} = {}
   if parent_sha ~= refs.ZERO_SHA then
