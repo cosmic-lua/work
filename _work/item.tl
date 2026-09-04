@@ -197,12 +197,17 @@ local record Raw
   is_held: boolean | nil
 end
 
+--- The valid `verdict` values, exported so a schema carrying its own
+--- copy of this vocabulary (`_work.index`'s DDL `CHECK IN (...)`) can
+--- be proven to name exactly these and no others.
 local VERDICTS: {string: boolean} = {
   [""] = true,
   ["accept"] = true,
   ["request changes"] = true,
 }
 
+--- The valid `resolution` values, exported for the same reason as
+--- `VERDICTS`.
 local RESOLUTIONS: {string: boolean} = {
   [""] = true,
   ["completed"] = true,
@@ -458,6 +463,8 @@ end
 
 local record item
   type Item = Item
+  VERDICTS: {string: boolean}
+  RESOLUTIONS: {string: boolean}
   is_open: function(it: Item): boolean
   is_root: function(it: Item): boolean
   is_flagged: function(it: Item): boolean
@@ -469,6 +476,8 @@ local record item
 end
 
 local M: item = {
+  VERDICTS = VERDICTS,
+  RESOLUTIONS = RESOLUTIONS,
   is_open = is_open,
   is_root = is_root,
   is_flagged = is_flagged,
