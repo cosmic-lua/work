@@ -2,5 +2,6 @@ title: gitboard next: an accepted item whose PR sits in a merge queue is "queued
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic@board
 claim: build-fmFu_8dce-07d7b9b9
+reviewer: review-fmFu_8dce-07d7b9b9
 pr: 1701
 builders: build-fmFu_8dce-07d7b9b9
