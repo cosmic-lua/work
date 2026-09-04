@@ -1,3 +1,4 @@
 title: board pin predates the coverage --baseline COSMIC_COVERAGE_ENV guard: bump bin/cosmic.pin to main's release
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
+speccers: 07d7b9b9-4374-5aae-9149-46fdff7aa81e
