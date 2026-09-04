@@ -186,6 +186,43 @@
   claim was under `build-HlNE_YWL2-e1847cac`, not this orchestrator
   session directly — expected, not friction). Worktree removed.
 
+## orchestrator (post-pass, PR watch continuation)
+
+- goal: after `«ekqI_n3Mm»`'s PR #1713 got a fresh-context `accept` review
+  (mutation-tested, auto-merge enabled, enqueued in the merge queue),
+  check whether this session's branch-delete permission on
+  `cosmic-lua/work` (broken earlier this pass, see the critical entry
+  above) had been fixed before relying on `gitboard done` once the PR
+  lands.
+  actually happened: `git fetch origin` on the board checkout showed the
+  earlier stranded item (`3IrHne1WNbXGfzIuWJw14A3CTsE`, handle
+  `14A3_CTsE`) now has ONLY an `ended/...` branch remotely — someone (a
+  different credential/session) already deleted the leftover `items/...`
+  branch; `gitboard fsck` confirms clean (`ok, 913 items`) and `gitboard
+  find` works again. But a direct probe — push a harmless throwaway
+  branch (`_perm_test_e1847cac`), then try to delete it — showed CREATE
+  still succeeds and DELETE still 403s for this session specifically. The
+  repair was made by a different, more-privileged actor; this session's
+  own credential is unchanged.
+  contributed: same root cause as the critical entry above — this
+  session's git-over-HTTPS credential for `cosmic-lua/work` lacks
+  branch-delete rights, full stop, independent of anyone else's access.
+  improvement: **decided NOT to call `gitboard done` on `ekqI_n3Mm` once
+  PR #1713 merges**, to avoid stranding a second item exactly the same
+  way. Left `ekqI_n3Mm` in "PR merged (or merging), review accepted,
+  awaiting `done`" state instead — a human or a session with
+  branch-delete rights needs to run `gitboard done ekqI_n3Mm --pr 1713
+  --reason completed --force --why ...` once the merge is confirmed.
+  This is the same fix needed as the critical entry above (item 1: fix
+  the credential); no new item filed, this is the same open gap
+  recurring on live work now, not just historical cleanup.
+  Cost: 2 extra git push calls (create+delete probe) to confirm rather
+  than assume; a stray, harmless `_perm_test_e1847cac` branch is left on
+  `origin` (local copy deleted) since I can't remove the remote copy
+  either — cosmetic, not a board item (not under `items/`, `ended/`, or
+  `board/`, so `fsck`/`find` don't see it), safe to delete whenever
+  someone with rights is cleaning up anyway.
+
 ## candidates
 - `gitboard done`'s create-then-delete branch transition has no atomicity
   or pre-flight check, and this session's credential cannot delete
