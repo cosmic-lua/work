@@ -2,6 +2,8 @@ title: coverage: print the would-be floor row for a file absent from .cosmic-cov
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
 claim: build-wkmX_zNkM-1
-reviewer: review-wkmX_zNkM-1
 pr: 1670
+verdict: accept
+verdict_head: 66083d60c6344f99e77f059703f00734bc816171
+verdict_spec: 22dca2a07943ba9cb2b03bef0ade8a74d81807988f4b00fc88b37f0886faf0ba
 builders: build-wkmX_zNkM-1
