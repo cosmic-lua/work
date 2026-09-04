@@ -1,0 +1,1 @@
+PR #1669's CI fails deterministically (git subprocess spawned by builder can't read the checkout's credential includeIf, confirmed via re-run) until this infra bug is fixed
