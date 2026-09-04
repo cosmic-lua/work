@@ -26,14 +26,31 @@ cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
 ```
 
-`_work/index.tl` and `_work/find.tl` are a DERIVED, in-memory SQLite
-index over the loaded items — never truth, never written back, never
-committed: every verb that needs it rebuilds it fresh from `store.list`
-and `store.read_specs`, and it is discarded when the verb ends.
-`index.tl` mirrors the ref layout's fields into STRICT tables and the
-role/state views `_work.flow` derives by hand; `find.tl` layers full-text
-search over the same connection for the `find` verb and `new`'s
-pre-mint duplicate-title check.
+`_work/index.tl` and `_work/find.tl` define a DERIVED SQLite schema
+over the loaded items — never truth, never itself the source a verb
+trusts: `index.tl` mirrors the ref layout's fields into STRICT tables
+and the role/state views `_work.flow` derives by hand; `find.tl` layers
+full-text search over the same connection. What holds the connection
+open is `_work/cache.tl` and the modules beside it
+(`_work/cachedb.tl`, `_work/cachequery.tl`): a persistent, per-clone
+file at `o/board.db`, incrementally patched by every save and fetch
+rather than rebuilt fresh each time — see the `o/board.db` paragraph
+below. A bare, throwaway connection built straight from `index.open`
+still exists for tests that want one without a file on disk.
+
+`o/board.db` is the derived, per-clone cache `_work/cache.tl` keeps: a
+SQLite file under a checkout's own `o/`, gitignored, carrying
+`index.tl`'s tables, `find.tl`'s search index, and the scheduled-lane
+observation `_work.lanes` now reads and writes there instead of
+committing `refs/board/lanes`. It is never truth and never shared —
+each clone rebuilds its own from `store.list`/`store.read_specs`
+whenever the file is missing, its schema version does not match, or a
+fresh `for-each-ref` digest over `refs/items`/`refs/ended`/`refs/board`
+disagrees with what the file last recorded (a hand-moved ref, or
+simply a clone that has never built one yet); every ordinary save and
+fetch instead patches just the rows the refs that moved own, so a
+session's second `find` or `sync` costs a handful of small queries
+against an already-open file rather than a fresh whole-board read.
 
 Every item is a git ref — `refs/items/<ksuid>` while open,
 `refs/ended/<ksuid>` once resolved — whose tip commit's tree carries
@@ -44,8 +61,10 @@ held), and its edges (one blob per related item under
 `edges/<kind>/<id>` — `beats`, `blocked_by`, and any other kind a
 newer writer names, carried opaquely by an older reader); the tree
 shape is `_work/itemtree.tl`, the ONE place it is written.
-`refs/board/lanes`, `refs/board/seq` and `refs/board/format` hold
-board-wide state the same way, outside the per-item namespace.
+`refs/board/seq` and `refs/board/format` hold board-wide state the
+same way, outside the per-item namespace — scheduled-lane health used
+to be a third such ref (`refs/board/lanes`) but now lives only in the
+local `o/board.db` cache, never committed; see above.
 `refs/board/format`'s tree holds one blob, `format`, naming the layout
 version every reader checks before trusting anything else it read
 alongside it (`_work/format.tl`) — a board on a version this tool does
@@ -62,7 +81,8 @@ read-only, offline whole-board audit no single verb ever asks:
 dangling `parent` or `edges/<kind>/<id>` references, an edge kind this
 build does not interpret, an item's tree not re-encoding to what it
 was read from, two open items sharing a key, a root carrying a `repo`,
-and anything the store's own tolerant decode had to flag.
+a stale `refs/board/lanes` ref left over from before lane health moved
+to the cache, and anything the store's own tolerant decode had to flag.
 
 A workable item's state is DERIVED from the facts its ref carries,
 never declared: open, unclaimed, and PR-less is `todo` (pullable once
