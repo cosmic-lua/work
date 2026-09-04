@@ -45,7 +45,7 @@ local API < const > = "https://api.github.com"
 
 --- Where the board's disposable GitHub cache lives, under a store's
 --- `o/` — the same directory `--make build` writes into, gitignored
---- on the board branch already.
+--- here already.
 local CACHE_DIR < const > = "gh-cache"
 
 --- One cached exchange: enough to revalidate (the ETag) and reuse
