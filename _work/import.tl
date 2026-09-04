@@ -34,6 +34,14 @@ local store = require("_work.store")
 local TOOL_NAME < const > = "Claude"
 local TOOL_EMAIL < const > = "noreply@anthropic.com"
 
+--- How many items' refs one push covers: a compromise between "one
+--- atomic push for the whole import" (the fastest shape, but one
+--- push large enough to strain argv limits or a real remote's own
+--- request-size limits) and "one push per item" (907 processes' worth
+--- of `has_origin`/push overhead on a real move, once every read and
+--- the local write were already batched).
+local PUSH_CHUNK < const > = 200
+
 --- One historical commit that touched an item's pair of files.
 local record Commit
   sha: string
@@ -314,6 +322,32 @@ local function run(s: store.Store, from_root: string, rev: string): integer | ni
       tip_of[r.refname] = r.sha
     end
   end
+  -- One push per PUSH_CHUNK items rather than one per item: each of
+  -- `publish.publish`'s own calls costs two processes on top of the
+  -- push itself (`has_origin`'s `git remote` check, then the push),
+  -- which dominated a real import's remaining cost once its reads and
+  -- its local write were already down to a handful of processes each.
+  -- Still chunked, not one giant push, so an import large enough to
+  -- strain a single `git push --atomic`'s argv stays working; a
+  -- rejected chunk still names which items landed before it and which
+  -- did not, close to as legible as one-at-a-time was.
+  local landed = 0
+  local chunk: {string} = {}
+  local function flush_chunk(): boolean, string
+    if #chunk == 0 then
+      return true, ""
+    end
+    for _, ref in ipairs(chunk) do
+      store.add_pending(s, {ref = ref, old = "", delete = false})
+    end
+    local pushed, perr = publish.publish(s)
+    if not pushed then
+      return false, perr
+    end
+    landed = landed + #chunk
+    chunk = {}
+    return true, ""
+  end
   for _, id in ipairs(ids) do
     local plans = chain_of[id]
     if plans ~= nil then
@@ -322,12 +356,18 @@ local function run(s: store.Store, from_root: string, rev: string): integer | ni
       if tip == nil then
         return nil, ("%s: fast-import did not create %s"):format(id, ref)
       end
-      s.pending = {{ref = ref, old = "", delete = false}}
-      local pushed, perr = publish.publish(s)
-      if not pushed then
-        return nil, ("%s: publish: %s"):format(id, perr)
+      chunk[#chunk + 1] = ref
+      if #chunk >= PUSH_CHUNK then
+        local ok, perr = flush_chunk()
+        if not ok then
+          return nil, ("%d item(s) pushed, then: %s"):format(landed, perr)
+        end
       end
     end
+  end
+  local ok, perr = flush_chunk()
+  if not ok then
+    return nil, ("%d item(s) pushed, then: %s"):format(landed, perr)
   end
   return #ids, ""
 end
