@@ -47,6 +47,7 @@ local proc = require("cosmic.proc")
 local brief = require("_work.brief")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
+local find = require("_work.find")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local import = require("_work.import")
@@ -264,6 +265,10 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "[ID] [options]", flags = {dir_flag()}}},
     {name = "sync", summary = "rebase onto the remote's state",
       spec = {flags = {dir_flag()}}},
+    {name = "find", summary = "full-text search over titles and specs; "
+      .. "prints each hit's handle, state, title and a snippet, then a "
+      .. "hit count",
+      spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
   },
 }
 
@@ -336,6 +341,9 @@ local function main(...: string): integer
   end
   if d.command == "sync" then
     return verbs.cmd_sync(s)
+  end
+  if d.command == "find" then
+    return find.cmd_find(s, table.concat(d.parsed.args, " "))
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
   -- with every other id-taking verb.
