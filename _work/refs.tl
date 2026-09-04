@@ -1,10 +1,11 @@
 --- Ref plumbing: reading `refs/heads/items/*`, `refs/heads/ended/*` and
 --- `refs/heads/board/*` with `for-each-ref`, moving one ref with
---- `update-ref` (a single compare-and-swap, or a `--stdin`
---- transaction for the ended-item move), and pushing every ref one
---- save touched in a single atomic, leased push. `_work.gitobj` is
---- the object half; this is the naming half, and `_work.store` is the
---- only caller outside tests.
+--- `update-ref` (a single compare-and-swap), telling whether one
+--- commit descends from another (`is_ancestor` — how a reader picks a
+--- winner when one id ends up filed under both namespaces), and
+--- pushing every ref one save touched in a single atomic, leased
+--- push. `_work.gitobj` is the object half; this is the naming half,
+--- and `_work.store` is the only caller outside tests.
 local child = require("cosmic.child")
 
 --- The sha `update-ref`/`--force-with-lease` treat as "does not exist
@@ -18,12 +19,12 @@ local record RefEntry
 end
 
 --- One ref this push moves: `old` is the lease (the tip observed at
---- load, or "" for a ref that must not exist remotely yet); `delete`
---- pushes a deletion instead of the local ref's current value.
+--- load, or "" for a ref that must not exist remotely yet). The
+--- pushing credential can create and update a branch but never
+--- delete one, so nothing here ever asks for a deletion.
 local record PushSpec
   ref: string
   old: string
-  delete: boolean
 end
 
 --- List every ref under the given patterns, with its current object.
@@ -102,44 +103,27 @@ local function update_ref(root: string, ref: string, new_sha: string,
   return true
 end
 
---- One item's ended-ref move: `refs/heads/items/<id>` becomes
---- `refs/heads/ended/<id>`, both at `sha` — the value fast-import (or
---- whatever wrote the item's new commit) already left at
---- `refs/heads/items/<id>`, so it is also the delete's own compare value,
---- not the tip observed before that write.
-local record EndedMove
-  id: string
-  sha: string
-end
-
---- Move every ended item in `moves` from `refs/heads/items/<id>` to
---- `refs/heads/ended/<id>` in ONE local transaction, regardless of how many
---- — every create and every delete either all land or none does, so
---- an interrupted move never leaves an item in both places or
---- neither, and a batch of several never costs more than one process.
+--- Whether `ancestor` is an ancestor of (or equal to) `descendant` —
+--- `git merge-base --is-ancestor`. Exists so a reader can tell which
+--- of two refs for the same id (one under `refs/heads/items`, one
+--- under `refs/heads/ended` — the residue of a resolution whose
+--- atomic push landed the create half of a namespace move but lost
+--- the delete half, since the pushing credential can create and
+--- update a branch but never delete one) is the live one: the ref
+--- whose commit descends from the other's is still moving forward,
+--- the other is the stale half of that half-landed push. A clean "no"
+--- (exit 1) and a real git failure both come back false — a caller
+--- picking between two refs treats "not proven to descend" the same
+--- way regardless of which one it was, so nothing here needs a third
+--- state.
 --- @param root string The repository root
---- @param moves {EndedMove} The items ending in this save, possibly empty
---- @return boolean True on success (including an empty `moves`)
---- @return string Error message
-local function move_many_to_ended(root: string, moves: {EndedMove}): boolean, string
-  if #moves == 0 then
-    return true
-  end
-  local lines: {string} = {}
-  for _, m in ipairs(moves) do
-    lines[#lines + 1] = ("create refs/heads/ended/%s %s\n"):format(m.id, m.sha)
-    lines[#lines + 1] = ("delete refs/heads/items/%s %s\n"):format(m.id, m.sha)
-  end
-  local r, err = child.run(
-    {"git", "-c", "core.createObject=rename", "update-ref", "--stdin"},
-    {cwd = root, stdin = table.concat(lines)})
-  if r == nil then
-    return false, err
-  end
-  if not r.ok then
-    return false, ("git update-ref --stdin failed: %s"):format(r.stderr)
-  end
-  return true
+--- @param ancestor string Commit sha
+--- @param descendant string Commit sha
+--- @return boolean True only when the check ran and answered yes
+local function is_ancestor(root: string, ancestor: string, descendant: string): boolean
+  local r = child.run({"git", "merge-base", "--is-ancestor", ancestor, descendant},
+    {cwd = root})
+  return r ~= nil and r.ok
 end
 
 --- Push every ref a save touched in one atomic, leased push. Each
@@ -163,11 +147,7 @@ local function push_atomic(root: string, specs: {PushSpec}): boolean, boolean, s
   end
   argv[#argv + 1] = "origin"
   for _, spec in ipairs(specs) do
-    if spec.delete then
-      argv[#argv + 1] = ":" .. spec.ref
-    else
-      argv[#argv + 1] = spec.ref
-    end
+    argv[#argv + 1] = spec.ref
   end
   local r, err = child.run(argv, {cwd = root})
   if r == nil then
@@ -251,12 +231,11 @@ local record refs
   ensure_refspecs: function(root: string): boolean, string
   type RefEntry = RefEntry
   type PushSpec = PushSpec
-  type EndedMove = EndedMove
   for_each_ref: function(root: string, patterns: {string}): {RefEntry} | nil, string
   committer_date_unix: function(root: string, ref: string): integer | nil, string
   update_ref: function(root: string, ref: string, new_sha: string,
   old_sha: string): boolean, string
-  move_many_to_ended: function(root: string, moves: {EndedMove}): boolean, string
+  is_ancestor: function(root: string, ancestor: string, descendant: string): boolean
   push_atomic: function(root: string, specs: {PushSpec}): boolean, boolean, string
   fetch_prune: function(root: string): boolean, string
 end
@@ -267,7 +246,7 @@ local M: refs = {
   for_each_ref = for_each_ref,
   committer_date_unix = committer_date_unix,
   update_ref = update_ref,
-  move_many_to_ended = move_many_to_ended,
+  is_ancestor = is_ancestor,
   push_atomic = push_atomic,
   fetch_prune = fetch_prune,
 }

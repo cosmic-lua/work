@@ -1,12 +1,15 @@
 --- The item store: every item lives as a git ref — `refs/heads/items/<id>`
---- while open, `refs/heads/ended/<id>` once resolved — whose tip commit's
---- tree is the item's current state (`_work.itemtree`'s canonical
---- shape) and whose parent chain is its history. There is no working
---- tree to hold them: `open` needs only a git repository, and a
---- mutation writes git objects and moves refs directly, never a file.
---- Publishing that to a remote, and reading the log back, live in
---- `_work.publish`, which calls back into `git`/`git_ok` here for the
---- same deterministic tool identity every store call uses.
+--- for an ordinary item, `refs/heads/ended/<id>` for one resolved before
+--- this rule (`ended/` is legacy: read, never written) — whose tip
+--- commit's tree is the item's current state (`_work.itemtree`'s
+--- canonical shape) and whose parent chain is its history. A
+--- resolution sets `resolution` on whichever ref the item already
+--- lives on; it never moves the ref. There is no working tree to hold
+--- them: `open` needs only a git repository, and a mutation writes git
+--- objects and updates refs directly, never a file. Publishing that to
+--- a remote, and reading the log back, live in `_work.publish`, which
+--- calls back into `git`/`git_ok` here for the same deterministic tool
+--- identity every store call uses.
 ---
 --- The read and write mechanics are `_work.gitread`/`_work.gitwrite`,
 --- split out to keep this file under its line cap; this module is the
@@ -28,8 +31,11 @@ local refs = require("_work.refs")
 --- item as observed (`leased_item` — independent of whatever a caller
 --- goes on to mutate `load`'s/`list`'s own returned `item.Item`
 --- into, since `save`'s fast-import diff needs the ORIGINAL fields to
---- compare against), `refs/heads/board/seq`'s own observed tip, and the
---- refs a completed `save` still owes `publish` a push for.
+--- compare against), `refs/heads/board/seq`'s own observed tip, the
+--- refs a completed `save` still owes `publish` a push for, and every
+--- id the most recent `list` found filed under both `refs/heads/items`
+--- and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the
+--- only reader).
 local record Store
   root: string
   session: string
@@ -40,6 +46,7 @@ local record Store
   leased_item: {string: item.Item}
   observed_seq: string
   pending: {refs.PushSpec}
+  duplicates: {gitread.Duplicate}
 end
 
 --- The refusal a lost push race earns, exported so a verb can tell it
@@ -150,7 +157,7 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}}
+    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {}}
 end
 
 --- Record the session `save` should credit as author for whatever it
@@ -293,7 +300,19 @@ local function list(s: Store): {item.Item} | nil, string
     s.leased_item[it.id] = snapshot_item(it)
   end
   s.observed_seq = board.seq_sha
+  s.duplicates = board.duplicates
   return board.items
+end
+
+--- Every id the most recent `list` found filed under both
+--- `refs/heads/items` and `refs/heads/ended` at once — empty before
+--- the first `list` call, or on a board with none. `_work.gitfsck` is
+--- the only caller: every other verb just uses whichever ref `list`
+--- already picked as the lease.
+--- @param s Store The store
+--- @return {gitread.Duplicate} The duplicates `list` found, possibly empty
+local function duplicates(s: Store): {gitread.Duplicate}
+  return s.duplicates
 end
 
 --- One line summarizing every item `list` flagged, in list order; ""
@@ -320,14 +339,14 @@ end
 --- `publish` — a fixture writing straight past a verb, say) must
 --- still lease against the tip the REMOTE last agreed to, not the
 --- intermediate value this checkout only ever held locally, so the
---- existing entry's `old` wins; only `delete` — whether the ref ends
---- up moved or removed — reflects the latest write.
+--- existing entry — `old` included — is left exactly as it is; there
+--- is nothing else on a `PushSpec` a later write to the same ref could
+--- change.
 --- @param s Store The store
 --- @param p refs.PushSpec The ref to push
 local function add_pending(s: Store, p: refs.PushSpec)
   for _, existing in ipairs(s.pending) do
     if existing.ref == p.ref then
-      existing.delete = p.delete
       return
     end
   end
@@ -440,6 +459,7 @@ local record store
   read_spec: function(s: Store, id: string): string
   read_specs: function(s: Store, ids: {string}): {string: string}
   list: function(s: Store): {item.Item} | nil, string
+  duplicates: function(s: Store): {gitread.Duplicate}
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
   save: function(s: Store, it: item.Item, message: string, spec?: string,
@@ -462,6 +482,7 @@ local M: store = {
   read_spec = read_spec,
   read_specs = read_specs,
   list = list,
+  duplicates = duplicates,
   flagged_summary = flagged_summary,
   stage = stage,
   save = save,
