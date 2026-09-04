@@ -1,3 +1,5 @@
 title: review brief: the accept-landing instruction says 'never merge directly' unconditionally, dropping doctrine.tl's board-PR-merges-directly branch
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic@board
+claim: build-WQjH_vI9p-62aa6405
+builders: build-WQjH_vI9p-62aa6405
