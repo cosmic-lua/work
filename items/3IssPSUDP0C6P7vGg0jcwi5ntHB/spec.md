@@ -45,13 +45,19 @@ independently of it.
    read once per process and memoized in the store, not per render.
 4. `git log` for the item's history stays: it is the one thing the load
    does not carry. Name it in the code as the one deliberate process.
-5. Tests: `_work/procs_test.tl`'s table (the process ratchet; ready when it
-   is on main — `bin/cosmic --make test _work/procs_test.tl` passes)
-   records the new counts: `show` and `next` at 4 (one `for-each-ref`,
-   three `cat-file --batch`), `show ID` at 5 (those plus `log`). If the
-   load's three `cat-file --batch` passes can become one process with
-   `--batch` reads interleaved, do it in this PR only if it stays under
-   the file caps; otherwise leave that as a note in the PR.
+5. Tests, in the diff: a `_work/cache_test.tl` case that the digest check
+   never calls `refs.for_each_ref` when handed the load's snapshot (swap the
+   function on the `_work.refs` module table for a counting stub around the
+   call, restore it after); a `_work/gitread_test.tl` case that resolving a
+   prefix and a handle against an in-memory snapshot calls `for_each_ref`
+   zero times; a `_work/gitshow_test.tl` case that `show ID` renders the spec
+   with `gitobj`'s `cat-file -p` path stubbed to fail, proving the body came
+   from the loaded Item. Expected after the change, for the builder's own
+   check with the strace command above (not recorded in the tree): `show`
+   and `next` at 4 git processes (one `for-each-ref`, three `cat-file
+   --batch`), `show ID` at 5 (those plus `log`). If the load's three
+   `cat-file --batch` passes can become one process, do it in this PR only
+   if it stays under the file caps; otherwise leave that as a note in the PR.
 
 ## Non-goals
 
