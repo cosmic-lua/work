@@ -10,6 +10,7 @@
 --- A refused publish drops every one of them, so anything a mutation
 --- touches beyond its subject travels with it rather than being
 --- committed alongside.
+local cache = require("_work.cache")
 local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
@@ -302,10 +303,20 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   store.set_session(s, session or "")
   store.set_op(s, verb)
   store.set_bounded(s, bounded or false)
+  -- Read before the write moves anything, so `after_save` below has
+  -- proof the cache was valid immediately beforehand — see
+  -- `_work.cache`'s own header for why this lives here rather than
+  -- inside `store.save` itself.
+  local before_digest = cache.guard(s.root)
   local saved, serr = store.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then
     return saved, serr
   end
+  local touched: {string} = {it.id}
+  for _, x in ipairs(also or {}) do
+    touched[#touched + 1] = x.id
+  end
+  cache.after_save(s.root, before_digest, touched)
   return publish.publish(s)
 end
 

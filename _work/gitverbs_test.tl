@@ -359,8 +359,18 @@ local function test_a_take_survives_a_lost_race()
     "the re-run lands against the merged board")
   local r = check.must(child.run({"git", "status", "--porcelain"},
       {cwd = a.root}))
-  assert((r.stdout:gsub("%s+$", "")) == "",
-    "the mutation leaves no stray change: " .. r.stdout)
+  -- `o/` is the cache database `_work.cache` just built reading this
+  -- board — an expected, gitignored-in-a-real-checkout artifact, never
+  -- a mutation touching the working tree; every OTHER line still has
+  -- to be empty.
+  local stray: {string} = {}
+  for line in (r.stdout or ""):gmatch("[^\n]+") do
+    if line:match("^%?%? o/") == nil then
+      stray[#stray + 1] = line
+    end
+  end
+  assert(#stray == 0,
+    "the mutation leaves no stray change: " .. table.concat(stray, "\n"))
 end
 
 -- sync rebases and then asks about lane health; a local-only checkout has no origin, so

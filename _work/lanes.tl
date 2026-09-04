@@ -10,28 +10,17 @@
 --- claim, and it never mints twice for one lane, because the repair
 --- item's `lane` field is the idempotency key `mint` searches on.
 local api = require("_work.api")
+local cachequery = require("_work.cachequery")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
-local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local literal = require("cosmic.literal")
 local product = require("_work.product")
 local publish = require("_work.publish")
-local refs = require("_work.refs")
 local store = require("_work.store")
 local time = require("cosmic.time")
-
---- The ref the lanes observation lives at — board state, not an item,
---- which is what keeps it off the append-only item history.
-local STATE_REF < const > = "refs/board/lanes"
-
---- The tool's own git identity — the same one `_work.store` commits
---- item mutations under, restated here since a lanes commit is not an
---- item write and so does not go through `_work.gitwrite`.
-local TOOL_NAME < const > = "Claude"
-local TOOL_EMAIL < const > = "noreply@anthropic.com"
 
 --- The scheduled workflows the board tracks, by filename under
 --- `.github/workflows/`. Stable order: `record`'s commit subject and
@@ -122,23 +111,6 @@ local function repair_spec(lane: string): string
   :format(lane)
 end
 
---- Parse `refs/board/lanes`'s `state` blob: one `lane: conclusion`
---- line per lane that has ever recorded one. Lane filenames carry a
---- `.`, so this is its own small parser rather than a reuse of
---- `_work.itemtree`'s meta parser, whose key charset is item fields.
---- @param text string The state blob's content
---- @return {string: string} Lane filename -> conclusion
-local function parse_state_text(text: string): {string: string}
-  local out: {string: string} = {}
-  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
-    local key, value = line:match("^(%S+): (.*)$")
-    if key then
-      out[key] = value
-    end
-  end
-  return out
-end
-
 --- One lane's last completed run, read live. Any failure — no token,
 --- no network, a lane with no completed run yet — is reported so the
 --- caller can treat the whole observation as unknown; a partial read
@@ -203,93 +175,46 @@ local function observe(s: store.Store): {string: string} | nil, string
   return facts
 end
 
---- The facts last recorded, read straight from `refs/board/lanes` —
---- this is what keeps a fresh worktree's reads offline and truthful.
+--- The facts last recorded, read from the cache's `lanes` table — this
+--- is what keeps a fresh worktree's reads offline and truthful.
 --- Exported for `show`'s lanes row too: a fresh board that has never
---- synced has no such ref, so `read_state` comes back empty and `show`
---- renders no row rather than a row of blanks.
+--- synced has no cache observation yet, so `read_state` comes back
+--- empty and `show` renders no row rather than a row of blanks.
 --- @param s store.Store The store
 --- @return {string: string} One conclusion per lane, "" for the rest
 local function read_state(s: store.Store): {string: string}
-  local r = store.git(s, {"cat-file", "-p", STATE_REF .. ":state"})
+  local all = cachequery.lanes_read(s.root)
   local out: {string: string} = {}
-  if r == nil or not r.ok then
-    return out
-  end
-  local parsed = parse_state_text(r.stdout)
   for _, lane in ipairs(LANES) do
-    if parsed[lane] ~= nil then
-      out[lane] = parsed[lane]
+    if all[lane] ~= nil then
+      out[lane] = all[lane]
     end
   end
   return out
 end
 
---- Commit the observed facts to `refs/board/lanes`, ONLY when they
---- differ from what is already recorded — an unchanged observation
---- has nothing for the log to say, and re-committing it every sync
---- would bury the runs that actually moved. Not an item write, so it
---- builds and pushes its own single-ref transaction directly rather
---- than going through `_work.gitwrite`.
+--- Record the observed facts in the cache's `lanes` table, ONLY when
+--- they differ from what is already recorded — an unchanged
+--- observation has nothing new to note. LOCAL to this checkout now,
+--- never pushed: a lane's health is a fact this clone observed live,
+--- not board state another clone needs to agree on.
 --- @param s store.Store The store
 --- @param facts {string: string} One conclusion per lane
---- @return boolean True once committed (and pushed, given a remote);
---- false when the facts already matched what was recorded, or on failure
+--- @return boolean True once recorded; false when the facts already
+--- matched what was recorded, or on failure
 --- @return string Error message; "" when nothing changed
 local function record(s: store.Store, facts: {string: string}): boolean, string
   local current = read_state(s)
   local changed = false
-  local subject_parts: {string} = {}
-  local state_lines: {string} = {}
   for _, lane in ipairs(LANES) do
-    local c = facts[lane] or ""
-    if c ~= (current[lane] or "") then
+    if (facts[lane] or "") ~= (current[lane] or "") then
       changed = true
-    end
-    if c ~= "" then
-      subject_parts[#subject_parts + 1] = ("%s=%s"):format(lane, c)
-      state_lines[#state_lines + 1] = ("%s: %s\n"):format(lane, c)
     end
   end
   if not changed then
     return false, ""
   end
-  local blob_sha, berr = gitobj.hash_object(s.root, table.concat(state_lines))
-  if blob_sha == nil then
-    return false, berr
-  end
-  local tree_sha, terr = gitobj.mktree(s.root,
-    {{mode = "100644", otype = "blob", sha = blob_sha, name = "state"}})
-  if tree_sha == nil then
-    return false, terr
-  end
-  local found, ferr = refs.for_each_ref(s.root, {STATE_REF})
-  if found == nil then
-    return false, ferr
-  end
-  local old_sha = refs.ZERO_SHA
-  if #found > 0 then
-    old_sha = found[1].sha
-  end
-  local parents: {string} = {}
-  if old_sha ~= refs.ZERO_SHA then
-    parents = {old_sha}
-  end
-  local message = "sync lanes: " .. table.concat(subject_parts, " ")
-  local commit_sha, cerr = gitobj.commit_tree(s.root, {
-      tree = tree_sha, parents = parents, message = message,
-      author_name = TOOL_NAME, author_email = TOOL_EMAIL,
-      committer_name = TOOL_NAME, committer_email = TOOL_EMAIL, op = "sync",
-    })
-  if commit_sha == nil then
-    return false, cerr
-  end
-  local moved, uerr = refs.update_ref(s.root, STATE_REF, commit_sha, old_sha)
-  if not moved then
-    return false, uerr
-  end
-  store.add_pending(s, {ref = STATE_REF, old = old_sha, delete = false})
-  return publish.publish(s)
+  return cachequery.lanes_write(s.root, facts)
 end
 
 --- Whether `it` is the open repair item for `lane` — the search

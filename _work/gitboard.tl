@@ -44,9 +44,9 @@ local flags = require("cosmic.flags")
 local fs = require("cosmic.fs")
 local proc = require("cosmic.proc")
 local brief = require("_work.brief")
+local cachequery = require("_work.cachequery")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
-local find = require("_work.find")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
 local graph = require("_work.gitgraph")
@@ -353,7 +353,7 @@ local function main(...: string): integer
     return fsck.cmd_fsck(s)
   end
   if d.command == "find" then
-    return find.cmd_find(s, table.concat(d.parsed.args, " "))
+    return cachequery.cmd_find(s.root, table.concat(d.parsed.args, " "))
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
   -- with every other id-taking verb.

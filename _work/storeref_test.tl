@@ -330,6 +330,16 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
     return #(fs.read(counter_file) or "")
   end
 
+  -- Warm the cache once against the EMPTY board first, so both
+  -- measured calls below find a cache file already there (and
+  -- therefore pay the same digest-guard process `_work.cache.open`
+  -- spends on every call) — every `seed` here writes through
+  -- `store.save` directly, bypassing the incremental hooks
+  -- `_work.gitgate.commit_and_publish` normally fires, so each
+  -- measured call below finds the cache stale and rebuilds it, a
+  -- fixed process count regardless of how many items that rebuild
+  -- reads.
+  show_process_count()
   seed(3)
   local small = show_process_count()
   seed(12)

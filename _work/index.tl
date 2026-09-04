@@ -413,12 +413,60 @@ local function close(self: Index): boolean, string
   return self.db:close()
 end
 
+--- Delete every row `id` owns, across `items` and everything that
+--- references it (`edges` where it is the source, `builders`,
+--- `speccers`) — `_work.cache`'s per-item invalidation, ahead of a
+--- fresh `insert_item` or on its own when the item no longer exists.
+--- Order matters: `edges.from_id`/`builders.item`/`speccers.item` all
+--- carry a foreign key into `items`, so the referencing rows go first.
+--- An edge some OTHER item holds pointing at `id` is deliberately left
+--- standing — dangling, exactly as `dangling_edges` already reports
+--- one after a bulk `open` load.
+--- @param db sqlite.Database The connection
+--- @param id string Item id
+--- @return boolean True on success
+--- @return string Error message
+local function delete_item(db: sqlite.Database, id: string): boolean, string
+  for _, sql in ipairs({
+      "DELETE FROM builders WHERE item = ?",
+      "DELETE FROM speccers WHERE item = ?",
+      "DELETE FROM edges WHERE from_id = ?",
+      "DELETE FROM items WHERE id = ?",
+    }) do
+    local ok, err = db:exec(sql, {id})
+    if not ok then
+      return false, err
+    end
+  end
+  return true, ""
+end
+
+--- Insert one item's rows — `items`, its own edges, `builders`,
+--- `speccers` — into a connection already carrying this schema.
+--- Assumes none already exist for its id; call `delete_item` first to
+--- refresh one already loaded. `_work.cache`'s per-item counterpart to
+--- `open`'s bulk `load_items`, which this reuses directly.
+--- @param db sqlite.Database The connection
+--- @param it Item The item
+--- @return boolean True on success
+--- @return string Error message
+local function insert_item(db: sqlite.Database, it: Item): boolean, string
+  local row_problems: {string} = {}
+  load_items(db, {it}, row_problems)
+  if #row_problems > 0 then
+    return false, table.concat(row_problems, "; ")
+  end
+  return true, ""
+end
+
 local record index
   type Index = Index
   DDL: string
   open: function(items: {Item}, specs?: {string: string}): Index | nil, string
   problems: function(self: Index): {string}
   close: function(self: Index): boolean, string
+  delete_item: function(db: sqlite.Database, id: string): boolean, string
+  insert_item: function(db: sqlite.Database, it: Item): boolean, string
 end
 
 local M: index = {
@@ -426,6 +474,8 @@ local M: index = {
   open = open,
   problems = problems,
   close = close,
+  delete_item = delete_item,
+  insert_item = insert_item,
 }
 
 return M

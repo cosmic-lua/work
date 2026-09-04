@@ -1,14 +1,17 @@
 --- Full-text search over the board: an FTS5 table layered onto an
 --- already-loaded `_work.index` connection, filled from the items it
---- carries plus their spec sidecars — read once, batched
---- (`store.read_specs`), and handed to `index.open` rather than
---- re-read here. `build` creates and fills the table; `query` is the
---- `gitboard find` verb's engine; `similar` is `new`'s pre-mint
---- duplicate check.
+--- carries plus their spec sidecars. `build` creates and fills the
+--- table in one pass, for an ephemeral connection built fresh (a
+--- test, an ad hoc index); `reindex_item`/`remove_item` are the
+--- single-row counterparts `_work.cache` patches its persistent
+--- connection with instead. `query` is the `gitboard find` verb's
+--- engine; `similar` is `new`'s pre-mint duplicate check.
+--- `_work.cache` is the only production caller of any of this —
+--- `find` and `new`'s duplicate check both go through its persistent
+--- connection now, never a fresh `index.open` of their own.
 local index = require("_work.index")
+local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
-local store = require("_work.store")
-local tail = require("_work.tail")
 
 local type Index = index.Index
 
@@ -209,82 +212,31 @@ local function similar(idx: Index, title: string): Rows | nil, string
   return out
 end
 
---- `similar`'s hits as `new`'s pre-mint warning lines — the whole
---- read-specs/open-index/query/close cycle in one call, so wiring it
---- into a verb costs one `for` loop. Infallible by design: this is a
---- warning, never a refusal, so a failure anywhere in the cycle (an
---- empty board, a transient index-build problem) is not the caller's
---- to handle — it simply means no lines to print, the same as a title
---- with nothing similar on the board.
---- @param s store.Store The store
---- @param title string The candidate title
---- @return {string} "similar: «handle» title" lines, at most three,
---- possibly none
-local function similar_lines(s: store.Store, title: string): {string}
-  local all = store.list(s)
-  if all == nil then
-    return {}
+--- Refresh one item's search row: delete then insert, so a stale
+--- title or snippet never lingers after an edit — `_work.cache`'s
+--- per-item counterpart to `build`'s bulk fill.
+--- @param idx Index A search table `build` has already created
+--- @param it item.Item The item, as freshly read
+--- @param spec_body string Its spec sidecar, "" when it has none
+--- @return boolean True on success
+--- @return string Error message
+local function reindex_item(idx: Index, it: item.Item, spec_body: string): boolean, string
+  local dok, derr = idx.db:exec("DELETE FROM search WHERE id = ?", {it.id})
+  if not dok then
+    return false, derr
   end
-  local ids: {string} = {}
-  for _, it in ipairs(all) do
-    ids[#ids + 1] = it.id
-  end
-  local idx = index.open(all, store.read_specs(s, ids))
-  if idx == nil then
-    return {}
-  end
-  if not build(idx) then
-    local _ok, _cerr = index.close(idx)
-    return {}
-  end
-  local hits = similar(idx, title)
-  local _ok2, _cerr2 = index.close(idx)
-  local out: {string} = {}
-  for _, h in ipairs(hits or {}) do
-    out[#out + 1] = ("similar: %s %s"):format(tail.handle(h.id), h.title)
-  end
-  return out
+  return idx.db:exec("INSERT INTO search(id, title, spec) VALUES (?, ?, ?)",
+    {it.id, it.title, spec_body})
 end
 
---- `find TEXT...`: every hit for the joined query, ranked, one line
---- each — handle, state, title, snippet — then the verdict line
---- `gitboard-find: N hit(s)`.
---- @param s store.Store The store
---- @param text string The query text
---- @return integer Exit code
-local function cmd_find(s: store.Store, text: string): integer
-  local all, aerr = store.list(s)
-  if all == nil then
-    print(("gitboard-find: %s"):format(aerr))
-    return 1
-  end
-  local ids: {string} = {}
-  for _, it in ipairs(all) do
-    ids[#ids + 1] = it.id
-  end
-  local idx, ierr = index.open(all, store.read_specs(s, ids))
-  if idx == nil then
-    print(("gitboard-find: %s"):format(ierr))
-    return 1
-  end
-  local bok, berr = build(idx)
-  if not bok then
-    local _ok3, _cerr3 = index.close(idx)
-    print(("gitboard-find: %s"):format(berr))
-    return 1
-  end
-  local hits, qerr = query(idx, text, 20)
-  local _ok4, _cerr4 = index.close(idx)
-  if hits == nil then
-    print(("gitboard-find: %s"):format(qerr))
-    return 1
-  end
-  for _, h in ipairs(hits) do
-    print(("%s [%s] %s — %s"):format(tail.handle(h.id), h.state, h.title,
-        h.snippet))
-  end
-  print(("gitboard-find: %d hit(s)"):format(#hits))
-  return 0
+--- Remove one item's search row — `_work.cache`'s delete path, for an
+--- id that no longer exists.
+--- @param idx Index A search table `build` has already created
+--- @param id string The item id
+--- @return boolean True on success
+--- @return string Error message
+local function remove_item(idx: Index, id: string): boolean, string
+  return idx.db:exec("DELETE FROM search WHERE id = ?", {id})
 end
 
 local record find
@@ -293,16 +245,16 @@ local record find
   build: function(idx: Index): boolean, string
   query: function(idx: Index, text: string, limit: integer): Rows | nil, string
   similar: function(idx: Index, title: string): Rows | nil, string
-  similar_lines: function(s: store.Store, title: string): {string}
-  cmd_find: function(s: store.Store, text: string): integer
+  reindex_item: function(idx: Index, it: item.Item, spec_body: string): boolean, string
+  remove_item: function(idx: Index, id: string): boolean, string
 end
 
 local M: find = {
   build = build,
   query = query,
   similar = similar,
-  similar_lines = similar_lines,
-  cmd_find = cmd_find,
+  reindex_item = reindex_item,
+  remove_item = remove_item,
 }
 
 return M

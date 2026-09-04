@@ -15,6 +15,7 @@ local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
+local refs = require("_work.refs")
 local store = require("_work.store")
 
 --- The known edge kinds this build interprets — every OTHER kind an
@@ -120,6 +121,20 @@ local function tree_problem(s: store.Store, it: item.Item, spec_body: string): s
   return nil
 end
 
+--- The stale `refs/board/lanes` finding: nothing writes it any more —
+--- the lane observation lives in the cache database instead — but a
+--- board carried over from before that move may still have one.
+--- @param s store.Store The store
+--- @return string | nil The problem, nil when the ref is not there
+local function stale_lanes_ref_problem(s: store.Store): string | nil
+  local found = refs.for_each_ref(s.root, {"refs/board/lanes"})
+  if found ~= nil and #found > 0 then
+    return "refs/board/lanes: stale — lane observations now live in "
+    .. "the cache database (o/board.db), not a committed ref; delete it"
+  end
+  return nil
+end
+
 --- Run the whole audit and print it: one line per problem, then the
 --- verdict line every other verb ends with.
 --- @param s store.Store The store
@@ -141,6 +156,10 @@ local function cmd_fsck(s: store.Store): integer
     if p ~= nil then
       problems[#problems + 1] = p
     end
+  end
+  local lanes_p = stale_lanes_ref_problem(s)
+  if lanes_p ~= nil then
+    problems[#problems + 1] = lanes_p
   end
   for _, p in ipairs(problems) do
     print(p)

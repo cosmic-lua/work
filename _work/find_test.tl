@@ -1,8 +1,7 @@
 #!/usr/bin/env cosmic
 -- `_work.find`: FTS5 query escaping (punctuation is always a literal,
 -- never syntax), `build`/`query` against a real store's items and
--- specs, `similar`'s closeness filter, and the `find` verb's printed
--- lines and verdict.
+-- specs, `similar`'s closeness filter.
 
 local check = require("cosmic.check")
 local find = require("_work.find")
@@ -102,36 +101,6 @@ local function test_similar_returns_nothing_for_a_wholly_new_title()
   check.must(index.close(idx))
 end
 
-local function test_similar_lines_formats_a_handle_and_title()
-  local s = init_state_repo("similar-lines")
-  file_item(s, "add full text search over the board", "")
-  local lines = find.similar_lines(s, "add full text search over items")
-  assert(#lines >= 1, "at least one similar line")
-  assert(lines[1]:match("^similar: «%w[%w_-]*» .+$") ~= nil, lines[1])
-end
-
-local function test_cmd_find_prints_hits_and_a_verdict()
-  local s = init_state_repo("cmd-find")
-  file_item(s, "fix the sqlite index loader", "")
-  local seen: {string} = {}
-  local old_print = _G.print
-  _G.print = function(msg: any) seen[#seen + 1] = tostring(msg) end
-  local rc = find.cmd_find(s, "sqlite")
-  _G.print = old_print
-  assert(rc == 0, "a hit is a success")
-  local last = seen[#seen]
-  assert(last == "gitboard-find: 1 hit(s)", last)
-  assert(seen[1]:find("sqlite", 1, true), seen[1])
-end
-
-local function test_cmd_find_reports_zero_hits_without_failing()
-  local s = init_state_repo("cmd-find-zero")
-  file_item(s, "something else entirely", "")
-  local seen: {string} = {}
-  local old_print = _G.print
-  _G.print = function(msg: any) seen[#seen + 1] = tostring(msg) end
-  local rc = find.cmd_find(s, "nonexistentword")
-  _G.print = old_print
-  assert(rc == 0, "zero hits is not a failure")
-  assert(seen[#seen] == "gitboard-find: 0 hit(s)", seen[#seen])
-end
+-- `similar_lines`/`cmd_find` now live in `_work.cache` (they open the
+-- persistent cache rather than a fresh `index.open`); their tests
+-- moved to `_work/cache_test.tl` alongside it.
