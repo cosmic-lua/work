@@ -55,6 +55,5 @@ return {
   ["_work/spec.tl"] = {["covered"] = 58, ["total"] = 60},
   ["_work/store.tl"] = {["covered"] = 142, ["total"] = 159},
   ["_work/tail.tl"] = {["covered"] = 38, ["total"] = 38},
-  ["cmd/gitboard/embed_gen.tl"] = {["covered"] = 0, ["total"] = 27},
   ["cmd/gitboard/main.tl"] = {["covered"] = 0, ["total"] = 2},
 }
