@@ -1,3 +1,5 @@
 title: gitview: wire the queued-accept decision logic into cmd_next's live path
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic@board
+claim: build-gj7P_Db0H-62aa6405
+builders: build-gj7P_Db0H-62aa6405
