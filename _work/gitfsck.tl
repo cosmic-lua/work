@@ -4,12 +4,16 @@
 --- (a hand edit, a canonical form that drifted), a `parent` or any
 --- `edges/<kind>/<id>` naming an id that is not an item, an edge kind
 --- this build does not interpret, more than one OPEN item claiming the
---- same key, a root carrying a `repo` it should never have, and any
---- item the store's own tolerant decode had to flag. `store.list`'s
---- own format check (`_work.gitread`) is the board-readable
---- precondition every other check here depends on — a board this tool
---- cannot even read is reported as the one problem it is, nothing else
---- asked.
+--- same key, a root carrying a `repo` it should never have, an id
+--- filed under both `refs/heads/items` and `refs/heads/ended` at once
+--- (the residue of a resolution whose atomic push landed the create
+--- half of an old-style namespace move and lost the delete half — the
+--- pushing credential can create and update a branch but never delete
+--- one), and any item the store's own tolerant decode had to flag.
+--- `store.list`'s own format check (`_work.gitread`) is the
+--- board-readable precondition every other check here depends on — a
+--- board this tool cannot even read is reported as the one problem it
+--- is, nothing else asked.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
@@ -155,6 +159,24 @@ local function stray_ref_problems(s: store.Store): {string}
   return out
 end
 
+--- One line per id `list` found filed under both `refs/heads/items`
+--- and `refs/heads/ended` at once, naming which ref is being read and
+--- the exact command a credential with delete rights runs to clear
+--- the other — the push every ordinary session makes can create and
+--- update a branch but never delete one, so this repair needs a
+--- different credential.
+--- @param s store.Store The store, after a `list` call
+--- @return {string} One line per duplicate, possibly empty
+local function duplicate_ref_problems(s: store.Store): {string}
+  local out: {string} = {}
+  for _, d in ipairs(store.duplicates(s)) do
+    out[#out + 1] = ("%s: filed under both %s and %s — reading %s; clear the other "
+      .. "with `git push origin --delete %s`"):format(
+      d.id:sub(1, 8), d.kept_ref, d.dropped_ref, d.kept_ref, d.dropped_ref)
+  end
+  return out
+end
+
 local function cmd_fsck(s: store.Store): integer
   local all, lerr = store.list(s)
   if all == nil then
@@ -176,6 +198,9 @@ local function cmd_fsck(s: store.Store): integer
   local lanes_p = stale_lanes_ref_problem(s)
   if lanes_p ~= nil then
     problems[#problems + 1] = lanes_p
+  end
+  for _, p in ipairs(duplicate_ref_problems(s)) do
+    problems[#problems + 1] = p
   end
   for _, p in ipairs(stray_ref_problems(s)) do
     problems[#problems + 1] = p

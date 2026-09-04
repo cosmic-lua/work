@@ -6,8 +6,9 @@
 --- crosses the kanban. Which items matter more is a recorded
 --- comparison (`compare`), derived into an order by `_work.priority`,
 --- never a number an item asserts about itself. Each item is a git ref,
---- `refs/heads/items/<ksuid>` (or `refs/heads/ended/<ksuid>` once resolved), whose
---- tip commit's tree carries its fields and spec prose (`_work.store`);
+--- `refs/heads/items/<ksuid>` (`refs/heads/ended/<ksuid>` for one filed
+--- before resolving stopped moving the ref), whose tip commit's tree
+--- carries its fields and spec prose (`_work.store`);
 --- the flow rules are `_work.flow`. Pull requests
 --- stay on GitHub and carry the fix; issues shrink to an inbound
 --- queue. Ids are KSUIDs; renders lead with the handle, the id's last
