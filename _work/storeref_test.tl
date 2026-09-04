@@ -10,6 +10,7 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local flow = require("_work.flow")
 local fs = require("cosmic.fs")
+local gitview = require("_work.gitview")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
@@ -287,4 +288,51 @@ local function test_list_process_count_is_constant_as_items_grow()
     ("list's process count must not grow with item count: %d (3 items) vs "
       .. "%d (15 items)"):format(small, big))
   assert(small <= 3, ("at most 3 processes: got %d"):format(small))
+end
+
+--- The whole-board render (`gitboard show`, bare) reads every open
+--- item's spec sidecar for the bar checks it prints — `store.read_specs`
+--- makes that one batch, not one `cat-file -p` per item, so the git
+--- process count `cmd_status` spends must stay flat as the board grows.
+local function test_whole_board_show_process_count_is_constant_as_items_grow()
+  local root = init_state_repo("show-process-count")
+  local s = check.must(store.open(root))
+  local real_git = check.must(child.run({"sh", "-c", "command -v git"})).stdout
+  real_git = (real_git:gsub("%s+$", ""))
+  local wrapdir = fs.join(tmpdir, "storeref-show-git-wrap")
+  assert(fs.remove_all(wrapdir))
+  assert(fs.make_dirs(wrapdir))
+  local counter_file = fs.join(tmpdir, "storeref-show-git-count.txt")
+  assert(fs.write(counter_file, ""))
+  assert(fs.write(fs.join(wrapdir, "git"),
+      ("#!/bin/sh\nprintf x >> '%s'\nexec '%s' \"$@\"\n"):format(counter_file, real_git)))
+  assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
+
+  local function seed(n: integer)
+    for i = 1, n do
+      local it = make_item()
+      assert(store.save(s, it, ("seed %d"):format(i),
+          ("spec body for item %d"):format(i)))
+    end
+  end
+
+  --- How many `git` invocations one `gitview.cmd_status` (bare `show`)
+  --- makes, with the wrapper ahead of the real binary on PATH.
+  local function show_process_count(): integer
+    assert(fs.write(counter_file, ""))
+    local old_path = os.getenv("PATH") or ""
+    assert(env.set("PATH", wrapdir .. ":" .. old_path, true))
+    gitview.cmd_status(s)
+    assert(env.set("PATH", old_path, true))
+    return #(fs.read(counter_file) or "")
+  end
+
+  seed(3)
+  local small = show_process_count()
+  seed(12)
+  local big = show_process_count()
+  assert(small > 0, "the wrapper caught at least one invocation")
+  assert(small == big,
+    ("show's process count must not grow with item count: %d (3 items) vs "
+      .. "%d (15 items)"):format(small, big))
 end

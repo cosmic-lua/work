@@ -184,18 +184,59 @@ local function read_spec(root: string, candidates: {string}): string
   return ""
 end
 
+--- Every named item's spec sidecar in one batch, "" for an id that
+--- has none or whose tip is unknown — the whole-board counterpart to
+--- `read_spec`, so a readiness pass over every item costs one more
+--- `cat-file --batch` instead of one process per item.
+--- @param root string The repository root
+--- @param shas_by_id {string: string} Each item's tip sha, from `list`
+--- @param ids {string} Item ids to read, in any order
+--- @return {string: string} Spec markdown by id, possibly empty
+local function read_specs(root: string, shas_by_id: {string: string},
+    ids: {string}): {string: string}
+  local result: {string: string} = {}
+  local queries: {string} = {}
+  local query_of: {string: string} = {}
+  for _, id in ipairs(ids) do
+    result[id] = ""
+    local sha = shas_by_id[id]
+    if sha ~= nil then
+      local q = sha .. ":spec.md"
+      queries[#queries + 1] = q
+      query_of[id] = q
+    end
+  end
+  local batch = gitobj.cat_file_batch(root, queries)
+  if batch == nil then
+    return result
+  end
+  for _, id in ipairs(ids) do
+    local q = query_of[id]
+    if q ~= nil then
+      local entry = batch[q]
+      if entry ~= nil then
+        result[id] = entry.content
+      end
+    end
+  end
+  return result
+end
+
 local record gitread
   type Loaded = Loaded
   type Board = Board
   load: function(root: string, id: string): Loaded | nil, string
   list: function(root: string): Board | nil, string
   read_spec: function(root: string, candidates: {string}): string
+  read_specs: function(root: string, shas_by_id: {string: string},
+  ids: {string}): {string: string}
 end
 
 local M: gitread = {
   load = load_item,
   list = list,
   read_spec = read_spec,
+  read_specs = read_specs,
 }
 
 return M

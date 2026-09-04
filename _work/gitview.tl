@@ -74,18 +74,20 @@ local function ci_states(s: store.Store, all: {item.Item}): act.CiStates
 end
 
 --- Every spec sidecar, by item id, for the bar checks the reports
---- run. Read once per render; the reports stay pure over the map.
+--- run. Read once per render, in one batch — `store.read_specs`, not
+--- one `read_spec` per item — so a board-wide render stays a fixed
+--- number of git processes as the item count grows.
 --- @param s store.Store The store
 --- @param all {item.Item} Every item
 --- @return act.Specs Sidecar body by id
 local function read_specs(s: store.Store, all: {item.Item}): act.Specs
-  local out: act.Specs = {}
+  local ids: {string} = {}
   for _, i in ipairs(all) do
     if item.is_open(i) then
-      out[i.id] = store.read_spec(s, i.id)
+      ids[#ids + 1] = i.id
     end
   end
-  return out
+  return store.read_specs(s, ids)
 end
 
 --- How many todo lines the board render shows item-by-item. The top

@@ -236,6 +236,17 @@ local function read_spec(s: Store, id: string): string
   return gitread.read_spec(s.root, {"refs/items/" .. id, "refs/ended/" .. id})
 end
 
+--- Every named item's spec sidecar in one batch, "" for one with
+--- none — the whole-board counterpart to `read_spec`; used for a
+--- readiness pass over many items instead of one process each. Reads
+--- against `s.leased_sha`, so call `list` (or `load` each id) first.
+--- @param s Store The store
+--- @param ids {string} Item ids to read, in any order
+--- @return {string: string} Spec markdown by id, possibly empty
+local function read_specs(s: Store, ids: {string}): {string: string}
+  return gitread.read_specs(s.root, s.leased_sha, ids)
+end
+
 --- Load one item, remembering its ref and tip as the lease `save`
 --- writes against next.
 --- @param s Store The store
@@ -400,6 +411,7 @@ local record store
   load: function(s: Store, id: string): item.Item | nil, string
   resolve: function(s: Store, prefix: string): string | nil, string
   read_spec: function(s: Store, id: string): string
+  read_specs: function(s: Store, ids: {string}): {string: string}
   list: function(s: Store): {item.Item} | nil, string
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
@@ -421,6 +433,7 @@ local M: store = {
   load = load_item,
   resolve = resolve,
   read_spec = read_spec,
+  read_specs = read_specs,
   list = list,
   flagged_summary = flagged_summary,
   stage = stage,
