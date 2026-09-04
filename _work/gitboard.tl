@@ -1,6 +1,5 @@
 #!/usr/bin/env cosmic
---- Work board CLI over a state REPOSITORY instead of GitHub labels: a
---- proof of concept where roles emerge from the dependency graph.
+--- Work board CLI over a state REPOSITORY, where roles emerge from the graph.
 --- There are no kinds and no goal tier — an item with open children
 --- is a container being decomposed, a childless root is awaiting
 --- triage, and a parented leaf is workable: the only thing that
@@ -47,6 +46,7 @@ local proc = require("cosmic.proc")
 local brief = require("_work.brief")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
+local find = require("_work.find")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
 local graph = require("_work.gitgraph")
@@ -269,9 +269,11 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "[ID] [options]", flags = {dir_flag()}}},
     {name = "sync", summary = "rebase onto the remote's state",
       spec = {flags = {dir_flag()}}},
-    {name = "fsck", summary = "read-only board audit: dangling edges, "
-      .. "canonical-tree drift, lane collisions, flagged items",
+    {name = "fsck", summary = "read-only board audit: edges, trees, lanes, flags",
       spec = {flags = {dir_flag()}}},
+    {name = "find", summary = "full-text search over titles and specs, "
+      .. "ranked, a snippet per hit",
+      spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
   },
 }
 
@@ -279,11 +281,8 @@ local CSPEC: flags.CommandSpec = {
 --- @param ... string Command-line arguments
 --- @return integer Exit code
 local function main(...: string): integer
-  -- `help <topic>` serves doctrine before the dispatcher sees it —
-  -- topics are not commands, so flags.command would refuse them as
-  -- unknown. A topic never shadows a verb (`_work/doctrine_test.tl`
-  -- pins that), so a verb's own help page always wins this race by
-  -- construction.
+  -- `help <topic>` serves doctrine before the dispatcher sees it: a
+  -- topic is not a command, and never shadows a verb (doctrine_test).
   local argv = {...}
   if argv[1] == "help" and argv[2] ~= nil then
     local topic = doctrine.page(argv[2])
@@ -352,6 +351,9 @@ local function main(...: string): integer
   end
   if d.command == "fsck" then
     return fsck.cmd_fsck(s)
+  end
+  if d.command == "find" then
+    return find.cmd_find(s, table.concat(d.parsed.args, " "))
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
   -- with every other id-taking verb.

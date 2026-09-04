@@ -26,6 +26,15 @@ cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
 ```
 
+`_work/index.tl` and `_work/find.tl` are a DERIVED, in-memory SQLite
+index over the loaded items — never truth, never written back, never
+committed: every verb that needs it rebuilds it fresh from `store.list`
+and `store.read_specs`, and it is discarded when the verb ends.
+`index.tl` mirrors the ref layout's fields into STRICT tables and the
+role/state views `_work.flow` derives by hand; `find.tl` layers full-text
+search over the same connection for the `find` verb and `new`'s
+pre-mint duplicate-title check.
+
 Every item is a git ref — `refs/items/<ksuid>` while open,
 `refs/ended/<ksuid>` once resolved — whose tip commit's tree carries
 its fields (a `meta` blob of `key: value` lines) and its spec prose
