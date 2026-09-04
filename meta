@@ -2,4 +2,5 @@ title: gitboard take: say that an orchestrator always passes --session, and let 
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic@board
 claim: build-VbI3_FiHP-d6f1cc41
+pr: 1709
 builders: build-VbI3_FiHP-d6f1cc41
