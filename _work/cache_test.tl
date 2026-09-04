@@ -149,7 +149,7 @@ local function test_a_corrupted_cache_meta_page_self_heals_on_open()
   local bytes = check.must(fs.read(path))
   local offset = (rootpage - 1) * page_size
   local zeroed = bytes:sub(1, offset) .. string.rep("\0", page_size)
-    .. bytes:sub(offset + page_size + 1)
+  .. bytes:sub(offset + page_size + 1)
   check.must(fs.write(path, zeroed))
 
   local c = check.must(cache.open(s.root))
