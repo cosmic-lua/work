@@ -47,6 +47,7 @@ local proc = require("cosmic.proc")
 local brief = require("_work.brief")
 local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
+local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
@@ -61,21 +62,16 @@ local show = require("_work.gitshow")
 local view = require("_work.gitview")
 
 --- The verbs whose save may be BOUNDED — advancing and leasing
---- `refs/board/seq` (`_work.store.set_bounded`), so two of them
---- racing each other need to see the SAME seq tip or the lease is
---- worthless: `take` (a NEW claim, against the doing bound) and
---- `block` (the add path only — see `_work.gitgraph.cmd_block`'s own
---- comment on why the remove path stays unbounded) are the only two
---- whose gates read the whole board before deciding, so only these
---- fetch the remote's state before mutating at all. Every other
---- write verb here never touches `refs/board/seq`, so it can build
---- its commit(s) against this checkout's own local refs and push
---- straight away: a stale lease is simply refused as `LOST_RACE` by
---- the push itself (`_work.publish.publish`, which re-syncs on
---- rejection) — a second round trip only when a race actually
---- happened, instead of paying for one on every call. `sync` and lane
---- minting fetch on their own, outside this dispatch, and are
---- unaffected either way.
+--- `refs/board/seq` (`_work.store.set_bounded`), so two of them racing
+--- each other need to see the SAME seq tip: `take` (a NEW claim, the
+--- doing bound) and `block` (the add path only — see
+--- `_work.gitgraph.cmd_block`'s own comment). Only these fetch the
+--- remote's state before mutating; every other write verb builds
+--- against this checkout's own local refs and pushes straight away —
+--- a stale lease is refused as `LOST_RACE` by the push itself
+--- (`_work.publish.publish`, which re-syncs on rejection), costing a
+--- round trip only when a race actually happened. `sync` and lane
+--- minting fetch on their own, outside this dispatch.
 local FETCH_FIRST: {string: boolean} = {
   ["take"] = true, ["block"] = true,
 }
@@ -273,6 +269,9 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "[ID] [options]", flags = {dir_flag()}}},
     {name = "sync", summary = "rebase onto the remote's state",
       spec = {flags = {dir_flag()}}},
+    {name = "fsck", summary = "read-only board audit: dangling edges, "
+      .. "canonical-tree drift, lane collisions, flagged items",
+      spec = {flags = {dir_flag()}}},
   },
 }
 
@@ -309,16 +308,12 @@ local function main(...: string): integer
     return 0
   end
   if d.command == "init" then
-    -- Inlined rather than a `verbs.cmd_init` wrapper: the mechanics
-    -- are `store.init_repo`'s, alongside `open`, and nothing else
-    -- needs its own copy of this two-line verdict.
     local dir = d.parsed.values["dir"] or "."
     local ok, err = store.init_repo(dir)
     if not ok then
       return gate.verdict_line("init", false, err)
     end
-    return gate.verdict_line("init", true,
-      ("state repository ready at %s"):format(dir))
+    return gate.verdict_line("init", true, ("state repository ready at %s"):format(dir))
   end
   local s, serr = store.open(d.parsed.values["dir"] or ".")
   if s == nil then
@@ -354,6 +349,9 @@ local function main(...: string): integer
   end
   if d.command == "sync" then
     return verbs.cmd_sync(s)
+  end
+  if d.command == "fsck" then
+    return fsck.cmd_fsck(s)
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
   -- with every other id-taking verb.
