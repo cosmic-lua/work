@@ -66,6 +66,28 @@ local function test_a_dangling_beats_edge_is_caught()
   assert(printed:find("gitboard-fsck: 1 problem(s)", 1, true) ~= nil, printed)
 end
 
+-- An edge kind this build does not interpret — `edges/relates/<id>`,
+-- say — round-trips through `_work.itemtree` opaquely
+-- (`item.Item.other_edges`) and is exactly what `fsck` flags: the kind
+-- itself as unknown, and any id under it that names no item.
+local function test_an_unknown_edge_kind_is_caught()
+  local s = init_state_repo("fsck-unknown-kind")
+  local root, _leaf = root_with_leaf(s)
+  local ghost = check.must(ksuid.encode(1690000004, ("\5"):rep(16)))
+  local it = check.must(store.load(s, root))
+  it.other_edges = {relates = {[ghost] = ""}}
+  assert(store.save(s, it, "hand-edited other_edges"))
+  local reread = check.must(store.load(s, root))
+  local reread_edges = reread.other_edges
+  assert(reread_edges ~= nil and reread_edges.relates ~= nil
+    and reread_edges.relates[ghost] ~= nil, "the kind round-trips")
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "an unknown edge kind is a problem: " .. printed)
+  assert(printed:find("unknown edge kind relates", 1, true) ~= nil, printed)
+  assert(printed:find("relates names " .. ghost, 1, true) ~= nil, printed)
+  assert(printed:find("which is not an item", 1, true) ~= nil, printed)
+end
+
 --- A minimal valid item.
 --- @param over {string: any} Fields to override
 --- @return item.Item The item
@@ -79,13 +101,13 @@ local function make_item(over?: {string: any}): item.Item
   return check.must(item.decode(t))
 end
 
--- Two open items sharing a lane: `_work.lanes.mint`'s own idempotency
+-- Two open items sharing a key: `_work.lanes.mint`'s own idempotency
 -- key is only checked at mint time, so a hand-edited second claimant
 -- is exactly the shape `fsck` exists to catch.
-local function test_two_open_items_in_one_lane_is_a_problem()
-  local a = make_item({lane = "release.yml"})
+local function test_two_open_items_in_one_key_is_a_problem()
+  local a = make_item({key = "release.yml"})
   local b = make_item({id = check.must(ksuid.encode(1690000003, ("\4"):rep(16))),
-      lane = "release.yml"})
+      key = "release.yml"})
   local problems = fsck.structural_problems({a, b})
   local found = false
   for _, p in ipairs(problems) do

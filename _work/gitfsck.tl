@@ -1,14 +1,15 @@
 --- `fsck`: a read-only, offline whole-board audit — the problems no
 --- other verb ever asks about because nothing else asks a WHOLE-board
 --- question: an item's tree not re-encoding to what it was read from
---- (a hand edit, a canonical form that drifted), a `parent`,
---- `beats/<id>` or `blocked_by/<id>` naming an id that is not an
---- item, more than one OPEN item claiming the same lane, a root
---- carrying a `repo` it should never have, and any item the store's
---- own tolerant decode had to flag. `store.list`'s own format check
---- (`_work.gitread`) is the board-readable precondition every other
---- check here depends on — a board this tool cannot even read is
---- reported as the one problem it is, nothing else asked.
+--- (a hand edit, a canonical form that drifted), a `parent` or any
+--- `edges/<kind>/<id>` naming an id that is not an item, an edge kind
+--- this build does not interpret, more than one OPEN item claiming the
+--- same key, a root carrying a `repo` it should never have, and any
+--- item the store's own tolerant decode had to flag. `store.list`'s
+--- own format check (`_work.gitread`) is the board-readable
+--- precondition every other check here depends on — a board this tool
+--- cannot even read is reported as the one problem it is, nothing else
+--- asked.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
@@ -16,16 +17,23 @@ local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local store = require("_work.store")
 
+--- The known edge kinds this build interprets — every OTHER kind an
+--- item's `other_edges` names is reported once per item, since it is
+--- carried opaquely rather than acted on by anything here.
+local KNOWN_KINDS < const >: {string: boolean} = {
+  beats = true, blocked_by = true,
+}
+
 --- The structural problems `all` carries — pure over an already-loaded
---- board, no git of its own: dangling `parent`/`beats`/`blocked_by`
---- edges, a lane two open items both claim, a root with a `repo`, and
---- every item's own `decode_problems`.
+--- board, no git of its own: dangling `parent`/`beats`/`blocked_by`/
+--- other-kind edges, an unknown edge kind, a key two open items both
+--- claim, a root with a `repo`, and every item's own `decode_problems`.
 --- @param all {item.Item} Every item
 --- @return {string} Problems, possibly empty
 local function structural_problems(all: {item.Item}): {string}
   local index = flow.by_id(all)
   local out: {string} = {}
-  local lane_holder: {string: string} = {}
+  local key_holder: {string: string} = {}
   for _, it in ipairs(all) do
     local id8 = it.id:sub(1, 8)
     if it.parent ~= "" and index[it.parent] == nil then
@@ -41,13 +49,33 @@ local function structural_problems(all: {item.Item}): {string}
         out[#out + 1] = ("%s: blocked_by names %s, which is not an item"):format(id8, b)
       end
     end
-    if item.is_open(it) and (it.lane or "") ~= "" then
-      local holder = lane_holder[it.lane]
+    local other_kinds: {string} = {}
+    for kind in pairs(it.other_edges or {}) do
+      other_kinds[#other_kinds + 1] = kind
+    end
+    table.sort(other_kinds)
+    for _, kind in ipairs(other_kinds) do
+      if not KNOWN_KINDS[kind] then
+        out[#out + 1] = ("%s: unknown edge kind %s"):format(id8, kind)
+      end
+      local ids: {string} = {}
+      for eid in pairs((it.other_edges or {})[kind] or {}) do
+        ids[#ids + 1] = eid
+      end
+      table.sort(ids)
+      for _, eid in ipairs(ids) do
+        if index[eid] == nil then
+          out[#out + 1] = ("%s: %s names %s, which is not an item"):format(id8, kind, eid)
+        end
+      end
+    end
+    if item.is_open(it) and (it.key or "") ~= "" then
+      local holder = key_holder[it.key]
       if holder ~= nil then
-        out[#out + 1] = ("%s and %s: both open in lane %s — at most one may be"):format(
-          holder, id8, it.lane)
+        out[#out + 1] = ("%s and %s: both open with key %s — at most one may be"):format(
+          holder, id8, it.key)
       else
-        lane_holder[it.lane] = id8
+        key_holder[it.key] = id8
       end
     end
     if item.is_root(it) and (it.repo or "") ~= "" then
