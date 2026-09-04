@@ -1,7 +1,10 @@
 title: cosmos pin bump: 2026.08.31-6dfa6728a to the newest release (>= 2026.09.04-65bc139fc), the whole exact-contract adaptation in one PR
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmic
-claim: 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff
 pr: 1705
+verdict: accept
+verdict_head: 686857c0a49e799f04bde5d16ed7e03c73e0e119
+verdict_spec: ef48194e80fb463ce228b40daa46c49a88671a7c60f72e84a10452163ff30157
+resolution: completed
 builders: wave21-1-pinbump 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff
 speccers: wave21-1-pinbump 259ba306-c053-56fc-b9ad-784a9d4ed050 6a6c39f4-13ef-5170-bf86-7c8195f1f8ff
