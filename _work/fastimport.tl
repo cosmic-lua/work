@@ -33,9 +33,9 @@ local time = require("cosmic.time")
 
 --- One path change a commit carries: replace `path` with `content`,
 --- or delete it when `content` is nil. Every path this item's tree
---- can hold — `meta`, `spec.md`, `beats/<id>`, `blocked_by/<id>` — is
---- a single file, never a subtree of subtrees, so one flat list of
---- these is the whole of what one item's commit needs to say.
+--- can hold — `meta`, `spec.md`, `held`, `edges/<kind>/<id>` — is a
+--- single file, so one flat list of these (nested paths and all) is
+--- the whole of what one item's commit needs to say.
 local record Op
   path: string
   --- nil deletes the path; "" is a legal blob (the beats marker, an
@@ -93,9 +93,11 @@ end
 --- already builds it as, never field by field), `spec.md` only when
 --- `spec_replacement` is given AND differs from `old_spec` (nil
 --- leaves the sidecar untouched — no read, no write, no path at all,
---- carried forward by `from`), and `beats`/`blocked_by` entries added,
---- changed or removed against `old`'s own sets. `old` is nil for a
---- brand-new item — every path the new item carries is then "added".
+--- carried forward by `from`), `held` added or removed when `is_held`
+--- flips, and every `edges/<kind>/<id>` entry — `beats`, `blocked_by`,
+--- and every kind in `other_edges` — added, changed or removed against
+--- `old`'s own sets. `old` is nil for a brand-new item — every path
+--- the new item carries is then "added".
 --- @param old item.Item | nil The item as last observed, nil when new
 --- @param new_it item.Item The item as it stands now
 --- @param spec_replacement string | nil Replacement spec.md text; nil
@@ -121,6 +123,15 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
       ops[#ops + 1] = {path = "spec.md", content = spec_replacement}
     end
   end
+  local old_held = old ~= nil and old.is_held or false
+  local new_held = new_it.is_held or false
+  if new_held ~= old_held then
+    if new_held then
+      ops[#ops + 1] = {path = "held", content = ""}
+    else
+      ops[#ops + 1] = {path = "held", content = nil}
+    end
+  end
   local old_beats: {string: boolean} = {}
   if old ~= nil then
     for _, b in ipairs(old.beats or {}) do
@@ -133,12 +144,12 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
   end
   for b in pairs(new_beats) do
     if not old_beats[b] then
-      ops[#ops + 1] = {path = "beats/" .. b, content = ""}
+      ops[#ops + 1] = {path = "edges/beats/" .. b, content = ""}
     end
   end
   for b in pairs(old_beats) do
     if not new_beats[b] then
-      ops[#ops + 1] = {path = "beats/" .. b, content = nil}
+      ops[#ops + 1] = {path = "edges/beats/" .. b, content = nil}
     end
   end
   local old_blocked: {string: string} = {}
@@ -153,12 +164,39 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
   end
   for b, reason in pairs(new_blocked) do
     if old_blocked[b] == nil or old_blocked[b] ~= reason then
-      ops[#ops + 1] = {path = "blocked_by/" .. b, content = reason}
+      ops[#ops + 1] = {path = "edges/blocked_by/" .. b, content = reason}
     end
   end
   for b in pairs(old_blocked) do
     if new_blocked[b] == nil then
-      ops[#ops + 1] = {path = "blocked_by/" .. b, content = nil}
+      ops[#ops + 1] = {path = "edges/blocked_by/" .. b, content = nil}
+    end
+  end
+  -- Every OTHER kind, unknown to this build: diffed the same shape as
+  -- `blocked_by` (id -> content), one subtree per kind, so a kind this
+  -- reader does not interpret still round-trips through an unrelated
+  -- write untouched, and only the ids that actually moved get an op.
+  local old_other: {string: {string: string}} = (old ~= nil and old.other_edges) or {}
+  local new_other: {string: {string: string}} = new_it.other_edges or {}
+  local kinds: {string: boolean} = {}
+  for k in pairs(old_other) do
+    kinds[k] = true
+  end
+  for k in pairs(new_other) do
+    kinds[k] = true
+  end
+  for kind in pairs(kinds) do
+    local old_map = old_other[kind] or {}
+    local new_map = new_other[kind] or {}
+    for eid, content in pairs(new_map) do
+      if old_map[eid] == nil or old_map[eid] ~= content then
+        ops[#ops + 1] = {path = ("edges/%s/%s"):format(kind, eid), content = content}
+      end
+    end
+    for eid in pairs(old_map) do
+      if new_map[eid] == nil then
+        ops[#ops + 1] = {path = ("edges/%s/%s"):format(kind, eid), content = nil}
+      end
     end
   end
   return ops

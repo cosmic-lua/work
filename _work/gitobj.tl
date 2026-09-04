@@ -154,7 +154,7 @@ local function commit_tree(root: string, spec: CommitSpec): string | nil, string
 end
 
 --- Read a batch of objects in one `git cat-file --batch` process.
---- Each query is a git rev spec: `<ref>:meta`, `<sha>:blocked_by/<id>`,
+--- Each query is a git rev spec: `<ref>:meta`, `<sha>:edges/blocked_by/<id>`,
 --- a bare sha, and so on. Content is read by exact byte count, so
 --- binary content (a raw tree object) round-trips intact; a missing
 --- path or object is simply absent from the result rather than an

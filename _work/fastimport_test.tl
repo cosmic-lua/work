@@ -36,9 +36,58 @@ local function test_diff_item_new_item_adds_every_path()
     by_path[op.path] = op.content
   end
   assert(by_path["meta"] ~= nil, "meta is always written for a new item")
-  assert(by_path["beats/beatee"] == "", "a beat is an empty marker blob")
-  assert(by_path["blocked_by/blockerid"] == "why", "the reason rides the blob")
+  assert(by_path["edges/beats/beatee"] == "", "a beat is an empty marker blob")
+  assert(by_path["edges/blocked_by/blockerid"] == "why", "the reason rides the blob")
   assert(by_path["spec.md"] == nil, "no spec_replacement means no spec.md op")
+  assert(by_path["held"] == nil, "an unheld item writes no held marker")
+end
+
+-- A held item's brand-new commit writes the `held` marker too, and
+-- dropping the hold on an already-held item deletes it.
+local function test_diff_item_held_marker_added_and_removed()
+  local held = make_item({is_held = true})
+  local new_ops = fastimport.diff_item(nil, held, nil, "")
+  local added: {string: string} = {}
+  for _, op in ipairs(new_ops) do
+    if op.content ~= nil then
+      added[op.path] = op.content
+    end
+  end
+  assert(added["held"] == "", "a brand-new held item writes the marker")
+
+  local unheld = make_item()
+  local drop_ops = fastimport.diff_item(held, unheld, nil, "")
+  local deleted = false
+  for _, op in ipairs(drop_ops) do
+    if op.path == "held" and op.content == nil then
+      deleted = true
+    end
+  end
+  assert(deleted, "dropping the hold deletes the marker")
+end
+
+-- An edge kind this build does not interpret — carried opaquely on
+-- `other_edges` — diffs the same shape `blocked_by` does: add,
+-- change, remove, one op per id that actually moved.
+local function test_diff_item_other_edges_round_trips()
+  local old = make_item()
+  old.other_edges = {relates = {a = "why a", b = "same"}}
+  local new_it = make_item()
+  new_it.other_edges = {relates = {a = "why a changed", b = "same", c = ""}}
+  local ops = fastimport.diff_item(old, new_it, nil, "")
+  local by_path: {string: string} = {}
+  local deleted: {string: boolean} = {}
+  for _, op in ipairs(ops) do
+    if op.content == nil then
+      deleted[op.path] = true
+    else
+      by_path[op.path] = op.content
+    end
+  end
+  assert(by_path["edges/relates/a"] == "why a changed", "a's reason moved")
+  assert(by_path["edges/relates/b"] == nil and not deleted["edges/relates/b"],
+    "b is unchanged: no op at all")
+  assert(by_path["edges/relates/c"] == "", "c is a fresh add")
 end
 
 -- Nothing changed between `old` and the same item passed as `new_it`
@@ -79,9 +128,9 @@ local function test_diff_item_beats_add_and_remove()
       by_path[op.path] = op.content
     end
   end
-  assert(deleted["beats/gone"], "the dropped beat is a D")
-  assert(by_path["beats/kept"] == "", "kept is a fresh add too (a different id)")
-  assert(by_path["beats/new"] == "", "the added beat is present")
+  assert(deleted["edges/beats/gone"], "the dropped beat is a D")
+  assert(by_path["edges/beats/kept"] == "", "kept is a fresh add too (a different id)")
+  assert(by_path["edges/beats/new"] == "", "the added beat is present")
   assert(by_path["meta"] == nil, "meta itself never moved")
 end
 
@@ -95,7 +144,7 @@ local function test_diff_item_blocked_by_reason_change_is_one_m()
       block_reason = {b1 = "new reason", b2 = "same"}})
   local ops = fastimport.diff_item(old, new_it, nil, "")
   assert(#ops == 1, "only b1's reason moved: " .. #ops)
-  assert(ops[1].path == "blocked_by/b1")
+  assert(ops[1].path == "edges/blocked_by/b1")
   assert(ops[1].content == "new reason")
 end
 
@@ -150,8 +199,8 @@ local function test_build_stream_for_a_known_item()
     message = "take known01 by session-a", op = "take",
     ops = {
       {path = "meta", content = "title: a title\nclaim: session-a\n"},
-      {path = "beats/beatee", content = ""},
-      {path = "blocked_by/oldid", content = nil},
+      {path = "edges/beats/beatee", content = ""},
+      {path = "edges/blocked_by/oldid", content = nil},
     },
   }
   local stream = fastimport.build_stream({plan})
@@ -167,10 +216,10 @@ local function test_build_stream_for_a_known_item()
       "data 32\n",
       "title: a title\nclaim: session-a\n",
       "\n",
-      "M 100644 inline beats/beatee\n",
+      "M 100644 inline edges/beats/beatee\n",
       "data 0\n",
       "\n",
-      "D blocked_by/oldid\n",
+      "D edges/blocked_by/oldid\n",
       "done\n",
     })
   assert(stream == expected, "stream text drifted:\n--- got ---\n" .. stream

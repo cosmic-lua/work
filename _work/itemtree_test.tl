@@ -43,18 +43,19 @@ local function fresh_repo(name: string): string
 end
 
 --- A fully-populated item — every scalar field set, plus beats,
---- blocked_by (with and without a reason) and builders/speccers — so
---- the round trip has everything to lose.
+--- blocked_by (with and without a reason), an edge kind this build
+--- does not interpret, and builders/speccers — so the round trip has
+--- everything to lose.
 local function full_item(): item.Item
-  local parent, beat1, beat2, block1, block2 =
-  fresh_id(), fresh_id(), fresh_id(), fresh_id(), fresh_id()
-  return check.must(item.decode({
+  local parent, beat1, beat2, block1, block2, other1 =
+  fresh_id(), fresh_id(), fresh_id(), fresh_id(), fresh_id(), fresh_id()
+  local it = check.must(item.decode({
         id = fresh_id(),
         title = "a fully populated item",
         parent = parent,
         repo = "cosmic-lua/cosmic",
         base = "main",
-        lane = "release.yml",
+        key = "release.yml",
         beats = beat1 .. " " .. beat2,
         blocked_by = block1 .. " " .. block2,
         block_reason = {
@@ -71,22 +72,26 @@ local function full_item(): item.Item
         verdict_spec = ("cd"):rep(20),
         is_held = false,
       }))
+  it.other_edges = {relates = {[other1] = "context"}}
+  return it
 end
 
 -- `encode_meta` writes every non-zero scalar field, one `key: value`
--- line each, and `parse_meta` reads them all back — `beats` and
--- `blocked_by` are not among them; those are tree entries.
+-- line each, `repo`/`base` collapsed into one `target` line — `beats`
+-- and `blocked_by` are not among them; those are tree entries, and
+-- neither is `held`, which is a marker blob, never a meta line.
 local function test_meta_round_trips_every_scalar_field()
   local it = full_item()
   local text = itemtree.encode_meta(it)
   assert(not text:find("beats", 1, true), "beats is not a meta line")
   assert(not text:find("blocked_by", 1, true), "blocked_by is not a meta line")
+  assert(not text:find("^held", 1, false) and not text:find("\nheld", 1, true),
+    "held is not a meta line")
   local parsed = itemtree.parse_meta(text)
   assert(parsed.title == it.title)
   assert(parsed.parent == it.parent)
-  assert(parsed.repo == it.repo)
-  assert(parsed.base == it.base)
-  assert(parsed.lane == it.lane)
+  assert(parsed.target == it.repo .. "@" .. it.base)
+  assert(parsed.key == it.key)
   assert(parsed.claim == it.claim)
   assert(parsed.reviewer == it.reviewer)
   assert(parsed.pr == tostring(it.pr))
@@ -106,13 +111,66 @@ local function test_meta_omits_zero_values()
   assert(text == "title: bare\n", "got: " .. text)
 end
 
--- `held: true` appears only when the item is actually held.
-local function test_held_appears_only_when_true()
-  local it = check.must(item.decode({id = fresh_id(),
-        title = "a root"}))
+-- `target` collapses `repo`/`base`: `owner/name` alone when there is
+-- no base, `owner/name@branch` when both are set, and omitted (like
+-- any other zero value) when both are empty.
+local function test_target_combines_repo_and_base()
+  local repo_only = check.must(item.decode({id = fresh_id(), title = "t",
+        parent = fresh_id(), repo = "cosmic-lua/cosmic"}))
+  assert(itemtree.encode_meta(repo_only):find(
+      "target: cosmic%-lua/cosmic\n", 1, false) ~= nil,
+    itemtree.encode_meta(repo_only))
+
+  local both = check.must(item.decode({id = fresh_id(), title = "t",
+        parent = fresh_id(), repo = "cosmic-lua/cosmic", base = "main"}))
+  assert(itemtree.encode_meta(both):find(
+      "target: cosmic%-lua/cosmic@main\n", 1, false) ~= nil,
+    itemtree.encode_meta(both))
+
+  local neither = check.must(item.decode({id = fresh_id(), title = "t"}))
+  assert(not itemtree.encode_meta(neither):find("target", 1, true),
+    "no target line when both are empty")
+end
+
+-- `parse_target`'s inverse, including the round trip through
+-- `to_item`, and its one refusal: more than one `@` is a decode
+-- problem, not a hard failure — the malformed value still decodes.
+local function test_parse_target_round_trips_and_refuses_extra_at()
+  local repo, base, err = itemtree.parse_target("owner/name@branch")
+  assert(repo == "owner/name" and base == "branch" and err == "", err)
+
+  local repo2, base2, err2 = itemtree.parse_target("owner/name")
+  assert(repo2 == "owner/name" and base2 == "" and err2 == "", err2)
+
+  local repo3, base3, err3 = itemtree.parse_target("")
+  assert(repo3 == "" and base3 == "" and err3 == "", err3)
+
+  local _repo4, _base4, err4 = itemtree.parse_target("owner/name@a@b")
+  assert(err4 ~= "" and err4:find("at most one @", 1, true) ~= nil, err4)
+
+  local decoded = itemtree.to_item(fresh_id(),
+    {title = "t", target = "owner/name@a@b"}, false, {}, {}, {}, {})
+  assert(item.is_flagged(decoded), "a malformed target flags the decode")
+  local found = false
+  for _, p in ipairs(decoded.decode_problems or {}) do
+    if p:find("at most one @", 1, true) then
+      found = true
+    end
+  end
+  assert(found, table.concat(decoded.decode_problems or {}, "; "))
+end
+
+-- `held` is a marker blob, not a meta line: `encode_meta` never writes
+-- it, and `to_item` takes it as a separate boolean the tree read
+-- supplies from the blob's presence.
+local function test_held_is_never_a_meta_line()
+  local it = check.must(item.decode({id = fresh_id(), title = "a root"}))
   it.is_held = true
   local text = itemtree.encode_meta(it)
-  assert(text:find("held: true", 1, true) ~= nil, text)
+  assert(not text:find("held", 1, true), "held never rides in meta: " .. text)
+  local held_it = itemtree.to_item(it.id, itemtree.parse_meta(text), true,
+    {}, {}, {}, {})
+  assert(held_it.is_held, "to_item takes held as its own argument")
 end
 
 -- The property the whole design rests on: decode a tree into an
@@ -125,33 +183,63 @@ local function test_canonical_round_trip_is_tree_sha_identical()
   local it = full_item()
   local tree1 = check.must(itemtree.build_tree(root, it, "## Change\nDo it.\n"))
 
-  -- Read the tree back exactly the way `_work.gitread` does.
+  -- Read the tree back exactly the way `_work.gitread` does: meta,
+  -- whether `held` is present, and every `edges/<kind>` subtree's own
+  -- ids, with a blob-content batch for everything but `beats`.
   local batch = check.must(gitobj.cat_file_batch(root,
-      {tree1 .. ":meta", tree1 .. ":beats", tree1 .. ":blocked_by"}))
+      {tree1 .. ":meta", tree1 .. ":held", tree1 .. ":edges"}))
   local meta = itemtree.parse_meta(batch[tree1 .. ":meta"].content)
-  local beats: {string} = {}
-  for _, e in ipairs(gitobj.parse_tree(batch[tree1 .. ":beats"].content)) do
-    beats[#beats + 1] = e.name
+  local held = batch[tree1 .. ":held"] ~= nil
+  local kinds = gitobj.parse_tree(batch[tree1 .. ":edges"].content)
+  local kind_queries: {string} = {}
+  for _, k in ipairs(kinds) do
+    kind_queries[#kind_queries + 1] = k.sha
   end
-  local blocked_tree = gitobj.parse_tree(batch[tree1 .. ":blocked_by"].content)
+  local kind_batch = check.must(gitobj.cat_file_batch(root, kind_queries))
+  local beats: {string} = {}
   local blocked_by: {string} = {}
   local reasons: {string: string} = {}
-  local reason_queries: {string} = {}
-  for _, e in ipairs(blocked_tree) do
-    blocked_by[#blocked_by + 1] = e.name
-    reason_queries[#reason_queries + 1] = e.sha
-  end
-  local reason_batch = check.must(gitobj.cat_file_batch(root, reason_queries))
-  for _, e in ipairs(blocked_tree) do
-    local re = reason_batch[e.sha]
-    if re ~= nil and re.content ~= "" then
-      reasons[e.name] = re.content
+  local other_edges: {string: {string: string}} = {}
+  local blob_queries: {string} = {}
+  for _, k in ipairs(kinds) do
+    if k.name ~= "beats" then
+      for _, e in ipairs(gitobj.parse_tree(kind_batch[k.sha].content)) do
+        blob_queries[#blob_queries + 1] = e.sha
+      end
     end
   end
-  local decoded = itemtree.to_item(it.id, meta, beats, blocked_by, reasons)
+  local blob_batch = check.must(gitobj.cat_file_batch(root, blob_queries))
+  for _, k in ipairs(kinds) do
+    local ids = gitobj.parse_tree(kind_batch[k.sha].content)
+    if k.name == "beats" then
+      for _, e in ipairs(ids) do
+        beats[#beats + 1] = e.name
+      end
+    elseif k.name == "blocked_by" then
+      for _, e in ipairs(ids) do
+        blocked_by[#blocked_by + 1] = e.name
+        local re = blob_batch[e.sha]
+        if re ~= nil and re.content ~= "" then
+          reasons[e.name] = re.content
+        end
+      end
+    else
+      local idmap: {string: string} = {}
+      for _, e in ipairs(ids) do
+        local blob = blob_batch[e.sha]
+        idmap[e.name] = blob ~= nil and blob.content or ""
+      end
+      other_edges[k.name] = idmap
+    end
+  end
+  local decoded = itemtree.to_item(it.id, meta, held, beats, blocked_by, reasons,
+    other_edges)
   assert(#(item.problems(decoded)) == 0,
     "the decoded item is content-valid: "
     .. table.concat(item.problems(decoded), "; "))
+  local decoded_edges = decoded.other_edges
+  assert(decoded_edges ~= nil and decoded_edges.relates ~= nil,
+    "the unknown edge kind round-trips onto other_edges")
 
   local tree2 = check.must(itemtree.build_tree(root, decoded, "## Change\nDo it.\n"))
   assert(tree1 == tree2, "decode -> encode gives an identical tree sha: "
