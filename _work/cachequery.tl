@@ -1,0 +1,135 @@
+--- The board cache's read-side convenience wrappers, built on
+--- `_work.cache`'s guarded `open`: the scheduled-lane observation
+--- `_work.lanes` now reads and writes here instead of committing
+--- `refs/board/lanes`, and the whole open/query/close cycle behind
+--- `new`'s pre-mint duplicate check and the `find` verb. Split out of
+--- `_work.cache` so that module (the guard, `rebuild`, and the
+--- incremental save/fetch paths) stays under the repo's line cap.
+local cache = require("_work.cache")
+local find = require("_work.find")
+local sqlite = require("cosmic.sqlite")
+local tail = require("_work.tail")
+
+--- Every observed lane's last recorded conclusion, "" for a lane never
+--- recorded — `_work.lanes`' `read_state`, backed by the cache's
+--- `lanes` table instead of the committed `refs/board/lanes`. A board
+--- that has never synced (no cache file, or one `open` cannot even
+--- build) has no observation, matching the ref-based behavior it
+--- replaces.
+--- @param root string The store's root
+--- @return {string: string} Conclusion by workflow filename
+local function lanes_read(root: string): {string: string}
+  local c, _err = cache.open(root)
+  if c == nil then
+    return {}
+  end
+  local out: {string: string} = {}
+  for row in assert(c.db:query("SELECT workflow, conclusion FROM lanes")) do
+    out[row.workflow as string] = row.conclusion as string -- cast: from any (sqlite row)
+  end
+  local _ok, _cerr = cache.close(c)
+  return out
+end
+
+--- Record each lane's observed conclusion, replacing whatever this
+--- checkout last recorded for it — `_work.lanes`' `record`, one row
+--- per lane in the cache's `lanes` table rather than a whole-board
+--- commit. LOCAL, per-clone state now: never pushed, and never shared
+--- with another checkout the way the committed ref used to be.
+--- @param root string The store's root
+--- @param facts {string: string} One conclusion per lane
+--- @return boolean True on success
+--- @return string Error message
+local function lanes_write(root: string, facts: {string: string}): boolean, string
+  local c, err = cache.open(root)
+  if c == nil then
+    return false, err
+  end
+  local now = os.time()
+  local ok, terr = c.db:transaction(function(tx: sqlite.Database): boolean, string
+      for workflow, conclusion in pairs(facts) do
+        local wok, werr = tx:exec([[
+          INSERT INTO lanes(workflow, conclusion, observed_at) VALUES (?, ?, ?)
+          ON CONFLICT(workflow) DO UPDATE SET conclusion = excluded.conclusion,
+            observed_at = excluded.observed_at
+        ]], {workflow, conclusion, now})
+        if not wok then
+          return false, werr
+        end
+      end
+      return true, ""
+    end)
+  local closed_ok, cerr = cache.close(c)
+  if not ok then
+    return false, terr
+  end
+  if not closed_ok then
+    return false, cerr
+  end
+  return true, ""
+end
+
+--- `_work.find.similar`'s hits as `new`'s pre-mint warning lines: open
+--- (rebuilding when stale), query, close. Infallible by design — a
+--- warning, never a refusal — so a failure anywhere (an empty board, a
+--- cache that could not be opened or rebuilt) simply means no lines to
+--- print, the same as a title with nothing similar on the board.
+--- @param root string The store's root
+--- @param title string The candidate title
+--- @return {string} "similar: «handle» title" lines, at most three, possibly none
+local function similar_lines(root: string, title: string): {string}
+  local c, _err = cache.open(root)
+  if c == nil then
+    return {}
+  end
+  local hits = find.similar(c, title)
+  local _ok, _cerr = cache.close(c)
+  local out: {string} = {}
+  for _, h in ipairs(hits or {}) do
+    out[#out + 1] = ("similar: %s %s"):format(tail.handle(h.id), h.title)
+  end
+  return out
+end
+
+--- `find TEXT...`: every hit for the joined query, ranked, one line
+--- each — handle, state, title, snippet — then the verdict line
+--- `gitboard-find: N hit(s)`. Opens the cache (rebuilding it when
+--- stale), queries, and closes.
+--- @param root string The store's root
+--- @param text string The query text
+--- @return integer Exit code
+local function cmd_find(root: string, text: string): integer
+  local c, err = cache.open(root)
+  if c == nil then
+    print(("gitboard-find: %s"):format(err))
+    return 1
+  end
+  local hits, qerr = find.query(c, text, 20)
+  local _ok, _cerr = cache.close(c)
+  if hits == nil then
+    print(("gitboard-find: %s"):format(qerr))
+    return 1
+  end
+  for _, h in ipairs(hits) do
+    print(("%s [%s] %s — %s"):format(tail.handle(h.id), h.state, h.title,
+        h.snippet))
+  end
+  print(("gitboard-find: %d hit(s)"):format(#hits))
+  return 0
+end
+
+local record cachequery
+  lanes_read: function(root: string): {string: string}
+  lanes_write: function(root: string, facts: {string: string}): boolean, string
+  similar_lines: function(root: string, title: string): {string}
+  cmd_find: function(root: string, text: string): integer
+end
+
+local M: cachequery = {
+  lanes_read = lanes_read,
+  lanes_write = lanes_write,
+  similar_lines = similar_lines,
+  cmd_find = cmd_find,
+}
+
+return M
