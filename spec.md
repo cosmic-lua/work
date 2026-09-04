@@ -223,6 +223,26 @@
   `board/`, so `fsck`/`find` don't see it), safe to delete whenever
   someone with rights is cleaning up anyway.
 
+- goal: PR #1713 merged (`pull_request.closed`, outcome `merged`,
+  session auto-unsubscribed). Before closing `ekqI_n3Mm`, re-probed
+  delete permission once more (fresh throwaway branch
+  `_perm_test2_e1847cac`, create then delete) rather than trust the
+  10-minutes-earlier result.
+  actually happened: identical result — create succeeds, delete still
+  403s. **Did not call `gitboard done ekqI_n3Mm`.** `gitboard show
+  ekqI_n3Mm` correctly reflects `state: accepted`, `pr: #1713`, with the
+  claim still held under `build-ekqI_n3Mm-e1847cac` — a valid, stable
+  "merged, awaiting done" state that costs nothing to leave as-is.
+  contributed: same unresolved credential gap.
+  improvement: none new. **Handoff for whoever fixes the credential (or
+  any session that already has delete rights)**: run `gitboard done
+  ekqI_n3Mm --pr 1713 --reason completed --force --why "PR #1713 merged
+  <sha>, review accepted"` to close the item; separately, two harmless
+  throwaway probe branches (`_perm_test_e1847cac`,
+  `_perm_test2_e1847cac`) sit on `origin` (cosmic-lua/work) and can be
+  deleted whenever convenient — neither is a board ref, so nothing reads
+  them.
+
 ## candidates
 - `gitboard done`'s create-then-delete branch transition has no atomicity
   or pre-flight check, and this session's credential cannot delete
