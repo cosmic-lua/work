@@ -328,7 +328,7 @@ end
 --- set: repair one of the three destination-fact fields directly —
 --- `title`, `repo`, `base` — the fields no other verb moves once an
 --- item is filed. Flow fields (claim, pr, verdict, resolution, parent,
---- blocked_by, lane) have their own verbs and gates; `set` refuses
+--- blocked_by, key) have their own verbs and gates; `set` refuses
 --- them by not existing for them — the dispatcher's flag spec never
 --- declares those long names on this command, so passing one is an
 --- unrecognized-flag refusal before `set` is ever called.

@@ -297,9 +297,9 @@ end
 --- days costing one item instead of five.
 --- @param it item.Item The item
 --- @param lane string Workflow filename
---- @return boolean True when it is open and carries this lane
+--- @return boolean True when it is open and carries this lane as its `key`
 local function is_repair_for(it: item.Item, lane: string): boolean
-  return item.is_open(it) and (it.lane or "") == lane
+  return item.is_open(it) and (it.key or "") == lane
 end
 
 --- File one repair item for a red lane, carrying the lane as its
@@ -314,7 +314,7 @@ local function file_repair(s: store.Store, lane: string): boolean, string
     id = ksuid.new(), title = title, parent = LANE_PARENT, repo = "",
     beats = {}, blocked_by = {}, block_reason = {}, claim = "",
     builders = {}, reviewer = "", pr = 0, verdict = "", verdict_head = "",
-    verdict_spec = "", resolution = "", lane = lane,
+    verdict_spec = "", resolution = "", key = lane,
   }
   local bad = item.problems(it)
   if #bad > 0 then

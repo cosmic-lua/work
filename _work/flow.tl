@@ -122,7 +122,7 @@ local function stage_rank(i: Item): integer
     end
     return STAGE_BUILDING
   end
-  if (i.lane or "") ~= "" then
+  if (i.key or "") ~= "" then
     return STAGE_REPAIR
   end
   return STAGE_TODO
@@ -231,7 +231,7 @@ end
 --- reporting the bound, never bypassed
 --- @return string | nil The refusal
 local function doing_refusal(items: {Item}, taking?: Item): string | nil
-  if taking ~= nil and (taking.lane or "") ~= "" then
+  if taking ~= nil and (taking.key or "") ~= "" then
     return nil
   end
   local n = 0
