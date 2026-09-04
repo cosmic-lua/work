@@ -50,8 +50,8 @@ local function test_compare_reverses_direct_refuses_transitive()
   local before = fixture.commits(s)
   assert(cmp.cmd_compare(s, low, high) == 0,
     "the direct reverse is a reversal, not a refusal")
-  assert(fixture.commits(s) == before + 1,
-    "and the reversal is ONE commit over both items")
+  assert(fixture.commits(s) == before + 2,
+    "and the reversal is one push over both items' own commits")
   assert(#check.must(store.load(s, high)).beats == 0,
     "the overturned edge is gone from the old winner")
   local now = check.must(store.load(s, low))

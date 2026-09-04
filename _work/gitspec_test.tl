@@ -311,10 +311,10 @@ local function test_spec_records_the_speccer_in_the_same_commit()
   assert(#it.speccers == 1 and it.speccers[1] == "refiner-a",
     "the speccer is recorded")
   local shown = check.must(store.git(s, {"show", "--name-only",
-        "--pretty=format:", "HEAD"}))
-  assert(shown.stdout:find(fs.join("items", leaf .. ".tl"), 1, true) ~= nil
-    and shown.stdout:find(fs.join("items", leaf .. ".md"), 1, true) ~= nil,
-    "the item and the sidecar land in the one commit: " .. shown.stdout)
+        "--pretty=format:", s.leased_ref[leaf]}))
+  assert(shown.stdout:find("meta", 1, true) ~= nil
+    and shown.stdout:find("spec.md", 1, true) ~= nil,
+    "the item's meta and its spec sidecar land in the one commit: " .. shown.stdout)
 
   local second = spec_file("speccer-second",
     (READY_SPEC:gsub("Not that.", "Refined again.")))

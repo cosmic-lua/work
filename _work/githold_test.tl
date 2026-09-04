@@ -13,11 +13,30 @@
 local check = require("cosmic.check")
 local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
+local gitobj = require("_work.gitobj")
 local item = require("_work.item")
-local literal = require("cosmic.literal")
+local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local verbs = require("_work.gitverbs")
+
+--- Write `it` straight to its ref, past `stage`'s validator — the
+--- shape a hand-edited commit, or an item carried over from an older
+--- board, would have: something `item.problems` would refuse were it
+--- written through `save`.
+--- @param s store.Store The store, already holding a lease on `it.id`
+--- @param it item.Item The item to write, unvalidated
+local function write_raw(s: store.Store, it: item.Item)
+  local tree_sha = check.must(itemtree.build_tree(s.root, it, store.read_spec(s, it.id)))
+  local parent_sha = s.leased_sha[it.id]
+  local commit_sha = check.must(gitobj.commit_tree(s.root, {
+        tree = tree_sha, parents = {parent_sha}, message = "hand-edit",
+        author_name = "test", author_email = "test@example.com",
+        committer_name = "test", committer_email = "test@example.com",
+      }))
+  assert(refs.update_ref(s.root, s.leased_ref[it.id], commit_sha, parent_sha))
+end
 
 local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
@@ -91,7 +110,7 @@ local function test_unhold_refuses_a_done_root()
   local stale = check.must(store.load(s, root))
   stale.is_held = true
   stale.resolution = "not-planned"
-  assert(literal.format_file(store.item_path(s, root), item.encode(stale)))
+  write_raw(s, stale)
   local before = commits(s)
   assert(cmp.cmd_unhold(s, root) ~= 0,
     "a done root is history, not a repair target: unhold refuses it")

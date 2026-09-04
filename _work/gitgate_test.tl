@@ -53,14 +53,18 @@ end
 local function test_a_lost_race_drops_the_mutation_and_refuses()
   local a, b = init_shared("gate-lost")
   -- `a` moves the remote forward, so `b`'s push below is rejected
-  -- against a remote it has not seen.
+  -- against a remote it has not seen. Bounded, standing for a real
+  -- take of new work: two brand-new items never share a ref on their
+  -- own, so the shared refs/board/seq lease every bounded save
+  -- advances is what puts them in each other's way here.
   local touched = make_item()
+  store.set_bounded(a, true)
   assert(store.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
 
   local mine = make_item()
   local ok, err = gate.commit_and_publish(b, mine, "a spec touch",
-    ("spec %s"):format(mine.id:sub(1, 8)))
+    ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
   local merged = check.must(store.list(b))
   assert(flow.by_id(merged)[touched.id] ~= nil,
@@ -74,15 +78,16 @@ end
 local function test_the_rerun_publishes_against_the_merged_state()
   local a, b = init_shared("gate-rerun")
   local touched = make_item()
+  store.set_bounded(a, true)
   assert(store.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
 
   local mine = make_item()
   local ok, err = gate.commit_and_publish(b, mine, "a spec touch",
-    ("spec %s"):format(mine.id:sub(1, 8)))
+    ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
   local again, aerr = gate.commit_and_publish(b, mine, "a spec touch",
-    ("spec %s"):format(mine.id:sub(1, 8)))
+    ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(again, "the re-run publishes: " .. tostring(aerr))
   assert(publish.sync(a))
   assert(check.must(store.load(a, mine.id)).id == mine.id,

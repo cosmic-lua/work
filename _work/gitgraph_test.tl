@@ -25,17 +25,19 @@ local commits = fixture.commits
 local give_spec = fixture.give_spec
 local root_with_leaf = fixture.root_with_leaf
 
-local function test_decomposition_is_one_commit()
+local function test_decomposition_is_one_push_two_commits()
   local s = init_state_repo("decompose")
   local _, leaf = root_with_leaf(s)
   -- The leaf is mid-build when the child arrives: the decomposition
-  -- clears the lock, in the same commit.
+  -- clears the lock — the child's OWN commit and the lock-clearing
+  -- commit on the parent, landed together in one atomic push.
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "session-A", 0, false, "") == 0)
   local before = commits(s)
   local _kid = file_item(s, "a sub-slice", leaf)
-  assert(commits(s) == before + 1,
-    ("one mutation, one commit: %d -> %d"):format(before, commits(s)))
+  assert(commits(s) == before + 2,
+    ("one push, two commits — child and de-phased parent: %d -> %d")
+    :format(before, commits(s)))
   local parent = check.must(store.load(s, leaf))
   assert(parent.claim == "",
     "gaining a child clears the lock on the new container")
@@ -43,15 +45,19 @@ end
 
 -- Re-parenting after a lost push race: `attach` has no WIP gate up
 -- front — triage is a decision already made — so after the race the
--- RE-RUN lands exactly as the first run would have.
+-- RE-RUN lands exactly as the first run would have. `attach` writes
+-- only the id's OWN ref (`other`, the new parent, is untouched here —
+-- it carries no claim/reviewer/hold for `containered` to clear), so
+-- the race has to move `leaf`'s ref itself: b re-parents it first,
+-- out from under a's stale read.
 local function test_a_reparent_survives_a_rebase()
   local a, b = init_shared("attach-race")
   local goal, leaf = root_with_leaf(a)
   local other = file_item(a, "another leaf", goal)
+  local another = file_item(a, "yet another leaf", goal)
   assert(publish.sync(b))
-  for i = 1, 3 do
-    assert(graph.cmd_new(b, ("theirs %d"):format(i), goal, nil, "") == 0)
-  end
+  assert(graph.cmd_attach(b, leaf, another) == 0,
+    "b moves leaf's ref first")
   assert(graph.cmd_attach(a, leaf, other) ~= 0,
     "the stale run is refused, not replayed")
   assert(graph.cmd_attach(a, leaf, other) == 0,
@@ -468,12 +474,13 @@ local function test_holding_a_root_keeps_the_order_total_and_reopens_on_evidence
   assert(third.kind == "intake" and third.item == nil
     and third.reason:find("every open root has live work", 1, true) ~= nil,
     "every root held: the fallback, never B: " .. third.reason)
-  -- Evidence under B reopens it in the child's own commit.
+  -- Evidence under B reopens it: the child's own commit and the
+  -- hold-clearing commit on B, landed in the one atomic push.
   local before = commits(s)
   assert(graph.cmd_new(s, "verification failed after all", b, nil, "") == 0)
-  assert(commits(s) == before + 1,
-    ("the child and the cleared hold are one commit: %d -> %d"):format(
-      before, commits(s)))
+  assert(commits(s) == before + 2,
+    ("the child and the cleared hold land as one push, two commits: %d -> %d")
+    :format(before, commits(s)))
   assert(not check.must(store.load(s, b)).is_held,
     "filing a child under a held root clears the hold")
   local _, live2, held2 = flow.roots(check.must(store.list(s)))
