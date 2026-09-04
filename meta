@@ -2,4 +2,5 @@ title: gitboard brief: warn agents against sleep N; <cmd> when waiting on a back
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-LmNB_gMXm-d6f1cc41
+pr: 1710
 builders: build-LmNB_gMXm-d6f1cc41
