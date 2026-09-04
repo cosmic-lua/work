@@ -27,10 +27,10 @@
 --- memory — the just-written items, and the one spec body that may
 --- have changed — never re-reading git; only the fetch path re-reads,
 --- since a fetch can land a version nobody observed directly, and it
---- does so in one batch (`gitread.load_many`) rather than one read per
---- id. Deliberately built on `root: string` rather than `_work.store`'s
---- `Store`: `_work.store` has no need of this module at all, and it is
---- `_work.gitgate`'s `commit_and_publish` (which already requires
+--- does so in one batch (`_work.gitreadmany.load_many`) rather than
+--- one read per id. Deliberately built on `root: string` rather than
+--- `_work.store`'s `Store`: `_work.store` has no need of this module
+--- at all, and it is `_work.gitgate`'s `commit_and_publish` (which already requires
 --- `_work.store`) that calls `guard`/`after_save` around every
 --- mutation's `store.save`, and `_work.publish` that wraps its fetches
 --- with `around_fetch` — a `Store` dependency here would close a cycle
@@ -39,6 +39,7 @@ local cachedb = require("_work.cachedb")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
+local gitreadmany = require("_work.gitreadmany")
 local index = require("_work.index")
 local item = require("_work.item")
 local proc = require("cosmic.proc")
@@ -344,12 +345,13 @@ local function after_save(root: string, before_digest: string | nil,
 end
 
 --- The fetch path's incremental update: read exactly `ids` fresh from
---- git, in one batch (`gitread.load_many`, plus one `gitread.read_specs`
---- for their sidecars) rather than one read per id, then patch them —
---- unlike the save path, a fetch can land a version nobody observed
---- directly, so this always rereads rather than trusting anything
---- already in memory. An id `load_many` did not find is genuinely gone
---- (a locally pruned ref), which is a plain delete.
+--- git, in one batch (`_work.gitreadmany.load_many`, plus one
+--- `gitread.read_specs` for their sidecars) rather than one read per
+--- id, then patch them — unlike the save path, a fetch can land a
+--- version nobody observed directly, so this always rereads rather
+--- than trusting anything already in memory. An id `load_many` did
+--- not find is genuinely gone (a locally pruned ref), which is a
+--- plain delete.
 --- @param root string The store's root
 --- @param before_digest string | nil The pre-fetch digest
 --- @param after_digest string The post-fetch digest, already known
@@ -362,7 +364,7 @@ local function patch_fetched(root: string, before_digest: string | nil,
   if #ids == 0 then
     return true, ""
   end
-  local loaded, lerr = gitread.load_many(root, ids)
+  local loaded, lerr = gitreadmany.load_many(root, ids)
   if loaded == nil then
     return false, lerr
   end

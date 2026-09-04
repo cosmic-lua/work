@@ -1,17 +1,20 @@
---- The store's read path: loading one item (or a named SET of them,
---- `load_many`) and listing the whole board, each in a fixed number of
---- git processes regardless of how many items exist, and tolerating
---- the one shape a half-landed resolution can leave behind: an id
---- filed under BOTH `refs/heads/items` and `refs/heads/ended` at once,
---- because the pushing credential landed the create half of an
---- old-style namespace move and lost the delete half (it can create
---- and update a branch but never delete one). `load`, `load_many`, and
---- `list` each keep exactly one entry per id when that happens
---- (`pick_duplicate`); `list` also reports every duplicate it found in
---- `Board.duplicates` so `_work.gitfsck` can name it for a human to
---- clear. Split out of `_work.store` so that module stays under its
---- line cap; `_work.store` and `_work.cache` (`load_many`, for its
---- fetch-path refresh) are the callers outside tests.
+--- The store's read path: loading one item and listing the whole
+--- board, each in a fixed number of git processes regardless of how
+--- many items exist, and tolerating the one shape a half-landed
+--- resolution can leave behind: an id filed under BOTH
+--- `refs/heads/items` and `refs/heads/ended` at once, because the
+--- pushing credential landed the create half of an old-style
+--- namespace move and lost the delete half (it can create and update
+--- a branch but never delete one). `load` and `list` each keep
+--- exactly one entry per id when that happens (`pick_duplicate`,
+--- exported for `_work.gitreadmany.load_many` to reuse the same rule);
+--- `list` also reports every duplicate it found in `Board.duplicates`
+--- so `_work.gitfsck` can name it for a human to clear. Split out of
+--- `_work.store` so that module stays under its line cap;
+--- `_work.store` is the only caller of `load`/`list` outside tests —
+--- `_work.gitreadmany.load_many`, a named-id-set batch `_work.cache`'s
+--- fetch-path refresh uses, is split into its own file for the same
+--- line-cap reason, built on the helpers this module exports below.
 local child = require("cosmic.child")
 local format = require("_work.format")
 local gitobj = require("_work.gitobj")
@@ -370,111 +373,6 @@ local function list(root: string): Board | nil, string
     duplicates = duplicates}
 end
 
---- Load a specific set of items by id, in the same fixed handful of
---- processes `list` uses for the whole board — the incremental cache's
---- fetch-path refresh, so re-reading exactly the ids a fetch actually
---- moved never costs one `load` per id. An id present in neither
---- namespace (a locally pruned ref) is simply absent from the result,
---- never an error: the caller reads that the same way `patch_item`
---- always has, as "genuinely gone." An id present under BOTH — the
---- same half-landed-resolution residue `list` tolerates — is resolved
---- through the same `pick_duplicate` rule, never by which of the two
---- `for-each-ref` happened to return last.
---- @param root string The repository root
---- @param ids {string} Item ids to read, in any order
---- @return {string: Loaded} | nil Loaded items by id, only those found
---- @return string Error message: a hard failure reading git objects
-local function load_many(root: string, ids: {string}): {string: Loaded} | nil, string
-  local out: {string: Loaded} = {}
-  if #ids == 0 then
-    return out
-  end
-  local patterns: {string} = {}
-  for _, id in ipairs(ids) do
-    patterns[#patterns + 1] = "refs/heads/items/" .. id
-    patterns[#patterns + 1] = "refs/heads/ended/" .. id
-  end
-  local found, ferr = refs.for_each_ref(root, patterns)
-  if found == nil then
-    return nil, ferr
-  end
-  local items_by_id: {string: refs.RefEntry} = {}
-  local ended_by_id: {string: refs.RefEntry} = {}
-  for _, r in ipairs(found) do
-    local id = r.refname:match("^refs/heads/items/(.+)$")
-    if id ~= nil then
-      items_by_id[id] = r
-    else
-      id = r.refname:match("^refs/heads/ended/(.+)$")
-      if id ~= nil then
-        ended_by_id[id] = r
-      end
-    end
-  end
-  local resolved: {refs.RefEntry} = {}
-  for _, id in ipairs(ids) do
-    local items_e, ended_e = items_by_id[id], ended_by_id[id]
-    if items_e ~= nil and ended_e ~= nil then
-      local kept = pick_duplicate(root, items_e, ended_e)
-      resolved[#resolved + 1] = kept
-    elseif items_e ~= nil then
-      resolved[#resolved + 1] = items_e
-    elseif ended_e ~= nil then
-      resolved[#resolved + 1] = ended_e
-    end
-  end
-  local queries: {string} = {}
-  for _, r in ipairs(resolved) do
-    queries[#queries + 1] = r.sha .. ":meta"
-    queries[#queries + 1] = r.sha .. ":held"
-    queries[#queries + 1] = r.sha .. ":edges"
-  end
-  local batch, berr = gitobj.cat_file_batch(root, queries)
-  if batch == nil then
-    return nil, berr
-  end
-  local kinds_by_ref: {string: {string: string}} = {}
-  local kind_queries: {string} = {}
-  for _, r in ipairs(resolved) do
-    local edges_entry = batch[r.sha .. ":edges"]
-    if edges_entry ~= nil then
-      local kinds = edge_kinds(edges_entry.content)
-      kinds_by_ref[r.refname] = kinds
-      for _, ksha in pairs(kinds) do
-        kind_queries[#kind_queries + 1] = ksha
-      end
-    end
-  end
-  local kind_batch, kerr = gitobj.cat_file_batch(root, kind_queries)
-  if kind_batch == nil then
-    return nil, kerr
-  end
-  local blob_queries: {string} = {}
-  for _, r in ipairs(resolved) do
-    local kinds = kinds_by_ref[r.refname]
-    if kinds ~= nil then
-      for _, sha in ipairs(content_blob_shas(kinds, kind_batch)) do
-        blob_queries[#blob_queries + 1] = sha
-      end
-    end
-  end
-  local blob_batch, rerr = gitobj.cat_file_batch(root, blob_queries)
-  if blob_batch == nil then
-    return nil, rerr
-  end
-  for _, r in ipairs(resolved) do
-    local id = r.refname:match("^refs/heads/items/(.+)$") or r.refname:match("^refs/heads/ended/(.+)$")
-    if id ~= nil then
-      local it, ierr = build_item(id, r.sha, batch, kind_batch, blob_batch)
-      if it == nil then
-        return nil, ierr
-      end
-      out[id] = {it = it, ref = r.refname, sha = r.sha}
-    end
-  end
-  return out
-end
-
 --- An item's spec sidecar, "" when absent, tried against every
 --- candidate ref in order — `_work.store` passes the observed ref
 --- alone when known, or both `refs/heads/items/<id>` and `refs/heads/ended/<id>`
@@ -535,19 +433,31 @@ local record gitread
   type Board = Board
   type Duplicate = Duplicate
   load: function(root: string, id: string): Loaded | nil, string
-  load_many: function(root: string, ids: {string}): {string: Loaded} | nil, string
   list: function(root: string): Board | nil, string
   read_spec: function(root: string, candidates: {string}): string
   read_specs: function(root: string, shas_by_id: {string: string},
   ids: {string}): {string: string}
+  -- Exported only for `_work.gitreadmany.load_many` to reuse without
+  -- duplicating this module's own read-path primitives.
+  edge_kinds: function(edges_content: string): {string: string}
+  content_blob_shas: function(kinds: {string: string},
+  kind_batch: {string: gitobj.BatchEntry}): {string}
+  build_item: function(id: string, sha: string,
+  batch: {string: gitobj.BatchEntry}, kind_batch: {string: gitobj.BatchEntry},
+  blob_batch: {string: gitobj.BatchEntry}): item.Item | nil, string
+  pick_duplicate: function(root: string, items_e: refs.RefEntry,
+  ended_e: refs.RefEntry): refs.RefEntry, refs.RefEntry
 end
 
 local M: gitread = {
   load = load_item,
-  load_many = load_many,
   list = list,
   read_spec = read_spec,
   read_specs = read_specs,
+  edge_kinds = edge_kinds,
+  content_blob_shas = content_blob_shas,
+  build_item = build_item,
+  pick_duplicate = pick_duplicate,
 }
 
 return M
