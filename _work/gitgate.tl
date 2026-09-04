@@ -312,11 +312,15 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   if not saved or store.is_noop(serr) then
     return saved, serr
   end
-  local touched: {string} = {it.id}
+  -- `it` first, then `also` — the cache patches straight from these,
+  -- exactly as `store.save` just wrote them, with no git read of its
+  -- own; only `it` (`items[1]`) can carry a spec change (`body`), so
+  -- that is the only slot `after_save` ever reindexes with new text.
+  local items: {item.Item} = {it}
   for _, x in ipairs(also or {}) do
-    touched[#touched + 1] = x.id
+    items[#items + 1] = x
   end
-  cache.after_save(s.root, before_digest, touched)
+  cache.after_save(s.root, before_digest, items, body)
   return publish.publish(s)
 end
 
