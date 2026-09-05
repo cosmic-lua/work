@@ -1,1 +1,0 @@
-the split's pull-time gate is closed: the pin (2026-08-27-afad5b5) predates the mechanism merge 6b88a0db, so a cold build's generation 1 still cannot read the directory — verified by ancestry check 2026-08-27
