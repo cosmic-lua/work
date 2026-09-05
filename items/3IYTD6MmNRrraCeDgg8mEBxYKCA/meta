@@ -2,6 +2,7 @@ title: docs/guides/lint.md claims to enumerate every rule the gate can fire and 
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-mEBx_YKCA-07d1f69e
+reviewer: review-mEBx_YKCA-07d1f69e
 pr: 1730
 builders: 07d1f69e-c5b3-54ef-884f-a50083be2b47 build-mEBx_YKCA-07d1f69e
 speccers: 07d1f69e-c5b3-54ef-884f-a50083be2b47
