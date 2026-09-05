@@ -34,16 +34,36 @@ The two nil-consuming callers stay nilable: `_make/init.tl:428`
 (`local v = by_name(name)`, argv dispatch) and `_make/policy.tl:316`
 (`if not (v is Verb) then` … "ci names a verb that does not exist").
 
-The eighth site, `cosmic/searcher_test.tl:57-58`, casts a
-`package.searchers` entry before `pcall`; the pinned stdlib types the
-entries already — probe:
-
-    for _, s in ipairs(package.searchers) do local ok, why = pcall(s, "x") end
-    → Type check passed
-
 Headroom: `git show origin/main:_make/init.tl | wc -l` → 498 (cap 500),
 so no helper fits there; `_make/policy.tl` → 376, and `init.tl` already
 requires it (`init.tl:30`) and hands it `by_name` (`init.tl:296`).
+
+**Re-scoped 2026-09-05: this item is now 7 of the 8 sites, not 8.**
+The eighth site, `cosmic/searcher_test.tl:57-58`, does not close as a
+plain cast removal — `1Lhz_38Wt` ("casts: dynamic-name-lookup's 8th
+site (package.searchers decline shape) needs a tl_patch entry or a
+re-scoped 7-of-8 close") worked that site in full and found it needs a
+`3p/tl/tl_patch/` builtin-type patch that only reaches generation 1's
+checker once a release carrying it is cut AND `bin/cosmic.pin` is
+bumped to it (`_build/coldbuild_test.tl`'s gen1 rule, `AGENTS.md`'s
+Build System section). `1Lhz_38Wt` landed the patch alone (merged,
+`resolution: completed`); the searcher_test.tl cast removal itself,
+plus the class's final tsv/casts.md reconcile, is `zs1K_cWnY`
+("casts: land searcher_test.tl's cast removal once the
+declining-searcher patch is pinned"), which is `blocked_by`
+`1Lhz_38Wt` and not yet ready (needs a release + pin bump first). This
+item's own scope was always the 7 `_make/init.tl` sites — the `##
+Change` below is corrected to stop touching
+`cosmic/searcher_test.tl` and to stop trying to zero the whole class,
+which `zs1K_cWnY` now owns.
+
+Re-verified against `origin/main` at `22e5233` (post-`1Lhz_38Wt`
+merge): `wc -l _make/init.tl _make/policy.tl` → 498 / 375 (headroom
+unchanged), the same 7 `as Verb` sites at the same lines (`grep -n "as
+Verb" _make/init.tl`), and `cast-sites.tsv`'s `dynamic name lookup`
+class still 8 rows with `cosmic/searcher_test.tl	58` still present
+(`awk -F'\t' '$3=="dynamic name lookup"' docs/design/cast-sites.tsv`)
+— untouched by `1Lhz_38Wt`, exactly as its own spec recorded.
 
 ## Change
 
@@ -57,22 +77,26 @@ requires it (`init.tl:30`) and hands it `by_name` (`init.tl:296`).
   `by_name("<x>") as Verb -- cast: …` with `policy.must_verb(by_name, "<x>")`.
   Net line count must stay ≤ 500 (`wc -l`); the replacement removes no
   lines and adds none.
-- `cosmic/searcher_test.tl:57-58`: delete the `-- cast:` line and call
-  `pcall(s, missing)` directly.
-- `_build/casts_baseline.tl`: `_make/init.tl` row 7 → gone,
-  `cosmic/searcher_test.tl` 1 → gone; run
+- `_build/casts_baseline.tl`: `_make/init.tl` row 7 → gone; run
   `bin/cosmic --make run _build/casts.tl --baseline` and commit.
-- `docs/design/cast-sites.tsv`: run
-  `bin/cosmic --make run _build/cast_sites.tl --reconcile`; the class
-  `dynamic name lookup` ends with zero rows, and
-  `_build/cast_sites_test.tl` requires every heading to have a row, so
-  delete the `### dynamic name lookup` section from
-  `docs/design/casts.md` (precedent: `git show cf416d85 -- docs/design/casts.md | grep '^-###'`
-  → `-### proved-value narrowing`) and fix every prose mention
-  (`git grep -n "dynamic name lookup" origin/main -- docs _build` lists them).
+- `docs/design/cast-sites.tsv`: run `bin/cosmic --make run
+  _build/cast_sites.tl --reconcile`. This drops only the 7
+  `_make/init.tl` rows; the `cosmic/searcher_test.tl	58` row survives
+  (it is `zs1K_cWnY`'s, untouched here), so the `dynamic name lookup`
+  class ends this item with exactly 1 row, and
+  `_build/cast_sites_test.tl`'s every-heading-has-a-row check still
+  passes without a section deletion. Do not delete
+  `docs/design/casts.md`'s `### dynamic name lookup` section here —
+  it still has a live row.
 - `bin/cosmic --make ci` ends `ci: PASS`.
 
 ## Non-goals
 
 The `E*`/`SIG*` constant lookups (`binding constant by name`, 5 rows)
 are item `3ISJHfNY` — untouched here.
+
+`cosmic/searcher_test.tl:57-58`'s cast, the `dynamic name lookup`
+class's final row, and `docs/design/casts.md`'s prose for the class
+are `zs1K_cWnY`'s scope regardless of landing order between the two
+items — untouched here (mirrors `zs1K_cWnY`'s own Non-goals, which
+names this item's 7 sites as its own untouched half).
