@@ -1,10 +1,10 @@
 title: gitboard next: one uncached GitHub read per review item, 1.1 s each, on the verb every loop starts with — observe CI with the lanes freshness window
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-M1Bw_JVNd-32638265
 pr: 19
 verdict: accept
 verdict_head: 36be7c426d061ee6910d6a07cd8d5c5dba947e48
 verdict_spec: 82f9615529dbf31093eba14db999c1cb41b2cb33
+resolution: completed
 builders: build-M1Bw_JVNd-32638265
 speccers: build-M1Bw_JVNd-32638265
