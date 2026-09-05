@@ -178,7 +178,7 @@ local META_KEYS < const >: {string} = {"title", "parent", "target", "key",
   "verdict_spec", "resolution", "builders", "speccers"}
 
 --- Draw an id: usually a fresh ksuid, sometimes deliberately not one
---- (empty, garbage) — to_item's edge lists carry raw strings from the
+--- (empty, garbage) — an edge kind's own ids carry raw strings from the
 --- tree, and a hand-edited commit can name anything at all.
 --- @param src source.Recorder The source to draw from
 --- @return string The id
@@ -196,7 +196,10 @@ end
 -- to_item builds an Item from whatever a tree handed back, however
 -- garbled: it must never throw, and it always returns an Item (content
 -- problems land in .decode_problems, per its own doc) carrying the id
--- it was given.
+-- it was given. Every edge kind lands the same way now — this build
+-- interprets none of them — so one generic "edge" shape (kind, id,
+-- content) stands in for what used to be `beats`/`blocked_by`
+-- specifically, a strict superset of the old coverage.
 local function test_to_item_totality()
   local ok, message = driver.run({
       name = "to_item_totality",
@@ -214,12 +217,10 @@ local function test_to_item_totality()
           put(out, some_id(src))
         end
         for _ = 1, src:int(0, 4) do
-          put(out, "beats")
+          put(out, "edge")
+          put(out, label(src, OWNER_CHARS, 8)) -- the edge kind's own name
           put(out, some_id(src))
-        end
-        for _ = 1, src:int(0, 4) do
-          put(out, "blocked_by")
-          put(out, some_id(src))
+          put(out, driver.bytes(src, 16)) -- the entry's content
         end
         put(out, tostring(src:int(1, 2))) -- held
         return table.concat(out)
@@ -239,18 +240,17 @@ local function test_to_item_totality()
           meta[key] = value
         end
         local order: {string} = {}
-        local beats: {string} = {}
-        local blocked_by: {string} = {}
+        local other_edges: {string: {string: string}} = {}
         while true do
           local kind = take(c)
           if kind == nil then
             return false, "generated input did not decode (kind)"
           end
-          if kind ~= "order" and kind ~= "beats" and kind ~= "blocked_by" then
+          if kind ~= "order" and kind ~= "edge" then
             -- kind now actually holds the `held` flag, "1" or "2"
             local id = ksuid.new()
             local ok, it = pcall(itemtree.to_item, id, meta, kind == "2",
-              order, beats, blocked_by, {}, {})
+              order, other_edges)
             if not ok then
               return false, "threw: " .. tostring(it)
             end
@@ -262,16 +262,26 @@ local function test_to_item_totality()
             end
             return true
           end
-          local id, ierr = take(c)
-          if not id then
-            return false, "generated input did not decode (id): " .. tostring(ierr)
-          end
           if kind == "order" then
+            local id, ierr = take(c)
+            if not id then
+              return false, "generated input did not decode (id): " .. tostring(ierr)
+            end
             order[#order + 1] = id
-          elseif kind == "beats" then
-            beats[#beats + 1] = id
           else
-            blocked_by[#blocked_by + 1] = id
+            local ekind, kerr = take(c)
+            local id, ierr = take(c)
+            local ccontent, cerr = take(c)
+            if not ekind or not id or not ccontent then
+              return false, "generated input did not decode (edge): "
+              .. tostring(kerr or ierr or cerr)
+            end
+            local idmap = other_edges[ekind]
+            if idmap == nil then
+              idmap = {}
+              other_edges[ekind] = idmap
+            end
+            idmap[id] = ccontent
           end
         end
       end,
@@ -308,8 +318,8 @@ local function test_meta_round_trip()
         end
         local it: item.Item = {
           id = ksuid.new(), title = title, parent = "", repo = repo,
-          base = base, key = "", order = {}, beats = {}, blocked_by = {},
-          block_reason = {}, claim = "", builders = {}, speccers = {},
+          base = base, key = "", order = {},
+          claim = "", builders = {}, speccers = {},
           reviewer = "", pr = math.tointeger(tonumber(pr_text)) or 0,
           result = "", verdict = "", verdict_head = "", verdict_spec = "",
           resolution = "",
@@ -320,7 +330,7 @@ local function test_meta_round_trip()
         end
         local meta_text = itemtree.encode_meta(it)
         local meta = itemtree.parse_meta(meta_text)
-        local round = itemtree.to_item(it.id, meta, false, {}, {}, {}, {}, {})
+        local round = itemtree.to_item(it.id, meta, false, {}, {})
         if item.is_flagged(round) then
           return false, string.format("round trip flagged: %s",
             table.concat(round.decode_problems or {}, "; "))

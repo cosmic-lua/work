@@ -5,9 +5,10 @@
 -- the cache's own SQL rows, committed rather than the throwaway script
 -- that first checked it against the production board (937 items, 0
 -- mismatches). Exercises every field that check covered on a small
--- hand-built fixture: multiple `beats`/`blocked_by` edges with reasons,
--- an `other_edges` kind, `builders`/`speccers` (order matters there —
--- oldest first — unlike the edge sets, which do not), and a held root.
+-- hand-built fixture: `builders`/`speccers` (order matters there —
+-- oldest first), and one item carrying an edge kind this build does
+-- not interpret — present on the git-truthed side and absent on the
+-- cache-hydrated one, since the cache carries no edge kind at all.
 
 local cache = require("_work.cache")
 local cachequery = require("_work.cachequery")
@@ -20,9 +21,8 @@ local storewrite = require("_work.storewrite")
 local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
 
---- Every id in `a`, as a membership map — `beats`/`blocked_by` (and
---- `decode_problems`) are sets, never sequences (`_work/itemtree.tl`'s
---- module header), so they compare order-blind.
+--- Every id in `a`, as a membership map (`decode_problems` is a set,
+--- never a sequence), so it compares order-blind.
 --- @param a {string} The ids
 --- @return {string: boolean} Membership by id
 local function as_set(a: {string}): {string: boolean}
@@ -78,56 +78,30 @@ local function assert_items_match(want: item.Item, got: item.Item)
   assert(got.verdict_head == want.verdict_head, id8 .. " verdict_head")
   assert(got.verdict_spec == want.verdict_spec, id8 .. " verdict_spec")
   assert(got.resolution == want.resolution, id8 .. " resolution")
-  assert(got.is_held == want.is_held, id8 .. " is_held")
   assert_same_order(want.order, got.order, id8 .. " order")
-  assert_same_set(want.beats, got.beats, id8 .. " beats")
-  assert_same_set(want.blocked_by, got.blocked_by, id8 .. " blocked_by")
   assert_same_order(want.builders, got.builders, id8 .. " builders")
   assert_same_order(want.speccers, got.speccers, id8 .. " speccers")
-  local want_reasons = want.block_reason or {}
-  local got_reasons = got.block_reason or {}
-  for blocker, why in pairs(want_reasons) do
-    assert(got_reasons[blocker] == why, id8 .. " block_reason " .. blocker)
-  end
-  for blocker in pairs(got_reasons) do
-    assert(want_reasons[blocker] ~= nil, id8 .. " block_reason " .. blocker .. " unexpected")
-  end
-  local want_oe = want.other_edges or {}
-  local got_oe = got.other_edges or {}
-  for kind, idmap in pairs(want_oe) do
-    local got_map = got_oe[kind] or {}
-    for eid, reason in pairs(idmap) do
-      assert(got_map[eid] == reason, id8 .. " other_edges " .. kind .. " " .. eid)
-    end
-  end
-  for kind in pairs(got_oe) do
-    assert(want_oe[kind] ~= nil, id8 .. " other_edges " .. kind .. " unexpected")
-  end
   assert_same_set(want.decode_problems or {}, got.decode_problems or {},
     id8 .. " decode_problems")
 end
 
 local function test_items_matches_store_list_field_for_field_and_in_order()
   local s = init_state_repo("cachequery-items-hydrate")
-  local root = file_item(s, "a held outcome", "")
+  local root = file_item(s, "an outcome", "")
   local leaf1 = file_item(s, "a workable slice", root)
   local leaf2 = file_item(s, "a second slice", root)
   local leaf3 = file_item(s, "a third slice", root)
 
   local root_it = check.must(store.load(s, root))
-  root_it.is_held = true
   root_it.order = {leaf2, leaf3, leaf1}
-  assert(storewrite.save(s, root_it, "hold the root and rank its children"))
+  assert(storewrite.save(s, root_it, "rank the children"))
   assert(storewrite.save_root_order(s, {root}, "rank the roots"))
 
   local leaf_it = check.must(store.load(s, leaf1))
-  leaf_it.beats = {leaf2, leaf3}
-  leaf_it.blocked_by = {leaf2, leaf3}
-  leaf_it.block_reason = {[leaf2] = "waiting on design", [leaf3] = "waiting on data"}
   leaf_it.other_edges = {relates = {[leaf2] = "see also"}}
   leaf_it.builders = {"session-a", "session-b"}
   leaf_it.speccers = {"session-c"}
-  assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with edges and a roster"))
+  assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with an edge and a roster"))
 
   local want = check.must(store.list(s))
   local want_root_order = store.root_order(s)
@@ -144,5 +118,23 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
     assert_items_match(w, g)
   end
   assert_same_order(want_root_order, got_root_order, "root_order")
+
+  -- The one field this differential deliberately does NOT match:
+  -- `store.list`'s fresh git read carries leaf1's edge kind
+  -- (`item.Item.other_edges`), but the cache's schema has no `edges`
+  -- table at all, so the hydrated side is always nil.
+  local leaf1_want, leaf1_got: item.Item, item.Item
+  for i, w in ipairs(want) do
+    if w.id == leaf1 then
+      leaf1_want, leaf1_got = w, got[i]
+    end
+  end
+  assert(leaf1_want ~= nil, "leaf1 is on the git-truthed side")
+  local want_edges = leaf1_want.other_edges
+  assert(want_edges ~= nil and want_edges.relates ~= nil
+    and want_edges.relates[leaf2] == "see also",
+    "the git-truthed side carries the edge")
+  assert(leaf1_got ~= nil and leaf1_got.other_edges == nil,
+    "the cache-hydrated side carries no edge kind at all")
 end
 test_items_matches_store_list_field_for_field_and_in_order()

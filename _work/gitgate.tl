@@ -349,12 +349,10 @@ end
 
 --- The locks a decomposition clears on the parent that just gained a
 --- child: it is no longer workable, so a claim or review standing on
---- it locks nothing anyone can build. A hold clears the same way: new
---- evidence under a held root is the claim that its win condition no
---- longer holds, so the marker leaves in the commit that files it. A
---- DONE root reopens the same way: filing or attaching a child under
---- it is evidence against the outcome, so its resolution clears too —
---- verified and retired roots alike, no separate verb.
+--- it locks nothing anyone can build. A DONE root reopens the same
+--- way: filing or attaching a child under it is evidence against the
+--- outcome, so its resolution clears too — verified and retired roots
+--- alike, no separate verb.
 ---
 --- Returned rather than saved, so the caller commits it TOGETHER with
 --- the child; committed on its own it would survive a refused child.
@@ -363,12 +361,11 @@ end
 local function containered(parent: item.Item): {item.Item}
   local reopened = item.is_root(parent) and (parent.resolution or "") ~= ""
   if (parent.claim or "") == "" and (parent.reviewer or "") == ""
-  and not parent.is_held and not reopened then
+  and not reopened then
     return {}
   end
   parent.claim = ""
   parent.reviewer = ""
-  parent.is_held = false
   if reopened then
     parent.resolution = ""
   end

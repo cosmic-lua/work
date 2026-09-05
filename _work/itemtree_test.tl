@@ -43,13 +43,12 @@ local function fresh_repo(name: string): string
 end
 
 --- A fully-populated item — every scalar field set, plus a ranked
---- order, beats, blocked_by (with and without a reason), an edge kind
---- this build does not interpret, and builders/speccers — so the
---- round trip has everything to lose.
+--- order, an edge kind this build does not interpret (with and
+--- without a reason), and builders/speccers — so the round trip has
+--- everything to lose.
 local function full_item(): item.Item
-  local parent, child1, child2, beat1, beat2, block1, block2, other1 =
-  fresh_id(), fresh_id(), fresh_id(), fresh_id(), fresh_id(), fresh_id(),
-  fresh_id(), fresh_id()
+  local parent, child1, child2, edge1, edge2 =
+  fresh_id(), fresh_id(), fresh_id(), fresh_id(), fresh_id()
   local it = check.must(item.decode({
         id = fresh_id(),
         title = "a fully populated item",
@@ -58,12 +57,6 @@ local function full_item(): item.Item
         base = "main",
         key = "release.yml",
         order = child1 .. " " .. child2,
-        beats = beat1 .. " " .. beat2,
-        blocked_by = block1 .. " " .. block2,
-        block_reason = {
-          [block1] = "the API is not stable yet",
-          [block2] = "",
-        },
         claim = "session-a",
         builders = "session-a session-b",
         speccers = "session-c",
@@ -72,23 +65,19 @@ local function full_item(): item.Item
         verdict = "request changes",
         verdict_head = ("ab"):rep(20),
         verdict_spec = ("cd"):rep(20),
-        is_held = false,
       }))
-  it.other_edges = {relates = {[other1] = "context"}}
+  it.other_edges = {relates = {[edge1] = "context", [edge2] = ""}}
   return it
 end
 
 -- `encode_meta` writes every non-zero scalar field, one `key: value`
--- line each, `repo`/`base` collapsed into one `target` line — `beats`
--- and `blocked_by` are not among them; those are tree entries, and
--- neither is `held`, which is a marker blob, never a meta line.
+-- line each, `repo`/`base` collapsed into one `target` line — an edge
+-- kind is not among them; that lives under `edges` entries, tree
+-- content this file never touches.
 local function test_meta_round_trips_every_scalar_field()
   local it = full_item()
   local text = itemtree.encode_meta(it)
-  assert(not text:find("beats", 1, true), "beats is not a meta line")
-  assert(not text:find("blocked_by", 1, true), "blocked_by is not a meta line")
-  assert(not text:find("^held", 1, false) and not text:find("\nheld", 1, true),
-    "held is not a meta line")
+  assert(not text:find("relates", 1, true), "an edge kind never rides in meta")
   assert(not text:find("^order", 1, false) and not text:find("\norder", 1, true),
     "order is not a meta line")
   local parsed = itemtree.parse_meta(text)
@@ -153,7 +142,7 @@ local function test_parse_target_round_trips_and_refuses_extra_at()
   assert(err4 ~= "" and err4:find("at most one @", 1, true) ~= nil, err4)
 
   local decoded = itemtree.to_item(fresh_id(),
-    {title = "t", target = "owner/name@a@b"}, false, {}, {}, {}, {}, {})
+    {title = "t", target = "owner/name@a@b"}, false, {}, {})
   assert(item.is_flagged(decoded), "a malformed target flags the decode")
   local found = false
   for _, p in ipairs(decoded.decode_problems or {}) do
@@ -164,24 +153,81 @@ local function test_parse_target_round_trips_and_refuses_extra_at()
   assert(found, table.concat(decoded.decode_problems or {}, "; "))
 end
 
--- `held` is a marker blob, not a meta line: `encode_meta` never writes
--- it, and `to_item` takes it as a separate boolean the tree read
--- supplies from the blob's presence.
-local function test_held_is_never_a_meta_line()
+-- `held` is a marker blob at the tree root, unknown to this build:
+-- there is no field left for `encode_meta` to write it from, and
+-- `to_item` turns its presence into a decode problem rather than a
+-- field, without failing the read.
+local function test_held_marker_is_an_unknown_decode_problem()
   local it = check.must(item.decode({id = fresh_id(), title = "a root"}))
-  it.is_held = true
   local text = itemtree.encode_meta(it)
-  assert(not text:find("held", 1, true), "held never rides in meta: " .. text)
-  local held_it = itemtree.to_item(it.id, itemtree.parse_meta(text), true,
-    {}, {}, {}, {}, {})
-  assert(held_it.is_held, "to_item takes held as its own argument")
+  local held_it = itemtree.to_item(it.id, itemtree.parse_meta(text), true, {}, {})
+  assert(item.is_flagged(held_it), "a held marker flags the decode")
+  local found = false
+  for _, p in ipairs(held_it.decode_problems or {}) do
+    if p:find("held", 1, true) then
+      found = true
+    end
+  end
+  assert(found, table.concat(held_it.decode_problems or {}, "; "))
+end
+
+--- Read one tree back exactly the way `_work.gitread.build_item` does:
+--- meta, whether `held` is present, the `order` blob when there is
+--- one, and every `edges/<kind>` subtree's own ids and content — this
+--- build interprets no kind, so every entry's content is fetched and
+--- landed on `other_edges` uniformly.
+--- @param root string The repository root
+--- @param tree_sha string The tree to read
+--- @return {string: string} meta `parse_meta`'s output
+--- @return boolean held Whether a `held` marker blob was present
+--- @return {string} order This tree's ranked children
+--- @return {string: {string: string}} other_edges Every edge kind found
+local function read_tree(root: string, tree_sha: string):
+  {string: string}, boolean, {string}, {string: {string: string}}
+  local batch = check.must(gitobj.cat_file_batch(root,
+      {tree_sha .. ":meta", tree_sha .. ":held", tree_sha .. ":order",
+        tree_sha .. ":edges"}))
+  local meta = itemtree.parse_meta(batch[tree_sha .. ":meta"].content)
+  local held = batch[tree_sha .. ":held"] ~= nil
+  local order: {string} = {}
+  local order_entry = batch[tree_sha .. ":order"]
+  if order_entry ~= nil then
+    order = itemtree.parse_order(order_entry.content)
+  end
+  local other_edges: {string: {string: string}} = {}
+  local edges_entry = batch[tree_sha .. ":edges"]
+  if edges_entry ~= nil then
+    local kinds = gitobj.parse_tree(edges_entry.content)
+    local kind_queries: {string} = {}
+    for _, k in ipairs(kinds) do
+      kind_queries[#kind_queries + 1] = k.sha
+    end
+    local kind_batch = check.must(gitobj.cat_file_batch(root, kind_queries))
+    local blob_queries: {string} = {}
+    for _, k in ipairs(kinds) do
+      for _, e in ipairs(gitobj.parse_tree(kind_batch[k.sha].content)) do
+        blob_queries[#blob_queries + 1] = e.sha
+      end
+    end
+    local blob_batch = check.must(gitobj.cat_file_batch(root, blob_queries))
+    for _, k in ipairs(kinds) do
+      local idmap: {string: string} = {}
+      for _, e in ipairs(gitobj.parse_tree(kind_batch[k.sha].content)) do
+        local blob = blob_batch[e.sha]
+        idmap[e.name] = blob ~= nil and blob.content or ""
+      end
+      other_edges[k.name] = idmap
+    end
+  end
+  return meta, held, order, other_edges
 end
 
 -- The property the whole design rests on: decode a tree into an
 -- Item, encode it straight back, and the tree sha must be IDENTICAL —
 -- not merely equivalent content built differently. Round-tripped
 -- twice, so a decode that quietly canonicalizes something (reordering
--- beats, say) would still be caught by the second pass staying stable.
+-- an edge kind's ids, say) would still be caught by the second pass
+-- staying stable.
 local function test_canonical_round_trip_is_tree_sha_identical()
   local root = fresh_repo("roundtrip")
   local it = full_item()
@@ -190,63 +236,8 @@ local function test_canonical_round_trip_is_tree_sha_identical()
   -- to actually be in this repository's odb.
   local tree1 = check.must(itemtree.build_tree(root, it, "## Change\nDo it.\n", true))
 
-  -- Read the tree back exactly the way `_work.gitread` does: meta,
-  -- whether `held` is present, the `order` blob when there is one, and
-  -- every `edges/<kind>` subtree's own ids, with a blob-content batch
-  -- for everything but `beats`.
-  local batch = check.must(gitobj.cat_file_batch(root,
-      {tree1 .. ":meta", tree1 .. ":held", tree1 .. ":order", tree1 .. ":edges"}))
-  local meta = itemtree.parse_meta(batch[tree1 .. ":meta"].content)
-  local held = batch[tree1 .. ":held"] ~= nil
-  local order: {string} = {}
-  local order_entry = batch[tree1 .. ":order"]
-  if order_entry ~= nil then
-    order = itemtree.parse_order(order_entry.content)
-  end
-  local kinds = gitobj.parse_tree(batch[tree1 .. ":edges"].content)
-  local kind_queries: {string} = {}
-  for _, k in ipairs(kinds) do
-    kind_queries[#kind_queries + 1] = k.sha
-  end
-  local kind_batch = check.must(gitobj.cat_file_batch(root, kind_queries))
-  local beats: {string} = {}
-  local blocked_by: {string} = {}
-  local reasons: {string: string} = {}
-  local other_edges: {string: {string: string}} = {}
-  local blob_queries: {string} = {}
-  for _, k in ipairs(kinds) do
-    if k.name ~= "beats" then
-      for _, e in ipairs(gitobj.parse_tree(kind_batch[k.sha].content)) do
-        blob_queries[#blob_queries + 1] = e.sha
-      end
-    end
-  end
-  local blob_batch = check.must(gitobj.cat_file_batch(root, blob_queries))
-  for _, k in ipairs(kinds) do
-    local ids = gitobj.parse_tree(kind_batch[k.sha].content)
-    if k.name == "beats" then
-      for _, e in ipairs(ids) do
-        beats[#beats + 1] = e.name
-      end
-    elseif k.name == "blocked_by" then
-      for _, e in ipairs(ids) do
-        blocked_by[#blocked_by + 1] = e.name
-        local re = blob_batch[e.sha]
-        if re ~= nil and re.content ~= "" then
-          reasons[e.name] = re.content
-        end
-      end
-    else
-      local idmap: {string: string} = {}
-      for _, e in ipairs(ids) do
-        local blob = blob_batch[e.sha]
-        idmap[e.name] = blob ~= nil and blob.content or ""
-      end
-      other_edges[k.name] = idmap
-    end
-  end
-  local decoded = itemtree.to_item(it.id, meta, held, order, beats, blocked_by,
-    reasons, other_edges)
+  local meta, held, order, other_edges = read_tree(root, tree1)
+  local decoded = itemtree.to_item(it.id, meta, held, order, other_edges)
   assert(#(item.problems(decoded)) == 0,
     "the decoded item is content-valid: "
     .. table.concat(item.problems(decoded), "; "))
@@ -264,6 +255,69 @@ local function test_canonical_round_trip_is_tree_sha_identical()
   -- A third pass off the second tree changes nothing further.
   local tree3 = check.must(itemtree.build_tree(root, decoded, "## Change\nDo it.\n"))
   assert(tree2 == tree3, "stable under a second round trip too")
+end
+
+-- An OLD-layout tree — `edges/beats/<id>` (an empty marker),
+-- `edges/blocked_by/<id>` (a reason), and a `held` blob at the tree
+-- root — is exactly what the migrate verb (the next slice) will read:
+-- this build interprets neither kind nor the marker, so `beats` and
+-- `blocked_by` land in `other_edges` with their content unchanged,
+-- `held`'s presence is a decode problem rather than a field, and the
+-- EDGES half of the tree re-encodes byte for byte from the decoded
+-- item — the `held` blob itself does not, since nothing here writes
+-- one any more; that asymmetry is exactly what makes `held` a decode
+-- problem and not a round-tripped field.
+local function test_old_layout_tree_edges_and_held_marker()
+  local root = fresh_repo("old-layout")
+  local beat_id = fresh_id()
+  local blocker_id = fresh_id()
+
+  local meta_sha = check.must(gitobj.hash_object_write(root, "title: an old item\n"))
+  local held_sha = check.must(gitobj.hash_object_write(root, ""))
+  local beat_marker_sha = check.must(gitobj.hash_object_write(root, ""))
+  local blocker_reason_sha = check.must(gitobj.hash_object_write(root,
+      "the API is not stable yet"))
+  local beats_tree_sha = check.must(gitobj.mktree_write(root,
+      {{mode = "100644", otype = "blob", sha = beat_marker_sha, name = beat_id}}))
+  local blocked_tree_sha = check.must(gitobj.mktree_write(root,
+      {{mode = "100644", otype = "blob", sha = blocker_reason_sha, name = blocker_id}}))
+  local edges_sha = check.must(gitobj.mktree_write(root, {
+        {mode = "40000", otype = "tree", sha = beats_tree_sha, name = "beats"},
+        {mode = "40000", otype = "tree", sha = blocked_tree_sha, name = "blocked_by"},
+      }))
+  local old_tree_sha = check.must(gitobj.mktree_write(root, {
+        {mode = "100644", otype = "blob", sha = meta_sha, name = "meta"},
+        {mode = "100644", otype = "blob", sha = held_sha, name = "held"},
+        {mode = "40000", otype = "tree", sha = edges_sha, name = "edges"},
+      }))
+
+  local meta, held, order, other_edges = read_tree(root, old_tree_sha)
+  local id = fresh_id()
+  local decoded = itemtree.to_item(id, meta, held, order, other_edges)
+
+  local decoded_edges = decoded.other_edges
+  assert(decoded_edges ~= nil, "the edges land in other_edges")
+  assert(decoded_edges.beats ~= nil and decoded_edges.beats[beat_id] == "",
+    "the beats marker's id and empty content survive")
+  assert(decoded_edges.blocked_by ~= nil
+    and decoded_edges.blocked_by[blocker_id] == "the API is not stable yet",
+    "the blocked_by reason survives")
+
+  assert(item.is_flagged(decoded), "the held marker flags the decode")
+  local found = false
+  for _, p in ipairs(decoded.decode_problems or {}) do
+    if p:find("held", 1, true) then
+      found = true
+    end
+  end
+  assert(found, table.concat(decoded.decode_problems or {}, "; "))
+
+  local rebuilt_sha = check.must(itemtree.build_tree(root, decoded, "", true))
+  local orig_edges = check.must(gitobj.cat_file_batch(root, {old_tree_sha .. ":edges"}))
+  local rebuilt_edges = check.must(gitobj.cat_file_batch(root, {rebuilt_sha .. ":edges"}))
+  assert(orig_edges[old_tree_sha .. ":edges"].content
+    == rebuilt_edges[rebuilt_sha .. ":edges"].content,
+    "beats and blocked_by re-encode byte for byte")
 end
 
 -- `spec.md` is present only when a non-empty body is given — an

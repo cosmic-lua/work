@@ -16,8 +16,7 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
---- One valid item, `order`/`beats`/etc space-joined the way `decode`
---- expects.
+--- One valid item, `order` space-joined the way `decode` expects.
 local function make(over: {string: any}): item.Item
   local t: {string: any} = {id = fresh_id(), title = "item"}
   for k, v in pairs(over or {}) do

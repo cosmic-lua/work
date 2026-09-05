@@ -89,21 +89,23 @@ local function test_take_refuses_work_under_an_unranked_root()
     "work under an unranked root has no rank path")
 end
 
--- An open blocker never refuses a take: the field is hand-written
--- straight through `storewrite.save` — no verb writes it any more —
--- and the rank path is the whole of the queue and the gate now, so a
--- blocker recorded on the item is not part of it.
+-- A `blocked_by` edge never refuses a take: it is an edge kind this
+-- build does not interpret, hand-written straight through
+-- `storewrite.save` — no verb writes it any more — and the rank path
+-- is the whole of the queue and the gate now, so an edge recorded on
+-- the item is not part of it.
 local function test_take_is_never_refused_by_an_open_blocker()
   local s = init_state_repo("blocked")
   local goal, leaf = root_with_leaf(s)
   local blocker = file_item(s, "lands first", goal)
   give_spec(s, leaf)
   local it = check.must(store.load(s, leaf))
-  it.blocked_by = {blocker}
+  it.other_edges = {blocked_by = {[blocker] = ""}}
   assert(storewrite.save(s, it, "hand-edited blocked_by"))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
     "an open blocker never gates the take")
-  assert(check.must(store.load(s, leaf)).blocked_by[1] == blocker,
+  local reloaded_edges = check.must(store.load(s, leaf)).other_edges
+  assert(reloaded_edges ~= nil and reloaded_edges.blocked_by[blocker] == "",
     "the edge still stands untouched")
 end
 
@@ -207,13 +209,14 @@ local function test_drop_leaves_blockers_standing()
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
   local question = file_item(s, "which premise still holds?", goal)
   local it = check.must(store.load(s, leaf))
-  it.blocked_by = {question}
+  it.other_edges = {blocked_by = {[question] = ""}}
   assert(storewrite.save(s, it, "hand-edited blocked_by"))
   assert(verbs.cmd_drop(s, leaf, "session-a",
       "blocked on the question", false) == 0)
   local dropped = check.must(store.load(s, leaf))
   assert(dropped.claim == "", "the lease returned")
-  assert(#dropped.blocked_by == 1 and dropped.blocked_by[1] == question,
+  local dropped_edges = dropped.other_edges
+  assert(dropped_edges ~= nil and dropped_edges.blocked_by[question] == "",
     "the blocker edge survives the drop untouched")
 end
 

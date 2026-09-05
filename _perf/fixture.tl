@@ -29,7 +29,12 @@
 --- comparisons are roots placed against a peer), 172/920 (19%) carry a
 --- `blocked_by` edge, and every item (920/920) carries a `spec.md`. The
 --- ratios below are those measurements; `build` reproduces them, not the
---- literal counts, so they hold at any `n`.
+--- literal counts, so they hold at any `n`. `beats` and `blocked_by` are
+--- edge kinds this build no longer interprets — modeled here on
+--- `Item.other_edges`, exactly as an unmigrated board's real tree
+--- entries land — since the fixture's job is the SHAPE of what `git
+--- for-each-ref`/`cat-file --batch` walk, not the field a decode reads
+--- it into.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -277,10 +282,13 @@ local function build(n?: integer): Fixture, string
     local id = root_ids[k]
     local it, derr = item.decode({
         id = id, title = ("fixture root %04d"):format(k),
-        beats = beats_of[id] or "",
       })
     if it == nil then
       return nil, "decode root " .. id .. ": " .. derr
+    end
+    local winner = beats_of[id]
+    if winner ~= nil then
+      it.other_edges = {beats = {[winner] = ""}}
     end
     local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
@@ -292,16 +300,23 @@ local function build(n?: integer): Fixture, string
     local parent = root_ids[((i - 1) % num_roots) + 1]
     local raw: {string: any} = {
       id = id, title = ("fixture leaf %06d"):format(i), parent = parent,
-      beats = beats_of[id] or "", resolution = resolution_of[id] or "",
+      resolution = resolution_of[id] or "",
     }
-    local blocker = blocker_of[id]
-    if blocker ~= nil then
-      raw.blocked_by = blocker
-      raw.block_reason = {[blocker] = "waiting on a prerequisite"}
-    end
     local it, derr = item.decode(raw)
     if it == nil then
       return nil, "decode leaf " .. id .. ": " .. derr
+    end
+    local edges: {string: {string: string}} = {}
+    local winner = beats_of[id]
+    if winner ~= nil then
+      edges.beats = {[winner] = ""}
+    end
+    local blocker = blocker_of[id]
+    if blocker ~= nil then
+      edges.blocked_by = {[blocker] = "waiting on a prerequisite"}
+    end
+    if next(edges) ~= nil then
+      it.other_edges = edges
     end
     local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then

@@ -3,21 +3,23 @@
 --- question: an item's tree not re-encoding to what it was read from
 --- (a hand edit, a canonical form that drifted), a `parent` or any
 --- `edges/<kind>/<id>` naming an id that is not an item, an edge kind
---- this build does not interpret, more than one OPEN item claiming the
---- same key, a root carrying a `repo` it should never have, an id
---- filed under both `refs/heads/items` and `refs/heads/ended` at once
---- (the residue of a resolution whose atomic push landed the create
---- half of an old-style namespace move and lost the delete half — the
---- pushing credential can create and update a branch but never delete
---- one), and any item the store's own tolerant decode had to flag.
---- `store.list`'s own format check (`_work.gitread`) is the
---- board-readable precondition every other check here depends on — a
---- board this tool cannot even read is reported as the one problem it
---- is, nothing else asked. An `order` entry naming an id that is not a
---- child of the item carrying it, and a `refs/heads/board/order` entry
---- that is not a root, are audited here rather than in `item.problems`
---- or `_work.flow`: both need the whole board's own parent-child shape
---- to judge, which a single item's own fields cannot carry.
+--- this build does not interpret (an unmigrated board's `beats` or
+--- `blocked_by`, or any other kind no build here has ever known), more
+--- than one OPEN item claiming the same key, a root carrying a `repo`
+--- it should never have, an id filed under both `refs/heads/items` and
+--- `refs/heads/ended` at once (the residue of a resolution whose
+--- atomic push landed the create half of an old-style namespace move
+--- and lost the delete half — the pushing credential can create and
+--- update a branch but never delete one), and any item the store's own
+--- tolerant decode had to flag. `store.list`'s own format check
+--- (`_work.gitread`) is the board-readable precondition every other
+--- check here depends on — a board this tool cannot even read is
+--- reported as the one problem it is, nothing else asked. An `order`
+--- entry naming an id that is not a child of the item carrying it, and
+--- a `refs/heads/board/order` entry that is not a root, are audited
+--- here rather than in `item.problems` or `_work.flow`: both need the
+--- whole board's own parent-child shape to judge, which a single
+--- item's own fields cannot carry.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
@@ -26,18 +28,11 @@ local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
 local store = require("_work.store")
 
---- The known edge kinds this build interprets — every OTHER kind an
---- item's `other_edges` names is reported once per item, since it is
---- carried opaquely rather than acted on by anything here.
-local KNOWN_KINDS < const >: {string: boolean} = {
-  beats = true, blocked_by = true,
-}
-
 --- The structural problems `all` carries — pure over an already-loaded
---- board, no git of its own: dangling `parent`/`order`/`beats`/
---- `blocked_by`/other-kind edges, an unknown edge kind, a key two open
---- items both claim, a root with a `repo`, and every item's own
---- `decode_problems`.
+--- board, no git of its own: dangling `parent`/`order` edges, every
+--- edge kind an item carries (this build interprets none, so each is
+--- reported), a key two open items both claim, a root with a `repo`,
+--- and every item's own `decode_problems`.
 --- @param all {item.Item} Every item
 --- @return {string} Problems, possibly empty
 local function structural_problems(all: {item.Item}): {string}
@@ -55,25 +50,13 @@ local function structural_problems(all: {item.Item}): {string}
         out[#out + 1] = ("%s: order names %s, which is not a child of it"):format(id8, o)
       end
     end
-    for _, b in ipairs(it.beats or {}) do
-      if index[b] == nil then
-        out[#out + 1] = ("%s: beats %s, which is not an item"):format(id8, b)
-      end
-    end
-    for _, b in ipairs(it.blocked_by or {}) do
-      if index[b] == nil then
-        out[#out + 1] = ("%s: blocked_by names %s, which is not an item"):format(id8, b)
-      end
-    end
     local other_kinds: {string} = {}
     for kind in pairs(it.other_edges or {}) do
       other_kinds[#other_kinds + 1] = kind
     end
     table.sort(other_kinds)
     for _, kind in ipairs(other_kinds) do
-      if not KNOWN_KINDS[kind] then
-        out[#out + 1] = ("%s: unknown edge kind %s"):format(id8, kind)
-      end
+      out[#out + 1] = ("%s: unknown edge kind %s"):format(id8, kind)
       local ids: {string} = {}
       for eid in pairs((it.other_edges or {})[kind] or {}) do
         ids[#ids + 1] = eid

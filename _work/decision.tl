@@ -17,7 +17,7 @@ local type Item = item.Item
 --- checked against this table, so a kind added to the ordering is a
 --- kind those tables are made to answer for.
 local KINDS < const >: {string} = {
-  "finish", "review", "pull", "unblock", "refine", "triage", "intake",
+  "finish", "review", "pull", "refine", "triage", "intake",
   "none",
 }
 

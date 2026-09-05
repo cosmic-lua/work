@@ -207,7 +207,7 @@ local function test_set_refuses_a_done_item()
 end
 
 -- `set` declares only title/repo/base — every flow field (claim, pr,
--- verdict, resolution, parent, blocked_by, lane) has its own verb and
+-- verdict, resolution, parent, lane) has its own verb and
 -- gate, so `set` refuses those by not declaring the flag at all: the
 -- dispatcher's own unrecognized-flag error, before `cmd_set` runs.
 local function test_set_refuses_an_unknown_flag()

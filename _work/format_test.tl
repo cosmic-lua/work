@@ -24,11 +24,22 @@ end
 -- named on both sides, so a reader can tell a too-old tool from a
 -- too-new board without decoding the message.
 local function test_a_different_version_refuses_and_names_both()
-  local refusal = format.refusal("2", true)
+  local refusal = format.refusal("99", true)
   assert(refusal ~= nil)
-  assert(refusal:find("2", 1, true) ~= nil, refusal)
+  assert(refusal:find("99", 1, true) ~= nil, refusal)
   assert(refusal:find(format.CURRENT, 1, true) ~= nil, refusal)
-  assert(format.refusal("2", false) ~= nil, "wrong on an empty board refuses too")
+  assert(format.refusal("99", false) ~= nil, "wrong on an empty board refuses too")
+end
+
+-- Layout `1` — the previous, beats/blocked_by/held-carrying layout —
+-- is a refusal this tool knows the way past: it names `gitboard
+-- migrate` rather than the generic "cannot safely read" wording.
+local function test_version_1_names_the_migrate_verb()
+  local refusal = format.refusal("1", true)
+  assert(refusal ~= nil)
+  assert(refusal:find("1", 1, true) ~= nil, refusal)
+  assert(refusal:find(format.CURRENT, 1, true) ~= nil, refusal)
+  assert(refusal:find("gitboard migrate", 1, true) ~= nil, refusal)
 end
 
 -- A missing marker refuses only once the board carries items — an OLD

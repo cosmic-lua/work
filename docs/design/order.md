@@ -118,7 +118,7 @@ list, as any lost race does. No ordering verb needs the board-wide
 
 ## The order every queue renders
 
-`_work/priority.tl` computes each item's rank path from the lists and
+`_work/rank.tl` computes each item's rank path from the lists and
 the parent chain, and `_work/flow.tl` sorts every queue by stage first
 (finishing before starting: accepted, review, rework, building,
 repair, todo) and rank path within a stage. The seeded per-session
@@ -130,7 +130,7 @@ carries one rank-path view, and a stale list entry is visible only to
 ## The description lives in one place
 
 `gitboard help order` is the statement, and it is the three sentences
-under "The rule" above. `_work/priority.tl`'s header says only that it
+under "The rule" above. `_work/rank.tl`'s header says only that it
 derives that page, and the README's ordering paragraph is one sentence
 citing it. `_work/doctrine_test.tl` pins that every page renders, and
 that the module header and the page agree on the sentence.

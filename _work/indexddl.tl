@@ -1,8 +1,8 @@
 --- The core schema `_work.index` loads into every connection it opens:
---- item fields, the edge relation, the ranks relation, and the views
---- every reader queries instead of re-deriving role and state by hand.
---- Split out of `_work.index` to keep that module under its line cap —
---- this file is the DDL text alone, with no behavior of its own.
+--- item fields, the ranks relation, and the views every reader queries
+--- instead of re-deriving role and state by hand. Split out of
+--- `_work.index` to keep that module under its line cap — this file is
+--- the DDL text alone, with no behavior of its own.
 ---
 --- House defaults for any SQLite schema the board opens: every table
 --- is `STRICT` (an FTS5 virtual table is the one exception — SQLite
@@ -13,14 +13,14 @@
 --- is `WITHOUT ROWID` so the key itself is the row's identity, foreign
 --- keys are ON for the whole connection, and a closed vocabulary
 --- (`verdict`, `resolution`, ...) is a `CHECK IN (...)` naming it
---- rather than trusted free text. `parent`, an edge's `to_id`, and a
---- rank's `child` are the deliberate exceptions: none carries a
---- foreign key, so a dangling one is a `problems()` QUERY finding
---- rather than a load-time refusal — the tree itself may carry a
---- dangling reference (a hand edit, a partial import, a stale rank
---- entry left behind by a move — `docs/design/order.md`'s "Moves and
---- stale entries" — or a rank entry naming something that never was a
---- child at all), and this index has to load it anyway to report on it.
+--- rather than trusted free text. `parent` and a rank's `child` are the
+--- deliberate exceptions: neither carries a foreign key, so a dangling
+--- one is a `problems()` QUERY finding rather than a load-time refusal
+--- — the tree itself may carry a dangling reference (a hand edit, a
+--- partial import, a stale rank entry left behind by a move —
+--- `docs/design/order.md`'s "Moves and stale entries" — or a rank
+--- entry naming something that never was a child at all), and this
+--- index has to load it anyway to report on it.
 ---
 --- `ranks` carries one row per entry of every item's own `order` list
 --- (`parent` = that item's id) and of the board's root list (`parent`
@@ -28,11 +28,6 @@
 --- a stale or otherwise non-child entry lands verbatim; deriving a
 --- clean dense ranking from it is `_work.index_rank`'s job, not the
 --- load's.
----
---- `dominates` is here because `_work.index.problems` needs it for the
---- priority-cycle finding; the position-list apparatus (`rank_path`)
---- is layered on top by `_work.index_rank`, which adds its own views
---- to a connection already carrying this DDL.
 local DDL < const > = [[
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
@@ -48,21 +43,7 @@ CREATE TABLE items (
   verdict TEXT NOT NULL DEFAULT '' CHECK(verdict IN ('', 'accept', 'request changes')),
   verdict_head TEXT NOT NULL DEFAULT '',
   verdict_spec TEXT NOT NULL DEFAULT '',
-  resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned')),
-  held INTEGER NOT NULL DEFAULT 0 CHECK(held IN (0, 1))
-) STRICT, WITHOUT ROWID;
-
--- Every edge this build carries, of any kind: `beats` (the priority
--- relation), `blocked_by` (a reason per entry), and any OTHER kind an
--- item's tree names, which this index loads exactly like the two it
--- interprets. `to_id` deliberately carries no foreign key — see the
--- module header.
-CREATE TABLE edges (
-  kind TEXT NOT NULL,
-  from_id TEXT NOT NULL REFERENCES items(id),
-  to_id TEXT NOT NULL,
-  reason TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY(kind, from_id, to_id)
+  resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned'))
 ) STRICT, WITHOUT ROWID;
 
 -- One row per entry of every item's own `order` list (`parent` = that
@@ -93,17 +74,15 @@ CREATE TABLE speccers (
 CREATE UNIQUE INDEX one_open_item_per_key
   ON items(key) WHERE key <> '' AND resolution = '';
 
--- `parent`, an edge's `to_id`, and a rank's `child` carry no foreign
--- key (see the module header), so nothing here forces their use — but
--- all three are join/filter keys on every read: `containers` and
--- `workable` filter items by parent, `broken_chains`' walk searches for
--- roots by `parent = ''` at every recursive step, `dangling_edges`
--- scans the whole `edges` table looking for a `to_id` no item claims,
--- and `_work.index_rank`'s dense-position view joins `ranks.child`
--- against `items` once per rank entry. `EXPLAIN QUERY PLAN` confirms
--- SQLite picks these over a full scan for all four.
+-- `parent` and a rank's `child` carry no foreign key (see the module
+-- header), so nothing here forces their use — but both are join/filter
+-- keys on every read: `containers` and `workable` filter items by
+-- parent, `broken_chains`' walk searches for roots by `parent = ''` at
+-- every recursive step, and `_work.index_rank`'s dense-position view
+-- joins `ranks.child` against `items` once per rank entry.
+-- `EXPLAIN QUERY PLAN` confirms SQLite picks these over a full scan
+-- for both.
 CREATE INDEX items_parent ON items(parent);
-CREATE INDEX edges_to ON edges(to_id);
 CREATE INDEX ranks_child ON ranks(child);
 
 CREATE VIEW open_items AS
@@ -153,26 +132,6 @@ CREATE VIEW substate AS
       ELSE 'building'
     END AS substate
   FROM items;
-
--- The transitive closure of the `beats` kind: every (winner, loser)
--- pair one item outranks, directly or through the chain. A self-pair
--- (winner = loser) means the edges cycle through that item. A
--- dangling beats edge (its `to_id` names no item) never enters the
--- walk, so it counts as a `dangling_edges` finding, never as
--- standing: joined against `items` at both the base case and every
--- recursive step, since a later hop can be the one that goes
--- dangling.
-CREATE VIEW dominates AS
-  WITH RECURSIVE dom(winner, loser) AS (
-    SELECT e.from_id, e.to_id FROM edges e
-    JOIN items i ON i.id = e.to_id
-    WHERE e.kind = 'beats'
-    UNION
-    SELECT d.winner, e.to_id FROM dom d
-    JOIN edges e ON d.loser = e.from_id AND e.kind = 'beats'
-    JOIN items i ON i.id = e.to_id
-  )
-  SELECT winner, loser FROM dom;
 ]]
 
 local record indexddl

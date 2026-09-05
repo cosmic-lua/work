@@ -18,8 +18,8 @@ local hash = require("cosmic.hash")
 local type BatchEntry = gitbatch.BatchEntry
 
 --- The sha1 of the empty blob, the same object `git hash-object` gives
---- an empty string — used for `beats/<id>` markers, which carry no
---- content of their own.
+--- an empty string — used for a reason-less `edges/<kind>/<id>`
+--- marker, which carries no content of its own.
 local EMPTY_BLOB_SHA < const > = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
 
 --- One entry in a tree being built or read back.

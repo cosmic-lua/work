@@ -44,12 +44,11 @@ local type Cache = index.Index
 --- therefore redundant for a DDL change specifically; it stays only
 --- as an escape hatch for forcing every clone to rebuild for a reason
 --- the fingerprint cannot see (a bug in how a row was interpreted, say).
---- Bumped to 3 for the `ranks` table (`_work.index`'s DDL, and the
---- rank-path patching this module's `patch_item` now carries through
---- `index.delete_item`/`insert_item`): the fingerprint alone already
+--- Bumped to 4 for the removal of the `edges` table and the `held`
+--- column (`_work.indexddl`'s DDL): the fingerprint alone already
 --- forces the rebuild that change needs, and the bump is
 --- belt-and-suspenders, matching this constant's own stated role.
-local SCHEMA_VERSION < const > = 3
+local SCHEMA_VERSION < const > = 4
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -374,7 +373,7 @@ local function expected_schema_fingerprint(): string | nil, string
   return fp
 end
 
---- Refresh or drop one item's rows — `items`/`edges`/`ranks`/`builders`/
+--- Refresh or drop one item's rows — `items`/`ranks`/`builders`/
 --- `speccers` (`_work.index`) and `search` (`_work.find`) — from what
 --- the caller already holds, no git read at all: `_work.cache`'s
 --- save-path and fetch-path patchers both reduce to this for one item.

@@ -61,9 +61,8 @@ once rather than surfacing the corruption.
 Every item is a git ref — `refs/heads/items/<ksuid>` — whose tip commit's
 tree carries its fields (a `meta` blob of `key: value` lines,
 `repo`/`base` collapsed into one `target` line), its spec prose
-(`spec.md`, present only when it has one), a `held` marker (present
-only when the item is held), and its ranked children (an optional
-`order` blob, present only on a parent that has ranked at least one
+(`spec.md`, present only when it has one), and its ranked children (an
+optional `order` blob, present only on a parent that has ranked at least one
 child — child ids one per line, in rank order); the tree shape is
 `_work/itemtree.tl`, the ONE place it is written. Resolving an
 item sets its `resolution` field on that same ref, an ordinary write
@@ -90,9 +89,10 @@ are the whole of that mechanism. Every verb and render still addresses
 an item by the 8-character handle (bare or wrapped, either divider,
 case-tolerant) or an unambiguous prefix. `gitboard fsck` is the
 read-only, offline whole-board audit no single verb ever asks:
-dangling `parent` or `edges/<kind>/<id>` references, an edge kind this
-build does not interpret, an item's tree not re-encoding to what it
-was read from, two open items sharing a key, a root carrying a `repo`,
+a dangling `parent`, an edge kind this build does not interpret (an
+unmigrated board's), a stale `order` entry, an item's tree not
+re-encoding to what it was read from, two open items sharing a key, a
+root carrying a `repo`,
 an id filed under both `refs/heads/items` and `refs/heads/ended` at
 once (the pushing credential can create and update a branch but never
 delete one, so an id can end up in both places only by hand, never by

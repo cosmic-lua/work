@@ -79,9 +79,13 @@ end
 local function signature(items: {Item}, specs: act.Specs): string
   local parts: {string} = {}
   for _, i in ipairs(items) do
+    local blocked = 0
+    for _ in pairs(((i.other_edges or {}).blocked_by) or {}) do
+      blocked = blocked + 1
+    end
     parts[#parts + 1] = ("%s:%s:%s:%s:%d:%s:%d:%d"):format(i.id:sub(1, 8),
       (i.parent or ""):sub(1, 8), i.resolution or "", i.claim or "",
-      i.pr or 0, i.verdict or "", #(i.blocked_by or {}),
+      i.pr or 0, i.verdict or "", blocked,
       #(specs[i.id] or ""))
   end
   return table.concat(parts, "|")
@@ -236,8 +240,10 @@ local function generate(r: Rng, leaves: integer,
   for _ = 1, roll(r, 4) do
     local waiter = workable[roll(r, #workable)]
     local on = workable[roll(r, #workable)]
-    if waiter.id ~= on.id and #waiter.blocked_by == 0 then
-      waiter.blocked_by = {on.id}
+    local waiter_edges = waiter.other_edges
+    if waiter.id ~= on.id and (waiter_edges == nil
+      or waiter_edges.blocked_by == nil) then
+      waiter.other_edges = {blocked_by = {[on.id] = ""}}
     end
   end
   for _ = 1, roll(r, 3) do

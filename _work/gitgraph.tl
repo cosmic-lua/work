@@ -115,8 +115,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   local it: item.Item = {
     id = ksuid.new(), title = title, parent = parent, repo = repo or "",
-    order = {}, beats = {},
-    blocked_by = {}, claim = "", pr = 0, verdict = "",
+    order = {}, claim = "", pr = 0, verdict = "",
     verdict_head = "", resolution = "",
   }
   local bad = item.problems(it)
@@ -249,7 +248,7 @@ end
 --- set: repair one of the three destination-fact fields directly —
 --- `title`, `repo`, `base` — the fields no other verb moves once an
 --- item is filed. Flow fields (claim, pr, verdict, resolution, parent,
---- blocked_by, key) have their own verbs and gates; `set` refuses
+--- key) have their own verbs and gates; `set` refuses
 --- them by not existing for them — the dispatcher's flag spec never
 --- declares those long names on this command, so passing one is an
 --- unrecognized-flag refusal before `set` is ever called.

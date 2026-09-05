@@ -64,15 +64,16 @@ end
 -- `load`'s three rounds — meta/held/edges, each edge kind's own
 -- subtree, and every content blob — run over ONE `cat-file --batch`
 -- session (`_work.gitobj.batch_session`), not one process per round.
--- An item with a real `blocked_by` edge exercises all three rounds
--- with non-empty queries, so an unconverted round would show up here
--- as a second (or third) spawn, not merely as an idle no-op call.
+-- An item with a real `blocked_by` edge — an edge kind this build does
+-- not interpret — exercises all three rounds with non-empty queries,
+-- so an unconverted round would show up here as a second (or third)
+-- spawn, not merely as an idle no-op call.
 local function test_load_of_an_item_with_edges_spawns_one_cat_file_process()
   local s = init_state_repo("one-spawn")
   local blocker = file_item(s, "a blocker", "")
   local id = file_item(s, "an item", "")
   local it = check.must(store.load(s, id))
-  it.blocked_by = {blocker}
+  it.other_edges = {blocked_by = {[blocker] = ""}}
   assert(storewrite.save(s, it, "hand-edited blocked_by"))
 
   local calls = cat_file_spawns(function(): boolean
@@ -92,7 +93,7 @@ local function test_list_of_a_board_with_edges_spawns_one_cat_file_process()
   local blocker = file_item(s, "a blocker", "")
   local id = file_item(s, "an item", "")
   local it = check.must(store.load(s, id))
-  it.blocked_by = {blocker}
+  it.other_edges = {blocked_by = {[blocker] = ""}}
   assert(storewrite.save(s, it, "hand-edited blocked_by"))
 
   local calls = cat_file_spawns(function(): boolean

@@ -422,7 +422,6 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   end
   it.claim = ""
   it.reviewer = ""
-  it.is_held = false
   it.resolution = reason
   -- CHILD rides the commit subject and the verdict line: the log names
   -- the evidence a verified root stands on.

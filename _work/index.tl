@@ -64,38 +64,18 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
   for _, it in ipairs(items) do
     local landed = try(db, [[
       INSERT INTO items(id, title, parent, repo, base, key, claim, reviewer,
-        pr, result, verdict, verdict_head, verdict_spec, resolution, held)
+        pr, result, verdict, verdict_head, verdict_spec, resolution)
       VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :reviewer,
-        :pr, :result, :verdict, :verdict_head, :verdict_spec, :resolution, :held)
+        :pr, :result, :verdict, :verdict_head, :verdict_spec, :resolution)
     ]], {
         id = it.id, title = it.title, parent = it.parent or "",
         repo = it.repo or "", base = it.base or "", key = it.key or "",
         claim = it.claim or "", reviewer = it.reviewer or "",
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",
         verdict_head = it.verdict_head or "", verdict_spec = it.verdict_spec or "",
-        resolution = it.resolution or "", held = it.is_held and 1 or 0,
+        resolution = it.resolution or "",
       }, nil, problems, it.id)
     if landed then
-      for _, b in ipairs(it.beats or {}) do
-        try(db, [[
-          INSERT OR IGNORE INTO edges(kind, from_id, to_id, reason)
-          VALUES ('beats', ?, ?, '')
-        ]], {it.id, b}, nil, problems, it.id)
-      end
-      for _, b in ipairs(it.blocked_by or {}) do
-        try(db, [[
-          INSERT OR IGNORE INTO edges(kind, from_id, to_id, reason)
-          VALUES ('blocked_by', ?, ?, ?)
-        ]], {it.id, b, (it.block_reason or {})[b] or ""}, nil, problems, it.id)
-      end
-      for kind, idmap in pairs(it.other_edges or {}) do
-        for eid, reason in pairs(idmap) do
-          try(db, [[
-            INSERT OR IGNORE INTO edges(kind, from_id, to_id, reason)
-            VALUES (?, ?, ?, ?)
-          ]], {kind, it.id, eid, reason or ""}, nil, problems, it.id)
-        end
-      end
       for seq, name in ipairs(it.builders or {}) do
         try(db, "INSERT OR IGNORE INTO builders(item, session, seq) VALUES (?, ?, ?)",
           {it.id, name, seq}, nil, problems, it.id)
@@ -187,23 +167,6 @@ local function dangling_parents(self: Index): {string}
   return out
 end
 
---- Edges whose `to_id` names no row in `items` — a dangling `beats`,
---- `blocked_by`, or other-kind edge, queried live since the column
---- carries no foreign key.
---- @param self Index The index
---- @return {string} Problem lines, possibly empty
-local function dangling_edges(self: Index): {string}
-  local out: {string} = {}
-  for row in assert(self.db:query([[
-      SELECT kind, from_id, to_id FROM edges e
-      WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.id = e.to_id)
-    ]])) do
-    out[#out + 1] = ("%s: %s %s, which is not an item"):format(
-      row.from_id, row.kind, row.to_id)
-  end
-  return out
-end
-
 --- Open items whose ancestor walk, bounded the same 16 hops
 --- `_work.flow` uses, never reaches a root — a broken
 --- or cyclic parent chain past the immediate parent, which the load's
@@ -236,25 +199,9 @@ local function broken_chains(self: Index): {string}
   return out
 end
 
---- Items a priority-edge cycle reaches, read off `dominates` — a SQL
---- view over `beats` — rather than walking `beats` by hand in Lua.
---- @param self Index The index
---- @return {string} Problem lines, possibly empty
-local function priority_cycles(self: Index): {string}
-  local out: {string} = {}
-  for row in assert(self.db:query(
-      "SELECT DISTINCT winner AS id FROM dominates WHERE winner = loser")) do
-    out[#out + 1] = ("%s: priority edges form a cycle through it — no verb "
-      .. "writes `beats` any more, so break the cycle by hand-editing it")
-    :format(row.id)
-  end
-  return out
-end
-
 --- Every problem the index knows about: the row refusals `open`
---- collected, plus the dangling-parent, dangling-edge, broken-chain,
---- priority-cycle and key-duplicate findings queried live from the
---- loaded tables.
+--- collected, plus the dangling-parent, broken-chain, and
+--- key-duplicate findings queried live from the loaded tables.
 --- @param self Index The index
 --- @return {string} Problem lines, possibly empty
 local function problems(self: Index): {string}
@@ -266,12 +213,6 @@ local function problems(self: Index): {string}
     out[#out + 1] = p
   end
   for _, p in ipairs(broken_chains(self)) do
-    out[#out + 1] = p
-  end
-  for _, p in ipairs(dangling_edges(self)) do
-    out[#out + 1] = p
-  end
-  for _, p in ipairs(priority_cycles(self)) do
     out[#out + 1] = p
   end
   for _, p in ipairs(key_duplicates(self)) do
@@ -289,15 +230,15 @@ local function close(self: Index): boolean, string
 end
 
 --- Delete every row `id` owns, across `items` and everything that
---- references it (`edges` where it is the source, `ranks` where it is
---- the parent — its own ranked-children list — `builders`,
---- `speccers`) — `_work.cache`'s per-item invalidation, ahead of a
---- fresh `insert_item` or on its own when the item no longer exists.
---- Order matters: `edges.from_id`/`builders.item`/`speccers.item` all
---- carry a foreign key into `items`, so the referencing rows go first.
---- An edge, or a rank entry, some OTHER item holds pointing at `id` is
---- deliberately left standing — dangling, exactly as `dangling_edges`
---- already reports one after a bulk `open` load.
+--- references it (`ranks` where it is the parent — its own
+--- ranked-children list — `builders`, `speccers`) — `_work.cache`'s
+--- per-item invalidation, ahead of a fresh `insert_item` or on its own
+--- when the item no longer exists. Order matters:
+--- `builders.item`/`speccers.item` both carry a foreign key into
+--- `items`, so the referencing rows go first. A rank entry some OTHER
+--- item holds pointing at `id` is deliberately left standing —
+--- dangling, exactly as `dangling_parents` already reports one after a
+--- bulk `open` load.
 --- @param db sqlite.Database The connection
 --- @param id string Item id
 --- @return boolean True on success
@@ -306,7 +247,6 @@ local function delete_item(db: sqlite.Database, id: string): boolean, string
   for _, sql in ipairs({
       "DELETE FROM builders WHERE item = ?",
       "DELETE FROM speccers WHERE item = ?",
-      "DELETE FROM edges WHERE from_id = ?",
       "DELETE FROM ranks WHERE parent = ?",
       "DELETE FROM items WHERE id = ?",
     }) do
@@ -318,7 +258,7 @@ local function delete_item(db: sqlite.Database, id: string): boolean, string
   return true, ""
 end
 
---- Insert one item's rows — `items`, its own edges, its own `ranks`
+--- Insert one item's rows — `items`, its own `ranks`
 --- entries, `builders`, `speccers` — into a connection already
 --- carrying this schema. Assumes none already exist for its id; call
 --- `delete_item` first to refresh one already loaded. `_work.cache`'s

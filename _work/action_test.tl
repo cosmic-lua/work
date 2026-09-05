@@ -233,13 +233,14 @@ end
 -- A blocker edge never gates the rework/building stage — it only
 -- ever recorded landing order for accepted work, and that hold is
 -- gone too: a claimed item in flight is offered to finish regardless
--- of what it names in `blocked_by`.
+-- of what it names in `blocked_by`, an edge kind this build does not
+-- interpret.
 local function test_a_blocked_building_item_is_still_offered()
   local items: {Item} = {}
   local root, root_order = placed_root(items)
   local peer = make({parent = root.id, claim = "other"})
-  local building = make({parent = root.id, claim = "me",
-      blocked_by = peer.id})
+  local building = make({parent = root.id, claim = "me"})
+  building.other_edges = {blocked_by = {[peer.id] = ""}}
   items[#items + 1] = peer
   items[#items + 1] = building
   local specs = ready_specs(items)

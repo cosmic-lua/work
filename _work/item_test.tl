@@ -3,7 +3,7 @@
 -- back in and validates, and the two round-trip through cosmic.literal
 -- byte-for-byte. The per-item rules pin the emergent-role invariants a
 -- single file can carry: only parented items hold coordination
--- fields, roots hold edges alone, and done items hold no locks.
+-- fields, roots hold none of them, and done items hold no locks.
 
 local check = require("cosmic.check")
 local item = require("_work.item")
@@ -13,7 +13,6 @@ local literal = require("cosmic.literal")
 local ZEROS = ("\0"):rep(16)
 local ID = check.must(ksuid.encode(1700000001, ZEROS))
 local PARENT = check.must(ksuid.encode(1700000000, ZEROS))
-local OTHER = check.must(ksuid.encode(1699999999, ZEROS))
 
 local function base(): {string: any}
   return {id = ID, title = "an item"}
@@ -52,42 +51,20 @@ local function test_worked_item_round_trips()
   t.pr = 456
   t.verdict = "request changes"
   t.verdict_head = "abc1234"
-  t.blocked_by = PARENT .. " " .. OTHER
   local it = check.must(item.decode(t))
   local back = check.must(item.decode(
       check.must(literal.parse(check.must(literal.format(item.encode(it)))))))
   assert(back.parent == PARENT, "position fields")
   assert(back.claim == "session-a" and back.pr == 456, "coordination fields")
-  assert(#back.blocked_by == 2 and back.blocked_by[1] == PARENT, "blocked_by")
 end
 
-local function test_roots_hold_edges_not_locks()
-  local root = base()
-  root.beats = PARENT
-  local g = check.must(item.decode(root))
-  assert(#g.beats == 1 and g.beats[1] == PARENT,
-    "a root's priority edge decodes")
+local function test_roots_hold_no_locks()
   local claimed = base()
   claimed.claim = "session-a"
   local it = check.must(item.decode(claimed))
   assert(has_problem(it, "not roots"),
     "a claimed root decodes flagged: "
     .. table.concat(it.decode_problems or {}, "; "))
-end
-
-local function test_priority_edges_name_other_items()
-  local looping = base()
-  looping.beats = ID
-  local it = check.must(item.decode(looping))
-  assert(has_problem(it, "nothing outranks itself"),
-    "a self-edge decodes flagged: "
-    .. table.concat(it.decode_problems or {}, "; "))
-  local junk = base()
-  junk.beats = "not-an-id"
-  local jit = check.must(item.decode(junk))
-  assert(has_problem(jit, "beats names a non-id"),
-    "a non-id edge decodes flagged: "
-    .. table.concat(jit.decode_problems or {}, "; "))
 end
 
 local function test_done_items_hold_no_locks()
@@ -227,76 +204,19 @@ end
 
 -- A list field's invariants hold by validation, not by any writer's
 -- convention: a migration or a hand-edit reaches the file directly,
--- and a repeated entry over-reports the blocker count and renders
--- twice in `show`. Refused rather than folded — silently deduping
--- would hide whichever writer produced them.
-local function test_list_fields_flag_a_repeated_entry()
-  local blocked = base()
-  blocked.blocked_by = PARENT .. " " .. OTHER .. " " .. PARENT
-  local bflagged = check.must(item.decode(blocked))
-  assert(has_problem(bflagged, "blocked_by repeats " .. PARENT),
-    "a repeated blocker decodes flagged: "
-    .. table.concat(bflagged.decode_problems or {}, "; "))
-
-  local ranked = base()
-  ranked.beats = PARENT .. " " .. OTHER .. " " .. OTHER
-  local rflagged = check.must(item.decode(ranked))
-  assert(has_problem(rflagged, "beats repeats " .. OTHER),
-    "a repeated beat decodes flagged: "
-    .. table.concat(rflagged.decode_problems or {}, "; "))
-
-  local distinct = base()
-  distinct.blocked_by = PARENT .. " " .. OTHER
-  distinct.beats = PARENT .. " " .. OTHER
-  local ok = check.must(item.decode(distinct))
-  assert(#ok.blocked_by == 2 and #ok.beats == 2 and not item.is_flagged(ok),
-    "distinct entries in each list decode clean")
-end
+-- and a repeated entry over-reports the roster and renders twice in
+-- `show`. Refused rather than folded — silently deduping would hide
+-- whichever writer produced them. `test_builders_round_trip` and
+-- `test_speccers_round_trip` cover this for the two list fields
+-- `item.tl` still carries.
 
 local function test_id_discipline()
   local it = check.must(item.decode({id = "not-a-ksuid", title = "t"}))
   assert(has_problem(it, "ksuid"), "a non-ksuid id decodes flagged")
-  local blocked = base()
-  blocked.blocked_by = "junk"
-  local bflagged = check.must(item.decode(blocked))
-  assert(has_problem(bflagged, "non-id"), "a non-id blocker decodes flagged: "
-    .. table.concat(bflagged.decode_problems or {}, "; "))
 end
-
-local function test_block_reason_rides_the_edge_and_round_trips()
-  local t = base()
-  t.parent = PARENT
-  t.blocked_by = OTHER
-  t.block_reason = {[OTHER] = "the API lands there first"}
-  local it = check.must(item.decode(t))
-  assert(it.block_reason[OTHER] == "the API lands there first",
-    "the reason decodes")
-  local back = check.must(item.decode(
-      check.must(literal.parse(check.must(literal.format(item.encode(it)))))))
-  assert(back.block_reason[OTHER] == "the API lands there first",
-    "and round-trips through the literal")
-  -- A reason whose edge is gone heals on the next write, like a
-  -- duplicate blocker does.
-  it.blocked_by = {}
-  local healed = item.encode(it)
-  assert(healed.block_reason == nil and healed.blocked_by == nil,
-    "an orphaned reason is not written")
-end
-
-local function test_an_item_cannot_wait_on_itself()
-  local t = base()
-  t.parent = PARENT
-  t.blocked_by = ID
-  local it = check.must(item.decode(t))
-  assert(has_problem(it, "itself"),
-    "a self-block decodes flagged: "
-    .. table.concat(it.decode_problems or {}, "; "))
-end
-
--- `builders` is the durable half of authorship: a space-joined list
--- like `beats` and `blocked_by`, omitted when empty, and refusing the
--- repeat that would let one session appear to have built an item
--- twice.
+-- `builders` is the durable half of authorship: a space-joined list,
+-- omitted when empty, and refusing the repeat that would let one
+-- session appear to have built an item twice.
 local function test_builders_round_trip()
   local t = base()
   t.parent = PARENT

@@ -33,13 +33,13 @@ local time = require("cosmic.time")
 
 --- One path change a commit carries: replace `path` with `content`,
 --- or delete it when `content` is nil. Every path this item's tree
---- can hold — `meta`, `spec.md`, `held`, `edges/<kind>/<id>` — is a
+--- can hold — `meta`, `spec.md`, `order`, `edges/<kind>/<id>` — is a
 --- single file, so one flat list of these (nested paths and all) is
 --- the whole of what one item's commit needs to say.
 local record Op
   path: string
-  --- nil deletes the path; "" is a legal blob (the beats marker, an
-  --- empty blocker reason) and is NOT a delete.
+  --- nil deletes the path; "" is a legal blob (an empty edge marker)
+  --- and is NOT a delete.
   content: string
 end
 
@@ -95,11 +95,10 @@ end
 --- leaves the sidecar untouched — no read, no write, no path at all,
 --- carried forward by `from`), `order` added, changed or removed when
 --- the ranked child list moved (compared as its own encoded blob, the
---- same way `meta` is), `held` added or removed when `is_held`
---- flips, and every `edges/<kind>/<id>` entry — `beats`, `blocked_by`,
---- and every kind in `other_edges` — added, changed or removed against
---- `old`'s own sets. `old` is nil for a brand-new item — every path
---- the new item carries is then "added".
+--- same way `meta` is), and every `edges/<kind>/<id>` entry — every
+--- kind in `other_edges` — added, changed or removed against `old`'s
+--- own sets. `old` is nil for a brand-new item — every path the new
+--- item carries is then "added".
 --- @param old item.Item | nil The item as last observed, nil when new
 --- @param new_it item.Item The item as it stands now
 --- @param spec_replacement string | nil Replacement spec.md text; nil
@@ -137,59 +136,10 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
       ops[#ops + 1] = {path = "order", content = new_order}
     end
   end
-  local old_held = old ~= nil and old.is_held or false
-  local new_held = new_it.is_held or false
-  if new_held ~= old_held then
-    if new_held then
-      ops[#ops + 1] = {path = "held", content = ""}
-    else
-      ops[#ops + 1] = {path = "held", content = nil}
-    end
-  end
-  local old_beats: {string: boolean} = {}
-  if old ~= nil then
-    for _, b in ipairs(old.beats or {}) do
-      old_beats[b] = true
-    end
-  end
-  local new_beats: {string: boolean} = {}
-  for _, b in ipairs(new_it.beats or {}) do
-    new_beats[b] = true
-  end
-  for b in pairs(new_beats) do
-    if not old_beats[b] then
-      ops[#ops + 1] = {path = "edges/beats/" .. b, content = ""}
-    end
-  end
-  for b in pairs(old_beats) do
-    if not new_beats[b] then
-      ops[#ops + 1] = {path = "edges/beats/" .. b, content = nil}
-    end
-  end
-  local old_blocked: {string: string} = {}
-  if old ~= nil then
-    for _, b in ipairs(old.blocked_by or {}) do
-      old_blocked[b] = (old.block_reason or {})[b] or ""
-    end
-  end
-  local new_blocked: {string: string} = {}
-  for _, b in ipairs(new_it.blocked_by or {}) do
-    new_blocked[b] = (new_it.block_reason or {})[b] or ""
-  end
-  for b, reason in pairs(new_blocked) do
-    if old_blocked[b] == nil or old_blocked[b] ~= reason then
-      ops[#ops + 1] = {path = "edges/blocked_by/" .. b, content = reason}
-    end
-  end
-  for b in pairs(old_blocked) do
-    if new_blocked[b] == nil then
-      ops[#ops + 1] = {path = "edges/blocked_by/" .. b, content = nil}
-    end
-  end
-  -- Every OTHER kind, unknown to this build: diffed the same shape as
-  -- `blocked_by` (id -> content), one subtree per kind, so a kind this
-  -- reader does not interpret still round-trips through an unrelated
-  -- write untouched, and only the ids that actually moved get an op.
+  -- Every edge kind, unknown to this build: diffed as id -> content,
+  -- one subtree per kind, so a kind this reader does not interpret
+  -- still round-trips through an unrelated write untouched, and only
+  -- the ids that actually moved get an op.
   local old_other: {string: {string: string}} = (old ~= nil and old.other_edges) or {}
   local new_other: {string: {string: string}} = new_it.other_edges or {}
   local kinds: {string: boolean} = {}

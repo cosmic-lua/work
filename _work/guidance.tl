@@ -56,12 +56,6 @@ local NOTES < const >: {string: {string}} = {
     "Then `show ID`: the spec sidecar is the spec; re-run its measured "
     .. "commands before building.",
   },
-  ["unblock"] = {
-    "Every takeable item waits on an open blocker, so nothing pulls however "
-    .. "deep the queue is. The item named is the chain's deepest open one.",
-    "Resolving it is whatever its own state calls for. When the reason recorded "
-    .. "on the edge no longer binds, drop the edge with `unblock ID BLOCKER`.",
-  },
   ["refine"] = {
     "Drive the highest-placed todo item toward the spec bar: `show ID` names "
     .. "the gaps, `spec ID FILE --base BASE` writes the refinement back.",

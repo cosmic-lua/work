@@ -79,22 +79,20 @@ local function edge_kinds(edges_content: string): {string: string}
   return out
 end
 
---- Every blob sha whose CONTENT a kind's own ids need — every
---- `blocked_by` and other-kind entry (the reason), never a `beats`
---- entry (an unread marker) — across whichever kinds `kinds` names.
+--- Every blob sha whose CONTENT a kind's own ids need — every entry
+--- across whichever kinds `kinds` names, marker or reason alike; a
+--- marker's blob is simply "" once fetched.
 --- @param kinds {string: string} Kind name -> subtree sha
 --- @param kind_batch {string: gitobj.BatchEntry} Each subtree's own content
 --- @return {string} Blob shas to fetch
 local function content_blob_shas(kinds: {string: string},
     kind_batch: {string: gitobj.BatchEntry}): {string}
   local out: {string} = {}
-  for kind, sha in pairs(kinds) do
-    if kind ~= "beats" then
-      local entry = kind_batch[sha]
-      if entry ~= nil then
-        for _, e in ipairs(gitobj.parse_tree(entry.content)) do
-          out[#out + 1] = e.sha
-        end
+  for _, sha in pairs(kinds) do
+    local entry = kind_batch[sha]
+    if entry ~= nil then
+      for _, e in ipairs(gitobj.parse_tree(entry.content)) do
+        out[#out + 1] = e.sha
       end
     end
   end
@@ -111,8 +109,8 @@ end
 --- @param batch {string: gitobj.BatchEntry} The meta/held/order/edges batch
 --- @param kind_batch {string: gitobj.BatchEntry} Each edge kind's own
 --- subtree content, by subtree sha
---- @param blob_batch {string: gitobj.BatchEntry} Every content blob
---- (a blocked_by or other-kind reason), by blob sha
+--- @param blob_batch {string: gitobj.BatchEntry} Every content blob (an
+--- edge kind's own reason or marker), by blob sha
 --- @return item.Item | nil The item
 --- @return string Error message; set only when `meta` itself is missing
 local function build_item(id: string, sha: string,
@@ -127,41 +125,22 @@ local function build_item(id: string, sha: string,
   local held = batch[sha .. ":held"] ~= nil
   local order_entry = batch[sha .. ":order"]
   local order = itemtree.parse_order(order_entry ~= nil and order_entry.content or "")
-  local beats: {string} = {}
-  local blocked_by: {string} = {}
-  local block_reason: {string: string} = {}
   local other_edges: {string: {string: string}} = {}
   local edges_entry = batch[sha .. ":edges"]
   if edges_entry ~= nil then
     for kind, ksha in pairs(edge_kinds(edges_entry.content)) do
       local kind_entry = kind_batch[ksha]
       if kind_entry ~= nil then
-        local ids = gitobj.parse_tree(kind_entry.content)
-        if kind == "beats" then
-          for _, e in ipairs(ids) do
-            beats[#beats + 1] = e.name
-          end
-        elseif kind == "blocked_by" then
-          for _, e in ipairs(ids) do
-            blocked_by[#blocked_by + 1] = e.name
-            local blob = blob_batch[e.sha]
-            if blob ~= nil and blob.content ~= "" then
-              block_reason[e.name] = blob.content
-            end
-          end
-        else
-          local idmap: {string: string} = {}
-          for _, e in ipairs(ids) do
-            local blob = blob_batch[e.sha]
-            idmap[e.name] = blob ~= nil and blob.content or ""
-          end
-          other_edges[kind] = idmap
+        local idmap: {string: string} = {}
+        for _, e in ipairs(gitobj.parse_tree(kind_entry.content)) do
+          local blob = blob_batch[e.sha]
+          idmap[e.name] = blob ~= nil and blob.content or ""
         end
+        other_edges[kind] = idmap
       end
     end
   end
-  return itemtree.to_item(id, meta, held, order, beats, blocked_by, block_reason,
-    other_edges)
+  return itemtree.to_item(id, meta, held, order, other_edges)
 end
 
 --- Which of two refs for the same id — one under `refs/heads/items`, one
@@ -270,7 +249,7 @@ end
 --- `gitbatch.batch_session` for all three rounds — every item's
 --- `meta`/`held`/`order`/`edges` plus the format marker's and the
 --- board's own `order` blob, every edge kind's own subtree content,
---- and every content blob (a `blocked_by` or other-kind reason) — two
+--- and every content blob an edge kind's own entry names — two
 --- processes total, never one per item or round, PLUS one
 --- `merge-base --is-ancestor` for every id this pass finds filed under
 --- both namespaces at once — rare, so it never shows up in the

@@ -40,7 +40,7 @@ return {
   ["_work/gitobj.tl"] = {["covered"] = 100, ["total"] = 115},
   ["_work/gitowner.tl"] = {["covered"] = 31, ["total"] = 31},
   ["_work/gitread.tl"] = {["covered"] = 234, ["total"] = 254},
-  ["_work/gitreadmany.tl"] = {["covered"] = 68, ["total"] = 82},
+  ["_work/gitreadmany.tl"] = {["covered"] = 66, ["total"] = 85},
   ["_work/gitready.tl"] = {["covered"] = 60, ["total"] = 74},
   ["_work/gitshow.tl"] = {["covered"] = 114, ["total"] = 126},
   ["_work/gitspec.tl"] = {["covered"] = 34, ["total"] = 36},

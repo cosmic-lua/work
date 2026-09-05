@@ -98,24 +98,6 @@ local function test_superset_on_a_broken_chain_past_the_direct_parent()
   assert_superset({a, b})
 end
 
-local function test_superset_on_a_priority_cycle()
-  local a = make({})
-  local b = make({beats = a.id})
-  a.beats = {b.id}
-  assert_superset({a, b})
-end
-
-local function test_superset_on_a_two_level_cycle_and_a_container()
-  local top = make({})
-  local mid = make({parent = top.id})
-  local leaf1 = make({parent = mid.id})
-  local leaf2 = make({parent = mid.id, resolution = "completed"})
-  local a = make({})
-  local b = make({beats = a.id})
-  a.beats = {b.id}
-  assert_superset({top, mid, leaf1, leaf2, a, b})
-end
-
 --- One board mixing every role and state this file's other tests
 --- exercise, shared by the state/substate agreement test below.
 --- @return {item.Item} The board
@@ -258,17 +240,6 @@ local function test_workable_view_uses_the_parent_index()
   local plan = plan_of(idx.db, "SELECT * FROM workable")
   assert(plan:find("items_parent", 1, true),
     "workable's plan does not name items_parent:\n" .. plan)
-  check.must(idxmod.close(idx))
-end
-
-local function test_dangling_edge_query_uses_the_edges_index()
-  local idx = check.must(idxmod.open({make({})}))
-  local plan = plan_of(idx.db, [[
-      SELECT kind, from_id, to_id FROM edges e
-      WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.id = e.to_id)
-    ]])
-  assert(plan:find("edges_to", 1, true),
-    "the dangling-edge query's plan does not name edges_to:\n" .. plan)
   check.must(idxmod.close(idx))
 end
 

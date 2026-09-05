@@ -4,17 +4,12 @@
 -- `_work.gitverbs.cmd_done`. `not-planned` needs no evidence, and `--by` off a root is
 -- meaningless. Filing or attaching a child under a done root reopens it in the same
 -- commit (`gate.containered`, `_work/gitgate_test.tl` covers the marker-clearing half).
--- Also covers what the `is_held` marker (hand-written straight through
--- `storewrite.save` — no verb sets it any more) means to `done` and to `item.problems`,
--- the store's own shape validator.
 
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
-local item = require("_work.item")
 local publish = require("_work.publish")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
@@ -176,65 +171,4 @@ local function test_attach_under_a_done_root_reopens_it()
     :format(before, commits(s)))
   assert(check.must(store.load(s, root)).resolution == "",
     "attaching a child under a done root clears its resolution")
-end
-
--- `not-planned`, not `completed`: this root has no completed child to name as `--by`
--- evidence, and `completed` on a root now requires one (`test_done_by_a_completed_child_
--- verifies_the_root` above covers the verified-by-evidence path).
-local function test_done_clears_the_held_marker_it_ends_over()
-  local s = init_state_repo("done-held")
-  local root = file_item(s, "an outcome verified, then ended", "")
-  local held = check.must(store.load(s, root))
-  held.is_held = true
-  assert(storewrite.save(s, held, "hand-edited is_held"))
-  assert(check.must(store.load(s, root)).is_held == true, "held before done")
-  assert(verbs.cmd_done(s, root, "not-planned", false, "") == 0,
-    "a held root ends like any open root")
-  local ended = check.must(store.load(s, root))
-  assert(ended.resolution == "not-planned", "the root is done")
-  assert(not ended.is_held, "and a done item never carries the marker")
-end
-
--- `item.problems` refuses `is_held` on a parented item: holding is an outcome-root
--- concept, and a hand edit is the only way a parented item would carry the marker.
-local function test_problems_reports_a_held_parented_item()
-  local s = init_state_repo("held-leaf")
-  local root, leaf = fixture.root_with_leaf(s)
-  local held_root = check.must(store.load(s, root))
-  held_root.is_held = true
-  assert(#item.problems(held_root) == 0, "a held root is a valid item")
-  local held_leaf = check.must(store.load(s, leaf))
-  held_leaf.is_held = true
-  local problems = item.problems(held_leaf)
-  local found = false
-  for _, p in ipairs(problems) do
-    if p:find("a parented item is never held", 1, true) then
-      found = true
-    end
-  end
-  assert(found, "is_held on a parented item is a problem: "
-    .. table.concat(problems, "; "))
-  assert(#problems == 1, "and the only one: " .. table.concat(problems, "; "))
-end
-
--- `item.problems` refuses `is_held` on a done item — a finished root is history on both
--- sides — and the store's own `stage` refuses to write it.
-local function test_problems_reports_a_held_done_item()
-  local s = init_state_repo("held-done")
-  local root = fixture.root_with_leaf(s)
-  local ended = check.must(store.load(s, root))
-  ended.resolution = "completed"
-  assert(#item.problems(ended) == 0, "a done root is a valid item")
-  ended.is_held = true
-  local problems = item.problems(ended)
-  local found = false
-  for _, p in ipairs(problems) do
-    if p:find("a done item never carries it", 1, true) then
-      found = true
-    end
-  end
-  assert(found, "is_held on a done item is a problem: "
-    .. table.concat(problems, "; "))
-  assert(#problems == 1, "and the only one: " .. table.concat(problems, "; "))
-  assert(not store.stage(s, ended), "so the store refuses to stage it")
 end

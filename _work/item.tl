@@ -22,8 +22,8 @@
 --- per-item shape (fields, exclusivity rules).
 ---
 --- There is no goal tier either: every item is the same record, and
---- what makes one more important than another is a committed
---- comparison (`beats`), never a field asserting its own rank. The
+--- what makes one more important than another is its position in the
+--- rank path (`_work.rank`), never a field asserting its own rank. The
 --- outcome prose that gives the tree its meaning lives in
 --- `docs/goals.md` on cosmic's own `main` and is read by people, not
 --- by this.
@@ -60,19 +60,6 @@ local record Item
   --- string — the literal domain has no lists. Empty when it has
   --- ranked none; an unranked child is simply absent from the list.
   order: {string}
-  --- Items this one was once ranked ABOVE, each by id: the retired
-  --- comparison relation, recorded on the winner. Stored as one
-  --- "id id" string — the literal domain has no lists. Nothing
-  --- derives an order from it any more — `_work.rank` derives the
-  --- live order from `order` instead.
-  beats: {string}
-  --- Open items this one waits on. Stored as one "id id" string —
-  --- the literal domain has no lists.
-  blocked_by: {string}
-  --- Why each blocker binds, by blocker id: what concretely cannot
-  --- proceed until it ends, recorded by a hand edit. Entries whose
-  --- blocker left `blocked_by` are pruned on the next write.
-  block_reason: {string: string}
   --- Edge kinds this reader does not interpret, carried opaquely so a
   --- tree written by a newer reader round-trips unchanged: kind -> id
   --- -> content (the reason, possibly ""). Never rendered by any verb
@@ -130,10 +117,6 @@ local record Item
   --- Why a finished item ended: "completed" | "not-planned"; "" while
   --- open. A non-empty resolution IS what "done" means.
   resolution: string
-  --- Whether this root's win condition is verified to hold. A marker,
-  --- not an ending: the root stays open and keeps its place in the
-  --- order; intake walks past it, and evidence filed under it clears it.
-  is_held: boolean
   --- Content problems `decode` found on this item (`problems(it)`,
   --- possibly several), carried alongside a successful decode instead
   --- of failing it — a read-time snapshot, not a stored fact: nil for
@@ -147,9 +130,9 @@ end
 --- the literal domain omits zero values on write (see `encode`), so
 --- an absent key is ordinary, not a mismatch — and nothing here is
 --- coerced: a wrong-typed field is a refusal, not a silent zero.
---- `blocked_by`, `beats` and `builders` validate as the space-joined
---- strings the file actually carries; splitting them into lists is a
---- transform `decode` still does after validation.
+--- `order` and `builders` validate as the space-joined strings the
+--- file actually carries; splitting them into lists is a transform
+--- `decode` still does after validation.
 local SPEC < const > = shape.record({
     id = shape.optional(shape.string),
     title = shape.optional(shape.string),
@@ -158,9 +141,6 @@ local SPEC < const > = shape.record({
     base = shape.optional(shape.string),
     key = shape.optional(shape.string),
     order = shape.optional(shape.string),
-    beats = shape.optional(shape.string),
-    blocked_by = shape.optional(shape.string),
-    block_reason = shape.optional(shape.map(shape.string)),
     claim = shape.optional(shape.string),
     builders = shape.optional(shape.string),
     speccers = shape.optional(shape.string),
@@ -171,7 +151,6 @@ local SPEC < const > = shape.record({
     verdict_head = shape.optional(shape.string),
     verdict_spec = shape.optional(shape.string),
     resolution = shape.optional(shape.string),
-    is_held = shape.optional(shape.boolean),
   })
 
 --- The type `shape.into` hands `decode` back: SPEC typed, with every
@@ -186,9 +165,6 @@ local record Raw
   base: string | nil
   key: string | nil
   order: string | nil
-  beats: string | nil
-  blocked_by: string | nil
-  block_reason: {string: string} | nil
   claim: string | nil
   builders: string | nil
   speccers: string | nil
@@ -199,7 +175,6 @@ local record Raw
   verdict_head: string | nil
   verdict_spec: string | nil
   resolution: string | nil
-  is_held: boolean | nil
 end
 
 --- The valid `verdict` values, exported so a schema carrying its own
@@ -268,12 +243,6 @@ local function problems(it: Item): {string}
     out[#out + 1] =
     "claim/reviewer/pr/verdict/repo/base belong to worked items, not roots"
   end
-  if not is_root(it) and it.is_held then
-    out[#out + 1] = "is_held marks an outcome root; a parented item is never held"
-  end
-  if not is_open(it) and it.is_held then
-    out[#out + 1] = "is_held marks an open root; a done item never carries it"
-  end
   if (it.pr or 0) ~= 0 and (it.result or "") ~= "" then
     out[#out + 1] = "pr and result never both stand: a deliverable is a diff "
     .. "or board state, never both"
@@ -287,18 +256,6 @@ local function problems(it: Item): {string}
   end
   if (it.base or "") ~= "" and not it.base:match("^[%w%-%._/]+$") then
     out[#out + 1] = ("base must be a branch name: %s"):format(it.base)
-  end
-  local blocked_seen: {string: boolean} = {}
-  for _, b in ipairs(it.blocked_by or {}) do
-    if not ksuid.is_id(b) then
-      out[#out + 1] = ("blocked_by names a non-id: %s"):format(tostring(b))
-    elseif b == it.id then
-      out[#out + 1] = "blocked_by names the item itself; nothing waits on itself"
-    elseif blocked_seen[b] then
-      out[#out + 1] = ("blocked_by repeats %s"):format(b)
-    else
-      blocked_seen[b] = true
-    end
   end
   local built_seen: {string: boolean} = {}
   for _, name in ipairs(it.builders or {}) do
@@ -316,23 +273,11 @@ local function problems(it: Item): {string}
       specced_seen[name] = true
     end
   end
-  local beats_seen: {string: boolean} = {}
-  for _, b in ipairs(it.beats or {}) do
-    if not ksuid.is_id(b) then
-      out[#out + 1] = ("beats names a non-id: %s"):format(tostring(b))
-    elseif b == it.id then
-      out[#out + 1] = "beats names the item itself; nothing outranks itself"
-    elseif beats_seen[b] then
-      out[#out + 1] = ("beats repeats %s"):format(b)
-    else
-      beats_seen[b] = true
-    end
-  end
   return out
 end
 
---- Split one of the space-joined list fields (`order`, `beats`,
---- `blocked_by`, `builders`, `speccers`) back into a list.
+--- Split one of the space-joined list fields (`order`, `builders`,
+--- `speccers`) back into a list.
 --- @param joined string | nil The space-joined field; "" or nil is empty
 --- @return {string} The list, possibly empty
 local function split_ids(joined: string | nil): {string}
@@ -368,12 +313,6 @@ local function decode(t: {string: any}): Item | nil, string
     return nil, err
   end
   local order = split_ids(raw.order)
-  local blocked = split_ids(raw.blocked_by)
-  local reasons: {string: string} = {}
-  for k, v in pairs(raw.block_reason or {}) do
-    reasons[k] = v
-  end
-  local beats = split_ids(raw.beats)
   local builders = split_ids(raw.builders)
   local speccers = split_ids(raw.speccers)
   local it: Item = {
@@ -384,9 +323,6 @@ local function decode(t: {string: any}): Item | nil, string
     base = raw.base or "",
     key = raw.key or "",
     order = order,
-    beats = beats,
-    blocked_by = blocked,
-    block_reason = reasons,
     claim = raw.claim or "",
     builders = builders,
     speccers = speccers,
@@ -397,7 +333,6 @@ local function decode(t: {string: any}): Item | nil, string
     verdict_head = raw.verdict_head or "",
     verdict_spec = raw.verdict_spec or "",
     resolution = raw.resolution or "",
-    is_held = raw.is_held or false,
   }
   local bad = problems(it)
   if #bad > 0 then
@@ -430,27 +365,6 @@ local function encode(it: Item): {string: any}
   if (it.base or "") ~= "" then t.base = it.base end
   if (it.key or "") ~= "" then t.key = it.key end
   if #(it.order or {}) > 0 then t.order = table.concat(it.order, " ") end
-  if #(it.beats or {}) > 0 then
-    t.beats = table.concat(it.beats, " ")
-  end
-  if #(it.blocked_by or {}) > 0 then
-    t.blocked_by = table.concat(it.blocked_by, " ")
-    -- Reasons ride only for blockers still named, so an entry whose
-    -- edge was dropped heals on the next write, the way a duplicate
-    -- blocker does.
-    local reasons: {string: string} = {}
-    local any_reason = false
-    for _, b in ipairs(it.blocked_by) do
-      local why = (it.block_reason or {})[b]
-      if why ~= nil and why ~= "" then
-        reasons[b] = why
-        any_reason = true
-      end
-    end
-    if any_reason then
-      t.block_reason = reasons
-    end
-  end
   if (it.claim or "") ~= "" then t.claim = it.claim end
   if #(it.builders or {}) > 0 then
     t.builders = table.concat(it.builders, " ")
@@ -465,7 +379,6 @@ local function encode(it: Item): {string: any}
   if (it.verdict_head or "") ~= "" then t.verdict_head = it.verdict_head end
   if (it.verdict_spec or "") ~= "" then t.verdict_spec = it.verdict_spec end
   if (it.resolution or "") ~= "" then t.resolution = it.resolution end
-  if it.is_held then t.is_held = true end
   return t
 end
 

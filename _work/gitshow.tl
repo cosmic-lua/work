@@ -1,5 +1,5 @@
 --- The `show ID` verb: one item rendered whole — fields, derived
---- state, rank, blockers, spec, history, and the same problem list
+--- state, rank, spec, history, and the same problem list
 --- `take` enforces as its spec bar, so what would refuse a pull is
 --- visible on the read that precedes it. Its own module rather than a
 --- third report inside `_work.gitview`, which sits against the repo's
@@ -37,17 +37,6 @@ local function state_of(it: item.Item): string
     return flow.substate(it)
   end
   return "todo"
-end
-
---- Whether a recorded blocker edge still holds its item up: a blocker
---- id with no item behind it does not block, and neither does one
---- whose item has ended.
---- @param index {string: item.Item} Items by id
---- @param id string The blocker's id
---- @return boolean True when that blocker is an open item
-local function binds(index: {string: item.Item}, id: string): boolean
-  local blocker = index[id]
-  return blocker ~= nil and item.is_open(blocker)
 end
 
 --- One item's fields, role, spec, spec-bar problems, and history.
@@ -115,30 +104,6 @@ local function show_report(it: item.Item, all: {item.Item},
       out[#out + 1] = ("verdict: %s (head %s%s)"):format(it.verdict,
         it.verdict_head, moved)
     end
-  end
-  -- Which edges still bind is `binds`, above: the cleared half is
-  -- printed too, since it is the record of what this item waited on.
-  local index = flow.by_id(all)
-  local binding: {string} = {}
-  local cleared: {string} = {}
-  for _, b in ipairs(it.blocked_by) do
-    if binds(index, b) then
-      binding[#binding + 1] = b
-    else
-      cleared[#cleared + 1] = b
-    end
-  end
-  if #binding > 0 then
-    out[#out + 1] = "blocked by: " .. table.concat(binding, " ")
-    for _, b in ipairs(binding) do
-      local why = (it.block_reason or {})[b]
-      if why ~= nil and why ~= "" then
-        out[#out + 1] = ("  %s: %s"):format(b:sub(1, 8), why)
-      end
-    end
-  end
-  if #cleared > 0 then
-    out[#out + 1] = "blockers cleared: " .. table.concat(cleared, " ")
   end
   if it.resolution ~= "" then
     out[#out + 1] = ("resolution: %s"):format(it.resolution)

@@ -63,7 +63,7 @@ local ROOTS < const >: {string} = {GOAL, LESSER}
 
 local function board_items(): {item.Item}
   return {
-    check.must(item.decode({id = GOAL, title = "a goal", beats = LESSER})),
+    check.must(item.decode({id = GOAL, title = "a goal"})),
     check.must(item.decode({id = CONTAINER, title = "a container",
           parent = GOAL})),
     check.must(item.decode({id = LEAF, title = "a leaf", parent = CONTAINER,

@@ -146,10 +146,13 @@ local function resolve_tail(root: string, input: string): string | nil, string
 end
 
 --- Hydrate every item straight from the cache's own SQL rows — one
---- query each against `items`, `edges` (grouped by `from_id`/`kind`
---- into `beats`, `blocked_by` + `block_reason`, and `other_edges` for
---- any other kind), `builders`, and `speccers` (both ordered by
---- `seq`) — into the same `{item.Item}` shape `store.list` returns:
+--- query each against `items`, `builders`, and `speccers` (both
+--- ordered by `seq`) — into the same `{item.Item}` shape `store.list`
+--- returns. The cache carries no edge kind at all (the schema has no
+--- `edges` table), so a cache-hydrated item's `other_edges` is always
+--- nil — nothing that reads a cache-hydrated board needs an edge kind
+--- this build does not interpret; `store.list`'s own git read is where
+--- that rides:
 --- no git object fetch, no `item.decode()`/`_work.itemtree.to_item`
 --- text parsing. `decode_problems` is reproduced the same way
 --- `to_item` sets it: `item.problems(it)` is a pure function of the
@@ -171,7 +174,7 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   local by_id: {string: item.Item} = {}
   local rows, err = c.db:query([[
     SELECT id, title, parent, repo, base, key, claim, reviewer, pr,
-      result, verdict, verdict_head, verdict_spec, resolution, held
+      result, verdict, verdict_head, verdict_spec, resolution
     FROM items ORDER BY id
   ]])
   if rows == nil then
@@ -188,10 +191,6 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       base = row.base as string, -- cast: from any (sqlite row)
       key = row.key as string, -- cast: from any (sqlite row)
       order = {},
-      beats = {},
-      blocked_by = {},
-      block_reason = {},
-      other_edges = {},
       claim = row.claim as string, -- cast: from any (sqlite row)
       builders = {},
       speccers = {},
@@ -202,47 +201,11 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       verdict_head = row.verdict_head as string, -- cast: from any (sqlite row)
       verdict_spec = row.verdict_spec as string, -- cast: from any (sqlite row)
       resolution = row.resolution as string, -- cast: from any (sqlite row)
-      is_held = (math.tointeger(row.held as number) or 0) == 1, -- cast: from any (sqlite row)
     }
   end
   local rerr = rows:err()
   if rerr then
     return nil, rerr
-  end
-
-  local edge_rows, eqerr = c.db:query("SELECT kind, from_id, to_id, reason FROM edges")
-  if edge_rows == nil then
-    return nil, eqerr
-  end
-  for row in edge_rows do
-    local kind = row.kind as string -- cast: from any (sqlite row)
-    local from_id = row.from_id as string -- cast: from any (sqlite row)
-    local to_id = row.to_id as string -- cast: from any (sqlite row)
-    local reason = row.reason as string -- cast: from any (sqlite row)
-    local it = by_id[from_id]
-    if it ~= nil then
-      if kind == "beats" then
-        it.beats[#it.beats + 1] = to_id
-      elseif kind == "blocked_by" then
-        it.blocked_by[#it.blocked_by + 1] = to_id
-        if reason ~= "" then
-          it.block_reason[to_id] = reason
-        end
-      else
-        local oe: {string: {string: string}} = it.other_edges or {}
-        it.other_edges = oe
-        local idmap = oe[kind]
-        if idmap == nil then
-          idmap = {}
-          oe[kind] = idmap
-        end
-        idmap[to_id] = reason
-      end
-    end
-  end
-  local eierr = edge_rows:err()
-  if eierr then
-    return nil, eierr
   end
 
   local builder_rows, bqerr = c.db:query("SELECT item, session FROM builders ORDER BY item, seq")

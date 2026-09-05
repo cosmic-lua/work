@@ -155,10 +155,10 @@ local function test_list_refuses_a_wrong_format_version()
   assert(store.init_repo(root))
   local s = check.must(store.open(root))
   seed_one_item(s)
-  rewrite_format(root, "2\n")
+  rewrite_format(root, "99\n")
   local all, lerr = store.list(s)
   assert(all == nil, "a board on a version this tool does not know is refused")
-  assert(lerr:find("2", 1, true) ~= nil and lerr:find(format.CURRENT, 1, true) ~= nil,
+  assert(lerr:find("99", 1, true) ~= nil and lerr:find(format.CURRENT, 1, true) ~= nil,
     "the refusal names both versions: " .. lerr)
 end
 
