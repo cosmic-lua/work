@@ -1,1 +1,0 @@
-the lint walks a parsed markdown AST for header attrs and link destinations; no such AST exists until cosmic.markdown ships
