@@ -2,5 +2,6 @@ title: gitverbs.tl/gitgate.tl at 500/500: split or relocate before zq2b_vYsf's m
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-6ImQ_qAgC-f3a5b327
+reviewer: review-6ImQ_qAgC-f3a5b327
 pr: 28
 builders: build-6ImQ_qAgC-f3a5b327
