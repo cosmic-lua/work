@@ -1,10 +1,10 @@
 title: gitboard read verbs: one ref snapshot per run — show takes two snapshots, show ID reads the spec twice, 6 and 12 git processes where 4 and 5 suffice
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-cwi5_ntHB-32638265
 pr: 18
 verdict: accept
 verdict_head: 772267b71933d43b9842ec80cae7669db9f30906
 verdict_spec: 4a0f5b3d85bb4c8512375bbf7253bb2438324bf2
+resolution: completed
 builders: build-cwi5_ntHB-32638265
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
