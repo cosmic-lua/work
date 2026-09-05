@@ -130,9 +130,31 @@ as covering both of rusage.tl's pairs. Applying the SAME stated rule to both, on
 getpriority/setpriority passes it; getrlimit/setrlimit does not, and is kept CONTROL on
 that basis rather than moved by default.
 
-Net effect: 5 pairs (10 blocks) move CONTROL → TRUE. The corrected fixture is **35 TRUE
-blocks** (the original 25 plus these 10) and **25 CONTROL blocks** (the original 35
-minus these 10), still well over the 10/20 minimums. `cosmic/url.tl`'s own family had a
+**Round 3 fix (one more mislabel, found by round-2 review's spot-check of un-flagged
+rows):** `_make/policy_test.tl:124`'s doc comment ("A baseline text literal from
+`{path, covered, total}` rows, the same shape `_tool/coverage/baseline_test.tl`'s
+`fixture` builds.") explicitly self-references `_tool/coverage/baseline_test.tl:27`'s
+`fixture` ("A baseline text literal from `{path, covered, total}` rows."), with
+byte-identical `@param`/`@return` tags and byte-identical function bodies. That makes it
+a THIRD member of the `baseline_test.tl:27`/`baseline_corpus_guard_test.tl:24` duplicate
+cluster already in this fixture as TRUE — not an independent CONTROL example, and it
+also fails the fixture's own CONTROL archetype (two functions in ONE module) by being
+cross-file entirely. Moved to TRUE below; its own ratios (bm25 0.9085, Jaccard 0.7143,
+both against `baseline_test.tl:27`) are unchanged, only its column. Both signals' worst
+TRUE and best CONTROL are numerically unaffected (0.9085 and 0.7143 were neither the
+extreme value on either signal), so neither margin moves.
+
+Round 2's review additionally spot-checked 18 further un-flagged rows against the
+stated rule directly and found no other misclassification; combined with round 1's own
+construction pass, a majority of the 60-row fixture has now been independently
+re-derived from source across the two review rounds, with this one correction as the
+net result — recorded here rather than re-claimed as a fresh from-scratch full audit,
+which was not performed a third time.
+
+Net effect: 6 pairs/singletons (11 blocks) move CONTROL → TRUE. The corrected fixture is
+**36 TRUE blocks** (the original 25, plus the 10 from round 2, plus this 1) and **24
+CONTROL blocks** (the original 35, minus these 11), still well over the 10/20 minimums.
+`cosmic/url.tl`'s own family had a
 labeling slip worth fixing while rebuilding this table: line 351 is `safe_param` (not
 `safe_path`), 360 is `safe_path` (not `safe_segment`), 369 is `safe_segment` (not
 `safe_host`), 378 is `safe_host` (not `safe_fragment`), 387 is `safe_fragment` (not
@@ -183,6 +205,7 @@ to 155 since d3bce22, content unchanged):
 | `cosmic/fs/dir.tl:86` (stat_link) | 1.0171 | `cosmic/fs/dir.tl:72` |
 | `cosmic/proc/rusage.tl:82` (getpriority) | 0.9024 | `cosmic/proc/rusage.tl:95` |
 | `cosmic/proc/rusage.tl:95` (setpriority) | **0.7166** | `cosmic/proc/rusage.tl:82` |
+| `_make/policy_test.tl:124` (round 3: third member of the baseline_test cluster, moved from CONTROL) | 0.9085 | `_tool/coverage/baseline_test.tl:27` |
 
 CONTROL blocks (all genuinely different-content adjacent functions or doc paragraphs,
 not copies, by the stated rule):
@@ -213,15 +236,18 @@ not copies, by the stated rule):
 | `_perf/gate.tl:333` | 0.9007 | `_perf/gate.tl:172` |
 | `_tool/example.tl:201` | 0.8642 | `_tool/benchmark.tl:228` |
 | `_tool/benchmark.tl:228` | 0.7156 | `_tool/example.tl:201` |
-| `_make/policy_test.tl:124` | 0.9085 | `_tool/coverage/baseline_test.tl:27` |
 
 **Signal A: worst TRUE = 0.7166 (`proc/rusage.tl:95` setpriority), best CONTROL =
 0.9378 (`fs/dir.tl:128` make_dirs) → margin = −0.2212. FAILS.** Corrected labeling
-removes the disputed pair from CONTROL, but the margin is not merely restored to
+removes the disputed pairs from CONTROL, but the margin is not merely restored to
 positive — it is now MORE decisively negative than round 1's reported −0.0890, because
 the newly-TRUE `setpriority`/`getpriority` pair (0.9024/0.7166) sits well below several
 still-legitimate CONTROLs (`make_dirs` 0.9378, `_perf/gate.tl` 0.9133/0.9007, `fs/ops.tl
-statfs` 0.9012, `fetch/verbs_test.tl` 0.9110, `_make/policy_test.tl` 0.9085). The bands
+statfs` 0.9012, `fetch/verbs_test.tl` 0.9110). `_make/policy_test.tl:124` (bm25 0.9085
+against `baseline_test.tl:27`) is no longer among these — round 3 reclassified it as a
+third member of the `baseline_test.tl`/`baseline_corpus_guard_test.tl` TRUE cluster
+rather than an independent CONTROL, per the paragraph above; its removal does not
+change the best-CONTROL value (0.9378 already exceeded it). The bands
 still fully overlap under a correctly-labeled fixture.
 
 ### Signal B (token-set Jaccard, `fts5vocab` instance table, no re-tokenizing) — full table
@@ -265,6 +291,7 @@ TRUE blocks:
 | `cosmic/fs/dir.tl:86` (stat_link) | 0.8333 | `cosmic/fs/dir.tl:72` |
 | `cosmic/proc/rusage.tl:82` (getpriority) | 0.7556 | `cosmic/proc/rusage.tl:95` |
 | `cosmic/proc/rusage.tl:95` (setpriority) | 0.7556 | `cosmic/proc/rusage.tl:82` |
+| `_make/policy_test.tl:124` (round 3: third member of the baseline_test cluster, moved from CONTROL) | 0.7143 | `_tool/coverage/baseline_test.tl:27` |
 
 CONTROL blocks:
 
@@ -294,7 +321,6 @@ CONTROL blocks:
 | `_perf/gate.tl:333` | 0.7000 | `_perf/gate.tl:172` |
 | `_tool/example.tl:201` | **0.8000** | `_tool/benchmark.tl:228` |
 | `_tool/benchmark.tl:228` | **0.8000** | `_tool/example.tl:201` |
-| `_make/policy_test.tl:124` | 0.7143 | `_tool/coverage/baseline_test.tl:27` |
 
 **Signal B: worst TRUE = 0.6667 (`_make/readstamp.tl:65`), best CONTROL = 0.8000
 (three-way tie: `fs/dir.tl` make_dir/make_dirs, `time.tl` format_date/format_iso8601,
@@ -302,7 +328,9 @@ CONTROL blocks:
 than round 1's reported −0.3011 (the corrected fixture removes `user.tl`'s
 `setresuid`/`setresgid` 0.9677 from CONTROL, which was round 1's cited lead failure
 example — that pair is legitimately TRUE and its 0.9677 now sits among the TRUE rows,
-not against them), but the margin is still solidly negative: three unrelated CONTROL
+not against them; `_make/policy_test.tl:124`'s 0.7143 similarly moved to TRUE in round 3
+and was never the extreme CONTROL value here either), but the margin is still solidly
+negative: three unrelated CONTROL
 pairs independently reach 0.80, above the weakest TRUE near-duplicate at 0.6667.
 
 **Decision (Change step 4/5), re-derived from the corrected fixture: neither signal
