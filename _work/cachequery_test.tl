@@ -96,7 +96,9 @@ local function test_resolve_tail_refuses_a_cache_row_ambiguity()
   check.must(cache.close(c))
   local id, err = cachequery.resolve_tail(s.root, "AAABBBBB")
   assert(id == nil, "two rows share this tail")
-  assert(err:find("ambiguous", 1, true), err)
+  -- Both rows share this tail, so the refusal renders the same handle
+  -- twice — the candidates as handles, not bare tails or ids.
+  assert(err == "AAABBBBB is ambiguous: «AAAB_BBBB» «AAAB_BBBB»", err)
 end
 
 --- The well-known empty tree's sha — good enough content for a bare
@@ -118,12 +120,11 @@ end
 
 -- The item's own spec bar: whichever path answers an ambiguous tail —
 -- the cache (`resolve_tail`) or the ref-glob fallback
--- (`tail.resolve_glob`) — must refuse with the identical message text,
--- not merely the word "ambiguous". PR #22 gave the two paths
--- independent refusal code, and they drifted: the glob path joined
--- full ids while the cache path (matching the pre-existing
--- `tail.resolve`) joined tails. File the SAME two colliding ids both
--- as raw refs (what the glob reads) and as cache rows (what the cache
+-- (`tail.resolve_glob`) — must refuse with the identical message
+-- text, not merely the word "ambiguous": both render every colliding
+-- candidate as its own handle, in id order, through the shared
+-- `tail.join_handles` helper. File the SAME two colliding ids both as
+-- raw refs (what the glob reads) and as cache rows (what the cache
 -- reads), so one input exercises both paths, and compare the messages
 -- verbatim.
 local function test_cache_and_glob_paths_refuse_the_same_ambiguity_identically()

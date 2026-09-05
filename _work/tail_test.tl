@@ -1,15 +1,13 @@
 #!/usr/bin/env cosmic
--- tail is mostly a pure derivation over an item's id: handle
--- rendering, shape detection, and resolve's exact/case-folded/refusal
--- arms are pinned directly, with no store and no git involved.
--- `resolve_glob` is the one exception — it reads the ref layout
--- directly, so its own tests below build a bare git repo and file raw
--- refs, never a store or a cache.
+-- tail is mostly a pure derivation over an item's id: handle rendering
+-- and shape detection are pinned directly, with no store and no git
+-- involved. `resolve_glob` is the one exception — it reads the ref
+-- layout directly, so its own tests below build a bare git repo and
+-- file raw refs, never a store or a cache.
 
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local gitobj = require("_work.gitobj")
-local item = require("_work.item")
 local refs = require("_work.refs")
 local tail = require("_work.tail")
 
@@ -32,22 +30,14 @@ local function file_ref(root: string, id: string)
 end
 
 --- A 27-char id with a chosen 8-char tail, so a test controls exactly
---- what `resolve` and `handle` see without depending on real KSUID
---- randomness. Two distinct fillers keep two same-tail items from
---- sharing one id.
+--- what `handle` and `resolve_glob` see without depending on real
+--- KSUID randomness. Two distinct fillers keep two same-tail items
+--- from sharing one id.
 --- @param t string The last 8 characters
 --- @param filler string One character to pad the leading 19 with
 --- @return string A 27-character id
 local function make_id(t: string, filler?: string): string
   return (filler or "0"):rep(19) .. t
-end
-
---- An item carrying exactly the given id.
---- @param id string The id
---- @param title string The title
---- @return item.Item The decoded item
-local function make(id: string, title: string): item.Item
-  return check.must(item.decode({id = id, title = title}))
 end
 
 local function test_handle_underscores_and_wraps_the_last_eight_characters()
@@ -77,72 +67,6 @@ local function test_is_tail_shape_rejects_malformed_input()
   assert(not tail.is_tail_shape(""), "empty")
 end
 
-local function test_resolve_matches_exactly_hyphenated_or_not()
-  local id = make_id("Q4TX9GMD")
-  local all: {item.Item} = {make(id, "a slice")}
-  assert(check.must(tail.resolve(all, "Q4TX9GMD")) == id, "hyphen-free")
-  assert(check.must(tail.resolve(all, "Q4TX-9GMD")) == id, "hyphenated")
-end
-
-local function test_resolve_accepts_a_pasted_wrapped_handle()
-  local id = make_id("d0x137YJ")
-  local all: {item.Item} = {make(id, "a slice")}
-  assert(check.must(tail.resolve(all, "«d0x1_37YJ»")) == id,
-    "a copy-pasted rendered handle resolves like any other tail")
-end
-
-local function test_resolve_accepts_a_hyphenated_paste_for_backward_tolerance()
-  local id = make_id("d0x137YJ")
-  local all: {item.Item} = {make(id, "a slice")}
-  assert(check.must(tail.resolve(all, "«d0x1-37YJ»")) == id,
-    "a handle copied before the divider changed still resolves")
-end
-
-local function test_resolve_falls_back_to_case_folded_match()
-  local id = make_id("Q4TXaBcD")
-  local all: {item.Item} = {make(id, "a slice")}
-  -- Neither typed form is an exact match (case differs), so both
-  -- exercise the case-folded stage, not the exact one.
-  assert(check.must(tail.resolve(all, "q4txabcd")) == id, "lowercased")
-  assert(check.must(tail.resolve(all, "q4tx-abcd")) == id,
-    "lowercased and hyphenated")
-end
-
-local function test_resolve_prefers_an_exact_match_over_a_folded_one()
-  local exact = make_id("Q4TXABCD")
-  local folded = make_id("q4txabcd", "1")
-  local all: {item.Item} = {make(exact, "exact"), make(folded, "folded")}
-  assert(check.must(tail.resolve(all, "Q4TXABCD")) == exact,
-    "the exact stage wins before the folded stage is ever tried")
-end
-
-local function test_resolve_refuses_an_exact_ambiguity()
-  local one = make_id("Q4TXABCD")
-  local other = make_id("Q4TXABCD", "1")
-  local all: {item.Item} = {make(one, "a"), make(other, "b")}
-  local id, err = tail.resolve(all, "Q4TXABCD")
-  assert(id == nil, "two items share this tail")
-  assert(err:find("ambiguous", 1, true) and err:find("Q4TXABCD", 1, true), err)
-end
-
-local function test_resolve_refuses_a_folded_ambiguity()
-  local one = make_id("Q4TXABCD")
-  local other = make_id("q4txabcd", "1")
-  local all: {item.Item} = {make(one, "a"), make(other, "b")}
-  -- Mixed case matches neither exactly, so both candidates surface
-  -- only once folding runs.
-  local id, err = tail.resolve(all, "Q4TXabcd")
-  assert(id == nil, "the fold matches both")
-  assert(err:find("ambiguous", 1, true), err)
-end
-
-local function test_resolve_refuses_no_match()
-  local all: {item.Item} = {make(make_id("Q4TX9GMD"), "a slice")}
-  local id, err = tail.resolve(all, "ZZZZZZZZ")
-  assert(id == nil, "no item carries that tail")
-  assert(err:find("no item matches tail", 1, true), err)
-end
-
 local function test_resolve_glob_matches_a_tail_exactly()
   local s = fixture.init_state_repo("resolve-glob-exact")
   local id = make_id("Q4TX9GMD")
@@ -159,7 +83,9 @@ local function test_resolve_glob_refuses_an_exact_ambiguity()
   file_ref(s.root, make_id("Q4TXABCD", "1"))
   local resolved, err = tail.resolve_glob(s.root, "Q4TXABCD")
   assert(resolved == nil, "two items share this tail")
-  assert(err:find("ambiguous", 1, true) and err:find("Q4TXABCD", 1, true), err)
+  -- Both candidates share this tail, so the refusal renders the same
+  -- handle twice — the candidates as handles, not bare tails or ids.
+  assert(err == "Q4TXABCD is ambiguous: «Q4TX_ABCD» «Q4TX_ABCD»", err)
 end
 
 local function test_resolve_glob_falls_back_to_case_folded_match()
@@ -179,7 +105,9 @@ local function test_resolve_glob_refuses_a_folded_ambiguity()
   file_ref(s.root, make_id("q4txabcd", "1"))
   local resolved, err = tail.resolve_glob(s.root, "Q4TXabcd")
   assert(resolved == nil, "the fold matches both")
-  assert(err:find("ambiguous", 1, true), err)
+  -- The two candidates' tails differ only in case, so their handles
+  -- render distinctly; the "0"-filled id sorts first, in id order.
+  assert(err == "Q4TXabcd is ambiguous: «Q4TX_ABCD» «q4tx_abcd»", err)
 end
 
 local function test_resolve_glob_refuses_no_match()
@@ -194,8 +122,21 @@ local function test_resolve_glob_skips_the_fallback_for_an_all_digit_tail()
   local s = fixture.init_state_repo("resolve-glob-digits")
   file_ref(s.root, make_id("Q4TX9GMD"))
   -- Case folding cannot change a match on an all-digit tail, so a
-  -- miss refuses outright rather than paying for the fallback.
+  -- miss refuses outright rather than paying for the fallback: wrap
+  -- `refs.for_each_ref` to count calls through the real thing, so a
+  -- regression that ran the fallback anyway (a second whole-namespace
+  -- scan) would show up as a second call, not just a passing refusal.
+  local original = refs.for_each_ref
+  local calls = 0
+  refs.for_each_ref = function(root: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    calls = calls + 1
+    return original(root, patterns)
+  end
   local resolved, err = tail.resolve_glob(s.root, "00000000")
+  refs.for_each_ref = original
   assert(resolved == nil)
   assert(err:find("no item matches tail", 1, true), err)
+  assert(calls == 1, ("expected exactly the exact-glob call, none for the "
+      .. "fallback: got %d"):format(calls))
 end

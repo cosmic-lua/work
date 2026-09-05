@@ -9,7 +9,6 @@
 --- live board (`git for-each-ref --format='%(refname)' refs/heads/items
 --- refs/heads/ended`), `id:sub(20)` is collision-free across every item,
 --- exact and case-folded.
-local item = require("_work.item")
 local refs = require("_work.refs")
 
 --- An item's tail as two underscore-divided 4-char chunks, undecorated
@@ -40,7 +39,7 @@ end
 --- rendered handle carries. Both dividers are accepted so a
 --- hyphenated handle from scrollback still parses — only rendering
 --- has settled on the underscore. So a caller can tell a tail
---- attempt from an id prefix before asking `resolve` to search.
+--- attempt from an id prefix before asking `resolve_glob` to search.
 --- @param input string Candidate input
 --- @return boolean True when it has tail shape
 local function is_tail_shape(input: string): boolean
@@ -50,57 +49,35 @@ end
 
 --- `input` reduced to its bare 8 characters: guillemets and either
 --- divider stripped, case preserved. What an EXACT match compares
---- against — `resolve`'s own first pass, and the glob patterns
---- `glob_patterns` builds; a caller after a case-insensitive match
---- folds the result itself.
+--- against — the glob patterns `glob_patterns` builds; a caller after
+--- a case-insensitive match folds the result itself.
 --- @param input string What a session typed
 --- @return string The normalized tail
 local function normalize(input: string): string
   return (input:gsub("[«»%-_]", ""))
 end
 
---- Resolve a tail against every item's `id:sub(20)`. An exact match
---- is tried first; only when that finds none does a case-insensitive
---- match follow — retyping tolerance, safe because the folded space
---- is measured collision-free on the live board (see the module
---- doc). Refuses on zero matches or more than one AT EITHER STAGE,
---- naming the candidates' tails.
---- @param items {item.Item} Every item
---- @param input string What a session typed
---- @return string | nil The matching item's id
---- @return string Error message
-local function resolve(items: {item.Item}, input: string): string | nil, string
-  local normalized = normalize(input)
-  local exact_ids: {string} = {}
-  local exact_tails: {string} = {}
-  for _, it in ipairs(items) do
-    if it.id:sub(20) == normalized then
-      exact_ids[#exact_ids + 1] = it.id
-      exact_tails[#exact_tails + 1] = it.id:sub(20)
-    end
+--- Every id in `ids`, sorted into id order (creation order — same-week
+--- KSUIDs share their leading characters, so a lexicographic sort on
+--- the full id is a chronological one) and rendered as its own
+--- `handle` — the form a session typed and the board prints, never a
+--- bare tail or a raw id — then space-joined. What an ambiguous
+--- match's refusal lists; shared by every resolver (`resolve_glob`
+--- here, `_work.cachequery.resolve_tail`) so a collision refuses with
+--- the same rendering regardless of which one answered it.
+--- @param ids {string} The ambiguous candidates' ids, any order
+--- @return string Space-joined handles, in id order
+local function join_handles(ids: {string}): string
+  local sorted: {string} = {}
+  for i, id in ipairs(ids) do
+    sorted[i] = id
   end
-  if #exact_ids == 1 then
-    return exact_ids[1]
+  table.sort(sorted)
+  local handles: {string} = {}
+  for i, id in ipairs(sorted) do
+    handles[i] = handle(id)
   end
-  if #exact_ids > 1 then
-    return nil, ("%s is ambiguous: %s"):format(input, table.concat(exact_tails, " "))
-  end
-  local folded = normalized:lower()
-  local ci_ids: {string} = {}
-  local ci_tails: {string} = {}
-  for _, it in ipairs(items) do
-    if it.id:sub(20):lower() == folded then
-      ci_ids[#ci_ids + 1] = it.id
-      ci_tails[#ci_tails + 1] = it.id:sub(20)
-    end
-  end
-  if #ci_ids == 1 then
-    return ci_ids[1]
-  end
-  if #ci_ids > 1 then
-    return nil, ("%s is ambiguous: %s"):format(input, table.concat(ci_tails, " "))
-  end
-  return nil, ("no item matches tail %s"):format(input)
+  return table.concat(handles, " ")
 end
 
 --- The `for-each-ref` glob patterns an exact tail match needs: the
@@ -161,8 +138,8 @@ end
 --- cannot change a match on an all-digit tail, which the exact glob
 --- already covers) does a case-folded fallback follow: one more
 --- `for-each-ref`, over the two whole namespaces, matched in Lua
---- exactly as `resolve` matches against a loaded item list. Either
---- stage's `ref`/`sha` (from `distinct_ids`) are the one-shot lease
+--- against every ref's own tail. Either stage's `ref`/`sha` (from
+--- `distinct_ids`) are the one-shot lease
 --- `_work.store.load_item` spends next, same as
 --- `_work.store.resolve`'s own prefix match.
 --- @param root string The repository root
@@ -179,11 +156,7 @@ local function resolve_glob(root: string, input: string): Resolved | nil, string
     return {id = ids[1], ref = ref, sha = sha}
   end
   if #ids > 1 then
-    local tails: {string} = {}
-    for i, id in ipairs(ids) do
-      tails[i] = id:sub(20)
-    end
-    return nil, ("%s is ambiguous: %s"):format(input, table.concat(tails, " "))
+    return nil, ("%s is ambiguous: %s"):format(input, join_handles(ids))
   end
   local t = normalize(input)
   if t:match("%a") == nil then
@@ -210,11 +183,7 @@ local function resolve_glob(root: string, input: string): Resolved | nil, string
     return nil, ("no item matches tail %s"):format(input)
   end
   if #ci_ids > 1 then
-    local ci_tails: {string} = {}
-    for i, id in ipairs(ci_ids) do
-      ci_tails[i] = id:sub(20)
-    end
-    return nil, ("%s is ambiguous: %s"):format(input, table.concat(ci_tails, " "))
+    return nil, ("%s is ambiguous: %s"):format(input, join_handles(ci_ids))
   end
   local _, cref, csha = distinct_ids(ci_found)
   return {id = ci_ids[1], ref = cref, sha = csha}
@@ -225,7 +194,7 @@ local record tail
   handle: function(id: string): string
   is_tail_shape: function(input: string): boolean
   normalize: function(input: string): string
-  resolve: function(items: {item.Item}, input: string): string | nil, string
+  join_handles: function(ids: {string}): string
   glob_patterns: function(input: string): {string}
   type Resolved = Resolved
   resolve_glob: function(root: string, input: string): Resolved | nil, string
@@ -236,7 +205,7 @@ local M: tail = {
   handle = handle,
   is_tail_shape = is_tail_shape,
   normalize = normalize,
-  resolve = resolve,
+  join_handles = join_handles,
   glob_patterns = glob_patterns,
   resolve_glob = resolve_glob,
 }
