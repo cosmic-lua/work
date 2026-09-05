@@ -142,11 +142,7 @@ local function resolve_tail(root: string, input: string): string | nil, string
   if #ids == 1 then
     return ids[1], ""
   end
-  local tails: {string} = {}
-  for _, id in ipairs(ids) do
-    tails[#tails + 1] = id:sub(20)
-  end
-  return nil, ("%s is ambiguous: %s"):format(input, table.concat(tails, " "))
+  return nil, ("%s is ambiguous: %s"):format(input, tail.join_handles(ids))
 end
 
 --- Hydrate every item straight from the cache's own SQL rows — one
