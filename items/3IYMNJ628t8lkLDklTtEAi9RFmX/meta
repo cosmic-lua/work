@@ -1,10 +1,10 @@
 title: casts: the 10 metatable-access sites behind an identity-compare and a metamethod-fetch helper
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: build-EAi9_RFmX-eceb7aa0
 pr: 1729
 verdict: accept
 verdict_head: 5cd0e95a59cc88067f2e0db1acb65c6d51945966
 verdict_spec: 56219f771adbbc7fc155e53abeaf6231d854e7e1
+resolution: completed
 builders: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7 build-EAi9_RFmX-eceb7aa0
 speccers: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7
