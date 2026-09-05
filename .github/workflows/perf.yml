@@ -115,21 +115,31 @@ jobs:
       # (release.yml) — is NOT a prefix of the commit being measured:
       # skip forward past this commit's own release(s) to the next
       # older one that still carries a `gitboard` asset. Which tag was
-      # picked is printed before anything is downloaded. A brand-new
-      # repository with no such release SKIPs the compare with a clear
-      # notice rather than failing — there is nothing wrong to report.
+      # picked is printed before anything is downloaded.
       #
-      # The chosen release's binary is measured on the SAME fixture as
-      # above (determinism, not a shared file) — never a stored number,
-      # and never the live board or a network call from inside a
-      # scenario. `pipefail` (set below) is load-bearing: without it the
-      # `if/else...fi`'s exit status is `tee`'s, always 0, and a real
-      # `perf-compare: FAIL` would never reach the `$rc` check and would
-      # never redden this job. A `perf-compare: FAIL` verdict fails this
-      # step and this job, and nothing else: no release waits on it.
-      # Failing to even LIST releases (network or API failure) fails the
-      # step immediately, distinct from the ordinary "nothing to compare
-      # against yet" skip; the next scheduled run retries either way.
+      # A DIFFERENT commit's release can still embed the SAME binary:
+      # this PR's own build proved it (a `_perf/**`/workflow/README/
+      # `.cosmic-coverage`-only change recompiles nothing `o/bin/gitboard`
+      # embeds), and any day main only moves those paths hits it again.
+      # So the two binaries' sha256 are compared BEFORE the baseline is
+      # even measured — running `_perf/run.tl` against a binary already
+      # known to be identical would spend minutes measuring a result
+      # `gate.tl compare` is going to refuse anyway. Three outcomes:
+      #   perf-baseline: SKIP (no release predates this commit)
+      #     — a brand-new repository; nothing to compare against yet
+      #   perf-compare: SKIP (binary identical to release TAG: ...)
+      #     — a real, non-self baseline release, but byte-identical to
+      #       today's build; there is no regression question to ask
+      #   perf-compare: OK / FAIL (from `gate.tl compare` itself)
+      #     — two genuinely different binaries, actually compared
+      # Only the third writes a `gate.tl compare` verdict; the first two
+      # are this step's own, and both exit 0 — there is nothing wrong to
+      # report in either. `pipefail` (set below) is load-bearing for the
+      # third: without it the `if/else...fi`'s exit status is `tee`'s,
+      # always 0, and a real `perf-compare: FAIL` would never reach the
+      # `$rc` check and would never redden this job. Failing to even LIST
+      # releases (network or API failure) fails the step immediately,
+      # distinct from every SKIP above; the next scheduled run retries.
       - name: compare against the latest release
         timeout-minutes: 20
         env:
@@ -161,11 +171,18 @@ jobs:
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
               --pattern gitboard --dir o/perf/prev
             chmod +x o/perf/prev/gitboard
-            GITBOARD_PERF_BIN="$PWD/o/perf/prev/gitboard" \
-              bin/cosmic /tmp/cosmic-perf-src/_perf/run.tl --out o/perf/prev/perf.json
-            bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl compare \
-              o/perf/prev/perf.json o/perf/perf.json o/perf/selfcheck.json \
-              | tee o/perf/compare.txt
+            cur_sha=$(sha256sum o/bin/gitboard | cut -d ' ' -f1)
+            prev_sha=$(sha256sum o/perf/prev/gitboard | cut -d ' ' -f1)
+            if [ "$cur_sha" = "$prev_sha" ]; then
+              echo "perf-compare: SKIP (binary identical to release $tag: nothing embedded changed)" \
+                | tee o/perf/compare.txt
+            else
+              GITBOARD_PERF_BIN="$PWD/o/perf/prev/gitboard" \
+                bin/cosmic /tmp/cosmic-perf-src/_perf/run.tl --out o/perf/prev/perf.json
+              bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl compare \
+                o/perf/prev/perf.json o/perf/perf.json o/perf/selfcheck.json \
+                | tee o/perf/compare.txt
+            fi
           fi || rc=$?
           {
             tail -n1 o/perf/baseline.txt
