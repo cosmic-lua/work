@@ -1,0 +1,3 @@
+title: prose near-duplicates: measure whether an FTS5 bm25 self-ratio or token Jaccard separates re-worded copies from related prose, and ship the report only if it does
+parent: 3HyRcrR35sYRwZl3guddvOBhFoK
+target: cosmic-lua/cosmic
