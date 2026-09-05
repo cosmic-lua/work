@@ -1,4 +1,7 @@
 return {
+  ["_fuzz/driver.tl"] = {["covered"] = 92, ["total"] = 151},
+  ["_fuzz/shrink.tl"] = {["covered"] = 12, ["total"] = 99},
+  ["_fuzz/source.tl"] = {["covered"] = 15, ["total"] = 45},
   ["_perf/bench/verbs_bench.tl"] = {["covered"] = 0, ["total"] = 69},
   ["_perf/fixture.tl"] = {["covered"] = 0, ["total"] = 135},
   ["_work/action.tl"] = {["covered"] = 169, ["total"] = 172},
