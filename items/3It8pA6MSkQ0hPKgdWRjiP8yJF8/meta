@@ -2,6 +2,7 @@ title: cosmic.ksuid: a public K-Sortable Unique ID module, ported from _work/ksu
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: build-jiP8_yJF8-4597e9df
+reviewer: review-jiP8_yJF8-4597e9df
 pr: 1718
 verdict_head: 4f84f7d451b525c0010abb31f07dc47a16de9b2b
 verdict_spec: c9e2dff6ec730078e215b0b0110f41226e75c0d4
