@@ -1,1 +1,0 @@
-batch 2 excludes _cli/citations_test.tl: its module-scope chdir/restore pair runs the restore before the runner tail, so the naive deletion fails 7 of its 14 cases (measured). The end-state count cannot reach 0 until that file migrates.

@@ -1,1 +1,0 @@
-the end-state check (grep -h '^test_[A-Za-z0-9_]*()$' $(git ls-files '*_test.tl') | wc -l -> must be 0) cannot pass until the 21 drifted self-calls across these 5 files are migrated
