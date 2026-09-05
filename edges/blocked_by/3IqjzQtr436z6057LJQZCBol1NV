@@ -1,1 +1,0 @@
-the lane's perf-gate cause is removed by D44 (PR #1687) rather than by resolving the regression question; after it and 3IqivZIz land, re-run release.yml and close this on a green run
