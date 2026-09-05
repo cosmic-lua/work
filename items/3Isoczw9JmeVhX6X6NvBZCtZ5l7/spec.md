@@ -19,6 +19,17 @@ whenever a verb runs; the duplicate reader is pure cost — two definitions of
 "pullable" to keep in step, and `flow.tl`/`priority.tl` both inside 30 lines
 of the 500-line cap.
 
+Profiled 2026-09-05 (module functions wrapped with timers around
+`_work.gitboard.main("show")`, live board, 929 refs): `show` 233 ms total;
+`store.list` 146 ms, inside it `gitread.list` 123 ms of which the four
+`cat-file --batch` reads are 102 ms inclusive — the same reads from a shell
+cost roughly 40 ms, so about 60 ms of every whole-board load is Lua parsing
+and item decoding, not git; then `read_specs` 19 ms, `cache.open` 15 ms,
+`touched_at` 15 ms. A read served from the current cache skips all of it:
+`find`, which already does, is 29 ms end to end. That is the size of this
+item's prize for `show`/`next`, and why speeding the parser is not filed
+separately.
+
 ## Change
 
 Research: decide how the verbs read the index instead of `flow.tl`/
