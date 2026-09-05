@@ -11,6 +11,7 @@ local check = require("cosmic.check")
 local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -104,4 +105,34 @@ local function test_help_documents_the_id_forms()
     "help should name the branch as the id's first 8 characters\ngot: " .. printed)
   assert(printed:find("different string", 1, true),
     "help should call out that the branch differs from the handle\ngot: " .. printed)
+end
+
+-- `resolve_id`'s tail (handle) branch leases the id it resolves to
+-- from `list`'s own snapshot, the same one-shot ticket a prefix match
+-- leaves for `load` — so `show <handle>` never repeats a for-each-ref
+-- for the id it already found in memory, only the whole-board one
+-- `list` itself pays for either way.
+local function test_show_with_a_handle_never_repeats_loads_for_each_ref()
+  local s = init_state_repo("show-handle-lease")
+  local id = file_item(s, "an item", "")
+  local exact_pattern = {"refs/heads/items/" .. id, "refs/heads/ended/" .. id}
+
+  local exact_calls = 0
+  local real_for_each_ref = refs.for_each_ref
+  refs.for_each_ref = function(root: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    if #patterns == 2 and patterns[1] == exact_pattern[1]
+    and patterns[2] == exact_pattern[2] then
+      exact_calls = exact_calls + 1
+    end
+    return real_for_each_ref(root, patterns)
+  end
+  local ok, code = pcall(gitboard_and_capture, "show", tail.handle(id), "--dir", s.root)
+  refs.for_each_ref = real_for_each_ref
+  if not ok then
+    error(code, 0)
+  end
+  assert(code == 0, "show <handle> should succeed")
+  assert(exact_calls == 0, "a handle's own load must not repeat the "
+    .. "exact-ref for-each-ref a bare id's load would run: " .. exact_calls)
 end

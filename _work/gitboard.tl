@@ -50,6 +50,7 @@ local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
+local gitread = require("_work.gitread")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local publish = require("_work.publish")
@@ -100,6 +101,12 @@ local function resolve_id(s: store.Store, input: string): string | nil, string
       return nil, aerr
     end
     id, rerr = tail.resolve(all, input)
+    -- `list` just leased every id in memory; hand this one to `load`
+    -- as the same one-shot ticket `resolve`'s own prefix match sets,
+    -- so a handle costs `load` no for-each-ref of its own either.
+    if id ~= nil and s.leased_ref[id] ~= nil and s.leased_sha[id] ~= nil then
+      s.fresh_lease = gitread.lease_encode(id, s.leased_ref[id], s.leased_sha[id])
+    end
   end
   return id, rerr
 end

@@ -179,6 +179,22 @@ local function pick_duplicate(root: string, items_e: refs.RefEntry,
   return ended_e, items_e
 end
 
+--- Encode/decode `_work.store`'s one-shot lease ticket: an id already
+--- resolved to its ref and sha (a prefix `resolve` matched, or a
+--- handle resolved against a `list` snapshot), spent by the very next
+--- `load` of that id; `lease_decode` gives "" for both when `ticket`
+--- is "" or names a different id.
+local function lease_encode(id: string, ref: string, sha: string): string
+  return ("%s %s %s"):format(id, ref, sha)
+end
+local function lease_decode(ticket: string, id: string): string, string
+  local tid, tref, tsha = ticket:match("^(%S+) (%S+) (%S+)$")
+  if tid ~= id then
+    return "", ""
+  end
+  return tref, tsha
+end
+
 --- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`
 --- — and, on the rare board where one id lives under both at once,
 --- picking the winner `pick_duplicate` names rather than whichever
@@ -448,6 +464,8 @@ local record gitread
   type Loaded = Loaded
   type Board = Board
   type Duplicate = Duplicate
+  lease_encode: function(id: string, ref: string, sha: string): string
+  lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
   known_ref?: string, known_sha?: string): Loaded | nil, string
   list: function(root: string): Board | nil, string
@@ -467,6 +485,8 @@ local record gitread
 end
 
 local M: gitread = {
+  lease_encode = lease_encode,
+  lease_decode = lease_decode,
   load = load_item,
   list = list,
   read_spec = read_spec,

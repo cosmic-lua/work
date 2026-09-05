@@ -1,11 +1,11 @@
 #!/usr/bin/env cosmic
 -- `_work.gitread`'s single-item fast path: `load` given a
--- caller-resolved ref and sha (`_work.store.resolve`'s own snapshot,
--- on an unambiguous match, or a prior `list`'s lease) skips its own
--- for-each-ref entirely, whether the id in hand came from a prefix
--- match or a handle (tail) match — both `_work.store.resolve_id`
--- routes end up with an exact ref+sha before this is called. With
--- neither given, `load` falls back to its usual single for-each-ref.
+-- caller-resolved ref and sha skips its own for-each-ref entirely, no
+-- matter which caller resolved them — `_work.store.resolve`'s own
+-- snapshot on an unambiguous prefix match, or `_work.gitboard`'s tail
+-- (handle) branch handing it a `list` snapshot's lease, both of which
+-- are exercised end to end in `_work/gitboard_test.tl`. With neither
+-- ref nor sha given, `load` falls back to its usual single for-each-ref.
 
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
@@ -37,10 +37,8 @@ local function for_each_ref_calls(f: function(): boolean): integer
   return calls
 end
 
--- The id in hand is exact either way an id-taking verb reaches it: a
--- prefix `store.resolve` matched unambiguously, or a handle `tail`
--- resolved against a `list` already in memory — both hand `load` the
--- ref and sha they already read, never a bare id.
+-- `load`'s own parameter-driven fast path: given the ref and sha for
+-- `id` already, it never repeats the for-each-ref that found them.
 local function test_load_with_a_known_ref_and_sha_never_calls_for_each_ref()
   local s = init_state_repo("known-ref-sha")
   local id = file_item(s, "an item", "")

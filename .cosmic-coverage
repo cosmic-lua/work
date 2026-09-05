@@ -25,7 +25,7 @@ return {
   ["_work/gitgraph.tl"] = {["covered"] = 194, ["total"] = 210},
   ["_work/gitobj.tl"] = {["covered"] = 100, ["total"] = 115},
   ["_work/gitowner.tl"] = {["covered"] = 31, ["total"] = 31},
-  ["_work/gitread.tl"] = {["covered"] = 104, ["total"] = 111},
+  ["_work/gitread.tl"] = {["covered"] = 234, ["total"] = 254},
   ["_work/gitreadmany.tl"] = {["covered"] = 68, ["total"] = 82},
   ["_work/gitready.tl"] = {["covered"] = 60, ["total"] = 74},
   ["_work/gitshow.tl"] = {["covered"] = 114, ["total"] = 126},
