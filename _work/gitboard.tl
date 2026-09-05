@@ -18,11 +18,8 @@
 ---   cosmic --make run _work/gitboard.tl init [--dir D]
 ---   cosmic --make run _work/gitboard.tl new "an outcome"
 ---   cosmic --make run _work/gitboard.tl new "a piece of it" --parent 2ai3
----   cosmic --make run _work/gitboard.tl compare 2ai3 2akQ
----   cosmic --make run _work/gitboard.tl hold 2ai3 --reason "..." | unhold 2ai3
 ---   cosmic --make run _work/gitboard.tl attach 2akQ 2ai3
 ---   cosmic --make run _work/gitboard.tl rank 2akQ --before 2ai3 | --after 2ai3 | --last
----   cosmic --make run _work/gitboard.tl block 2akQ 2ai3 | unblock 2akQ 2ai3
 ---   cosmic --make run _work/gitboard.tl set 2akQ --title "a truer title"
 ---   cosmic --make run _work/gitboard.tl spec 2akQ SPEC.md
 ---   cosmic --make run _work/gitboard.tl show [2akQ]
@@ -51,7 +48,6 @@ local fs = require("cosmic.fs")
 local proc = require("cosmic.proc")
 local brief = require("_work.brief")
 local cachequery = require("_work.cachequery")
-local cmp = require("_work.gitcompare")
 local commands = require("_work.gitcommands")
 local doctrine = require("_work.doctrine")
 local fsck = require("_work.gitfsck")
@@ -73,16 +69,15 @@ local view = require("_work.gitview")
 --- The verbs whose save may be BOUNDED — advancing and leasing
 --- `refs/heads/board/seq` (`_work.store.set_bounded`), so two of them racing
 --- each other need to see the SAME seq tip: `take` (a NEW claim, the
---- doing bound) and `block` (the add path only — see
---- `_work.gitgraph.cmd_block`'s own comment). Only these fetch the
---- remote's state before mutating; every other write verb builds
---- against this checkout's own local refs and pushes straight away —
---- a stale lease is refused as `LOST_RACE` by the push itself
---- (`_work.publish.publish`, which re-syncs on rejection), costing a
---- round trip only when a race actually happened. `sync` and lane
---- minting fetch on their own, outside this dispatch.
+--- doing bound). Only this fetches the remote's state before
+--- mutating; every other write verb builds against this checkout's
+--- own local refs and pushes straight away — a stale lease is refused
+--- as `LOST_RACE` by the push itself (`_work.publish.publish`, which
+--- re-syncs on rejection), costing a round trip only when a race
+--- actually happened. `sync` and lane minting fetch on their own,
+--- outside this dispatch.
 local FETCH_FIRST: {string: boolean} = {
-  ["take"] = true, ["block"] = true,
+  ["take"] = true,
 }
 
 --- Resolve one id-taking argument, whatever position it sits in: an
@@ -303,29 +298,6 @@ local function main(...: string): integer
       return 1
     end
     return rank.cmd_rank(s, id, before, after, d.parsed.switches["last"] or false)
-  end
-  if d.command == "compare" then
-    local other, oerr = resolve_id(s, d.parsed.args[2] or "")
-    if other == nil then
-      io.stderr:write(tostring(oerr) .. "\n")
-      return 1
-    end
-    return cmp.cmd_compare(s, id, other)
-  end
-  if d.command == "hold" then
-    return cmp.cmd_hold(s, id, d.parsed.values["reason"] or "")
-  end
-  if d.command == "unhold" then
-    return cmp.cmd_unhold(s, id)
-  end
-  if d.command == "block" or d.command == "unblock" then
-    local blocker, berr = resolve_id(s, d.parsed.args[2] or "")
-    if blocker == nil then
-      io.stderr:write(tostring(berr) .. "\n")
-      return 1
-    end
-    return graph.cmd_block(s, id, blocker, d.command == "unblock",
-      d.parsed.values["reason"] or "")
   end
   if d.command == "set" then
     return graph.cmd_set(s, id, d.parsed.values["title"],

@@ -11,9 +11,9 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local fixture = require("_work.fixture")
 local gitread = require("_work.gitread")
-local graph = require("_work.gitgraph")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
@@ -71,7 +71,9 @@ local function test_load_of_an_item_with_edges_spawns_one_cat_file_process()
   local s = init_state_repo("one-spawn")
   local blocker = file_item(s, "a blocker", "")
   local id = file_item(s, "an item", "")
-  assert(graph.cmd_block(s, id, blocker, false, "waiting on the blocker") == 0)
+  local it = check.must(store.load(s, id))
+  it.blocked_by = {blocker}
+  assert(storewrite.save(s, it, "hand-edited blocked_by"))
 
   local calls = cat_file_spawns(function(): boolean
       check.must(gitread.load(s.root, id))
@@ -89,7 +91,9 @@ local function test_list_of_a_board_with_edges_spawns_one_cat_file_process()
   local s = init_state_repo("list-one-spawn")
   local blocker = file_item(s, "a blocker", "")
   local id = file_item(s, "an item", "")
-  assert(graph.cmd_block(s, id, blocker, false, "waiting on the blocker") == 0)
+  local it = check.must(store.load(s, id))
+  it.blocked_by = {blocker}
+  assert(storewrite.save(s, it, "hand-edited blocked_by"))
 
   local calls = cat_file_spawns(function(): boolean
       check.must(gitread.list(s.root))

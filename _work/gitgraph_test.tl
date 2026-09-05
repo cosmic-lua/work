@@ -1,20 +1,13 @@
 #!/usr/bin/env cosmic
 -- The graph verbs against scratch state repositories: filing an item,
--- the parent edge and the blocker edge, their refusals, and the
--- properties that hold across such a mutation — one commit per
--- change, and locks that cannot outlive the decomposition that made
--- their holder a container.
+-- the parent edge, its refusals, and the properties that hold across
+-- such a mutation — one commit per change, and locks that cannot
+-- outlive the decomposition that made their holder a container.
 
 local check = require("cosmic.check")
-local cmp = require("_work.gitcompare")
-local decision = require("_work.decision")
 local flow = require("_work.flow")
 local gitboard = require("_work.gitboard")
-local gitrank = require("_work.gitrank")
-local intake = require("_work.intake")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
-local rank = require("_work.rank")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
@@ -42,118 +35,6 @@ local function test_decomposition_is_one_push_two_commits()
   local parent = check.must(store.load(s, leaf))
   assert(parent.claim == "",
     "gaining a child clears the lock on the new container")
-end
-
---- Run graph.cmd_block and capture exactly what it prints via print() --
---- the same swap-and-restore pattern verdict_and_capture in
---- gitverdict_test.tl uses -- so a test can pin the exact line printed,
---- not just the exit code (an edge already present is a no-op SUCCESS
---- that prints `store`'s own "nothing to record" line, and only the
---- text says so -- the exit code alone reads the same as any other
---- success).
---- @param s store.Store The store
---- @param id string The waiting item
---- @param blocker string The item it waits on
---- @param remove boolean True to drop the blocker instead of adding it
---- @param reason string What concretely cannot proceed; required to add
---- @return integer cmd_block's exit code
---- @return string Every print()'d line, newline-joined
-local function block_and_capture(s: store.Store, id: string, blocker: string,
-    remove: boolean, reason: string): integer, string
-  local old_print = _G.print
-  local lines: {string} = {}
-  _G.print = function(...: any)
-    local parts: {string} = {}
-    for i = 1, select("#", ...) do
-      parts[i] = tostring((select(i, ...)))
-    end
-    lines[#lines + 1] = table.concat(parts, "\t")
-  end
-  local ok, result = pcall(graph.cmd_block, s, id, blocker, remove, reason)
-  _G.print = old_print
-  if not ok then
-    error(result, 0)
-  end
-  return result, table.concat(lines, "\n")
-end
-
--- Landing order is a board fact like any other: one verb, one commit,
--- and refusals where hand-editing the field wrote nonsense.
-local function test_block_records_landing_order_and_refuses_nonsense()
-  local s = init_state_repo("block")
-  local goal, first = root_with_leaf(s)
-  local second = file_item(s, "the slice that waits", goal)
-  assert(graph.cmd_block(s, second, first, false, "") ~= 0,
-    "a block with no reason is refused")
-  assert(graph.cmd_block(s, second, first, false, "first lands the API") == 0)
-  local waited = check.must(store.load(s, second))
-  assert(#waited.blocked_by == 1, "the blocker is recorded")
-  assert(waited.block_reason[first] == "first lands the API",
-    "the reason rides on the edge")
-  local before_noop = commits(s)
-  local noop_code, noop_line = block_and_capture(s, second, first, false,
-    "first lands the API")
-  assert(noop_code == 0, "an identical reason is a no-op, not a refusal")
-  assert(noop_line:find("nothing to record", 1, true) ~= nil,
-    "prints store's own no-op line: " .. noop_line)
-  assert(commits(s) == before_noop, "a no-op writes no commit")
-  local unchanged = check.must(store.load(s, second))
-  assert(#unchanged.blocked_by == 1, "the blocker list is untouched")
-  assert(unchanged.block_reason[first] == "first lands the API",
-    "the reason is untouched")
-  local before_update = commits(s)
-  assert(graph.cmd_block(s, second, first, false, "the API grew a v2 path") == 0,
-    "a different reason updates the edge instead of refusing")
-  assert(commits(s) == before_update + 1, "the update is one commit")
-  local updated = check.must(store.load(s, second))
-  assert(#updated.blocked_by == 1, "blocked_by is untouched by the update")
-  assert(updated.blocked_by[1] == first, "still the same blocker")
-  assert(updated.block_reason[first] == "the API grew a v2 path",
-    "the reason was replaced")
-  assert(graph.cmd_block(s, second, second, false, "self") ~= 0,
-    "an item cannot block itself")
-  assert(graph.cmd_block(s, first, second, false, "reverse") ~= 0,
-    "and the reverse edge would deadlock both")
-  assert(#check.must(store.load(s, first)).blocked_by == 0,
-    "the refused edge is not written")
-  assert(graph.cmd_block(s, second, first, true, "") == 0, "unblock drops it")
-  local freed = check.must(store.load(s, second))
-  assert(#freed.blocked_by == 0, "leaving none")
-  assert(freed.block_reason[first] == nil, "the reason goes with the edge")
-  assert(graph.cmd_block(s, second, first, true, "") ~= 0,
-    "and dropping what is not there is refused")
-end
-
--- `block` is a pure graph edit, and its verdict line carries the
--- block-first procedure's two edges: a claim on the waiting item
--- stands through it (releasing is `drop`'s, said on the line), and an
--- UNPLACED blocker still wires — the edge is real — but the line
--- warns, because `take` refuses unplaced work, so the chain would
--- park behind a question nobody can pull.
-local function test_block_keeps_the_claim_and_warns_on_an_unplaced_blocker()
-  local s = init_state_repo("block-guidance")
-  local goal, leaf = root_with_leaf(s)
-  give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  local placed = file_item(s, "the placed question", goal)
-  local code, line = block_and_capture(s, leaf, placed,
-    false, "the decision is open")
-  assert(code == 0, "blocking a claimed item is not refused")
-  assert(line:find("`drop` releases it", 1, true) ~= nil,
-    "a claimed item's line points the release at drop: " .. line)
-  assert(line:find("UNPLACED", 1, true) == nil,
-    "a placed blocker earns no placement warning: " .. line)
-  assert(check.must(store.load(s, leaf)).claim == "session-a",
-    "the claim stands through the block — a graph edit moves no lease")
-  local stray = file_item(s, "an unplaced question", "")
-  local code2, line2 = block_and_capture(s, leaf, stray,
-    false, "awaiting a decision nobody has placed")
-  assert(code2 == 0,
-    "an unplaced blocker still wires — the warning is advisory")
-  assert(line2:find("UNPLACED", 1, true) ~= nil,
-    "the line warns that the chain parks behind unplaced work: " .. line2)
-  assert(#check.must(store.load(s, leaf)).blocked_by == 2,
-    "both edges stand")
 end
 
 -- `new --repo` scopes the item's PR to a foreign repo; the field is
@@ -376,87 +257,4 @@ local function test_set_refuses_every_flow_field_flag()
   assert(after.resolution == before.resolution,
     "resolution untouched: " .. after.resolution)
   assert(after.key == before.key, "key untouched: " .. after.key)
-end
-
--- The derived order is a closure over `beats` across EVERY item, open,
--- held or done: holding the middle of a chain A > B > C leaves A and C
--- placed and A's dominance count whole. A held root is not ended — it
--- is still listed by `flow.roots` — but intake walks past it the way
--- it walks past a root with live work, and filing evidence under it
--- clears the hold in the same commit as the child.
-local function test_holding_a_root_keeps_the_order_total_and_reopens_on_evidence()
-  local s = init_state_repo("hold-order")
-  local a = file_item(s, "outcome A", "")
-  local b = file_item(s, "outcome B", "")
-  local c = file_item(s, "outcome C", "")
-  assert(cmp.cmd_compare(s, a, b) == 0)
-  assert(cmp.cmd_compare(s, b, c) == 0)
-  assert(gitrank.cmd_rank(s, a, "", "", true) == 0, "a ranks last")
-  assert(gitrank.cmd_rank(s, b, "", "", true) == 0, "b ranks last: a, b")
-  assert(gitrank.cmd_rank(s, c, "", "", true) == 0, "c ranks last: a, b, c")
-  local function own_of(id: string): integer
-    local _, own = prio.key_of(prio.positions(check.must(store.list(s))), id)
-    return own
-  end
-  local function offered(): decision.Action
-    local all = check.must(store.list(s))
-    local root_order = store.root_order(s)
-    local ranks = rank.positions(all, root_order)
-    return intake.intake_action(all, {}, ranks, root_order)
-  end
-  local a_own_before = own_of(a)
-  assert(a_own_before == 2, "A dominates B and C transitively: " .. a_own_before)
-  assert(cmp.cmd_hold(s, b, "B's win condition verified") == 0)
-  local all = check.must(store.list(s))
-  local at = prio.positions(all)
-  assert(prio.is_placed(at, a) and prio.is_placed(at, c),
-    "holding B severs no chain: A and C keep their positions")
-  assert(own_of(a) == a_own_before, "and A's dominance count is unchanged")
-  local ordered, live, held = flow.roots(all, store.root_order(s))
-  local listed: {string: boolean} = {}
-  for _, r in ipairs(ordered) do
-    listed[r.id] = true
-  end
-  assert(listed[a] and listed[c] and listed[b],
-    "a held root is not ended, so nothing leaves the general listing")
-  assert(held[b] and not held[a] and not held[c] and not live[b],
-    "roots names B held, and nothing live")
-  -- Intake never offers B: with A open and idle it offers A; with A
-  -- held too it skips over B to C; with every root held, the fallback.
-  local first = check.must(offered())
-  assert(first.kind == "intake" and first.item.id == a,
-    "the top-ranked idle root is offered first")
-  assert(cmp.cmd_hold(s, a, "A verified") == 0)
-  local second = check.must(offered())
-  assert(second.kind == "intake" and second.item.id == c,
-    "with A held, intake walks past held B to C")
-  assert(cmp.cmd_hold(s, c, "C verified") == 0)
-  local third = check.must(offered())
-  assert(third.kind == "intake" and third.item == nil
-    and third.reason:find("every open root has live work", 1, true) ~= nil,
-    "every root held: the fallback, never B: " .. third.reason)
-  -- Evidence under B reopens it: the child's own commit and the
-  -- hold-clearing commit on B, landed in the one atomic push.
-  local before = commits(s)
-  assert(graph.cmd_new(s, "verification failed after all", b, nil, "") == 0)
-  assert(commits(s) == before + 2,
-    ("the child and the cleared hold land as one push, two commits: %d -> %d")
-    :format(before, commits(s)))
-  assert(not check.must(store.load(s, b)).is_held,
-    "filing a child under a held root clears the hold")
-  local _, live2, held2 = flow.roots(check.must(store.list(s)),
-    store.root_order(s))
-  assert(live2[b] and not held2[b], "B is live now, and no longer held")
-  -- Ending that child leaves B open, idle and unheld: it is offered
-  -- again with nothing further said — the skip was the hold's alone.
-  local kid: string = nil
-  for _, i in ipairs(check.must(store.list(s))) do
-    if i.parent == b then
-      kid = i.id
-    end
-  end
-  assert(verbs.cmd_done(s, kid, "not-planned", false, "") == 0)
-  local again = check.must(offered())
-  assert(again.kind == "intake" and again.item.id == b,
-    "an unheld idle root is offered again")
 end

@@ -15,6 +15,7 @@ local fixture = require("_work.fixture")
 local gate = require("_work.gitgate")
 local gitsync = require("_work.gitsync")
 local spec = require("_work.spec")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 local graph = require("_work.gitgraph")
 local vrd = require("_work.gitverdict")
@@ -88,19 +89,22 @@ local function test_take_refuses_work_under_an_unranked_root()
     "work under an unranked root has no rank path")
 end
 
--- An open blocker no longer refuses a take: the edge still records
--- what it recorded, but the rank path is the whole of the queue and
--- the gate now, and a blocker is not part of it.
+-- An open blocker never refuses a take: the field is hand-written
+-- straight through `storewrite.save` — no verb writes it any more —
+-- and the rank path is the whole of the queue and the gate now, so a
+-- blocker recorded on the item is not part of it.
 local function test_take_is_never_refused_by_an_open_blocker()
   local s = init_state_repo("blocked")
   local goal, leaf = root_with_leaf(s)
   local blocker = file_item(s, "lands first", goal)
   give_spec(s, leaf)
-  assert(graph.cmd_block(s, leaf, blocker, false, "the API lands there") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.blocked_by = {blocker}
+  assert(storewrite.save(s, it, "hand-edited blocked_by"))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
     "an open blocker never gates the take")
   assert(check.must(store.load(s, leaf)).blocked_by[1] == blocker,
-    "the edge still stands — this verb is a graph edit, not a lease")
+    "the edge still stands untouched")
 end
 
 -- The doing bound binds NEW takes only: at the limit a take of todo
@@ -193,26 +197,24 @@ local function test_take_refuses_a_pull_past_an_unclaimed_verdict()
     "a recorded reviewer clears the debt and the queue moves again")
 end
 
--- A drop returns the lease and touches nothing else: an edge wired mid-build (the block-
--- first exit for an item that cannot proceed) survives the drop, so the released item
--- waits on its question instead of re-entering the pull queue.
+-- A drop returns the lease and touches nothing else: a blocker edge
+-- hand-wired mid-build survives the drop untouched, since this verb
+-- clears claims and verdicts, never the item's other fields.
 local function test_drop_leaves_blockers_standing()
   local s = init_state_repo("drop-blocked")
   local goal, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
   local question = file_item(s, "which premise still holds?", goal)
-  assert(graph.cmd_block(s, leaf, question, false,
-      "the measured premise no longer reproduces") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.blocked_by = {question}
+  assert(storewrite.save(s, it, "hand-edited blocked_by"))
   assert(verbs.cmd_drop(s, leaf, "session-a",
       "blocked on the question", false) == 0)
   local dropped = check.must(store.load(s, leaf))
   assert(dropped.claim == "", "the lease returned")
   assert(#dropped.blocked_by == 1 and dropped.blocked_by[1] == question,
-    "the blocker edge survives the drop")
-  local index = flow.by_id(check.must(store.list(s)))
-  assert(flow.is_blocked(dropped, index),
-    "the released item waits on its open question")
+    "the blocker edge survives the drop untouched")
 end
 
 -- Another session's live claim refuses a drop without force: the

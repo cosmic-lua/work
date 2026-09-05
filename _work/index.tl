@@ -4,11 +4,10 @@
 --- committed to git; the ref layout (`_work.store` and the modules
 --- beside it) is the only durable state the board has. `_work.find`
 --- layers full-text search on top of the same connection;
---- `_work.index_priority` adds the priority-relation views and proves
---- them equal to `_work.priority`'s own Lua derivation; `_work.index_rank`
---- adds the position-list rank path. `_work.indexddl` carries the DDL
---- text itself, split out to keep this module under its line cap — its
---- own header states the house SQLite defaults every table here follows.
+--- `_work.index_rank` adds the position-list rank path. `_work.indexddl`
+--- carries the DDL text itself, split out to keep this module under
+--- its line cap — its own header states the house SQLite defaults
+--- every table here follows.
 local indexddl = require("_work.indexddl")
 local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
@@ -206,7 +205,7 @@ local function dangling_edges(self: Index): {string}
 end
 
 --- Open items whose ancestor walk, bounded the same 16 hops
---- `_work.priority`/`_work.flow` use, never reaches a root — a broken
+--- `_work.flow` uses, never reaches a root — a broken
 --- or cyclic parent chain past the immediate parent, which the load's
 --- own per-row check (a missing DIRECT parent) cannot see. A chain
 --- that walks into a dangling parent id simply has no row to join
@@ -237,17 +236,16 @@ local function broken_chains(self: Index): {string}
   return out
 end
 
---- Items a priority-edge cycle reaches — the SQL counterpart of
---- `_work.priority.cycle_problems`, read off `dominates` instead of
---- re-walking `beats` in Lua.
+--- Items a priority-edge cycle reaches, read off `dominates` — a SQL
+--- view over `beats` — rather than walking `beats` by hand in Lua.
 --- @param self Index The index
 --- @return {string} Problem lines, possibly empty
 local function priority_cycles(self: Index): {string}
   local out: {string} = {}
   for row in assert(self.db:query(
       "SELECT DISTINCT winner AS id FROM dominates WHERE winner = loser")) do
-    out[#out + 1] = ("%s: priority edges form a cycle through it — the "
-      .. "comparison was ambiguous; restate it and re-compare the pair")
+    out[#out + 1] = ("%s: priority edges form a cycle through it — no verb "
+      .. "writes `beats` any more, so break the cycle by hand-editing it")
     :format(row.id)
   end
   return out

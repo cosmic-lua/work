@@ -1,10 +1,9 @@
---- The graph verbs: `new`, `attach`, `block` and its `unblock` half —
---- the mutations that shape the item GRAPH (an item's existence, a
---- parent edge, a blocker edge) rather than moving work state, which
---- is `_work.gitverbs`. `set` lives here too: not a graph edge, but
---- the other class of fact nothing else moves — an item's own
---- destination (`title`, `repo`, `base`), fixed at file time and
---- otherwise stuck once a refinement outgrows it.
+--- The graph verbs: `new` and `attach` — the mutations that shape the
+--- item GRAPH (an item's existence, a parent edge) rather than moving
+--- work state, which is `_work.gitverbs`. `set` lives here too: not a
+--- graph edge, but the other class of fact nothing else moves — an
+--- item's own destination (`title`, `repo`, `base`), fixed at file
+--- time and otherwise stuck once a refinement outgrows it.
 ---
 --- Verbs receive FULL ids — the dispatcher
 --- resolves prefixes — and every verb prints a `gitboard-<verb>:`
@@ -17,9 +16,9 @@
 --- parent is the whole operation, because roles derive from the graph
 --- — a captured item becomes work by gaining a parent, and a workable
 --- item becomes a container the moment a child attaches under it.
---- Priority is the other half of triage and has its own verb,
---- `compare`, because an item can be placed without being adopted and
---- adopted without being compared.
+--- Rank is the other half of triage and has its own verb, `rank`,
+--- because an item can be placed without being adopted and adopted
+--- without being ranked.
 local cachequery = require("_work.cachequery")
 local flow = require("_work.flow")
 local friction = require("_work.gitfriction")
@@ -27,7 +26,6 @@ local gate = require("_work.gitgate")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
-local prio = require("_work.priority")
 local rank = require("_work.gitrank")
 local session = require("_work.session")
 local store = require("_work.store")
@@ -160,7 +158,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if not ok then
     return gate.verdict_line("new", false, err)
   end
-  local entered = "triage — attach it under something, or compare it"
+  local entered = "triage — rank it among the roots, or attach it under a ranked root"
   if parent ~= "" then
     entered = "todo"
   end
@@ -246,142 +244,6 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   end
   return gate.verdict_line("attach", true,
     ("%s now under %s%s"):format(id:sub(1, 8), parent:sub(1, 8), workable))
-end
-
---- block/unblock: the `blocked_by` field as a verb, so the landing
---- order between two slices is recorded the same way every other
---- board fact is — one mutation, one commit, one refusal when it does
---- not hold. Hand-editing the field was the standing workaround, and
---- it wrote duplicate ids and ids of items that do not exist; both
---- are refused here, and an existing duplicate is collapsed by the
---- next write.
----
---- A block RECORDS ITS REASON: one cheap command sequences whole
---- chains behind the blocker, and an edge nobody can later judge —
---- does this still bind, or did the spec grow its own workaround? —
---- can only be resolved by whoever remembers writing it. The reason
---- travels on the item (`block_reason`), rendered by `show`, and is
---- what a session weighs before dropping the edge.
---- @param s store.Store The store
---- @param id string The waiting item
---- @param blocker string The item it waits on
---- @param remove boolean True to drop the blocker instead of adding it
---- @param reason string What concretely cannot proceed; required to add
---- @return integer 0 on success, 1 otherwise
-local function cmd_block(s: store.Store, id: string, blocker: string,
-    remove: boolean, reason: string): integer
-  local verb = remove and "unblock" or "block"
-  if not remove and (reason or ""):match("%S") == nil then
-    return gate.verdict_line(verb, false,
-      "REFUSED: a block records why the edge binds — pass --reason "
-      .. "'<what concretely cannot proceed until the blocker ends>'")
-  end
-  local all, aerr = store.list(s)
-  if all == nil then
-    return gate.verdict_line(verb, false, aerr)
-  end
-  local index = flow.by_id(all)
-  local it = index[id]
-  if it == nil then
-    return gate.verdict_line(verb, false, ("no item %s"):format(id))
-  end
-  if index[blocker] == nil then
-    return gate.verdict_line(verb, false, ("no item %s"):format(blocker))
-  end
-  if id == blocker then
-    return gate.verdict_line(verb, false, "an item cannot block itself")
-  end
-  -- A blocker that already waits on this item, through any chain,
-  -- would leave both permanently unpullable — and `next` would say
-  -- nothing, because it just skips what is blocked.
-  if not remove and flow.waits_on(index, blocker, id) then
-    return gate.verdict_line(verb, false,
-      ("%s already waits on %s — blocking would deadlock both"):format(
-        blocker:sub(1, 8), id:sub(1, 8)))
-  end
-  local kept: {string} = {}
-  local seen: {string: boolean} = {}
-  local had = false
-  for _, b in ipairs(it.blocked_by or {}) do
-    if b == blocker then
-      had = true
-    elseif not seen[b] then
-      seen[b] = true
-      kept[#kept + 1] = b
-    end
-  end
-  if remove and not had then
-    return gate.verdict_line(verb, false,
-      ("%s does not wait on %s"):format(id:sub(1, 8), blocker:sub(1, 8)))
-  end
-  -- An edge that already exists is compared, not blindly refused: the
-  -- SAME reason re-run leaves the item untouched, so `save`'s own
-  -- no-op success closes it out; a DIFFERENT reason replaces the
-  -- stored one in place — one mutation, where the old refusal forced
-  -- an unblock+block pair with a race window where the edge was
-  -- briefly gone.
-  local had_reason = (it.block_reason or {})[blocker]
-  local updating = not remove and had and had_reason ~= reason
-  if remove or updating or not had then
-    if not remove then
-      kept[#kept + 1] = blocker
-    end
-    it.blocked_by = kept
-    local reasons = it.block_reason or {}
-    if remove then
-      reasons[blocker] = nil
-    else
-      reasons[blocker] = reason
-    end
-    it.block_reason = reasons
-  end
-  -- Guidance for the add path, decided against the same board the
-  -- gates read. Both notes are the block-first procedure's edges: a
-  -- blocker no comparison reaches is one `take` refuses, so the chain
-  -- would park behind work nobody can pull (a blocker LIFTS its order
-  -- from its waiters, but never its placement); and a claim is
-  -- `drop`'s to release — this verb is a graph edit and must not
-  -- touch a lease, least of all somebody else's.
-  local notes = ""
-  if not remove then
-    if not prio.is_placed(prio.positions(all), blocker) then
-      notes = notes .. ("; blocker %s is UNPLACED — attach or compare "
-        .. "it, or nobody can take it and this chain stays parked")
-      :format(blocker:sub(1, 8))
-    end
-    if (it.claim or "") ~= "" then
-      notes = notes .. ("; the claim on %s still stands — `drop` "
-        .. "releases it"):format(id:sub(1, 8))
-    end
-  end
-  -- Bounded on the add path only: `flow.waits_on` just decided this
-  -- edge deadlocks nothing against the board THIS checkout read, and
-  -- two reciprocal blocks from two checkouts touch two DIFFERENT
-  -- items' refs — nothing else would put them in each other's way, so
-  -- without the seq lease both could land and the pair would cycle.
-  -- Removing an edge can never create one, so `unblock` stays
-  -- unbounded, contending only with another writer of the same item.
-  local ok, err = gate.commit_and_publish(s, it, nil,
-    ("%s %s on %s"):format(verb, id:sub(1, 8), blocker:sub(1, 8)), verb, nil,
-    nil, not remove)
-  if not ok then
-    return gate.verdict_line(verb, false, err)
-  end
-  if store.is_noop(err) then
-    return gate.verdict_line(verb, true, err)
-  end
-  if updating then
-    return gate.verdict_line(verb, true,
-      ("%s still waits on %s — reason updated%s"):format(
-        id:sub(1, 8), blocker:sub(1, 8), notes))
-  end
-  local shape = "now waits on"
-  if remove then
-    shape = "no longer waits on"
-  end
-  return gate.verdict_line(verb, true,
-    ("%s %s %s (%d blocker(s))%s"):format(id:sub(1, 8), shape,
-      blocker:sub(1, 8), #kept, notes))
 end
 
 --- set: repair one of the three destination-fact fields directly —
@@ -470,8 +332,6 @@ local record gitgraph
   before?: string, after?: string): integer
   cmd_attach: function(s: store.Store, id: string, parent: string,
   before?: string, after?: string): integer
-  cmd_block: function(s: store.Store, id: string, blocker: string,
-  remove: boolean, reason: string): integer
   cmd_set: function(s: store.Store, id: string, title: string | nil,
   repo: string | nil, new_base: string | nil): integer
 end
@@ -479,7 +339,6 @@ end
 local M: gitgraph = {
   cmd_new = cmd_new,
   cmd_attach = cmd_attach,
-  cmd_block = cmd_block,
   cmd_set = cmd_set,
 }
 

@@ -56,9 +56,6 @@ local CSPEC: flags.CommandSpec = {
           {long = "after", arg = "X",
             help = "place it immediately after X among PARENT's children "
             .. "(at most one of --before/--after)"}}}},
-    {name = "compare", summary = "record that ID outranks OTHER "
-      .. "(a standing reverse edge is reversed)",
-      spec = {usage = "ID OTHER [options]", flags = {dir_flag()}}},
     {name = "rank", summary = "position ID among its siblings: before or "
       .. "after X, or last; roots rank against roots",
       spec = {usage = "ID --before X | --after X | --last [options]",
@@ -70,33 +67,6 @@ local CSPEC: flags.CommandSpec = {
           {long = "before", arg = "X", help = "place ID immediately before X"},
           {long = "after", arg = "X", help = "place ID immediately after X"},
           {long = "last", help = "place ID last among its siblings"}}}},
-    {name = "hold", summary = "mark root ID held: its win condition verified; "
-      .. "intake walks past it until evidence is filed under it",
-      spec = {usage = "ID [options]", flags = {dir_flag(),
-          {long = "reason", arg = "WHY",
-            help = "what verified the win condition, and how"}}}},
-    {name = "unhold", summary = "clear root ID's hold marker by hand "
-      .. "(filing a child under it clears it too)",
-      spec = {usage = "ID [options]", flags = {dir_flag()}}},
-    {name = "block", summary = "record that ID waits on BLOCKER",
-      spec = {usage = "ID BLOCKER [options]",
-        summary = "record that ID waits on BLOCKER, the reason on the "
-        .. "item.\n\nAn item that cannot proceed — a spec gap, a reopened "
-        .. "decision, a falsified\npremise — is never dropped bare. The "
-        .. "procedure, in this order:\n\n"
-        .. "  1. `new '<the question>' --parent <ID's parent> --spec-file Q.md`\n"
-        .. "     (parented, so the question is placed and takeable)\n"
-        .. "  2. `block ID <question> --reason '<what cannot proceed>'`\n"
-        .. "  3. `drop ID --why 'blocked on <question>'` if holding the claim\n\n"
-        .. "ID is then never offered while the question is open, and the "
-        .. "question's\n`done` unblocks it by itself — no unblock needed. "
-        .. "A blocker is ordered up\nby what waits on it, so blocking lifts "
-        .. "the question's place in the queue.",
-        flags = {dir_flag(),
-          {long = "reason", arg = "WHY",
-            help = "what concretely cannot proceed until BLOCKER ends"}}}},
-    {name = "unblock", summary = "drop BLOCKER from ID's blockers",
-      spec = {usage = "ID BLOCKER [options]", flags = {dir_flag()}}},
     {name = "set", summary = "repair ID's title, repo and/or base "
       .. "(at least one; nothing else moves here)",
       spec = {usage = "ID [options]", flags = {dir_flag(),
@@ -160,9 +130,8 @@ local CSPEC: flags.CommandSpec = {
         .. "untouched.\n\nA bare drop asserts the WORKER stopped — a dead "
         .. "wave agent, a session out\nof budget, a review nobody can "
         .. "finish — so the item is safe to re-offer\nas-is. An ITEM that "
-        .. "cannot proceed is never dropped bare: `new` the\nquestion, "
-        .. "`block` ID on it, then drop (see `help block` for the "
-        .. "procedure).",
+        .. "cannot proceed is never dropped bare: file the\nquestion as a "
+        .. "child (`new --parent <ID>`), then drop.",
         flags = {dir_flag(),
           {long = "why", arg = "REASON",
             help = "why the session lets go (a dead agent, a build out of "

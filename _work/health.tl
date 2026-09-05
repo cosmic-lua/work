@@ -1,18 +1,13 @@
 --- Board health beyond per-item shape: the stalls `status` renders
 --- and `next` must not answer around. Pure over already-read state,
 --- the way `_work.flow` is — timestamps arrive from the caller, so
---- nothing here touches git or the filesystem. Two lease detectors
---- and one graph detector:
+--- nothing here touches git or the filesystem. Two lease detectors:
 ---
 ---   stale claims    a claim is a lock with no expiry, held by
 ---                   sessions that are ephemeral by construction; a
 ---                   claimed item whose last board commit is older
 ---                   than the lease is stalled, not in progress
 ---   stale reviews   the review claim's shorter horizon, same idea
----   blocker cycles  reciprocal `block` calls racing from two
----                   checkouts edit different files, merge cleanly,
----                   and land a cycle the verb's own check never saw
-local flow = require("_work.flow")
 local item = require("_work.item")
 
 local type Item = item.Item
@@ -67,26 +62,6 @@ local function stale_hours(i: Item, ages: Ages): integer
   return math.floor((ages[i.id] or 0) / 3600)
 end
 
---- Items whose blocker chain returns to themselves. `flow.is_blocked`
---- reads one hop and `next` silently skips what is blocked, so a
---- cycle starves both items and everything behind them with no
---- diagnostic anywhere — this is that diagnostic.
---- @param items {Item} All items
---- @return {string} Problems, possibly empty
-local function blocker_cycle_problems(items: {Item}): {string}
-  local index = flow.by_id(items)
-  local out: {string} = {}
-  for _, i in ipairs(items) do
-    if item.is_open(i) and #(i.blocked_by or {}) > 0
-    and flow.waits_on(index, i.id, i.id) then
-      out[#out + 1] = ("%s: its blocker chain returns to itself — nothing "
-        .. "on the cycle can be taken; break it with `gitboard unblock`")
-      :format(i.id)
-    end
-  end
-  return out
-end
-
 local record health
   type Ages = Ages
   LEASE_S: integer
@@ -94,7 +69,6 @@ local record health
   REVIEW_LEASE_S: integer
   is_review_stale: function(i: Item, ages: Ages): boolean
   stale_hours: function(i: Item, ages: Ages): integer
-  blocker_cycle_problems: function(items: {Item}): {string}
 end
 
 local M: health = {
@@ -103,7 +77,6 @@ local M: health = {
   REVIEW_LEASE_S = REVIEW_LEASE_S,
   is_review_stale = is_review_stale,
   stale_hours = stale_hours,
-  blocker_cycle_problems = blocker_cycle_problems,
 }
 
 return M

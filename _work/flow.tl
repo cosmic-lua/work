@@ -246,60 +246,6 @@ local function doing_refusal(items: {Item}, taking?: Item): string | nil
   :format(n, DOING_LIMIT)
 end
 
---- Whether one recorded blocker edge still holds its item up. A
---- blocker id with no item behind it does not block, and neither does
---- one whose item has ended. Every reader of a `blocked_by` edge asks
---- THIS, so a mark, a skipped take and a rendered heading cannot
---- disagree about what "blocked" means.
---- @param index Index Items by id
---- @param id string The blocker's id
---- @return boolean True when that blocker is an open item
-local function binds(index: Index, id: string): boolean
-  local blocker = index[id]
-  return blocker ~= nil and it.is_open(blocker)
-end
-
---- Whether an item waits on an open blocker.
---- @param i Item The item
---- @param index Index Items by id
---- @return boolean True when some named blocker still binds
-local function is_blocked(i: Item, index: Index): boolean
-  for _, b in ipairs(i.blocked_by or {}) do
-    if binds(index, b) then
-      return true
-    end
-  end
-  return false
-end
-
---- Whether `from` waits on `target`, directly or through a chain of
---- blockers. Bounded by the items already walked, so a cycle already
---- in the data cannot spin here — which is what lets the `block` verb
---- ask this question of data that may already hold one.
---- @param index Index Items by id
---- @param from string The waiting item's id
---- @param target string The id it might be waiting on
---- @param seen {string: boolean} Ids already walked; nil to start
---- @return boolean True when a blocker chain leads from `from` to `target`
-local function waits_on(index: Index, from: string, target: string,
-    seen?: {string: boolean}): boolean
-  local walked = seen or {}
-  if walked[from] then
-    return false
-  end
-  walked[from] = true
-  local i = index[from]
-  if i == nil then
-    return false
-  end
-  for _, b in ipairs(i.blocked_by or {}) do
-    if b == target or waits_on(index, b, target, walked) then
-      return true
-    end
-  end
-  return false
-end
-
 --- The root an item's parent chain reaches, or nil for a broken or
 --- cyclic chain.
 --- @param i Item The item
@@ -443,10 +389,6 @@ local record flow
   in_state: function(items: {Item}, state: string,
   ranks: {string: rank.Rank}, seed?: string): {Item}
   doing_refusal: function(items: {Item}, taking?: Item): string | nil
-  is_blocked: function(i: Item, index: Index): boolean
-  binds: function(index: Index, id: string): boolean
-  waits_on: function(index: Index, from: string, target: string,
-  seen?: {string: boolean}): boolean
   root_of: function(i: Item, index: Index): Item | nil
   item_problems: function(i: Item, index: Index): {string}
   graph_problems: function(items: {Item}): {string}
@@ -473,9 +415,6 @@ local M: flow = {
   role = role,
   in_state = in_state,
   doing_refusal = doing_refusal,
-  is_blocked = is_blocked,
-  binds = binds,
-  waits_on = waits_on,
   root_of = root_of,
   item_problems = item_problems,
   graph_problems = graph_problems,

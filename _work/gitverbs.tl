@@ -254,11 +254,11 @@ end
 --- stopped: a drop says the WORKER did (a dead wave agent, a session
 --- out of budget, a review nobody can finish), so the item is safe to
 --- re-offer as-is. An item that cannot proceed — a spec gap, a
---- reopened decision — is not dropped bare: the question becomes its
---- own item (`new`, parented so it is placed), the item `block`s on
---- it, and only then does the claim return, so it waits on the answer
---- instead of bouncing cold to a session that would hit the same
---- wall. Never refused for flow; the one guard is somebody else's
+--- reopened decision — is not dropped bare: the question becomes a
+--- CHILD of this item (`new --parent <ID>`), and only then does the
+--- claim return; the item is a container until the child resolves,
+--- and the child's `done` frees it with no further verb. Never
+--- refused for flow; the one guard is somebody else's
 --- LIVE claim (a takeover of the abandoning kind, said on the
 --- record). Claim, handover (PR or research result), and any standing
 --- verdict clear together: what remains is the item, its spec, its
@@ -275,7 +275,8 @@ local function cmd_drop(s: store.Store, id: string, session: string,
     return gate.verdict_line("drop", false,
       "REFUSED: a drop names why the session lets go — pass --why "
       .. "'<the worker-side reason>'. An ITEM that cannot proceed is "
-      .. "not dropped bare: `new` the question and `block` on it first")
+      .. "not dropped bare: file the question as a child "
+      .. "(`new --parent <ID>`), then drop")
   end
   -- One `store.list`: it carries this item's lease too.
   local all, aerr = store.list(s)
@@ -324,19 +325,13 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   if not ok then
     return gate.verdict_line("drop", false, err)
   end
-  -- Which queue the released item lands in decides the line: blocked
-  -- items wait on their question, bare todo is re-offered as-is, and
-  -- the bare line names the block-first recovery while the dropping
+  -- The bare line names the child-first recovery while the dropping
   -- session still has the context to file the question.
-  if flow.is_blocked(it, flow.by_id(all)) then
-    return gate.verdict_line("drop", true,
-      ("%s released — it waits on its open blocker(s), not the queue")
-      :format(id:sub(1, 8)))
-  end
   return gate.verdict_line("drop", true,
     ("%s is todo again, re-offered as-is — a bare drop says the item "
-      .. "is fine; if it cannot proceed, `new` the question and "
-      .. "`block %s <question>` first"):format(id:sub(1, 8), id:sub(1, 8)))
+      .. "is fine; if it cannot proceed, file the question as a child "
+      .. "(`new --parent %s <question>`), then drop"):format(
+      id:sub(1, 8), id:sub(1, 8)))
 end
 
 --- done: end an item, recording why. A ROOT's own gates

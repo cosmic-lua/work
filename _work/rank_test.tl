@@ -1,8 +1,6 @@
 -- The rank-path derivation: an item's rank is a path down from its
 -- root, and every level of that path is a position in a list the
--- level above holds. These pin the rule directly, independent of the
--- comparison-relation `_work.priority` still derives the live order
--- from.
+-- level above holds. These pin the rule directly.
 
 local check = require("cosmic.check")
 local item = require("_work.item")

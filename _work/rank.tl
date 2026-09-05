@@ -37,9 +37,8 @@ local type Item = item.Item
 local type Index = {string: Item}
 
 --- The most parent hops a walk to the root takes before giving up —
---- matches `_work.priority` and `_work.flow`'s own trace bound: deeper
---- nesting than this is its own design smell, and a chain this long is
---- cyclic in practice.
+--- matches `_work.flow`'s own trace bound: deeper nesting than this is
+--- its own design smell, and a chain this long is cyclic in practice.
 local MAX_DEPTH < const > = 16
 
 --- One ancestor's position in ITS OWN parent's list — one entry of a
@@ -56,9 +55,7 @@ end
 local record Rank
   --- Whether this item's ROOT appears in the board's root list — the
   --- only placement test there is. False for a root itself absent
-  --- from the list, and for everything under it: `_work/priority.tl`'s
-  --- `Position.placed`, restated for a position instead of a
-  --- comparison.
+  --- from the list, and for everything under it.
   ranked: boolean
   --- The ancestor chain from the root down to this item, inclusive —
   --- always at least one entry (the item itself), even when the walk
@@ -242,9 +239,7 @@ end
 
 --- FNV-1a over a string, folded to 32 bits: the seeded tie-break below
 --- needs a stable, cheap, well-mixed order over ids — never
---- cryptography. Pure arithmetic, so every machine agrees. Copied from
---- `_work.priority`, which needs the identical shape for its own
---- seeded tie-break.
+--- cryptography. Pure arithmetic, so every machine agrees.
 --- @param text string The text to hash
 --- @return integer The 32-bit hash
 local function fnv32(text: string): integer

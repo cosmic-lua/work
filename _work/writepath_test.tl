@@ -5,10 +5,10 @@
 -- sidecar for an id that does not exist yet, and reads the ad hoc
 -- `git remote`/`git remote get-url origin` facts at most once per
 -- store. Its own file, alongside `_work/gitgraph.tl` (`new`) and
--- `_work/gitcompare.tl` (`compare`), rather than folded into either
--- verb's own `_test.tl` — `gitgraph_test.tl` is at the line cap
--- already, and this property belongs to the write path shared by
--- every mutation verb, not to one verb's own test file.
+-- `_work/gitrank.tl` (`rank`), rather than folded into either verb's
+-- own `_test.tl` — `gitgraph_test.tl` is at the line cap already, and
+-- this property belongs to the write path shared by every mutation
+-- verb, not to one verb's own test file.
 
 local cache = require("_work.cache")
 local check = require("cosmic.check")
@@ -19,7 +19,7 @@ local fs = require("cosmic.fs")
 local gh = require("_work.gh")
 local gitread = require("_work.gitread")
 local graph = require("_work.gitgraph")
-local cmp = require("_work.gitcompare")
+local rank = require("_work.gitrank")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
@@ -102,34 +102,43 @@ local function test_new_reads_the_board_once_and_rereads_only_the_written_ref()
       .. "duplicated snapshot on top: got %d"):format(fe.n))
 end
 
--- `compare` on the same kind of fixture: the defect this item's
--- Evidence names directly — a second, full `store.list` call after
--- the write, to report the new standing, which loaded the whole
--- board's cat-file batches a second time. `it`/`lo` are elements of
--- `all` by reference, so the edge the write just made is already
--- visible in `all` without asking git again.
-local function test_compare_reads_the_board_once_not_twice()
-  local a, _b = fixture.init_shared("compare-load-count")
-  assert(graph.cmd_new(a, "alpha", "", nil, "") == 0)
-  assert(graph.cmd_new(a, "beta", "", nil, "") == 0)
+-- `rank` on the same kind of fixture: the defect this item's Evidence
+-- names directly — a second, full `store.list` call after the write,
+-- to report the new standing, which loaded the whole board's
+-- cat-file batches a second time. Ranking a CHILD under its parent
+-- (not a root) exercises the same `commit_and_publish` path `new`
+-- above does — a root's own `rank` writes `refs/heads/board/order`
+-- directly and never touches the cache, which is a different count.
+local function test_rank_reads_the_board_once_not_twice()
+  local a, _b = fixture.init_shared("rank-load-count")
+  assert(graph.cmd_new(a, "an outcome", "", nil, "") == 0)
   local seeded = check.must(store.list(a))
-  assert(#seeded == 2, "two items should be on the board: got " .. #seeded)
-  local winner, loser = seeded[1].id, seeded[2].id
+  assert(#seeded == 1, "one root should be on the board: got " .. #seeded)
+  local root = seeded[1].id
+  assert(graph.cmd_new(a, "a piece of it", root, nil, "") == 0)
+  local all = check.must(store.list(a))
+  local kid: string = nil
+  for _, i in ipairs(all) do
+    if i.parent == root then
+      kid = i.id
+    end
+  end
+  assert(kid ~= nil, "the child should be on the board")
 
   local warm = check.must(cache.rebuild(a.root))
   assert(cache.close(warm))
 
   local fe = count_for_each_ref()
   local ld = count_gitread_load()
-  local rc = cmp.cmd_compare(a, winner, loser)
+  local rc = rank.cmd_rank(a, kid, "", "", true)
   fe.restore()
   ld.restore()
 
-  assert(rc == 0, "compare should be accepted")
-  assert(ld.n == 0, "compare must never fall back to a per-item load: got " .. ld.n)
-  assert(fe.n == 3, ("compare should read the board once — one snapshot, "
+  assert(rc == 0, "rank should be accepted")
+  assert(ld.n == 0, "rank must never fall back to a per-item load: got " .. ld.n)
+  assert(fe.n == 3, ("rank should read the board once — one snapshot, "
       .. "one written-ref read-back, one cache after-write digest check — "
-      .. "never the second full snapshot a stale reported standing used "
+      .. "never a second full snapshot a stale reported standing used "
       .. "to cost: got %d"):format(fe.n))
 end
 

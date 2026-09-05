@@ -2,10 +2,7 @@
 --- `_work.index`'s `ranks` table (docs/design/order.md): each item's
 --- root's rank among roots, then its rank among its siblings at each
 --- level down. `_work.rank` (Teal, over `item.Item.order` directly)
---- renders the same shape; the two are pinned against each other once
---- both exist. `_work.index_priority`'s dominance-based `own`/`band` is
---- the OLDER relation this is meant to replace; nothing here reads or
---- writes it.
+--- renders the same shape; the two are pinned against each other.
 ---
 --- `dense_rank` is one entry's position among a parent's list, counting
 --- only entries that actually name a child of that parent (a stale
@@ -19,9 +16,9 @@
 --- `items.parent` = '' too — a root, by definition) — one join
 --- condition covers both.
 ---
---- `rank_path` is `key_of`/`is_placed`'s SQL counterpart: a recursive
+--- `rank_path` is `_work.rank.key`/`is_ranked`'s SQL counterpart: a recursive
 --- walk from every root DOWN to its descendants (bounded at 16 hops,
---- matching `_work.index_priority.ancestors`'s own bound), building
+--- matching `_work.flow`'s own parent-chain trace bound), building
 --- each item's `key` as it goes rather than assembling it after the
 --- fact, since two items sharing an ancestor prefix must share that
 --- prefix's TEXT exactly for `ORDER BY key` to group them correctly.

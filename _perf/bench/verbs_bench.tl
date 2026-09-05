@@ -189,19 +189,19 @@ local function scenarios(): {pt.Scenario}, string
       end,
     },
     {
-      -- `compare_winner`/`compare_loser` already carry this edge (the
-      -- fixture places every root against its neighbor), so every call
-      -- here — the first included — is the no-op path: exactly the
-      -- steady-state cost of a session re-asserting a standing judgment,
-      -- which is the common case (`compare` is idempotent by design).
-      name = "compare",
+      -- `rank_target` is already ranked last among roots (the fixture
+      -- seeds root order in id order), so every call here — the first
+      -- included — is the no-op path: exactly the steady-state cost of
+      -- a session re-asserting a standing position (`rank` is
+      -- idempotent by design).
+      name = "rank",
       setup = function(): any, string
-        return check.must(fixture.fresh_clone(fx.bare, fx.root .. "/compare")), nil
+        return check.must(fixture.fresh_clone(fx.bare, fx.root .. "/rank")), nil
       end,
       fn = function(ctx: any): any
-        return spawn(as_dir(ctx), {"compare", fx.compare_winner, fx.compare_loser})
+        return spawn(as_dir(ctx), {"rank", fx.rank_target, "--last"})
       end,
-      check = verdict_check("compare"),
+      check = verdict_check("rank"),
       teardown = function(ctx: any)
         local _ok, _err = fs.remove_all(as_dir(ctx))
       end,

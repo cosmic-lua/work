@@ -60,18 +60,17 @@ local record Item
   --- string — the literal domain has no lists. Empty when it has
   --- ranked none; an unranked child is simply absent from the list.
   order: {string}
-  --- Items this one is ranked ABOVE, each by id: the priority
-  --- relation, recorded on the winner of a comparison. Stored as one
-  --- "id id" string — the literal domain has no lists. Any item may
-  --- carry them; the order itself is derived in `_work.priority`.
+  --- Items this one was once ranked ABOVE, each by id: the retired
+  --- comparison relation, recorded on the winner. Stored as one
+  --- "id id" string — the literal domain has no lists. Nothing
+  --- derives an order from it any more — `_work.rank` derives the
+  --- live order from `order` instead.
   beats: {string}
   --- Open items this one waits on. Stored as one "id id" string —
   --- the literal domain has no lists.
   blocked_by: {string}
   --- Why each blocker binds, by blocker id: what concretely cannot
-  --- proceed until it ends. A block is one cheap command with
-  --- board-wide flow consequences, and the reason is what lets a
-  --- later session judge whether the edge still holds. Entries whose
+  --- proceed until it ends, recorded by a hand edit. Entries whose
   --- blocker left `blocked_by` are pruned on the next write.
   block_reason: {string: string}
   --- Edge kinds this reader does not interpret, carried opaquely so a

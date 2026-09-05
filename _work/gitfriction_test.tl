@@ -7,7 +7,6 @@
 
 local check = require("cosmic.check")
 local env = require("cosmic.env")
-local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
@@ -39,8 +38,7 @@ end
 --- @return {string} The three claimed leaves' bare tails
 local function three_minted_claims(s: store.Store, orch8: string): {string}
   local goal = file_item(s, "an outcome", "")
-  local peer = file_item(s, "a lesser outcome", "")
-  assert(cmp.cmd_compare(s, goal, peer) == 0, "compare should be accepted")
+  local _peer = file_item(s, "a lesser outcome", "")
   assert(rank.cmd_rank(s, goal, "", "", true) == 0, "rank should be accepted")
   local handles: {string} = {}
   for i = 1, 3 do
@@ -122,8 +120,7 @@ end
 local function test_friction_filing_is_not_satisfied_by_another_orchestrator()
   local s = init_state_repo("friction-concurrent")
   local goal = file_item(s, "an outcome", "")
-  local peer = file_item(s, "a lesser outcome", "")
-  assert(cmp.cmd_compare(s, goal, peer) == 0, "compare should be accepted")
+  local _peer = file_item(s, "a lesser outcome", "")
   assert(rank.cmd_rank(s, goal, "", "", true) == 0, "rank should be accepted")
 
   pin_session("orchAAAA")

@@ -156,12 +156,11 @@ local record Fixture
   --- An existing root, always open: `show ID`'s target and `new`'s
   --- `--parent`.
   sample_id: string
-  --- `compare`'s winner and loser — two roots the fixture already placed
-  --- against each other, so the scenario's repeated calls re-record the
-  --- SAME judgment (a no-op after the first, exactly as re-running a real
-  --- `compare` does).
-  compare_winner: string
-  compare_loser: string
+  --- `rank`'s target: a root the fixture already ranked LAST among
+  --- roots, so the scenario's repeated `rank ID --last` calls re-record
+  --- the SAME position (a no-op after the first, exactly as re-running a
+  --- real `rank` does).
+  rank_target: string
   --- Open, unclaimed, PR-less leaves `done` may resolve one at a time.
   done_pool: {string}
 end
@@ -208,10 +207,10 @@ local function build(n?: integer): Fixture, string
     leaf_ids[i] = ids[num_roots + i]
   end
 
-  -- `beats` is recorded on the WINNER only (`_work.gitcompare`): chain the
-  -- roots first (root k beats root k+1, so every root but the last has a
-  -- placement), then, if the target needs more winners than roots supply,
-  -- pair up leaves the same way.
+  -- `beats` is recorded on the WINNER only: chain the roots first (root
+  -- k beats root k+1, so every root but the last has a placement), then,
+  -- if the target needs more winners than roots supply, pair up leaves
+  -- the same way.
   local winner_target = math.max(1, round(total * BEATS_WINNER_RATIO))
   local beats_of: {string: string} = {}
   local made = 0
@@ -242,9 +241,8 @@ local function build(n?: integer): Fixture, string
 
   -- `blocked_by`: a strictly-increasing chain over the OPEN leaves (never
   -- the ones `resolution_of` just closed, or `next` would have nothing to
-  -- walk past) — leaf i waits on leaf i-1, which can never cycle, so this
-  -- needs none of `cmd_block`'s own deadlock check (bypassed along with
-  -- the rest of that verb).
+  -- walk past) — leaf i waits on leaf i-1, which can never cycle, so
+  -- nothing here needs a deadlock check.
   local blocked_target = round(total * BLOCKED_RATIO)
   local blocker_of: {string: string} = {}
   local open_start = resolved_count + 1
@@ -311,6 +309,13 @@ local function build(n?: integer): Fixture, string
     end
   end
 
+  -- Roots ranked in id order: `rank_target` — the last one — is
+  -- already exactly where a repeated `rank ID --last` would put it.
+  local ook, oerr = storewrite.save_root_order(s, root_ids, "seed root order")
+  if not ook then
+    return nil, "save_root_order: " .. oerr
+  end
+
   local pok, perr = publish.publish(s)
   if not pok then
     return nil, "publish: " .. perr
@@ -319,7 +324,7 @@ local function build(n?: integer): Fixture, string
   return {
     root = root_dir, bare = bare, clone = clone_dir, n = total,
     sample_id = root_ids[1],
-    compare_winner = root_ids[1], compare_loser = root_ids[2],
+    rank_target = root_ids[num_roots],
     done_pool = done_pool,
   }
 end

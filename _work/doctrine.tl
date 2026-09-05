@@ -287,10 +287,11 @@ merges directly), then `done ID`. `request
 changes` — the concrete gaps quoted on the PR; the claimant reworks
 on the same PR. `reject` — the approach is wrong: close the PR,
 record what was learned, clear the claim. A reject that reopens a
-decision uses the block-first exit: file the question as an item
-and block this one on it, so the learning holds the item back until
-answered. Rejection is cheap by design; wrong work merged is
-expensive. A research item takes the same verdicts, re-running its
+decision files the question as a child of the item, then drops the
+claim: the item is a container until the child resolves, and the
+child's `done` frees it with no further verb (`help order`).
+Rejection is cheap by design; wrong work merged is expensive. A
+research item takes the same verdicts, re-running its
 recorded checks in place of a diff — checks its spec carries because
 whoever claimed it (an orchestrator applying a `brief research ID`
 agent's recommendation, or a solo session) already wrote them there.

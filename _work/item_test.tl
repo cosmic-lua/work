@@ -225,12 +225,11 @@ local function test_base_names_the_prs_target_branch()
     .. table.concat(rflagged.decode_problems or {}, "; "))
 end
 
--- A list field's invariants hold by validation, not by the writer's
--- convention: `block` rebuilds its list through a `seen` set, but a
--- migration or a hand-edit reaches the file directly, and a repeated
--- entry over-reports the blocker count and renders twice in `show`.
--- Refused rather than folded — silently deduping would hide whichever
--- writer produced them.
+-- A list field's invariants hold by validation, not by any writer's
+-- convention: a migration or a hand-edit reaches the file directly,
+-- and a repeated entry over-reports the blocker count and renders
+-- twice in `show`. Refused rather than folded — silently deduping
+-- would hide whichever writer produced them.
 local function test_list_fields_flag_a_repeated_entry()
   local blocked = base()
   blocked.blocked_by = PARENT .. " " .. OTHER .. " " .. PARENT

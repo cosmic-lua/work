@@ -29,12 +29,10 @@
 --- clean dense ranking from it is `_work.index_rank`'s job, not the
 --- load's.
 ---
---- `dominates` is here (not in `_work.index_priority`) because
---- `_work.index.problems` needs it for the priority-cycle finding; the
---- rest of the priority apparatus (`own`, `band`, `ancestors`,
---- `unplaced`) is layered on top by `_work.index_priority`, and the
---- position-list apparatus (`rank_path`) by `_work.index_rank` — both
---- add their own views to a connection already carrying this DDL.
+--- `dominates` is here because `_work.index.problems` needs it for the
+--- priority-cycle finding; the position-list apparatus (`rank_path`)
+--- is layered on top by `_work.index_rank`, which adds its own views
+--- to a connection already carrying this DDL.
 local DDL < const > = [[
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
@@ -158,13 +156,12 @@ CREATE VIEW substate AS
 
 -- The transitive closure of the `beats` kind: every (winner, loser)
 -- pair one item outranks, directly or through the chain. A self-pair
--- (winner = loser) means the edges cycle through that item — the same
--- test `_work.priority.cycle_problems` runs in Lua. A dangling beats
--- edge (its `to_id` names no item) never enters the walk — matching
--- `_work.priority.walk`'s own `index[b] ~= nil` guard — so it counts
--- as a `dangling_edges` finding, never as standing: joined against
--- `items` at both the base case and every recursive step, since a
--- later hop can be the one that goes dangling.
+-- (winner = loser) means the edges cycle through that item. A
+-- dangling beats edge (its `to_id` names no item) never enters the
+-- walk, so it counts as a `dangling_edges` finding, never as
+-- standing: joined against `items` at both the base case and every
+-- recursive step, since a later hop can be the one that goes
+-- dangling.
 CREATE VIEW dominates AS
   WITH RECURSIVE dom(winner, loser) AS (
     SELECT e.from_id, e.to_id FROM edges e

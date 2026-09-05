@@ -10,7 +10,6 @@ local cachedb = require("_work.cachedb")
 local cachequery = require("_work.cachequery")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
-local cmp = require("_work.gitcompare")
 local find = require("_work.find")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
@@ -255,16 +254,20 @@ end
 
 -- The equality ratchet (D6): a sequence of saves in clone A — a
 -- BOUNDED save (a fresh take against the doing bound), an ENDED move
--- (done), and an EDGE change (compare) — each checked against a cold
--- rebuild; then B syncs, saves of its own, and A syncs LAST, so A's
--- cache takes the fetch path rather than the save path, checked once
--- more.
+-- (done), and an EDGE change (a hand-edited `beats` field, straight
+-- through `commit_and_publish` — no verb writes it any more) — each
+-- checked against a cold rebuild; then B syncs, saves of its own, and
+-- A syncs LAST, so A's cache takes the fetch path rather than the
+-- save path, checked once more.
 local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   local a, b = init_shared("cache-ratchet")
   local root_a, leaf_a = fixture.root_with_leaf(a)
   fixture.give_spec(a, leaf_a)
   local outcome_b = file_item(a, "the second outcome, unrelated", "")
-  assert(cmp.cmd_compare(a, outcome_b, root_a) == 0)
+  local outcome_b_it = check.must(store.load(a, outcome_b))
+  outcome_b_it.beats = {root_a}
+  assert(gate.commit_and_publish(a, outcome_b_it, nil,
+      "hand-edited beats: outcome_b over root_a", "beats"))
   assert(publish.sync(b))
 
   -- 1) BOUNDED: a fresh take against the doing bound leases and
@@ -278,7 +281,10 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
 
   -- 3) EDGE: a `beats` edge lands on the winner's own row.
   local other_leaf = file_item(a, "another workable slice", root_a)
-  assert(cmp.cmd_compare(a, other_leaf, outcome_b) == 0)
+  local other_leaf_it = check.must(store.load(a, other_leaf))
+  other_leaf_it.beats = {outcome_b}
+  assert(gate.commit_and_publish(a, other_leaf_it, nil,
+      "hand-edited beats: other_leaf over outcome_b", "beats"))
   assert_cache_matches_cold_rebuild(a, "after an edge change")
 
   -- 4) RANK: an item's own `order` changes — `ranks` rows at
@@ -298,7 +304,10 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   -- B syncs onto everything A just did, then makes a save of its own.
   assert(publish.sync(b))
   local b_leaf = file_item(b, "a slice b files", root_a)
-  assert(cmp.cmd_compare(b, b_leaf, other_leaf) == 0)
+  local b_leaf_it = check.must(store.load(b, b_leaf))
+  b_leaf_it.beats = {other_leaf}
+  assert(gate.commit_and_publish(b, b_leaf_it, nil,
+      "hand-edited beats: b_leaf over other_leaf", "beats"))
 
   -- A syncs LAST: its cache takes the FETCH path, not the save path.
   assert(publish.sync(a))

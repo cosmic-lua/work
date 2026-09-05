@@ -143,7 +143,7 @@ local function test_show_names_an_items_own_graph_problem()
   assert(verdict:find("is todo", 1, true), verdict)
 end
 
--- `blocked by` means what `flow.is_blocked` means: an edge whose
+-- `blocked by` names only a blocker that still binds: an edge whose
 -- blocker has ended does not hold the item up, and printing it beside
 -- the ones that do reads as a chain far deeper than it is. The closed
 -- edges stay visible under their own heading — they are the record of

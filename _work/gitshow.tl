@@ -39,6 +39,17 @@ local function state_of(it: item.Item): string
   return "todo"
 end
 
+--- Whether a recorded blocker edge still holds its item up: a blocker
+--- id with no item behind it does not block, and neither does one
+--- whose item has ended.
+--- @param index {string: item.Item} Items by id
+--- @param id string The blocker's id
+--- @return boolean True when that blocker is an open item
+local function binds(index: {string: item.Item}, id: string): boolean
+  local blocker = index[id]
+  return blocker ~= nil and item.is_open(blocker)
+end
+
 --- One item's fields, role, spec, spec-bar problems, and history.
 --- @param it item.Item The item
 --- @param all {item.Item} Every item
@@ -105,16 +116,13 @@ local function show_report(it: item.Item, all: {item.Item},
         it.verdict_head, moved)
     end
   end
-  -- Which edges still bind is `flow.binds`, the same predicate
-  -- `flow.is_blocked` is built from, so this heading, the `[blocked]`
-  -- mark and `next`'s skipping cannot disagree about what holds an
-  -- item up. The cleared half is printed too: it is the record of what
-  -- this item waited on.
+  -- Which edges still bind is `binds`, above: the cleared half is
+  -- printed too, since it is the record of what this item waited on.
   local index = flow.by_id(all)
   local binding: {string} = {}
   local cleared: {string} = {}
   for _, b in ipairs(it.blocked_by) do
-    if flow.binds(index, b) then
+    if binds(index, b) then
       binding[#binding + 1] = b
     else
       cleared[#cleared + 1] = b

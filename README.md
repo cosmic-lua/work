@@ -11,14 +11,14 @@ break every checkout's push-as-compare-and-swap at once.
 ```
 (no items/ directory — every item is a git ref, not a file)
 _work/       the machinery: gitboard (CLI), gitverbs (mutations),
-             gitcompare (the priority relation as a verb), gitview
+             gitrank (the rank verb), gitview
              (reads), gitgate (the spec bar, the doing bound, and the
              commit-and-publish every mutation goes through), store
              (git-backed persistence over the ref layout — gitobj,
              refs, gitread, gitwrite and itemtree are its object,
              ref, read and canonical-tree layers), flow (the derived states and graph rules),
-             priority (the comparison relation and the order derived
-             from it), spec (the spec bar's section grammar), item
+             rank (the rank path every queue is ordered by), spec
+             (the spec bar's section grammar), item
              (the record), ksuid (ids)
 cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
@@ -188,11 +188,11 @@ a deletion.
 
 A mutation's PUSH is always the compare-and-swap, leased against each
 ref's observed tip — so only a BOUNDED mutation (one whose gate reads
-the whole board before deciding, today `take`ing NEW work and the
-add half of `block`, both against a shared `refs/heads/board/seq` lease)
-fetches the remote's state before it builds anything: two of those
-racing each other need to see the same seq tip, or the lease decides
-nothing. Every other mutation never touches `refs/heads/board/seq`, so it
+the whole board before deciding, today `take`ing NEW work, against a
+shared `refs/heads/board/seq` lease) fetches the remote's state before
+it builds anything: two takes racing each other need to see the same
+seq tip, or the lease decides nothing. Every other mutation never
+touches `refs/heads/board/seq`, so it
 builds straight against this checkout's own local refs and pushes —
 a stale lease is simply refused as `LOST_RACE` by the push itself,
 recovered exactly as any lost race is, costing the extra round trip
@@ -250,7 +250,7 @@ imported here as findings at triage.
 
 `_perf/bench/verbs_bench.tl` times `o/bin/gitboard`'s verbs (`show`,
 `show ID`, `next`, `find`, `fsck`, `sync`, a cache-cold `show`, and the
-mutations `new`, `compare`, `done`) wall-clock, one process spawn per
+mutations `new`, `rank`, `done`) wall-clock, one process spawn per
 call, against a synthetic board `_perf/fixture.tl` generates in a local
 bare origin plus a clone — deterministic, no network, never the live
 board — in the proportions a real board carries. gitboard's cost is

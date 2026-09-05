@@ -147,12 +147,11 @@ local function test_item_under_an_unranked_root_is_unplaced_and_sorts_last()
   check.must(idxmod.close(idx))
 end
 
--- Mirrors `_work.priority_test`'s style of combining scenarios: one
--- small board exercising a positioned root with a positioned child and
--- two unpositioned ones (oldest first), beside an unranked root with
--- its own unpositioned child — reasoned out field by field in the
--- module's own header, then asserted here as the one order
--- `_work.index_rank.order_ids` must produce end to end.
+-- One small board combining several scenarios: a positioned root with
+-- a positioned child and two unpositioned ones (oldest first), beside
+-- an unranked root with its own unpositioned child — reasoned out
+-- field by field in the module's own header, then asserted here as
+-- the one order `_work.index_rank.order_ids` must produce end to end.
 local function test_order_by_key_then_id_matches_the_stated_rule()
   local r1 = make({}) -- ranked root, position 1
   local r2 = make({}) -- unranked root
