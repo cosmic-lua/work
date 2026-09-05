@@ -1,1 +1,0 @@
-the corpus's default location cannot be specified until a test can find its own source directory: fs.dirname(arg[0]) resolves to o/, so committed corpus entries are unreachable and FUZZ_SAVE writes into the build tree
