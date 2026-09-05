@@ -16,6 +16,7 @@ local fixture = require("_work.fixture")
 local gh = require("_work.gh")
 local item = require("_work.item")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
@@ -139,7 +140,7 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
   end
 
   --- A stored, PARENTED item carrying `pr`/`repo`, saved straight through
-  --- `store.save` — `pr`/`repo` are refused on a root (`item.problems`),
+  --- `storewrite.save` — `pr`/`repo` are refused on a root (`item.problems`),
   --- so each gets its own throwaway parent. `is_candidate` and `at_sync`
   --- care about the facts on the item, not how it got there, so a
   --- minimal decode is enough beyond that.
@@ -153,7 +154,7 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
           title = title, parent = parent}))
     it.pr = pr
     it.repo = REPO
-    assert(store.save(s, it, ("take %s by builder-a"):format(it.id:sub(1, 8))))
+    assert(storewrite.save(s, it, ("take %s by builder-a"):format(it.id:sub(1, 8))))
     return assert(store.load(s, it.id))
   end
 
@@ -166,7 +167,7 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
     local reviewing = pr_item(s, "a reviewing item", 5)
     local done = pr_item(s, "a done item", 6)
     done.resolution = "completed"
-    assert(store.save(s, done, "done " .. done.id:sub(1, 8) .. " completed (from todo)"))
+    assert(storewrite.save(s, done, "done " .. done.id:sub(1, 8) .. " completed (from todo)"))
     done = assert(store.load(s, done.id))
 
     assert(not ciobs.is_candidate(todo), "no PR is not a candidate")
