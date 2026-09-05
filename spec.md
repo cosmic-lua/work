@@ -190,6 +190,16 @@ query explosion that runs for minutes without progress; batch each candidate's
 shared-term lookup into one grouped `... WHERE term IN (...) GROUP BY doc` query and
 precompute per-doc term counts with a single upfront `GROUP BY doc` pass first.
 
+Two out-of-scope findings surfaced while building the fixture were filed as their own
+items, both under this item's parent, both targeted at the sibling exact-duplicate
+gate item («iltX_EM90»): «cY1cArl» (`CLAUDE.md`/`AGENTS.md`, a symlink pair, will read
+as spurious 1.00-ratio self-duplicates to any scanner that doesn't dedupe by realpath)
+and «LOP1MhAs» (6+ `_eval/checks/*.tl` files share a verbatim, legitimate
+interface-contract doc comment at bm25 ≈1.00–1.04 — a decision the exact gate needs
+before day one). Neither is a follow-up of THIS item's own signal research (both
+signals failed; no `_tool/prose_similar.tl` is filed or warranted) — they are
+independent defects the fixture-building process happened to surface.
+
 ## Non-goals
 
 A gate. Semantic or vector similarity («Pszd_rIKz» records why not). Comment quality.
