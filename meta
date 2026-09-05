@@ -3,7 +3,6 @@ parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-98RT_EE0A-32638265
 pr: 17
-verdict: request changes
 verdict_head: 707828ff4083362d36b8559ccae69cf918d85a5f
 verdict_spec: b46c0a99f6de9ca8956edae1044f9159a362c467
 builders: build-98RT_EE0A-32638265
