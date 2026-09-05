@@ -2,5 +2,6 @@ title: gitgraph_test.tl at 500/500: split or relocate before HlNE_YWL2's four ne
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-T6Gj_9ge9-f3a5b327
+pr: 24
 builders: refine-T6Gj_9ge9-62aa6405 build-T6Gj_9ge9-f3a5b327
 speccers: refine-T6Gj_9ge9-62aa6405
