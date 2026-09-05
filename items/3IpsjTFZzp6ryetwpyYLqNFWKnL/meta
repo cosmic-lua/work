@@ -1,10 +1,10 @@
 title: tl integer-strict rule: is_a-comparison shape is a near no-op — narrowed_declaration launders number to integer before any comparison sees it
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: build-LqNF_WKnL-2305d922
 pr: 1726
 verdict: accept
 verdict_head: cd473c0a255c8636c0bb9a77d168f2da4ad48e89
 verdict_spec: ac054a9353b7c658e977af2eb1ce37daaabaa675
+resolution: completed
 builders: build-LqNF_WKnL-2305d922
 speccers: 2305d922-4768-559a-95be-2449dd99270f
