@@ -1,1 +1,0 @@
-the spec's 8th site (cosmic/searcher_test.tl:57-58) does not close as written — package.searchers's builtin tl type has no string-return arm for a declining searcher, so removing the cast fails to type-check; needs a decision on splitting the item or folding a tl_patch entry into its Change
