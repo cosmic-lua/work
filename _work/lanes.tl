@@ -2,8 +2,8 @@
 --- required lanes (release, fuzz, docs) came back green from their
 --- last completed run, records the fact so reads stay tokenless and
 --- offline, and mints one idempotent repair item per red lane. The
---- logic lives here rather than in `_work.gitverbs` so that module's
---- 500-line cap stays clear; `cmd_sync` there is the only caller.
+--- logic lives here rather than in `_work.gitsync` so that module
+--- stays thin; `cmd_sync` there is the only caller.
 ---
 --- A red lane mints; a green one closes an UNCLAIMED repair and
 --- leaves a claimed one alone — the monitor never undoes a builder's
@@ -378,8 +378,8 @@ M.report = report
 --- line and nothing else: the lanes verdicts (`show`, `next`) read
 --- `read_state` regardless, so they reuse the last real observation
 --- exactly as if this call had made one. Isolated here, not in
---- `cmd_sync` itself, so `_work.gitverbs` stays under its 500-line
---- cap; `cmd_sync` is the only caller.
+--- `cmd_sync` itself, so `_work.gitsync` stays thin; `cmd_sync` is
+--- the only caller.
 --- @param s store.Store The store
 --- @return {string} Lines for the caller to print, one fact per line
 local function at_sync(s: store.Store): {string}

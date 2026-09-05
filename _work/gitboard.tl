@@ -53,6 +53,7 @@ local gate = require("_work.gitgate")
 local gitread = require("_work.gitread")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
+local gitsync = require("_work.gitsync")
 local publish = require("_work.publish")
 local session = require("_work.session")
 local store = require("_work.store")
@@ -344,7 +345,7 @@ local function main(...: string): integer
     return view.cmd_next(s, who)
   end
   if d.command == "sync" then
-    return verbs.cmd_sync(s)
+    return gitsync.cmd_sync(s)
   end
   if d.command == "fsck" then
     return fsck.cmd_fsck(s)

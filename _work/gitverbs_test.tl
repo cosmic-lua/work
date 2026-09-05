@@ -13,6 +13,7 @@ local publish = require("_work.publish")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
 local gate = require("_work.gitgate")
+local gitsync = require("_work.gitsync")
 local spec = require("_work.spec")
 local verbs = require("_work.gitverbs")
 local graph = require("_work.gitgraph")
@@ -376,10 +377,11 @@ end
 -- sync rebases and then asks about lane health; a local-only checkout has no origin, so
 -- lane health comes back unknown rather than red, and sync itself still succeeds — the
 -- same shape a token-less or offline session sees. `_work.lanes_test` drives
--- `observe`/`record`/`mint` directly; this pins that `cmd_sync` reaches them at all.
+-- `observe`/`record`/`mint` directly; this pins that `_work.gitsync.cmd_sync` reaches
+-- them at all.
 local function test_sync_asks_about_lanes_and_survives_not_knowing()
   local s = init_state_repo("sync-lanes")
-  assert(verbs.cmd_sync(s) == 0, "an unknown lane state does not fail sync")
+  assert(gitsync.cmd_sync(s) == 0, "an unknown lane state does not fail sync")
 end
 
 -- `take --result` is the research handover, `take --pr`'s mirror for an item whose
