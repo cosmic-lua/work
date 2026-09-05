@@ -1,1 +1,0 @@
-cold build fails during generate _types/tlast_gen.tl: the interpreted searcher resolves cosmo.* against the bootstrap's bundled (pre-bump) declarations for any file it reaches outside the two generators' own closures (main_handlers.tl, tty.tl both reproduce) -- warm build/ci is fully green on cosmic-pin-bump-3IkMf7BY (pushed), but Acceptance requires a cold build too
