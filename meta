@@ -2,5 +2,6 @@ title: casts: the 10 metatable-access sites behind an identity-compare and a met
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-EAi9_RFmX-eceb7aa0
+pr: 1729
 builders: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7 build-EAi9_RFmX-eceb7aa0
 speccers: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7
