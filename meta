@@ -1,0 +1,3 @@
+title: untriaged() hides an unranked board-level item once it has open children, even though its own bar still blocks it
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/work
