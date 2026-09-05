@@ -255,11 +255,17 @@ end
 --- rather than in every reader: a board on a layout this tool cannot
 --- trust is refused before anything else it read alongside it is
 --- believed.
+--- `allow_old_format` lets `gitboard migrate` — the one verb layout 1
+--- is not refused for — read a board `format.refusal` would otherwise
+--- refuse: the bypass applies ONLY when the marker actually reads "1",
+--- never to a missing marker or an unknown future version, both of
+--- which stay refused exactly as before. Every other caller omits it.
 --- @param root string The repository root
+--- @param allow_old_format boolean | nil True to read past a layout-1 refusal
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
-local function list(root: string): Board | nil, string
+local function list(root: string, allow_old_format?: boolean): Board | nil, string
   local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
   if found == nil then
     return nil, ferr
@@ -328,7 +334,10 @@ local function list(root: string): Board | nil, string
   local format_content = gitboardstate.read(board_refs, batch)
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
-    return gitbatch.session_fail(sess, frefusal)
+    local trimmed = (format_content or ""):gsub("%s+$", "")
+    if not (allow_old_format and trimmed == "1") then
+      return gitbatch.session_fail(sess, frefusal)
+    end
   end
   local kinds_by_id: {string: {string: string}} = {}
   local kind_queries: {string} = {}
@@ -444,7 +453,7 @@ local record gitread
   lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
   known_ref?: string, known_sha?: string): Loaded | nil, string
-  list: function(root: string): Board | nil, string
+  list: function(root: string, allow_old_format?: boolean): Board | nil, string
   read_spec: function(root: string, candidates: {string}): string
   read_specs: function(root: string, shas_by_id: {string: string},
   ids: {string}): {string: string}

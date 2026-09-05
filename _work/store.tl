@@ -331,10 +331,33 @@ end
 --- unconditionally for that one item, never a wrong answer. Exported
 --- for `_work.storewrite.save` to snapshot what it just wrote, into
 --- the same `leased_item` table this module populates.
+---
+--- `other_edges` rides along on its own, deep-copied by hand: it is
+--- carried opaquely by `_work.itemtree` (the ref layout), never by
+--- `item.encode`/`decode` (the OLD literal-table codec `encode`/
+--- `decode` above still are), so the round trip would otherwise drop
+--- it silently — invisible for an ordinary item, which never has any,
+--- but exactly the field `gitboard migrate`'s diff needs an honest
+--- baseline for.
 --- @param it item.Item The item to copy
 --- @return item.Item | nil The copy, nil when re-decoding it failed
 local function snapshot_item(it: item.Item): item.Item | nil
   local copy, _err = item.decode(item.encode(it))
+  if copy == nil then
+    return nil
+  end
+  local other_edges = it.other_edges
+  if other_edges ~= nil then
+    local edges_copy: {string: {string: string}} = {}
+    for kind, idmap in pairs(other_edges) do
+      local inner: {string: string} = {}
+      for id, content in pairs(idmap) do
+        inner[id] = content
+      end
+      edges_copy[kind] = inner
+    end
+    copy.other_edges = edges_copy
+  end
   return copy
 end
 
@@ -360,7 +383,10 @@ end
 
 --- Every item in the store, done ones included, sorted by id. Three
 --- git processes for the whole board, whatever its size — never one
---- per item; see `_work.gitread.list`.
+--- per item; see `_work.gitread.list`. `_work.storemigrate.list_for_migrate`
+--- is this same body against `gitread.list`'s `allow_old_format` bypass,
+--- split into its own file rather than added here, to stay under the
+--- line cap.
 --- @param s Store The store
 --- @return {item.Item} | nil The items, some possibly flagged
 --- @return string Error message naming the first genuinely corrupt item

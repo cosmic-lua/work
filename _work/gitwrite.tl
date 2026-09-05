@@ -46,6 +46,19 @@ local record Request
   bounded: boolean
   seq_sha: string
   read_spec: function(id: string): string
+  --- Ids whose tree carries a `held` blob this save must force-delete.
+  --- `item.Item` has no field for it (see `_work.itemtree`'s header),
+  --- so `fastimport.diff_item` cannot see it on its own; `gitboard
+  --- migrate` is the only caller that sets this. nil or absent for
+  --- every other caller, same as an empty map.
+  drop_held: {string: boolean}
+  --- Extra commits this save lands in the SAME stream and push,
+  --- alongside the item commits above — built directly by the caller
+  --- rather than through `diff_item`, for a ref that carries no
+  --- `item.Item` at all. `gitboard migrate` uses this for
+  --- `refs/heads/board/format`'s layout bump; every other caller
+  --- leaves it empty.
+  extra_commits: {fastimport.CommitPlan}
 end
 
 --- What `save_batch` did: the refs to push, each item's new ref and
@@ -96,6 +109,9 @@ local function plan_one(req: Request, it: item.Item,
     old_spec = req.read_spec(it.id)
   end
   local ops = fastimport.diff_item(old, it, spec_replacement, old_spec)
+  if (req.drop_held or {})[it.id] then
+    ops[#ops + 1] = {path = "held", content = nil}
+  end
   if #ops == 0 then
     return nil
   end
@@ -117,11 +133,12 @@ end
 
 --- Write every item in `req.items`, each as its own commit when its
 --- diff found anything to move, and — when `req.bounded` — advance
---- `refs/heads/board/seq` too, ALL of it in one `git fast-import` stream.
---- Every commit lands on the ref its item was already leased on —
---- setting `resolution` is an ordinary field write, never a ref move —
---- so there is nothing else to do locally afterward. Every write
---- staged is left in `Outcome.pushes` for `publish` to push together.
+--- `refs/heads/board/seq` too, plus every one of `req.extra_commits`,
+--- ALL of it in one `git fast-import` stream. Every commit lands on
+--- the ref its item was already leased on — setting `resolution` is
+--- an ordinary field write, never a ref move — so there is nothing
+--- else to do locally afterward. Every write staged is left in
+--- `Outcome.pushes` for `publish` to push together.
 --- @param req Request The save request
 --- @return Outcome | nil What moved
 --- @return string Error message
@@ -141,6 +158,20 @@ local function save_batch(req: Request): Outcome | nil, string
       commits[#commits + 1] = plan
       planned[#planned + 1] = p
     end
+  end
+  -- Extra commits (`gitboard migrate`'s format-ref bump): built
+  -- directly by the caller, so there is no `Planned` bookkeeping to
+  -- derive — just the ref and the tip it must fast-forward from,
+  -- recorded here so the read-back below can verify each one the same
+  -- way it verifies every item's commit.
+  local extra_old: {string: string} = {}
+  for _, c in ipairs(req.extra_commits or {}) do
+    commits[#commits + 1] = c
+    local old = refs.ZERO_SHA
+    if (c.from or "") ~= "" then
+      old = c.from
+    end
+    extra_old[c.ref] = old
   end
   if #commits == 0 then
     return out, ""
@@ -175,6 +206,9 @@ local function save_batch(req: Request): Outcome | nil, string
   if req.bounded then
     patterns[#patterns + 1] = "refs/heads/board/seq"
   end
+  for ref in pairs(extra_old) do
+    patterns[#patterns + 1] = ref
+  end
   local found, ferr = refs.for_each_ref(req.root, patterns)
   if found == nil then
     return nil, ("fast-import applied, but its result could not be read back: %s")
@@ -197,6 +231,14 @@ local function save_batch(req: Request): Outcome | nil, string
     end
     out.pushes[#out.pushes + 1] = {ref = p.ref, old = p.old_sha}
     out.new_ref[p.id], out.new_sha[p.id] = p.ref, new_sha
+  end
+  for ref, old in pairs(extra_old) do
+    local new_sha = new_sha_of[ref]
+    if new_sha == nil or new_sha == old then
+      return nil, ("fast-import did not fast-forward %s — refused (unexpected "
+        .. "local state)"):format(ref)
+    end
+    out.pushes[#out.pushes + 1] = {ref = ref, old = old}
   end
   if req.bounded then
     local new_seq = new_sha_of["refs/heads/board/seq"]
