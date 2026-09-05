@@ -2,5 +2,6 @@ title: CI: build and run MODE=cov o/cov/tool/lua/test on every PR
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: build-jsyr_D5ML-a159f2f2
+reviewer: review-jsyr_D5ML-a159f2f2
 pr: 384
 builders: build-jsyr_D5ML-a159f2f2
