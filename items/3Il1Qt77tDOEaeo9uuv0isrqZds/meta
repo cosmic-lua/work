@@ -1,3 +1,4 @@
 title: C line coverage for the Lua bindings: a cov MODE, a per-file floor, and a ratchet in the test target — the C analogue of .cosmic-coverage
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmic
+speccers: fe06cb27-50b8-5666-a033-c8f08b932d33
