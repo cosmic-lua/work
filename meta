@@ -2,6 +2,7 @@ title: gitboard: verbs read the SQL views, not flow.tl/priority.tl — decide th
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: research-BZCt_Z5l7-32638265
+reviewer: review-BZCt_Z5l7-32638265
 result: e676f0b593e3f8750369235e102e8f435dfeeb10
 verdict_spec: bbb033e2afb0111835ee8509a9eced130645371e
 builders: research-BZCt_Z5l7-32638265
