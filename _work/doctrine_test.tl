@@ -6,6 +6,7 @@
 -- help page.
 
 local doctrine = require("_work.doctrine")
+local fs = require("cosmic.fs")
 local gitboard = require("_work.gitboard")
 
 --- Run gitboard.main(...) and capture exactly what it prints via
@@ -85,6 +86,53 @@ local function test_build_mirrors_the_ready_when_convention()
       "a `Ready when` command\n   runs first, and not ready is a bare drop, not a bounce",
       1, true) ~= nil,
     "step 2 runs the Ready when command first and treats not-ready as a drop")
+end
+
+--- The first paragraph of a `---`-commented module header: lines up
+--- to the first bare `---` separator, the `--- ` prefix stripped and
+--- rewrapped onto one line — so it compares to a doctrine page's own
+--- first paragraph once that is collapsed the same way.
+--- @param source string The module's full source text
+--- @return string The paragraph, one line, single-spaced
+local function header_first_paragraph(source: string): string
+  local out: {string} = {}
+  for line in (source .. "\n"):gmatch("(.-)\n") do
+    if line == "---" then
+      break
+    end
+    local stripped = line:match("^%-%-%- ?(.*)$")
+    if stripped == nil then
+      break
+    end
+    out[#out + 1] = stripped
+  end
+  return table.concat(out, " ")
+end
+
+--- A page body's first paragraph: up to its first blank line, its own
+--- line breaks collapsed to spaces.
+--- @param body string The page body, past its "name — title" header
+--- @return string The paragraph, one line, single-spaced
+local function body_first_paragraph(body: string): string
+  local para = body:match("^(.-)\n\n") or body
+  return (para:gsub("\n", " "))
+end
+
+-- `help order` IS `_work/rank.tl`'s own definition of rank, restated
+-- nowhere else: the page's first paragraph must read exactly as the
+-- module header's does, so the two can never drift apart in meaning.
+local function test_order_page_opens_with_ranks_own_definition()
+  local page = doctrine.page("order")
+  assert(page ~= nil, "the order topic renders")
+  local body = page:match("\n\n(.*)$")
+  assert(body ~= nil, "the page carries a body past its header")
+  local source, rerr = fs.read("_work/rank.tl")
+  assert(source ~= nil, "rank.tl reads from the tree: " .. tostring(rerr))
+  local want = header_first_paragraph(source)
+  local got = body_first_paragraph(body)
+  assert(got == want,
+    ("the order page's first paragraph must equal rank.tl's header:\n"
+      .. "want: %s\ngot:  %s"):format(want, got))
 end
 
 local function test_no_topic_shadows_a_verb()

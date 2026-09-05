@@ -62,19 +62,21 @@ Every item is a git ref — `refs/heads/items/<ksuid>` — whose tip commit's
 tree carries its fields (a `meta` blob of `key: value` lines,
 `repo`/`base` collapsed into one `target` line), its spec prose
 (`spec.md`, present only when it has one), a `held` marker (present
-only when the item is held), and its edges (one blob per related item
-under `edges/<kind>/<id>` — `beats`, `blocked_by`, and any other kind a
-newer writer names, carried opaquely by an older reader); the tree
-shape is `_work/itemtree.tl`, the ONE place it is written. Resolving an
+only when the item is held), and its ranked children (an optional
+`order` blob, present only on a parent that has ranked at least one
+child — child ids one per line, in rank order); the tree shape is
+`_work/itemtree.tl`, the ONE place it is written. Resolving an
 item sets its `resolution` field on that same ref, an ordinary write
 like any other — `refs/heads/ended/<ksuid>` is the layout new items were
 filed under before this rule; every reader still reads it, but nothing
 writes a new entry there any more, so a resolved item stays exactly
 where it already was.
-`refs/heads/board/seq` and `refs/heads/board/format` hold board-wide state the
-same way, outside the per-item namespace — scheduled-lane health used
-to be a third such ref (`refs/heads/board/lanes`) but now lives only in the
-local `o/board.db` cache, never committed; see above.
+`refs/heads/board/seq`, `refs/heads/board/format`, and
+`refs/heads/board/order` (the board's own root ranking, the same
+blob shape a parent's ranked children take) hold board-wide state
+the same way, outside the per-item namespace — scheduled-lane health
+used to be a fourth such ref (`refs/heads/board/lanes`) but now lives
+only in the local `o/board.db` cache, never committed; see above.
 `refs/heads/board/format`'s tree holds one blob, `format`, naming the layout
 version every reader checks before trusting anything else it read
 alongside it (`_work/format.tl`) — a board on a version this tool does
@@ -116,17 +118,7 @@ tier: an item with open children is a container being decomposed, a
 parentless one is a root, and a parented leaf is workable (the only
 thing with a board state).
 
-Which items matter more is a RELATION, not a number an item asserts
-about itself. `compare A B` commits one judgment — A outranks B — as
-an edge on the winner, and `_work/priority.tl` derives every order
-from the accumulated edges: transitivity closes the pairs nobody was
-asked about, a comparison at any height places everything beneath it,
-and age is the last word among items no comparison separates. An item
-no edge reaches, at any height, is UNPLACED, and that is exactly what
-the triage queue holds; `take` refuses work with no position, so an
-unplaced item is never pulled. A cycle
-is reported, never averaged away: it means the comparison question was
-ambiguous, so the pair is restated and re-asked.
+How the board orders itself, top to bottom, is `gitboard help order`.
 
 The outcome prose those roots stand for lives in `docs/goals.md` on
 cosmic-lua/cosmic's `main`. It is context a planner reads to interpret

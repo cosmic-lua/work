@@ -23,6 +23,7 @@ local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
 local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local refs = require("_work.refs")
 local sess = require("_work.session")
 local store = require("_work.store")
@@ -145,15 +146,22 @@ end
 --- @param specs act.Specs Sidecar body by id
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param lane_facts {string: string} | nil Lane state, nil when unsynced
+--- @param root_order {string} The board's root ranking, in rank order
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function status_report(all: {item.Item}, specs: act.Specs,
-    ages?: health.Ages, lane_facts?: {string: string}): {string}, string
+    ages?: health.Ages, lane_facts?: {string: string}, root_order?: {string}):
+  {string}, string
   local aged = ages or {}
   local index = flow.by_id(all)
   local pos = prio.positions(all)
+  -- Selection and stage-bucketing stay `flow`'s (todo vs. doing, stage
+  -- order) — this is only the RENDER order laid over what it returns,
+  -- so every queue on this page reads in the one order `show ID`
+  -- describes for a single item.
+  local ranks = rank.positions(all, root_order or {})
   local out: {string} = {}
-  local doing = flow.in_state(all, "doing", pos)
+  local doing = rank.sorted(flow.in_state(all, "doing", pos), ranks)
   out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
   for _, i in ipairs(doing) do
     local marks = (" [%s]"):format(flow.substate(i))
@@ -182,7 +190,7 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   if flagged ~= "" then
     out[#out + 1] = flagged
   end
-  local todo = flow.in_state(all, "todo", pos)
+  local todo = rank.sorted(flow.in_state(all, "todo", pos), ranks)
   local pullable = 0
   for _, i in ipairs(todo) do
     if act.passes_bar(i, specs, pos) and not flow.is_blocked(i, index) then
@@ -205,7 +213,7 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   end
   -- Untriaged roots render item by item: they are not workable yet,
   -- and this is the one list of them anyone gets.
-  local triage = flow.untriaged(all)
+  local triage = rank.sorted(flow.untriaged(all), ranks)
   out[#out + 1] = ("%-6s %d"):format("triage", #triage)
   for _, f in ipairs(triage) do
     out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
@@ -228,6 +236,15 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   return out, verdict
 end
 
+--- `list_via_cache`'s result: every item plus the board's root
+--- ranking, read off the one open cache together — a record rather
+--- than a third return slot, since slot 1 here admits nil
+--- (`guide.lint`'s `fallible-returns` rule).
+local record Board
+  items: {item.Item}
+  root_order: {string}
+end
+
 --- Every item via the board cache instead of a fresh git read —
 --- `_work.cachequery.items` hydrated straight from `cache.open`'s SQL
 --- rows, current for the live board by the same freshness guard
@@ -243,11 +260,13 @@ end
 --- snapshot in `s.touched_at`, so `claim_ages` never has to ask git
 --- again for a claimed item's touch time. A snapshot that fails to
 --- read is not fatal here: `known_digest` is left nil, and `cache.open`
---- falls back to taking its own.
+--- falls back to taking its own. Also reads the board's root ranking
+--- off the same open cache, so a render that needs both never pays for
+--- a second open.
 --- @param s store.Store The store
---- @return {item.Item} | nil Every item
+--- @return Board | nil Every item, and the board's root ranking
 --- @return string Error message
-local function list_via_cache(s: store.Store): {item.Item} | nil, string
+local function list_via_cache(s: store.Store): Board | nil, string
   local found, _ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
   local known_digest: string | nil = nil
   if found ~= nil then
@@ -265,6 +284,7 @@ local function list_via_cache(s: store.Store): {item.Item} | nil, string
     return nil, cerr
   end
   local all, ierr = cachequery.items(c)
+  local root_order, _oerr = cachequery.root_order(c)
   local close_ok, close_err = cache.close(c)
   if all == nil then
     return nil, ierr
@@ -272,16 +292,17 @@ local function list_via_cache(s: store.Store): {item.Item} | nil, string
   if not close_ok then
     return nil, close_err
   end
-  return all
+  return {items = all, root_order = root_order}, ""
 end
 
 --- Bare `show`: the whole board. Named `cmd_status` for the report it
 --- prints; the verdict line says `show`, the verb that reaches it.
 local function cmd_status(s: store.Store): integer
-  local all, aerr = list_via_cache(s)
-  if all == nil then
+  local board, aerr = list_via_cache(s)
+  if board == nil then
     return verdict_line("show", false, aerr)
   end
+  local all = board.items
   -- An unsynced board has no lanes_state.tl at all, and read_state
   -- reports that the same way it reports every lane already at its
   -- last-recorded value: an empty map. That is also, and only, what
@@ -294,7 +315,7 @@ local function cmd_status(s: store.Store): integer
     lane_facts = facts
   end
   local lines, verdict = status_report(all, read_specs(s, all),
-    claim_ages(s, all), lane_facts)
+    claim_ages(s, all), lane_facts, board.root_order)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -400,19 +421,22 @@ local function next_report_live(s: store.Store, all: {item.Item},
 end
 
 local function cmd_next(s: store.Store, session?: string): integer
-  local all, aerr = list_via_cache(s)
-  if all == nil then
+  local board, aerr = list_via_cache(s)
+  if board == nil then
     return verdict_line("next", false, aerr)
   end
+  local all = board.items
   return verdict_line("next", true,
     next_report_live(s, all, read_specs(s, all), session, claim_ages(s, all),
       ci_states(s, all)))
 end
 
 local record gitview
+  type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
   status_report: function(all: {item.Item}, specs: act.Specs,
-  ages?: health.Ages, lane_facts?: {string: string}): {string}, string
+  ages?: health.Ages, lane_facts?: {string: string}, root_order?: {string}):
+  {string}, string
   next_report: function(all: {item.Item}, specs: act.Specs,
   session?: string, ages?: health.Ages): string
   next_report_live: function(s: store.Store, all: {item.Item},
@@ -423,7 +447,7 @@ local record gitview
   -- Exported only so `_work/gitview_test.tl` can verify the process
   -- count directly: production code reaches both through `cmd_status`/
   -- `cmd_next`.
-  list_via_cache: function(s: store.Store): {item.Item} | nil, string
+  list_via_cache: function(s: store.Store): Board | nil, string
   claim_ages: function(s: store.Store, all: {item.Item}): health.Ages
   cmd_status: function(s: store.Store): integer
   cmd_next: function(s: store.Store, session?: string): integer

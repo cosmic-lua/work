@@ -182,10 +182,10 @@ more and nothing less:
    file it. Draft it in full instead — title, a complete spec body
    meeting the ready bar (`## Goal`/`## Evidence`/`## Change`/
    `## Non-goals`/`## Acceptance`, each with the evidence it names),
-   the parent it attaches under, and any `block` relationship to a
-   sibling — precise enough that the orchestrator can run
-   `gitboard new`/`attach`/`block` from it verbatim, with no
-   judgment call of its own left to make.
+   the parent it attaches under, and any rank against a sibling —
+   precise enough that the orchestrator can run `gitboard
+   new`/`attach`/`rank` from it verbatim, with no judgment call of
+   its own left to make.
 4. Compose this item's own spec update — e.g. the summary table the
    spec's `## Acceptance` names — as the exact replacement text,
    ready for `gitboard spec <ITEM_ID> <file> --base <the current
@@ -218,8 +218,8 @@ repo's AGENTS.md alone is not yours to guess past.
 1. The recommended full new spec for THIS item, verbatim, ready to
    write to a file for `gitboard spec`.
 2. One block per capture item to file: title, full spec body, parent
-   id, and any blocker relationship — ready for `gitboard new` /
-   `attach` / `block` verbatim.
+   id, and any rank against a sibling — ready for `gitboard new` /
+   `attach` / `rank` verbatim.
 3. Or, if you stopped short: the exact blocker.
 4. Any out-of-scope findings, as separate paragraphs.
 Keep it factual and precise — the orchestrator applies your
@@ -323,14 +323,14 @@ children, each sized for one session's PR, until nothing is left
 uncut. Each child needs its own pullable spec — run
 `bin/gitboard help bar` for the bar; never file a child as a
 placeholder title with no `## Change`. Real landing order between
-children is a `blocked_by` edge, not prose. File each with:
+children is their rank, not prose. File each with:
 
 ```
 bin/gitboard new "<child title>" --parent <ITEM_ID> --spec-file <file>
 ```
 
-and `bin/gitboard block <child-id> <blocker-id> --reason '<why>'`
-for any real ordering dependency between the children you filed.
+and `bin/gitboard rank <child-id> --before|--after <sibling-id>`
+for any real ordering between the children you filed.
 
 ## Rules
 

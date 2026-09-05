@@ -1,9 +1,9 @@
 --- The `show ID` verb: one item rendered whole — fields, derived
---- state, priority standing, blockers, spec, history, and the same
---- problem list `take` enforces as its spec bar, so what would refuse
---- a pull is visible on the read that precedes it. Its own module
---- rather than a third report inside `_work.gitview`, which sits
---- against the repo's 500-line rule.
+--- state, rank, blockers, spec, history, and the same problem list
+--- `take` enforces as its spec bar, so what would refuse a pull is
+--- visible on the read that precedes it. Its own module rather than a
+--- third report inside `_work.gitview`, which sits against the repo's
+--- 500-line rule.
 ---
 --- Like every read verb, the report is PURE over already-read state
 --- and the `cmd_` half owns the store reads: what a session reads is
@@ -17,8 +17,8 @@ local gitready = require("_work.gitready")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local overlap = require("_work.overlap")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -42,13 +42,15 @@ end
 --- One item's fields, role, spec, spec-bar problems, and history.
 --- @param it item.Item The item
 --- @param all {item.Item} Every item
+--- @param ranks {string: rank.Rank} Rank by item id (`rank.positions`)
 --- @param body string Its spec sidecar, "" when it has none
 --- @param events {publish.Event} Its git history, newest first
 --- @param problems {string} The take gate's problem list, possibly empty
 --- @param overlaps {string} `_work.overlap`'s pre-rendered lines, possibly empty
 --- @return {string} The lines to print
 --- @return string The verdict detail
-local function show_report(it: item.Item, all: {item.Item}, body: string,
+local function show_report(it: item.Item, all: {item.Item},
+    ranks: {string: rank.Rank}, body: string,
     events: {publish.Event}, problems: {string},
     overlaps?: {string}): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
@@ -65,30 +67,7 @@ local function show_report(it: item.Item, all: {item.Item}, body: string,
   if item.is_open(it) and flow.role(it, all) == "work" then
     out[#out + 1] = ("state: %s"):format(state_of(it))
   end
-  local at = prio.positions(all)
-  local band, own = prio.key_of(at, it.id)
-  if band < 0 then
-    out[#out + 1] = "priority: unplaced — nothing has been compared against it"
-  else
-    out[#out + 1] = ("priority: band %d, outranks %d"):format(band, own)
-  end
-  -- `priority` is what was RECORDED; this is what orders the item when
-  -- a blocker edge moved it off that. A session reading a queue has to
-  -- be able to see why something sorted where it did, or a lift reads
-  -- as a bug in the sort.
-  local lift_band, _lift_own, frees = prio.order_of(at, it.id)
-  if frees > 0 then
-    local from = ""
-    local source = (at[it.id] or {}).lifted_from or ""
-    if source ~= "" then
-      from = (", ordered at band %d for %s"):format(lift_band,
-        source:sub(1, 8))
-    end
-    out[#out + 1] = ("unblocks: %d open item(s)%s"):format(frees, from)
-  end
-  if #it.beats > 0 then
-    out[#out + 1] = "outranks: " .. table.concat(it.beats, " ")
-  end
+  out[#out + 1] = ("rank: %s"):format(rank.describe(ranks, all, it.id))
   if it.claim ~= "" then out[#out + 1] = ("claim: %s"):format(it.claim) end
   if it.reviewer ~= "" then
     out[#out + 1] = ("reviewer: %s"):format(it.reviewer)
@@ -196,7 +175,7 @@ local function cmd_show(s: store.Store, id: string): integer
   -- column to preserve — and a cache silently missing exactly this
   -- row (stale in a way its own digest guard cannot catch) must never
   -- read as "no such item" for the one item a session named directly.
-  -- Only `all` — every OTHER item, for role/priority/overlap context —
+  -- Only `all` — every OTHER item, for role/rank/overlap context —
   -- comes from the cache; that whole-board read is `store.list`'s
   -- expensive half, not this one.
   local it, lerr = store.load(s, id)
@@ -208,6 +187,7 @@ local function cmd_show(s: store.Store, id: string): integer
     return verdict_line("show", false, cerr)
   end
   local all, aerr = cachequery.items(c)
+  local root_order, _oerr = cachequery.root_order(c)
   local close_ok, close_err = cache.close(c)
   if all == nil then
     return verdict_line("show", false, aerr)
@@ -215,6 +195,7 @@ local function cmd_show(s: store.Store, id: string): integer
   if not close_ok then
     return verdict_line("show", false, close_err)
   end
+  local ranks = rank.positions(all, root_order)
   -- `git log` is the one read the load never carries — the item's
   -- history lives only in its commits, so this stays a deliberate
   -- process rather than folding into a batch.
@@ -244,7 +225,8 @@ local function cmd_show(s: store.Store, id: string): integer
   else
     body = store.read_spec(s, id)
   end
-  local lines, verdict = show_report(it, all, body, events, problems, overlaps)
+  local lines, verdict = show_report(it, all, ranks, body, events, problems,
+    overlaps)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -252,7 +234,8 @@ local function cmd_show(s: store.Store, id: string): integer
 end
 
 local record gitshow
-  show_report: function(it: item.Item, all: {item.Item}, body: string,
+  show_report: function(it: item.Item, all: {item.Item},
+  ranks: {string: rank.Rank}, body: string,
   events: {publish.Event}, problems: {string},
   overlaps?: {string}): {string}, string
   cmd_show: function(s: store.Store, id: string): integer
