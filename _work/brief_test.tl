@@ -332,8 +332,10 @@ local function test_brief_refusals_and_the_spec_less_decompose()
   local it = check.must(store.load(s, leaf))
   assert(it.claim == "", "brief is a read: no claim moved")
   assert(out:find("bin/gitboard sync", 1, true) ~= nil
-    and out:find("o/bin/gitboard", 1, true) == nil,
-    "decompose brief names bin/gitboard, not o/bin/gitboard: " .. out)
+    and out:find("o/bin/gitboard", 1, true) == nil
+    and out:find("gitboard is already built", 1, true) == nil,
+    "decompose brief names bin/gitboard, drops o/bin/gitboard and the "
+    .. "stale 'already built' sentence: " .. out)
   local prior = env.get("GITBOARD_DIR")
   check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
   local _, dout = brief_and_capture(s, "decompose", root)
@@ -355,8 +357,10 @@ local function test_refine_brief_carries_the_current_spec_as_base()
   assert(out:find("<GAP>", 1, true) ~= nil,
     "the gap paragraph stays the orchestrator's to fill")
   assert(out:find("bin/gitboard sync", 1, true) ~= nil
-    and out:find("o/bin/gitboard", 1, true) == nil,
-    "refine brief names bin/gitboard, not o/bin/gitboard: " .. out)
+    and out:find("o/bin/gitboard", 1, true) == nil
+    and out:find("gitboard is already built", 1, true) == nil,
+    "refine brief names bin/gitboard, drops o/bin/gitboard and the "
+    .. "stale 'already built' sentence: " .. out)
   local prior = env.get("GITBOARD_DIR")
   check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
   local _, rout = brief_and_capture(s, "refine", leaf)
