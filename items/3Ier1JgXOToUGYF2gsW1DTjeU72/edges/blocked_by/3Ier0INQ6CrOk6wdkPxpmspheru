@@ -1,1 +1,0 @@
-a package system turns every stdlib break into a break in code the project does not own, discovered in a build it does not run; the compatibility commitment must bound D10 first
