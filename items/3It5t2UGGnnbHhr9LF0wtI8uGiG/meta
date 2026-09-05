@@ -1,4 +1,4 @@
-title: cacheread: migrate gitgate, gitverdict, and gitverbs off flow.tl/priority.tl
+title: gitgate/gitverdict/gitverbs: no migration needed — their one store.list is the write's own lease read (research finding, closes with no code)
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
