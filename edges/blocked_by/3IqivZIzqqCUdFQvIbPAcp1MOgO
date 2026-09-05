@@ -1,1 +1,0 @@
-no release can be cut until release.yml's gate gets past doc_paths_test; the includeIf/board-fetch fix is the first of the lane's two blockers
