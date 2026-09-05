@@ -27,6 +27,7 @@ local brieftext = require("_work.brieftext")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
 local ciobs = require("_work.ciobs")
+local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
@@ -215,6 +216,21 @@ local function bounce_context(s: store.Store, it: item.Item): string
     {REVIEWER_FINDING = finding.body, BRANCH = it.id:sub(1, 8)})
 end
 
+--- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`, derived from
+--- the `GITBOARD_DIR` this process was run under — `bin/gitboard`
+--- exports it as `<root>/o/board`, so its parent's parent is the
+--- checkout root. "" when `GITBOARD_DIR` is unset, leaving the
+--- placeholder for the caller to fill, the same way `<WORKTREE>`
+--- survives when the board cannot answer it.
+--- @return string The product checkout's absolute path, "" if unknown
+local function product_root(): string
+  local dir = env.get("GITBOARD_DIR")
+  if dir == nil or dir == "" then
+    return ""
+  end
+  return fs.absolute_path(fs.dirname(fs.dirname(dir)))
+end
+
 --- brief: print one role's prompt for an item, filled from the board.
 --- The body prints first and the verdict line closes it (the `show`
 --- shape), naming the placeholders left for the caller.
@@ -269,6 +285,10 @@ local function cmd_brief(s: store.Store, kind: string, id: string): integer
     BOARD_DIR = fs.absolute_path(s.root),
     REVIEW_SESSION = label,
   }
+  local root = product_root()
+  if root ~= "" then
+    values["PRODUCT_ROOT"] = root
+  end
   if kind == "builder" then
     local bc = bounce_context(s, it)
     if bc ~= "" then

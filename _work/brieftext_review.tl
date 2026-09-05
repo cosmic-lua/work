@@ -8,6 +8,17 @@
 ---
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
+---
+--- `<PRODUCT_ROOT>` is the product checkout holding `bin/gitboard`;
+--- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
+--- (its parent's parent), since `bin/gitboard` fetches and execs its
+--- own pinned release rather than something built in the board
+--- checkout. `SSL_USE_SYSTEM_CERTS=1` stays in both verdict blocks: a
+--- direct `cosmic.fetch` against `api.github.com` — the same call the
+--- verdict's PR-head check makes through `_work.gh`/`_work.api` —
+--- fails TLS verification without it and succeeds with it on the
+--- network this was measured against; the measurement used a plain
+--- fetch rather than a live `verdict`, which would mutate the board.
 
 local REVIEW < const > = [[
 You are a fresh-context code reviewer for `<REPO>`. You have never
@@ -63,15 +74,16 @@ agent's worktree.
 
 ## Recording your verdict
 
-Three verdicts: `accept`, `request-changes`, `reject`. gitboard is
-already built in the board checkout; this review is claimed under
-session `<REVIEW_SESSION>` — you MUST use that exact string. Export
-SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
+Three verdicts: `accept`, `request-changes`, `reject`. `bin/gitboard`
+in the product checkout fetches its own pinned release; this review
+is claimed under session `<REVIEW_SESSION>` — you MUST use that exact
+string. Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches
+GitHub.
 
 ```
-cd <BOARD_DIR>
+cd <PRODUCT_ROOT>
 export SSL_USE_SYSTEM_CERTS=1
-o/bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
+bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
   --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
 ```
 
@@ -146,15 +158,16 @@ reads well.
 
 ## Recording your verdict
 
-Three verdicts: `accept`, `request-changes`, `reject`. gitboard is
-already built in the board checkout; this review is claimed under
-session `<REVIEW_SESSION>` — you MUST use that exact string. Export
-SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
+Three verdicts: `accept`, `request-changes`, `reject`. `bin/gitboard`
+in the product checkout fetches its own pinned release; this review
+is claimed under session `<REVIEW_SESSION>` — you MUST use that exact
+string. Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches
+GitHub.
 
 ```
-cd <BOARD_DIR>
+cd <PRODUCT_ROOT>
 export SSL_USE_SYSTEM_CERTS=1
-o/bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
+bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
   --session <REVIEW_SESSION>
 ```
 
