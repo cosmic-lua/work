@@ -1,0 +1,223 @@
+name: perf
+
+# gitboard's cost is git processes, not Lua (see this item's Evidence on
+# the board): wall-clock scenarios over a generated fixture
+# (`_perf/fixture.tl`, `_perf/bench/verbs_bench.tl`), measured daily and
+# compared main against the latest release with cosmic's own instrument
+# (`_perf/run.tl`, `_perf/gate.tl` — this repository writes no harness of
+# its own; see `_perf/bench/verbs_bench.tl`'s header for how those
+# resolve against THIS tree's benches from a checkout of cosmic-lua/cosmic).
+# Nothing downstream reads the result, so a red run holds nothing — same
+# as cosmic's D44 — but the compare step carries no guard: a lane that
+# cannot fail is not a lane, and a reproduced regression is its only
+# signal.
+#
+# It fires at 09:00 UTC — the same daily offset cosmic's own fuzz.yml
+# uses, safely past cosmic-lua/cosmic's 06:00 release window whose
+# pinned binary (`bin/cosmic.pin`) this repository's whole build runs
+# under. This repository's own `release.yml` publishes continuously (one
+# release per push to main, no daily cron of its own), so the newest
+# release is usually built from the exact commit this job measures —
+# comparing a binary against itself is refused by `gate.tl compare`
+# (by design). The baseline is therefore the newest release whose OWN
+# source commit is NOT the commit being measured (see the "compare
+# against the latest release" step below), never simply "the latest".
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+  # So the lane's own plumbing is proven on the PR that adds it, and on
+  # every later change to it.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/perf.yml'
+
+permissions:
+  contents: read
+
+# PR runs supersede each other like every other PR lane; scheduled runs
+# never cancel each other.
+concurrency:
+  group: perf-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # A plain runner, no container and no elevated privilege — the same
+  # shape as this repository's own `board` workflow: gitboard's build and
+  # its `_perf` scenarios need neither the fence nor the coverage
+  # sensitivity cosmic-lua/cosmic's own pr.yml/perf.yml run under, since
+  # this repository defines no `cosmic/**` and ships no binary called
+  # `cosmic` to converge.
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # The harness (`_perf/run.tl`, `_perf/gate.tl`, `_perf/harness.tl`,
+      # `_perf/perf_types.tl`, `_perf/compare.tl`) lives in
+      # cosmic-lua/cosmic, not here (`_perf/bench/verbs_bench.tl`'s
+      # header records the probe that decided this) — this checks out its
+      # `main` once, read-only, for the scripts alone; nothing here builds
+      # or gates cosmic-lua/cosmic itself.
+      - name: fetch cosmic's perf harness
+        run: |
+          set -eux
+          git clone --depth 1 https://github.com/cosmic-lua/cosmic /tmp/cosmic-perf-src
+
+      - name: plan
+        id: plan
+        run: |
+          set -eux
+          echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      # `bin/cosmic` fetches the one pinned cosmic and execs it; this
+      # repository defines no `cosmic/**` and ships no binary called
+      # `cosmic`, so there is no fixpoint to converge and every verb below
+      # runs under that one pinned release.
+      - name: build gitboard
+        run: |
+          set -eux
+          bin/cosmic --make fetch
+          bin/cosmic --make build
+          test -x o/bin/gitboard
+
+      # Twice against the same binary, on one runner in one job:
+      # `_perf/gate.tl selfcheck` measures o/bin/gitboard twice into
+      # perf.json/selfcheck.json, the second reading standing as the A/A
+      # noise control the compare step below reads. Each measurement
+      # builds its own fixture (`_perf/fixture.tl` is deterministic, so
+      # both reify the SAME synthetic board) and never touches the
+      # network itself — only this step's outer plumbing does. A
+      # scenario's check() failure fails this step: it means the binary
+      # answered WRONG, not slow, and that is a real finding whether or
+      # not anything is published today.
+      #
+      # `PERF_BIN` names what `_perf/run.tl` records (`bin`/`bin_sha`)
+      # as the measured binary — distinct from `GITBOARD_PERF_BIN`
+      # (`_perf/bench/verbs_bench.tl`), which names what the SCENARIOS
+      # spawn. Left unset, `run.tl` records whichever cosmic is running
+      # the harness — the same pinned `bin/cosmic` on every invocation
+      # — so `gate.tl compare`'s identity check would read every run as
+      # the SAME binary and refuse regardless of what was actually
+      # measured; every `run.tl` invocation in this workflow sets both,
+      # to the same file.
+      - name: measure gitboard twice
+        timeout-minutes: 20
+        run: |
+          set -euxo pipefail
+          PERF_BIN="$PWD/o/bin/gitboard" \
+            bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl selfcheck \
+            o/perf/perf.json o/perf/selfcheck.json
+
+      # The baseline is NOT simply "the latest release": this repository
+      # publishes one on every push to main, so the newest release is
+      # usually built from the exact commit this job is measuring, and
+      # `gate.tl compare` correctly refuses a binary compared against
+      # itself (`binaries: base ... current ... (same)`) — a refusal
+      # this lane must NOT read as "clean" now that pipefail (below)
+      # lets it redden the lane. So the releases list is read directly
+      # (`gh api`) and filtered to the newest one whose OWN source
+      # commit — the 7-char sha its tag carries, `YYYY-MM-DD-<sha7>`
+      # (release.yml) — is NOT a prefix of the commit being measured:
+      # skip forward past this commit's own release(s) to the next
+      # older one that still carries a `gitboard` asset. Which tag was
+      # picked is printed before anything is downloaded.
+      #
+      # A DIFFERENT commit's release can still embed the SAME binary:
+      # this PR's own build proved it (a `_perf/**`/workflow/README/
+      # `.cosmic-coverage`-only change recompiles nothing `o/bin/gitboard`
+      # embeds), and any day main only moves those paths hits it again.
+      # So the two binaries' sha256 are compared BEFORE the baseline is
+      # even measured — running `_perf/run.tl` against a binary already
+      # known to be identical would spend minutes measuring a result
+      # `gate.tl compare` is going to refuse anyway. Three outcomes:
+      #   perf-baseline: SKIP (no release predates this commit)
+      #     — a brand-new repository; nothing to compare against yet
+      #   perf-compare: SKIP (binary identical to release TAG: ...)
+      #     — a real, non-self baseline release, but byte-identical to
+      #       today's build; there is no regression question to ask
+      #   perf-compare: OK / FAIL (from `gate.tl compare` itself)
+      #     — two genuinely different binaries, actually compared
+      # Only the third writes a `gate.tl compare` verdict; the first two
+      # are this step's own, and both exit 0 — there is nothing wrong to
+      # report in either. `pipefail` (set below) is load-bearing for the
+      # third: without it the `if/else...fi`'s exit status is `tee`'s,
+      # always 0, and a real `perf-compare: FAIL` would never reach the
+      # `$rc` check and would never redden this job. Failing to even LIST
+      # releases (network or API failure) fails the step immediately,
+      # distinct from every SKIP above; the next scheduled run retries.
+      - name: compare against the latest release
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uxo pipefail
+          rc=0
+          if ! releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30"); then
+            echo "perf-baseline: FAIL (could not list releases)" | tee o/perf/baseline.txt >&2
+            exit 1
+          fi
+          tag=$(echo "$releases" | jq -r --arg sha "$GITHUB_SHA" '
+              [ .[]
+                | select(.draft == false)
+                | . + {rel_sha: (.tag_name | capture("-(?<s>[0-9a-f]{7})$").s // "")}
+                | select(.rel_sha != "")
+                | select((.assets // []) | any(.name == "gitboard"))
+                | select((.rel_sha as $s | ($sha | startswith($s))) | not)
+              ]
+              | sort_by(.created_at) | reverse
+              | (.[0].tag_name // "")
+            ')
+          if [ -z "$tag" ]; then
+            echo "perf-baseline: SKIP (no release predates this commit)" > o/perf/baseline.txt
+            echo "perf-compare: SKIP (no baseline)" > o/perf/compare.txt
+          else
+            echo "perf-baseline: OK $tag" > o/perf/baseline.txt
+            mkdir -p o/perf/prev
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern gitboard --dir o/perf/prev
+            chmod +x o/perf/prev/gitboard
+            cur_sha=$(sha256sum o/bin/gitboard | cut -d ' ' -f1)
+            prev_sha=$(sha256sum o/perf/prev/gitboard | cut -d ' ' -f1)
+            if [ "$cur_sha" = "$prev_sha" ]; then
+              echo "perf-compare: SKIP (binary identical to release $tag: nothing embedded changed)" \
+                | tee o/perf/compare.txt
+            else
+              GITBOARD_PERF_BIN="$PWD/o/perf/prev/gitboard" \
+              PERF_BIN="$PWD/o/perf/prev/gitboard" \
+                bin/cosmic /tmp/cosmic-perf-src/_perf/run.tl --out o/perf/prev/perf.json
+              bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl compare \
+                o/perf/prev/perf.json o/perf/perf.json o/perf/selfcheck.json \
+                | tee o/perf/compare.txt
+            fi
+          fi || rc=$?
+          {
+            tail -n1 o/perf/baseline.txt
+            [ -f o/perf/compare.txt ] && tail -n1 o/perf/compare.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -ne 0 ]; then
+            [ -f o/perf/compare.txt ] && cat o/perf/compare.txt >&2
+            tail -n1 o/perf/baseline.txt >&2
+            echo "perf: main regressed against release $tag. Nothing is blocked and nothing was withheld: this lane reports." >&2
+            echo "  re-run this workflow to re-measure: a real regression reproduces, noise does not." >&2
+            exit "$rc"
+          fi
+
+      # `if: always()` is on the upload, not on the compare: the readings
+      # are the record, and a red day's numbers are the ones worth
+      # keeping.
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        if: always()
+        with:
+          name: perf-${{ steps.plan.outputs.day }}
+          path: |
+            o/perf/perf.json
+            o/perf/selfcheck.json
+            o/perf/compare.txt
+            o/perf/baseline.txt
+            o/perf/prev/perf.json

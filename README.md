@@ -22,6 +22,8 @@ _work/       the machinery: gitboard (CLI), gitverbs (mutations),
              (the record), ksuid (ids)
 cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
+_perf/       wall-clock verb scenarios over a generated fixture — see
+             `## Performance` below
 ```
 
 `_work/index.tl` and `_work/find.tl` define a DERIVED SQLite schema
@@ -251,3 +253,26 @@ GitHub keeps two jobs: pull requests (against the repo an item's own
 `repo` field names — most often cosmic-lua/cosmic) carry fixes and
 their review; cosmic-lua/cosmic's issues are the inbound queue,
 imported here as findings at triage.
+
+## Performance
+
+`_perf/bench/verbs_bench.tl` times `o/bin/gitboard`'s verbs (`show`,
+`show ID`, `next`, `find`, `fsck`, `sync`, a cache-cold `show`, and the
+mutations `new`, `compare`, `done`) wall-clock, one process spawn per
+call, against a synthetic board `_perf/fixture.tl` generates in a local
+bare origin plus a clone — deterministic, no network, never the live
+board — in the proportions a real board carries. gitboard's cost is
+git processes, not Lua, so this measures the whole stack a session
+actually waits on. `.github/workflows/perf.yml` runs it daily,
+comparing today's tree against the latest published release; it gates
+nothing — a regression is reported, not blocked, the same as
+cosmic-lua/cosmic's own perf lane. To run it locally, from a checkout
+of cosmic-lua/cosmic (`PERF_BIN=$PWD/o/bin/gitboard bin/cosmic
+/path/to/cosmic/_perf/run.tl --out o/perf/current.json`, run from this
+repository's root after `bin/cosmic --make build`); `GITBOARD_PERF_N`
+overrides the fixture's item count (default 1000), `GITBOARD_PERF_BIN`
+the binary the scenarios spawn, and `PERF_BIN` — cosmic's own
+`_perf/run.tl` variable — the binary the results file records as
+measured; set both to the same file, or a comparison's identity check
+reads every run as the same binary (whichever cosmic is running the
+harness) and refuses.
