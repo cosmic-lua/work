@@ -17,12 +17,14 @@ local cache = require("_work.cache")
 local events = require("_work.events")
 local store = require("_work.store")
 local refs = require("_work.refs")
-local time = require("cosmic.time")
 
 --- One item mutation as git recorded it.
 local record Event
   sha: string
-  --- ISO 8601 commit time.
+  --- UTC, `YYYY-MM-DDTHH:MM:SSZ` — the same `Z`-suffixed form
+  --- `_work.gitshow`'s own `opened:` line prints, and (see `history`'s
+  --- own doc comment) rendered the same way regardless of source, so
+  --- it never depends on the host's git version or its `TZ`.
   at: string
   subject: string
 end
@@ -148,24 +150,17 @@ local function abbrev_width(s: store.Store, sample_sha: string): integer
   return #(r.stdout:gsub("%s+$", ""))
 end
 
---- `events.Row.at` back to the strict-ISO-8601 string `%cI` renders —
---- always at a UTC (`+00:00`) offset, since the epoch integer the
---- `events` table stores never carries the committer's original
---- offset the way a live `%cI` reading does. Every commit this project
---- writes is made by a process running in UTC (`_work.fastimport`'s
---- own `git_date_now`, on every environment this board runs in), so
---- this reconstructs the same string a live `%cI` read would — an
---- assumption a non-UTC development machine could break for its OWN
---- freshly made commits, never for the board's real history.
+--- One epoch, rendered `YYYY-MM-DDTHH:MM:SSZ` — the single formatter
+--- `history` runs EVERY commit time through, cache-sourced or
+--- git-sourced alike (see `history`'s own doc comment for why: `%cI`
+--- prints a different suffix on a different git version for the exact
+--- same UTC instant, which a byte-identical render cannot tolerate).
+--- `!` forces `os.date` to UTC regardless of the host's own `TZ`, the
+--- same call `_work.gitshow`'s `opened:` line already makes.
 --- @param epoch integer Unix seconds
---- @return string | nil The ISO 8601 string, nil on a bad epoch
-local function iso8601_utc(epoch: integer): string | nil
-  local dt, _err = time.gmtime(epoch)
-  if dt == nil then
-    return nil
-  end
-  return ("%04d-%02d-%02dT%02d:%02d:%02d+00:00"):format(
-    dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec)
+--- @return string The UTC timestamp
+local function iso8601_z(epoch: integer): string
+  return os.date("!%Y-%m-%dT%H:%M:%SZ", epoch) as string -- cast: os.date with a format string always returns string
 end
 
 --- `history`'s cache path: `_work.events.read`, newest first, with
@@ -185,11 +180,8 @@ local function events_from_cache(s: store.Store, id: string): {Event} | nil
   local out: {Event} = {}
   for i = #rows, 1, -1 do
     local row = rows[i]
-    local at = iso8601_utc(row.at)
-    if at == nil then
-      return nil
-    end
-    out[#out + 1] = {sha = row.sha:sub(1, width), at = at, subject = row.subject}
+    out[#out + 1] = {sha = row.sha:sub(1, width), at = iso8601_z(row.at),
+      subject = row.subject}
   end
   return out
 end
@@ -199,6 +191,17 @@ end
 --- ref (O(item) not O(board)) otherwise — or the whole board's, merged
 --- across every item and ended ref, when `id` is nil (always `git
 --- log`; the cache carries no whole-board query for this).
+---
+--- FORMAT: `at` is `iso8601_z` run over `%ct` (raw epoch seconds) on
+--- BOTH paths, never git's own `%cI` — `%cI` prints a different
+--- offset suffix on different git versions for the exact same UTC
+--- instant (`+00:00` vs. `Z`), which a cache path that stores only the
+--- epoch cannot reproduce, and a byte-identical render cannot tolerate
+--- either way. Routing the fallback through the same Lua formatter the
+--- cache path already uses makes `show ID`'s history block `Z`-form
+--- UTC unconditionally — the same form `_work.gitshow`'s `opened:`
+--- line prints — rather than a fact of the git binary that happens to
+--- be installed.
 --- @param s store.Store The store
 --- @param id string Item id, or nil for every commit on every ref
 --- @return {Event} | nil Events, possibly empty
@@ -211,7 +214,7 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
   if cached ~= nil then
     return cached
   end
-  local argv: {string} = {"log", "--format=%h\t%cI\t%s"}
+  local argv: {string} = {"log", "--format=%h\t%ct\t%s"}
   if id ~= nil then
     local ref = s.leased_ref[id]
     if ref == nil then
@@ -244,9 +247,12 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
   end
   local out: {Event} = {}
   for line in r.stdout:gmatch("([^\n]+)") do
-    local sha, at, subject = line:match("^(%S+)\t(%S+)\t(.*)$")
-    if sha then
-      out[#out + 1] = {sha = sha, at = at, subject = subject}
+    local sha, at_str, subject = line:match("^(%S+)\t(%S+)\t(.*)$")
+    if sha and at_str then
+      local at = math.tointeger(tonumber(at_str))
+      if at then
+        out[#out + 1] = {sha = sha, at = iso8601_z(at), subject = subject}
+      end
     end
   end
   return out
