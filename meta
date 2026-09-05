@@ -2,5 +2,6 @@ title: gitbatch: a regression test that fails when the pipe-saturating round is 
 parent: 3IszjUoYYOxuFeVKV0sbaNRtA4O
 target: cosmic-lua/work
 claim: build-gLmN_lcB-32638265
+reviewer: review-CgLm_NlcB-32638265
 pr: 32
 builders: build-gLmN_lcB-32638265
