@@ -206,6 +206,39 @@ local function test_resolve_prefixes()
   assert(none == nil and nerr:find("no item", 1, true), "a miss is named")
 end
 
+-- `resolve`'s own one-shot lease is what lets the very next `load` of
+-- the resolved id skip repeating this prefix's for-each-ref —
+-- `_work.gitboard`'s handle route gets the symmetric guard in
+-- `_work/gitboard_test.tl`; this is the prefix half.
+local function test_resolve_leases_the_load_that_follows_a_prefix()
+  local root = init_state_repo("resolve-leases-load")
+  local s = check.must(store.open(root))
+  local a = make_item()
+  assert(store.save(s, a, "new a"))
+  local resolved = check.must(store.resolve(s, a.id:sub(1, 26)))
+  assert(resolved == a.id, "the prefix resolves")
+
+  local exact_pattern = {"refs/heads/items/" .. a.id, "refs/heads/ended/" .. a.id}
+  local exact_calls = 0
+  local real_for_each_ref = refs.for_each_ref
+  refs.for_each_ref = function(croot: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    if #patterns == 2 and patterns[1] == exact_pattern[1]
+    and patterns[2] == exact_pattern[2] then
+      exact_calls = exact_calls + 1
+    end
+    return real_for_each_ref(croot, patterns)
+  end
+  local ok, loaded = pcall(store.load, s, resolved)
+  refs.for_each_ref = real_for_each_ref
+  if not ok then
+    error(loaded, 0)
+  end
+  assert(loaded ~= nil, "the load should succeed")
+  assert(exact_calls == 0, "a resolved prefix's own load must not repeat "
+    .. "the exact-ref for-each-ref an unleased load would run: " .. exact_calls)
+end
+
 -- Everything one mutation touches lands as its OWN commit, one per
 -- item — the atomicity moved from the git commit object to the push
 -- that lands them together; `save` alone (no publish) is what this

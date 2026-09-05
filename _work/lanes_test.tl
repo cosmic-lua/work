@@ -10,6 +10,7 @@ local check = require("cosmic.check")
 local env = require("cosmic.env")
 local action = require("_work.action")
 local api = require("_work.api")
+local cache = require("_work.cache")
 local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
@@ -18,6 +19,7 @@ local gitready = require("_work.gitready")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
+local refs = require("_work.refs")
 local spec = require("_work.spec")
 local store = require("_work.store")
 
@@ -270,4 +272,30 @@ local function test_at_sync_proceeds_on_healthy_remaining()
   local lines = lanes.at_sync(s)
   assert(#lines == 1, table.concat(lines, " | "))
   assert(lines[1]:find("no origin remote", 1, true) ~= nil, "got: " .. lines[1])
+end
+
+-- `read_state` hands the cache `s.board_digest` once a `list` has set
+-- one, so the digest check never retakes the ref snapshot `list`
+-- already has — `_work/cache_test.tl` proves `cache.open` itself
+-- honors a known digest; this proves `lanes` actually passes one.
+local function test_read_state_reuses_a_known_board_digest()
+  local s = init_state_repo("lanes-digest-reuse")
+  check.must(cache.close(check.must(cache.open(s.root))))
+  check.must(store.list(s))
+  assert(s.board_digest ~= "", "list should have set a board digest")
+
+  local calls = 0
+  local real_for_each_ref = refs.for_each_ref
+  refs.for_each_ref = function(root: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    calls = calls + 1
+    return real_for_each_ref(root, patterns)
+  end
+  local ok, err = pcall(lanes.read_state, s)
+  refs.for_each_ref = real_for_each_ref
+  if not ok then
+    error(err, 0)
+  end
+  assert(calls == 0, "read_state must not retake the ref snapshot just "
+    .. "to validate the cache: " .. calls)
 end
