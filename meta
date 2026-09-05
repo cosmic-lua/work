@@ -1,3 +1,4 @@
 title: gitfsck's tree_problem check spawns ~5 git processes per item instead of batching — the whole cost of a 13-15s fsck at ~915 items
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+resolution: completed
