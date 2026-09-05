@@ -1,3 +1,4 @@
 title: gitboard attach: reparenting doesn't prune the old parent's order list, leaving fsck-flagged dangling entries
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+resolution: not-planned
