@@ -63,7 +63,7 @@ parent is meaningless once it has left, so the old parent's list entry
 is ignored on read and reported by `fsck`; `attach` never rewrites the
 old parent. The moved item arrives unranked among its new siblings:
 the mover judged where it belongs, not how it compares to neighbours
-it has never been weighed against. Moving between roots is already
+it has never been weighed against. Moving between outcomes is already
 the large rank change (a new prefix). `attach --before X` or
 `--after X` moves and places in one commit on two refs, for a move
 that knows its place; `rank` alone is the same-parent case.
@@ -75,9 +75,9 @@ the container's own entry goes stale, its children's list is untouched.
 
 An outcome whose win condition holds is `done --reason completed --by
 CHILD`, where CHILD is the verification item that carries the
-evidence: a child of the root whose own resolution is `completed`.
+evidence: a child of the outcome whose own resolution is `completed`.
 `done` refuses an outcome with an open child, a CHILD that is not its
-completed child, or no `--by` at all, so a root cannot be verified by
+completed child, or no `--by` at all, so an outcome cannot be verified by
 assertion; the child's id rides in the commit subject and the verdict
 line, so the log names the evidence. Retiring an outcome needs no
 child: `done --reason not-planned` asks only for the reason.
