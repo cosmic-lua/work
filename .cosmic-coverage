@@ -55,7 +55,8 @@ return {
   ["_work/review.tl"] = {["covered"] = 71, ["total"] = 74},
   ["_work/session.tl"] = {["covered"] = 44, ["total"] = 44},
   ["_work/spec.tl"] = {["covered"] = 58, ["total"] = 60},
-  ["_work/store.tl"] = {["covered"] = 142, ["total"] = 159},
+  ["_work/store.tl"] = {["covered"] = 133, ["total"] = 144},
+  ["_work/storewrite.tl"] = {["covered"] = 62, ["total"] = 64},
   ["_work/tail.tl"] = {["covered"] = 38, ["total"] = 38},
   ["cmd/gitboard/main.tl"] = {["covered"] = 0, ["total"] = 2},
 }

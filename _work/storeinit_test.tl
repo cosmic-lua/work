@@ -11,6 +11,7 @@ local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -142,7 +143,7 @@ end
 local function seed_one_item(s: store.Store)
   local id = check.must(ksuid.encode(1700000000, ("\0"):rep(16)))
   local it = check.must(item.decode({id = id, title = "a seeded item"}))
-  assert(store.save(s, it, "seed"))
+  assert(storewrite.save(s, it, "seed"))
 end
 
 -- A board whose marker names a version other than the one this tool

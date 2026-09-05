@@ -12,6 +12,7 @@ local fs = require("cosmic.fs")
 local publish = require("_work.publish")
 local spec = require("_work.spec")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 local vrd = require("_work.gitverdict")
 
@@ -213,8 +214,7 @@ local function test_the_builder_needs_force_to_verdict_its_own_item()
   local s = init_state_repo("verdict-session")
   local _, leaf = root_with_leaf(s)
   handed_over(s, leaf, 11)
-  local code, printed = verdict_and_capture(s, leaf, "accept", 11, "abc1234",
-    "session-a")
+  local code, printed = verdict_and_capture(s, leaf, "accept", 11, "abc1234", "session-a")
   assert(code ~= 0, "the session that built it may not accept it")
   assert(printed:find("needs a fresh context", 1, true) ~= nil,
     "the printed refusal says what happened: " .. printed)
@@ -314,7 +314,7 @@ local function test_a_verdict_consumes_the_review_claim()
   handed_over(s, leaf, 41)
   local it = check.must(store.load(s, leaf))
   it.reviewer = "review-9"
-  assert(store.save(s, it, "review claim for the fixture"))
+  assert(storewrite.save(s, it, "review claim for the fixture"))
   assert(vrd.cmd_verdict(s, leaf, "request changes", 41, "abc1234") == 0)
   assert(check.must(store.load(s, leaf)).reviewer == "", "the verdict consumed the claim")
 end

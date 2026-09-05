@@ -9,14 +9,17 @@
 --- `git`/`git_ok` here for the same deterministic tool identity every store call uses.
 ---
 --- The read and write mechanics are `_work.gitread`/`_work.gitwrite`, split out to keep
---- this file under its line cap; this module is the orchestration — which lease each write
---- compares against, and what a verb sets through `set_session`/`set_op`/`set_bounded`
---- before it calls `save`, whose own signature carries none of that.
+--- this file under its line cap; this module is the read half — opening a repository,
+--- resolving an id prefix, and loading or listing items. The write half — `save`,
+--- `add_pending`, and the lease/CAS bookkeeping (`set_session`/`set_op`/`set_bounded`) a
+--- verb sets before calling `save` — is `_work.storewrite`, split out the same way and for
+--- the same reason; it requires this module for the `Store` type and the few pieces of
+--- state (`NOOP_PREFIX`, `snapshot_item`, `stage`, `read_spec`) its own `save` needs, so
+--- this module never requires it back.
 local child = require("cosmic.child")
 local format = require("_work.format")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
-local gitwrite = require("_work.gitwrite")
 local item = require("_work.item")
 local refs = require("_work.refs")
 
@@ -30,6 +33,8 @@ local refs = require("_work.refs")
 --- id the most recent `list` found filed under both `refs/heads/items` and
 --- `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only reader; `list`'s
 --- ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live here too).
+--- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
+--- same fields this module's `load`/`list` populate.
 local record Store
   root: string
   session: string
@@ -157,33 +162,6 @@ local function open(root: string): Store | nil, string
     board_digest = "", fresh_lease = ""}
 end
 
---- Record the session `save` should credit as author for whatever it
---- writes next — the identity a verb that knows its caller threads
---- through the store rather than through `save`'s own signature, which
---- stays fixed. Sticks until changed; a verb that never calls this
---- leaves every write of its own attributed to the tool identity.
---- @param s Store The store
---- @param session string The session's identity, "" for none
-local function set_session(s: Store, session: string)
-  s.session = session or ""
-end
-
---- Record the `Op:` trailer `save` should add to its next commit(s).
---- @param s Store The store
---- @param op string The verb name, "" for none
-local function set_op(s: Store, op: string)
-  s.op = op or ""
-end
-
---- Mark the next `save` as a BOUNDED mutation: it also advances and
---- leases `refs/heads/board/seq`, so two bounded mutations racing each
---- other cannot both land. Consumed by `save`, which resets it.
---- @param s Store The store
---- @param bounded boolean Whether the next save is bounded
-local function set_bounded(s: Store, bounded: boolean)
-  s.bounded = bounded or false
-end
-
 --- The full id a unique prefix names, resolved against the refs
 --- directly — `for-each-ref` treats a full ref name as a pattern that
 --- also matches any glob suffixed onto it, so one call covers both an
@@ -248,14 +226,16 @@ end
 --- An independent copy of `it`, sharing no table with it — `encode`
 --- then `decode` round-trips through fresh tables at every level
 --- (`_work.item`'s own tested inverse pair), so this is cheaper to
---- lean on than a bespoke deep-copy function. Used only to snapshot
---- an item as OBSERVED, before any caller goes on to mutate the
---- object `load`/`list` handed back — `decode`'s own tolerance means
---- this can only fail on an item already flagged unreadable, in which
---- case the snapshot is skipped rather than surfaced as an error: the
+--- lean on than a bespoke deep-copy function. Used here to snapshot an
+--- item as OBSERVED, before any caller goes on to mutate the object
+--- `load`/`list` handed back — `decode`'s own tolerance means this can
+--- only fail on an item already flagged unreadable, in which case the
+--- snapshot is skipped rather than surfaced as an error: the
 --- fast-import diff (`_work.fastimport.diff_item`) treats a missing
 --- snapshot as "unobserved", which only costs it writing every path
---- unconditionally for that one item, never a wrong answer.
+--- unconditionally for that one item, never a wrong answer. Exported
+--- for `_work.storewrite.save` to snapshot what it just wrote, into
+--- the same `leased_item` table this module populates.
 --- @param it item.Item The item to copy
 --- @return item.Item | nil The copy, nil when re-decoding it failed
 local function snapshot_item(it: item.Item): item.Item | nil
@@ -336,30 +316,10 @@ local function flagged_summary(items: {item.Item}): string
   return ("%d unreadable/flagged: %s"):format(#parts, table.concat(parts, "; "))
 end
 
---- Queue one ref for the next `publish`, merging with whatever this
---- checkout already owes it a push for. A second unpublished write to
---- a ref this session already queued (`save` called again before
---- `publish` — a fixture writing straight past a verb, say) must
---- still lease against the tip the REMOTE last agreed to, not the
---- intermediate value this checkout only ever held locally, so the
---- existing entry — `old` included — is left exactly as it is; there
---- is nothing else on a `PushSpec` a later write to the same ref could
---- change.
---- @param s Store The store
---- @param p refs.PushSpec The ref to push
-local function add_pending(s: Store, p: refs.PushSpec)
-  for _, existing in ipairs(s.pending) do
-    if existing.ref == p.ref then
-      return
-    end
-  end
-  s.pending[#s.pending + 1] = p
-end
-
---- Validate an item well enough to write. `save` calls this itself
---- for `it` and every `also` item before touching any object; kept as
---- its own function since it is also how a caller checks a hand-built
---- record without writing it.
+--- Validate an item well enough to write. `_work.storewrite.save` calls
+--- this itself for `it` and every `also` item before touching any
+--- object; kept as its own function since it is also how a caller
+--- checks a hand-built record without writing it.
 --- @param s Store The store
 --- @param it item.Item The item
 --- @param _spec string | nil Unused; kept for signature compatibility
@@ -373,121 +333,43 @@ local function stage(_s: Store, it: item.Item, _spec?: string): boolean, string
   return true, ""
 end
 
---- Write one item (and, when given, further items the same mutation
---- touches) as one commit PER item, moved locally, and left for
---- `publish` to push together in one atomic transaction — the
---- multi-ref replacement for "every mutation is one commit": the
---- atomicity now lives at the push, not at the git commit object.
---- Each item's new tree is compared against the one its observed tip
---- already carries; the whole call is the no-op success only when
---- NOTHING moved.
---- @param s Store The store
---- @param it item.Item The item
---- @param message string Commit subject, shared by every commit this call makes
---- @param spec string Replacement spec markdown for `it`; nil leaves its sidecar
---- exactly as observed
---- @param also {item.Item} Further items to write in the same mutation
---- @return boolean True on success — a no-op mutation succeeds too
---- @return string "" on an ordinary success; on a no-op, the `is_noop`-testable
---- "nothing to record: ..." message; the failure detail otherwise
-local function save(s: Store, it: item.Item, message: string,
-    spec?: string, also?: {item.Item}): boolean, string
-  local batch: {item.Item} = {it}
-  for _, other in ipairs(also or {}) do
-    batch[#batch + 1] = other
-  end
-  for _, x in ipairs(batch) do
-    local ok, err = stage(s, x)
-    if not ok then
-      return false, err
-    end
-  end
-  local function read_current_spec(id: string): string
-    return read_spec(s, id)
-  end
-  local outcome, oerr = gitwrite.save_batch({
-      root = s.root, items = batch, message = message, session = s.session,
-      op = s.op, spec_for_first = spec, leased_ref = s.leased_ref,
-      leased_sha = s.leased_sha, leased_item = s.leased_item,
-      bounded = s.bounded, seq_sha = s.observed_seq,
-      read_spec = read_current_spec,
-    })
-  if outcome == nil then
-    return false, oerr
-  end
-  s.bounded = false
-  if not outcome.changed then
-    return true, NOOP_PREFIX .. ("%s leaves the board unchanged"):format(message)
-  end
-  s.fresh_lease = ""
-  local written_by_id: {string: item.Item} = {}
-  for _, x in ipairs(batch) do
-    written_by_id[x.id] = x
-  end
-  for id, ref in pairs(outcome.new_ref) do
-    s.leased_ref[id] = ref
-    s.leased_sha[id] = outcome.new_sha[id]
-    -- A later save in the same store handle (another `also` batch, a
-    -- second verb call) has to diff against what THIS save just
-    -- wrote, not the state it was leased against a moment ago.
-    local written = written_by_id[id]
-    if written ~= nil then
-      s.leased_item[id] = snapshot_item(written)
-    end
-  end
-  if outcome.seq_changed then
-    s.observed_seq = outcome.new_seq_sha
-  end
-  for _, p in ipairs(outcome.pushes) do
-    add_pending(s, p)
-  end
-  return true, ""
-end
-
 local record store
   type Store = Store
   LOST_RACE: string
+  NOOP_PREFIX: string
   is_noop: function(detail: string): boolean
   git: function(s: Store, argv: {string}): child.Result | nil, string
   git_ok: function(s: Store, argv: {string}): child.Result | nil, string
   init_repo: function(dir: string): boolean, string
   open: function(root: string): Store | nil, string
-  set_session: function(s: Store, session: string)
-  set_op: function(s: Store, op: string)
-  set_bounded: function(s: Store, bounded: boolean)
-  add_pending: function(s: Store, p: refs.PushSpec)
   load: function(s: Store, id: string): item.Item | nil, string
   resolve: function(s: Store, prefix: string): string | nil, string
   read_spec: function(s: Store, id: string): string
   read_specs: function(s: Store, ids: {string}): {string: string}
+  snapshot_item: function(it: item.Item): item.Item | nil
   list: function(s: Store): {item.Item} | nil, string
   duplicates: function(s: Store): {gitread.Duplicate}
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
-  save: function(s: Store, it: item.Item, message: string, spec?: string,
-  also?: {item.Item}): boolean, string
 end
 
 local M: store = {
   LOST_RACE = LOST_RACE,
+  NOOP_PREFIX = NOOP_PREFIX,
   is_noop = is_noop,
   git = git,
   git_ok = git_ok,
   init_repo = init_repo,
   open = open,
-  set_session = set_session,
-  set_op = set_op,
-  set_bounded = set_bounded,
-  add_pending = add_pending,
   load = load_item,
   resolve = resolve,
   read_spec = read_spec,
   read_specs = read_specs,
+  snapshot_item = snapshot_item,
   list = list,
   duplicates = duplicates,
   flagged_summary = flagged_summary,
   stage = stage,
-  save = save,
 }
 
 return M

@@ -21,6 +21,7 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local init_shared = fixture.init_shared
 local file_item = fixture.file_item
@@ -133,7 +134,7 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   -- own commit below is built against state the winner's push makes
   -- stale rather than one that already contains it.
   local base = make_item()
-  assert(store.save(a, base, "seed a common base"))
+  assert(storewrite.save(a, base, "seed a common base"))
   assert(publish.publish(a))
   assert(publish.sync(b))
 
@@ -145,14 +146,14 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   -- under the ref layout, so the race needs one shared ref.
   local wa = check.must(store.load(a, base.id))
   wa.title = "a's edit wins"
-  assert(store.save(a, wa, "a wins the race"))
+  assert(storewrite.save(a, wa, "a wins the race"))
   assert(publish.publish(a))
 
   -- b's edit of the same item, built and pushed against the now-stale
   -- base, loses.
   local wb = check.must(store.load(b, base.id))
   wb.title = "b's edit loses"
-  assert(store.save(b, wb, "b loses the race"))
+  assert(storewrite.save(b, wb, "b loses the race"))
   local ok, err = publish.publish(b)
   assert(not ok and err == store.LOST_RACE,
     "the losing mutation must refuse LOST_RACE: " .. tostring(err))

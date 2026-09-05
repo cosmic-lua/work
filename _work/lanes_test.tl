@@ -22,6 +22,7 @@ local lanes = require("_work.lanes")
 local refs = require("_work.refs")
 local spec = require("_work.spec")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local init_state_repo = fixture.init_state_repo
 
@@ -91,7 +92,7 @@ local function test_a_claimed_repair_is_left_alone_on_green()
   local repair = repair_for(check.must(store.list(s)), "release.yml")
   assert(repair ~= nil)
   repair.claim = "session-a"
-  assert(store.save(s, repair, ("take %s by session-a"):format(
+  assert(storewrite.save(s, repair, ("take %s by session-a"):format(
         repair.id:sub(1, 8))))
 
   assert(lanes.mint(s, GREEN))
@@ -196,7 +197,7 @@ local function test_a_minted_repair_is_offered_and_admitted()
   local s = init_state_repo("mint-admitted")
   local parent = check.must(item.decode({id = lanes.LANE_PARENT,
         title = "lane repair outcome"}))
-  assert(store.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
+  assert(storewrite.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
   local peer_id = fixture.file_item(s, "a peer outcome", "")
   assert(cmp.cmd_compare(s, parent.id, peer_id) == 0,
     "compare should be accepted")
