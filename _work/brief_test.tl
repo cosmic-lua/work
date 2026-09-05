@@ -331,6 +331,18 @@ local function test_brief_refusals_and_the_spec_less_decompose()
     "and says so in place of the spec")
   local it = check.must(store.load(s, leaf))
   assert(it.claim == "", "brief is a read: no claim moved")
+  assert(out:find("bin/gitboard sync", 1, true) ~= nil
+    and out:find("o/bin/gitboard", 1, true) == nil
+    and out:find("gitboard is already built", 1, true) == nil,
+    "decompose brief names bin/gitboard, drops o/bin/gitboard and the "
+    .. "stale 'already built' sentence: " .. out)
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
+  local _, dout = brief_and_capture(s, "decompose", root)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
+  assert(dout:find("cd /home/user/product\n", 1, true) ~= nil,
+    "decompose: PRODUCT_ROOT fills from GITBOARD_DIR: " .. dout)
 end
 
 local function test_refine_brief_carries_the_current_spec_as_base()
@@ -344,6 +356,18 @@ local function test_refine_brief_carries_the_current_spec_as_base()
     "the current spec rides as the CAS base")
   assert(out:find("<GAP>", 1, true) ~= nil,
     "the gap paragraph stays the orchestrator's to fill")
+  assert(out:find("bin/gitboard sync", 1, true) ~= nil
+    and out:find("o/bin/gitboard", 1, true) == nil
+    and out:find("gitboard is already built", 1, true) == nil,
+    "refine brief names bin/gitboard, drops o/bin/gitboard and the "
+    .. "stale 'already built' sentence: " .. out)
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
+  local _, rout = brief_and_capture(s, "refine", leaf)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
+  assert(rout:find("cd /home/user/product\n", 1, true) ~= nil,
+    "refine: PRODUCT_ROOT fills from GITBOARD_DIR: " .. rout)
 end
 
 -- A research handover earns the review brief too, as the research
