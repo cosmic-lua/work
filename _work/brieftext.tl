@@ -104,6 +104,33 @@ plus any out-of-scope findings as separate paragraphs. Keep it
 factual and concise.
 ]]
 
+--- The `<BOUNCE_CONTEXT>` section for a rework hand-back — an item
+--- that already carries a `request changes` verdict on an open PR.
+--- `_work.brief` fills `<REVIEWER_FINDING>` and `<BRANCH>` itself
+--- (the same `<UPPER_SNAKE>` grammar `fill` implements) before
+--- splicing the result into `BUILDER`'s own `<BOUNCE_CONTEXT>` slot,
+--- so a fresh pull — nothing to fill this WITH — never sees this text
+--- at all; `<WORKTREE>` here stays for the outer fill to leave alone,
+--- exactly as `BUILDER`'s own copy does.
+local REWORK < const > = [[
+## This is a rework, not a fresh pull
+
+The item already carries a `request changes` verdict on an open PR.
+Reuse its existing worktree and branch — do NOT branch fresh and do
+NOT discard the diff already there. Before touching anything, confirm
+the worktree at `<WORKTREE>` still exists, `git status` is clean, and
+its head matches what was last pushed to `<BRANCH>`; if it does not,
+stop and report the mismatch rather than rebuilding it from scratch.
+
+The reviewer's most recent finding, verbatim:
+
+> <REVIEWER_FINDING>
+
+Fix what it names, then push a fix to the SAME branch
+(`git push origin <BRANCH>`) rather than opening a new pull request —
+the existing PR updates itself from the push.
+]]
+
 local RESEARCH < const > = [[
 You are a research agent for `<REPO>`, working one item from the work
 board. You have no memory of any prior conversation — everything you
@@ -320,6 +347,7 @@ ordered, and the verb verdict lines. Keep it factual and concise.
 
 local record brieftext
   BUILDER: string
+  REWORK: string
   RESEARCH: string
   REFINE: string
   DECOMPOSE: string
@@ -327,6 +355,7 @@ end
 
 local M: brieftext = {
   BUILDER = BUILDER,
+  REWORK = REWORK,
   RESEARCH = RESEARCH,
   REFINE = REFINE,
   DECOMPOSE = DECOMPOSE,
