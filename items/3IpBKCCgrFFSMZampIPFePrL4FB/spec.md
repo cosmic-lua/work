@@ -73,6 +73,19 @@ That test is this change's canary: once record-field narrowing lands,
 `o.sub.x` inside `if o.sub then` no longer errors, so this test's own
 assertions flip from "still errors, with this hint" to "checks clean."
 
+**Engineering is already done.** A prior attempt implemented this in
+full on branch `3IpBKCCg` (commit `f0234765`, pushed to
+`origin/3IpBKCCg`), `bin/cosmic --make ci` green (5 stages, 3273/3273
+tests) — including a real bug found and fixed along the way (a naive
+first version narrowed a nil-compared field to bare `nil` even where
+the field's own declared type didn't admit nil, exposed by
+`cosmic/re.tl`'s `CacheEntry.iter_err`; fixed by excluding non-nil-
+admitting fields from the eq-nil shape). It stalled only on step 4
+below, written at the time against D21's original text — amended since
+(2026-09,
+[D21](../../docs/decisions/d21-carried-tl-patch.md#amended-2026-09)):
+landing a carried patch is no longer gated on filing anything upstream.
+
 ## Change
 
 **This item writes and lands the checker patch only. It does NOT
@@ -94,7 +107,7 @@ delete any of the 5 casts above** — see Non-goals; the cold-build rule
    ```teal
    ["narrow-record-field"] = {
      file = "tl.lua",
-     note = "<upstream issue ref>: a guard on `x.field` narrows the field's nil union at the use, invalidated by any assignment to `x.field` or to `x`",
+     note = "a guard on `x.field` narrows the field's nil union at the use, invalidated by any assignment to `x.field` or to `x`",
      find = [=====[<exact tl.lua snippet, from the fetched o/3p/tl/tl.tl>]=====],
      replace = [=====[<the same snippet plus the cosmic carried-patch comment and the fix>]=====],
    },
@@ -123,16 +136,19 @@ delete any of the 5 casts above** — see Non-goals; the cold-build rule
    nil-union pattern still fails to narrow, keep a trimmed version of
    this test for that residual case instead of deleting it outright).
 
-4. **Open the upstream issue.** Per D21's maturity clause ("each
-   carried patch is debt with a written-down maturity date: it must be
-   submitted upstream"): open an issue against `teal-language/tl`
-   describing the gap (guard-on-a-record-field does not narrow the
-   field), referencing `docs/design/casts.md`'s "record union after
-   guard" section and the 5 sites above as motivating cases. Record its
-   number in the patch entry's `note` field, matching this file's
-   existing convention (`whilp/cosmic#942`, `whilp/cosmic#1065`) or the
-   direct-upstream-reference convention used in
-   `3p/tl/tl_patch/for_control_var.tl` ("Upstream teal-language/tl#1058").
+4. **Land it — no upstream filing required.** Per D21 as amended
+   2026-09: reuse branch `3IpBKCCg` (commit `f0234765`) rather than
+   redoing the engineering. Its 16 `teal-language/tl#PENDING`
+   placeholders in `3p/tl/tl_patch/narrow_record_field.tl`'s `note`
+   fields are stale under the old clause — replace each with the plain
+   rationale (the fact-and-invalidation sentence in step 2 above, or
+   the equivalent local to each of the 16 entries), with no issue
+   number required. Filing an issue in `cosmic-lua/cosmic` or
+   upstream at `teal-language/tl` is optional, never a precondition;
+   do it only if you judge it independently worth doing. Re-run
+   `bin/cosmic --make ci` on the updated head, then open the PR
+   (`Board: FePr_L4FB`'s full id as the body's first line, per the
+   usual convention) and hand it to `take FePr_L4FB --pr N`.
 
 Gate with `bin/cosmic --make ci`, including the flipped canary.
 
