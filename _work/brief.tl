@@ -161,6 +161,34 @@ local function ci_refusal(s: store.Store, it: item.Item, id8: string):
     or "CI has already concluded failure on this head"), ""
 end
 
+--- The `<BOUNCE_CONTEXT>` a rework hand-back fills into a builder
+--- brief: the item's own most recent `request changes` verdict on an
+--- open PR, quoting the latest CHANGES_REQUESTED review's finding
+--- verbatim, plus the worktree-reuse and push-not-new-PR instructions
+--- an orchestrator otherwise hand-assembles every round. "" — an
+--- unfilled placeholder, exactly the fresh-pull behavior — whenever
+--- the item is not standing in rework, or the read fails (no reviews
+--- found, no token, a network error): a strict improvement over
+--- today's always-empty case, never a new failure mode.
+--- @param s store.Store The store
+--- @param it item.Item The item under brief
+--- @return string The filled section, "" when there is nothing to fill it with
+local function bounce_context(s: store.Store, it: item.Item): string
+  if (it.verdict or "") ~= "request changes" or (it.pr or 0) == 0 then
+    return ""
+  end
+  local revs, _err = gh.reviews(s, it.pr, it.repo)
+  if revs == nil then
+    return ""
+  end
+  local finding = gh.latest_request_changes(revs)
+  if finding == nil then
+    return ""
+  end
+  return fill(brieftext.REWORK,
+    {REVIEWER_FINDING = finding.body, BRANCH = it.id:sub(1, 8)})
+end
+
 --- brief: print one role's prompt for an item, filled from the board.
 --- The body prints first and the verdict line closes it (the `show`
 --- shape), naming the placeholders left for the caller.
@@ -215,6 +243,12 @@ local function cmd_brief(s: store.Store, kind: string, id: string): integer
     BOARD_DIR = fs.absolute_path(s.root),
     REVIEW_SESSION = label,
   }
+  if kind == "builder" then
+    local bc = bounce_context(s, it)
+    if bc ~= "" then
+      values["BOUNCE_CONTEXT"] = bc
+    end
+  end
   -- The slug can fail (no origin remote in a scratch checkout); the
   -- brief still emits, with <REPO> surviving for the caller — named
   -- by the verdict line like any other unanswered placeholder.
