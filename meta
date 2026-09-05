@@ -1,4 +1,4 @@
 title: main is red: _work/ciobs_test.tl still calls store.save, moved to storewrite.save by fd6f1dc0 — blocks CI on every _work/* PR
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-claim: build-7oS4_jJLc-f3a5b327
+resolution: completed
 builders: build-7oS4_jJLc-f3a5b327
