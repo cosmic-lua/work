@@ -71,7 +71,7 @@
   as its own recognized case (skip without re-deriving) rather than always
   literally acting on `next`'s single suggestion.
 
-## build q0zL_uDdq (background, in flight)
+## build q0zL_uDdq (background) — first attempt STOPPED short, respec'd, re-spawned
 - claimed as `build-q0zL_uDdq-eceb7aa0`, branch `3IYMP66h`, worktree
   `/home/user/wt-q0zL_uDdq`. Before spawning, the orchestrator itself had to
   re-scope the item's spec (`spec` verb, compare-and-swap against the
@@ -92,8 +92,52 @@
   either is pulled — `1Lhz_38Wt`'s own spec already named this precedent
   explicitly (the `keP3_sWNy`/`vBk9_UxhS` split), so the follow-on item
   inheriting a stale scope was foreseeable at refine time, not just build
-  time. Full section (agent's own `## Friction`, transcript numbers) pending
-  — the build agent has not reported yet.
+  time.
+
+  **The first builder (subagent `ae2af8b2`, 47 tool calls, ~399s, 103k
+  tokens) reported back and stopped short rather than push**, which is the
+  correct outcome, but it surfaced a SECOND gap the orchestrator's own
+  re-scope (above) missed: `bin/cosmic --make ci` failed at the `lint` stage
+  because `docs/design/casts.md`'s fenced citation of `_make/init.tl:143`
+  goes stale the instant that line's cast is replaced — a direct,
+  unavoidable consequence of the Change the orchestrator itself wrote, not
+  something the builder could have avoided by building differently. The
+  builder correctly identified that fixing it head-on would mean editing
+  `docs/design/casts.md`, which the orchestrator's own Non-goals wall
+  (reserving the file for `zs1K_cWnY`) appeared to forbid, and stopped with
+  its diff committed but unpushed rather than guess past the contradiction —
+  exactly per its brief's "if you get stuck" instructions.
+  contributed: the orchestrator wrote a Non-goals wall broad enough
+  ("`docs/design/casts.md`'s prose for the class... untouched here") to
+  also (unintentionally) cover the file's fenced CODE citation, which is
+  mechanically tied to the very line the Change requires editing — a
+  citation-accuracy consequence of an in-scope edit is a different thing
+  from a prose rewrite, but the wall's wording didn't distinguish them, and
+  the orchestrator's own pre-spawn review (which re-verified line counts and
+  site lists) did not run the actual gate against the proposed diff, so it
+  never saw the lint failure the builder found in ~2 minutes.
+  improvement: (1) filed as a candidate below — a refiner drafting a spec
+  that edits a line `docs/design/*.md` quotes verbatim should grep
+  `docs/design/*.md` for that exact `path:line` citation string before
+  finalizing, not rely on a Non-goals wall description alone to know what a
+  neighboring file's edit will touch; (2) the orchestrator itself should
+  have run (or asked the first builder to run) `bin/cosmic --make ci`
+  against the proposed diff during refinement, before spawning, matching
+  `help bar`'s "measured, not inferred" standard for a Change that touches
+  a lint-checked file — this would have caught the gap for ~1 gate run
+  instead of costing a full wasted builder attempt (47 tool calls) that
+  correctly stopped short.
+
+  Respec'd a third time (`spec` v3, `--force` over the still-live
+  `build-q0zL_uDdq-eceb7aa0` claim since it is the orchestrator's own claim
+  under a minted label) to add one narrowly-scoped exception to the
+  Non-goals wall: repointing ONLY the fenced citation's header+line to
+  `cosmic/searcher_test.tl:58` (the class's sole remaining live site after
+  this item lands), leaving the wall's protected explanatory prose
+  untouched. Re-spawned a second builder (`ad5f8fa0`) to add that one commit
+  on top of the first builder's intact, unpushed `3b73ab5`, then push and
+  open the PR. Full section for both builders' own `## Friction` pending —
+  the second has not reported yet.
 
 ## refine EAi9_RFmX (background, in flight)
 - spawned to write a `## Change` for the metatable-access-helper item (spec
@@ -104,3 +148,12 @@
 - (pending) doc note in `help review`/orchestrate about already-green PRs and
   auto-merge not retroactively firing — staying here for triage, not filed as
   its own item: only observed once, not yet confirmed as a repeat pattern.
+- (pending) `help bar`/`help build` guidance: a spec whose `## Change` edits
+  a line quoted verbatim by a `docs/design/*.md` fenced citation should say
+  so explicitly, found by grepping `docs/design/*.md` for the exact
+  `path:line` string of every changed line before finalizing — this pass
+  lost a full builder attempt (47 tool calls, ~399s) to exactly this gap on
+  `q0zL_uDdq`. Staying here for triage rather than filed as its own item:
+  the fix is process/doctrine text in the tool itself, which this session
+  did not locate the source of (outside `cosmic-lua/cosmic`/`cosmic-lua/work`'s
+  item data, if not inside `cosmic-lua/work`'s own tool source — unconfirmed).
