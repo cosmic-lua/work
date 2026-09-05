@@ -2,5 +2,6 @@ title: docs symbol page: --docs <symbol> lists where the shipped guides and exam
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: build-ev5V_lF1l-5c8fc82c
+reviewer: review-ev5V_lF1l-5c8fc82c
 pr: 1722
 builders: build-ev5V_lF1l-5c8fc82c
