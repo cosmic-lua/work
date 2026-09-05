@@ -1,1 +1,0 @@
-Box's net-tier fallback applies the sandbox net section (Options.net / restrict's net masks), which mqcc_NQnm implements; that code doesn't exist yet
