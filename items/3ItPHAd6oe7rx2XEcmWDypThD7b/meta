@@ -2,5 +2,6 @@ title: check types hints: each gotcha section carries its checker message as a g
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: build-DypT_hD7b-5c8fc82c
+reviewer: review-DypT_hD7b-5c8fc82c
 pr: 1721
 builders: build-DypT_hD7b-5c8fc82c
