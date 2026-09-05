@@ -34,10 +34,10 @@ return values, expected 1, got 2"). Fixing the underlying gap means
 patching tl's builtin `package.searchers` annotation via
 `3p/tl/tl_patch/`.
 
-**Refinement verified a fix**: adding a `| string` union arm to the
-first element of the return tuple type-checks clean and preserves
-semantics. Probe (read-only: a scratch copy of `o/3p/tl/tl.lua` with
-just this one-line edit, loaded into `package.loaded["tl"]` before
+**A fix was verified**: adding a `| string` union arm to the first
+element of the return tuple type-checks clean and preserves semantics.
+Probe (read-only: a scratch copy of `o/3p/tl/tl.lua` with just this
+one-line edit, loaded into `package.loaded["tl"]` before
 `require("tl")` — the same technique `_make.patch`'s `reverse` probe
 uses, so the unpack directory under `o/3p/tl` is never written):
 
@@ -67,16 +67,110 @@ unrelated. A new topically-named file is the fit, matching how the
 directory already splits by theme (`ast_cache.tl`, `cast.tl`,
 `closure.tl`, `enum.tl`, `for_control_var.tl`, `narrow.tl`).
 
-`docs/design/casts.md`'s `### dynamic name lookup` section currently
-reads "The searcher slot wants a declared record and nothing more" —
-that resolution was never built and is not what closes it; the
-sentence needs to change to match whichever fix actually lands.
+**The above probe is necessary but not sufficient — the class of gap
+this refinement exists to fix.** A builder implemented the ORIGINAL
+one-PR spec exactly (the patch file above, plus removing the cast in
+`cosmic/searcher_test.tl` and the baseline/tsv/docs reconcile steps)
+and hit `_build/coldbuild_test.tl`'s guard: generation 1 of every build
+type-checks the WHOLE tree using the PINNED release's own embedded
+`tl` checker (`o/bootstrap/cosmic`, invoked with `--include-dir .` so
+it resolves MODULES from the tree while the CHECKER stays the pin —
+`_build/coldbuild_test.tl:12-19`'s doc comment states this exactly),
+not the freshly-patched `o/3p/tl/tl.lua`. The pinned release
+(`bin/cosmic.pin`, currently `2026-09-04-5d5dc3a`) predates this
+patch, so gen1 fails on `cosmic/searcher_test.tl:58` with the exact
+error reproduced above — the cast-free rewrite can never reach gen1's
+checker in the same PR that adds the patch. `AGENTS.md`'s Build System
+section states the required staging: "a source that needs the tree's
+own checker (a new narrowing rule, a new patch entry) passes the
+converged `--make ci` and fails only a cold build... Such a change
+stages behind a release and pin bump: land the checker first, bump
+`bin/cosmic.pin` to a release carrying it, then land the code that
+needs it." The original spec conflated both halves into one PR, which
+cannot pass a cold build as written.
 
-Because this item closes only 1 of the class's 8 rows,
-`docs/design/cast-sites.tsv`'s `dynamic name lookup` class keeps rows
-after this item lands (the 7 in `_make/init.tl`, `q0zL_uDdq`'s scope) —
-no zero-row / section-deletion step applies here, unlike a full 8-of-8
-close.
+This repo already has a working precedent for exactly this split, on
+a different pin: `keP3_sWNy` (`cosmic-lua/cosmopolitan`-side
+annotation) landed alone, and `vBk9_UxhS` (the `cosmic-lua/cosmic`-side
+pin bump + cast removal, `blocked_by keP3_sWNy`) was filed for the
+half that needs a release first. This item mirrors that shape, except
+both halves are `cosmic-lua/cosmic`-internal (the patch and the pin
+that must carry it are the same repo's own pin to itself).
+
+**This refinement verified the patch-file-ALONE half does not itself
+trip the cold-build rule.** In a scratch clone of the tree at the
+current tip (not the builder's worktree — read for reference only),
+added ONLY `3p/tl/tl_patch/declining_searcher.tl`, with
+`cosmic/searcher_test.tl` left completely unmodified (cast still in
+place):
+
+    o/bootstrap/cosmic --check types --include-dir . --include-dir o/_types/types_gen \
+        3p/tl/tl_patch/declining_searcher.tl
+    Type check passed: 3p/tl/tl_patch/declining_searcher.tl
+
+    o/bootstrap/cosmic --check types --include-dir . --include-dir o/_types/types_gen \
+        cosmic/searcher_test.tl
+    Type check passed: cosmic/searcher_test.tl
+
+Then the full gen1 sweep exactly as `_build/coldbuild_test.tl` composes
+it (every `.tl` under `3p _build _cli _docs _eval _fuzz _make _perf
+_tool _types cmd cosmic`, testdata excluded — 625 files with the new
+one added) under the same pinned bootstrap: exit 0, "Type check
+passed" on all 625, including the new file. Then the actual guard
+test itself, via the tree's own build:
+
+    o/bin/cosmic --make test _build/coldbuild_test.tl
+    ✓ _build/coldbuild_test.tl (1 test functions)  18701ms
+    test: PASS (1 file)
+
+**Running the change as it will actually land surfaced one real gap
+the original spec's `## Change` missed.** After `bin/cosmic --make
+fetch` (confirmed the patch applies: `o/3p/tl/tl.lua:337` and
+`tl.tl:337` both now read the `| string` arm), a full `bin/cosmic
+--make ci` FAILED at the coverage stage:
+
+    coverage ratchet: 3p/tl/tl_patch/declining_searcher.tl: not in baseline (new file? run 'cosmic --make coverage --baseline' and commit)
+    coverage ratchet: 1 problem(s); if the decline is intended, run 'cosmic --make coverage --baseline' and commit the result
+    coverage: FAIL (288 files)
+    ci: FAIL (coverage)
+
+Every existing `3p/tl/tl_patch/*.tl` file already carries a
+`.cosmic-coverage` row (`ast_cache.tl`, `cast.tl`, `closure.tl`,
+`enum.tl`, `for_control_var.tl`, `narrow.tl`, all `{covered = 0, total
+= 1}` — `grep -n tl_patch .cosmic-coverage`); the new file needs the
+same row, added by hand per `AGENTS.md`'s Testing section ("Move the
+one row your change actually affects by hand-editing its
+`covered`/`total` pair in `.cosmic-coverage` directly"). Adding
+
+    ["3p/tl/tl_patch/declining_searcher.tl"] = {["covered"] = 0, ["total"] = 1},
+
+(alphabetically between `closure.tl` and `enum.tl`, matching the
+existing rows' shape) and re-running:
+
+    3338 tests: 3338 passed
+    coverage: read 1046 .cov files
+    coverage ratchet ok
+    coverage: PASS (288 files)
+    ci: PASS (5 stages)
+
+with `cosmic/searcher_test.tl`'s cast confirmed untouched throughout
+(`grep -n "cast:" cosmic/searcher_test.tl` still shows the line at
+every step above).
+
+Because this item now lands only the patch file — the
+`cosmic/searcher_test.tl` cast, and the `_build/casts_baseline.tl` /
+`docs/design/cast-sites.tsv` / `docs/design/casts.md` reconcile steps
+that follow from removing it, are deferred to `zs1K_cWnY` ("casts:
+land searcher_test.tl's cast removal once the declining-searcher patch
+is pinned"), `blocked_by` this item — `docs/design/cast-sites.tsv`'s
+`dynamic name lookup` class keeps ALL 8 rows after THIS item lands
+(not 7): the `cosmic/searcher_test.tl` row is untouched here, and the
+7 `_make/init.tl` rows are `q0zL_uDdq`'s separate scope. Likewise
+`docs/design/casts.md`'s `### dynamic name lookup` prose is left
+unedited here (still reading the stale "wants a declared record"
+line) — correcting it is bundled with `zs1K_cWnY`'s cast removal, so
+the prose is rewritten once, describing the site's actual FINAL state
+rather than a half-landed one.
 
 ## Change
 
@@ -109,33 +203,36 @@ close.
   Both `find` strings occur exactly once today in their respective
   files (verified above); `_make/patch.tl`'s apply enforces that on
   every fetch regardless.
+- `.cosmic-coverage`: add
+  `["3p/tl/tl_patch/declining_searcher.tl"] = {["covered"] = 0, ["total"] = 1},`
+  alongside the other `3p/tl/tl_patch/*.tl` rows (alphabetically
+  between `closure.tl` and `enum.tl`) — required, or the coverage
+  stage refuses the new unbaselined source (verified above).
 - Run `bin/cosmic --make fetch` so the new patch applies into
   `o/3p/tl/tl.lua` and `o/3p/tl/tl.tl` — required before any check or
   build observes it (`3p/tl/tl_patch/*.tl` entries apply on fetch, not
   on write).
-- `cosmic/searcher_test.tl:57-58`: delete the `-- cast:` comment line
-  and change `pcall((s as function(string): any), missing)` to
-  `pcall(s, missing)`.
-- `_build/casts_baseline.tl`: run `bin/cosmic --make run _build/casts.tl
-  --baseline` and commit — this drops the now-zero
-  `["cosmic/searcher_test.tl"] = 1` entry.
-- `docs/design/cast-sites.tsv`: run `bin/cosmic --make run
-  _build/cast_sites.tl --reconcile` — this drops the
-  `cosmic/searcher_test.tl	58	dynamic name lookup` row. The class keeps
-  its heading and its remaining 7 rows (all `_make/init.tl`), so no
-  section-deletion step applies (`_build/cast_sites_test.tl` only
-  requires a heading with at least one row, which 7 remaining rows
-  satisfy).
-- `docs/design/casts.md`: in the `### dynamic name lookup` section,
-  replace "The searcher slot wants a declared record and nothing
-  more." with "The searcher slot's decline (a bare string, not a
-  loader) has no arm in tl's builtin `package.searchers` type; a
-  carried `3p/tl/tl_patch/` entry teaches it the union, closing the
-  last one."
-- `bin/cosmic --make ci` ends `ci: PASS`.
+- `cosmic/searcher_test.tl` is left COMPLETELY UNTOUCHED — the
+  `-- cast:` comment and the cast at line 57-58 both stay exactly as
+  they are. Gen1 still type-checks this file against the OLD pinned
+  checker (no `| string` arm) even in this same PR that adds the
+  patch, since the pin itself does not move here; removing the cast is
+  `zs1K_cWnY`'s scope, gated on a release + pin bump.
+- `bin/cosmic --make ci` ends `ci: PASS` — with the patch present,
+  applied via fetch, and the cast still in `cosmic/searcher_test.tl`
+  (verified above).
 
 ## Non-goals
 
 The 7 `_make/init.tl` dynamic-name-lookup sites, `policy.must_verb`,
 and the tsv class reaching zero rows are `q0zL_uDdq`'s scope —
 untouched here regardless of landing order between the two items.
+
+Removing `cosmic/searcher_test.tl`'s cast, the `_build/casts_baseline.tl`
+/ `docs/design/cast-sites.tsv` / `docs/design/casts.md` reconcile steps
+that follow from it, and the `docs/design/casts.md` prose correction
+are `zs1K_cWnY`'s scope — not resolvable until a cosmic release exists
+whose commit descends from this item's merge and `bin/cosmic.pin` is
+bumped to it, so they are deliberately not attempted here even though
+their content is already known (carried verbatim into `zs1K_cWnY`'s
+spec).
