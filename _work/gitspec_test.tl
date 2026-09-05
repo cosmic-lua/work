@@ -7,11 +7,11 @@
 -- item's MOTION.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
 local gitready = require("_work.gitready")
 local gitspec = require("_work.gitspec")
 local fs = require("cosmic.fs")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
@@ -39,9 +39,14 @@ local function test_the_spec_bar_is_the_items_own()
   local stray = check.must(store.load(s, finding))
   stray.parent = "3HyArM3A3zHuRxn3VYCvKmUZ7KW"
   assert(storewrite.save(s, stray, "hand-edited parent"))
-  local all = check.must(store.list(s))
-  assert(#flow.graph_problems(all) > 0, "the board does have a problem")
-  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf)), all) == 0,
+  -- Straight through `storewrite.save`, bypassing `gate.commit_and_publish`'s
+  -- own cache patch — closed here so the `store.list`/`store.read`
+  -- calls below reopen fresh rather than missing this hand-edit.
+  local _cok, _cerr = store.close(s)
+  check.must(store.list(s))
+  local c = check.must(store.read(s))
+  assert(#check.must(read.structure(c)) > 0, "the board does have a problem")
+  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf))) == 0,
     "a sound item meets the bar while another item is broken")
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
     "and it may be taken")
@@ -144,8 +149,7 @@ local function test_spec_bar_names_an_undeclared_repo()
   local _, leaf = root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0)
   assert(gitspec.cmd_spec(s, leaf, spec_file("upstream", UPSTREAM_CLONE)) == 0)
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   local found = false
   for _, p in ipairs(problems) do
     if p:find("jart/cosmopolitan", 1, true) then found = true end
@@ -165,8 +169,7 @@ local function test_declaring_the_repo_clears_the_bar()
   local declared = UPSTREAM_CLONE
   .. "\n## Access\n- jart/cosmopolitan (read-only, upstream history)\n"
   assert(gitspec.cmd_spec(s, leaf, spec_file("declared", declared)) == 0)
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared repo clears the bar: "
     .. table.concat(problems, "; "))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
@@ -180,8 +183,7 @@ local function test_the_items_own_repo_needs_no_declaring()
   local _, leaf = root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "jart/cosmopolitan", nil) == 0)
   assert(gitspec.cmd_spec(s, leaf, spec_file("self", UPSTREAM_CLONE)) == 0)
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "the item's own repo is not a gap: "
     .. table.concat(problems, "; "))
 end
@@ -319,8 +321,10 @@ local function test_next_carries_the_last_drops_why()
   assert(verbs.cmd_drop(s, leaf, "session-a",
       "the builder session hit its budget", false) == 0)
   local all = check.must(store.list(s))
-  local report = view.next_report_live(s, all, view.read_specs(s, all),
-    "", {}, nil)
+  local c = check.must(store.read(s))
+  local report, rerr = view.next_report_live(s, c, all, view.read_specs(s, all),
+    "", {}, {}, nil)
+  assert(rerr == "", rerr)
   assert(report:find("last drop:", 1, true) ~= nil, report)
   assert(report:find("the builder session hit its budget", 1, true) ~= nil,
     report)

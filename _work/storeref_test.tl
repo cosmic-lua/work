@@ -15,6 +15,7 @@ local gitview = require("_work.gitview")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -135,7 +136,9 @@ local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
   local winner = check.must(store.load(b, mine.id))
   assert(winner.claim == "session-a",
     "the winning take is visible after the sync")
-  assert(flow.doing_refusal(check.must(store.list(b))) ~= nil,
+  check.must(store.list(b))
+  local c = check.must(store.read(b))
+  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
     "doing holds exactly its bound — the re-run verb's own gate now "
     .. "refuses this take")
 end
@@ -321,6 +324,13 @@ local function test_list_process_count_is_constant_as_items_grow()
       it.other_edges = {blocked_by = {[ids[1]] = "seeding order"}}
       assert(storewrite.save(s, it, "block"))
     end
+    -- These writes go straight through `storewrite.save`, bypassing
+    -- `gate.commit_and_publish`'s own cache patch — so, unlike a real
+    -- mutation verb, nothing here keeps `s.index` in step with what
+    -- was just seeded. Closing it is this test's own stand-in for
+    -- that: the next `store.list` reopens fresh rather than reading
+    -- back whatever a still-open connection saw before this seeding.
+    local _cok, _cerr = store.close(s)
   end
 
   --- How many `git` invocations one `store.list` makes, with the

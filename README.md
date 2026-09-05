@@ -88,10 +88,9 @@ version every reader checks before trusting anything else it read
 alongside it (`_work/format.tl`) — a board on a version this tool does
 not know, or missing the marker while it already carries items, is
 refused rather than silently misread; `gitboard init` writes the
-marker on a board that has neither yet. `gitboard migrate` is the one
-verb an old layout-1 board is not refused for: it mints the board item,
-ranks every parent's children by their old `beats`/`blocked_by` edges,
-and bumps the marker to the current layout in one push. Nothing here is a file in the
+marker on a board that has neither yet. Layout 1 (the previous,
+`beats`/`blocked_by`/`held`-carrying shape) has no migration path from
+here — every live board has already moved to layout 2. Nothing here is a file in the
 working tree: a read is `git for-each-ref`/`cat-file --batch` against
 the ref layout, and a write is one `git fast-import` stream
 (`_work/fastimport.tl`) — `_work/store.tl` and the modules beside it

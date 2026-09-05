@@ -8,6 +8,7 @@ local check = require("cosmic.check")
 local flow = require("_work.flow")
 local gitboard = require("_work.gitboard")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
@@ -90,7 +91,9 @@ local function test_filing_is_admitted_at_the_doing_bound()
     assert(verbs.cmd_take(s, id, ("wake-%d"):format(k), 0, false, "") == 0,
       "the bound admits takes up to its number")
   end
-  assert(flow.doing_refusal(check.must(store.list(s))) ~= nil,
+  check.must(store.list(s))
+  local c = check.must(store.read(s))
+  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
     "the board is at the bound")
   local capture = file_item(s, "a capture", "")
   assert(graph.cmd_attach(s, capture, goal) == 0,

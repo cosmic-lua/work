@@ -1,12 +1,17 @@
---- Differential fuzz property for `_work.readddl`'s `queue` view
---- against `_work.flow.unified`, over the same adversarial item graphs
---- `_fuzz.rank_fuzz_test` draws (random parents and `order` lists from
---- a small shared id pool, including stale entries, duplicates, and
---- cycles), now also carrying randomized claim/PR/verdict/lane-repair
---- fields so every stage bucket (accepted, review, rework, building,
---- repair, todo) gets exercised, not only todo:
----   queue's id order is IDENTICAL to flow.unified's, with no seed,
----   over any graph this pool can draw.
+--- Order-totality fuzz property for `_work.readddl`'s `queue` view, over
+--- adversarial item graphs (random parents and `order` lists from a
+--- small shared id pool, including stale entries, duplicates, and
+--- cycles, plus randomized claim/PR/verdict/lane-repair fields so
+--- every stage bucket — accepted, review, rework, building, repair,
+--- todo — gets exercised): no Teal oracle stands in for `queue`
+--- anymore (`docs/design/read.md`), so what this checks instead is
+--- that the view's own SQL `ORDER BY` is a genuine total order and
+--- names exactly the board's workable items —
+---   every id `queue` returns is distinct;
+---   the row count equals a raw, independent count of `workable`;
+---   re-sorting the returned rows in Teal by the exact fields the SQL
+---   itself ordered by (`stage`, `key`, `id`) changes nothing — the
+---   database's own collation and Lua's string comparison agree.
 --- The generated graph is length-prefixed into the driver's string
 --- input, so a failure still reports a replayable seed and shrinks to
 --- a small graph.
@@ -17,8 +22,6 @@ local driver = require("_fuzz.driver")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
 local item = require("_work.item")
-local flow = require("_work.flow")
-local rank = require("_work.rank")
 local read = require("_work.read")
 local readddl = require("_work.readddl")
 local source = require("_fuzz.source")
@@ -234,23 +237,13 @@ local function decode_graph(blob: string): Graph | nil, string
   return {items = items, root_order = root_order}, ""
 end
 
---- Every id `xs` names, in order.
---- @param xs {item.Item}
---- @return {string}
-local function ids_of(xs: {item.Item}): {string}
-  local out: {string} = {}
-  for _, i in ipairs(xs) do
-    out[#out + 1] = i.id
-  end
-  return out
-end
-
--- queue's id order must equal flow.unified's, with no seed, over
--- every graph this pool can draw — cycles, dangling parents, stale
--- and duplicate order entries, and every stage bucket included.
-local function test_queue_order_matches_flow_unified()
+-- `queue`'s own order must be total, and its rows must name exactly
+-- the board's workable items — over every graph this pool can draw:
+-- cycles, dangling parents, stale and duplicate order entries, and
+-- every stage bucket included.
+local function test_queue_is_a_total_order_over_every_workable_item()
   local ok, message = driver.run({
-      name = "read_queue_matches_unified",
+      name = "read_queue_is_a_total_order",
       gen = gen_graph,
       budget = 4000000,
       check = function(input: string): boolean, string
@@ -260,9 +253,9 @@ local function test_queue_order_matches_flow_unified()
         end
         local items = g.items
         -- Fold the separately drawn root list onto whichever item is
-        -- parentless (the board), matching `_work.rank.positions`
-        -- reading a board's outcome ranking off the board ITEM's own
-        -- `order` field.
+        -- parentless (the board), matching `_work.readddl`'s own
+        -- `rank_path` view reading a board's outcome ranking off the
+        -- board ITEM's own `order` field.
         for _, it in ipairs(items) do
           if (it.parent or "") == "" then
             it.order = g.root_order
@@ -285,20 +278,52 @@ local function test_queue_order_matches_flow_unified()
           return false, "readddl.ensure_views failed: " .. tostring(rderr)
         end
 
-        local ranks = rank.positions(items)
-        local want = ids_of(flow.unified(items, ranks))
         local got_rows, qerr = read.queue(idx)
-        local _c, _ce = idxmod.close(idx)
         if got_rows == nil then
+          local _c, _ce = idxmod.close(idx)
           return false, "read.queue failed: " .. tostring(qerr)
         end
-        local got: {string} = {}
-        for _, r in ipairs(got_rows) do
-          got[#got + 1] = r.id
+        local wrow, werr = idx.db:query_one("SELECT COUNT(*) AS n FROM workable")
+        local _c, _ce = idxmod.close(idx)
+        if wrow == nil then
+          return false, "counting workable failed: " .. tostring(werr)
         end
-        if table.concat(got, ",") ~= table.concat(want, ",") then
-          return false, ("queue order disagrees with unified: got %s want %s")
-          :format(table.concat(got, ","), table.concat(want, ","))
+        local want_n = math.tointeger(wrow.n as number) or -1 -- cast: from any (sqlite row)
+
+        if #got_rows ~= want_n then
+          return false, ("queue returned %d row(s), workable has %d")
+          :format(#got_rows, want_n)
+        end
+        local seen: {string: boolean} = {}
+        for _, r in ipairs(got_rows) do
+          if seen[r.id] then
+            return false, "queue named the same id twice: " .. r.id
+          end
+          seen[r.id] = true
+        end
+
+        -- The rows re-sorted, in Teal, by the exact fields the view's
+        -- own `ORDER BY` used: if this changes nothing, the database's
+        -- collation and Lua's `<` agree, and the order is total.
+        local resorted: {read.QueueRow} = {}
+        for _, r in ipairs(got_rows) do
+          resorted[#resorted + 1] = r
+        end
+        table.sort(resorted, function(a: read.QueueRow, b: read.QueueRow): boolean
+            if a.stage ~= b.stage then
+              return a.stage < b.stage
+            end
+            if a.key ~= b.key then
+              return a.key < b.key
+            end
+            return a.id < b.id
+          end)
+        for i, r in ipairs(got_rows) do
+          if resorted[i].id ~= r.id then
+            return false, ("queue's own order is not total: position %d was %s, "
+              .. "a Teal re-sort of the same rows wants %s"):format(
+              i, r.id, resorted[i].id)
+          end
         end
         return true
       end,

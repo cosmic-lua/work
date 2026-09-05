@@ -19,7 +19,9 @@ local find = require("_work.find")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
 local index = require("_work.index")
+local index_rank = require("_work.index_rank")
 local proc = require("cosmic.proc")
+local readddl = require("_work.readddl")
 local sqlite = require("cosmic.sqlite")
 
 local type Cache = cachedb.Cache
@@ -93,6 +95,19 @@ local function rebuild(root: string): Cache | nil, string
     local _c, _cerr = db:close()
     return nil, eerr
   end
+  -- `_work.read`'s derived views, added here so every persisted cache
+  -- file carries them — `_work.index_rank`'s `dense_rank`/`rank_path`
+  -- first, since `_work.readddl`'s own views join against those.
+  local irok, irerr = index_rank.ensure_views(c)
+  if not irok then
+    local _c, _cerr = db:close()
+    return nil, irerr
+  end
+  local rdok, rderr = readddl.ensure_views(c)
+  if not rdok then
+    local _c, _cerr = db:close()
+    return nil, rderr
+  end
   local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
   if not evok then
     local _c, _cerr = db:close()
@@ -136,7 +151,16 @@ local function rebuild(root: string): Cache | nil, string
   if not cok then
     return nil, cerr
   end
-  for _, p in ipairs({tmp_path .. "-wal", tmp_path .. "-shm"}) do
+  for _, p in ipairs({tmp_path .. "-wal", tmp_path .. "-shm",
+      -- `final_path`'s OWN leftover sidecars, wiped here too: a rename
+      -- only moves the one path it names, so a `-wal`/`-shm` pair left
+      -- beside the file this is about to replace would sit there
+      -- associated with the NEW file by name alone once the rename
+      -- lands — sqlite would try to replay it on the next open, an
+      -- open connection's own not-yet-checkpointed leftover from
+      -- BEFORE this rebuild replacing an item's freshly written row
+      -- with whatever that stale log still held.
+      final_path .. "-wal", final_path .. "-shm"}) do
     if fs.is_present(p) then
       local _ok, _err = fs.remove(p)
     end

@@ -10,7 +10,7 @@ local gh = require("_work.gh")
 local item = require("_work.item")
 local owner = require("_work.gitowner")
 local publish = require("_work.publish")
-local rank = require("_work.rank")
+local read = require("_work.read")
 local review = require("_work.review")
 local spec = require("_work.spec")
 local store = require("_work.store")
@@ -107,22 +107,40 @@ end
 --- one list `check` reports and `take` enforces.
 --- @param s store.Store The store
 --- @param it item.Item The item
---- @param all {item.Item} Every item
 --- @param body string | nil Its spec sidecar, when the caller already
 --- has it (a batched `read_specs`, say) — nil to read it here
 --- @return {string} Problems, empty when the item meets the bar
 local function ready_problems(s: store.Store, it: item.Item,
-    all: {item.Item}, body?: string): {string}
-  local index = flow.by_id(all)
-  local out = flow.item_problems(it, index)
-  local r = flow.role(it, all)
-  if r ~= "work" then
+    body?: string): {string}
+  local out: {string} = {}
+  local c, cerr = store.read(s)
+  if c == nil then
+    out[#out + 1] = ("could not read the board database: %s"):format(cerr)
+    return out
+  end
+  local structure, sterr = read.structure(c)
+  if structure == nil then
+    out[#out + 1] = ("could not read board structure: %s"):format(sterr)
+  else
+    for _, row in ipairs(structure) do
+      if row.id == it.id and (row.kind == "dangling_parent" or row.kind == "deep_chain") then
+        out[#out + 1] = ("%s: %s"):format(it.id:sub(1, 8), row.detail)
+      end
+    end
+  end
+  local r, rerr = read.role(c, it.id)
+  if r == nil then
+    out[#out + 1] = ("could not read role: %s"):format(rerr)
+  elseif r ~= "work" then
     out[#out + 1] = ("%s is a %s, not workable"):format(it.id:sub(1, 8), r)
   end
   -- Rank is a path from the outcome: an item whose outcome is not in
   -- the board's own `order` has no answer to "where does this sit
   -- against everything else" and cannot be queued honestly.
-  if not rank.is_ranked(rank.positions(all), it.id) then
+  local ranked, rkerr = read.is_ranked(c, it.id)
+  if ranked == nil then
+    out[#out + 1] = ("could not read rank: %s"):format(rkerr)
+  elseif not ranked then
     out[#out + 1] = ("%s's outcome is unranked — rank the outcome first "
       .. "(`gitboard rank <outcome>`), or attach it under an item that "
       .. "already is"):format(it.id:sub(1, 8))
@@ -153,7 +171,7 @@ local record gitready
   number: integer): string
   undeclared_repos: function(it: item.Item, body: string): {string}
   ready_problems: function(s: store.Store, it: item.Item,
-  all: {item.Item}, body?: string): {string}
+  body?: string): {string}
 end
 
 local M: gitready = {

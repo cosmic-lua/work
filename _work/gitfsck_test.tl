@@ -10,7 +10,6 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
-local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local fsck = require("_work.gitfsck")
 local gitboard = require("_work.gitboard")
@@ -25,6 +24,18 @@ local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
 local init_state_repo = fixture.init_state_repo
 local root_with_leaf = fixture.root_with_leaf
+
+--- The one parentless item, found by walking `items` in order.
+--- @param items {item.Item} All items
+--- @return item.Item | nil The board, nil when none is filed yet
+local function find_board(items: {item.Item}): item.Item | nil
+  for _, i in ipairs(items) do
+    if item.is_parentless(i) then
+      return i
+    end
+  end
+  return nil
+end
 
 --- Run `fsck.cmd_fsck` and capture what it printed, the way
 --- `gitboard_test.tl`'s own helper pins a CLI verb's console output.
@@ -100,10 +111,11 @@ local function test_an_order_entry_naming_a_non_child_is_caught()
   local root, _leaf = root_with_leaf(s)
   local ghost = check.must(ksuid.encode(1690000006, ("\7"):rep(16)))
   local all = check.must(store.list(s))
-  local index_by_id = flow.by_id(all)
+  local index_by_id = item.by_id(all)
   local peer: string = nil
   for _, it in ipairs(all) do
-    if it.id ~= root and flow.is_outcome(it, index_by_id) then
+    local parent = index_by_id[it.parent or ""]
+    if it.id ~= root and parent ~= nil and item.is_parentless(parent) then
       peer = it.id
     end
   end
@@ -127,7 +139,7 @@ local function test_the_boards_own_order_naming_a_non_child_is_caught()
   local s = init_state_repo("fsck-board-order-non-child")
   local _root, leaf = root_with_leaf(s)
   local all = check.must(store.list(s))
-  local board = check.must(flow.find_board(all), "the board exists")
+  local board = check.must(find_board(all), "the board exists")
   local it = check.must(store.load(s, board.id))
   it.order = {leaf}
   assert(storewrite.save(s, it, "hand-edited board order"))
@@ -257,6 +269,13 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
     :gsub("%s+$", ""))
   fixture.git(s.root, {"update-ref", "refs/heads/ended/" .. id, done_sha})
   fixture.git(s.root, {"update-ref", "refs/heads/items/" .. id, items_sha})
+  -- The save above went straight through `storewrite.save`, and the
+  -- ref surgery right after it straight through git — both bypass
+  -- `gate.commit_and_publish`'s own cache patch, so `s.index` (opened
+  -- again by `store.load`'s own lease read) is closed here: the next
+  -- `store.list` reopens fresh against what git now actually holds
+  -- rather than the board as it stood before either move.
+  local _cok, _cerr = store.close(s)
 
   local all = check.must(store.list(s))
   local matches = 0

@@ -74,6 +74,13 @@ local record Store
   remote_url_read: boolean
   remote_present: boolean
   remote_present_read: boolean
+  --- The board cache, opened once and held for the rest of this
+  --- invocation — `read`'s own handle, and what `list` hydrates
+  --- `leased_ref`/`leased_sha`/`touched_at`/`board_digest` from. nil
+  --- before the first `read`/`list` call, or once `close` has run.
+  --- Every `_work.read` call a verb makes goes through this same
+  --- connection, never a fresh `cache.open` of its own.
+  index: cache.Cache | nil
 end
 
 --- The refusal a lost push race earns, exported so a verb can tell it
@@ -154,7 +161,7 @@ local function open(root: string): Store | nil, string
     leased_sha = {}, leased_item = {}, touched_at = {}, written_at = 0, observed_seq = "",
     pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
     remote_url = "", remote_url_ok = false, remote_url_read = false,
-    remote_present = false, remote_present_read = false}
+    remote_present = false, remote_present_read = false, index = nil}
 end
 
 --- The full id a unique prefix names, resolved against the refs
@@ -237,8 +244,8 @@ end
 --- `item.encode`/`decode` (the OLD literal-table codec `encode`/
 --- `decode` above still are), so the round trip would otherwise drop
 --- it silently — invisible for an ordinary item, which never has any,
---- but exactly the field `gitboard migrate`'s diff needs an honest
---- baseline for.
+--- but exactly the field a diff over an unmigrated board's edges needs
+--- an honest baseline for.
 --- @param it item.Item The item to copy
 --- @return item.Item | nil The copy, nil when re-decoding it failed
 local function snapshot_item(it: item.Item): item.Item | nil
@@ -281,45 +288,85 @@ local function load_item(s: Store, id: string): item.Item | nil, string
   return loaded.it
 end
 
---- Every item in the store, done ones included, sorted by id — read
---- through the board cache (`_work.cache.open`, which takes the one
---- `for-each-ref` snapshot below as its own freshness digest and
---- rebuilds from git only on a mismatch) rather than a fresh git read
---- every time: `_work.gitread.list` is now called only by the cache's
---- own `rebuild` (and, for an old-layout board, `_work.storemigrate.list_for_migrate`'s
---- `allow_old_format` bypass). `leased_ref`/`leased_sha`/`touched_at` —
---- each id's write lease, the compare-and-swap a mutation's push is
---- made against — and `observed_seq` come from the cache's own rows,
---- current for the live board by the same digest guard `cache.open`
---- always applies; `duplicates` comes from the snapshot itself, since
---- the cache carries no namespace information to derive it from.
+--- Open the board cache and hold it on `s.index` for the rest of this
+--- invocation — idempotent, so every caller (`list`, `read`) reaches
+--- the SAME connection rather than each opening its own:
+--- `_work.cache.open` takes the one `for-each-ref` snapshot below as
+--- its own freshness digest and rebuilds from git only on a mismatch,
+--- so `_work.gitread.list` runs only from the cache's own `rebuild`.
+--- Every `_work.read` call a verb makes goes through the handle this
+--- returns.
 --- @param s Store The store
---- @return {item.Item} | nil The items, some possibly flagged
---- @return string Error message naming the first genuinely corrupt item
-local function list(s: Store): {item.Item} | nil, string
+--- @return cache.Cache | nil The open cache
+--- @return string Error message
+local function ensure_index(s: Store): cache.Cache | nil, string
+  if s.index ~= nil then
+    return s.index, ""
+  end
   local found, ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
   if found == nil then
     return nil, ferr
   end
   local known_digest = cachedb.digest_of(found)
   local duplicates = gitdedupe.of(s.root, found)
-
   local c, cerr = cache.open(s.root, known_digest)
+  if c == nil then
+    return nil, cerr
+  end
+  s.index = c
+  s.duplicates = duplicates
+  s.board_digest = known_digest
+  return c, ""
+end
+
+--- The open board cache `read.*` reads through — `ensure_index`,
+--- opening and hydrating it on first call, a bare field read on every
+--- one after.
+--- @param s Store The store
+--- @return cache.Cache | nil The open cache
+--- @return string Error message
+local function read(s: Store): cache.Cache | nil, string
+  return ensure_index(s)
+end
+
+--- Close the cache `read`/`list` opened, when one is open; a no-op
+--- otherwise. Every invocation that opened one closes it before
+--- exiting.
+--- @param s Store The store
+--- @return boolean True on success
+--- @return string Error message
+local function close(s: Store): boolean, string
+  local c = s.index
+  if c == nil then
+    return true, ""
+  end
+  s.index = nil
+  return cache.close(c)
+end
+
+--- Every item in the store, done ones included, sorted by id — read
+--- through `ensure_index`'s open cache rather than a fresh git read
+--- every time. `leased_ref`/`leased_sha`/`touched_at` — each id's
+--- write lease, the compare-and-swap a mutation's push is made
+--- against — and `observed_seq` come from the cache's own rows,
+--- current for the live board by the same digest guard `ensure_index`
+--- always applies; `duplicates` comes from the ref snapshot itself,
+--- since the cache carries no namespace information to derive it from.
+--- @param s Store The store
+--- @return {item.Item} | nil The items, some possibly flagged
+--- @return string Error message naming the first genuinely corrupt item
+local function list(s: Store): {item.Item} | nil, string
+  local c, cerr = ensure_index(s)
   if c == nil then
     return nil, cerr
   end
   local all, ierr = cachequery.items(c)
   if all == nil then
-    local _ok, _cerr = cache.close(c)
     return nil, ierr
   end
   local ls, lerr = cachequery.leases(c)
-  local close_ok, close_err = cache.close(c)
   if ls == nil then
     return nil, lerr
-  end
-  if not close_ok then
-    return nil, close_err
   end
 
   for id, ref in pairs(ls.refs_by_id) do
@@ -331,8 +378,6 @@ local function list(s: Store): {item.Item} | nil, string
     s.leased_item[it.id] = snapshot_item(it)
   end
   s.observed_seq = ls.seq_sha
-  s.duplicates = duplicates
-  s.board_digest = known_digest
   return all
 end
 
@@ -397,6 +442,8 @@ local record store
   read_specs: function(s: Store, ids: {string}): {string: string}
   snapshot_item: function(it: item.Item): item.Item | nil
   list: function(s: Store): {item.Item} | nil, string
+  read: function(s: Store): cache.Cache | nil, string
+  close: function(s: Store): boolean, string
   duplicates: function(s: Store): {gitread.Duplicate}
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
@@ -416,6 +463,8 @@ local M: store = {
   read_specs = read_specs,
   snapshot_item = snapshot_item,
   list = list,
+  read = read,
+  close = close,
   duplicates = duplicates,
   flagged_summary = flagged_summary,
   stage = stage,

@@ -9,10 +9,27 @@
 
 local check = require("cosmic.check")
 local act = require("_work.action")
+local fixture = require("_work.fixture")
+local idxmod = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 
 local type Item = item.Item
+
+--- `act.next_action`, over a fresh in-memory index built from `items`.
+--- @param items {Item} All items
+--- @param specs act.Specs Sidecar body by id
+--- @param session string | nil This session's name, "" when unnamed
+--- @param ci act.CiStates | nil CI state by item id, absent when unknown
+--- @return act.Action
+local function next_action(items: {Item}, specs: act.Specs,
+    session?: string, ci?: act.CiStates): act.Action
+  local c = fixture.make_index(items)
+  local a, err = act.next_action(c, items, specs, session, nil, nil, "", ci)
+  check.must(idxmod.close(c))
+  assert(a ~= nil, err)
+  return a
+end
 
 local counter = 0
 
@@ -67,7 +84,7 @@ local function test_green_and_none_are_offered_as_the_review()
     items[#items + 1] = reviewable
     local specs = ready_specs(items)
     local ci: act.CiStates = {[reviewable.id] = state}
-    local a = act.next_action(items, specs, "me", nil, "", ci)
+    local a = next_action(items, specs, "me", ci)
     assert(a.kind == "review" and a.item.id == reviewable.id,
       ("state %s should still be offered: %s"):format(state, a.kind))
   end
@@ -86,7 +103,7 @@ local function test_a_running_head_is_not_offered()
   local items: {Item} = {board, root, reviewable}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "running"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = next_action(items, specs, "me", ci)
   assert(a.kind ~= "review", "a running head is not offered: " .. a.kind)
   assert(a.kind == "none", "and nothing else fires either: " .. a.kind)
   assert(a.reason:find("ci running", 1, true) ~= nil,
@@ -103,7 +120,7 @@ local function test_a_red_head_is_not_offered_and_reads_as_the_builders()
   local items: {Item} = {board, root, reviewable}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "red"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = next_action(items, specs, "me", ci)
   assert(a.kind ~= "review", "a red head is not offered: " .. a.kind)
   assert(a.reason:find("ci red — builder's", 1, true) ~= nil,
     "the reason names it as the builder's move: " .. a.reason)
@@ -120,7 +137,7 @@ local function test_a_ci_blocked_review_never_holds_a_pull_back()
   items[#items + 1] = fresh
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "running"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = next_action(items, specs, "me", ci)
   assert(a.kind == "pull" and a.item.id == fresh.id,
     "a pullable item is still offered: " .. a.kind)
 end
@@ -132,7 +149,7 @@ local function test_no_ci_map_offers_the_review_as_before()
   local root = placed_root(items)
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
   items[#items + 1] = reviewable
-  local a = act.next_action(items, ready_specs(items), "me")
+  local a = next_action(items, ready_specs(items), "me")
   assert(a.kind == "review" and a.item.id == reviewable.id,
     "no CI map is not a refusal: " .. a.kind)
 end
@@ -155,7 +172,7 @@ local function test_ci_names_matches_the_tallied_count()
   local items: {Item} = {board, root, mine, theirs}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[mine.id] = "running", [theirs.id] = "running"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = next_action(items, specs, "me", ci)
   assert(a.kind == "none", "nothing else fires: " .. a.kind)
   assert(a.reason:find("1 item(s) await CI", 1, true) ~= nil,
     "the count reflects only what was tallied: " .. a.reason)

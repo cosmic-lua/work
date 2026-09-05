@@ -35,7 +35,14 @@ local function cmd_spec(s: store.Store, id: string, file: string,
     return gate.verdict_line("spec", false, lerr)
   end
   if not frc then
-    local refusal = gate.spec_refusal(it, session or "")
+    local c, cerr = store.read(s)
+    if c == nil then
+      return gate.verdict_line("spec", false, cerr)
+    end
+    local refusal, srerr = gate.spec_refusal(c, it, session or "")
+    if srerr ~= "" then
+      return gate.verdict_line("spec", false, srerr)
+    end
     if refusal then
       return gate.verdict_line("spec", false, refusal)
     end

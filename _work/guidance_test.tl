@@ -8,6 +8,7 @@
 
 local check = require("cosmic.check")
 local decision = require("_work.decision")
+local fixture = require("_work.fixture")
 local guidance = require("_work.guidance")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -95,7 +96,10 @@ end
 --- indented two spaces — so a session reads what to do and what it
 --- means in one answer.
 local function test_next_prints_guidance_under_the_action()
-  local report = view.next_report(board_items(), {})
+  local items = board_items()
+  local c = fixture.make_index(items)
+  local report, err = view.next_report(c, items, {})
+  assert(err == "", err)
   local lines: {string} = {}
   for line in (report .. "\n"):gmatch("([^\n]*)\n") do
     lines[#lines + 1] = line
@@ -139,12 +143,15 @@ local function test_a_research_handover_review_cites_no_pr()
     "and with no item, the diff reading stands")
   local board = fresh_id()
   local root = fresh_id()
-  local report = view.next_report({
-      check.must(item.decode({id = board, title = "board"})),
-      check.must(item.decode({id = root, title = "an outcome", parent = board})),
-      check.must(item.decode({id = fresh_id(), title = "a slice", parent = root,
-            claim = "who", builders = "who", result = ("ab"):rep(32)})),
-    }, {}, "me")
+  local items2 = {
+    check.must(item.decode({id = board, title = "board"})),
+    check.must(item.decode({id = root, title = "an outcome", parent = board})),
+    check.must(item.decode({id = fresh_id(), title = "a slice", parent = root,
+          claim = "who", builders = "who", result = ("ab"):rep(32)})),
+  }
+  local c2 = fixture.make_index(items2)
+  local report, rerr = view.next_report(c2, items2, {}, "me")
+  assert(rerr == "", rerr)
   assert(report:find("  " .. lines[#lines], 1, true),
     "`next` prints the handover reading under the action: " .. report)
 end

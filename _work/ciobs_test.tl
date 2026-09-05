@@ -15,6 +15,7 @@ local env = require("cosmic.env")
 local fixture = require("_work.fixture")
 local gh = require("_work.gh")
 local item = require("_work.item")
+local read = require("_work.read")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
@@ -155,6 +156,13 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
     it.pr = pr
     it.repo = REPO
     assert(storewrite.save(s, it, ("take %s by builder-a"):format(it.id:sub(1, 8))))
+    -- This write goes straight through `storewrite.save`, bypassing
+    -- `gate.commit_and_publish`'s own cache patch — closing `s.index`
+    -- here (opened again by `fixture.file_item`'s own trailing
+    -- `store.list`) is this test's stand-in for that, so a caller's
+    -- next `store.list`/`store.read` reopens fresh instead of missing
+    -- what this save just wrote.
+    local _cok, _cerr = store.close(s)
     return assert(store.load(s, it.id))
   end
 
@@ -170,9 +178,18 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
     assert(storewrite.save(s, done, "done " .. done.id:sub(1, 8) .. " completed (from todo)"))
     done = assert(store.load(s, done.id))
 
-    assert(not ciobs.is_candidate(todo), "no PR is not a candidate")
-    assert(ciobs.is_candidate(reviewing), "an open review-stage PR is a candidate")
-    assert(not ciobs.is_candidate(done), "a resolved item is never a candidate")
+    assert(store.list(s))
+    local c = assert(store.read(s))
+    local rows = assert(read.queue(c))
+    local stage_by_id: {string: integer} = {}
+    for _, row in ipairs(rows) do
+      stage_by_id[row.id] = row.stage
+    end
+
+    assert(not ciobs.is_candidate(todo, stage_by_id), "no PR is not a candidate")
+    assert(ciobs.is_candidate(reviewing, stage_by_id),
+      "an open review-stage PR is a candidate")
+    assert(not ciobs.is_candidate(done, stage_by_id), "a resolved item is never a candidate")
   end
 
   -- `at_sync` observes a new candidate once, so the next `next` finds a

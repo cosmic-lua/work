@@ -17,7 +17,6 @@ local cache = require("_work.cache")
 local cachequery = require("_work.cachequery")
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
-local flow = require("_work.flow")
 local gitrank = require("_work.gitrank")
 local gitread = require("_work.gitread")
 local item = require("_work.item")
@@ -125,7 +124,14 @@ local function test_items_matches_gitread_list_field_for_field_and_in_order()
   -- any other item's `.order` field — `assert_items_match` already
   -- covers it — so this only pins that the outcome actually landed in
   -- the board's own order rather than going unchecked.
-  local want_board = check.must(flow.find_board(want))
+  local want_board: item.Item = nil
+  for _, i in ipairs(want) do
+    if item.is_parentless(i) then
+      want_board = i
+      break
+    end
+  end
+  assert(want_board ~= nil, "the board is among the items")
   assert_same_order(want_board.order, {root}, "the board's own order")
 
   -- The one field this differential deliberately does NOT match:

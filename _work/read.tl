@@ -50,6 +50,13 @@ local record StructureRow
   detail: string
 end
 
+--- One `stale` row: a claim or review claim standing past its lease.
+local record StaleRow
+  id: string
+  kind: string
+  age_s: integer
+end
+
 --- `query_one`'s nil branch, resolved to a real failure when one
 --- happened, or to `label` when the query simply found no row — the
 --- one rule every single-row reader below shares.
@@ -180,6 +187,30 @@ local function key(c: Index, id: string): string | nil, string
     return "1" .. id, ""
   end
   return row.key as string, "" -- cast: from any (sqlite row)
+end
+
+--- Whether `id`'s own parent chain reaches the board — a real row in
+--- `rank_path`, as opposed to one absent entirely (broken, cyclic, or
+--- deeper than 16 levels). Unlike `is_ranked`, this says nothing about
+--- POSITION: an item can reach the board unpositioned (ordinary
+--- triage) and still answer true here.
+--- @param c Index An index with `_work.readddl.ensure_views` applied
+--- @param id string The item's id
+--- @return boolean | nil
+--- @return string Error message
+local function reaches_board(c: Index, id: string): boolean | nil, string
+  local exists, eerr = item_exists(c, id)
+  if not exists then
+    return nil, absent(eerr, ("read: no such item: %s"):format(id))
+  end
+  local row, rerr = c.db:query_one("SELECT 1 AS x FROM rank_path WHERE id = ?", {id})
+  if row == nil then
+    if rerr ~= nil and rerr ~= "" then
+      return nil, rerr
+    end
+    return false, ""
+  end
+  return true, ""
 end
 
 --- The one unified queue: stage first, then rank-path key, then id —
@@ -323,14 +354,60 @@ local function structure(c: Index): {StructureRow} | nil, string
   return out, ""
 end
 
+--- The board's own id — the one parentless item — nil when this board
+--- carries none yet (`gitboard init` writes one; `_work.readddl`'s
+--- `board` view picks the lowest id on a broken tree carrying more
+--- than one, deterministically, the same way `structure`'s
+--- `second_root` finding names the rest).
+--- @param c Index An index with `_work.readddl.ensure_views` applied
+--- @return string | nil The board's id, nil when there is none
+--- @return string Error message
+local function board(c: Index): string | nil, string
+  local row, err = c.db:query_one("SELECT id FROM board")
+  if row == nil then
+    if err ~= nil and err ~= "" then
+      return nil, err
+    end
+    return nil, ""
+  end
+  return row.id as string, "" -- cast: from any (sqlite row)
+end
+
+--- Every claim and review claim standing past its lease
+--- (`_work.health.LEASE_S`/`REVIEW_LEASE_S`), from `items.touched_at`.
+--- @param c Index An index with `_work.readddl.ensure_views` applied
+--- @return {StaleRow} | nil
+--- @return string Error message
+local function stale(c: Index): {StaleRow} | nil, string
+  local rows, err = c.db:query("SELECT id, kind, age_s FROM stale ORDER BY kind, id")
+  if rows == nil then
+    return nil, err
+  end
+  local out: {StaleRow} = {}
+  for row in rows do
+    out[#out + 1] = {
+      id = row.id as string, -- cast: from any (sqlite row)
+      kind = row.kind as string, -- cast: from any (sqlite row)
+      age_s = math.tointeger(row.age_s as number) or 0, -- cast: from any (sqlite row)
+    }
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+  return out, ""
+end
+
 local record read
   type QueueRow = QueueRow
   type OutcomeRow = OutcomeRow
   type ChildRow = ChildRow
   type StructureRow = StructureRow
+  type StaleRow = StaleRow
   role: function(c: Index, id: string): string | nil, string
   state: function(c: Index, id: string): string | nil, string
   substate: function(c: Index, id: string): string | nil, string
+  reaches_board: function(c: Index, id: string): boolean | nil, string
   queue: function(c: Index): {QueueRow} | nil, string
   outcomes: function(c: Index): {OutcomeRow} | nil, string
   triage: function(c: Index): {string} | nil, string
@@ -339,12 +416,15 @@ local record read
   key: function(c: Index, id: string): string | nil, string
   children: function(c: Index, id: string): {ChildRow} | nil, string
   structure: function(c: Index): {StructureRow} | nil, string
+  board: function(c: Index): string | nil, string
+  stale: function(c: Index): {StaleRow} | nil, string
 end
 
 local M: read = {
   role = role,
   state = state,
   substate = substate,
+  reaches_board = reaches_board,
   queue = queue,
   outcomes = outcomes,
   triage = triage,
@@ -353,6 +433,8 @@ local M: read = {
   key = key,
   children = children,
   structure = structure,
+  board = board,
+  stale = stale,
 }
 
 return M

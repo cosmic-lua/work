@@ -22,7 +22,6 @@
 --- parent-child shape to judge, which a single item's own fields
 --- cannot carry — the board's own `order` is one such item's field
 --- like any other, so the same check already covers it.
-local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
@@ -40,7 +39,7 @@ local store = require("_work.store")
 --- @param all {item.Item} Every item
 --- @return {string} Problems, possibly empty
 local function structural_problems(all: {item.Item}): {string}
-  local index = flow.by_id(all)
+  local index = item.by_id(all)
   local out: {string} = {}
   local key_holder: {string: string} = {}
   local parentless: {string} = {}
@@ -82,7 +81,7 @@ local function structural_problems(all: {item.Item}): {string}
         key_holder[it.key] = id8
       end
     end
-    if flow.is_board(it) then
+    if item.is_parentless(it) then
       parentless[#parentless + 1] = id8
       if (it.repo or "") ~= "" then
         out[#out + 1] = ("%s: a parentless item carries repo %s — the board "

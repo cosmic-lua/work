@@ -10,21 +10,22 @@
 --- between them.
 ---
 --- Every connection this module opens is WAL with `synchronous = OFF`
---- (`open_conn`): the file is disposable — gitignored, and rebuilt
---- outright whenever it drifts or fails to read — so a torn write on a
---- crash costs a rebuild, never data worth an fsync. `rebuild` still
---- builds at a temp path and renames it into place, so it switches
---- that temp connection OUT of WAL (`journal_mode = DELETE`, which
---- checkpoints and removes the `-wal`/`-shm` sidecars itself) before
---- closing it — a plain rename only moves the one file it names, so a
---- sidecar left behind under the temp name would otherwise become
---- permanent litter.
+--- (`open_conn`): the file is disposable — gitignored, rebuilt outright
+--- whenever it drifts or fails to read, so a torn write on a crash
+--- costs a rebuild, never data worth an fsync. `rebuild` builds at a
+--- temp path and renames it into place, switching that temp connection
+--- OUT of WAL (`journal_mode = DELETE`, checkpointing and removing its
+--- `-wal`/`-shm` sidecars) before closing it — a rename only moves the
+--- one path it names, so a sidecar left under the temp name would
+--- otherwise become permanent litter.
 local cachedb_events = require("_work.cachedb_events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local hash = require("cosmic.hash")
 local index = require("_work.index")
+local index_rank = require("_work.index_rank")
 local item = require("_work.item")
+local readddl = require("_work.readddl")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 
@@ -148,9 +149,9 @@ local function wipe(root: string)
   end
 end
 
---- The digest `cache_meta.refs_digest` records: sha256 of every
---- watched ref's `"<refname> <sha>"` line, sorted, newline-joined —
---- deterministic regardless of `for-each-ref`'s own listing order.
+--- The digest `cache_meta.refs_digest` records: sha256 of every watched
+--- ref's `"<refname> <sha>"` line, sorted and newline-joined — deterministic
+--- regardless of `for-each-ref`'s listing order.
 --- @param entries {refs.RefEntry} A ref listing, e.g. from `refs_snapshot`
 --- @return string The digest, hex-encoded
 local function digest_of(entries: {refs.RefEntry}): string
@@ -319,12 +320,15 @@ local function schema_fingerprint(db: sqlite.Database): string | nil, string
   return hash.sha256_hex(table.concat(parts, "\n"))
 end
 
---- The schema `index.DDL`, `_work.find`'s search table, and
---- `EXTRA_DDL` produce TODAY, fingerprinted the same way `_work.cache.rebuild`
---- fingerprints the real file — built on a throwaway `:memory:`
---- connection rather than the file under test, since the whole point
---- is a value independent of whatever that file happens to hold. What
---- `_work.cache.open` compares `cache_meta.schema_fingerprint` against.
+--- The schema `index.DDL`, `_work.find`'s search table, `EXTRA_DDL`,
+--- and `_work.index_rank`/`_work.readddl`'s views produce TODAY,
+--- fingerprinted the same way `_work.cache.rebuild` fingerprints the
+--- real file — a throwaway `:memory:` connection, since the whole
+--- point is a value independent of any file's actual content. Every
+--- DDL step `rebuild` applies for real has to run here too, in the
+--- same order, or this permanently disagrees with a freshly rebuilt
+--- file and `cache.open` rebuilds on every call. What `cache.open`
+--- compares `cache_meta.schema_fingerprint` against.
 --- @return string | nil The fingerprint
 --- @return string Error message
 local function expected_schema_fingerprint(): string | nil, string
@@ -347,6 +351,16 @@ local function expected_schema_fingerprint(): string | nil, string
   if not eok then
     local _c, _cerr = db:close()
     return nil, eerr
+  end
+  local irok, irerr = index_rank.ensure_views(scratch)
+  if not irok then
+    local _c, _cerr = db:close()
+    return nil, irerr
+  end
+  local rdok, rderr = readddl.ensure_views(scratch)
+  if not rdok then
+    local _c, _cerr = db:close()
+    return nil, rderr
   end
   local fp, fperr = schema_fingerprint(db)
   local _c, cerr = db:close()
@@ -431,8 +445,7 @@ local function patch_item(c: Cache, it: item.Item, spec_body: string | nil,
   return find.reindex_item(c, it, spec_body or prior_spec or "")
 end
 
---- Close the connection. Idempotent, like `Database.close` itself —
---- the same contract `_work.index.close` gives an ordinary `Index`.
+--- Close the connection. Idempotent, the same contract `_work.index.close` gives an ordinary `Index`.
 --- @param c Cache The cache
 --- @return boolean True on success
 --- @return string Error message

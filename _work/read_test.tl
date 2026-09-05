@@ -1,25 +1,27 @@
 #!/usr/bin/env cosmic
 -- `_work.readddl`'s views and `_work.read`'s typed readers over them,
--- differentially checked against the Teal derivations they stand in
--- for: `_work.flow.role`/`state`/`substate`/`stage_rank`/`unified`/
--- `outcomes`/`live_outcomes`/`untriaged`/`doing_refusal`'s count, and
--- `_work.rank.is_ranked`/`key`. `_work.read_structure_test` covers the
--- `structure` view's five finding kinds — split out so this file stays
--- under the line cap. Runner mode (D29): every `test_*` below is
+-- checked as queries over fixture rows loaded into an in-memory
+-- database against literal expected rows — the design's own rule
+-- (`docs/design/read.md`): a derived fact is tested this way, never
+-- through a Teal reimplementation. `_work.read_structure_test` covers
+-- the `structure` view's five finding kinds — split out so this file
+-- stays under the line cap. Runner mode (D29): every `test_*` below is
 -- enrolled by being defined, not by being called.
 
 local check = require("cosmic.check")
+local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local idxmod = require("_work.index")
-local irank = require("_work.index_rank")
+local index_rank = require("_work.index_rank")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
-local rank = require("_work.rank")
 local read = require("_work.read")
 local readddl = require("_work.readddl")
 
---- One `role` expectation: an item and the role `_work.flow.role` (and
---- `_work.read.role`) must both give it.
+local make_index = fixture.make_index
+
+--- One `role` expectation: an item and the role `_work.read.role`
+--- must give it.
 local record RoleWant
   it: item.Item
   role: string
@@ -47,29 +49,17 @@ local function make(over: {string: any}): item.Item
   return check.must(item.decode(t))
 end
 
---- An index over `items` with `_work.index_rank` AND `_work.readddl`'s
---- views applied, in that order — `readddl`'s own views join against
---- `rank_path`/`dense_rank`, so those must exist first.
---- @param items {item.Item} The board
---- @return idxmod.Index
-local function make_index(items: {item.Item}): idxmod.Index
-  local idx = check.must(idxmod.open(items))
-  check.must(irank.ensure_views(idx))
-  check.must(readddl.ensure_views(idx))
-  return idx
-end
-
-local function test_role_matches_flow_for_every_role()
+local function test_role_for_every_role()
   local board = make({})
   -- `outcome` stays childless but for a DONE child — a container's
-  -- test needs an OPEN one (`has_open_children` counts only those),
-  -- so a done child here proves it does not flip an outcome to
-  -- "container", and gives role a done item to answer "work" for
-  -- (`show` prints a done item's role too).
+  -- test needs an OPEN one (only those make a container), so a done
+  -- child here proves it does not flip an outcome to "container", and
+  -- gives role a done item to answer "work" for (`show` prints a done
+  -- item's role too).
   local outcome = make({parent = board.id})
   local done_leaf = make({parent = outcome.id, resolution = "completed"})
-  -- A second outcome, decomposed: it reads as "container" itself
-  -- (an open child of its own), which is why `container_node` — a
+  -- A second outcome, decomposed: it reads as "container" itself (an
+  -- open child of its own), which is why `container_node` — a
   -- non-outcome item with an open child — is the one actually
   -- asserted "container" below.
   local outcome2 = make({parent = board.id})
@@ -85,16 +75,13 @@ local function test_role_matches_flow_for_every_role()
     {it = leaf, role = "work"}, {it = done_leaf, role = "work"},
   }
   for _, want in ipairs(cases) do
-    local flow_role = flow.role(want.it, items)
-    assert(flow_role == want.role,
-      ("flow disagrees with the fixture: %s"):format(flow_role))
     local got = check.must(read.role(idx, want.it.id))
     assert(got == want.role, ("%s: got %s, wanted %s"):format(want.it.id, got, want.role))
   end
   check.must(idxmod.close(idx))
 end
 
-local function test_state_and_substate_agree_with_flow()
+local function test_state_and_substate()
   local board = make({})
   local outcome = make({parent = board.id})
   board.order = {outcome.id}
@@ -106,27 +93,31 @@ local function test_state_and_substate_agree_with_flow()
   local accepted = make({parent = outcome.id, claim = "sess", pr = 3,
       verdict = "accept"})
   local done = make({parent = outcome.id, resolution = "completed"})
-  local items = {board, outcome, todo, building, review, rework, accepted, done}
-  local idx = make_index(items)
+  local idx = make_index({board, outcome, todo, building, review, rework,
+      accepted, done})
 
-  for _, it in ipairs(items) do
-    local want_state = "todo"
-    if it.resolution ~= "" then
-      want_state = "ended"
-    elseif flow.is_doing(it) then
-      want_state = "doing"
-    end
-    local got_state = check.must(read.state(idx, it.id))
-    assert(got_state == want_state,
-      ("%s: state %s, wanted %s"):format(it.id, got_state, want_state))
-    local got_sub = check.must(read.substate(idx, it.id))
-    assert(got_sub == flow.substate(it),
-      ("%s: substate %s, wanted %s"):format(it.id, got_sub, flow.substate(it)))
+  local cases = {
+    {it = board, state = "todo", substate = "building"},
+    {it = outcome, state = "todo", substate = "building"},
+    {it = todo, state = "todo", substate = "building"},
+    {it = building, state = "doing", substate = "building"},
+    {it = review, state = "doing", substate = "review"},
+    {it = rework, state = "doing", substate = "rework"},
+    {it = accepted, state = "doing", substate = "accepted"},
+    {it = done, state = "ended", substate = "building"},
+  }
+  for _, c in ipairs(cases) do
+    local got_state = check.must(read.state(idx, c.it.id))
+    assert(got_state == c.state,
+      ("%s: state %s, wanted %s"):format(c.it.id, got_state, c.state))
+    local got_sub = check.must(read.substate(idx, c.it.id))
+    assert(got_sub == c.substate,
+      ("%s: substate %s, wanted %s"):format(c.it.id, got_sub, c.substate))
   end
   check.must(idxmod.close(idx))
 end
 
-local function test_stage_matches_flow_stage_rank()
+local function test_stage_runs_accepted_to_todo()
   local board = make({})
   local outcome = make({parent = board.id})
   board.order = {outcome.id}
@@ -137,30 +128,35 @@ local function test_stage_matches_flow_stage_rank()
   local building = make({parent = outcome.id, claim = "s"})
   local repair = make({parent = outcome.id, key = "lane-x"})
   local todo = make({parent = outcome.id})
-  local items = {board, outcome, accepted, review, rework, building, repair, todo}
-  local idx = make_index(items)
+  local idx = make_index({board, outcome, accepted, review, rework, building,
+      repair, todo})
 
-  for _, it in ipairs({accepted, review, rework, building, repair, todo}) do
-    local row = check.must(idx.db:query_one("SELECT stage FROM stage WHERE id = ?", {it.id}))
+  local cases = {
+    {it = accepted, stage = flow.STAGE_ACCEPTED},
+    {it = review, stage = flow.STAGE_REVIEW},
+    {it = rework, stage = flow.STAGE_REWORK},
+    {it = building, stage = flow.STAGE_BUILDING},
+    {it = repair, stage = flow.STAGE_REPAIR},
+    {it = todo, stage = flow.STAGE_TODO},
+  }
+  for _, c in ipairs(cases) do
+    local row = check.must(idx.db:query_one("SELECT stage FROM stage WHERE id = ?", {c.it.id}))
     local got = math.tointeger(row.stage as number) -- cast: from any (sqlite row)
-    assert(got == flow.stage_rank(it),
-      ("%s: stage %s, wanted %s"):format(it.id, tostring(got), tostring(flow.stage_rank(it))))
+    assert(got == c.stage,
+      ("%s: stage %s, wanted %s"):format(c.it.id, tostring(got), tostring(c.stage)))
   end
   check.must(idxmod.close(idx))
 end
 
---- Every id `xs` names, in the order given.
---- @param xs {item.Item}
---- @return {string}
-local function ids_of(xs: {item.Item}): {string}
-  local out: {string} = {}
-  for _, i in ipairs(xs) do
-    out[#out + 1] = i.id
-  end
-  return out
-end
-
-local function test_queue_matches_flow_unified_order()
+-- The unified queue: stage first — accepted, review, rework, building,
+-- lane repair, todo — then rank path within a stage, age last. Two
+-- outcomes (o1 before o2 in the board's own order) give the todo
+-- bucket a real tie to break: `todo_b` (under o1) outranks both
+-- `todo_a` and `under_container` (under o2, at different depths —
+-- ranking by outcome first means depth past it never matters), and
+-- between those two — tied through o2, both unranked at the next
+-- level — age decides: `todo_a` was minted before `container`.
+local function test_queue_orders_stage_then_rank_then_age()
   local board = make({})
   local o1 = make({parent = board.id})
   local o2 = make({parent = board.id})
@@ -175,11 +171,11 @@ local function test_queue_matches_flow_unified_order()
   local container = make({parent = o2.id})
   local under_container = make({parent = container.id})
   local done = make({parent = o1.id, resolution = "completed"})
-  local items = {board, o1, o2, accepted, review, rework, building, repair,
-    todo_a, todo_b, container, under_container, done}
-  local idx = make_index(items)
+  local idx = make_index({board, o1, o2, accepted, review, rework, building,
+      repair, todo_a, todo_b, container, under_container, done})
 
-  local want = ids_of(flow.unified(items, rank.positions(items)))
+  local want = {accepted.id, review.id, rework.id, building.id, repair.id,
+    todo_b.id, todo_a.id, under_container.id}
   local got_rows = check.must(read.queue(idx))
   local got: {string} = {}
   for _, r in ipairs(got_rows) do
@@ -198,42 +194,41 @@ local function test_outcomes_and_live_outcomes()
   board.order = {ranked_idle.id, ranked_live.id}
   local child = make({parent = ranked_live.id})
   local done_child = make({parent = ranked_idle.id, resolution = "completed"})
-  local items = {board, ranked_live, ranked_idle, unranked, child, done_child}
-  local idx = make_index(items)
+  local idx = make_index({board, ranked_live, ranked_idle, unranked, child,
+      done_child})
 
-  local want_ids = ids_of(flow.outcomes(items))
-  local want_live = flow.live_outcomes(items)
+  local want_ids = {ranked_idle.id, ranked_live.id}
+  local want_live: {string: boolean} = {[ranked_idle.id] = false, [ranked_live.id] = true}
   local got = check.must(read.outcomes(idx))
   local got_ids: {string} = {}
   for _, r in ipairs(got) do
     got_ids[#got_ids + 1] = r.id
-    local want_l = want_live[r.id] or false
-    assert(r.live == want_l,
-      ("%s: live %s, wanted %s"):format(r.id, tostring(r.live), tostring(want_l)))
+    assert(r.live == want_live[r.id],
+      ("%s: live %s, wanted %s"):format(r.id, tostring(r.live), tostring(want_live[r.id])))
   end
   assert(table.concat(got_ids, " ") == table.concat(want_ids, " "),
     ("got:  %s\nwant: %s"):format(table.concat(got_ids, " "), table.concat(want_ids, " ")))
   check.must(idxmod.close(idx))
 end
 
-local function test_triage_matches_untriaged()
+local function test_triage_holds_unranked_childless_outcomes()
   local board = make({})
   local ranked = make({parent = board.id})
   board.order = {ranked.id}
   local bare_capture = make({parent = board.id})
+  -- An unranked outcome already being decomposed is not triage either
+  -- — only a CHILDLESS, unranked outcome is.
   local decomposed_capture = make({parent = board.id})
   local kid = make({parent = decomposed_capture.id})
-  local items = {board, ranked, bare_capture, decomposed_capture, kid}
-  local idx = make_index(items)
+  local idx = make_index({board, ranked, bare_capture, decomposed_capture, kid})
 
-  local want = ids_of(flow.untriaged(items))
   local got = check.must(read.triage(idx))
-  assert(table.concat(got, " ") == table.concat(want, " "),
-    ("got:  %s\nwant: %s"):format(table.concat(got, " "), table.concat(want, " ")))
+  assert(#got == 1 and got[1] == bare_capture.id,
+    ("got: %s, wanted only %s"):format(table.concat(got, " "), bare_capture.id))
   check.must(idxmod.close(idx))
 end
 
-local function test_doing_count_matches_flow()
+local function test_doing_count_holds_open_workable_leaves_only()
   local board = make({})
   local outcome = make({parent = board.id})
   board.order = {outcome.id}
@@ -242,22 +237,50 @@ local function test_doing_count_matches_flow()
   local todo = make({parent = outcome.id})
   local container = make({parent = outcome.id})
   local claimed_container_child = make({parent = container.id, claim = "s"})
-  local items = {board, outcome, building, review, todo, container,
-    claimed_container_child}
-  local idx = make_index(items)
+  local idx = make_index({board, outcome, building, review, todo, container,
+      claimed_container_child})
 
-  local want = 0
-  for _, it in ipairs(items) do
-    if item.is_open(it) and flow.is_doing(it) and flow.role(it, items) == "work" then
-      want = want + 1
-    end
-  end
+  -- The container itself is never counted, claimed or not — only a
+  -- WORK item (a childless leaf) is; `building`, `review` and its own
+  -- claimed child are the three.
   local got = check.must(read.doing_count(idx))
-  assert(got == want, ("got %d, wanted %d"):format(got, want))
+  assert(got == 3, ("got %d, wanted 3"):format(got))
   check.must(idxmod.close(idx))
 end
 
-local function test_is_ranked_matches_rank()
+local function test_is_ranked_follows_the_outcome_level_alone()
+  local board = make({})
+  local ranked = make({parent = board.id})
+  local unranked = make({parent = board.id})
+  board.order = {ranked.id}
+  local kid = make({parent = ranked.id})
+  local under_unranked = make({parent = unranked.id})
+  local idx = make_index({board, ranked, unranked, kid, under_unranked})
+
+  local cases = {
+    {it = board, want = true}, {it = ranked, want = true},
+    {it = unranked, want = false},
+    -- `kid`'s own position among `ranked`'s children is never asked:
+    -- its OUTCOME (`ranked` itself) is positioned, which is the whole
+    -- of what "not triage" means.
+    {it = kid, want = true},
+    {it = under_unranked, want = false},
+  }
+  for _, c in ipairs(cases) do
+    local got = check.must(read.is_ranked(idx, c.it.id))
+    assert(got == c.want,
+      ("%s: is_ranked %s, wanted %s"):format(c.it.id, tostring(got), tostring(c.want)))
+  end
+  check.must(idxmod.close(idx))
+end
+
+-- `_work.read.key`'s own order-totality: a shorter path is a byte
+-- prefix of any longer path sharing its ancestors, so `ranked`'s key
+-- is a prefix of `kid`'s, `unranked`'s a prefix of `under_unranked`'s,
+-- and sorting every key gives exactly the tree order — a positioned
+-- ancestor (`ranked`, key starting "0") before an unpositioned one
+-- (`unranked`, key starting "1") at the same level.
+local function test_key_orders_the_tree_and_prefixes_its_descendants()
   local board = make({})
   local ranked = make({parent = board.id})
   local unranked = make({parent = board.id})
@@ -266,68 +289,86 @@ local function test_is_ranked_matches_rank()
   local under_unranked = make({parent = unranked.id})
   local items = {board, ranked, unranked, kid, under_unranked}
   local idx = make_index(items)
-  local ranks = rank.positions(items)
 
+  local keyed: {string: string} = {}
   for _, it in ipairs(items) do
-    local got = check.must(read.is_ranked(idx, it.id))
-    assert(got == rank.is_ranked(ranks, it.id),
-      ("%s: is_ranked %s, wanted %s"):format(it.id, tostring(got),
-        tostring(rank.is_ranked(ranks, it.id))))
+    keyed[it.id] = check.must(read.key(idx, it.id))
   end
-  check.must(idxmod.close(idx))
-end
+  assert(keyed[board.id] == "", "the board's key is empty, a prefix of every other")
+  assert(keyed[kid.id]:sub(1, #keyed[ranked.id]) == keyed[ranked.id]
+    and keyed[kid.id] ~= keyed[ranked.id],
+    "ranked's key is a strict prefix of its child's own")
+  assert(keyed[under_unranked.id]:sub(1, #keyed[unranked.id]) == keyed[unranked.id]
+    and keyed[under_unranked.id] ~= keyed[unranked.id],
+    "unranked's key is a strict prefix of its child's own")
+  assert(keyed[ranked.id] < keyed[unranked.id],
+    "a positioned outcome sorts before an unpositioned one")
 
---- `_work.read.key`'s POSITIONED fields run one higher than
---- `_work.rank.key`'s own: `_work.index_rank`'s SQL numbers a dense
---- position with `ROW_NUMBER()` (1-based), while
---- `_work.rank.dense_positions` numbers the same list 0-based — a
---- pre-existing difference in `_work.index_rank` (untouched by this
---- slice) this test works around rather than papers over: an
---- UNPOSITIONED field ("1" plus the level's own id) carries no number
---- at all, so it IS byte-identical either way, and a uniform +1 shift
---- on every positioned field changes no comparison's OUTCOME (the
---- leading "0"/"1" digit, never the shifted suffix, is what decides
---- against an unpositioned sibling, and the shift is the same on both
---- sides of any two positioned siblings). This asserts the ORDER the
---- two agree on, and byte equality on the one path here with no
---- positioned field on it at all.
-local record KeyPair
-  id: string
-  key: string
-end
-
-local function test_key_agrees_with_rank_order()
-  local board = make({})
-  local ranked = make({parent = board.id})
-  local unranked = make({parent = board.id})
-  board.order = {ranked.id}
-  local kid = make({parent = ranked.id})
-  local under_unranked = make({parent = unranked.id})
-  local items = {board, ranked, unranked, kid, under_unranked}
-  local idx = make_index(items)
-  local ranks = rank.positions(items)
-
-  local want_ids = ids_of(rank.sorted(items, ranks))
-  local by_key: {KeyPair} = {}
+  local want_ids = {board.id, ranked.id, kid.id, unranked.id, under_unranked.id}
+  local by_key: {item.Item} = {}
   for _, it in ipairs(items) do
-    by_key[#by_key + 1] = {id = it.id, key = check.must(read.key(idx, it.id))}
+    by_key[#by_key + 1] = it
   end
-  table.sort(by_key, function(a: KeyPair, b: KeyPair): boolean
-      return a.key < b.key
+  table.sort(by_key, function(a: item.Item, b: item.Item): boolean
+      return keyed[a.id] < keyed[b.id]
     end)
   local got_ids: {string} = {}
-  for _, p in ipairs(by_key) do
-    got_ids[#got_ids + 1] = p.id
+  for _, it in ipairs(by_key) do
+    got_ids[#got_ids + 1] = it.id
   end
   assert(table.concat(got_ids, " ") == table.concat(want_ids, " "),
     ("got:  %s\nwant: %s"):format(table.concat(got_ids, " "), table.concat(want_ids, " ")))
+  check.must(idxmod.close(idx))
+end
 
-  -- Neither level on `under_unranked`'s path is ever positioned, so
-  -- no numbering offset is in play: this one IS byte-identical.
-  local got_key = check.must(read.key(idx, under_unranked.id))
-  assert(got_key == rank.key(ranks, under_unranked.id),
-    ("%s: got %s, wanted %s"):format(under_unranked.id, got_key,
-      rank.key(ranks, under_unranked.id)))
+--- `depth` containers under `parent`, each the next one's parent, then
+--- one workable leaf under the last — the deep-chain fixture shared by
+--- the queue-fallback and `_work.read_structure_test`'s deep-chain test.
+--- @param parent string The outcome (or any container) to nest under
+--- @param depth integer How many containers to stack
+--- @return {item.Item} The containers then the leaf, in nesting order
+--- @return item.Item The leaf
+local function make_chain(parent: string, depth: integer): {item.Item}, item.Item
+  local out: {item.Item} = {}
+  local cur = parent
+  for _ = 1, depth do
+    local c = make({parent = cur})
+    out[#out + 1] = c
+    cur = c.id
+  end
+  local leaf = make({parent = cur})
+  out[#out + 1] = leaf
+  return out, leaf
+end
+
+-- A chain past `rank_path`'s 16-hop bound carries no row there: the
+-- leaf reads unranked with the one-field fallback key ("1" plus its
+-- own id), the same total-order rule an ordinary unpositioned field
+-- follows, and it still queues — the only workable item on this
+-- board, since every container above it has exactly one open child.
+local function test_a_too_deep_chain_falls_back_to_its_own_id()
+  local board = make({})
+  local outcome = make({parent = board.id})
+  board.order = {outcome.id}
+  -- 15 containers puts the leaf at depth 17 from the board (outcome at
+  -- depth 1) — one past the 16-hop bound.
+  local chain, leaf = make_chain(outcome.id, 15)
+  local items: {item.Item} = {board, outcome}
+  for _, it in ipairs(chain) do
+    items[#items + 1] = it
+  end
+  local idx = make_index(items)
+
+  local got_ranked = check.must(read.is_ranked(idx, leaf.id))
+  assert(got_ranked == false, "past the bound, unranked")
+  local got_key = check.must(read.key(idx, leaf.id))
+  assert(got_key == "1" .. leaf.id,
+    ("%s: got %s, wanted the one-field fallback"):format(leaf.id, got_key))
+
+  local got_rows = check.must(read.queue(idx))
+  assert(#got_rows == 1 and got_rows[1].id == leaf.id
+    and got_rows[1].stage == flow.STAGE_TODO,
+    "the leaf is the board's only workable item")
   check.must(idxmod.close(idx))
 end
 
@@ -361,54 +402,60 @@ local function test_children_listing()
   check.must(idxmod.close(idx))
 end
 
---- `depth` containers under `parent`, each the next one's parent, then
---- one workable leaf under the last — the deep-chain fixture shared by
---- the queue-fallback and `structure` deep-chain tests.
---- @param parent string The outcome (or any container) to nest under
---- @param depth integer How many containers to stack
---- @return {item.Item} The containers then the leaf, in nesting order
---- @return item.Item The leaf
-local function make_chain(parent: string, depth: integer): {item.Item}, item.Item
-  local out: {item.Item} = {}
-  local cur = parent
-  for _ = 1, depth do
-    local c = make({parent = cur})
-    out[#out + 1] = c
-    cur = c.id
-  end
-  local leaf = make({parent = cur})
-  out[#out + 1] = leaf
-  return out, leaf
+-- `board`: the one parentless item, chosen deterministically (lowest
+-- id) on a broken tree carrying more than one.
+local function test_board_names_the_one_parentless_item()
+  local board = make({})
+  local outcome = make({parent = board.id})
+  local idx = make_index({board, outcome})
+  assert(check.must(read.board(idx)) == board.id, "the board's own id")
+  check.must(idxmod.close(idx))
 end
 
-local function test_deep_chain_falls_back_like_rank_key()
+local function test_board_is_nil_when_none_is_filed()
+  local idx = make_index({})
+  local got, err = read.board(idx)
+  assert(got == nil and err == "", "no board, no error — nothing is filed yet")
+  check.must(idxmod.close(idx))
+end
+
+-- `stale`: a claim or review claim past its lease
+-- (`_work.health.LEASE_S`/`REVIEW_LEASE_S`), from `items.touched_at` —
+-- exercised through `_work.index`'s own load, which writes a caller's
+-- `touched_at` straight into the row (no separate lease-hydration
+-- path to fake here).
+local function test_stale_holds_claims_and_reviews_past_their_lease()
   local board = make({})
   local outcome = make({parent = board.id})
   board.order = {outcome.id}
-  -- 15 containers puts the leaf at depth 17 from the board (outcome at
-  -- depth 1) — one past `rank_path`'s 16-hop bound, so it carries no
-  -- row there, exactly like `_work.rank`'s own MAX_DEPTH-bounded walk.
-  local chain, leaf = make_chain(outcome.id, 15)
-  local items: {item.Item} = {board, outcome}
-  for _, it in ipairs(chain) do
-    items[#items + 1] = it
-  end
-  local idx = make_index(items)
-  local ranks = rank.positions(items)
+  local now = os.time()
+  local fresh_claim = make({parent = outcome.id, claim = "s1"})
+  local stale_claim = make({parent = outcome.id, claim = "s2"})
+  local fresh_review = make({parent = outcome.id, pr = 3, reviewer = "r1"})
+  local stale_review = make({parent = outcome.id, pr = 4, reviewer = "r2"})
+  local idx = check.must(idxmod.open(
+      {board, outcome, fresh_claim, stale_claim, fresh_review, stale_review}))
+  check.must(idx.db:exec("UPDATE items SET touched_at = ? WHERE id = ?",
+      {now, fresh_claim.id}))
+  check.must(idx.db:exec("UPDATE items SET touched_at = ? WHERE id = ?",
+      {now - 5 * 3600, stale_claim.id}))
+  check.must(idx.db:exec("UPDATE items SET touched_at = ? WHERE id = ?",
+      {now, fresh_review.id}))
+  check.must(idx.db:exec("UPDATE items SET touched_at = ? WHERE id = ?",
+      {now - 2 * 3600, stale_review.id}))
+  check.must(index_rank.ensure_views(idx))
+  check.must(readddl.ensure_views(idx))
 
-  local got_ranked = check.must(read.is_ranked(idx, leaf.id))
-  assert(got_ranked == rank.is_ranked(ranks, leaf.id), "unranked, same as the Teal walk")
-  local got_key = check.must(read.key(idx, leaf.id))
-  assert(got_key == rank.key(ranks, leaf.id),
-    ("%s: got %s, wanted %s"):format(leaf.id, got_key, rank.key(ranks, leaf.id)))
-
-  local want = ids_of(flow.unified(items, ranks))
-  local got_rows = check.must(read.queue(idx))
-  local got: {string} = {}
-  for _, r in ipairs(got_rows) do
-    got[#got + 1] = r.id
+  local rows = check.must(read.stale(idx))
+  local by_id: {string: read.StaleRow} = {}
+  for _, r in ipairs(rows) do
+    by_id[r.id] = r
   end
-  assert(table.concat(got, " ") == table.concat(want, " "),
-    ("got:  %s\nwant: %s"):format(table.concat(got, " "), table.concat(want, " ")))
+  assert(by_id[fresh_claim.id] == nil, "a fresh claim is not stale")
+  assert(by_id[stale_claim.id] ~= nil and by_id[stale_claim.id].kind == "claim",
+    "a claim past its 4-hour lease is stale")
+  assert(by_id[fresh_review.id] == nil, "a fresh review claim is not stale")
+  assert(by_id[stale_review.id] ~= nil and by_id[stale_review.id].kind == "review",
+    "a review claim past its 1-hour lease is stale")
   check.must(idxmod.close(idx))
 end

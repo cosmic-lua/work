@@ -1,18 +1,28 @@
---- The derived-view DDL slice R2 adds on top of `_work.indexddl`'s base
---- schema and `_work.index_rank`'s rank views: role, stage, the single
---- unified queue, the board's outcomes with their live flag, triage,
---- the doing count, a per-item children listing, and the whole-board
---- structural-problem findings. Every view here is read-only SQL
---- standing in for a Teal derivation that already exists
---- (`_work.flow`, `_work.rank`, `_work.gitfsck`) — `_work.read_test`
---- is the differential proof the two agree, over the same fixture
---- items both sides read.
+--- An item's rank is a path: its position among its siblings at each
+--- level down from the board, the one parentless item. Rank among
+--- siblings is a position in a list the parent holds; siblings not in
+--- the list follow it, by age. An outcome the board's list does not
+--- position, and everything under it, is triage.
+---
+--- `gitboard help order` is pinned to the paragraph above, verbatim
+--- (`_work.doctrine_test`) — it must read exactly the same, so the two
+--- can never drift apart in meaning.
+---
+--- The derived-view DDL this file adds on top of `_work.indexddl`'s
+--- base schema and `_work.index_rank`'s rank views: role, stage, the
+--- single unified queue, the board's outcomes with their live flag,
+--- triage, the doing count, a per-item children listing, the claims
+--- and review claims standing past their lease, and the whole-board
+--- structural-problem findings. Every view here is read-only SQL — the
+--- one implementation of a fact every verb reads through
+--- `_work.read`'s typed functions over it, never re-derived in Teal.
 ---
 --- Apply after `_work.index.open`'s own DDL AND
 --- `_work.index_rank.ensure_views` — `queue`, `outcomes`, and
 --- `triage` below all join against `rank_path`/`dense_rank`, so those
---- must exist first. No verb calls this yet; `_work.read` is the
---- typed reader built on top, and both are wired in by a later slice.
+--- must exist first. `_work.cacherebuild.rebuild` applies both, once,
+--- to every persisted cache file; `_work.read` is the typed reader
+--- every verb queries through, via `_work.store.read`'s open handle.
 local index = require("_work.index")
 
 local type Index = index.Index
@@ -140,6 +150,25 @@ CREATE VIEW doing AS
   FROM workable w
   JOIN state st ON st.id = w.id
   WHERE st.state = 'doing';
+
+-- stale: claims and review claims past their lease, from
+-- `items.touched_at` — `_work.health.LEASE_S` (claim, 14400s/4h) and
+-- `_work.health.REVIEW_LEASE_S` (review, 3600s/1h) restated here as
+-- literal seconds, since a view cannot read a Teal constant; keep the
+-- two in sync by hand. One row per lease currently past its horizon:
+-- (id, kind, age_s).
+CREATE VIEW stale AS
+  SELECT id, 'claim' AS kind,
+    (CAST(strftime('%s', 'now') AS INTEGER) - touched_at) AS age_s
+  FROM open_items
+  WHERE claim <> ''
+  AND (CAST(strftime('%s', 'now') AS INTEGER) - touched_at) > 14400
+  UNION ALL
+  SELECT id, 'review' AS kind,
+    (CAST(strftime('%s', 'now') AS INTEGER) - touched_at) AS age_s
+  FROM open_items
+  WHERE reviewer <> ''
+  AND (CAST(strftime('%s', 'now') AS INTEGER) - touched_at) > 3600;
 
 -- children: (parent, child, position, open) for every item that has
 -- one — `position` is the child's dense rank in the parent's own

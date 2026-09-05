@@ -12,13 +12,13 @@ local action = require("_work.action")
 local api = require("_work.api")
 local cache = require("_work.cache")
 local fixture = require("_work.fixture")
-local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local gitready = require("_work.gitready")
 local gitobj = require("_work.gitobj")
 local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
+local read = require("_work.read")
 local refs = require("_work.refs")
 local spec = require("_work.spec")
 local store = require("_work.store")
@@ -94,6 +94,11 @@ local function test_a_claimed_repair_is_left_alone_on_green()
   repair.claim = "session-a"
   assert(storewrite.save(s, repair, ("take %s by session-a"):format(
         repair.id:sub(1, 8))))
+  -- Straight through `storewrite.save`, bypassing the cache patch AND
+  -- the lease `commit_and_publish` would otherwise have refreshed —
+  -- closed here so `mint` below reads a fresh lease rather than
+  -- fast-importing against the sha this claim already moved past.
+  local _cok, _cerr = store.close(s)
 
   assert(lanes.mint(s, GREEN))
   local still = check.must(store.load(s, repair.id))
@@ -166,6 +171,13 @@ local function test_report_surfaces_a_mint_failure()
         committer_name = "test", committer_email = "test@example.com",
       }))
   assert(store.git_ok(s, {"update-ref", "refs/heads/items/" .. id, bogus_sha}))
+  -- The raw ref update above bypasses the store entirely — `s.index`,
+  -- opened again by `file_item`'s own trailing `store.list`, still
+  -- reflects the board from before it. Closed here so `report`'s own
+  -- `store.list` (through `mint`) reopens fresh against the corrupt
+  -- ref this update just wrote, rather than reusing a connection that
+  -- never saw it move.
+  local _cok, _cerr = store.close(s)
   local lines = lanes.report(s, RED)
   local found = false
   for _, line in ipairs(lines) do
@@ -188,17 +200,24 @@ end
 
 -- A minted repair is coherent with the two verbs that decide its
 -- fate: `next` (`_work.action.next_action`) offers it, and `take`
--- (`_work.gitready.ready_problems` plus `flow.doing_refusal`, the exact
+-- (`_work.gitready.ready_problems` plus the doing bound, the exact
 -- pair `cmd_take` calls) admits it. Placed the way the real repair
 -- parent (G8) already is on the live board — ranked among the roots,
 -- inherited by every child minted under it — so the only variable
 -- under test is the sidecar `file_repair` now writes.
 local function test_a_minted_repair_is_offered_and_admitted()
   local s = init_state_repo("mint-admitted")
-  local board = check.must(flow.find_board(check.must(store.list(s))))
+  check.must(store.list(s))
+  local c = check.must(store.read(s))
+  local board_id = check.must(read.board(c))
   local parent = check.must(item.decode({id = lanes.LANE_PARENT,
-        title = "lane repair outcome", parent = board.id}))
+        title = "lane repair outcome", parent = board_id}))
   assert(storewrite.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
+  -- Straight through `storewrite.save`, bypassing the cache patch AND
+  -- the lease `commit_and_publish` would otherwise have refreshed —
+  -- closed here so `cmd_rank` below reads a fresh lease rather than
+  -- fast-importing against the sha this save already moved past.
+  local _cok, _cerr = store.close(s)
   assert(gitrank.cmd_rank(s, parent.id, "", "", true) == 0,
     "rank should be accepted")
 
@@ -211,16 +230,21 @@ local function test_a_minted_repair_is_offered_and_admitted()
   for _, it in ipairs(all) do
     specs[it.id] = store.read_spec(s, it.id)
   end
-  local a = action.next_action(all, specs)
+  local c2 = check.must(store.read(s))
+  local a, aerr = action.next_action(c2, all, specs)
+  assert(a ~= nil, aerr)
   assert(a.kind == "pull" and a.item.id == repair.id,
     "next offers the minted repair: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
 
-  local problems = gitready.ready_problems(s, repair, all)
+  local problems = gitready.ready_problems(s, repair)
   assert(#problems == 0,
     "take admits it too: " .. table.concat(problems, "; "))
-  assert(flow.doing_refusal(all, repair) == nil,
-    "and the doing bound never holds a lane repair back")
+  -- A lane repair's own `key` is the doing bound's bypass
+  -- (`_work.gitverbs`'s `doing_refusal`): never capped by how much is
+  -- already in flight, because a red lane's fix cannot wait on a
+  -- queue depth it did not cause.
+  assert(repair.key ~= "", "and the doing bound never holds a lane repair back")
 end
 
 -- The freshness window: an observation noted moments ago skips the

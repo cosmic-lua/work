@@ -121,20 +121,21 @@ list, as any lost race does. No ordering verb needs the board-wide
 
 ## The order every queue renders
 
-`_work/rank.tl` computes each item's rank path from the lists and
-the parent chain, and `_work/flow.tl` sorts every queue by stage first
-(finishing before starting: accepted, review, rework, building,
-repair, todo) and rank path within a stage. The seeded per-session
-tie-break replaces age among items nothing separates, so concurrent
-sessions fan out across the tied remainder. The derived SQLite index
-carries one rank-path view, and a stale list entry is visible only to
-`fsck`.
+The board database's `rank_path` view computes each item's rank path
+from the lists and the parent chain, and its `queue` view sorts every
+open item by stage first (finishing before starting: accepted,
+review, rework, building, repair, todo) and rank path within a stage
+— `_work/read.queue`'s rows, which `_work/action.tl` reads. The
+seeded per-session tie-break (`_work/seed.tl`) replaces age among
+items nothing separates, applied over those rows, so concurrent
+sessions fan out across the tied remainder. A stale list entry is
+visible only to `fsck`.
 
 ## The description lives in one place
 
 `gitboard help order` is the statement, and it is the three sentences
-under "The rule" above. `_work/rank.tl`'s header says only that it
-derives that page, and the README's ordering paragraph is one sentence
+under "The rule" above. `_work/readddl.tl`'s header carries that same
+text verbatim, and the README's ordering paragraph is one sentence
 citing it. `_work/doctrine_test.tl` pins that every page renders, and
 that the module header and the page agree on the sentence.
 

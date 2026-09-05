@@ -9,7 +9,9 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local flow = require("_work.flow")
+local item = require("_work.item")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
 local gate = require("_work.gitgate")
@@ -163,7 +165,10 @@ local function test_drop_clears_the_locks_and_names_the_reason()
   local dropped = check.must(store.load(s, leaf))
   assert(dropped.claim == "" and dropped.pr == 0 and dropped.verdict == "",
     "the claim, the PR and any verdict clear together")
-  assert(not flow.is_doing(dropped), "the item is todo again")
+  check.must(store.list(s))
+  local dc = check.must(store.read(s))
+  assert(check.must(read.state(dc, dropped.id)) == "todo",
+    "the item is todo again")
   local events = check.must(publish.history(s, leaf))
   assert(events[1].subject:find("out of budget", 1, true),
     "the reason is in the log: " .. events[1].subject)
@@ -185,9 +190,10 @@ local function test_take_refuses_a_pull_past_an_unclaimed_verdict()
   assert(verbs.cmd_take(s, built, "session-a", 77, false, "") == 0,
     "the handover records the PR")
   local all = check.must(store.list(s))
-  assert(#gate.review_debt(all, "session-b") == 1,
+  local c = check.must(store.read(s))
+  assert(#check.must(gate.review_debt(c, all, "session-b")) == 1,
     "the unclaimed verdict is session-b's debt")
-  assert(#gate.review_debt(all, "session-a") == 0,
+  assert(#check.must(gate.review_debt(c, all, "session-a")) == 0,
     "the builder could not give the verdict, so it is not their debt")
   assert(verbs.cmd_take(s, second, "session-b", 0, false, "") ~= 0,
     "a pull past the waiting verdict is refused")
@@ -211,6 +217,11 @@ local function test_drop_leaves_blockers_standing()
   local it = check.must(store.load(s, leaf))
   it.other_edges = {blocked_by = {[question] = ""}}
   assert(storewrite.save(s, it, "hand-edited blocked_by"))
+  -- Straight through `storewrite.save`, bypassing the cache patch AND
+  -- the lease `commit_and_publish` would otherwise have refreshed —
+  -- closed here so `cmd_drop` below reads a fresh lease rather than
+  -- fast-importing against the sha this hand-edit already moved past.
+  local _cok, _cerr = store.close(s)
   assert(verbs.cmd_drop(s, leaf, "session-a",
       "blocked on the question", false) == 0)
   local dropped = check.must(store.load(s, leaf))
@@ -306,11 +317,17 @@ local function test_done_says_when_a_container_is_workable_again()
   assert(verbs.cmd_done(s, kid, "completed", false, "") == 0)
   assert(commits(s) == before + 1, "the close is one commit")
   local all = check.must(store.list(s))
-  local parent = flow.by_id(all)[leaf]
-  assert(flow.role(parent, all) == "work",
+  local c = check.must(store.read(s))
+  local parent = item.by_id(all)[leaf]
+  assert(check.must(read.role(c, parent.id)) == "work",
     "its last child closed, so the container is workable by derivation")
-  assert(#flow.graph_problems(all) == 0,
-    "and nothing is left off the board: " .. table.concat(flow.graph_problems(all), "; "))
+  local structure = check.must(read.structure(c))
+  local details: {string} = {}
+  for _, p in ipairs(structure) do
+    details[#details + 1] = ("%s: %s"):format(p.id, p.detail)
+  end
+  assert(#structure == 0,
+    "and nothing is left off the board: " .. table.concat(details, "; "))
 end
 
 -- The already-recorded case: `done` again with the same reason is a no-op that succeeds.
@@ -416,7 +433,10 @@ local function test_take_result_records_the_research_handover()
   assert(handed.result == spec.revision(store.read_spec(s, leaf)),
     "the handover records the spec's revision")
   assert(handed.claim == "session-a", "the claim survives it")
-  assert(flow.substate(handed) == "review", "and the item awaits a verdict")
+  check.must(store.list(s))
+  local hc = check.must(store.read(s))
+  assert(check.must(read.substate(hc, handed.id)) == "review",
+    "and the item awaits a verdict")
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "", true) == 0,
     "re-handing the same spec over is a no-op")
   assert(commits(s) == before + 1, "nothing new to commit")

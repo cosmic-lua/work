@@ -11,7 +11,7 @@ local gitread = require("_work.gitread")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
-local rank = require("_work.rank")
+local read = require("_work.read")
 local show = require("_work.gitshow")
 local spec = require("_work.spec")
 local store = require("_work.store")
@@ -69,13 +69,60 @@ local function a_board(): {item.Item}
   }
 end
 
---- `a_board()`'s rank map with no outcome ranking recorded on the
---- board — every assertion below that is not itself about the `rank:`
---- line is indifferent to its exact text.
+--- `show.show_report`, over an in-memory index built from `all` — role,
+--- rank and state are read through the same `_work.read`/`_work.gitshow`
+--- functions `cmd_show` calls, so this pins the whole render path, not
+--- a hand-picked stand-in for it.
+--- @param it item.Item The item to render
 --- @param all {item.Item} Every item
---- @return {string: rank.Rank} Rank by item id
-local function board_ranks(all: {item.Item}): {string: rank.Rank}
-  return rank.positions(all)
+--- @param body string Its spec sidecar, "" when it has none
+--- @param events {publish.Event} Its git history, newest first
+--- @param problems {string} The take gate's problem list, possibly empty
+--- @param overlaps {string} | nil `_work.overlap`'s pre-rendered lines
+--- @return {string} The lines to print
+--- @return string The verdict detail
+local function report_for(it: item.Item, all: {item.Item}, body: string,
+    events: {publish.Event}, problems: {string}, overlaps?: {string}): {string}, string
+  -- `it` rides along in the index too: `read.role`/`describe`/`state_of`
+  -- below query rows keyed by ITS OWN id, not only its ancestors', so a
+  -- caller testing a standalone item never part of `all` (a handover
+  -- scenario built just for this render, say) needs it indexed same
+  -- as any other.
+  local indexed = all
+  local present = false
+  for _, existing in ipairs(all) do
+    if existing.id == it.id then
+      present = true
+      break
+    end
+  end
+  if not present then
+    indexed = {}
+    for _, existing in ipairs(all) do
+      indexed[#indexed + 1] = existing
+    end
+    indexed[#indexed + 1] = it
+  end
+  local c = fixture.make_index(indexed)
+  local role = check.must(read.role(c, it.id))
+  local rank_line = check.must(show.describe(c, it))
+  local state = check.must(show.state_of(c, it))
+  local child_rows = check.must(read.children(c, it.id))
+  local by_id = item.by_id(all)
+  local children_lines: {string} = {}
+  for _, ch in ipairs(child_rows) do
+    if ch.open then
+      local title = ""
+      local child_it = by_id[ch.child]
+      if child_it ~= nil then
+        title = child_it.title
+      end
+      children_lines[#children_lines + 1] = ("  %s %s"):format(
+        tail.handle(ch.child), title)
+    end
+  end
+  return show.show_report(it, role, rank_line, state, body, events, problems,
+    children_lines, overlaps)
 end
 
 local function test_show_prints_fields_role_and_history()
@@ -83,7 +130,7 @@ local function test_show_prints_fields_role_and_history()
   local events: {publish.Event} = {
     {sha = "abc1234", at = "2026-08-17T00:00:00Z", subject = "move it"},
   }
-  local lines, verdict = show.show_report(all[3], all, board_ranks(all), "## Change\ndo it\n",
+  local lines, verdict = report_for(all[3], all, "## Change\ndo it\n",
     events, {})
   assert(lines[1] == tail.handle(WORK) .. " a slice [" .. WORK .. "]",
     "the header carries the wrapped handle and the full id: " .. lines[1])
@@ -101,11 +148,11 @@ local function test_show_prints_repo_and_base()
   local all = a_board()
   local scoped = check.must(item.decode({id = WORK, title = "a slice",
         parent = UNDER, repo = "whilp/cosmopolitan", base = "release"}))
-  local lines = show.show_report(scoped, all, board_ranks(all), "", {}, {})
+  local lines = report_for(scoped, all, "", {}, {})
   assert(matched(lines, "^repo: whilp/cosmopolitan$"), table.concat(lines, "\n"))
   assert(matched(lines, "^base: release$"), table.concat(lines, "\n"))
 
-  local plain = show.show_report(all[3], all, board_ranks(all), "", {}, {})
+  local plain = report_for(all[3], all, "", {}, {})
   assert(not matched(plain, "^repo:"), "no repo, no line")
   assert(not matched(plain, "^base:"), "no base, no line")
 end
@@ -117,11 +164,11 @@ local function test_show_prints_the_take_gates_problems()
   local all = a_board()
   local problems = {"spec: Change is missing or empty",
     "it has no position in the priority order"}
-  local lines = show.show_report(all[4], all, board_ranks(all), "", {}, problems)
+  local lines = report_for(all[4], all, "", {}, problems)
   assert(matched(lines, "^bar: spec: Change is missing or empty$"),
     table.concat(lines, "\n"))
   assert(matched(lines, "^bar: it has no position"), "every problem prints")
-  local clean = show.show_report(all[4], all, board_ranks(all), "", {}, {})
+  local clean = report_for(all[4], all, "", {}, {})
   assert(not matched(clean, "^bar:"), "no problems, no bar lines")
 end
 
@@ -130,7 +177,7 @@ local function test_show_prints_the_reviewer_lock()
   local under_review = check.must(item.decode({id = WORK, title = "a slice",
         parent = UNDER, claim = "session-a", pr = 42,
         reviewer = "reviewer-b"}))
-  local lines = show.show_report(under_review, all, board_ranks(all), "", {}, {})
+  local lines = report_for(under_review, all, "", {}, {})
   assert(matched(lines, "^reviewer: reviewer%-b$"),
     "the review lock is a fact worth reading: " .. table.concat(lines, "\n"))
 end
@@ -140,7 +187,7 @@ local function test_show_names_an_items_own_graph_problem()
   local adrift = all[4]
   adrift.parent = next_id()
   local index_problems = {("parent %s does not exist"):format(adrift.parent)}
-  local lines, verdict = show.show_report(adrift, all, board_ranks(all), "", {}, index_problems)
+  local lines, verdict = report_for(adrift, all, "", {}, index_problems)
   assert(matched(lines, "bar: parent .* does not exist"),
     "a broken chain says so where it is read: "
     .. table.concat(lines, "\n"))
@@ -159,11 +206,11 @@ local function test_show_prints_a_flagged_items_decode_problems()
   local flagged = check.must(item.decode({id = next_id(),
         title = "broken\ntitle", parent = UNDER}))
   all[#all + 1] = flagged
-  local lines = show.show_report(flagged, all, board_ranks(all), "", {}, {})
+  local lines = report_for(flagged, all, "", {}, {})
   assert(matched(lines, "^flagged: title must be one line"),
     table.concat(lines, "\n"))
 
-  local clean = show.show_report(all[4], all, board_ranks(all), "", {}, {})
+  local clean = report_for(all[4], all, "", {}, {})
   assert(not matched(clean, "^flagged:"), "no problems, no flagged lines")
 end
 
@@ -174,11 +221,11 @@ local function test_show_says_whether_the_spec_moved_since_the_verdict()
         parent = UNDER, claim = "session-a", pr = 42,
         verdict = "request changes", verdict_head = "5364cc21",
         verdict_spec = judged}))
-  local moved = show.show_report(reworked, all, board_ranks(all), SIDECAR .. "\n## Evidence\n",
+  local moved = report_for(reworked, all, SIDECAR .. "\n## Evidence\n",
     {}, {})
   assert(matched(moved, "^verdict: request changes %(head 5364cc21, "
       .. "spec changed since%)$"), table.concat(moved, "\n"))
-  local still = show.show_report(reworked, all, board_ranks(all), SIDECAR, {}, {})
+  local still = report_for(reworked, all, SIDECAR, {}, {})
   assert(matched(still, "^verdict: request changes %(head 5364cc21, "
       .. "spec unchanged since%)$"), table.concat(still, "\n"))
   -- An unrecorded revision says nothing rather than guessing: the line
@@ -186,7 +233,7 @@ local function test_show_says_whether_the_spec_moved_since_the_verdict()
   local legacy = check.must(item.decode({id = WORK, title = "a slice",
         parent = UNDER, claim = "session-a", pr = 42, verdict = "accept",
         verdict_head = "5364cc21"}))
-  local plain = show.show_report(legacy, all, board_ranks(all), SIDECAR, {}, {})
+  local plain = report_for(legacy, all, SIDECAR, {}, {})
   assert(matched(plain, "^verdict: accept %(head 5364cc21%)$"),
     table.concat(plain, "\n"))
 end
@@ -200,7 +247,7 @@ local function test_show_prints_a_research_handovers_digest()
         parent = UNDER, claim = "session-a", builders = "session-a",
         result = ("abcdef0123456789"):rep(4)}))
   all[#all + 1] = handed
-  local lines = show.show_report(handed, all, board_ranks(all), "## Change\ndo it\n", {}, {})
+  local lines = report_for(handed, all, "## Change\ndo it\n", {}, {})
   assert(matched(lines, "^state: review$"), table.concat(lines, "\n"))
   assert(matched(lines, "^result: abcdef0$"),
     "the digest prints where a PR would: " .. table.concat(lines, "\n"))
@@ -218,7 +265,7 @@ local function test_show_prints_a_handovers_verdict_by_result_not_head()
         parent = UNDER, claim = "session-a", builders = "session-a",
         result = ("abcdef0123456789"):rep(4), verdict = "accept",
         verdict_head = "", verdict_spec = judged}))
-  local lines = show.show_report(accepted, all, board_ranks(all), SIDECAR, {}, {})
+  local lines = report_for(accepted, all, SIDECAR, {}, {})
   assert(matched(lines,
       "^verdict: accept %(result abcdef0, spec unchanged since%)$"),
     "the digest prints where a diff's head would: "
@@ -233,8 +280,7 @@ local function test_show_prints_the_rank_line_for_a_ranked_child()
   local all = a_board()
   all[1].order = {UNDER, ADRIFT}
   all[6].order = {ROOT}
-  local ranks = rank.positions(all)
-  local lines = show.show_report(all[2], all, ranks, "", {}, {})
+  local lines = report_for(all[2], all, "", {}, {})
   assert(matched(lines, "^rank: 1 of 2 under .+$"), table.concat(lines, "\n"))
 end
 
@@ -242,17 +288,31 @@ local function test_show_prints_unranked_for_a_child_missing_from_the_order()
   local all = a_board()
   all[1].order = {ADRIFT}
   all[6].order = {ROOT}
-  local ranks = rank.positions(all)
-  local lines = show.show_report(all[2], all, ranks, "", {}, {})
+  local lines = report_for(all[2], all, "", {}, {})
   assert(matched(lines, "^rank: unranked$"), table.concat(lines, "\n"))
 end
 
 local function test_show_prints_the_rank_line_for_an_outcome()
   local all = a_board()
   all[6].order = {ROOT, BEATEN}
-  local ranks = rank.positions(all)
-  local lines = show.show_report(all[1], all, ranks, "", {}, {})
+  local lines = report_for(all[1], all, "", {}, {})
   assert(matched(lines, "^rank: outcome 1 of 2$"), table.concat(lines, "\n"))
+end
+
+-- `show ID` lists its own open children in rank order, one line each
+-- with the wrapped handle and title — a done child never appears.
+local function test_show_lists_its_open_children()
+  local all = a_board()
+  local done_kid = check.must(item.decode({id = next_id(),
+        title = "a finished slice", parent = UNDER, resolution = "completed"}))
+  all[#all + 1] = done_kid
+  local lines = report_for(all[2], all, "", {}, {})
+  assert(matched(lines, "^children:$"), table.concat(lines, "\n"))
+  assert(matched(lines, "^  " .. tail.handle(WORK) .. " a slice$"),
+    "the open child is listed with its handle and title: "
+    .. table.concat(lines, "\n"))
+  assert(not matched(lines, "a finished slice"),
+    "a done child is never listed: " .. table.concat(lines, "\n"))
 end
 
 --- Run `show.cmd_show` against a real store and capture what it

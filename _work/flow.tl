@@ -1,18 +1,15 @@
---- The flow rules over the item graph: pure functions over a list of
---- items, no network and no filesystem. There are no kinds — an
---- item's ROLE derives from its DEPTH in the graph, and this module is
---- where that derivation lives:
+--- What remains of the flow rules once every derivation over the item
+--- graph moved into the board database's views (`_work.readddl`,
+--- read back through `_work.read` — `docs/design/read.md`): the one
+--- WIP bound, the stage order's numeric constants (the `stage` view
+--- computes the same ranking; these name it for the Teal code that
+--- still branches on a queue row's `stage` field), and the spec bar's
+--- gap check, which reads a spec body alone and touches no graph.
 ---
 ---   board     the one parentless item — never workable, never taken
 ---   container any item with open children (being decomposed)
 ---   outcome   a direct child of the board — decomposed, never taken
 ---   work      a childless item below the outcome level
----
---- The board and outcome tests (`is_board`, `is_outcome`) live here
---- rather than on `_work.item.Item` because they need more than one
---- item to answer: `is_board` alone is a single-item parentless check,
---- but `is_outcome` has to look the item's own parent up to see
---- whether THAT is the board.
 ---
 --- A workable item's STATE derives from the facts it carries, never
 --- from a declared column:
@@ -20,27 +17,22 @@
 ---   todo    open, unclaimed, no PR — pullable once its spec passes
 ---           the bar (`_work.spec.ready_gaps`, asked at take)
 ---   doing   open with a claim or a PR; within it the same facts say
----           what happens next (`substate`): building, review,
----           rework, accepted — or queued, when a caller has read the
----           PR and found it already merging on its own
+---           what happens next: building, review, rework, accepted —
+---           or queued, when a caller has read the PR and found it
+---           already merging on its own
 ---
 --- ONE WIP bound, `DOING_LIMIT`, covers the whole in-flight span:
 --- taking NEW work is refused at the limit, finishing motions never
 --- are. Capacity otherwise spreads by worker — one claim per session
 --- — so there is no per-column table and nothing to tune per phase.
 ---
---- Every queue here orders by rank path; `gitboard help order` is the
---- rule.
+--- Every queue orders by rank path; `gitboard help order` is the rule
+--- (`_work.readddl`'s own header carries it verbatim).
 ---
 --- What a session should DO with all this is `_work.action`: the
---- rules and the policy that consults them are separate modules, so
---- growing one never crowds the other against the file-length cap.
-local it = require("_work.item")
-local rank = require("_work.rank")
+--- policy that reads the database and decides is a separate module,
+--- so growing one never crowds the other against the file-length cap.
 local spec = require("_work.spec")
-
-local type Item = it.Item
-local type Index = it.Index
 
 --- The most open doing items the board holds before a new take is
 --- refused. One number over the whole in-flight span (building,
@@ -52,45 +44,6 @@ local type Index = it.Index
 --- board's own log, as a reviewed change here.
 local DOING_LIMIT < const >: integer = 10
 
---- Whether an open workable item is in flight: a claim or a PR makes
---- it `doing`, and nothing else does.
---- @param i Item The item
---- @return boolean True when a claim or a PR stands on it
-local function is_doing(i: Item): boolean
-  return (i.claim or "") ~= "" or (i.pr or 0) ~= 0
-end
-
---- What a doing item's own facts say happens next. A handover with
---- no verdict on it awaits one — a PR for a diff, `result` for a
---- research slice — and this is the ONE place that says so: every
---- queue, offer and refusal that ranks "review" reads it from here.
----
---- `queued` is the one refinement a caller supplies rather than the
---- item deriving on its own: whether an accepted item's PR already
---- reports it is queued to merge on its own
---- (`_work.review.is_queued`, read live when `next` reads the PR).
---- Absent, it is exactly what a store with no GitHub reach reads back
---- as — an ordinary accept, awaiting merge as it always has.
---- @param i Item The item
---- @param queued boolean | nil Whether an accepted item's PR is
---- already queued to merge on its own
---- @return string "accepted" | "queued" | "rework" | "review" | "building"
-local function substate(i: Item, queued?: boolean): string
-  if (i.verdict or "") == "accept" then
-    if queued then
-      return "queued"
-    end
-    return "accepted"
-  end
-  if (i.verdict or "") == "request changes" then
-    return "rework"
-  end
-  if (i.pr or 0) ~= 0 or (i.result or "") ~= "" then
-    return "review"
-  end
-  return "building"
-end
-
 --- The stage half of the unified order: how close an item is to
 --- done, lower ranks first. ONE declaration — every queue, offer,
 --- and refusal that says "finishing beats starting" derives from
@@ -98,6 +51,9 @@ end
 --- before verdicts land, verdicts before rework, rework before
 --- builds, and only then does anything new start — a red lane's
 --- repair first (the pull that cannot wait), ordinary todo last.
+--- `_work.readddl`'s `stage` view computes the same numbers over the
+--- database directly; these constants are what Teal code branches on
+--- against a `_work.read.QueueRow.stage` field.
 local STAGE_ACCEPTED < const >: integer = 1
 local STAGE_REVIEW < const >: integer = 2
 local STAGE_REWORK < const >: integer = 3
@@ -105,325 +61,7 @@ local STAGE_BUILDING < const >: integer = 4
 local STAGE_REPAIR < const >: integer = 5
 local STAGE_TODO < const >: integer = 6
 
---- An open workable item's stage rank.
---- @param i Item The item
---- @return integer The rank, STAGE_ACCEPTED through STAGE_TODO
-local function stage_rank(i: Item): integer
-  if is_doing(i) then
-    local sub = substate(i)
-    if sub == "accepted" then
-      return STAGE_ACCEPTED
-    end
-    if sub == "review" then
-      return STAGE_REVIEW
-    end
-    if sub == "rework" then
-      return STAGE_REWORK
-    end
-    return STAGE_BUILDING
-  end
-  if (i.key or "") ~= "" then
-    return STAGE_REPAIR
-  end
-  return STAGE_TODO
-end
-
---- Whether an item has an open child.
---- @param items {Item} All items
---- @param id string The candidate parent's id
---- @return boolean True when some open item names it as parent
-local function has_open_children(items: {Item}, id: string): boolean
-  for _, i in ipairs(items) do
-    if i.parent == id and it.is_open(i) then
-      return true
-    end
-  end
-  return false
-end
-
---- Whether `i` is the board: the one item with no parent.
---- @param i Item The item
---- @return boolean True when parentless
-local function is_board(i: Item): boolean
-  return it.is_parentless(i)
-end
-
---- Whether `i` is an outcome: a direct child of the board. Needs
---- `index` to look its own parent up — a single item cannot answer
---- this about itself.
---- @param i Item The item
---- @param index Index Items by id
---- @return boolean True when `i`'s own parent is the board
-local function is_outcome(i: Item, index: Index): boolean
-  local parent = index[i.parent or ""]
-  return parent ~= nil and is_board(parent)
-end
-
---- The item with no parent, "" when there is one to have, found by
---- walking `items` in order (`store.list`'s own id order) so the
---- choice is deterministic even on a board `fsck` would flag for
---- carrying more than one such item.
---- @param items {Item} All items
---- @return Item | nil The board, nil when none is filed yet
-local function find_board(items: {Item}): Item | nil
-  for _, i in ipairs(items) do
-    if is_board(i) then
-      return i
-    end
-  end
-  return nil
-end
-
---- The role an item's graph position gives it: the board first (its
---- own open children would otherwise read as a container), then
---- decomposition (a container, board or not), then whether it is a
---- direct child of the board, then plain work.
---- @param i Item The item
---- @param items {Item} All items
---- @return string "board" | "container" | "outcome" | "work"
-local function role(i: Item, items: {Item}): string
-  if is_board(i) then
-    return "board"
-  end
-  if has_open_children(items, i.id) then
-    return "container"
-  end
-  if is_outcome(i, it.by_id(items)) then
-    return "outcome"
-  end
-  return "work"
-end
-
---- The open workable items in one derived state, in queue order: rank
---- path first, age last.
---- @param items {Item} All items
---- @param state string "todo" or "doing"
---- @param ranks {string: rank.Rank} Rank by item id
---- @param seed string Per-session tie-break seed, "" for age order
---- @return {Item} Sorted items, possibly empty
-local function in_state(items: {Item}, state: string,
-    ranks: {string: rank.Rank}, seed?: string): {Item}
-  local out: {Item} = {}
-  for _, i in ipairs(items) do
-    if it.is_open(i) and role(i, items) == "work"
-    and (is_doing(i) and "doing" or "todo") == state then
-      out[#out + 1] = i
-    end
-  end
-  return rank.sorted(out, ranks, seed)
-end
-
---- Every open workable item in ONE queue: stage first (`stage_rank`),
---- then rank path within a stage, age last (`rank.sorted`). `next`
---- offers this queue's head and the take gate refuses what its
---- prefix outranks, so the right-to-left doctrine is this derivation,
---- not restated advice.
---- @param items {Item} All items
---- @param ranks {string: rank.Rank} Rank by item id
---- @param seed string Per-session tie-break seed, "" for age order
---- @return {Item} The queue, closest-to-done first
-local function unified(items: {Item},
-    ranks: {string: rank.Rank}, seed?: string): {Item}
-  local buckets: {integer: {Item}} = {}
-  for _, i in ipairs(items) do
-    if it.is_open(i) and role(i, items) == "work" then
-      local sr = stage_rank(i)
-      local bucket = buckets[sr]
-      if bucket == nil then
-        bucket = {}
-        buckets[sr] = bucket
-      end
-      bucket[#bucket + 1] = i
-    end
-  end
-  local out: {Item} = {}
-  for sr = STAGE_ACCEPTED, STAGE_TODO do
-    for _, i in ipairs(rank.sorted(buckets[sr] or {}, ranks, seed)) do
-      out[#out + 1] = i
-    end
-  end
-  return out
-end
-
---- The refusal a NEW take earns from the doing bound, or nil while
---- the board has room. Only a take of todo work asks — a takeover of
---- in-flight work adds nothing to the count, and finishing motions
---- never ask at all. A lane-repair item is the other arrival the
---- bound never holds back: the fix for a red lane cannot wait on a
---- queue depth it did not cause, the same admits-over-limit hole an
---- accept into land once used before the phase model retired.
---- @param items {Item} All items
---- @param taking Item The item about to be taken; nil when only
---- reporting the bound, never bypassed
---- @return string | nil The refusal
-local function doing_refusal(items: {Item}, taking?: Item): string | nil
-  if taking ~= nil and (taking.key or "") ~= "" then
-    return nil
-  end
-  local n = 0
-  for _, i in ipairs(items) do
-    if it.is_open(i) and is_doing(i) and role(i, items) == "work" then
-      n = n + 1
-    end
-  end
-  if n < DOING_LIMIT then
-    return nil
-  end
-  return ("doing is at %d/%d — finish something before taking more")
-  :format(n, DOING_LIMIT)
-end
-
---- Whether `i`'s parent chain eventually reaches the board — the
---- structural soundness test `item_problems`/`graph_problems` use.
---- False for a broken or cyclic chain, or one that runs past
---- `MAX_DEPTH` hops without reaching it.
---- @param i Item The item
---- @param index Index Items by id
---- @return boolean True when the chain reaches the board
-local function reaches_board(i: Item, index: Index): boolean
-  local cur = i
-  for _ = 1, it.MAX_DEPTH do
-    if is_board(cur) then
-      return true
-    end
-    cur = index[cur.parent]
-    if cur == nil then
-      return false
-    end
-  end
-  return false
-end
-
---- The outcome an item's parent chain reaches — itself when it is one
---- — or nil when the chain is broken, cyclic, or belongs to the board
---- itself (which has no outcome ancestor).
---- @param i Item The item
---- @param index Index Items by id
---- @return Item | nil The outcome
-local function outcome_of(i: Item, index: Index): Item | nil
-  local cur = i
-  for _ = 1, it.MAX_DEPTH do
-    if is_board(cur) then
-      return nil
-    end
-    if is_outcome(cur, index) then
-      return cur
-    end
-    cur = index[cur.parent]
-    if cur == nil then
-      return nil
-    end
-  end
-  return nil
-end
-
---- ONE item's graph problems: a parent that does not exist, and a
---- chain that never reaches the board. Placement is not asked here —
---- an unplaced item is the triage queue's to report, and the take
---- gate is where placement refuses work — so an unrelated item's
---- broken chain can never refuse a take that has nothing to do with
---- it. `status` asks this of everything, which is where board-wide
---- health belongs.
---- @param i Item The item
---- @param index Index Items by id
---- @return {string} Problems, possibly empty
-local function item_problems(i: Item, index: Index): {string}
-  local out: {string} = {}
-  if not is_board(i) and index[i.parent] == nil then
-    out[#out + 1] = ("%s: parent %s does not exist"):format(i.id, i.parent)
-    return out
-  end
-  if not it.is_open(i) then
-    return out
-  end
-  if not reaches_board(i, index) then
-    out[#out + 1] = ("%s: parent chain is broken or cyclic"):format(i.id)
-  end
-  return out
-end
-
---- Every item's graph problems, for board-wide health.
---- @param items {Item} All items
---- @return {string} Problems, possibly empty
-local function graph_problems(items: {Item}): {string}
-  local index = it.by_id(items)
-  local out: {string} = {}
-  for _, i in ipairs(items) do
-    for _, p in ipairs(item_problems(i, index)) do
-      out[#out + 1] = p
-    end
-  end
-  return out
-end
-
---- The open outcomes that are RANKED — positioned in the board's own
---- `order` — in rank order. Nothing marks an outcome as important:
---- standing in the board's own list is the only claim to importance
---- the board recognises.
---- @param items {Item} All items
---- @return {Item} Open ranked outcomes, rank order
-local function outcomes(items: {Item}): {Item}
-  local index = it.by_id(items)
-  local ranks = rank.positions(items)
-  local out: {Item} = {}
-  for _, i in ipairs(items) do
-    if it.is_open(i) and is_outcome(i, index)
-    and rank.is_ranked(ranks, i.id) then
-      out[#out + 1] = i
-    end
-  end
-  return rank.sorted(out, ranks)
-end
-
---- Every outcome id with live work already under it: an open
---- descendant, not itself an outcome, whose parent chain reaches it.
---- Pairs with `outcomes` to tell an outcome awaiting decomposition
---- apart from one already driven by open work.
---- @param items {Item} All items
---- @return {string: boolean} outcome id -> has live work
-local function live_outcomes(items: {Item}): {string: boolean}
-  local index = it.by_id(items)
-  local live: {string: boolean} = {}
-  for _, i in ipairs(items) do
-    if it.is_open(i) and not is_outcome(i, index) and not is_board(i) then
-      local outcome = outcome_of(i, index)
-      if outcome ~= nil then
-        live[outcome.id] = true
-      end
-    end
-  end
-  return live
-end
-
---- The triage queue: open outcomes the board's own `order` does not
---- position. Captured evidence, nothing decomposing it, nothing
---- having adopted it, and no claim yet about how much it matters —
---- which is exactly the state triage exists to resolve, by ranking it
---- among the outcomes, attaching it under one already ranked, or
---- ending it.
----
---- Ranked is what separates this queue from intake: an outcome
---- somebody HAS ranked is one the planner decomposes (`outcomes`),
---- even with no children yet.
---- @param items {Item} All items
---- @return {Item} Unranked outcomes, age order
-local function untriaged(items: {Item}): {Item}
-  local index = it.by_id(items)
-  local ranks = rank.positions(items)
-  local out: {Item} = {}
-  for _, i in ipairs(items) do
-    if it.is_open(i) and is_outcome(i, index)
-    and not has_open_children(items, i.id)
-    and not rank.is_ranked(ranks, i.id) then
-      out[#out + 1] = i
-    end
-  end
-  return rank.sorted(out, ranks)
-end
-
 local record flow
-  type Item = Item
-  type Index = Index
   DOING_LIMIT: integer
   STAGE_ACCEPTED: integer
   STAGE_REVIEW: integer
@@ -431,27 +69,6 @@ local record flow
   STAGE_BUILDING: integer
   STAGE_REPAIR: integer
   STAGE_TODO: integer
-  is_doing: function(i: Item): boolean
-  substate: function(i: Item, queued?: boolean): string
-  stage_rank: function(i: Item): integer
-  unified: function(items: {Item}, ranks: {string: rank.Rank},
-  seed?: string): {Item}
-  by_id: function(items: {Item}): Index
-  has_open_children: function(items: {Item}, id: string): boolean
-  is_board: function(i: Item): boolean
-  is_outcome: function(i: Item, index: Index): boolean
-  find_board: function(items: {Item}): Item | nil
-  role: function(i: Item, items: {Item}): string
-  in_state: function(items: {Item}, state: string,
-  ranks: {string: rank.Rank}, seed?: string): {Item}
-  doing_refusal: function(items: {Item}, taking?: Item): string | nil
-  reaches_board: function(i: Item, index: Index): boolean
-  outcome_of: function(i: Item, index: Index): Item | nil
-  item_problems: function(i: Item, index: Index): {string}
-  graph_problems: function(items: {Item}): {string}
-  outcomes: function(items: {Item}): {Item}
-  live_outcomes: function(items: {Item}): {string: boolean}
-  untriaged: function(items: {Item}): {Item}
   ready_gaps: function(body: string): {string}
 end
 
@@ -463,25 +80,6 @@ local M: flow = {
   STAGE_BUILDING = STAGE_BUILDING,
   STAGE_REPAIR = STAGE_REPAIR,
   STAGE_TODO = STAGE_TODO,
-  is_doing = is_doing,
-  substate = substate,
-  stage_rank = stage_rank,
-  unified = unified,
-  by_id = it.by_id,
-  has_open_children = has_open_children,
-  is_board = is_board,
-  is_outcome = is_outcome,
-  find_board = find_board,
-  role = role,
-  in_state = in_state,
-  doing_refusal = doing_refusal,
-  reaches_board = reaches_board,
-  outcome_of = outcome_of,
-  item_problems = item_problems,
-  graph_problems = graph_problems,
-  outcomes = outcomes,
-  live_outcomes = live_outcomes,
-  untriaged = untriaged,
   ready_gaps = spec.ready_gaps,
 }
 

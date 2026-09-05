@@ -7,18 +7,13 @@
 -- `_work/gitshow_test.tl`; the one case that spans both, a repo mark
 -- rendered by two reports at once, stays here.
 
-local cache = require("_work.cache")
 local check = require("cosmic.check")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local fixture = require("_work.fixture")
-local gh = require("_work.gh")
-local rank = require("_work.rank")
-local refs = require("_work.refs")
+local read = require("_work.read")
 local show = require("_work.gitshow")
-local store = require("_work.store")
 local tail = require("_work.tail")
-local verbs = require("_work.gitverbs")
 local view = require("_work.gitview")
 
 local counter = 0
@@ -85,8 +80,26 @@ local function full_specs(): {string: string}
   return out
 end
 
+--- `view.status_report`, over a fresh in-memory index built from
+--- `items` — what every pure test in this file asks instead of a real
+--- store, the same way `_work.fixture.make_index` serves any other
+--- report or decision test.
+--- @param items {item.Item} The board
+--- @param specs act.Specs Sidecar body by id
+--- @param ages health.Ages | nil Stale claim ages, by id
+--- @param lane_facts {string: string} | nil Lane state, nil when unsynced
+--- @return {string} The lines to print
+--- @return string The verdict detail
+local function status(items: {item.Item}, specs: {string: string},
+    ages?: {string: integer}, lane_facts?: {string: string}): {string}, string
+  local c = fixture.make_index(items)
+  local lines, verdict = view.status_report(c, items, specs, ages, lane_facts)
+  assert(lines ~= nil, verdict)
+  return lines, verdict
+end
+
 local function test_status_renders_doing_against_the_bound()
-  local lines, verdict = view.status_report(board_items(), full_specs())
+  local lines, verdict = status(board_items(), full_specs())
   assert(has(lines, "^doing  1/10$"), table.concat(lines, "\n"))
   assert(has(lines, "%[review%]"), "the substate shows")
   assert(has(lines, "@session%-a"), "so does the claim")
@@ -108,7 +121,7 @@ local function test_status_lists_the_triage_queue()
   local capture = fresh_id()
   items[#items + 1] = check.must(item.decode({id = capture,
         title = "a capture", parent = BOARD}))
-  local lines = view.status_report(items, full_specs())
+  local lines = status(items, full_specs())
   assert(has(lines, "^triage 1$"), table.concat(lines, "\n"))
   assert(has(lines, "^  " .. lit(tail.handle(capture)) .. " a capture$"),
     "each untriaged root is listed with its wrapped handle, not the "
@@ -119,10 +132,14 @@ local function test_status_names_graph_problems()
   local items = board_items()
   items[#items + 1] = check.must(item.decode({id = fresh_id(),
         title = "an orphan", parent = fresh_id()}))
-  local lines, verdict = view.status_report(items, full_specs())
+  local lines, verdict = status(items, full_specs())
   assert(has(lines, "graph: "),
     "a broken chain is board health: " .. table.concat(lines, "\n"))
-  assert(verdict:find("1 graph problem(s)", 1, true), verdict)
+  -- The structure view reports a dangling parent AND the unreachable
+  -- chain it causes as two separate findings — richer than the old
+  -- single-problem-per-item walk, so this pins "at least one", not
+  -- an exact count.
+  assert(verdict:find("graph problem%(s%)"), verdict)
 end
 
 local function test_status_reports_the_bound_binding()
@@ -132,7 +149,7 @@ local function test_status_reports_the_bound_binding()
           title = "more", parent = CONTAINER,
           claim = ("wake-%d"):format(k)}))
   end
-  local _, verdict = view.status_report(items, full_specs())
+  local _, verdict = status(items, full_specs())
   assert(verdict:find("bound: doing is at 11/10", 1, true), verdict)
 end
 
@@ -142,7 +159,7 @@ end
 -- has no `lanes_state.tl`, and `show` prints no row rather than one
 -- of blanks.
 local function test_status_renders_the_lanes_row_when_state_exists()
-  local lines = view.status_report(board_items(), full_specs(), nil,
+  local lines = status(board_items(), full_specs(), nil,
     {["release.yml"] = "success", ["fuzz.yml"] = "failure",
       ["docs.yml"] = "success"})
   assert(has(lines,
@@ -155,7 +172,7 @@ end
 -- partial or not-yet-observed lane takes) is left out of the row
 -- rather than printed as `lane=`.
 local function test_the_lanes_row_omits_an_unrecorded_lane()
-  local lines = view.status_report(board_items(), full_specs(), nil,
+  local lines = status(board_items(), full_specs(), nil,
     {["release.yml"] = "success", ["fuzz.yml"] = "", ["docs.yml"] = "success"})
   assert(has(lines, "^lanes  release%.yml=success docs%.yml=success$"),
     "the blank lane is omitted, not printed as lane=: "
@@ -163,7 +180,7 @@ local function test_the_lanes_row_omits_an_unrecorded_lane()
 end
 
 local function test_status_omits_the_lanes_row_when_unsynced()
-  local lines = view.status_report(board_items(), full_specs())
+  local lines = status(board_items(), full_specs())
   for _, line in ipairs(lines) do
     assert(not line:match("^lanes"),
       "no lanes row prints when the board has never synced: " .. line)
@@ -178,21 +195,32 @@ local function test_status_prints_one_summary_line_for_flagged_items()
   local bad = check.must(item.decode({id = fresh_id(),
         title = "broken\ntitle", parent = CONTAINER}))
   items[#items + 1] = bad
-  local lines = view.status_report(items, full_specs())
+  local lines = status(items, full_specs())
   assert(has(lines, "^1 unreadable/flagged: " .. lit(bad.id:sub(1, 8))
       .. " \u{2014} title must be one line"),
     "one summary line names the flagged record: "
     .. table.concat(lines, "\n"))
 
-  local clean_lines = view.status_report(board_items(), full_specs())
+  local clean_lines = status(board_items(), full_specs())
   for _, line in ipairs(clean_lines) do
     assert(not line:match("unreadable/flagged"),
       "no flagged records, no summary line: " .. line)
   end
 end
 
+--- `view.next_report`, over a fresh in-memory index built from `items`.
+--- @param items {item.Item} The board
+--- @param specs {string: string} Sidecar body by id
+--- @return string The action, its target, the rule behind it, and its guidance
+local function next_report(items: {item.Item}, specs: {string: string}): string
+  local c = fixture.make_index(items)
+  local report, err = view.next_report(c, items, specs)
+  assert(err == "", err)
+  return report
+end
+
 local function test_next_names_one_action_and_its_rule()
-  local report = view.next_report(board_items(), full_specs())
+  local report = next_report(board_items(), full_specs())
   assert(report:find("review", 1, true)
     and report:find(tail.handle(LEAF), 1, true),
     "a PR awaiting a verdict is judged before anything is pulled: "
@@ -224,7 +252,7 @@ local function test_next_alternate_carries_an_overlap_annotation()
   specs[SECOND] = table.concat({
       "## Change", "Also touch `_work/brief.tl`.",
     }, "\n")
-  local report = view.next_report(items, specs)
+  local report = next_report(items, specs)
   assert(report:find("or: pull " .. tail.handle(FRESH)
       .. " a fresh leaf — overlaps: " .. tail.handle(SECOND)
       .. " on _work/brief.tl", 1, true),
@@ -268,12 +296,15 @@ local function test_repo_is_rendered_in_show_and_status()
         repo = "whilp/cosmopolitan"}))
   all[#all + 1] = scoped
 
-  local ranks = rank.positions(all)
-  local show_lines = show.show_report(scoped, all, ranks, "", {}, {})
+  local c = fixture.make_index(all)
+  local role = check.must(read.role(c, scoped.id))
+  local rank_line = check.must(show.describe(c, scoped))
+  local state = check.must(show.state_of(c, scoped))
+  local show_lines = show.show_report(scoped, role, rank_line, state, "", {}, {}, {})
   assert(has(show_lines, "^repo: whilp/cosmopolitan$"),
     "show prints a repo line: " .. table.concat(show_lines, "\n"))
 
-  local status_lines = view.status_report(all, full_specs())
+  local status_lines = status(all, full_specs())
   assert(has(status_lines, "%[whilp/cosmopolitan%]"),
     "status marks the item with its repo: " .. table.concat(status_lines, "\n"))
   local leaf_line = ""
@@ -286,7 +317,11 @@ local function test_repo_is_rendered_in_show_and_status()
   assert(not leaf_line:find("whilp/cosmopolitan", 1, true),
     "the same-repo LEAF is unmarked: " .. leaf_line)
 
-  local default_show = show.show_report(all[3], all, ranks, "", {}, {})
+  local role3 = check.must(read.role(c, all[3].id))
+  local rank_line3 = check.must(show.describe(c, all[3]))
+  local state3 = check.must(show.state_of(c, all[3]))
+  local default_show = show.show_report(all[3], role3, rank_line3, state3, "",
+    {}, {}, {})
   assert(not has(default_show, "^repo:"),
     "an item with no repo prints no repo line: "
     .. table.concat(default_show, "\n"))
@@ -301,7 +336,7 @@ local function test_status_marks_a_research_handover_with_its_digest()
         parent = CONTAINER, claim = "session-b", builders = "session-b",
         result = ("abcdef0123456789"):rep(4)}))
   all[#all + 1] = handed
-  local lines = view.status_report(all, full_specs())
+  local lines = status(all, full_specs())
   local line = ""
   for _, l in ipairs(lines) do
     if l:find("a handover", 1, true) then
@@ -313,187 +348,4 @@ local function test_status_marks_a_research_handover_with_its_digest()
   assert(line:find("[review] @session-b result:abcdef0", 1, true),
     "marked with its substate, claim and digest: " .. line)
   assert(not line:find("pr:", 1, true), "and no PR mark: " .. line)
-end
-
---- Stand `gh.head_checks` in for a fixed state for the duration of
---- `f`, restoring the real function even when `f` fails an assertion
---- — the same swap-and-restore `gitreview_test.tl`'s `with_ci_state`
---- uses, sized to the two states this file actually exercises.
---- @param state string The state `head_checks` reports
---- @param f function(): boolean The test body; returns true when done
-local function with_ci_state(state: string, f: function(): boolean)
-  local real = gh.head_checks
-  gh.head_checks = function(_s: store.Store, _pr: integer, _repo: string | nil):
-    gh.HeadChecks | nil, string
-    return {state = state, head_sha = "", runs = {}}, ""
-  end
-  local ok, err = pcall(f)
-  gh.head_checks = real
-  if not ok then
-    error(err, 0)
-  end
-end
-
---- Run `view.cmd_next` and capture exactly what it prints via
---- `print()` -- the same swap-and-restore pattern `gitboard_test.tl`'s
---- `gitboard_and_capture` uses to pin a CLI's exact console output.
---- @param s store.Store The store
---- @param session string This session's name
---- @return integer cmd_next's exit code
---- @return string Every print()'d line, newline-joined
-local function cmd_next_and_capture(s: store.Store, session: string):
-  integer, string
-  local old_print = _G.print
-  local lines: {string} = {}
-  _G.print = function(...: any)
-    local parts: {string} = {}
-    for i = 1, select("#", ...) do
-      parts[i] = tostring((select(i, ...)))
-    end
-    lines[#lines + 1] = table.concat(parts, "\t")
-  end
-  local ok, result = pcall(view.cmd_next, s, session)
-  _G.print = old_print
-  if not ok then
-    error(result, 0)
-  end
-  return result, table.concat(lines, "\n")
-end
-
--- A reviewable item taken and handed over carrying a PR. The initial
--- claim is forced: the leaf's root is deliberately left unplaced (see
--- `unplaced_root_with_leaf`), and an unplaced item's own spec bar
--- normally refuses `take` — `--force` is only how this fixture skips
--- straight to "in review", not a claim about the real gate.
-local function handed_over(s: store.Store, leaf: string, builder: string,
-    pr: integer)
-  fixture.give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, builder, 0, true,
-      "test fixture: skip the position gate") == 0)
-  assert(verbs.cmd_take(s, leaf, builder, pr, false, "") == 0)
-end
-
---- A deliberately UNPLACED root with one workable leaf under it — the
---- same shape `_work/action_ci_test.tl`'s
---- `test_a_running_head_is_not_offered` uses: it has a child (not
---- triage) and is not a placed root (nothing to decompose), so no
---- intake rung has anything to offer instead and the CI-blocked
---- review below is the only candidate `next` has to weigh.
---- @param s store.Store The store
---- @return string The workable leaf's id
-local function unplaced_root_with_leaf(s: store.Store): string
-  local root = fixture.file_item(s, "an outcome", "")
-  return fixture.file_item(s, "a workable slice", root)
-end
-
--- The wiring this item adds: `next` (through `gitview.cmd_next`, the
--- actual entry `gitboard next` reaches) reads live CI state for a
--- reviewable item carrying a PR and steps it out of the offer exactly
--- as `_work/action_ci_test.tl` proves `action.tl` alone can — proof
--- that a real `gitboard next` invocation now builds and passes the
--- `CiStates` map, not only that `next_action` honors one when handed
--- one directly.
-local function test_live_next_skips_a_reviewable_item_with_ci_running()
-  local s = fixture.init_state_repo("next-ci-running")
-  local leaf = unplaced_root_with_leaf(s)
-  handed_over(s, leaf, "builder-a", 9)
-  with_ci_state("running", function(): boolean
-      local code, printed = cmd_next_and_capture(s, "")
-      assert(code == 0, printed)
-      assert(printed:find("ci running", 1, true) ~= nil,
-        "a running head is not offered by a live next: " .. printed)
-      return true
-    end)
-end
-
--- Same wiring, the red case: already decided, but the move is the
--- builder's, not a reviewer's — and the live path renders that
--- distinctly from "running", the same as the pure layer already does.
-local function test_live_next_skips_a_reviewable_item_with_ci_red()
-  local s = fixture.init_state_repo("next-ci-red")
-  local leaf = unplaced_root_with_leaf(s)
-  handed_over(s, leaf, "builder-a", 9)
-  with_ci_state("red", function(): boolean
-      local code, printed = cmd_next_and_capture(s, "")
-      assert(code == 0, printed)
-      assert(printed:find("ci red — builder's", 1, true) ~= nil,
-        "a red head reads as the builder's move on a live next: " .. printed)
-      return true
-    end)
-end
-
---- Three separate roots, each with one workable leaf claimed under
---- its own builder — `claim_ages` only asks about a claimed item, so
---- three is enough to prove the cost stays flat rather than growing
---- with the count. `--force` skips the position gate the same way
---- `handed_over` does; none of these go to review, so `claim`, not
---- `reviewer`, is what makes each one eligible.
---- @param s store.Store The store
---- @return {string} The three claimed leaves' ids
-local function three_claimed_leaves(s: store.Store): {string}
-  local ids: {string} = {}
-  for k = 1, 3 do
-    local root = fixture.file_item(s, ("outcome %d"):format(k), "")
-    local leaf = fixture.file_item(s, ("workable slice %d"):format(k), root)
-    fixture.give_spec(s, leaf)
-    assert(verbs.cmd_take(s, leaf, ("builder-%d"):format(k), 0, true,
-        "test fixture: skip the position gate") == 0)
-    ids[#ids + 1] = leaf
-  end
-  return ids
-end
-
--- This item's own claim: `list_via_cache` pays for exactly one
--- `for-each-ref` snapshot (over `cachedb.WATCH_PATTERNS`, carrying
--- every ref's committer date), and `claim_ages` — reading
--- `s.touched_at`, which that one snapshot already populated — spawns
--- none of its own, no matter how many items are claimed. The ground
--- truth is read directly off `refs.committer_date_unix` before the
--- counting stub goes up, so the assertion is against the real ref
--- state a claim just wrote, not a second call to the code under test.
-local function test_claim_ages_costs_nothing_beyond_the_one_snapshot()
-  local s = fixture.init_state_repo("claim-ages-snapshot")
-  local ids = three_claimed_leaves(s)
-
-  local now = os.time()
-  local expected: {string: integer} = {}
-  for _, id in ipairs(ids) do
-    local ref = "refs/heads/items/" .. id
-    expected[id] = now - check.must(refs.committer_date_unix(s.root, ref))
-  end
-
-  -- Warmed first, the way a real session's second-and-later render
-  -- always finds the cache: `list_via_cache`'s own snapshot then
-  -- reuses the file rather than paying `rebuild`'s cost too.
-  local warm = check.must(cache.rebuild(s.root))
-  assert(cache.close(warm))
-
-  local board, lerr = view.list_via_cache(s)
-  assert(board ~= nil, lerr)
-  local all = board.items
-
-  local calls = 0
-  local real_fe = refs.for_each_ref
-  local real_cdu = refs.committer_date_unix
-  refs.for_each_ref = function(root: string, patterns: {string}):
-    {refs.RefEntry} | nil, string
-    calls = calls + 1
-    return real_fe(root, patterns)
-  end
-  refs.committer_date_unix = function(root: string, ref: string): integer | nil, string
-    calls = calls + 1
-    return real_cdu(root, ref)
-  end
-  local ages = view.claim_ages(s, all)
-  refs.for_each_ref = real_fe
-  refs.committer_date_unix = real_cdu
-
-  assert(calls == 0, ("claim_ages should spawn nothing beyond the snapshot "
-      .. "list_via_cache already took: got %d"):format(calls))
-  for _, id in ipairs(ids) do
-    assert(ages[id] ~= nil, "a claimed item's age is reported: " .. id:sub(1, 8))
-    assert(math.abs(ages[id] - expected[id]) <= 2,
-      ("the age should match the fixture commit's own touch time: got %d, "
-        .. "wanted ~%d"):format(ages[id], expected[id]))
-  end
 end
