@@ -237,9 +237,9 @@ gitboard is already built in the board checkout. Export
 SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 
 ```
-cd <BOARD_DIR>
+cd <PRODUCT_ROOT>
 export SSL_USE_SYSTEM_CERTS=1
-o/bin/gitboard sync
+bin/gitboard sync
 ```
 
 ## The task: refine one item's spec to the bar
@@ -258,7 +258,7 @@ Current spec (verbatim — also your compare-and-swap base):
 Rewrite the item's `## Change` (and `## Non-goals` if a wall is at
 stake) so a competent, literal-minded session — nothing beyond the
 spec and the repo's AGENTS.md — could not get it wrong. Run
-`o/bin/gitboard help bar` for the full bar; the short form: every
+`bin/gitboard help bar` for the full bar; the short form: every
 tree-fact measured during THIS refinement with the command that
 produced it (a behavioural claim needs the command AND its pasted
 output), bounds land as tests in the diff-to-be, size for one PR one
@@ -269,7 +269,7 @@ checklist a builder must reproduce.
 Write the new spec to a file holding ONLY the spec, then:
 
 ```
-o/bin/gitboard spec <ITEM_ID> <new-spec-file> --base <file-with-the-current-spec-above>
+bin/gitboard spec <ITEM_ID> <new-spec-file> --base <file-with-the-current-spec-above>
 ```
 
 If refused because someone else's write landed first: `sync`,
@@ -300,9 +300,9 @@ gitboard is already built in the board checkout. Export
 SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 
 ```
-cd <BOARD_DIR>
+cd <PRODUCT_ROOT>
 export SSL_USE_SYSTEM_CERTS=1
-o/bin/gitboard sync
+bin/gitboard sync
 ```
 
 ## The task: decompose one outcome into workable children
@@ -321,15 +321,15 @@ Current spec/prose on the outcome (may be empty):
 Work backwards from the outcome's win condition: cut it into
 children, each sized for one session's PR, until nothing is left
 uncut. Each child needs its own pullable spec — run
-`o/bin/gitboard help bar` for the bar; never file a child as a
+`bin/gitboard help bar` for the bar; never file a child as a
 placeholder title with no `## Change`. Real landing order between
 children is a `blocked_by` edge, not prose. File each with:
 
 ```
-o/bin/gitboard new "<child title>" --parent <ITEM_ID> --spec-file <file>
+bin/gitboard new "<child title>" --parent <ITEM_ID> --spec-file <file>
 ```
 
-and `o/bin/gitboard block <child-id> <blocker-id> --reason '<why>'`
+and `bin/gitboard block <child-id> <blocker-id> --reason '<why>'`
 for any real ordering dependency between the children you filed.
 
 ## Rules
