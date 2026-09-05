@@ -139,10 +139,48 @@
   open the PR. Full section for both builders' own `## Friction` pending —
   the second has not reported yet.
 
-## refine EAi9_RFmX (background, in flight)
+## refine EAi9_RFmX (background) — completed, spec was near-excellent but had one type-check gap
 - spawned to write a `## Change` for the metatable-access-helper item (spec
-  had only a `## Goal`, failed the bar outright). Full section pending — the
-  refine agent has not reported yet.
+  had only a `## Goal`, failed the bar outright). Subagent `a9688211`: 78 tool
+  calls, 976s, 180.5k tokens. Result was unusually thorough and largely
+  correct on independent orchestrator spot-check (all 5 cited files' line
+  counts and cited source lines verified byte-for-byte against
+  `origin/main` before spawning a builder) — but one of its two "zero
+  residual cast" claims (`_types/tlast.tl`'s `local mt: any =
+  getmetatable(t)`) does not type-check, discovered only when a builder
+  actually tried it.
+  contributed: the refiner's own `## Friction` flagged the root cause
+  itself: "no built `cosmic` binary was available in this environment (no
+  `o/` tree), so I could not run `--check types` to confirm the exact
+  rewritten lines compile," and mitigated by citing only in-tree
+  precedent (`cosmic/json.tl`'s `array_marker: any`) rather than
+  verifying the new snippet directly — but the precedent's applicability
+  silently depended on the precedent's `getmetatable` argument being
+  itself `any`-typed, which `tag_of`'s `t: {any: any}` argument is not;
+  tl's `narrowed_declaration` re-narrows a combined `local x: T = init`
+  form back to the initializer's concrete inferred type
+  (`metatable<{any: any}>`), and only a split declare/assign avoids it.
+  improvement: same fix-shape as the sibling `q0zL_uDdq` finding above —
+  a refiner without a built binary should flag every UNVERIFIED type-check
+  claim as such in the spec (not present as fact), so a builder or
+  orchestrator knows exactly which lines still need confirming before
+  spawning full implementation; conversely an orchestrator with a
+  buildable checkout (this one had one, via `git fetch` + `bin/cosmic
+  --make fetch`) should spot-check a refined spec's NEW code snippets
+  against `--check types` before spawning a builder, the same way it
+  already spot-checked line numbers and citations — this would have
+  caught the gap in ~1 command instead of costing a full builder attempt
+  (55 tool calls, 493s, 113.7k tokens) that correctly stopped short and
+  itself found the exact fix (verified independently by the orchestrator
+  in the builder's own worktree before respec'ing a third time).
+  Respec'd (`spec` v2, `--force` over the orchestrator's own
+  `build-EAi9_RFmX-eceb7aa0` claim) with the two-statement declare/assign
+  fix, verified by the orchestrator directly
+  (`o/bin/cosmic --check types` → `Type check passed`) before respec'ing.
+  Re-spawned a follow-up builder (`ac692a82`) to apply just that one fix
+  on top of the first builder's intact `9455817`, then push and open the
+  PR. Full section for both builders' own `## Friction` pending — the
+  follow-up has not reported yet.
 
 ## candidates
 - **ROOT CAUSE FOUND (was misdiagnosed at first): the delay between
