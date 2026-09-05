@@ -10,6 +10,7 @@
 --- that returns its lines can be asserted on without capturing
 --- stdout.
 local cache = require("_work.cache")
+local cachequery = require("_work.cachequery")
 local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
@@ -224,10 +225,35 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   return out, verdict
 end
 
+--- Every item via the board cache instead of a fresh git read —
+--- `_work.cachequery.items` hydrated straight from `cache.open`'s SQL
+--- rows, current for the live board by the same freshness guard
+--- `find`/`new` already go through. Neither `cmd_status` nor
+--- `cmd_next` writes through `s` afterward, so the lease `store.list`
+--- would have set on it is never missed.
+--- @param s store.Store The store
+--- @return {item.Item} | nil Every item
+--- @return string Error message
+local function list_via_cache(s: store.Store): {item.Item} | nil, string
+  local c, cerr = cache.open(s.root)
+  if c == nil then
+    return nil, cerr
+  end
+  local all, ierr = cachequery.items(c)
+  local close_ok, close_err = cache.close(c)
+  if all == nil then
+    return nil, ierr
+  end
+  if not close_ok then
+    return nil, close_err
+  end
+  return all
+end
+
 --- Bare `show`: the whole board. Named `cmd_status` for the report it
 --- prints; the verdict line says `show`, the verb that reaches it.
 local function cmd_status(s: store.Store): integer
-  local all, aerr = store.list(s)
+  local all, aerr = list_via_cache(s)
   if all == nil then
     return verdict_line("show", false, aerr)
   end
@@ -349,7 +375,7 @@ local function next_report_live(s: store.Store, all: {item.Item},
 end
 
 local function cmd_next(s: store.Store, session?: string): integer
-  local all, aerr = store.list(s)
+  local all, aerr = list_via_cache(s)
   if all == nil then
     return verdict_line("next", false, aerr)
   end
