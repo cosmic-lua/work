@@ -61,6 +61,7 @@ return {
   ["_work/priority.tl"] = {["covered"] = 166, ["total"] = 180},
   ["_work/product.tl"] = {["covered"] = 3, ["total"] = 3},
   ["_work/publish.tl"] = {["covered"] = 63, ["total"] = 81},
+  ["_work/rank.tl"] = {["covered"] = 162, ["total"] = 172},
   ["_work/refs.tl"] = {["covered"] = 78, ["total"] = 89},
   ["_work/review.tl"] = {["covered"] = 71, ["total"] = 74},
   ["_work/session.tl"] = {["covered"] = 44, ["total"] = 44},
