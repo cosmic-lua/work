@@ -1,1 +1,0 @@
-needs a cosmos release built from a commit that carries keP3_sWNy's unix.setsockopt @overload annotation; none exists until that item is done and cosmic-lua/cosmopolitan cuts a release from it
