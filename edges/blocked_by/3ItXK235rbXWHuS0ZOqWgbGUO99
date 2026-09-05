@@ -1,0 +1,1 @@
+item 5's premise (cosmic --docs -- '--recipe' reaches the handler intact) is false — the dispatcher's -- pre-scan drops the query; needs the dispatcher fix before item 5 can be built/tested as specified
