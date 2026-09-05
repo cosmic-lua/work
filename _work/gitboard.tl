@@ -365,8 +365,18 @@ local function main(...: string): integer
       d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
   if d.command == "done" then
+    local by = ""
+    local by_raw = d.parsed.values["by"]
+    if by_raw ~= nil then
+      local resolved, byerr = resolve_id(s, by_raw)
+      if resolved == nil then
+        io.stderr:write(tostring(byerr) .. "\n")
+        return 1
+      end
+      by = resolved
+    end
     return verbs.cmd_done(s, id, d.parsed.values["reason"] or "completed",
-      d.parsed.switches["force"], d.parsed.values["why"] or "")
+      d.parsed.switches["force"], d.parsed.values["why"] or "", by)
   end
   return show.cmd_show(s, id)
 end

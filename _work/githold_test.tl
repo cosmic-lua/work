@@ -122,15 +122,18 @@ local function test_unhold_refuses_a_done_root()
   assert(after.resolution == "not-planned", "and so is the resolution")
 end
 
+-- `not-planned`, not `completed`: this root has no completed child to
+-- name as `--by` evidence, and `completed` on a root now requires one
+-- (`_work/gitdoneroot_test.tl` covers the verified-by-evidence path).
 local function test_done_clears_the_marker_it_ends_over()
   local s = init_state_repo("done-held")
   local root = file_item(s, "an outcome verified, then ended", "")
   assert(cmp.cmd_hold(s, root, "verified by hand") == 0)
   assert(check.must(store.load(s, root)).is_held == true, "held before done")
-  assert(verbs.cmd_done(s, root, "completed", false, "") == 0,
+  assert(verbs.cmd_done(s, root, "not-planned", false, "") == 0,
     "a held root ends like any open root")
   local ended = check.must(store.load(s, root))
-  assert(ended.resolution == "completed", "the root is done")
+  assert(ended.resolution == "not-planned", "the root is done")
   assert(not ended.is_held, "and a done item never carries the marker")
   assert(cmp.cmd_unhold(s, root) ~= 0, "so there is nothing to unhold")
 end

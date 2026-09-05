@@ -309,13 +309,15 @@ local function test_done_says_when_a_container_is_workable_again()
 end
 
 -- The already-recorded case: `done` again with the same reason is a no-op that succeeds.
+-- `not-planned`: this lone root has no completed child to name as `--by`
+-- evidence, and `completed` on a root now requires one.
 local function test_done_again_is_a_noop_success()
   local s = init_state_repo("done-noop")
   local id = file_item(s, "a lone item", "")
-  assert(verbs.cmd_done(s, id, "completed", false, "") == 0)
+  assert(verbs.cmd_done(s, id, "not-planned", false, "") == 0)
   local before, seen, old_print = commits(s), "", _G.print
   _G.print = function(msg: any) seen = tostring(msg) end
-  local again = verbs.cmd_done(s, id, "completed", false, "")
+  local again = verbs.cmd_done(s, id, "not-planned", false, "")
   _G.print = old_print
   assert(again == 0 and commits(s) == before
     and seen:find("nothing to record", 1, true) ~= nil, seen)

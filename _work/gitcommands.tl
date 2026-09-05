@@ -185,10 +185,12 @@ local CSPEC: flags.CommandSpec = {
             .. "(the session built or specced this item) — repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "done", summary = "end ID, recording why (an accepted PR is "
-      .. "verified merged first)",
+      .. "verified merged first; a root's `completed` needs --by CHILD)",
       spec = {usage = "ID [options]", flags = {dir_flag(),
           {long = "reason", arg = "REASON", default = "completed",
             help = "completed or not-planned"},
+          {long = "by", arg = "CHILD", help = "a root's evidence: its "
+            .. "completed child, required with --reason completed"},
           {long = "force", help = "end an item under an unjudged PR, or "
             .. "without reading its merge"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},

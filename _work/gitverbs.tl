@@ -3,13 +3,15 @@
 --- is not a graph mutation, the sync housekeeping, or `init`. The verbs that shape the
 --- graph — `new`, `attach`, `block` and its `unblock` half — are `_work.gitgraph`; the
 --- spec sidecar's own verb is `_work.gitspec`; the two takes `take` reaches by derivation
---- — the review claim and the research handover — are `_work.gittake`. All of them run
+--- — the review claim and the research handover — are `_work.gittake`; `done`'s own gates
+--- on a ROOT (`--by CHILD`) are `_work.gitdoneroot`. All of them run
 --- over `_work.store` (persistence) and `_work.flow` (policy). Verbs receive FULL ids —
 --- the dispatcher resolves prefixes — and every verb prints a `gitboard-<verb>:` verdict
 --- line and returns its exit code. Mutations commit locally and publish through
 --- `publish.publish`, whose rejected-push path drops the mutation whole, re-syncs, and
 --- refuses — re-running the verb re-applies every gate against the merged board.
 local ciobs = require("_work.ciobs")
+local doneroot = require("_work.gitdoneroot")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
@@ -349,8 +351,13 @@ local function cmd_drop(s: store.Store, id: string, session: string,
       .. "`block %s <question>` first"):format(id:sub(1, 8), id:sub(1, 8)))
 end
 
+--- done: end an item, recording why. A ROOT's own gates
+--- (`--by CHILD` on a verified outcome) are `_work.gitdoneroot`; every
+--- gate below is unchanged, since a root carries no claim, PR or
+--- builders (`item.problems`) for any of them to fire on.
+--- @param by string | nil The completed child verifying a root, "" off one
 local function cmd_done(s: store.Store, id: string, reason: string,
-    force: boolean, why: string): integer
+    force: boolean, why: string, by?: string): integer
   local forced = gate.force_refusal(force, why)
   if forced then
     return gate.verdict_line("done", false, "REFUSED: " .. forced)
@@ -366,6 +373,11 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   local it = flow.by_id(all)[id]
   if it == nil then
     return gate.verdict_line("done", false, ("no item %s"):format(id))
+  end
+  local by_id = by or ""
+  local refusal = doneroot.done_refusal(all, it, reason, by_id)
+  if refusal then
+    return gate.verdict_line("done", false, "REFUSED: " .. refusal)
   end
   -- An open PR is work mid-review: ending the item under it makes the
   -- diff vanish from the board while it still exists on GitHub. An
@@ -429,8 +441,14 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   it.reviewer = ""
   it.is_held = false
   it.resolution = reason
+  -- CHILD rides the commit subject and the verdict line: the log names
+  -- the evidence a verified root stands on.
+  local by_note = ""
+  if by_id ~= "" then
+    by_note = (" by %s"):format(by_id:sub(1, 8))
+  end
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("done %s %s (from %s)%s"):format(id:sub(1, 8), reason, from,
+    ("done %s %s%s (from %s)%s"):format(id:sub(1, 8), reason, by_note, from,
       gate.forced_suffix(force, why)), "done")
   if not ok then
     return gate.verdict_line("done", false, err)
@@ -459,7 +477,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     end
   end
   return gate.verdict_line("done", true,
-    ("%s %s (%s)%s"):format(id:sub(1, 8), reason, from, returned))
+    ("%s %s%s (%s)%s"):format(id:sub(1, 8), reason, by_note, from, returned))
 end
 
 local record gitverbs
@@ -468,7 +486,7 @@ local record gitverbs
   cmd_drop: function(s: store.Store, id: string, session: string,
   why: string, force: boolean): integer
   cmd_done: function(s: store.Store, id: string, reason: string,
-  force: boolean, why: string): integer
+  force: boolean, why: string, by?: string): integer
 end
 
 local M: gitverbs = {
