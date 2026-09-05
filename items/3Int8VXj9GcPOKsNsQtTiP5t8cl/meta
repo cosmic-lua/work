@@ -1,4 +1,5 @@
 title: cosmic.sqlite: wrap BLOB values in a distinct type using the new value_type/column_type accessors
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
 target: cosmic-lua/cosmic
-builders: wave-TiP5-build
+claim: build-TiP5_t8cl-4597e9df
+builders: wave-TiP5-build build-TiP5_t8cl-4597e9df
