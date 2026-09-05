@@ -177,10 +177,41 @@
   `build-EAi9_RFmX-eceb7aa0` claim) with the two-statement declare/assign
   fix, verified by the orchestrator directly
   (`o/bin/cosmic --check types` → `Type check passed`) before respec'ing.
-  Re-spawned a follow-up builder (`ac692a82`) to apply just that one fix
-  on top of the first builder's intact `9455817`, then push and open the
-  PR. Full section for both builders' own `## Friction` pending — the
-  follow-up has not reported yet.
+  Re-spawned a follow-up builder (`ac692a82`, 51 tool calls, 519s, 116.6k
+  tokens) to apply just that one fix on top of the first builder's intact
+  `9455817`, then push and open the PR (#1729). It also had to hand-fix
+  two more `docs/design/casts.md` citations and one `cosmic/check.tl`
+  coverage-ratchet row that shifted as a side effect of the new helper
+  insertions — flagged in its own friction as not anticipated by either
+  spec version. Reviewed by `a0089c5` (57 tool calls, 420s, 111.5k
+  tokens): accept, independently re-verified every file-length
+  arithmetic, both citation shifts, and the coverage row against its own
+  fresh build; two mutation tests both caught the guard they targeted.
+  Auto-merge enabled, later confirmed enqueued and merged (see PR-merge
+  note above — same merge-queue behavior, no longer surprising).
+  `done` recorded.
+
+  **Confirmed 2nd time: the review/build brief's literal `cd /home`
+  instruction for running `bin/gitboard` is wrong in this environment.**
+  Both this pass's reviewers (`aaf38f06` on PR #1727 review, and this one
+  on PR #1729) independently hit the same friction: `bin/gitboard` lives
+  in the PRODUCT checkout (`/home/user/cosmic/bin/gitboard` here, or
+  wherever that checkout actually is), not literally at `/home`, and
+  `cd /home && bin/gitboard ...` fails with "no such file." Both
+  recovered in one extra tool call each (a `find`/`ls`), so low
+  individual cost, but it is now 2/2 reviewers hitting the identical
+  wrong turn from the identical brief line. Checked the board for
+  precedent before filing (`cosmic-lua/work`'s `TE1u_Un2i`/PR #34 and
+  `U7bX_uuKQ`/PR #37 already fixed a related but distinct bug — a stale
+  `o/bin/gitboard` path — and both are merged); this session's version
+  post-dates both fixes (it already reads `bin/gitboard`, not
+  `o/bin/gitboard`) but the `<PRODUCT_ROOT>` template placeholder itself
+  resolved to the literal string `/home` rather than the actual checkout
+  path, so it's a live, distinct bug in the substitution, not a
+  duplicate. Filed as `3IuKZB9z` (captured finding, not a ready spec —
+  this session could not locate the template's source to write an exact
+  `## Change`), attached under the same parent (`3HyRdT1J`) as its two
+  precedents for whoever refines it next.
 
 ## candidates
 - **ROOT CAUSE FOUND (was misdiagnosed at first): the delay between
