@@ -73,179 +73,245 @@ Changing any view's definition or the STRICT schema; changing any verb's
 printed output; moving the lanes observation; the embedding stage (its own
 item).
 
-## Findings (research pass, 2026-09-05)
+## Findings (research pass 2026-09-05, reworked after `request changes`)
 
 **Re-run confirms the Evidence exactly**, with normal day-to-day drift:
-12 `CREATE VIEW`s (same 12 names), the 13-importer grep (same 13 files),
-`flow.tl` 490 / `priority.tl` 478 / `cachequery.tl` 135 / `index_test.tl`
-323 / `index_priority_test.tl` 225 lines (all unchanged), 19 test cases
-(15+4, unchanged). Timing re-run on the production board (930 refs, not
-929 — one ref moved since the prior count): `show` 236 ms (was 233),
-`store.list` 149.8 ms (146), `gitread.list` 128.7 ms (123), `cat_file_batch`
-107.3 ms inclusive over 4 calls (102), `read_specs` 16.8 ms (19),
-`cache.open` 15.0 ms (15); `find` 30 ms end to end (29). **One drift worth
-recording**: `priority.tl`'s `M` table actually exports **11** functions,
-not 10 (`index_of, dominated, beaten_set, has_out_edge, positions, key_of,
-order_of, is_placed, sorted, cycle_problems, edge_refusal`) — `edge_refusal`
-is the eleventh. `flow.tl`'s 17 is exact once `ready_gaps` (a re-export of
-`_work.spec.ready_gaps`, unrelated to graph/state derivation) is excluded
-from the 18 keys in its `M` table.
+12 `CREATE VIEW`s, the 13-importer grep, all five line counts, 19 test
+cases — all unchanged (929 → 930 → 937 refs across three separate re-syncs
+of the production board over two days; a moved number each time, never a
+shape break). Timing re-run: `show` 236 ms, `store.list` 149.8 ms,
+`gitread.list` 128.7 ms, `cat_file_batch` 107.3 ms, `read_specs` 16.8 ms,
+`cache.open` 15.0 ms; `find` 30 ms end to end — all within a few ms of the
+Evidence's numbers. `priority.tl`'s `M` table actually exports **11**
+functions (the eleventh, `edge_refusal`, was undercounted when the spec was
+written); `flow.tl`'s 17 is exact once `ready_gaps` (unrelated to graph/state
+derivation) is excluded from the 18 function-shaped keys of its 25-key `M`
+table (`DOING_LIMIT` + six `STAGE_*` constants make up the rest).
 
 ### 1. Coverage table
 
-Proven `same` rows were diffed live against the production board (930
-items, 244 `blocked_by` edges) via a throwaway script wrapping
-`_work.index.open` + `_work.index_priority.ensure_views` next to
-`_work.priority`/`_work.flow`'s own derivation; counts below are that run's
-output.
+Kept as evidence that the SQL views ARE a faithful, provable stand-in for
+`flow.tl`/`priority.tl`'s Lua derivations — the finding in section 5 below
+changes how that fact gets exploited, not whether it holds.
 
 **`_work/flow.tl` (17 functions)**
 
 | function | same/none | view or query | evidence |
 |---|---|---|---|
-| `is_doing` | same | `state` view (`state = 'doing'`) | 0/201 mismatches (open items only — `state`'s CASE checks `resolution` first, same as `is_doing`'s callers always do) |
-| `substate` | same | `substate` view (no `queued` arg — already documented as the store's unsupplied-argument behavior) | 0/930 mismatches |
+| `is_doing` | same | `state` view (`state = 'doing'`) | 0/201 mismatches (open items only) |
+| `substate` | same | `substate` view (no `queued` arg) | 0/930 mismatches |
 | `stage_rank` | none | no view composes `state`+`substate`+`key` into one rank yet | — |
-| `unified` | none | needs `stage_rank` (above) plus per-bucket blocker-lift and the seeded tie-break, neither modeled in SQL | — |
-| `by_id` | none (superseded) | the cache connection itself replaces a per-call in-memory index; nothing needs a Lua `{id: Item}` table once a handle is open | — |
-| `has_open_children` | same | `containers` view / `EXISTS` query | 0/930 mismatches |
-| `role` | same | composed from `containers` + `roots` views | 0/930 mismatches |
-| `in_state` | same (membership only) | `workable` ⋈ `state` | membership proven via `doing`/`todo` counts (3 doing, matches exactly); **order** is none — see the order-wall finding below |
-| `doing_refusal` | same | `COUNT(*) FROM workable w JOIN state s ON s.id=w.id WHERE s.state='doing'` vs `DOING_LIMIT`, plus a trivial `items.key` check for the lane-repair carve-out | lua=3, sql=3 |
-| `is_blocked` | same | `SELECT 1 FROM edges e JOIN open_items o ON o.id=e.to_id WHERE e.kind='blocked_by' AND e.from_id=?` | 0/930 mismatches |
-| `binds` | same | `EXISTS(SELECT 1 FROM open_items WHERE id=?)` — the base case of the query above | structurally identical to the proven `is_blocked` query; not independently diffed |
-| `waits_on` | none | no transitive `blocked_by` closure view exists (only `dominates`, over `beats`); **also**, both live call sites (`gitcompare`'s `compare`, `gitgraph`'s `block`) ask it about a candidate edge **before** it is committed — see the write-path finding below | — |
-| `root_of` | same | `ancestors` (from `index_priority`) ⋈ `roots`, plus a self-check for an item that is already a root | 0/930 mismatches |
-| `item_problems` | same | `dangling_parents` + `broken_chains` queries, already in `index.tl` | 0/0 on this board (no problems today); already differentially proven with non-zero fixtures by `index_test.tl` |
-| `graph_problems` | same, as a **superset** | `index.problems()` = `graph_problems` ∪ `key_duplicates` (already proven by `index_test.tl`'s `assert_superset`) | 0 extra lines on this board (no key collisions today) |
-| `roots` | same (placement/live/held) | `roots` ⋈ `unplaced` ⋈ `ancestors` ⋈ `items.held` | 12 placed open roots, lua=sql; **order** carries the same lift caveat as `in_state`/`unified` whenever a placed root is itself lifted by an open blocker (not exercised by today's 12, not proven absent in general) |
-| `untriaged` | same | `roots` ∖ `containers` ∩ `unplaced`, ordered by id ascending (everything in it is unplaced, so band/own never differ and lift never applies) | exact id-set match, 2=2 |
+| `unified` | none | needs `stage_rank` plus per-bucket ordering (see §2) | — |
+| `by_id` | none (superseded) | a cache connection needs no per-call in-memory index | — |
+| `has_open_children` | same | `containers` view | 0/930 mismatches |
+| `role` | same | composed from `containers` + `roots` | 0/930 mismatches |
+| `in_state` | same (membership) | `workable` ⋈ `state` | membership proven (3 doing = 3); order — see §2 |
+| `doing_refusal` | same | `workable ⋈ state='doing'` count vs `DOING_LIMIT` | lua=3, sql=3 |
+| `is_blocked` | same | `edges ⋈ open_items` (`kind='blocked_by'`) | 0/930 mismatches |
+| `binds` | same | base case of the query above | structurally identical, not independently diffed |
+| `waits_on` | none | no transitive `blocked_by` closure view; also a pre-write check — see §5 | — |
+| `root_of` | same | `ancestors` ⋈ `roots` + self-check | 0/930 mismatches |
+| `item_problems` | same | `dangling_parents` + `broken_chains`, already in `index.tl` | 0/0 on this board; nonzero already proven by fixtures |
+| `graph_problems` | same, as a superset | `index.problems()` ⊇ | 0 extra lines today |
+| `roots` | same (placement/live/held) | `roots` ⋈ `unplaced` ⋈ `ancestors` ⋈ `items.held` | 12 placed roots, lua=sql |
+| `untriaged` | same | `roots` ∖ `containers` ∩ `unplaced`, id-ascending | exact set match, 2=2 |
 
-`ready_gaps` is a re-export of `_work.spec.ready_gaps` (checks spec markdown
-text, not graph/state) — out of scope for this migration; callers keep
-calling it directly.
+`ready_gaps` re-exports `_work.spec.ready_gaps` — out of scope, unrelated to
+the graph/state migration.
 
-**`_work/priority.tl` (11 functions — see the count note above)**
+**`_work/priority.tl` (11 functions)**
 
 | function | same/none | view or query | evidence |
 |---|---|---|---|
 | `index_of` | none (superseded) | same rationale as `by_id` | — |
-| `dominated` | same | `SELECT loser FROM dominates WHERE winner=?` | 0/50 sampled |
-| `beaten_set` | same | `SELECT DISTINCT e.to_id FROM edges e JOIN items i ON i.id=e.to_id WHERE e.kind='beats'` | lua=59, sql=59 |
-| `has_out_edge` | same | `SELECT 1 FROM edges e JOIN items i2 ON i2.id=e.to_id WHERE e.kind='beats' AND e.from_id=?` | 0/930 mismatches |
-| `positions` | same (`placed`/`band`/`own` only) | `own` + `band` + `unplaced` views | 0/930 mismatches on all three fields; **`lift_band`/`lift_own`/`lifted_from`/`unblocks` are none** — see below |
-| `key_of` | same | `index_priority.position_of` already returns exactly this pair | proven via `positions` row above |
-| `order_of` | none | same lift gap as `positions` | — |
-| `is_placed` | same | `unplaced` view / `position_of`'s first return | proven via `roots`/`untriaged` above |
-| `sorted` | none, for the full contract | `order_ids` matches only band/own ordering with no seed and no active lift; diverges on this board — see below | first divergence at rank 10 of 930 (ids `3Ip8zrCb`/`3Ip8wKdw` swap) |
-| `cycle_problems` | same | `priority_cycles` (`index.tl`) / `cycle_ids` (`index_priority.tl`) | 0=0 on this board; non-zero already proven by fixtures |
-| `edge_refusal` | same in principle, kept in Teal in practice | composable via `EXISTS(SELECT 1 FROM dominates WHERE winner=<loser> AND loser=<winner>)` | not independently diffed (no live cycle scenario); its one caller needs it evaluated against a not-yet-committed edge — see below |
+| `dominated` | same | `dominates` view, filtered by winner | 0/50 sampled |
+| `beaten_set` | same | distinct `beats` `to_id` query | lua=59, sql=59 |
+| `has_out_edge` | same | `edges`/`items` query | 0/930 mismatches |
+| `positions` | same (`placed`/`band`/`own`) | `own` + `band` + `unplaced` views | 0/930 mismatches on all three; the other four fields — see below |
+| `key_of` | same | `index_priority.position_of` | proven via `positions` |
+| `order_of` | none | see §2/§5 | — |
+| `is_placed` | same | `unplaced` view | proven via `roots`/`untriaged` |
+| `sorted` | none, full contract | see §2/§5 | first divergence at rank 10/930 |
+| `cycle_problems` | same | `priority_cycles`/`cycle_ids` | 0=0 today; nonzero proven by fixtures |
+| `edge_refusal` | same in principle | `dominates` existence check | its one caller needs it against an uncommitted edge — see §5 |
 
-### 2. The order wall — two separate gaps, not one
+### 2. The order wall — corrected
 
-**(a) The seeded tie-break.** Confirmed by grep AND by running it:
-`cosmic.sqlite`'s `Database` record (`/home/user/cosmic/cosmic/sqlite/init.tl`)
-exposes `prepare/query/query_one/exec/exec_script/transaction/savepoint/
-last_insert_rowid/changes/close` — no `create_function`, `create_aggregate`,
-or `create_collation`. A runtime probe confirms it: `type(db.create_function)`
-is `nil`, and calling it raises `attempt to call a nil value (method
-'create_function')`. The capability exists one layer down — the raw
-`cosmo.lsqlite3` binding **does** declare `create_function`/`create_aggregate`/
-`create_collation` (`o/_types/types_gen/cosmo/lsqlite3.d.tl` lines 108/129/149)
-— but `_work/*.tl` uses `cosmic.sqlite`, never reaches for `cosmo.lsqlite3`
-directly, and the wrapper does not forward it. **Decision: the seeded
-`fnv32` tie-break stays in Teal**, applied to rows already ordered by
-band/own from SQL.
+**§2 was wrong about the mechanism behind the observed divergence.** Re-probing the
+two ids that swap at rank 10 (`3Ip8zrCbHnPiV5bRM49XvoxXNCM`,
+`3Ip8wKdwg5luRdQ0MHhfh4nDtCK`) directly:
 
-**(b) Blocker lift is a second, bigger gap the spec did not anticipate.**
-`_work/index_priority.tl`'s own header says blocker-lift is "deliberately
-NOT modeled," true only on boards with no `blocked_by` edges. The production
-board carries **244** `blocked_by` edges, and the divergence is measurable,
-not theoretical: `priority.sorted`'s unseeded order and `index_priority.
-order_ids` **diverge starting at rank 10 of 930** (two items swap because one
-is lifted by an open blocker `order_ids` cannot see). Because `unified` and
-`in_state`'s printed order is exactly what `next`/`show` render — and this
-item's own Non-goals forbid changing a verb's printed output — **lift must
-also stay in Teal**, not just the tie-break. The good news: lift does not
-need a new recursive view (which would touch a Non-goal). It needs two lean
-queries against tables that already exist — `SELECT id FROM open_items`
-and `SELECT from_id, to_id FROM edges WHERE kind='blocked_by'` — feeding
-`priority.lift`'s existing walk, adapted to consume those thin rows plus the
-SQL-sourced `own`/`band` map instead of full `{Item}` + `index_of`. No view
-or schema changes either way.
+```
+3Ip8zrCbHnPiV5bRM49XvoxXNCM: placed=true band=8 own=1 lift_band=8 lift_own=1 lifted_from="" unblocks=4
+3Ip8wKdwg5luRdQ0MHhfh4nDtCK: placed=true band=8 own=1 lift_band=8 lift_own=1 lifted_from="" unblocks=0
+board-wide: 0/937 items have lifted_from ~= ""
+```
 
-**Revised decision**: `own`, `band`, and `placed` come from
-`index_priority`'s existing views; blocker lift and the seeded tie-break
-both stay in Teal, fed by two small queries rather than a full `store.list`.
+Both ids carry `lift_band == band` and `lift_own == own` — **neither is
+lifted**, and board-wide, **zero of 937 items have ever been lifted**
+(`lifted_from` empty everywhere). Blocker-lift remains a real, unmodeled gap
+in the SQL views, but it is not what fires today. The field that actually
+differs is `unblocks` — 4 vs 0, the THIRD tie-break tier `priority.sorted`
+reads after band and own (how many open items wait on this one through a
+`blocked_by` chain). `index_priority.order_ids`'s `ORDER BY` has no
+`unblocks` term at all — no view computes it — so on a band/own tie it falls
+straight to id order, which is exactly where `3Ip8wKdw` (< `3Ip8zrCb`
+lexically) and `3Ip8zrCb` (higher `unblocks`) swap.
 
-### 3. The seam
+Both gaps — the seeded tie-break (confirmed absent: `cosmic.sqlite`'s
+`Database` has no `create_function`, confirmed by grep and by a runtime
+probe raising "attempt to call a nil value") and this `unblocks` count both
+need the SAME missing capability: a transitive `blocked_by` closure view,
+analogous to `dominates` but over `blocked_by` instead of `beats`, which
+does not exist today (only a direct, one-hop `edges` query does). Building
+one is a real, if bounded, SQL design task — **and section 5 below found it
+is unnecessary**, so the engineering decision this section originally
+reached (views for band/own, Teal for the rest) is superseded, not merely
+corrected, by a simpler alternative that needs neither the seeded tie-break
+nor a new closure view at all.
 
-`_work/cachequery.tl` stays at 135 lines (unchanged); the migrated readers
-go into a new sibling, **`_work/cacheread.tl`** — 20-odd functions with doc
-comments plus the lift/tie-break helper above will cross the 500-line cap
-if folded into `cachequery.tl`.
+### 3. The seam — original design (superseded by §5)
 
-**A wiring gap must be closed before any of this can work**:
-`_work.index_priority.ensure_views` — which creates the `has_edge`, `own`,
-`ancestors`, `band`, `unplaced` views — is called nowhere outside its own
-test (`grep -rn "ensure_views" _work cmd`, only `index_priority.tl` and
-`index_priority_test.tl` match). `_work/cache.tl`'s `rebuild` runs
-`index.DDL` and `cachedb.EXTRA_DDL` but never `index_priority.EXTRA_DDL`,
-and `_work/cachedb.tl`'s `expected_schema_fingerprint` builds the same two,
-skipping the third. **`o/board.db` today does not carry the priority
-views at all.** This is a small, precise fix (add one more
-`db:exec_script(index_priority.EXTRA_DDL)` call in both places;
-`schema_fingerprint` already derives from `sqlite_master`, so no
-`SCHEMA_VERSION` bump is mechanically required) — assigned to follow-up (a)
-below, since it is the first to need it.
+The original plan: `_work/cachequery.tl` stays at 135 lines; migrated
+readers go into a new sibling `_work/cacheread.tl`, one function per
+`flow`/`priority` export, same name, taking the cache handle instead of
+`{Item}`.
 
-**Verbs that must keep the Teal path** (not a should-move-later; a
-structural fit problem, matching what step 3 asked to name):
+A wiring gap this plan would have needed regardless: `_work.index_priority.
+ensure_views` (the `has_edge`/`own`/`ancestors`/`band`/`unplaced` views) is
+called nowhere outside its own test — `o/board.db` today does not carry
+them. Under §5's revised design this gap no longer matters for THIS item
+(the views are not consulted at all), so it is recorded here as a
+pre-existing, orthogonal piece of dead wiring, not something this item's
+follow-up needs to fix.
 
-- **`gitfsck`** — its only flow usage is `flow.by_id` (already "none,
-  superseded" in the table above), and its entire purpose is auditing raw
-  git truth independent of, and in spite of, a possibly-corrupt cache.
-  Keeps `store.list` + `flow.by_id` exactly as today; needs **no** follow-up
-  work at all.
-- **`gitcompare`**'s `compare` verb (`_work/gitcompare.tl:29-104`) calls
-  `prio.index_of`/`prio.edge_refusal` on an **in-memory graph that already
-  has the candidate edge added**, to decide before commit whether it would
-  close a cycle — the persistent cache reflects only committed state and
-  cannot represent a hypothetical edge without a speculative write this
-  research is not scoped to design. That pre-write check keeps
-  `store.list` + `prio.index_of`/`edge_refusal` unchanged. Its **post-write**
-  reporting line (`gitcompare.tl:104`, `prio.key_of(prio.positions(store.list(s)...), winner)`,
-  a second whole-board `store.list` paid only to print one item's band/own)
-  **can** move to a single cache-backed `position_of` read once (a) lands —
-  the write already patched the cache by the time this line runs.
-- **`gitgraph`**'s `block`/`unblock` verb (`_work/gitgraph.tl:238`) calls
-  `flow.waits_on` in the same shape as `gitcompare`'s pre-write check
-  ("Bounded on the add path only: `flow.waits_on` just decided this," the
-  module's own comment). Cluster (d)'s follow-up should apply the same
-  committed-vs-candidate test call-site by call-site rather than assume a
-  blanket function-level swap; `flow.root_of`/`flow.has_open_children`
-  elsewhere in the same file are ordinary reads and migrate cleanly.
-- A **fresh clone before `sync`** pays `cache.open`'s existing cold-rebuild
-  cost transparently (no cache file → `rebuild` → full `store.list`); no
-  caller-side special-casing is needed, this is already how `cache.open`
-  works today.
+**Verbs that must keep the Teal path** (unchanged conclusion, now understood
+as an instance of the general rule §5 states): `gitfsck` (deliberately
+audits raw git truth, bypassing the cache by design); `gitcompare`'s
+pre-write cycle check (validates a candidate edge the persistent cache does
+not yet reflect); `gitgraph`'s `block`/`unblock` (`flow.waits_on` at
+`gitgraph.tl:238`, same shape as `gitcompare`'s check).
 
-### 4. Follow-ups
+### 4. Rigor pass: every `flow.`/`prio.` call site, every cluster
 
-Filed as the five sibling items under this parent (a: `cacheread` seam plus
-gitshow + gitview; b: gitready + intake + action; c: gitgate + gitverdict +
-gitverbs; d: gitgraph + health, with gitcompare's pre-write check and gitfsck
-staying on the Teal path; e: delete flow.tl/priority.tl). Because all four
-of (a)-(d) migrate into the **same** new file (`_work/cacheread.tl`), true
-file-disjointness among them is only possible if one of them creates it and
-the others only consume it: **(a) creates `_work/cacheread.tl`** with every
-function classified `same` above (from both tables) plus the lift/tie-break
-helper from the order-wall decision — a deliberate, larger-than-"gitshow+
-gitview" scope for (a), stated so no judgment is left for its builder. (b),
-(c), (d) then touch only their own importer files (a `require` line and one
-argument per call site) and are `blocked_by` (a); they do not touch
-`cacheread.tl` again, so they remain file-disjoint from each other. (e) is
-`blocked_by` (a)-(d) as `## Change` already states, and additionally
-relocates `flow.tl`'s constants (`DOING_LIMIT`, `STAGE_*`) and
-`priority.tl`'s `Position` record, since importers still reference them
-directly after the functions move.
+Requested after the two gaps above: `grep -n "flow\.\|prio\."` over every
+file in every cluster, every call site classified, with `flow.Index`/
+`prio.Position` type-alias references included
+(`grep -rn "flow\.Index\|prio\.Index\|prio\.Position" _work cmd | grep -v _test`
+— hits in `intake.tl`, `health.tl`, `action.tl`, plus `flow.tl`/`priority.tl`'s
+own internal cross-references).
+
+**Call-site count per file** (`grep -c "store\.list\|store\.load\b"`):
+
+| file | store.list/load calls | shape |
+|---|---|---|
+| `gitshow.tl` | 2 (`:190` load, `:194` list) | pure read (`show`) |
+| `gitview.tl` | 2 (`:221`, `:343`, both list) | pure read (`status`/`next`) |
+| `gitready.tl` | 0 | pure function, `items`/`all` passed in |
+| `intake.tl` | 0 | pure function, `items` passed in |
+| `action.tl` | 0 | pure function, `items` passed in |
+| `gitgate.tl` | 0 | pure function, `items` passed in |
+| `health.tl` | 0 | pure function, `items` passed in |
+| `gitverdict.tl` | 2 (mutation `verdict`) | mutation |
+| `gitverbs.tl` | 6 (mutations `take`/`drop`/`done`/`sync`) | mutation |
+| `gitgraph.tl` | 5 (mutations `new`/`attach`/`block`/`unblock`/`set`) | mutation |
+| `gitcompare.tl` | 4 (mutations `compare`/`hold`/`unhold`) | mutation |
+| `gitfsck.tl` | 3 (read-only, deliberately bypasses cache) | audit |
+
+Tracing where the zero-`store.list` files get their `items`/`all` from:
+`gitready.ready_problems` is called from `gitshow.tl:206` (read) AND
+`gitverbs.tl:182` (mutation, via `gitgate.review_debt_refusal` at
+`gitgate.tl` — itself only ever called from `gitverbs.tl:182`, a mutation).
+`intake`/`action`/`health` are all reached, transitively, from
+`gitview.tl`'s two `store.list` calls (`status_report`/`next_report` →
+`act.next_action` → `intake`/`health`) — **`gitview.tl` and `gitshow.tl` are
+the only two files in all twelve importers where `store.list`/`store.load`
+is called directly**; every other file receives `{Item}` from one of those
+two, or (for the five mutation files) loads its own fresh copy because it
+is about to write.
+
+**`gitgraph.tl`'s full inventory** (every line, as requested):
+
+| line | call | classification |
+|---|---|---|
+| 77 | `flow.by_id(all)` (in `new`) | mutation-fed, `all` already loaded for the commit; superseded regardless (by_id is dead weight even in Teal) |
+| 140 | `flow.by_id(all)` (in `attach`) | mutation-fed |
+| 152 | `flow.root_of(parent_item, index)` (in `attach`, checks the prospective parent's OWN chain reaches a root) | reads committed state, but `all`/`index` are already in memory for the same commit — no `store.list` this eliminates |
+| 185 | `flow.has_open_children(all, id)` (in `attach`, post-commit, decides wording only) | same — `all` already in memory, pre-dating the commit |
+| 224 | `flow.by_id(all)` (in `block`/`unblock`) | mutation-fed |
+| 238 | `flow.waits_on(index, blocker, id)` | validates the CANDIDATE blocker edge before it is written — cannot read the persistent cache at all |
+| 288 | `prio.is_placed(prio.positions(all), blocker)` (in `block`/`unblock`, guidance text only) | same as 152/185 — `all` already in memory |
+
+No line in `gitgraph.tl` calls `store.list` more than once per verb, and no
+line's classification changes if it moves — see §5.
+
+### 5. Revised recommendation: hydrate `{Item}` from the cache, don't reimplement the readers
+
+The rigor pass above shows the original per-function SQL-reimplementation
+design (§3) attacks the wrong layer. Every mutation-verb call (five of the
+twelve files) is fed by a `store.list`/`store.load` that verb's own commit
+lease already requires — migrating those calls to a cache-handle read adds
+a SECOND read for zero savings, and for `gitcompare`/`gitgraph`'s cycle
+checks specifically, cannot even be correct (the cache reflects only
+committed state). `gitready`/`intake`/`action`/`gitgate`/`health` call
+NEITHER `store.list` NOR the cache themselves — they are pure functions fed
+by whichever of the two READ entry points, `gitshow.tl` and `gitview.tl`,
+loaded the board. **Those two files are the entire migration surface.**
+
+The measured alternative: rather than port 28 functions to SQL and manage
+the seeded-tie-break/blocker-lift gap (§2), hydrate a `{Item}` list directly
+from the cache's own rows — already-typed SQL columns, no git object fetch
+and no `item.decode()` text parsing — and hand it to `flow.tl`/
+`priority.tl`'s EXISTING, UNCHANGED functions.
+
+```
+store.list:       937 items, 144.3 ms
+cache hydration:  937 items,  27.1 ms   (5.3x faster)
+```
+
+(`cache.open` → `SELECT * FROM items` + `SELECT ... FROM edges` +
+`builders`/`speccers`, grouped into `{item.Item}` shapes in Lua.) Field-level
+equivalence, not just a count: every one of 937 items' 15 scalar fields plus
+`beats`/`blocked_by`/`builders`/`speccers` (as sorted sets) diffed between
+`store.list`'s output and the cache hydration — **0 mismatches**.
+
+This changes every downstream conclusion:
+
+- **§2's order wall dissolves.** `priority.sorted`/`.positions` run
+  UNCHANGED over the hydrated list — no seeded tie-break to reimplement, no
+  blocker-lift or `unblocks` gap to close, because ordering never leaves
+  Teal. The `unblocks`-vs-lift correction above stands as evidence for why
+  the SQL-reimplementation path was riskier than this one, not as a live
+  constraint on it.
+- **§3's seam becomes ONE new function**, not a new module of ~28 ports:
+  `_work/cachequery.tl` (135 lines, room to spare) gains
+  `items(c: cache.Cache): {item.Item} | nil, string`, mirroring
+  `store.list`'s shape exactly.
+- **Only `gitshow.tl` and `gitview.tl` change.** Three call sites
+  (`gitshow.tl:194`, `gitview.tl:221`, `gitview.tl:343`) swap `store.list(s)`
+  for `cache.open(s.root)` + `cachequery.items(c)`; `gitshow.tl:190`'s
+  separate `store.load(s, id)` becomes unnecessary (`it` is already in the
+  hydrated `all`). Neither verb writes through `s` afterward
+  (`gate.commit_and_publish` is never called from `cmd_show`, `cmd_status`,
+  or `cmd_next`), so dropping `store.list`'s lease side effect (`s.
+  leased_ref`/`leased_sha`/`leased_item`) there is safe — those three verbs
+  never use it.
+- **`flow.tl`, `priority.tl`, `health.tl`, `gitready.tl`, `intake.tl`,
+  `action.tl`, `gitgate.tl`, `gitverdict.tl`, `gitverbs.tl`, `gitgraph.tl`,
+  `gitcompare.tl`, `gitfsck.tl` need NO internal changes at all** — they
+  keep calling exactly the functions they call today; only the ultimate
+  SOURCE of the `{Item}` list two of them start from changes. This is what
+  makes item (e) ("delete `flow.tl`/`priority.tl`") not just hard to
+  complete but unnecessary: both modules stay exactly as they are,
+  permanently load-bearing for every mutation verb's write-time gates.
+
+### 6. Revised follow-ups
+
+One item does the entire migration: **(a)** — retitled, its spec rewritten
+to add `cachequery.items` and the three call-site swaps, with the
+field-equivalence proof above as its evidence. Items **(b)**, **(c)**,
+**(e)** as originally filed have no code left for them to do — each is
+rewritten to record why, with a recommendation to resolve each
+`not-planned` citing this research rather than leave them open for a
+builder to discover the same thing independently; **(d)** keeps one small,
+real task (`gitcompare.tl:104`'s second whole-board read), `blocked_by` (a).
