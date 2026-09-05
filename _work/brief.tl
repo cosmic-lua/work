@@ -26,6 +26,7 @@
 local brieftext = require("_work.brieftext")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
+local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
@@ -122,10 +123,13 @@ end
 --- neither: a brief for a store with no GitHub reach emits exactly as
 --- it always has, `<HEAD_SHA>` left for the caller to fill.
 ---
---- One `head_checks` call does the whole read: the sha and run list
+--- One `ciobs.live` call does the whole read: the sha and run list
 --- this needs both for `<HEAD_SHA>` and for the running/red refusal
 --- text ride the returned record, so nothing here re-fetches the PR
---- or its checks a second time.
+--- or its checks a second time — and the live read writes through to
+--- the render-side cache as a side effect, the same way `take --pr`'s
+--- own live read does (`_work/gitverbs.tl`), so the brief a session
+--- reads before acting leaves `next`'s next render nothing to fetch.
 --- @param s store.Store The store
 --- @param it item.Item The item under review
 --- @param id8 string The item's handle, for the refusal text
@@ -133,7 +137,7 @@ end
 --- @return string The PR's head sha, "" when unknown or not green
 local function ci_refusal(s: store.Store, it: item.Item, id8: string):
   string, string
-  local hc, _herr = gh.head_checks(s, it.pr, it.repo)
+  local hc, _herr = ciobs.live(s, it.repo, it.pr)
   if hc == nil
   or (hc.state ~= "green" and hc.state ~= "running" and hc.state ~= "red") then
     return "", ""
