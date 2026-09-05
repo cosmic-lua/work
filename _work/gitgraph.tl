@@ -87,7 +87,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   local it: item.Item = {
     id = ksuid.new(), title = title, parent = parent, repo = repo or "",
-    beats = {},
+    order = {}, beats = {},
     blocked_by = {}, claim = "", pr = 0, verdict = "",
     verdict_head = "", resolution = "",
   }

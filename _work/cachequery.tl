@@ -187,6 +187,7 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       repo = row.repo as string, -- cast: from any (sqlite row)
       base = row.base as string, -- cast: from any (sqlite row)
       key = row.key as string, -- cast: from any (sqlite row)
+      order = {},
       beats = {},
       blocked_by = {},
       block_reason = {},

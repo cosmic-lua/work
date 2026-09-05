@@ -30,6 +30,7 @@ return {
   ["_work/gitboard.tl"] = {["covered"] = 246, ["total"] = 338},
   ["_work/gitcompare.tl"] = {["covered"] = 90, ["total"] = 99},
   ["_work/gitfriction.tl"] = {["covered"] = 50, ["total"] = 56},
+  ["_work/gitboardstate.tl"] = {["covered"] = 38, ["total"] = 38},
   ["_work/gitfsck.tl"] = {["covered"] = 65, ["total"] = 75},
   ["_work/gitgate.tl"] = {["covered"] = 187, ["total"] = 204},
   ["_work/gitgraph.tl"] = {["covered"] = 194, ["total"] = 210},

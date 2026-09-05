@@ -1,5 +1,6 @@
 --- The store's write half: `save` (and the `add_pending` it uses to
---- queue a ref for `_work.publish`), plus the lease/CAS bookkeeping a
+--- queue a ref for `_work.publish`), `save_root_order` for
+--- `refs/heads/board/order` alone, plus the lease/CAS bookkeeping a
 --- verb sets on the `Store` before calling it — `set_session`,
 --- `set_op`, `set_bounded`. Split out of `_work.store` so that module
 --- stays under its line cap; this module requires it back for the
@@ -96,6 +97,8 @@ local function save(s: store.Store, it: item.Item, message: string,
       op = s.op, spec_for_first = spec, leased_ref = s.leased_ref,
       leased_sha = s.leased_sha, leased_item = s.leased_item,
       bounded = s.bounded, seq_sha = s.observed_seq,
+      root_order = nil, observed_root_order = s.observed_root_order,
+      order_sha = s.observed_order_sha,
       read_spec = read_current_spec,
     })
   if outcome == nil then
@@ -130,6 +133,49 @@ local function save(s: store.Store, it: item.Item, message: string,
   return true, ""
 end
 
+--- Write a new root ranking to `refs/heads/board/order`, leased
+--- against the tip `store.list` last observed for it — the
+--- board-level counterpart to `save`, for a mutation that touches no
+--- item at all (`refs/heads/board/seq` plays no part: the ref's own
+--- tip is the lease, per `docs/design/order.md`). No verb calls this
+--- yet.
+--- @param s store.Store The store
+--- @param ids {string} The new root ranking, in rank order
+--- @param message string Commit subject
+--- @return boolean True on success — a no-op mutation succeeds too
+--- @return string "" on an ordinary success; on a no-op, the
+--- `store.is_noop`-testable "nothing to record: ..." message; the
+--- failure detail otherwise
+local function save_root_order(s: store.Store, ids: {string}, message: string):
+  boolean, string
+  local function no_spec(_id: string): string
+    return ""
+  end
+  local outcome, oerr = gitwrite.save_batch({
+      root = s.root, items = {}, message = message, session = s.session,
+      op = s.op, spec_for_first = nil, leased_ref = s.leased_ref,
+      leased_sha = s.leased_sha, leased_item = s.leased_item,
+      bounded = false, seq_sha = s.observed_seq,
+      root_order = ids, observed_root_order = s.observed_root_order,
+      order_sha = s.observed_order_sha,
+      read_spec = no_spec,
+    })
+  if outcome == nil then
+    return false, oerr
+  end
+  if not outcome.changed then
+    return true, store.NOOP_PREFIX .. ("%s leaves the board unchanged"):format(message)
+  end
+  if outcome.order_changed then
+    s.observed_order_sha = outcome.new_order_sha
+    s.observed_root_order = ids
+  end
+  for _, p in ipairs(outcome.pushes) do
+    add_pending(s, p)
+  end
+  return true, ""
+end
+
 local record storewrite
   set_session: function(s: store.Store, session: string)
   set_op: function(s: store.Store, op: string)
@@ -137,6 +183,7 @@ local record storewrite
   add_pending: function(s: store.Store, p: refs.PushSpec)
   save: function(s: store.Store, it: item.Item, message: string, spec?: string,
   also?: {item.Item}): boolean, string
+  save_root_order: function(s: store.Store, ids: {string}, message: string): boolean, string
 end
 
 local M: storewrite = {
@@ -144,6 +191,7 @@ local M: storewrite = {
   set_op = set_op,
   set_bounded = set_bounded,
   add_pending = add_pending,
+  save_root_order = save_root_order,
   save = save,
 }
 

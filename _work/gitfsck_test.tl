@@ -88,6 +88,48 @@ local function test_a_dangling_beats_edge_is_caught()
   assert(printed:find("gitboard-fsck: 1 problem(s)", 1, true) ~= nil, printed)
 end
 
+-- An `order` entry naming an id that is not a child of the item
+-- carrying it — hand-written straight through `storewrite.save`, since
+-- no verb ranks children yet — is exactly what `fsck` exists to catch:
+-- one entry names an id that is not an item at all, the other names a
+-- real item (`root`'s own peer, itself a root) that is simply not
+-- ITS child.
+local function test_an_order_entry_naming_a_non_child_is_caught()
+  local s = init_state_repo("fsck-order-non-child")
+  local root, _leaf = root_with_leaf(s)
+  local ghost = check.must(ksuid.encode(1690000006, ("\7"):rep(16)))
+  local all = check.must(store.list(s))
+  local peer: string = nil
+  for _, it in ipairs(all) do
+    if it.id ~= root and item.is_root(it) then
+      peer = it.id
+    end
+  end
+  assert(peer ~= nil, "root_with_leaf files a peer root too")
+  local it = check.must(store.load(s, root))
+  it.order = {ghost, peer}
+  assert(storewrite.save(s, it, "hand-edited order"))
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "a non-child order entry is a problem: " .. printed)
+  assert(printed:find("order names " .. ghost, 1, true) ~= nil, printed)
+  assert(printed:find("order names " .. peer, 1, true) ~= nil, printed)
+  assert(printed:find("which is not a child of it", 1, true) ~= nil, printed)
+end
+
+-- `refs/heads/board/order` naming an id that is not a root — a leaf,
+-- say — is the board-level counterpart, caught the same way over a
+-- root ranking written through `storewrite.save_root_order`, the write
+-- path this slice adds with no verb calling it yet.
+local function test_a_root_order_entry_naming_a_non_root_is_caught()
+  local s = init_state_repo("fsck-root-order-non-root")
+  local _root, leaf = root_with_leaf(s)
+  assert(storewrite.save_root_order(s, {leaf}, "hand-edited root order"))
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "a non-root board order entry is a problem: " .. printed)
+  assert(printed:find("refs/heads/board/order: names " .. leaf, 1, true) ~= nil, printed)
+  assert(printed:find("which is not a root", 1, true) ~= nil, printed)
+end
+
 -- An edge kind this build does not interpret — `edges/relates/<id>`,
 -- say — round-trips through `_work.itemtree` opaquely
 -- (`item.Item.other_edges`) and is exactly what `fsck` flags: the kind

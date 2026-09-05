@@ -19,6 +19,7 @@ local publish = require("_work.publish")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
@@ -60,6 +61,28 @@ local function test_a_hand_moved_ref_forces_a_rebuild()
   local row = check.must(c.db:query_one("SELECT title FROM items WHERE id = ?", {id}))
   assert(row.title == "changed behind the tool's back",
     "the digest mismatch forced a rebuild: " .. tostring(row.title))
+  check.must(cache.close(c))
+end
+
+-- `refs/heads/board/order` lives under the `refs/heads/board` pattern
+-- `_work.cachedb`'s watch already covers (the same one `board/seq` and
+-- `board/format` ride) — this slice adds no code to cache.tl/cachedb.tl
+-- for it, so this pins that the coverage already holds: writing a root
+-- ranking (`storewrite.save_root_order`, no verb calls it yet) moves
+-- the digest `open` recorded, the same way any other watched ref does.
+local function test_a_board_order_write_moves_the_recorded_digest()
+  local s = init_state_repo("board-order-digest")
+  local root = file_item(s, "an outcome", "")
+  check.must(cache.close(check.must(cache.open(s.root))))
+
+  assert(storewrite.save_root_order(s, {root}, "rank the roots"))
+
+  local c = check.must(cache.open(s.root))
+  local found = check.must(refs.for_each_ref(s.root,
+      {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
+  local fresh = cachedb.digest_of(found)
+  assert(cachedb.meta_get(c.db, "refs_digest") == fresh,
+    "the cache's recorded digest reflects refs/heads/board/order")
   check.must(cache.close(c))
 end
 

@@ -56,6 +56,10 @@ local record Item
   --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN
   --- item may carry a given key.
   key: string
+  --- This item's ranked children, in rank order. Stored as one "id id"
+  --- string — the literal domain has no lists. Empty when it has
+  --- ranked none; an unranked child is simply absent from the list.
+  order: {string}
   --- Items this one is ranked ABOVE, each by id: the priority
   --- relation, recorded on the winner of a comparison. Stored as one
   --- "id id" string — the literal domain has no lists. Any item may
@@ -154,6 +158,7 @@ local SPEC < const > = shape.record({
     repo = shape.optional(shape.string),
     base = shape.optional(shape.string),
     key = shape.optional(shape.string),
+    order = shape.optional(shape.string),
     beats = shape.optional(shape.string),
     blocked_by = shape.optional(shape.string),
     block_reason = shape.optional(shape.map(shape.string)),
@@ -181,6 +186,7 @@ local record Raw
   repo: string | nil
   base: string | nil
   key: string | nil
+  order: string | nil
   beats: string | nil
   blocked_by: string | nil
   block_reason: {string: string} | nil
@@ -326,6 +332,18 @@ local function problems(it: Item): {string}
   return out
 end
 
+--- Split one of the space-joined list fields (`order`, `beats`,
+--- `blocked_by`, `builders`, `speccers`) back into a list.
+--- @param joined string | nil The space-joined field; "" or nil is empty
+--- @return {string} The list, possibly empty
+local function split_ids(joined: string | nil): {string}
+  local out: {string} = {}
+  for ref in (joined or ""):gmatch("%S+") do
+    out[#out + 1] = ref
+  end
+  return out
+end
+
 --- An item from the table `cosmic.literal` parsed, with zero values
 --- filled in and every field shape-checked. Unknown keys are ignored,
 --- so a file carrying retired fields still reads — and sheds them on
@@ -350,26 +368,15 @@ local function decode(t: {string: any}): Item | nil, string
   if not raw then
     return nil, err
   end
-  local blocked: {string} = {}
-  for ref in (raw.blocked_by or ""):gmatch("%S+") do
-    blocked[#blocked + 1] = ref
-  end
+  local order = split_ids(raw.order)
+  local blocked = split_ids(raw.blocked_by)
   local reasons: {string: string} = {}
   for k, v in pairs(raw.block_reason or {}) do
     reasons[k] = v
   end
-  local beats: {string} = {}
-  for ref in (raw.beats or ""):gmatch("%S+") do
-    beats[#beats + 1] = ref
-  end
-  local builders: {string} = {}
-  for name in (raw.builders or ""):gmatch("%S+") do
-    builders[#builders + 1] = name
-  end
-  local speccers: {string} = {}
-  for name in (raw.speccers or ""):gmatch("%S+") do
-    speccers[#speccers + 1] = name
-  end
+  local beats = split_ids(raw.beats)
+  local builders = split_ids(raw.builders)
+  local speccers = split_ids(raw.speccers)
   local it: Item = {
     id = raw.id or "",
     title = raw.title or "",
@@ -377,6 +384,7 @@ local function decode(t: {string: any}): Item | nil, string
     repo = raw.repo or "",
     base = raw.base or "",
     key = raw.key or "",
+    order = order,
     beats = beats,
     blocked_by = blocked,
     block_reason = reasons,
@@ -422,6 +430,7 @@ local function encode(it: Item): {string: any}
   if (it.repo or "") ~= "" then t.repo = it.repo end
   if (it.base or "") ~= "" then t.base = it.base end
   if (it.key or "") ~= "" then t.key = it.key end
+  if #(it.order or {}) > 0 then t.order = table.concat(it.order, " ") end
   if #(it.beats or {}) > 0 then
     t.beats = table.concat(it.beats, " ")
   end

@@ -31,10 +31,14 @@ local refs = require("_work.refs")
 --- fast-import diff needs the ORIGINAL fields to compare against), each id's committer date
 --- from whichever ref snapshot a caller already took (`touched_at` — `_work.publish.touched_at`
 --- reads it first, falling back to its own one-ref process only for an id no snapshot named),
---- `refs/heads/board/seq`'s own observed tip, the refs a completed `save` still owes `publish`
---- a push for, and every id the most recent `list` found filed under both `refs/heads/items`
---- and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only reader; `list`'s
---- ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live here too).
+--- `refs/heads/board/seq`'s own observed tip, the board's own root ranking as OBSERVED
+--- (`observed_root_order`) and `refs/heads/board/order`'s own observed tip
+--- (`observed_order_sha`) — the diff baseline and lease a root-order write is made against,
+--- the same role `leased_item`/`leased_sha` play for one item — the refs a completed `save`
+--- still owes `publish` a push for, and every id the most recent `list` found filed under both
+--- `refs/heads/items` and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only
+--- reader; `list`'s ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live
+--- here too).
 --- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
 --- same fields this module's `load`/`list` populate.
 ---
@@ -55,6 +59,8 @@ local record Store
   leased_item: {string: item.Item}
   touched_at: {string: integer}
   observed_seq: string
+  observed_root_order: {string}
+  observed_order_sha: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
   board_digest: string
@@ -177,7 +183,8 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, touched_at = {}, observed_seq = "", pending = {},
+    leased_sha = {}, leased_item = {}, touched_at = {}, observed_seq = "",
+    observed_root_order = {}, observed_order_sha = "", pending = {},
     duplicates = {}, board_digest = "", fresh_lease = "", remote_url = "",
     remote_url_ok = false, remote_url_read = false, remote_present = false,
     remote_present_read = false}
@@ -303,9 +310,19 @@ local function list(s: Store): {item.Item} | nil, string
     s.leased_item[it.id] = snapshot_item(it)
   end
   s.observed_seq = board.seq_sha
+  s.observed_root_order = board.root_order
+  s.observed_order_sha = board.order_sha
   s.duplicates = board.duplicates
   s.board_digest = board.refs_digest
   return board.items
+end
+
+--- The board's own root ranking, as the most recent `list` observed
+--- it — empty before the first `list` call, or on a board with none.
+--- @param s Store The store
+--- @return {string} Ranked root ids, in rank order, possibly empty
+local function root_order(s: Store): {string}
+  return s.observed_root_order
 end
 
 --- Every id the most recent `list` found filed under both
@@ -369,6 +386,7 @@ local record store
   read_specs: function(s: Store, ids: {string}): {string: string}
   snapshot_item: function(it: item.Item): item.Item | nil
   list: function(s: Store): {item.Item} | nil, string
+  root_order: function(s: Store): {string}
   duplicates: function(s: Store): {gitread.Duplicate}
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
@@ -388,6 +406,7 @@ local M: store = {
   read_specs = read_specs,
   snapshot_item = snapshot_item,
   list = list,
+  root_order = root_order,
   duplicates = duplicates,
   flagged_summary = flagged_summary,
   stage = stage,
