@@ -1,1 +1,0 @@
-sources will require the patched checker; the pinned bootstrap (2026-08-27-6b88a0d) predates c78504bd, so cold build fails until the pin catches up
