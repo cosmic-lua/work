@@ -1,103 +1,59 @@
 --- `fsck`: a read-only, offline whole-board audit — the problems no
 --- other verb ever asks about because nothing else asks a WHOLE-board
---- question: an item's tree not re-encoding to what it was read from
---- (a hand edit, a canonical form that drifted), a `parent` or any
---- `edges/<kind>/<id>` naming an id that is not an item, an edge kind
---- this build does not interpret (an unmigrated board's `beats` or
---- `blocked_by`, or any other kind no build here has ever known), more
---- than one OPEN item claiming the same key, a second parentless item
---- (there is meant to be exactly one — the board), a board (or any
---- other parentless item) carrying a `repo` it should never have, an
---- id filed under both `refs/heads/items` and `refs/heads/ended` at
---- once (the residue of a resolution whose atomic push landed the
---- create half of an old-style namespace move and lost the delete half
---- — the pushing credential can create and update a branch but never
---- delete one), and any item the store's own tolerant decode had to
---- flag. `store.list`'s own format check (`_work.gitread`) is the
+--- question. `docs/design/read.md`'s "The one verb that reads git": the
+--- database at `o/board.db` is the read model every other verb reads,
+--- rebuilt from the refs on a digest mismatch and patched by every
+--- save — `fsck` is the one place that reads git to check that model
+--- AGAINST the refs it claims to derive from, rebuilding the same
+--- rows into a throwaway database (`_work.cacherebuild.fill`'s own
+--- fill path, reused against `:memory:`) and diffing every `items`
+--- row (lease columns included), every `ranks` row, and the `events`
+--- count per item against the session's own open cache.
+---
+--- Structural findings — a dangling `parent`, a second parentless item
+--- (there is meant to be exactly one — the board), an `order` entry
+--- naming an id that is not a child of the item carrying it, two open
+--- items sharing a `key`, and a parent chain broken, cyclic, or deeper
+--- than 16 levels — are `_work.read.structure`'s five SQL-derivable
+--- kinds, asked of the same throwaway rebuild. An `order` entry naming
+--- a non-child is reported but never counted: a read that walks
+--- `_work.read.children` skips straight past it, so it is not a
+--- problem any read ever meets — see "stale order entries" below.
+---
+--- What SQL cannot answer, this module still asks directly: an item's
+--- tree not re-encoding to what it was read from (a hand edit, a
+--- canonical form that drifted — `tree_problem`), an id filed under
+--- both `refs/heads/items` and `refs/heads/ended` at once (the residue
+--- of a resolution whose atomic push landed the create half of an
+--- old-style namespace move and lost the delete half — the pushing
+--- credential can create and update a branch but never delete one),
+--- a stray branch under the item namespaces whose tail is not a
+--- KSUID, and the stale `refs/heads/board/lanes` ref no build writes
+--- any more. `store.list`'s own format check (`_work.gitread`) is the
 --- board-readable precondition every other check here depends on — a
 --- board this tool cannot even read is reported as the one problem it
---- is, nothing else asked. An `order` entry naming an id that is not a
---- child of the item carrying it is audited here rather than in
---- `item.problems` or `_work.flow`: both need the whole board's own
---- parent-child shape to judge, which a single item's own fields
---- cannot carry — the board's own `order` is one such item's field
---- like any other, so the same check already covers it.
+--- is, nothing else asked.
+local cacherebuild = require("_work.cacherebuild")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
+local index = require("_work.index")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
+local read = require("_work.read")
 local refs = require("_work.refs")
+local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
+local tail = require("_work.tail")
 
---- The structural problems `all` carries — pure over an already-loaded
---- board, no git of its own: dangling `parent`/`order` edges, every
---- edge kind an item carries (this build interprets none, so each is
---- reported), a key two open items both claim, a second parentless
---- item, a parentless item with a `repo`, and every item's own
---- `decode_problems`.
---- @param all {item.Item} Every item
---- @return {string} Problems, possibly empty
-local function structural_problems(all: {item.Item}): {string}
-  local index = item.by_id(all)
-  local out: {string} = {}
-  local key_holder: {string: string} = {}
-  local parentless: {string} = {}
-  for _, it in ipairs(all) do
-    local id8 = it.id:sub(1, 8)
-    if it.parent ~= "" and index[it.parent] == nil then
-      out[#out + 1] = ("%s: parent %s does not exist"):format(id8, it.parent)
-    end
-    for _, o in ipairs(it.order or {}) do
-      local child = index[o]
-      if child == nil or child.parent ~= it.id then
-        out[#out + 1] = ("%s: order names %s, which is not a child of it"):format(id8, o)
-      end
-    end
-    local other_kinds: {string} = {}
-    for kind in pairs(it.other_edges or {}) do
-      other_kinds[#other_kinds + 1] = kind
-    end
-    table.sort(other_kinds)
-    for _, kind in ipairs(other_kinds) do
-      out[#out + 1] = ("%s: unknown edge kind %s"):format(id8, kind)
-      local ids: {string} = {}
-      for eid in pairs((it.other_edges or {})[kind] or {}) do
-        ids[#ids + 1] = eid
-      end
-      table.sort(ids)
-      for _, eid in ipairs(ids) do
-        if index[eid] == nil then
-          out[#out + 1] = ("%s: %s names %s, which is not an item"):format(id8, kind, eid)
-        end
-      end
-    end
-    if item.is_open(it) and (it.key or "") ~= "" then
-      local holder = key_holder[it.key]
-      if holder ~= nil then
-        out[#out + 1] = ("%s and %s: both open with key %s — at most one may be"):format(
-          holder, id8, it.key)
-      else
-        key_holder[it.key] = id8
-      end
-    end
-    if item.is_parentless(it) then
-      parentless[#parentless + 1] = id8
-      if (it.repo or "") ~= "" then
-        out[#out + 1] = ("%s: a parentless item carries repo %s — the board "
-          .. "takes no repo"):format(id8, it.repo)
-      end
-    end
-    for _, p in ipairs(it.decode_problems or {}) do
-      out[#out + 1] = ("%s: flagged: %s"):format(id8, p)
-    end
-  end
-  if #parentless > 1 then
-    out[#out + 1] = ("%d parentless items — exactly one is meant to exist "
-      .. "(the board): %s"):format(#parentless, table.concat(parentless, ", "))
-  end
-  return out
-end
+--- `items` columns worth comparing between the session's cache and the
+--- throwaway rebuild — every column but `id` itself, which is the key
+--- the comparison is keyed on.
+local ITEM_COLUMNS < const >: {string} = {
+  "title", "parent", "repo", "base", "key", "claim", "reviewer", "pr",
+  "result", "verdict", "verdict_head", "verdict_spec", "resolution",
+  "ref", "tip", "touched_at",
+}
 
 --- Whether one item's tree, re-encoded from its own decoded fields,
 --- hashes IDENTICALLY to the tip it was read from — the canonical
@@ -151,10 +107,6 @@ local function stale_lanes_ref_problem(s: store.Store): string | nil
   return nil
 end
 
---- Run the whole audit and print it: one line per problem, then the
---- verdict line every other verb ends with.
---- @param s store.Store The store
---- @return integer Exit code
 --- Branches under the item namespaces whose tail is not a KSUID: not
 --- items, skipped by every read, and worth deleting.
 --- @param s store.Store The store
@@ -163,8 +115,8 @@ local function stray_ref_problems(s: store.Store): {string}
   local out: {string} = {}
   local found = refs.for_each_ref(s.root, {"refs/heads/items", "refs/heads/ended"})
   for _, r in ipairs(found or {}) do
-    local tail = r.refname:match("/([^/]+)$") or ""
-    if not (#tail == 27 and tail:match("^%w+$")) then
+    local tail_seg = r.refname:match("/([^/]+)$") or ""
+    if not (#tail_seg == 27 and tail_seg:match("^%w+$")) then
       out[#out + 1] = ("stray ref %s: not an item id; delete the branch"):format(r.refname)
     end
   end
@@ -189,13 +141,192 @@ local function duplicate_ref_problems(s: store.Store): {string}
   return out
 end
 
+--- Every `items` row, keyed by id, every column but `id` stringified —
+--- the shape `audit_cache` diffs.
+--- @param db sqlite.Database The connection
+--- @return {string: {string: string}} | nil id -> column -> value
+--- @return string Error message
+local function read_items(db: sqlite.Database): {string: {string: string}} | nil, string
+  local rows, err = db:query("SELECT * FROM items")
+  if rows == nil then
+    return nil, err
+  end
+  local out: {string: {string: string}} = {}
+  for row in rows do
+    local id = row.id as string -- cast: from any (sqlite row)
+    local cols: {string: string} = {}
+    for _, col in ipairs(ITEM_COLUMNS) do
+      cols[col] = tostring(row[col])
+    end
+    out[id] = cols
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+  return out, ""
+end
+
+--- Every `ranks` row, grouped by parent, in stored position order —
+--- the whole ordered child list is what `audit_cache` diffs, since the
+--- ORDER is exactly the fact under audit.
+--- @param db sqlite.Database The connection
+--- @return {string: {string}} | nil parent -> ordered child ids
+--- @return string Error message
+local function read_ranks(db: sqlite.Database): {string: {string}} | nil, string
+  local rows, err = db:query("SELECT parent, child FROM ranks ORDER BY parent, position")
+  if rows == nil then
+    return nil, err
+  end
+  local out: {string: {string}} = {}
+  for row in rows do
+    local parent = row.parent as string -- cast: from any (sqlite row)
+    local child = row.child as string -- cast: from any (sqlite row)
+    out[parent] = out[parent] or {}
+    local list = out[parent]
+    list[#list + 1] = child
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+  return out, ""
+end
+
+--- Every item's `events` row count.
+--- @param db sqlite.Database The connection
+--- @return {string: integer} | nil item id -> row count
+--- @return string Error message
+local function read_event_counts(db: sqlite.Database): {string: integer} | nil, string
+  local rows, err = db:query("SELECT item, COUNT(*) AS n FROM events GROUP BY item")
+  if rows == nil then
+    return nil, err
+  end
+  local out: {string: integer} = {}
+  for row in rows do
+    out[row.item as string] = math.tointeger(row.n as number) or 0 -- cast: from any (sqlite row)
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+  return out, ""
+end
+
+--- The audit `fsck` exists to run: every `items` row (lease columns
+--- included), every `ranks` row, and the `events` count per item,
+--- between the throwaway rebuild (`refs_db`, freshly filled from what
+--- git says right now) and the session's own open cache (`cache_db`,
+--- `o/board.db`). One finding line per disagreement,
+--- `cache: <handle> <column> reads X, refs say Y` — named for the
+--- cache since the refs are truth and the cache is the read model
+--- derived from them.
+--- @param refs_db sqlite.Database The throwaway rebuild
+--- @param cache_db sqlite.Database The session's open cache
+--- @return {string} One line per disagreement
+--- @return string Error message
+local function audit_cache(refs_db: sqlite.Database, cache_db: sqlite.Database): {string}, string
+  local refs_items, rierr = read_items(refs_db)
+  if refs_items == nil then
+    return {}, rierr
+  end
+  local cache_items, cierr = read_items(cache_db)
+  if cache_items == nil then
+    return {}, cierr
+  end
+  local refs_ranks, rrerr = read_ranks(refs_db)
+  if refs_ranks == nil then
+    return {}, rrerr
+  end
+  local cache_ranks, crerr = read_ranks(cache_db)
+  if cache_ranks == nil then
+    return {}, crerr
+  end
+  local refs_events, reerr = read_event_counts(refs_db)
+  if refs_events == nil then
+    return {}, reerr
+  end
+  local cache_events, ceerr = read_event_counts(cache_db)
+  if cache_events == nil then
+    return {}, ceerr
+  end
+
+  local ids: {string} = {}
+  local seen: {string: boolean} = {}
+  for id in pairs(refs_items) do
+    seen[id] = true
+    ids[#ids + 1] = id
+  end
+  for id in pairs(cache_items) do
+    if not seen[id] then
+      seen[id] = true
+      ids[#ids + 1] = id
+    end
+  end
+  table.sort(ids)
+
+  local out: {string} = {}
+  for _, id in ipairs(ids) do
+    local want = refs_items[id]
+    local got = cache_items[id]
+    if want == nil then
+      out[#out + 1] = ("cache: %s is in the cache but not in the refs"):format(tail.handle(id))
+    elseif got == nil then
+      out[#out + 1] = ("cache: %s is in the refs but not in the cache"):format(tail.handle(id))
+    else
+      for _, col in ipairs(ITEM_COLUMNS) do
+        if got[col] ~= want[col] then
+          out[#out + 1] = ("cache: %s %s reads %s, refs say %s"):format(
+            tail.handle(id), col, got[col], want[col])
+        end
+      end
+    end
+    local want_n = refs_events[id] or 0
+    local got_n = cache_events[id] or 0
+    if want_n ~= got_n then
+      out[#out + 1] = ("cache: %s events reads %d, refs say %d"):format(
+        tail.handle(id), got_n, want_n)
+    end
+    local want_order = table.concat(refs_ranks[id] or {}, ",")
+    local got_order = table.concat(cache_ranks[id] or {}, ",")
+    if want_order ~= got_order then
+      out[#out + 1] = ("cache: %s order reads [%s], refs say [%s]"):format(
+        tail.handle(id), got_order, want_order)
+    end
+  end
+  return out, ""
+end
+
+--- The `ok` verdict detail: item count alone when nothing was ignored,
+--- with the stale-order count appended only when there is one — the
+--- common healthy-board case stays exactly as terse as it always was.
+--- @param n_items integer How many items the board carries
+--- @param n_stale integer How many stale order entries were found
+--- @return string
+local function ok_detail(n_items: integer, n_stale: integer): string
+  if n_stale > 0 then
+    return ("ok (%d items), %d stale order entries"):format(n_items, n_stale)
+  end
+  return ("ok (%d items)"):format(n_items)
+end
+
+--- The failing verdict detail: the problem count, with the stale-order
+--- count appended only when there is one.
+--- @param n_problems integer How many real problems were found
+--- @param n_stale integer How many stale order entries were found
+--- @return string
+local function fail_detail(n_problems: integer, n_stale: integer): string
+  if n_stale > 0 then
+    return ("%d problem(s), %d stale order entries"):format(n_problems, n_stale)
+  end
+  return ("%d problem(s)"):format(n_problems)
+end
+
 local function cmd_fsck(s: store.Store): integer
   -- A fresh git read, never the cache-backed `store.list`: this audit's
-  -- own job is checking the database against git, so it needs every
-  -- field git actually carries — `other_edges` (an unmigrated board's
-  -- `beats`/`blocked_by`, or any other kind this build does not
-  -- interpret) and the observed tree `tree_problem` re-encodes against
-  -- — neither of which the cache's schema carries at all.
+  -- own job is checking the database against git, so it needs to
+  -- rebuild the derived rows from the refs itself rather than trust
+  -- whatever `o/board.db` already holds.
   local board, lerr = gitread.list(s.root)
   if board == nil then
     print(lerr)
@@ -216,7 +347,67 @@ local function cmd_fsck(s: store.Store): integer
     end
   end
   local specs = store.read_specs(s, ids)
-  local problems = structural_problems(all)
+
+  local problems: {string} = {}
+  local stale_orders: {string} = {}
+
+  -- Rebuild the derived rows from the refs into a throwaway in-memory
+  -- database, reusing `_work.cacherebuild`'s own fill path — the same
+  -- schema and data `store.read` incrementally maintains at
+  -- `o/board.db`, built fresh from what git says right now.
+  local mem, merr = sqlite.open(":memory:")
+  if mem == nil then
+    problems[#problems + 1] = ("could not open a throwaway database: %s"):format(merr)
+  else
+    local fok, ferr = cacherebuild.fill(mem, s.root, board, specs)
+    if not fok then
+      problems[#problems + 1] = ("could not rebuild the throwaway database: %s"):format(ferr)
+      local _c, _cerr = mem:close()
+      mem = nil
+    end
+  end
+
+  if mem ~= nil then
+    local rebuilt: index.Index = {db = mem, specs = specs, load_problems = {}}
+    -- `read.structure`'s five SQL-derivable findings, asked of the
+    -- fresh rebuild — what a Teal walk over `all` used to compute by
+    -- hand. `stale_order` is reported but never counted: a read that
+    -- walks `_work.read.children` skips straight past it, so it is
+    -- not a problem any read ever meets.
+    local srows, serr = read.structure(rebuilt)
+    if srows == nil then
+      problems[#problems + 1] = ("could not query structure: %s"):format(serr)
+    else
+      for _, r in ipairs(srows) do
+        local line = ("%s: %s"):format(r.id:sub(1, 8), r.detail)
+        if r.kind == "stale_order" then
+          stale_orders[#stale_orders + 1] = line
+        else
+          problems[#problems + 1] = line
+        end
+      end
+    end
+
+    -- The audit itself: the session's own open cache, diffed against
+    -- the fresh rebuild row by row — one line per disagreement, or a
+    -- single confirming line when there is none.
+    local c, cerr = store.read(s)
+    if c == nil then
+      problems[#problems + 1] = ("could not open the session cache: %s"):format(cerr)
+    else
+      local diffs, derr = audit_cache(mem, c.db)
+      if derr ~= "" then
+        problems[#problems + 1] = ("could not audit the cache: %s"):format(derr)
+      elseif #diffs == 0 then
+        print("gitboard-fsck: cache agrees with the refs")
+      end
+      for _, d in ipairs(diffs) do
+        problems[#problems + 1] = d
+      end
+    end
+    local _c, _cerr = mem:close()
+  end
+
   -- One process for every item's observed tree, whatever the board's
   -- size — the batched form of `gitobj.tree_of`, which used to cost
   -- one `git rev-parse` PER item here.
@@ -241,22 +432,27 @@ local function cmd_fsck(s: store.Store): integer
   for _, p in ipairs(stray_ref_problems(s)) do
     problems[#problems + 1] = p
   end
+
   for _, p in ipairs(problems) do
     print(p)
   end
-  if #problems == 0 then
-    return gate.verdict_line("fsck", true, ("ok (%d items)"):format(#all))
+  if #stale_orders > 0 then
+    print("stale order entries (ignored by reads):")
+    for _, p in ipairs(stale_orders) do
+      print(p)
+    end
   end
-  return gate.verdict_line("fsck", false, ("%d problem(s)"):format(#problems))
+  if #problems == 0 then
+    return gate.verdict_line("fsck", true, ok_detail(#all, #stale_orders))
+  end
+  return gate.verdict_line("fsck", false, fail_detail(#problems, #stale_orders))
 end
 
 local record gitfsck
-  structural_problems: function(all: {item.Item}): {string}
   cmd_fsck: function(s: store.Store): integer
 end
 
 local M: gitfsck = {
-  structural_problems = structural_problems,
   cmd_fsck = cmd_fsck,
 }
 
