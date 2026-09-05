@@ -1,2 +1,3 @@
 title: spec sidecars imported from GitHub issues carry raw HTML entities (&#39; &#34;) instead of real characters, breaking exact-match gates like the PR-quoting check
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 resolution: completed
