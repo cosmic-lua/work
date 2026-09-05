@@ -2,6 +2,8 @@ title: store.tl at 500/500 after #18: split the read half from the write half be
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-br5S_1U-32638265
-reviewer: review-Bkbr_5S1U-32638265
 pr: 21
+verdict: accept
+verdict_head: cf7650a1a8ef56a87e4ef360fd44dae459410abb
+verdict_spec: 1a91f4940aea147ec74ece4c3e343bdd9e35a984
 builders: build-br5S_1U-32638265
