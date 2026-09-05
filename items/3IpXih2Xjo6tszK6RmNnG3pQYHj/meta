@@ -1,10 +1,10 @@
 title: tl: pcall-return-shape's union-with-any design regresses dozens of unrelated call sites tree-wide — re-scope to the zero-return case
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
-claim: build-nG3p_QYHj-3c1cde43
 pr: 1725
 verdict: accept
 verdict_head: e59713bbc59178859bbc3a8e37b78be718649b23
 verdict_spec: 26e05f98379a01e2f81ca6006e000cd93857d066
+resolution: completed
 builders: build-nG3p_QYHj-3c1cde43
 speccers: 3c1cde43-b57b-53a6-9b5e-5d6e14979b25
