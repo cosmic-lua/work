@@ -93,6 +93,49 @@
   per D29) — cost ~3 calls, no tree/doc gap, a habit note in the agent's own
   friction section.
 
+## research 10WB_be6U (claude) — no-adopt, --result handover, 790s, 81 tool calls, in=164 out=1148 cache_read=8318585 cache_create=126324, errors=3
+- goal: run `--make run` against the throwaway prototype "in `o/`" per the spec's own
+  wording. actually happened: `--make run` refuses any path under `o/` (excluded by
+  the project model — "no such source"), a wall none of the other `_build/*.tl`
+  examples the spec was modeled on would hit since they live outside `o/`. Cost
+  ~10 min / 4 calls tracing `_make/runverb.tl`'s `resolve()`/`file_of()` before
+  finding it, then discovering by experiment (not by doc) that a BARE
+  `o/bin/cosmic o/proto/foo.tl` (no `--make`) resolves `require("_cli.*")`/
+  `require("_make.*")` against the live tree, not just the binary's embedded copies —
+  `CLAUDE.md` only documents this bare-vs-`--make run` distinction for `_perf`
+  specifically. contributed: no doc states that an `o/`-resident script and
+  `--make run` are mutually exclusive, or that bare execution's live-tree resolution
+  generalizes beyond `_perf`. improvement: a one-line note in the build-system docs
+  on when bare-script requires resolve against the live tree vs. the embedded
+  snapshot — a doc fix, not filed as its own item this pass (folded into the
+  candidate below since it's small enough to land inline next time that doc is
+  touched, not on its own).
+- goal: express `nil_returns`' count "as a join" per the spec's own Evidence framing.
+  actually happened: after reading all 380 lines of `_cli/nilreturn.tl` (~20 min),
+  found the count comes from a stateful, ordered frame-stack walk matching
+  function/record/block nesting — not expressible as a SQL `WHERE`/`JOIN` — and had
+  to port ~230 lines of that algorithm into the prototype to measure honestly rather
+  than silently re-lexing. contributed: the spec's own Evidence stated "nil-returns a
+  join" as settled, symmetric with casts' one-line `WHERE text='as'`; it isn't. This
+  is exactly the kind of fact a decision record exists to surface, and the report's
+  central no-adopt finding (rule (b)) rests on it — not a doctrine or tool gap, a
+  correct research outcome.
+- goal: get a fair generation-time number. actually happened: the first (row-by-row)
+  implementation measured 3.1–3.8 s; unsure if that was an insert-pattern artifact,
+  spent one more round (~15 min, 3 calls) building a 500-row-batched `INSERT...VALUES`
+  variant — an intermediate scratch script hit 3 avoidable errors (a `db:transaction`
+  callback missing its `boolean, string` return annotation, a `#` on a map instead of
+  an array, a Write-before-Read tool-order slip) before landing at 2.7–3.3 s, same
+  verdict. Not wasted (materially strengthens the no-adopt case) but the spec's
+  Change section didn't anticipate needing a second implementation pass to trust the
+  first measurement.
+- orchestrator action: composed the item's full revised spec (Evidence/Change/
+  Non-goals unchanged, `## Result` appended with the agent's numbers and the
+  determinative rule-(a) failure) from the report, `gitboard spec 10WB_be6U <file>
+  --force --why` (claim was the agent's, already reported), `take 10WB_be6U --force`
+  then `take 10WB_be6U --result` — now `awaiting review`. Worktree/branch produced no
+  diff (confirmed clean) and were removed.
+
 ## candidates
 - none passing the spec bar this pass. Deferred, not lost: the two pre-existing
   unparented triage items («KGOw_xnx8» friction: 2026-09-05 work9-routine,
