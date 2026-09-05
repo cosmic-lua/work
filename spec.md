@@ -158,21 +158,81 @@
   reproducible, not worth filing per the agent's own account.
   **Improvement:** none.
 
-## build jiP8_yJF8 (Sonnet 5) — still running
+## build jiP8_yJF8 (Sonnet 5) — PR #1718 opened, 589s, 52 tool calls, tokens in=100 out=935 cache_read=3907308 cache_create=78720, first edit call 20, 2 error results, 3 repeated commands
 
-Claimed and spawned this pass; not yet reported. Its friction section is
-written when it reports, in a later pass's log per
-`skills/work/friction.md`'s "what the agent reports".
+- **Goal (agent's own report):** locate `_work/ksuid.tl`, the spec's cited
+  reference implementation, to port it.
+  **Actually happened:** it does not exist anywhere in the cosmic
+  worktree — it lives in the sibling `cosmic-lua/work` repo, not cloned
+  locally (builders are told not to invoke the `gitboard`/`o/board`
+  machinery that would fetch it). Cost ~3 tool calls (a failed local
+  search, a GitHub `search_code` that also came back empty, then a direct
+  `get_file_contents` guess against `cosmic-lua/work` that worked) and a
+  few minutes.
+  **Contributed:** the spec's evidence paragraph reads as if the reference
+  sits in the same tree being checked ("`ls cosmic/ | grep -i ksuid` is
+  empty" implies checking the one worktree), when the port source is
+  actually a different repository entirely.
+  **Improvement:** spec text that names a cross-repo reference file should
+  name the repo explicitly at the point of the port instruction, not only
+  in the opening evidence sentence — a builder with no GitHub tool access
+  would have been stuck outright. Doc-level fix in how refine writes
+  cross-repo evidence; not a gate.
+- **Transcript-measured, not in the agent's own account:** two Bash calls
+  came back as errors — an `ls _work`/`ls o/board` probe (exit 2, hunting
+  for the same missing reference file before the GitHub fetch worked) and
+  one `--check lint` run catching a real `assert-justify` violation
+  (`cosmic/ksuid.tl:96`, D23's licence for a throwing `assert`) that the
+  agent then fixed — the second "error" is the lint gate doing its job,
+  not friction. Three commands repeated (2-3x each): re-reading
+  `cosmic/ksuid.tl` and `.cosmic-coverage`, and re-running `--make ci`,
+  consistent with an ordinary edit-check-fix loop, not thrashing.
 
 ## research Ng6q_dpp2 (Sonnet 5) — still running
 
 Claimed and spawned this pass; not yet reported. Its friction section is
 written when it reports, in a later pass's log.
 
-## build TiP5_t8cl (Sonnet 5) — still running
+## build TiP5_t8cl (Sonnet 5) — stopped short (spec's UDF-argument bullet unbuildable as written), 384s, 32 tool calls, tokens in=66 out=476 cache_read=2123395 cache_create=71556, no edits, 0 error results, 1 repeated command
 
-Claimed and spawned this pass; not yet reported. Its friction section is
-written when it reports, in a later pass's log.
+- **Goal (agent's own report):** determine whether the `bind.tl`
+  "UDF-argument side" bullet was implementable as specified.
+  **Actually happened:** ~15 of the stretch's 32 tool calls (repo-wide
+  greps across `cosmic/`, the generated `.d.tl` types, git history) to
+  establish that `cosmic.sqlite` exposes no `create_function`/
+  `create_aggregate` surface at all — the spec's own Non-goal phrasing
+  ("the existing UDF-arg push path") presupposes a mechanism that was
+  never built. Correctly stopped without editing anything (`git status`
+  clean at report time) and reported the exact grep commands and their
+  empty output as evidence, rather than guessing past the gap. Orchestrator
+  filed the question (`3ItQ6kLa`), blocked `TiP5_t8cl` on it, and dropped
+  the claim — a clean bounce, not wasted work: the agent's own account
+  matches what the transcript shows (zero edits, zero errors, one command
+  re-run while confirming the pin carried the new accessors).
+  **Contributed:** the refiner wrote the Change/Non-goals pair assuming a
+  UDF registration wrapper already existed in `cosmic.sqlite`, without
+  having grepped for it first.
+  **Improvement:** as `help bar` already states ("Measured, not inferred"),
+  a spec bullet phrased "the existing X" should carry the command that
+  found X, the same discipline the bar already asks of every other claim —
+  this is the bar's own rule not having been applied at refine time, not a
+  new rule to add.
+- **Goal (agent's own report):** find where the read-side `column_type(n)`
+  check could actually run.
+  **Actually happened:** ~10 minutes tracing `column.tl` → found it only
+  ever sees an already-materialized `Row`, not the raw statement; the real
+  column extraction is `row_iter.tl:81`, a file the Change never names.
+  **Contributed:** the Change's file list names the module that owns the
+  *concept* (column typing) rather than the module that owns the raw
+  statement (`row_iter.tl`).
+  **Improvement:** folded into the filed question `3ItQ6kLa`'s respec
+  instructions (name `row_iter.tl` explicitly alongside `column.tl`).
+
+- Spec bullets phrased "the existing X" (e.g. TiP5_t8cl's "the existing
+  UDF-arg push path") should be grepped for at refine time, per `help
+  bar`'s own "measured, not inferred" rule — filed as the concrete instance
+  «3ItQ6kLa» rather than left here, since it already carries a full respec
+  with the two required decisions and file names.
 
 ## candidates
 
