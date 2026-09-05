@@ -15,8 +15,10 @@ answers — a streaming client instead of three run-to-completion ones.
 helper the passes use; `cosmic.child` has a streaming interface (check
 `cosmic --docs child` for `start` with stdin/stdout pipes).
 
-Ready when: the store split («3IszecFx…», store.tl at 500/500) is on main —
-`git log --oneline origin/main | grep -c 3IszecFx` prints 1.
+Ready when: the store split («Bkbr_5S1U», PR #21) is on main —
+`git log --oneline origin/main | grep -c "(#21)"` prints 1 (a squash merge
+carries the PR number, not the branch); `store.tl` is then the read half at
+375 lines.
 
 ## Change
 
