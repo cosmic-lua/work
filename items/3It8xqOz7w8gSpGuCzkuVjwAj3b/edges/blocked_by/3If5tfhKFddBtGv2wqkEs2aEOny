@@ -1,0 +1,1 @@
+needs cosmic.sqlite's create_function wrapper (Es2a_EOny) to exist before ksuid() can be registered through it
