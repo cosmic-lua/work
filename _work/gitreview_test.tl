@@ -10,6 +10,7 @@ local fixture = require("_work.fixture")
 local gh = require("_work.gh")
 local health = require("_work.health")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 local vrd = require("_work.gitverdict")
 
@@ -185,7 +186,7 @@ local function test_a_named_builder_cannot_review_claim_it()
   it.claim = "reviewer-b"
   it.pr = 5
   it.builders = {"session-a"}
-  assert(store.save(s, it,
+  assert(storewrite.save(s, it,
       "fixture: builder recorded, someone else holds the claim"))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
     "the named builder is refused the review claim")
@@ -205,7 +206,7 @@ local function test_a_named_speccer_cannot_review_claim_it()
   it.claim = "reviewer-b"
   it.pr = 6
   it.speccers = {"session-x"}
-  assert(store.save(s, it,
+  assert(storewrite.save(s, it,
       "fixture: speccer recorded, someone else holds the claim"))
   assert(verbs.cmd_take(s, leaf, "session-x", 0, false, "") ~= 0,
     "the named speccer is refused the review claim")

@@ -18,6 +18,7 @@ local item = require("_work.item")
 local prio = require("_work.priority")
 local publish = require("_work.publish")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 --- Print a verb's verdict line and return its exit code.
 --- @param verb string The verb
@@ -300,21 +301,21 @@ end
 local function commit_and_publish(s: store.Store, it: item.Item, body: string,
     message: string, verb: string, also?: {item.Item}, session?: string,
     bounded?: boolean): boolean, string
-  store.set_session(s, session or "")
-  store.set_op(s, verb)
-  store.set_bounded(s, bounded or false)
+  storewrite.set_session(s, session or "")
+  storewrite.set_op(s, verb)
+  storewrite.set_bounded(s, bounded or false)
   -- Read before the write moves anything, so `after_save` below has
   -- proof the cache was valid immediately beforehand — see
   -- `_work.cache`'s own header for why this lives here rather than
-  -- inside `store.save` itself.
+  -- inside `storewrite.save` itself.
   local before_digest = cache.guard(s.root)
-  local saved, serr = store.save(s, it, message, body, also)
+  local saved, serr = storewrite.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then
     return saved, serr
   end
   -- `it` first, then `also` — the cache patches straight from these,
-  -- exactly as `store.save` just wrote them, with no git read of its
-  -- own; only `it` (`items[1]`) can carry a spec change (`body`), so
+  -- exactly as `storewrite.save` just wrote them, with no git read of
+  -- its own; only `it` (`items[1]`) can carry a spec change (`body`), so
   -- that is the only slot `after_save` ever reindexes with new text.
   local items: {item.Item} = {it}
   for _, x in ipairs(also or {}) do

@@ -181,7 +181,10 @@ end
 local function test_canonical_round_trip_is_tree_sha_identical()
   local root = fresh_repo("roundtrip")
   local it = full_item()
-  local tree1 = check.must(itemtree.build_tree(root, it, "## Change\nDo it.\n"))
+  -- Written for real: the read-back below goes through
+  -- `cat_file_batch`, a real `git cat-file`, which needs the objects
+  -- to actually be in this repository's odb.
+  local tree1 = check.must(itemtree.build_tree(root, it, "## Change\nDo it.\n", true))
 
   -- Read the tree back exactly the way `_work.gitread` does: meta,
   -- whether `held` is present, and every `edges/<kind>` subtree's own

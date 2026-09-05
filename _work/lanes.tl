@@ -12,6 +12,7 @@
 local api = require("_work.api")
 local cachequery = require("_work.cachequery")
 local env = require("cosmic.env")
+local freshness = require("_work.freshness")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
@@ -40,8 +41,9 @@ local LANE_PARENT < const > = "3HyRdT1JQS7pCPgF3sZi2Deo66q"
 --- back-to-back reads a busy session (or an orchestrator polling
 --- `sync` in a loop) would otherwise pay for, while still catching a
 --- lane turning red the same day. Local to this checkout's `o/`, so
---- it says nothing about what another worktree observed.
-local FRESH_WINDOW_S < const > = 15 * 60
+--- it says nothing about what another worktree observed. Shared with
+--- `_work.ciobs` via `_work.freshness` rather than picked here alone.
+local FRESH_WINDOW_S < const > = freshness.WINDOW_S
 
 --- Set (to anything) to force a fresh read past the freshness window
 --- — the escape hatch for a session that knows a lane just finished
@@ -179,11 +181,15 @@ end
 --- is what keeps a fresh worktree's reads offline and truthful.
 --- Exported for `show`'s lanes row too: a fresh board that has never
 --- synced has no cache observation yet, so `read_state` comes back
---- empty and `show` renders no row rather than a row of blanks.
+--- empty and `show` renders no row rather than a row of blanks. Hands
+--- the cache `s.board_digest` when a `list` this invocation already
+--- took set one, so a session that just listed the board never
+--- retakes the ref snapshot only to validate the cache with it.
 --- @param s store.Store The store
 --- @return {string: string} One conclusion per lane, "" for the rest
 local function read_state(s: store.Store): {string: string}
-  local all = cachequery.lanes_read(s.root)
+  local all = cachequery.lanes_read(s.root,
+    s.board_digest ~= "" and s.board_digest or nil)
   local out: {string: string} = {}
   for _, lane in ipairs(LANES) do
     if all[lane] ~= nil then
@@ -214,7 +220,8 @@ local function record(s: store.Store, facts: {string: string}): boolean, string
   if not changed then
     return false, ""
   end
-  return cachequery.lanes_write(s.root, facts)
+  return cachequery.lanes_write(s.root, facts,
+    s.board_digest ~= "" and s.board_digest or nil)
 end
 
 --- Whether `it` is the open repair item for `lane` — the search

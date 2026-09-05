@@ -53,9 +53,17 @@ local DB_FILENAME < const > = "board.db"
 --- for a reader that would rather query it than read the connection's
 --- own `PRAGMA user_version`), `schema_fingerprint` (`schema_fingerprint`
 --- below — the actual DDL shape, catching a change `SCHEMA_VERSION`
---- was not bumped for), and `lanes`, the scheduled-lane observation
---- `_work.lanes` now reads and writes here instead of committing
---- `refs/heads/board/lanes`.
+--- was not bumped for), `lanes`, the scheduled-lane observation
+--- `_work.lanes` reads and writes here instead of committing
+--- `refs/heads/board/lanes`, and `ci_checks`, the same shape of
+--- observation for a pull request's CI state: `_work.ciobs` reads and
+--- writes it instead of every render asking GitHub live. Keyed on
+--- `(repo, pr)` rather than the item id, since the id a render already
+--- has is what looks the row up. `state` is `_work.gh.HeadChecks`'
+--- vocabulary; `head` is the commit sha the state was observed
+--- against, so an observation is never trusted past its window: this
+--- table only ever holds the head that was current when it was last
+--- written.
 local EXTRA_DDL < const > = [[
 CREATE TABLE cache_meta (
   k TEXT PRIMARY KEY,
@@ -66,6 +74,15 @@ CREATE TABLE lanes (
   workflow TEXT PRIMARY KEY,
   conclusion TEXT NOT NULL,
   observed_at INTEGER NOT NULL
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE ci_checks (
+  pr INTEGER NOT NULL,
+  repo TEXT NOT NULL,
+  head TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('green', 'red', 'running', 'none')),
+  observed_at INTEGER NOT NULL,
+  PRIMARY KEY (repo, pr)
 ) STRICT, WITHOUT ROWID;
 ]]
 

@@ -5,12 +5,19 @@
 -- take gate's problem list, the sidecar, the git history.
 
 local check = require("cosmic.check")
+local fixture = require("_work.fixture")
+local gitread = require("_work.gitread")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local show = require("_work.gitshow")
 local spec = require("_work.spec")
+local store = require("_work.store")
 local tail = require("_work.tail")
+
+local init_state_repo = fixture.init_state_repo
+local file_item = fixture.file_item
+local give_spec = fixture.give_spec
 
 local seq = 0
 
@@ -237,4 +244,53 @@ local function test_show_prints_a_handovers_verdict_by_result_not_head()
       "^verdict: accept %(result abcdef0, spec unchanged since%)$"),
     "the digest prints where a diff's head would: "
     .. table.concat(lines, "\n"))
+end
+
+--- Run `show.cmd_show` against a real store and capture what it
+--- prints via `print()` — the swap-and-restore pattern the other verb
+--- tests use.
+--- @param s store.Store The store
+--- @param id string The item to show
+--- @return integer cmd_show's exit code
+--- @return string Every print()'d line, newline-joined
+local function show_and_capture(s: store.Store, id: string): integer, string
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local ok, result = pcall(show.cmd_show, s, id)
+  _G.print = old_print
+  if not ok then
+    error(result, 0)
+  end
+  return result, table.concat(lines, "\n")
+end
+
+-- `show ID`'s spec body comes from the same batched `read_specs` that
+-- already covers every open sibling — never a standalone `cat-file -p
+-- <ref>:spec.md` — so it renders correctly even with that single-file
+-- path (`gitread.read_spec`) stubbed to fail outright.
+local function test_show_id_renders_the_spec_without_gitreads_single_file_read()
+  local s = init_state_repo("show-spec-from-batch")
+  local id = file_item(s, "an item", "")
+  give_spec(s, id)
+
+  local real_read_spec = gitread.read_spec
+  gitread.read_spec = function(_root: string, _candidates: {string}): string
+    error("gitread.read_spec must not run: the body should come from "
+      .. "the batched read_specs", 0)
+  end
+  local ok, code, out = pcall(show_and_capture, s, id)
+  gitread.read_spec = real_read_spec
+  if not ok then
+    error(code, 0)
+  end
+  assert(code == 0, "show should still succeed: " .. tostring(out))
+  assert(out:find("Do exactly this.", 1, true) ~= nil,
+    "the spec body must render from the loaded batch: " .. out)
 end

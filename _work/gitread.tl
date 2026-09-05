@@ -15,6 +15,7 @@
 --- `_work.gitreadmany.load_many`, a named-id-set batch `_work.cache`'s
 --- fetch-path refresh uses, is split into its own file for the same
 --- line-cap reason, built on the helpers this module exports below.
+local cachedb = require("_work.cachedb")
 local child = require("cosmic.child")
 local format = require("_work.format")
 local gitobj = require("_work.gitobj")
@@ -46,13 +47,18 @@ end
 --- The whole board as `list` found it: every item, its ref and tip
 --- (`refs_by_id`/`shas_by_id` — the write lease for each),
 --- `refs/heads/board/seq`'s own tip, "" when the ref does not exist yet,
---- and every id `list` found filed under both namespaces at once.
+--- every id `list` found filed under both namespaces at once, and the
+--- digest of the `for-each-ref` snapshot this pass took over exactly
+--- `_work.cachedb`'s own watched patterns — `_work.cache.open`'s
+--- validation check when a caller already has this snapshot in hand,
+--- so it never repeats the `for-each-ref` `list` just paid for.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
   shas_by_id: {string: string}
   seq_sha: string
   duplicates: {Duplicate}
+  refs_digest: string
 end
 
 --- Every `edges/<kind>` subtree an item's `sha:edges` entry names, as
@@ -173,30 +179,55 @@ local function pick_duplicate(root: string, items_e: refs.RefEntry,
   return ended_e, items_e
 end
 
+--- Encode/decode `_work.store`'s one-shot lease ticket: an id already
+--- resolved to its ref and sha (a prefix `resolve` matched, or a
+--- handle resolved against a `list` snapshot), spent by the very next
+--- `load` of that id; `lease_decode` gives "" for both when `ticket`
+--- is "" or names a different id.
+local function lease_encode(id: string, ref: string, sha: string): string
+  return ("%s %s %s"):format(id, ref, sha)
+end
+local function lease_decode(ticket: string, id: string): string, string
+  local tid, tref, tsha = ticket:match("^(%S+) (%S+) (%S+)$")
+  if tid ~= id then
+    return "", ""
+  end
+  return tref, tsha
+end
+
 --- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`
 --- — and, on the rare board where one id lives under both at once,
 --- picking the winner `pick_duplicate` names rather than whichever
---- `for-each-ref` happened to list first.
+--- `for-each-ref` happened to list first. `known_ref`/`known_sha` skip
+--- this for-each-ref entirely when the caller already resolved them
+--- unambiguously (`_work.store.resolve`'s own snapshot, or a prior
+--- `list`'s lease).
 --- @param root string The repository root
 --- @param id string Item id
+--- @param known_ref string | nil The id's ref, already resolved
+--- @param known_sha string | nil That ref's tip
 --- @return Loaded | nil The item, its ref and its tip
 --- @return string Error message; "no item <id>" when absent
-local function load_item(root: string, id: string): Loaded | nil, string
-  local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
-  if found == nil then
-    return nil, ferr
-  end
-  if #found == 0 then
-    return nil, ("no item %s"):format(id)
-  end
-  local ref, sha = found[1].refname, found[1].sha
-  if #found > 1 then
-    local items_e, ended_e = found[1], found[2]
-    if items_e.refname ~= "refs/heads/items/" .. id then
-      items_e, ended_e = ended_e, items_e
+local function load_item(root: string, id: string,
+    known_ref?: string, known_sha?: string): Loaded | nil, string
+  local ref, sha = known_ref, known_sha
+  if ref == nil or ref == "" or sha == nil or sha == "" then
+    local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
+    if found == nil then
+      return nil, ferr
     end
-    local kept = pick_duplicate(root, items_e, ended_e)
-    ref, sha = kept.refname, kept.sha
+    if #found == 0 then
+      return nil, ("no item %s"):format(id)
+    end
+    ref, sha = found[1].refname, found[1].sha
+    if #found > 1 then
+      local items_e, ended_e = found[1], found[2]
+      if items_e.refname ~= "refs/heads/items/" .. id then
+        items_e, ended_e = ended_e, items_e
+      end
+      local kept = pick_duplicate(root, items_e, ended_e)
+      ref, sha = kept.refname, kept.sha
+    end
   end
   local batch, berr = gitobj.cat_file_batch(root,
     {sha .. ":meta", sha .. ":held", sha .. ":edges"})
@@ -249,6 +280,7 @@ local function list(root: string): Board | nil, string
   if found == nil then
     return nil, ferr
   end
+  local refs_digest = cachedb.digest_of(found)
   local items_by_id: {string: refs.RefEntry} = {}
   local ended_by_id: {string: refs.RefEntry} = {}
   local seq_sha = ""
@@ -370,7 +402,7 @@ local function list(root: string): Board | nil, string
       return a.id < b.id
     end)
   return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id, seq_sha = seq_sha,
-    duplicates = duplicates}
+    duplicates = duplicates, refs_digest = refs_digest}
 end
 
 --- An item's spec sidecar, "" when absent, tried against every
@@ -432,7 +464,10 @@ local record gitread
   type Loaded = Loaded
   type Board = Board
   type Duplicate = Duplicate
-  load: function(root: string, id: string): Loaded | nil, string
+  lease_encode: function(id: string, ref: string, sha: string): string
+  lease_decode: function(ticket: string, id: string): string, string
+  load: function(root: string, id: string,
+  known_ref?: string, known_sha?: string): Loaded | nil, string
   list: function(root: string): Board | nil, string
   read_spec: function(root: string, candidates: {string}): string
   read_specs: function(root: string, shas_by_id: {string: string},
@@ -450,6 +485,8 @@ local record gitread
 end
 
 local M: gitread = {
+  lease_encode = lease_encode,
+  lease_decode = lease_decode,
   load = load_item,
   list = list,
   read_spec = read_spec,

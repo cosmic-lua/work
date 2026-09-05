@@ -9,6 +9,7 @@
 --- line and returns its exit code. Mutations commit locally and publish through
 --- `publish.publish`, whose rejected-push path drops the mutation whole, re-syncs, and
 --- refuses — re-running the verb re-applies every gate against the merged board.
+local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
@@ -108,14 +109,16 @@ local function cmd_take(s: store.Store, id: string, session: string,
     -- is already a decided fact a reviewer can act on (a quick request
     -- changes), but a running one is not yet known either way, so
     -- claiming the review now only burns a reader on a verdict it
-    -- cannot give. `head_checks` reads nil on no GitHub reach (no
+    -- cannot give. `ciobs.live` reads nil on no GitHub reach (no
     -- origin, no token, a network error) — exactly the cases this
-    -- refuses nothing for, same as before this gate existed. One call
-    -- does the whole read: the sha and run list needed for the
-    -- refusal text ride the returned record, so nothing here
-    -- re-fetches the PR or its checks a second time.
+    -- refuses nothing for, same as before this gate existed — and
+    -- writes the result through to the render-side cache, so `next`
+    -- sees this exact head without a call of its own. One call does
+    -- the whole read: the sha and run list needed for the refusal
+    -- text ride the returned record, so nothing here re-fetches the
+    -- PR or its checks a second time.
     if (it.pr or 0) ~= 0 and not force then
-      local hc, _herr = gh.head_checks(s, it.pr, it.repo)
+      local hc, _herr = ciobs.live(s, it.repo, it.pr)
       if hc ~= nil and hc.state == "running" then
         local sha7 = "?"
         if hc.head_sha ~= "" then
@@ -459,16 +462,19 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     ("%s %s (%s)%s"):format(id:sub(1, 8), reason, from, returned))
 end
 
--- Lane health (`_work.lanes`): a `nil` observe (offline, no token)
--- prints and is never treated as red; `at_sync` does the observe /
--- record / mint pipeline and hands back the lines to print, keeping
--- this module under its 500-line cap.
+-- Lane health (`_work.lanes`) and PR CI observation (`_work.ciobs`):
+-- each `at_sync` does its own observe pipeline and hands back the
+-- lines to print, keeping this module under its 500-line cap. A `nil`
+-- observe (offline, no token) prints and is never treated as red.
 local function cmd_sync(s: store.Store): integer
   local ok, err = publish.sync(s)
   if not ok then
     return gate.verdict_line("sync", false, err)
   end
   for _, line in ipairs(lanes.at_sync(s)) do
+    print(line)
+  end
+  for _, line in ipairs(ciobs.at_sync(s)) do
     print(line)
   end
   return gate.verdict_line("sync", true, "state is current")

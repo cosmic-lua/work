@@ -108,9 +108,11 @@ end
 --- @param s store.Store The store
 --- @param it item.Item The item
 --- @param all {item.Item} Every item
+--- @param body string | nil Its spec sidecar, when the caller already
+--- has it (a batched `read_specs`, say) — nil to read it here
 --- @return {string} Problems, empty when the item meets the bar
 local function ready_problems(s: store.Store, it: item.Item,
-    all: {item.Item}): {string}
+    all: {item.Item}, body?: string): {string}
   local index = flow.by_id(all)
   local out = flow.item_problems(it, index)
   local r = flow.role(it, all)
@@ -133,11 +135,11 @@ local function ready_problems(s: store.Store, it: item.Item,
       out[#out + 1] = ("blocked_by names %s, which is not an item"):format(b)
     end
   end
-  local body = store.read_spec(s, it.id)
-  for _, gap in ipairs(flow.ready_gaps(body)) do
+  local spec_body = body or store.read_spec(s, it.id)
+  for _, gap in ipairs(flow.ready_gaps(spec_body)) do
     out[#out + 1] = ("spec: %s"):format(gap)
   end
-  for _, repo in ipairs(undeclared_repos(it, body)) do
+  for _, repo in ipairs(undeclared_repos(it, spec_body)) do
     out[#out + 1] = ("spec reaches %s with no declared read access — name "
       .. "it under \"## Access\"; undeclared, it strands the claim now "
       .. "and the review just as surely"):format(repo)
@@ -145,7 +147,7 @@ local function ready_problems(s: store.Store, it: item.Item,
   -- The item's own `repo` is exempt above because it is where the diff
   -- lands — which is exactly why it must be somewhere the claiming
   -- session can land one (`_work.gitowner`).
-  local foreign = owner.repo_problem(s, it.repo, body, it.id)
+  local foreign = owner.repo_problem(s, it.repo, spec_body, it.id)
   if foreign then
     out[#out + 1] = foreign
   end
@@ -159,7 +161,7 @@ local record gitready
   number: integer): string
   undeclared_repos: function(it: item.Item, body: string): {string}
   ready_problems: function(s: store.Store, it: item.Item,
-  all: {item.Item}): {string}
+  all: {item.Item}, body?: string): {string}
 end
 
 local M: gitready = {

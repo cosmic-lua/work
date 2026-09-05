@@ -50,6 +50,7 @@ local cmp = require("_work.gitcompare")
 local doctrine = require("_work.doctrine")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
+local gitread = require("_work.gitread")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local publish = require("_work.publish")
@@ -84,24 +85,41 @@ end
 --- Resolve one id-taking argument, whatever position it sits in: an
 --- id prefix is tried first; only when that refuses AND the input has
 --- a tail's shape (8 base62 characters, one optional hyphen, either
---- bare or guillemet-wrapped) does a board-wide tail search follow —
---- so a plain id-prefix typo still gets store.resolve's own message.
---- Every id-taking argument (the first, and PARENT/OTHER/BLOCKER)
---- routes through this so a rendered handle resolves in any position.
+--- bare or guillemet-wrapped) does tail resolution follow — so a
+--- plain id-prefix typo still gets store.resolve's own message. A
+--- tail costs no whole-board load: the cache answers first, with no
+--- process at all, when `o/board.db` already carries the id
+--- (`_work.cachequery.resolve_tail`); a miss there — the cache file is
+--- absent, or the item is newer than it — falls to
+--- `_work.tail.resolve_glob`'s own `for-each-ref` glob. Every
+--- id-taking argument (the first, and PARENT/OTHER/BLOCKER) routes
+--- through this so a rendered handle resolves in any position.
 --- @param s store.Store The store
 --- @param input string What a session typed
 --- @return string | nil The resolved item id
 --- @return string Error message
 local function resolve_id(s: store.Store, input: string): string | nil, string
   local id, rerr = store.resolve(s, input)
-  if id == nil and tail.is_tail_shape(input) then
-    local all, aerr = store.list(s)
-    if all == nil then
-      return nil, aerr
-    end
-    id, rerr = tail.resolve(all, input)
+  if id ~= nil or not tail.is_tail_shape(input) then
+    return id, rerr
   end
-  return id, rerr
+  local cached, cerr = cachequery.resolve_tail(s.root, input)
+  if cerr ~= "" then
+    return nil, cerr
+  end
+  if cached ~= nil then
+    return cached, ""
+  end
+  local resolved, gerr = tail.resolve_glob(s.root, input)
+  if resolved == nil then
+    return nil, gerr
+  end
+  -- The one-shot ticket `resolve`'s own prefix match sets, so a
+  -- handle costs `load` no for-each-ref of its own either.
+  if resolved.ref ~= "" and resolved.sha ~= "" then
+    s.fresh_lease = gitread.lease_encode(resolved.id, resolved.ref, resolved.sha)
+  end
+  return resolved.id, ""
 end
 
 local CSPEC: flags.CommandSpec = {
