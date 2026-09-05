@@ -200,8 +200,83 @@
   self-resolved within the diff per the item's own instructions ("build a correct,
   unit-tested `return_slots`"); nothing further to file.
 
+## build DypT_hD7b (claude) — PR #1721, 1377s, 145 tool calls, in=262 out=4005 cache_read=23643514 cache_create=237306, errors=21 (mostly deliberate scratch-probe non-zero exits)
+- goal: decide which of 4 hand-written checker-message patterns ending in a bare
+  `guide.gotchas` pointer should be re-pointed at a section slug. actually happened:
+  ~20 min / a dozen probes cross-checking every pattern against every gotchas.md
+  slug, because 2 of the 4 (shadowed/unused-variable warnings) have no matching
+  section at all — the spec's "re-pointed at their section slug" assumes a total
+  1:1 mapping that isn't. contributed: spec didn't name the exact patterns/slugs the
+  way it named the symptom-less sections explicitly. improvement: name the mapping
+  exactly in future specs of this shape — a spec-writing habit.
+- goal: get the exact symptom-line text right per "elide positions/names as `...`".
+  actually happened: ~30 min reproducing real checker messages (~15 scratch files)
+  because the same logical error has multiple worded variants by context
+  (`"argument 1: got..."` vs `"in local declaration: n: got..."` vs `"in
+  assignment: ..."`), and the spec's own worked example only matches under
+  "contains," not full-line equality — undersold by the "elide as `...`" framing.
+  improvement: state explicitly that a symptom line is a stable fragment, not
+  necessarily the full message.
+- real bug caught by mutation-testing (working as intended): the agent's first-draft
+  fence parser for `_build/gotchas_test.tl` didn't stop scanning at the next `## `
+  heading, so an unterminated fence silently consumed a LATER section's closing
+  fence and read as well-formed; the malformed-block test caught it, ~10 min to fix.
+  No countermeasure needed — this is exactly what the mutation-test step is for.
+- orchestrator action: `take DypT_hD7b --session build-DypT_hD7b-5c8fc82c --pr 1721`
+  — awaiting review. `take ... --session review-DypT_hD7b-5c8fc82c` REFUSED: CI still
+  running on head `ce80615` (0/2 checks done) — deferred to a later check-in, not a
+  problem (the tool correctly refuses a review on unsettled CI).
+
+## build ev5V_lF1l (claude) — PR #1722, 1591s, 133 tool calls, in=258 out=5026 cache_read=22573844 cache_create=220800, errors=1
+- goal: type-check a file that requires a just-edited sibling module mid-development.
+  actually happened: `--check types` resolves `cosmic.*`-namespaced requires against
+  the LAST BUILD's embedded snapshot, not live disk — ~20 min of phantom "unknown
+  type" errors from the pre-edit version until a `--make build` refreshed it.
+  contributed: AGENTS.md's "between edits, `--check types <file>`" guidance doesn't
+  flag that cross-file checks on `cosmic/**` need a fresh build first. improvement:
+  a note on this in AGENTS.md's testing/checking section — a doc fix; a candidate
+  below since it's small and reusable across every builder that edits `cosmic/**`.
+  Mutation-testing caught a real bug in the agent's own diff (a naive substring
+  fallback matching `fs.read` inside `fs.readlink`) — working as intended.
+- orchestrator action: `take ev5V_lF1l --session build-ev5V_lF1l-5c8fc82c --pr 1722`
+  — awaiting review. Review claim REFUSED: CI still running on head `31dbb92` —
+  deferred.
+
+## research CCB2_BBra, resumed (claude) — no-adopt, --result handover, ~1320s (resumed leg), 64 tool calls, in=134 out=661 cache_read=6727755 cache_create=325492, errors=1
+- context: this agent's FIRST leg ended prematurely reporting "waiting for a
+  background job" it could not actually be woken up for as a subagent (logged
+  above as friction); resumed via SendMessage with instructions to check the job
+  and finish properly.
+- goal: wait for its own background Jaccard-scoring job during the resumed leg.
+  actually happened: one `sleep 30; tail ...` compound command was BLOCKED outright
+  ("use Monitor with an until-loop instead") — the harness enforces the same
+  no-raw-sleep-polling rule on subagents as on the orchestrator. Cost: 1 refused
+  call, then correctly switched to `Monitor`. No further friction: the job it was
+  waiting on turned out to be the ABANDONED naive (unbatched) Jaccard attempt from
+  before the resume — recognized as stale and superseded by a rewritten batched
+  version in the same leg, completing cleanly (see its own findings: Signal A and
+  B both fail the decision rule decisively, negative margins).
+- orchestrator action: composed the full new spec from the agent's own verbatim
+  draft (reused directly — the agent's report already IS the exact spec text),
+  `gitboard spec CCB2_BBra <file> --base <fetched> --force --why` (claim was the
+  agent's), `take CCB2_BBra --session research-CCB2_BBra-5c8fc82c --result` — no
+  `--force` needed this time since the session label matched exactly (the lesson
+  from the earlier reconciliation-session-label entry, applied correctly here).
+  Now awaiting review. Worktree/clone confirmed clean, removed. Two out-of-scope
+  findings from the agent's report — a `CLAUDE.md`/`AGENTS.md` symlink inflating
+  duplicate counts, and 6 `_eval/checks/*.tl` files sharing a legitimate
+  interface-contract doc comment that will read as a false positive to the
+  sibling exact-duplicate gate — filed as «cY1cArl» and «LOP1MhAs» respectively,
+  both parented under the same goal, both entered todo directly (passed the bar).
+
 ## candidates
-- none passing the spec bar this pass. Deferred, not lost: the two pre-existing
+- AGENTS.md testing/checking guidance: note that `--check types` on `cosmic/**`
+  cross-file requires resolves against the last BUILD's embedded snapshot, not live
+  disk — a `--make build` is needed before checking a file that requires a
+  just-edited sibling. Found independently by 2 builders in this pass — filed as
+  «AjLPBPK» (parented under the same docs-usability goal as DypT_hD7b), entered
+  todo directly.
+- none of the other candidates from this pass passed the spec bar. Deferred, not lost: the two pre-existing
   unparented triage items («KGOw_xnx8» friction: 2026-09-05 work9-routine,
   «rzSb_Hy5t» resolution-supersession phrasing as a duplicate signal) were left
   untouched — spare width went to the wave (7 disjoint builds filled the doing
