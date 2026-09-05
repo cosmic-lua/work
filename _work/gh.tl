@@ -13,6 +13,28 @@ local child = require("cosmic.child")
 local review = require("_work.review")
 local store = require("_work.store")
 
+--- `git remote get-url origin`'s answer, read once per store and
+--- memoized on it — the URL never changes within one run, and several
+--- gates each ask `slug` about the same board's own origin. Populates
+--- `s.remote_url`/`remote_url_ok` the first time, a no-op after.
+--- @param s store.Store The store
+local function read_remote_url(s: store.Store)
+  if s.remote_url_read then
+    return
+  end
+  s.remote_url_read = true
+  local r, err = child.run({"git", "remote", "get-url", "origin"}, {cwd = s.root})
+  if r == nil then
+    s.remote_url_ok, s.remote_url = false, err or ""
+  elseif not r.ok then
+    s.remote_url_ok = false
+    s.remote_url = "no origin remote: " .. ((r.stderr or ""):gsub("%s+$", ""))
+  else
+    s.remote_url_ok = true
+    s.remote_url = (r.stdout or ""):gsub("%s+$", "")
+  end
+end
+
 --- The `owner/repo` a call addresses: `repo` verbatim when set, else
 --- read from this checkout's origin. Both URL shapes GitHub hands out
 --- are accepted; a `.git` suffix is dropped.
@@ -24,15 +46,11 @@ local function slug(s: store.Store, repo: string | nil): string | nil, string
   if (repo or "") ~= "" then
     return repo
   end
-  local r, err = child.run({"git", "remote", "get-url", "origin"},
-    {cwd = s.root})
-  if r == nil then
-    return nil, err
+  read_remote_url(s)
+  if not s.remote_url_ok then
+    return nil, s.remote_url
   end
-  if not r.ok then
-    return nil, "no origin remote: " .. ((r.stderr or ""):gsub("%s+$", ""))
-  end
-  local url = (r.stdout or ""):gsub("%s+$", "")
+  local url = s.remote_url
   local owner, name = url:match("github%.com[:/]([^/]+)/(.+)$")
   if owner == nil then
     return nil, ("origin is not a github remote: %s"):format(url)

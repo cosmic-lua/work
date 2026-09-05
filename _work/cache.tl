@@ -303,10 +303,16 @@ end
 --- immediately beforehand, which is what makes patching only the
 --- touched items safe rather than silently trusting a maybe-stale file.
 --- @param root string The store's root
+--- @param known_digest string | nil A ref-snapshot digest the caller
+--- already took (`_work.store.list`'s own `board_digest`, say) — skips
+--- this guard's otherwise-fresh `for-each-ref` when given
 --- @return string | nil The pre-write digest
-local function guard(root: string): string | nil
+local function guard(root: string, known_digest?: string): string | nil
   if not fs.is_file(cachedb.path_of(root)) then
     return nil
+  end
+  if known_digest ~= nil and known_digest ~= "" then
+    return known_digest
   end
   local d = cachedb.fresh_digest(root)
   return d
@@ -448,7 +454,7 @@ local record cache
   open: function(root: string, known_digest?: string): Cache | nil, string
   rebuild: function(root: string): Cache | nil, string
   close: function(c: Cache): boolean, string
-  guard: function(root: string): string | nil
+  guard: function(root: string, known_digest?: string): string | nil
   after_save: function(root: string, before_digest: string | nil,
   items: {item.Item}, spec_body: string | nil)
   around_fetch: function(root: string,

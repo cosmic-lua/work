@@ -307,8 +307,12 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   -- Read before the write moves anything, so `after_save` below has
   -- proof the cache was valid immediately beforehand — see
   -- `_work.cache`'s own header for why this lives here rather than
-  -- inside `storewrite.save` itself.
-  local before_digest = cache.guard(s.root)
+  -- inside `storewrite.save` itself. `s.board_digest` is `store.list`'s
+  -- own ref-snapshot digest, already covering the SAME watched
+  -- namespaces the guard would otherwise re-read fresh — "" (unset,
+  -- when the caller loaded by id rather than by listing the board)
+  -- falls through to that fresh read exactly as before.
+  local before_digest = cache.guard(s.root, s.board_digest)
   local saved, serr = storewrite.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then
     return saved, serr

@@ -81,9 +81,12 @@ end
 --- print, the same as a title with nothing similar on the board.
 --- @param root string The store's root
 --- @param title string The candidate title
+--- @param known_digest string | nil A ref-snapshot digest the caller
+--- already took, passed straight through to `cache.open`
 --- @return {string} "similar: «handle» title" lines, at most three, possibly none
-local function similar_lines(root: string, title: string): {string}
-  local c, _err = cache.open(root)
+local function similar_lines(root: string, title: string,
+    known_digest?: string): {string}
+  local c, _err = cache.open(root, known_digest)
   if c == nil then
     return {}
   end
@@ -127,7 +130,8 @@ local record cachequery
   lanes_read: function(root: string, known_digest?: string): {string: string}
   lanes_write: function(root: string, facts: {string: string},
   known_digest?: string): boolean, string
-  similar_lines: function(root: string, title: string): {string}
+  similar_lines: function(root: string, title: string,
+  known_digest?: string): {string}
   cmd_find: function(root: string, text: string): integer
 end
 

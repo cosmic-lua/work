@@ -101,7 +101,9 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   -- Warning only, never a refusal — printed before the mint verdict so
   -- a session sees a likely duplicate before it commits to a new id.
-  for _, line in ipairs(cachequery.similar_lines(s.root, title)) do
+  -- `s.board_digest` is the snapshot `store.list` above already took —
+  -- passed through so this open never re-reads it fresh.
+  for _, line in ipairs(cachequery.similar_lines(s.root, title, s.board_digest)) do
     print(line)
   end
   -- No gate: a filed child always enters `todo`, which is unbounded
