@@ -1,3 +1,8 @@
+## Access
+
+read access to `cosmic-lua/work` — `_work/tail.tl`, `_work/cachequery.tl`
+and the merged PR #22 diff cited below in Evidence.
+
 ## Evidence
 
 PR #22 (`3It7RFOgaN9ROO8gehRGkFkU7L5`, «GkFk_U7L5», merged 2026-09-05) added
