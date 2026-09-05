@@ -36,6 +36,7 @@
 --- with `around_fetch` — a `Store` dependency here would close a cycle
 --- against both.
 local cachedb = require("_work.cachedb")
+local cacherebuild = require("_work.cacherebuild")
 local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
@@ -43,140 +44,17 @@ local gitread = require("_work.gitread")
 local gitreadmany = require("_work.gitreadmany")
 local index = require("_work.index")
 local item = require("_work.item")
-local proc = require("cosmic.proc")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 
 local type Cache = cachedb.Cache
 local SCHEMA_VERSION < const > = cachedb.SCHEMA_VERSION
 
---- Cold-build the cache file from scratch: every item and spec this
---- root's board carries, `_work.index`'s tables, `_work.find`'s
---- search table, `cache_meta` and `lanes` — written to a temp file
---- beside the real path and renamed into place once complete, so a
---- reader never sees a half-built file. The temp connection is
---- dropped out of WAL (`journal_mode = DELETE`, which checkpoints and
---- removes its `-wal`/`-shm` sidecars) before the rename, so nothing
---- named after the temp path is left behind; the reopened final
---- connection returns to this module's ordinary WAL rule
---- (`cachedb.open_conn`). Exported for the equality ratchet, which
---- forces one to compare against the incrementally maintained file;
---- ordinary reads go through `open`.
---- @param root string The store's root
---- @return Cache | nil The freshly built cache
---- @return string Error message
-local function rebuild(root: string): Cache | nil, string
-  local board, berr = gitread.list(root)
-  if board == nil then
-    return nil, berr
-  end
-  local ids: {string} = {}
-  for _, it in ipairs(board.items) do
-    ids[#ids + 1] = it.id
-  end
-  local specs = gitread.read_specs(root, board.shas_by_id, ids)
-  local dir_ok, dir_err = fs.make_dirs(fs.join(root, "o"))
-  if not dir_ok then
-    return nil, dir_err
-  end
-  local final_path = cachedb.path_of(root)
-  local tmp_path = ("%s.tmp.%d"):format(final_path, proc.getpid())
-  for _, p in ipairs({tmp_path, tmp_path .. "-wal", tmp_path .. "-shm"}) do
-    if fs.is_present(p) then
-      local rm_ok, rm_err = fs.remove(p)
-      if not rm_ok then
-        return nil, rm_err
-      end
-    end
-  end
-  local db, derr = cachedb.open_conn(tmp_path)
-  if db == nil then
-    return nil, derr
-  end
-  local ddl_ok, ddl_err = db:exec_script(index.DDL)
-  if not ddl_ok then
-    local _c, _cerr = db:close()
-    return nil, ddl_err
-  end
-  local tx_ok, tx_err = db:transaction(function(tx: sqlite.Database): boolean, string
-      for _, it in ipairs(board.items) do
-        local iok, ierr = index.insert_item(tx, it)
-        if not iok then
-          return false, ierr
-        end
-      end
-      return true, ""
-    end)
-  if not tx_ok then
-    local _c, _cerr = db:close()
-    return nil, tx_err
-  end
-  local c: Cache = {db = db, specs = specs, load_problems = {}}
-  local fok, ferr = find.build(c)
-  if not fok then
-    local _c, _cerr = db:close()
-    return nil, ferr
-  end
-  local eok, eerr = db:exec_script(cachedb.EXTRA_DDL)
-  if not eok then
-    local _c, _cerr = db:close()
-    return nil, eerr
-  end
-  local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
-  if not evok then
-    local _c, _cerr = db:close()
-    return nil, everr
-  end
-  local pvok, pverr = db:exec(("PRAGMA user_version = %d"):format(SCHEMA_VERSION))
-  if not pvok then
-    local _c, _cerr = db:close()
-    return nil, pverr
-  end
-  local digest, digerr = cachedb.fresh_digest(root)
-  if digest == nil then
-    local _c, _cerr = db:close()
-    return nil, digerr
-  end
-  local fp, fperr = cachedb.schema_fingerprint(db)
-  if fp == nil then
-    local _c, _cerr = db:close()
-    return nil, fperr
-  end
-  local sok, serr = cachedb.meta_set(db, "refs_digest", digest)
-  if sok then
-    sok, serr = cachedb.meta_set(db, "schema_version", tostring(SCHEMA_VERSION))
-  end
-  if sok then
-    sok, serr = cachedb.meta_set(db, "schema_fingerprint", fp)
-  end
-  if not sok then
-    local _c, _cerr = db:close()
-    return nil, serr
-  end
-  local jok, jerr = db:exec("PRAGMA journal_mode = DELETE")
-  if not jok then
-    local _c, _cerr = db:close()
-    return nil, jerr
-  end
-  local cok, cerr = db:close()
-  if not cok then
-    return nil, cerr
-  end
-  for _, p in ipairs({tmp_path .. "-wal", tmp_path .. "-shm"}) do
-    if fs.is_present(p) then
-      local _ok, _err = fs.remove(p)
-    end
-  end
-  local mvok, mverr = fs.move(tmp_path, final_path)
-  if not mvok then
-    return nil, mverr
-  end
-  local reopened, roerr = cachedb.open_conn(final_path)
-  if reopened == nil then
-    return nil, roerr
-  end
-  return {db = reopened, specs = {}, load_problems = {}}
-end
+--- Cold-build the cache file from scratch — `_work.cacherebuild`,
+--- split out to keep this module under its line cap. Exported for the
+--- equality ratchet, which forces one to compare against the
+--- incrementally maintained file; ordinary reads go through `open`.
+local rebuild = cacherebuild.rebuild
 
 --- The guarded read every caller goes through: reuse the cache file as
 --- it stands when its schema version, schema fingerprint, and stored
@@ -443,6 +321,14 @@ end
 --- passes through unchanged either way; a cache that cannot be read,
 --- or was already stale, is left for the next `open` to rebuild, never
 --- a reason to fail the fetch.
+---
+--- A moved `refs/heads/board/order` skips the patch entirely, even
+--- when items also moved: the root list (`ranks` at `parent = ''`) has
+--- no single item's patch to ride along with, so patching the items
+--- while leaving that move unapplied would record a digest the file no
+--- longer actually matches. Leaving `refs_digest` at its pre-fetch
+--- value costs only the ordinary stale-cache path: the next `open`
+--- rebuilds, picking up everything at once.
 --- @param root string The store's root
 --- @param fetch_fn function() -> boolean, string  The fetch to run
 --- @return boolean True on success
@@ -459,6 +345,9 @@ local function around_fetch(root: string, fetch_fn: function(): boolean, string)
   end
   local after_entries = cachedb.refs_snapshot(root)
   if after_entries == nil then
+    return ok, err
+  end
+  if cachedb.board_order_sha(before_entries) ~= cachedb.board_order_sha(after_entries) then
     return ok, err
   end
   local before_shas = cachedb.shas_by_item(before_entries)

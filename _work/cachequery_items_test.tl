@@ -79,6 +79,7 @@ local function assert_items_match(want: item.Item, got: item.Item)
   assert(got.verdict_spec == want.verdict_spec, id8 .. " verdict_spec")
   assert(got.resolution == want.resolution, id8 .. " resolution")
   assert(got.is_held == want.is_held, id8 .. " is_held")
+  assert_same_order(want.order, got.order, id8 .. " order")
   assert_same_set(want.beats, got.beats, id8 .. " beats")
   assert_same_set(want.blocked_by, got.blocked_by, id8 .. " blocked_by")
   assert_same_order(want.builders, got.builders, id8 .. " builders")
@@ -115,7 +116,9 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
 
   local root_it = check.must(store.load(s, root))
   root_it.is_held = true
-  assert(storewrite.save(s, root_it, "hold the root"))
+  root_it.order = {leaf2, leaf3, leaf1}
+  assert(storewrite.save(s, root_it, "hold the root and rank its children"))
+  assert(storewrite.save_root_order(s, {root}, "rank the roots"))
 
   local leaf_it = check.must(store.load(s, leaf1))
   leaf_it.beats = {leaf2, leaf3}
@@ -127,8 +130,10 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
   assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with edges and a roster"))
 
   local want = check.must(store.list(s))
+  local want_root_order = store.root_order(s)
   local c = check.must(cache.open(s.root))
   local got = check.must(cachequery.items(c))
+  local got_root_order = check.must(cachequery.root_order(c))
   assert(check.must(cache.close(c)))
 
   assert(#want == #got, ("%d vs %d items"):format(#want, #got))
@@ -138,5 +143,6 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
         i, g.id:sub(1, 8), w.id:sub(1, 8)))
     assert_items_match(w, g)
   end
+  assert_same_order(want_root_order, got_root_order, "root_order")
 end
 test_items_matches_store_list_field_for_field_and_in_order()

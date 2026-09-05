@@ -5,163 +5,17 @@
 --- beside it) is the only durable state the board has. `_work.find`
 --- layers full-text search on top of the same connection;
 --- `_work.index_priority` adds the priority-relation views and proves
---- them equal to `_work.priority`'s own Lua derivation.
----
---- House defaults for any SQLite schema the board opens: every table
---- is `STRICT` (an FTS5 virtual table is the one exception — SQLite
---- cannot make one STRICT) with column types drawn only from the
---- STRICT set (`TEXT`, `INTEGER`, `REAL`, `BLOB`, `ANY` — no affinity
---- aliases like `VARCHAR`), a booleanish column is
---- `INTEGER ... CHECK(x IN (0, 1))`, a table whose primary key is TEXT
---- is `WITHOUT ROWID` so the key itself is the row's identity, foreign
---- keys are ON for the whole connection, and a closed vocabulary
---- (`verdict`, `resolution`, ...) is a `CHECK IN (...)` naming it
---- rather than trusted free text. `parent` and an edge's `to_id` are
---- the deliberate exceptions: neither carries a foreign key, so a
---- dangling one is a `problems()` QUERY finding rather than a load-time
---- refusal — the tree itself may carry a dangling reference (a hand
---- edit, a partial import), and this index has to load it anyway to
---- report on it.
+--- them equal to `_work.priority`'s own Lua derivation; `_work.index_rank`
+--- adds the position-list rank path. `_work.indexddl` carries the DDL
+--- text itself, split out to keep this module under its line cap — its
+--- own header states the house SQLite defaults every table here follows.
+local indexddl = require("_work.indexddl")
 local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
 
 local type Item = item.Item
 
---- The schema: item fields, the edge relation, and the views every
---- reader queries instead of re-deriving role and state by hand.
---- `dominates` is here (not in `_work.index_priority`) because
---- `problems` needs it for the priority-cycle finding; the rest of the
---- priority apparatus (`own`, `band`, `ancestors`, `unplaced`) is
---- layered on top by `_work.index_priority`, which this module does
---- not need.
-local DDL < const > = [[
-CREATE TABLE items (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL CHECK(length(title) > 0),
-  parent TEXT NOT NULL DEFAULT '',
-  repo TEXT NOT NULL DEFAULT '',
-  base TEXT NOT NULL DEFAULT '',
-  key TEXT NOT NULL DEFAULT '',
-  claim TEXT NOT NULL DEFAULT '',
-  reviewer TEXT NOT NULL DEFAULT '',
-  pr INTEGER NOT NULL DEFAULT 0,
-  result TEXT NOT NULL DEFAULT '',
-  verdict TEXT NOT NULL DEFAULT '' CHECK(verdict IN ('', 'accept', 'request changes')),
-  verdict_head TEXT NOT NULL DEFAULT '',
-  verdict_spec TEXT NOT NULL DEFAULT '',
-  resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned')),
-  held INTEGER NOT NULL DEFAULT 0 CHECK(held IN (0, 1))
-) STRICT, WITHOUT ROWID;
-
--- Every edge this build carries, of any kind: `beats` (the priority
--- relation), `blocked_by` (a reason per entry), and any OTHER kind an
--- item's tree names, which this index loads exactly like the two it
--- interprets. `to_id` deliberately carries no foreign key — see the
--- module header.
-CREATE TABLE edges (
-  kind TEXT NOT NULL,
-  from_id TEXT NOT NULL REFERENCES items(id),
-  to_id TEXT NOT NULL,
-  reason TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY(kind, from_id, to_id)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE builders (
-  item TEXT REFERENCES items(id),
-  session TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  PRIMARY KEY(item, seq)
-) STRICT, WITHOUT ROWID;
-
-CREATE TABLE speccers (
-  item TEXT REFERENCES items(id),
-  session TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  PRIMARY KEY(item, seq)
-) STRICT, WITHOUT ROWID;
-
-CREATE UNIQUE INDEX one_open_item_per_key
-  ON items(key) WHERE key <> '' AND resolution = '';
-
--- `parent` and an edge's `to_id` carry no foreign key (see the module
--- header), so nothing here forces their use — but both are join/filter
--- keys on every read: `containers` and `workable` filter items by
--- parent, `broken_chains`' walk searches for roots by `parent = ''`
--- at every recursive step, and `dangling_edges` scans the whole
--- `edges` table looking for a `to_id` no item claims. `EXPLAIN QUERY
--- PLAN` confirms SQLite picks these over a full scan for all four.
-CREATE INDEX items_parent ON items(parent);
-CREATE INDEX edges_to ON edges(to_id);
-
-CREATE VIEW open_items AS
-  SELECT * FROM items WHERE resolution = '';
-
-CREATE VIEW roots AS
-  SELECT * FROM items WHERE parent = '';
-
--- An item with an open child, whether or not the item itself is open
--- — matches `_work.flow.has_open_children`, which asks nothing about
--- the container's own state. Written as EXISTS rather than a
--- JOIN+DISTINCT: each `i` is wanted at most once regardless of how
--- many open children it has, and EXISTS gets there without a
--- deduplicating temp b-tree, searching `items_parent` for the child
--- check.
-CREATE VIEW containers AS
-  SELECT i.* FROM items i
-  WHERE EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
-
-CREATE VIEW workable AS
-  SELECT i.* FROM open_items i
-  WHERE i.parent <> ''
-  AND NOT EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
-
--- Mirrors `_work.flow.is_doing` and the resolution rule exactly; it
--- says nothing about role, the way `is_doing`/`is_open` do not either
--- — `workable` is where role is asked.
-CREATE VIEW state AS
-  SELECT id,
-    CASE
-      WHEN resolution <> '' THEN 'ended'
-      WHEN claim <> '' OR pr <> 0 THEN 'doing'
-      ELSE 'todo'
-    END AS state
-  FROM items;
-
--- Mirrors `_work.flow.substate` with no `queued` argument — the store
--- has no live GitHub read to supply one, which is exactly what
--- `substate`'s own header documents as its unsupplied-argument
--- behavior: an accept reads as the ordinary wait.
-CREATE VIEW substate AS
-  SELECT id,
-    CASE
-      WHEN verdict = 'accept' THEN 'accepted'
-      WHEN verdict = 'request changes' THEN 'rework'
-      WHEN pr <> 0 OR result <> '' THEN 'review'
-      ELSE 'building'
-    END AS substate
-  FROM items;
-
--- The transitive closure of the `beats` kind: every (winner, loser)
--- pair one item outranks, directly or through the chain. A self-pair
--- (winner = loser) means the edges cycle through that item — the same
--- test `_work.priority.cycle_problems` runs in Lua. A dangling beats
--- edge (its `to_id` names no item) never enters the walk — matching
--- `_work.priority.walk`'s own `index[b] ~= nil` guard — so it counts
--- as a `dangling_edges` finding, never as standing: joined against
--- `items` at both the base case and every recursive step, since a
--- later hop can be the one that goes dangling.
-CREATE VIEW dominates AS
-  WITH RECURSIVE dom(winner, loser) AS (
-    SELECT e.from_id, e.to_id FROM edges e
-    JOIN items i ON i.id = e.to_id
-    WHERE e.kind = 'beats'
-    UNION
-    SELECT d.winner, e.to_id FROM dom d
-    JOIN edges e ON d.loser = e.from_id AND e.kind = 'beats'
-    JOIN items i ON i.id = e.to_id
-  )
-  SELECT winner, loser FROM dom;
-]]
+local DDL < const > = indexddl.DDL
 
 --- The open connection plus the per-load problem strings `open`
 --- collected while inserting; `problems` adds the live, queried
@@ -250,6 +104,15 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
       for seq, name in ipairs(it.speccers or {}) do
         try(db, "INSERT OR IGNORE INTO speccers(item, session, seq) VALUES (?, ?, ?)",
           {it.id, name, seq}, nil, problems, it.id)
+      end
+      -- `it.order`'s own array index IS the stored 1-based position —
+      -- a stale entry (naming something no longer a child of `it`)
+      -- lands verbatim, exactly as the module header describes;
+      -- `_work.index_rank`'s dense-position view is where a stale
+      -- entry gets skipped.
+      for pos, child in ipairs(it.order or {}) do
+        try(db, "INSERT OR IGNORE INTO ranks(parent, position, child) VALUES (?, ?, ?)",
+          {it.id, pos, child}, nil, problems, it.id)
       end
     end
   end
@@ -428,14 +291,15 @@ local function close(self: Index): boolean, string
 end
 
 --- Delete every row `id` owns, across `items` and everything that
---- references it (`edges` where it is the source, `builders`,
+--- references it (`edges` where it is the source, `ranks` where it is
+--- the parent — its own ranked-children list — `builders`,
 --- `speccers`) — `_work.cache`'s per-item invalidation, ahead of a
 --- fresh `insert_item` or on its own when the item no longer exists.
 --- Order matters: `edges.from_id`/`builders.item`/`speccers.item` all
 --- carry a foreign key into `items`, so the referencing rows go first.
---- An edge some OTHER item holds pointing at `id` is deliberately left
---- standing — dangling, exactly as `dangling_edges` already reports
---- one after a bulk `open` load.
+--- An edge, or a rank entry, some OTHER item holds pointing at `id` is
+--- deliberately left standing — dangling, exactly as `dangling_edges`
+--- already reports one after a bulk `open` load.
 --- @param db sqlite.Database The connection
 --- @param id string Item id
 --- @return boolean True on success
@@ -445,6 +309,7 @@ local function delete_item(db: sqlite.Database, id: string): boolean, string
       "DELETE FROM builders WHERE item = ?",
       "DELETE FROM speccers WHERE item = ?",
       "DELETE FROM edges WHERE from_id = ?",
+      "DELETE FROM ranks WHERE parent = ?",
       "DELETE FROM items WHERE id = ?",
     }) do
     local ok, err = db:exec(sql, {id})
@@ -455,11 +320,12 @@ local function delete_item(db: sqlite.Database, id: string): boolean, string
   return true, ""
 end
 
---- Insert one item's rows — `items`, its own edges, `builders`,
---- `speccers` — into a connection already carrying this schema.
---- Assumes none already exist for its id; call `delete_item` first to
---- refresh one already loaded. `_work.cache`'s per-item counterpart to
---- `open`'s bulk `load_items`, which this reuses directly.
+--- Insert one item's rows — `items`, its own edges, its own `ranks`
+--- entries, `builders`, `speccers` — into a connection already
+--- carrying this schema. Assumes none already exist for its id; call
+--- `delete_item` first to refresh one already loaded. `_work.cache`'s
+--- per-item counterpart to `open`'s bulk `load_items`, which this
+--- reuses directly.
 --- @param db sqlite.Database The connection
 --- @param it Item The item
 --- @return boolean True on success
@@ -473,6 +339,31 @@ local function insert_item(db: sqlite.Database, it: Item): boolean, string
   return true, ""
 end
 
+--- Replace the board's own root ranking (`ranks` rows at `parent =
+--- ''`) with `root_order` — delete then reinsert, the one-parent
+--- pattern `delete_item`/`insert_item` apply to an ordinary item's own
+--- children, applied here to the board itself. A malformed ranking (a
+--- duplicate id, an id naming no root) lands verbatim; flagging that is
+--- `_work.gitfsck.root_order_problems`'s job, not this loader's.
+--- @param db sqlite.Database The connection
+--- @param root_order {string} The board's root ranking, in rank order
+--- @return boolean True on success
+--- @return string Error message
+local function insert_root_order(db: sqlite.Database, root_order: {string}): boolean, string
+  local dok, derr = db:exec("DELETE FROM ranks WHERE parent = ''")
+  if not dok then
+    return false, derr
+  end
+  for pos, child in ipairs(root_order) do
+    local iok, ierr = db:exec(
+      "INSERT INTO ranks(parent, position, child) VALUES ('', ?, ?)", {pos, child})
+    if not iok then
+      return false, ierr
+    end
+  end
+  return true, ""
+end
+
 local record index
   type Index = Index
   DDL: string
@@ -481,6 +372,7 @@ local record index
   close: function(self: Index): boolean, string
   delete_item: function(db: sqlite.Database, id: string): boolean, string
   insert_item: function(db: sqlite.Database, it: Item): boolean, string
+  insert_root_order: function(db: sqlite.Database, root_order: {string}): boolean, string
 end
 
 local M: index = {
@@ -489,6 +381,7 @@ local M: index = {
   problems = problems,
   close = close,
   delete_item = delete_item,
+  insert_root_order = insert_root_order,
   insert_item = insert_item,
 }
 

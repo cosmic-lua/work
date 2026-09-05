@@ -7,12 +7,14 @@
 
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
+local cachequery = require("_work.cachequery")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local cmp = require("_work.gitcompare")
 local find = require("_work.find")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
+local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
 local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
@@ -213,7 +215,7 @@ end
 --- Every table the cache's schema carries — `_work.index`'s own plus
 --- `_work.find`'s search table and `_work.cache`'s own two.
 local CACHE_TABLES < const >: {string} = {
-  "items", "edges", "builders", "speccers", "search", "cache_meta", "lanes",
+  "items", "edges", "ranks", "builders", "speccers", "search", "cache_meta", "lanes",
 }
 
 --- Compare `s`'s LIVE, incrementally maintained cache file against a
@@ -278,6 +280,20 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   local other_leaf = file_item(a, "another workable slice", root_a)
   assert(cmp.cmd_compare(a, other_leaf, outcome_b) == 0)
   assert_cache_matches_cold_rebuild(a, "after an edge change")
+
+  -- 4) RANK: an item's own `order` changes — `ranks` rows at
+  -- `parent = root_a`. `store.list` first, matching every other step
+  -- here (each a real verb that lists the whole board before writing):
+  -- a fresh `a.board_digest` is what lets `commit_and_publish`'s own
+  -- guard match the cache file's currently recorded one, rather than a
+  -- stale digest from `take`'s list call two steps back silently
+  -- skipping this patch.
+  check.must(store.list(a))
+  local root_it = check.must(store.load(a, root_a))
+  root_it.order = {other_leaf}
+  assert(gate.commit_and_publish(a, root_it, nil, "rank root_a's child",
+      "rank"))
+  assert_cache_matches_cold_rebuild(a, "after an order change")
 
   -- B syncs onto everything A just did, then makes a save of its own.
   assert(publish.sync(b))
@@ -392,4 +408,40 @@ local function test_open_with_a_known_digest_skips_for_each_ref()
   end
   assert(calls == 0, "a known digest must skip open's own for-each-ref: " .. calls)
   check.must(cache.close(c as cache.Cache)) -- cast: pcall erases the union
+end
+
+-- `refs/heads/board/order` moving during a fetch skips the incremental
+-- patch entirely (`_work.cache.around_fetch`'s `board_order_sha`
+-- check): the root list lives at `ranks` rows `parent = ''`, which no
+-- single item's patch touches, so recording a fresh digest without
+-- also patching it would claim the file matches the board when it does
+-- not. The file is left exactly as it stood — stale, by design — and
+-- the next `open` rebuilds, picking up the new root order correctly.
+local function test_a_synced_root_order_change_leaves_the_cache_stale_until_the_next_open()
+  local a, b = init_shared("root-order-fetch")
+  local root = file_item(a, "an outcome", "")
+  assert(publish.sync(b))
+  check.must(cache.close(check.must(cache.open(b.root))))
+  local before_raw = check.must(sqlite.open(cache.path_of(b.root)))
+  local before_digest = check.must(cachedb.meta_get(before_raw, "refs_digest"))
+  check.must(before_raw:close())
+
+  -- `save_root_order` only commits locally; a real verb's `commit_and_publish`
+  -- pushes too (`_work.gitgate`), which this mimics directly since no
+  -- verb calls `save_root_order` yet.
+  assert(storewrite.save_root_order(a, {root}, "rank the roots"))
+  assert(publish.publish(a))
+  assert(publish.sync(b))
+
+  local after_raw = check.must(sqlite.open(cache.path_of(b.root)))
+  local after_digest = check.must(cachedb.meta_get(after_raw, "refs_digest"))
+  check.must(after_raw:close())
+  assert(after_digest == before_digest,
+    "a root-order fetch must not mark the file fresh without patching it")
+
+  local c = check.must(cache.open(b.root))
+  local got = check.must(cachequery.root_order(c))
+  check.must(cache.close(c))
+  assert(table.concat(got, " ") == root,
+    ("root_order after the forced rebuild: %s"):format(table.concat(got, " ")))
 end
