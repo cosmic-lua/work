@@ -9,6 +9,7 @@
 --- line and returns its exit code. Mutations commit locally and publish through
 --- `publish.publish`, whose rejected-push path drops the mutation whole, re-syncs, and
 --- refuses — re-running the verb re-applies every gate against the merged board.
+local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
@@ -459,16 +460,19 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     ("%s %s (%s)%s"):format(id:sub(1, 8), reason, from, returned))
 end
 
--- Lane health (`_work.lanes`): a `nil` observe (offline, no token)
--- prints and is never treated as red; `at_sync` does the observe /
--- record / mint pipeline and hands back the lines to print, keeping
--- this module under its 500-line cap.
+-- Lane health (`_work.lanes`) and PR CI observation (`_work.ciobs`):
+-- each `at_sync` does its own observe pipeline and hands back the
+-- lines to print, keeping this module under its 500-line cap. A `nil`
+-- observe (offline, no token) prints and is never treated as red.
 local function cmd_sync(s: store.Store): integer
   local ok, err = publish.sync(s)
   if not ok then
     return gate.verdict_line("sync", false, err)
   end
   for _, line in ipairs(lanes.at_sync(s)) do
+    print(line)
+  end
+  for _, line in ipairs(ciobs.at_sync(s)) do
     print(line)
   end
   return gate.verdict_line("sync", true, "state is current")
