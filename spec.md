@@ -68,6 +68,16 @@ ref, rebuilt from one log walk and patched on every save.
    (current and legacy); rebuild equals the per-item `git log` for a
    fixture with three items and a rework round; save patch keeps `seq`
    contiguous; fetch patch after an external commit lands the new rows.
+7. Line caps, measured at head c78bedbb (2026-09-05): `_work/cache.tl`
+   is 475 lines and `_work/cachedb.tl` 438, so steps 1 and 3 do not fit
+   in place. The cache-side event logic (the rebuild fill, the save
+   patch, the fetch patch) lives in `_work/events.tl` beside `walk` and
+   `parse_subject` (or a second new module `_work/cacheevents.tl` if
+   `events.tl` would pass 500), and `cache.tl` gains only the calls into
+   it. The DDL and the `pr_rounds` view go in `cachedb.tl` if they fit
+   under the cap; otherwise in a new `_work/cachedb_events.tl` that
+   `cachedb.tl`'s schema list includes, so the fingerprint still covers
+   it. Moving unrelated code out of either file is not this item.
 
 ## Non-goals
 
