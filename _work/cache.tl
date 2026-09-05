@@ -182,14 +182,20 @@ end
 --- there and rebuild once. A second failure, from `rebuild` itself, is
 --- returned as-is — this is a repair for a bad FILE, not a retry loop.
 --- @param root string The store's root
+--- @param known_digest string | nil A ref-snapshot digest the caller
+--- already took (`_work.store.list`'s own, say) — skips this open's
+--- otherwise-fresh `for-each-ref` when given
 --- @return Cache | nil The cache
 --- @return string Error message
-local function open(root: string): Cache | nil, string
+local function open(root: string, known_digest?: string): Cache | nil, string
   local path = cachedb.path_of(root)
   if fs.is_file(path) then
     local db = cachedb.open_conn(path)
     if db ~= nil then
-      local fresh = cachedb.fresh_digest(root)
+      local fresh = known_digest
+      if fresh == nil then
+        fresh = cachedb.fresh_digest(root)
+      end
       local expected_fp = cachedb.expected_schema_fingerprint()
       if fresh ~= nil and cachedb.db_user_version(db) == SCHEMA_VERSION
       and cachedb.meta_get(db, "refs_digest") == fresh
@@ -439,7 +445,7 @@ local record cache
   type Cache = Cache
   SCHEMA_VERSION: integer
   path_of: function(root: string): string
-  open: function(root: string): Cache | nil, string
+  open: function(root: string, known_digest?: string): Cache | nil, string
   rebuild: function(root: string): Cache | nil, string
   close: function(c: Cache): boolean, string
   guard: function(root: string): string | nil

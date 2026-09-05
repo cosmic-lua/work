@@ -195,28 +195,34 @@ local function cmd_show(s: store.Store, id: string): integer
   if all == nil then
     return verdict_line("show", false, aerr)
   end
-  local body = store.read_spec(s, id)
+  -- `git log` is the one read the load never carries — the item's
+  -- history lives only in its commits, so this stays a deliberate
+  -- process rather than folding into a batch.
   local events, herr = publish.history(s, id)
   if events == nil then
     return verdict_line("show", false, herr)
   end
   local problems: {string} = {}
   local overlaps: {string} = {}
+  local body = ""
   if item.is_open(it) then
-    problems = gitready.ready_problems(s, it, all)
-    -- Every OTHER open item's spec, read in one batch
-    -- (`store.read_specs`) rather than one `cat-file -p` per sibling,
-    -- so `_work.overlap` can compare Change-section paths against
-    -- this one's without the process count growing with the board.
-    local other_ids: {string} = {}
+    -- This item's spec and every OTHER open item's, read in ONE batch
+    -- (`store.read_specs`) rather than a single `cat-file -p` for this
+    -- one plus a separate batch for the rest, so `_work.overlap` (and
+    -- `ready_problems` below, handed the same body) never re-reads a
+    -- spec this call already has.
+    local ids: {string} = {id}
     for _, other in ipairs(all) do
       if other.id ~= it.id and item.is_open(other) then
-        other_ids[#other_ids + 1] = other.id
+        ids[#ids + 1] = other.id
       end
     end
-    local bodies = store.read_specs(s, other_ids)
-    bodies[it.id] = body
+    local bodies = store.read_specs(s, ids)
+    body = bodies[it.id] or ""
+    problems = gitready.ready_problems(s, it, all, body)
     overlaps = overlap.lines(it.id, bodies)
+  else
+    body = store.read_spec(s, id)
   end
   local lines, verdict = show_report(it, all, body, events, problems, overlaps)
   for _, line in ipairs(lines) do
