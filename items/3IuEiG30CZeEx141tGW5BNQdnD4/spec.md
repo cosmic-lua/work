@@ -213,6 +213,18 @@
   `## Change`), attached under the same parent (`3HyRdT1J`) as its two
   precedents for whoever refines it next.
 
+  **The follow-up builder also hit `_build/cast_sites.tl --reconcile`
+  refusing on pure line-shifted (not new) cast sites** (`bind.tl`,
+  `check.tl`, `tlast.tl` all grew lines above surviving cast sites) —
+  ~15 minutes worked out by hand that these were known sites merely
+  moved, not new ones. Checked the board before filing anything: this
+  exact defect is already tracked, unbuilt, as `Iejv_42Oj` ("cast-sites
+  --reconcile keys on line number, so a pure line shift blocks the
+  regen command its own failure advertises," opened 2026-08-30 from an
+  unrelated PR hitting the identical shape). No new item filed — this
+  pass is a second independent recurrence corroborating it, worth
+  flagging for a priority bump at next triage rather than re-filing.
+
 ## candidates
 - **ROOT CAUSE FOUND (was misdiagnosed at first): the delay between
   `enable_pr_auto_merge` and an actual merge on an already-green PR is
