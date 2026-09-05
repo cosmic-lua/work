@@ -17,9 +17,11 @@ local tail = require("_work.tail")
 --- build) has no observation, matching the ref-based behavior it
 --- replaces.
 --- @param root string The store's root
+--- @param known_digest string | nil A ref-snapshot digest the caller
+--- already took, passed straight through to `cache.open`
 --- @return {string: string} Conclusion by workflow filename
-local function lanes_read(root: string): {string: string}
-  local c, _err = cache.open(root)
+local function lanes_read(root: string, known_digest?: string): {string: string}
+  local c, _err = cache.open(root, known_digest)
   if c == nil then
     return {}
   end
@@ -38,10 +40,13 @@ end
 --- with another checkout the way the committed ref used to be.
 --- @param root string The store's root
 --- @param facts {string: string} One conclusion per lane
+--- @param known_digest string | nil A ref-snapshot digest the caller
+--- already took, passed straight through to `cache.open`
 --- @return boolean True on success
 --- @return string Error message
-local function lanes_write(root: string, facts: {string: string}): boolean, string
-  local c, err = cache.open(root)
+local function lanes_write(root: string, facts: {string: string},
+    known_digest?: string): boolean, string
+  local c, err = cache.open(root, known_digest)
   if c == nil then
     return false, err
   end
@@ -119,8 +124,9 @@ local function cmd_find(root: string, text: string): integer
 end
 
 local record cachequery
-  lanes_read: function(root: string): {string: string}
-  lanes_write: function(root: string, facts: {string: string}): boolean, string
+  lanes_read: function(root: string, known_digest?: string): {string: string}
+  lanes_write: function(root: string, facts: {string: string},
+  known_digest?: string): boolean, string
   similar_lines: function(root: string, title: string): {string}
   cmd_find: function(root: string, text: string): integer
 end

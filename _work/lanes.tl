@@ -179,11 +179,15 @@ end
 --- is what keeps a fresh worktree's reads offline and truthful.
 --- Exported for `show`'s lanes row too: a fresh board that has never
 --- synced has no cache observation yet, so `read_state` comes back
---- empty and `show` renders no row rather than a row of blanks.
+--- empty and `show` renders no row rather than a row of blanks. Hands
+--- the cache `s.board_digest` when a `list` this invocation already
+--- took set one, so a session that just listed the board never
+--- retakes the ref snapshot only to validate the cache with it.
 --- @param s store.Store The store
 --- @return {string: string} One conclusion per lane, "" for the rest
 local function read_state(s: store.Store): {string: string}
-  local all = cachequery.lanes_read(s.root)
+  local all = cachequery.lanes_read(s.root,
+    s.board_digest ~= "" and s.board_digest or nil)
   local out: {string: string} = {}
   for _, lane in ipairs(LANES) do
     if all[lane] ~= nil then
@@ -214,7 +218,8 @@ local function record(s: store.Store, facts: {string: string}): boolean, string
   if not changed then
     return false, ""
   end
-  return cachequery.lanes_write(s.root, facts)
+  return cachequery.lanes_write(s.root, facts,
+    s.board_digest ~= "" and s.board_digest or nil)
 end
 
 --- Whether `it` is the open repair item for `lane` — the search

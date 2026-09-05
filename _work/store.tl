@@ -11,11 +11,10 @@
 --- calls back into `git`/`git_ok` here for the same deterministic tool
 --- identity every store call uses.
 ---
---- The read and write mechanics are `_work.gitread`/`_work.gitwrite`,
---- split out to keep this file under its line cap; this module is the
---- orchestration — which lease each write compares against, and what
---- a verb sets through `set_session`/`set_op`/`set_bounded` before it
---- calls `save`, whose own signature carries none of that.
+--- The read and write mechanics are `_work.gitread`/`_work.gitwrite`, split out to keep
+--- this file under its line cap; this module is the orchestration — which lease each write
+--- compares against, and what a verb sets through `set_session`/`set_op`/`set_bounded`
+--- before it calls `save`, whose own signature carries none of that.
 local child = require("cosmic.child")
 local format = require("_work.format")
 local fs = require("cosmic.fs")
@@ -35,7 +34,7 @@ local refs = require("_work.refs")
 --- refs a completed `save` still owes `publish` a push for, and every
 --- id the most recent `list` found filed under both `refs/heads/items`
 --- and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the
---- only reader).
+--- only reader; `list`'s ref-snapshot digest and `resolve`'s one-shot lease live here too).
 local record Store
   root: string
   session: string
@@ -47,6 +46,8 @@ local record Store
   observed_seq: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
+  board_digest: string
+  fresh_lease: string
 end
 
 --- The refusal a lost push race earns, exported so a verb can tell it
@@ -157,7 +158,8 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {}}
+    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {},
+    board_digest = "", fresh_lease = ""}
 end
 
 --- Record the session `save` should credit as author for whatever it
@@ -219,6 +221,9 @@ local function resolve(s: Store, prefix: string): string | nil, string
   if #matches > 1 then
     return nil, ("%s is ambiguous: %s"):format(prefix, table.concat(matches, " "))
   end
+  if #found == 1 then -- never the ambiguous case; see the Store doc
+    s.fresh_lease = ("%s %s %s"):format(matches[1], found[1].refname, found[1].sha)
+  end
   return matches[1]
 end
 
@@ -266,13 +271,16 @@ end
 --- Load one item, remembering its ref and tip as the lease `save`
 --- writes against next, and a snapshot of its fields as observed —
 --- the baseline `save`'s fast-import diff compares the mutated item
---- against.
+--- against — `resolve`'s one-shot lease for this id, when it just set one.
 --- @param s Store The store
 --- @param id string Item id
 --- @return item.Item | nil The item
 --- @return string Error message; "no item <id>" when absent
 local function load_item(s: Store, id: string): item.Item | nil, string
-  local loaded, err = gitread.load(s.root, id)
+  local fid, fref, fsha = s.fresh_lease:match("^(%S+) (%S+) (%S+)$")
+  s.fresh_lease = ""
+  local loaded, err = gitread.load(s.root, id,
+    fid == id and fref or "", fid == id and fsha or "")
   if loaded == nil then
     return nil, err
   end
@@ -301,6 +309,7 @@ local function list(s: Store): {item.Item} | nil, string
   end
   s.observed_seq = board.seq_sha
   s.duplicates = board.duplicates
+  s.board_digest = board.refs_digest
   return board.items
 end
 
