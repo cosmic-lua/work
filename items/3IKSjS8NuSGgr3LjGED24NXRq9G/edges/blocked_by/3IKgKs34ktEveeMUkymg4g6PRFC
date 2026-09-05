@@ -1,1 +1,0 @@
-both edit _fuzz/literal_fuzz_test.tl: 3IKgKs34 (PR #1361, in check) removes the byte-27 domain bound and its two constants, and this slice adds a differential property to the same file — landing order, so the differential lands on the file the byte-27 fix left behind rather than conflicting with it
