@@ -1,1 +1,0 @@
-its two-entry patch pair can only land in 3p/tl/tl_patch/narrow.tl: the single file has 1 line of headroom, so the entries wait on the split (stage 2), not just the mechanism
