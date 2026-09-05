@@ -225,8 +225,8 @@ local function test_show_prints_a_handovers_verdict_by_result_not_head()
     .. table.concat(lines, "\n"))
 end
 
--- `show ID` prints one `rank:` line from `_work.rank.describe` — a
--- ranked child names its position and its parent's handle, an
+-- `show ID` prints one `rank:` line from this module's own `describe` —
+-- a ranked child names its position and its parent's handle, an
 -- unranked one (its parent's list skips it) reads "unranked", and an
 -- outcome reads its position among the board's other outcomes.
 local function test_show_prints_the_rank_line_for_a_ranked_child()

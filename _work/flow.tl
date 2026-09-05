@@ -40,9 +40,7 @@ local rank = require("_work.rank")
 local spec = require("_work.spec")
 
 local type Item = it.Item
-
---- Items indexed by id.
-local type Index = {string: Item}
+local type Index = it.Index
 
 --- The most open doing items the board holds before a new take is
 --- refused. One number over the whole in-flight span (building,
@@ -53,10 +51,6 @@ local type Index = {string: Item}
 --- limits allowed in practice; re-tuned by measurement over the
 --- board's own log, as a reviewed change here.
 local DOING_LIMIT < const >: integer = 10
-
---- The most parent hops a trace walks before calling the chain
---- cyclic; deeper nesting than this is its own design smell.
-local MAX_DEPTH < const > = 16
 
 --- Whether an open workable item is in flight: a claim or a PR makes
 --- it `doing`, and nothing else does.
@@ -134,17 +128,6 @@ local function stage_rank(i: Item): integer
   return STAGE_TODO
 end
 
---- Items indexed by id.
---- @param items {Item} All items
---- @return Index The index
-local function by_id(items: {Item}): Index
-  local out: Index = {}
-  for _, i in ipairs(items) do
-    out[i.id] = i
-  end
-  return out
-end
-
 --- Whether an item has an open child.
 --- @param items {Item} All items
 --- @param id string The candidate parent's id
@@ -205,7 +188,7 @@ local function role(i: Item, items: {Item}): string
   if has_open_children(items, i.id) then
     return "container"
   end
-  if is_outcome(i, by_id(items)) then
+  if is_outcome(i, it.by_id(items)) then
     return "outcome"
   end
   return "work"
@@ -299,7 +282,7 @@ end
 --- @return boolean True when the chain reaches the board
 local function reaches_board(i: Item, index: Index): boolean
   local cur = i
-  for _ = 1, MAX_DEPTH do
+  for _ = 1, it.MAX_DEPTH do
     if is_board(cur) then
       return true
     end
@@ -319,7 +302,7 @@ end
 --- @return Item | nil The outcome
 local function outcome_of(i: Item, index: Index): Item | nil
   local cur = i
-  for _ = 1, MAX_DEPTH do
+  for _ = 1, it.MAX_DEPTH do
     if is_board(cur) then
       return nil
     end
@@ -363,7 +346,7 @@ end
 --- @param items {Item} All items
 --- @return {string} Problems, possibly empty
 local function graph_problems(items: {Item}): {string}
-  local index = by_id(items)
+  local index = it.by_id(items)
   local out: {string} = {}
   for _, i in ipairs(items) do
     for _, p in ipairs(item_problems(i, index)) do
@@ -374,33 +357,42 @@ local function graph_problems(items: {Item}): {string}
 end
 
 --- The open outcomes that are RANKED — positioned in the board's own
---- `order` — in rank order, each with whether live work already
---- drives it (an open descendant whose parent chain reaches it).
---- Nothing marks an outcome as important: standing in the board's own
---- list is the only claim to importance the board recognises.
+--- `order` — in rank order. Nothing marks an outcome as important:
+--- standing in the board's own list is the only claim to importance
+--- the board recognises.
 --- @param items {Item} All items
 --- @return {Item} Open ranked outcomes, rank order
---- @return {string: boolean} outcome id -> has live work
-local function roots(items: {Item}): {Item}, {string: boolean}
-  local index = by_id(items)
+local function outcomes(items: {Item}): {Item}
+  local index = it.by_id(items)
   local ranks = rank.positions(items)
   local out: {Item} = {}
+  for _, i in ipairs(items) do
+    if it.is_open(i) and is_outcome(i, index)
+    and rank.is_ranked(ranks, i.id) then
+      out[#out + 1] = i
+    end
+  end
+  return rank.sorted(out, ranks)
+end
+
+--- Every outcome id with live work already under it: an open
+--- descendant, not itself an outcome, whose parent chain reaches it.
+--- Pairs with `outcomes` to tell an outcome awaiting decomposition
+--- apart from one already driven by open work.
+--- @param items {Item} All items
+--- @return {string: boolean} outcome id -> has live work
+local function live_outcomes(items: {Item}): {string: boolean}
+  local index = it.by_id(items)
   local live: {string: boolean} = {}
   for _, i in ipairs(items) do
-    if it.is_open(i) then
-      if is_outcome(i, index) then
-        if rank.is_ranked(ranks, i.id) then
-          out[#out + 1] = i
-        end
-      elseif not is_board(i) then
-        local outcome = outcome_of(i, index)
-        if outcome ~= nil then
-          live[outcome.id] = true
-        end
+    if it.is_open(i) and not is_outcome(i, index) and not is_board(i) then
+      local outcome = outcome_of(i, index)
+      if outcome ~= nil then
+        live[outcome.id] = true
       end
     end
   end
-  return rank.sorted(out, ranks), live
+  return live
 end
 
 --- The triage queue: open outcomes the board's own `order` does not
@@ -411,12 +403,12 @@ end
 --- ending it.
 ---
 --- Ranked is what separates this queue from intake: an outcome
---- somebody HAS ranked is one the planner decomposes (`roots`), even
---- with no children yet.
+--- somebody HAS ranked is one the planner decomposes (`outcomes`),
+--- even with no children yet.
 --- @param items {Item} All items
 --- @return {Item} Unranked outcomes, age order
 local function untriaged(items: {Item}): {Item}
-  local index = by_id(items)
+  local index = it.by_id(items)
   local ranks = rank.positions(items)
   local out: {Item} = {}
   for _, i in ipairs(items) do
@@ -457,7 +449,8 @@ local record flow
   outcome_of: function(i: Item, index: Index): Item | nil
   item_problems: function(i: Item, index: Index): {string}
   graph_problems: function(items: {Item}): {string}
-  roots: function(items: {Item}): {Item}, {string: boolean}
+  outcomes: function(items: {Item}): {Item}
+  live_outcomes: function(items: {Item}): {string: boolean}
   untriaged: function(items: {Item}): {Item}
   ready_gaps: function(body: string): {string}
 end
@@ -474,7 +467,7 @@ local M: flow = {
   substate = substate,
   stage_rank = stage_rank,
   unified = unified,
-  by_id = by_id,
+  by_id = it.by_id,
   has_open_children = has_open_children,
   is_board = is_board,
   is_outcome = is_outcome,
@@ -486,7 +479,8 @@ local M: flow = {
   outcome_of = outcome_of,
   item_problems = item_problems,
   graph_problems = graph_problems,
-  roots = roots,
+  outcomes = outcomes,
+  live_outcomes = live_outcomes,
   untriaged = untriaged,
   ready_gaps = spec.ready_gaps,
 }

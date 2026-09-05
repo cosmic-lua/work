@@ -105,16 +105,18 @@ end
 --- Place ID into PARENT's `order` relative to X (`--before`/`--after`),
 --- for `attach`/`new`'s own placement option: a child that already
 --- knows where it goes among its new siblings lands positioned in the
---- same commit that parents it. A no-op when neither flag is given —
---- the caller's `also` list is untouched, and the item is unranked
---- among its new siblings exactly as it always was.
+--- same commit that parents it. Call only when at least one of
+--- `before`/`after` is given — a caller with neither has nothing to
+--- place, and skips this entirely; the item stays unranked among its
+--- new siblings exactly as it always was.
 --- @param parent_item item.Item The new parent, already resolved
 --- @param id string The item being placed under it
 --- @param before string X to place ID before; "" when unused
---- @param after string X to place ID after; "" when unused
+--- @param after string X to place ID after; "" when unused, but not
+--- both "" — the caller's job to check
 --- @param index flow.Index Every item by id, to check X's own parent
---- @return boolean True when `parent_item.order` was placed (and mutated)
---- @return string Error message; "" on success, placed or not
+--- @return boolean True on success; `parent_item.order` was mutated
+--- @return string Refusal reason; "" only on success
 local function place_under(parent_item: item.Item, id: string, before: string,
     after: string, index: flow.Index): boolean, string
   if before ~= "" and after ~= "" then
@@ -123,9 +125,6 @@ local function place_under(parent_item: item.Item, id: string, before: string,
   local x = before
   if x == "" then
     x = after
-  end
-  if x == "" then
-    return false, ""
   end
   if x == id then
     return false, "an item cannot rank against itself"

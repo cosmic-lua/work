@@ -25,7 +25,7 @@ local KINDS < const >: {string} = {
 local record Action
   --- One of `KINDS`.
   kind: string
-  --- The item the action targets; nil for intake-with-no-root and none.
+  --- The item the action targets; nil for intake-with-no-outcome and none.
   item: Item
   --- The rule that chose this action, stated for the human/agent.
   reason: string

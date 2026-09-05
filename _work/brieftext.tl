@@ -307,7 +307,7 @@ bin/gitboard sync
 
 ## The task: decompose one outcome into workable children
 
-Outcome root: `<ITEM_ID>` (handle <HANDLE>)
+Outcome item id: `<ITEM_ID>` (handle <HANDLE>)
 Title: <TITLE>
 
 <GAP>

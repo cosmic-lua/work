@@ -150,11 +150,11 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- which is what keeps the cheap decision cheap. The bound binds at
   -- take, where committing to work is the expensive decision.
   local also = gate.containered(parent_item, index)
-  local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
-  if perr ~= "" then
-    return gate.verdict_line("new", false, perr)
-  end
-  if placed then
+  if bfr ~= "" or aft ~= "" then
+    local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
+    if not placed then
+      return gate.verdict_line("new", false, perr)
+    end
     also = add_once(also, parent_item)
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
@@ -227,11 +227,12 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
     return gate.verdict_line("attach", false, table.concat(bad, "; "))
   end
   local also = gate.containered(parent_item, index)
-  local placed, perr = rank.place_under(parent_item, id, before or "", after or "", index)
-  if perr ~= "" then
-    return gate.verdict_line("attach", false, perr)
-  end
-  if placed then
+  if (before or "") ~= "" or (after or "") ~= "" then
+    local placed, perr = rank.place_under(parent_item, id, before or "",
+      after or "", index)
+    if not placed then
+      return gate.verdict_line("attach", false, perr)
+    end
     also = add_once(also, parent_item)
   end
   local ok, err = gate.commit_and_publish(s, it, nil,

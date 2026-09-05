@@ -35,6 +35,12 @@ local identity = require("_work.identity")
 local ksuid = require("_work.ksuid")
 local shape = require("cosmic.shape")
 
+--- The most parent hops a walk up the tree takes before giving up:
+--- deeper nesting than this is its own design smell, and a chain this
+--- long is cyclic in practice. `_work.rank` and `_work.flow` both walk
+--- parent chains and share this one bound.
+local MAX_DEPTH < const > = 16
+
 local record Item
   --- The filename stem and the one name other items use: a KSUID.
   id: string
@@ -220,6 +226,21 @@ local function is_parentless(it: Item): boolean
   return (it.parent or "") == ""
 end
 
+--- Items indexed by id.
+local type Index = {string: Item}
+
+--- Every item indexed by its own id — the one lookup nearly every
+--- graph walk in `_work.rank` and `_work.flow` needs first.
+--- @param items {Item} All items
+--- @return Index Items by id
+local function by_id(items: {Item}): Index
+  local out: Index = {}
+  for _, i in ipairs(items) do
+    out[i.id] = i
+  end
+  return out
+end
+
 --- The problems an item has on its own, empty when it is valid. One
 --- list rather than first-failure, so a hand-edited file reports
 --- everything wrong with it at once.
@@ -395,11 +416,14 @@ end
 
 local record item
   type Item = Item
+  type Index = Index
+  MAX_DEPTH: integer
   VERDICTS: {string: boolean}
   RESOLUTIONS: {string: boolean}
   is_open: function(it: Item): boolean
   is_parentless: function(it: Item): boolean
   is_flagged: function(it: Item): boolean
+  by_id: function(items: {Item}): Index
   problems: function(it: Item): {string}
   identity_refusal: function(session: string): string
   record_involvement: function(list: {string}, session: string): boolean, string
@@ -408,11 +432,13 @@ local record item
 end
 
 local M: item = {
+  MAX_DEPTH = MAX_DEPTH,
   VERDICTS = VERDICTS,
   RESOLUTIONS = RESOLUTIONS,
   is_open = is_open,
   is_parentless = is_parentless,
   is_flagged = is_flagged,
+  by_id = by_id,
   problems = problems,
   identity_refusal = identity.identity_refusal,
   record_involvement = identity.record_involvement,

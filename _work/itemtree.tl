@@ -14,8 +14,9 @@
 --- `parse_target`). `order` is not a meta line either: one blob, child
 --- ids one per line with a trailing newline, present only when this
 --- item has ranked at least one child (`encode_order`/`parse_order` —
---- the same shape `refs/heads/board/order` carries for the board's own
---- roots).
+--- the same shape the board's own item carries for its own outcomes,
+--- since it holds their list exactly like any other parent holds its
+--- children's).
 ---
 --- `edges/<kind>/<id>` entries carry every edge kind this build does
 --- not interpret, each by id (`item.Item.other_edges`): an empty
@@ -84,8 +85,8 @@ local function parse_target(target: string): string, string, string
 end
 
 --- The `order` blob's text for a ranked list of ids: one per line,
---- trailing newline, "" when the list is empty — the shared shape an
---- item's own `order` blob and `refs/heads/board/order` both carry.
+--- trailing newline, "" when the list is empty — the shape every
+--- item's own `order` blob carries, the board's own included.
 --- @param ids {string} Ranked ids, in rank order
 --- @return string The blob text, "" for an empty list
 local function encode_order(ids: {string}): string

@@ -158,7 +158,7 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     -- Adoption under a ranked outcome, which is the branch of triage
     -- that keeps an item alive; `attach` is ungated, so neither is
     -- this.
-    local ranked = flow.roots(items)
+    local ranked = flow.outcomes(items)
     if #ranked == 0 then
       it.resolution = "not-planned"
       return nil

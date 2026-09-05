@@ -1,19 +1,18 @@
 --- Fuzz properties for `_work.rank`'s pure rank-path derivation over an
 --- ADVERSARIAL item graph: random parents and random `order` lists
 --- (including stale entries — an id no longer a child — and duplicate
---- ones), drawn from a small shared id pool the same way
---- `_fuzz/priority_fuzz_test.tl` builds its adversarial graphs, plus a
---- random board root list drawn the same way. This is exactly the
---- shape `gitboard fsck` exists to catch, and exactly what a
---- hand-edited or corrupted commit can hand back to a live read.
+--- ones), drawn from a small shared id pool, plus a random board
+--- outcome list drawn the same way. This is exactly the shape
+--- `gitboard fsck` exists to catch, and exactly what a hand-edited or
+--- corrupted commit can hand back to a live read.
 ---   sorted is a total order: antisymmetric and transitive on sampled
 ---   triples, over any graph this pool can draw;
 ---   sorted agrees with key's lexicographic order on sampled pairs;
 ---   positions/sorted/key are identical across two runs over the same
 ---   generated input, so no table-iteration order leaks into a render.
 --- The generated graph is length-prefixed into the driver's string
---- input the way `_fuzz/priority_fuzz_test.tl`'s is, so a failure
---- still reports a replayable seed and shrinks to a small graph.
+--- input, so a failure still reports a replayable seed and shrinks to
+--- a small graph.
 --- env: FUZZ_SEED FUZZ_ITERS
 
 local check = require("cosmic.check")

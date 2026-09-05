@@ -25,6 +25,70 @@ local tail = require("_work.tail")
 
 local verdict_line = gate.verdict_line
 
+--- The item named `id` in `items`, or nil.
+--- @param items {item.Item} All items
+--- @param id string The id to find
+--- @return item.Item | nil
+local function find_item(items: {item.Item}, id: string): item.Item | nil
+  for _, i in ipairs(items) do
+    if i.id == id then
+      return i
+    end
+  end
+  return nil
+end
+
+--- Mirrors `_work.tail.handle`'s 8-character convention (guillemet-
+--- wrapped, underscore-divided tail) without requiring that module.
+--- @param id string A full item id (a 27-char KSUID)
+--- @return string "«XXXX_XXXX»"
+local function handle_of(id: string): string
+  local t = id:sub(20)
+  return "«" .. t:sub(1, 4) .. "_" .. t:sub(5, 8) .. "»"
+end
+
+--- The render for one item's rank: "3 of 7 under «HANDLE»" for an item
+--- under an ordinary parent (7 = how many of its siblings are
+--- positioned), "outcome 2 of 5" for a direct child of the board, "the
+--- board" for the board itself, or "unranked" when the item's own
+--- parent has no position for it.
+--- @param ranks {string: rank.Rank} Rank by item id
+--- @param items {item.Item} All items
+--- @param id string The item's id
+--- @return string
+local function describe(ranks: {string: rank.Rank}, items: {item.Item},
+    id: string): string
+  local r = ranks[id]
+  local i = find_item(items, id)
+  if r == nil or i == nil then
+    return "unranked"
+  end
+  if #r.chain == 0 then
+    return "the board"
+  end
+  local own = r.chain[#r.chain]
+  if own.position < 0 then
+    return "unranked"
+  end
+  local parent_id = i.parent or ""
+  local total = 0
+  for _, other in ipairs(items) do
+    if (other.parent or "") == parent_id then
+      local orank = ranks[other.id]
+      if orank ~= nil and #orank.chain > 0
+      and orank.chain[#orank.chain].position >= 0 then
+        total = total + 1
+      end
+    end
+  end
+  local parent_item = find_item(items, parent_id)
+  if parent_item ~= nil and item.is_parentless(parent_item) then
+    return ("outcome %d of %d"):format(own.position + 1, total)
+  end
+  return ("%d of %d under %s"):format(own.position + 1, total,
+    handle_of(parent_id))
+end
+
 --- One word for where an item stands: how it ended, else its derived
 --- state while in flight, else todo.
 --- @param it item.Item The item
@@ -67,7 +131,7 @@ local function show_report(it: item.Item, all: {item.Item},
   if item.is_open(it) and flow.role(it, all) == "work" then
     out[#out + 1] = ("state: %s"):format(state_of(it))
   end
-  out[#out + 1] = ("rank: %s"):format(rank.describe(ranks, all, it.id))
+  out[#out + 1] = ("rank: %s"):format(describe(ranks, all, it.id))
   if it.claim ~= "" then out[#out + 1] = ("claim: %s"):format(it.claim) end
   if it.reviewer ~= "" then
     out[#out + 1] = ("reviewer: %s"):format(it.reviewer)
@@ -206,6 +270,8 @@ local function cmd_show(s: store.Store, id: string): integer
 end
 
 local record gitshow
+  describe: function(ranks: {string: rank.Rank}, items: {item.Item},
+  id: string): string
   show_report: function(it: item.Item, all: {item.Item},
   ranks: {string: rank.Rank}, body: string,
   events: {publish.Event}, problems: {string},
@@ -214,6 +280,7 @@ local record gitshow
 end
 
 local M: gitshow = {
+  describe = describe,
   show_report = show_report,
   cmd_show = cmd_show,
 }

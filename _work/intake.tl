@@ -64,7 +64,8 @@ local function intake_action(items: {Item}, specs: Specs,
       .. "refine it until `check` passes",
     }
   end
-  local ordered, live = flow.roots(items)
+  local ordered = flow.outcomes(items)
+  local live = flow.live_outcomes(items)
   for _, g in ipairs(ordered) do
     if not live[g.id] then
       return {

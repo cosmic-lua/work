@@ -104,9 +104,15 @@ CREATE VIEW containers AS
   SELECT i.* FROM items i
   WHERE EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
 
+-- A childless item below the outcome level — matches
+-- `_work.flow.role`'s "work": an outcome (a direct child of the board,
+-- `i.parent IN (SELECT id FROM roots)`) is excluded even with no
+-- children of its own, since decomposing it is still triage's answer,
+-- never a take's.
 CREATE VIEW workable AS
   SELECT i.* FROM open_items i
   WHERE i.parent <> ''
+  AND i.parent NOT IN (SELECT id FROM roots)
   AND NOT EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
 
 -- Mirrors `_work.flow.is_doing` and the resolution rule exactly; it

@@ -229,26 +229,3 @@ local function test_key_agrees_with_sorted_on_a_small_board()
     "the key's lexicographic order agrees with sorted: "
     .. table.concat(by_sorted, ",") .. " vs " .. table.concat(by_key_ids, ","))
 end
-
-local function test_describe_renders_the_board_outcomes_and_unranked()
-  local board = make({})
-  local top = make({parent = board.id})
-  local first = make({parent = top.id})
-  local second = make({parent = top.id})
-  local loose = make({parent = top.id})
-  top.order = {first.id, second.id}
-  board.order = {top.id}
-  local items: {item.Item} = {board, top, first, second, loose}
-  local ranks = rank.positions(items)
-  assert(rank.describe(ranks, items, first.id) == "1 of 2 under "
-    .. "«" .. top.id:sub(20, 23) .. "_" .. top.id:sub(24, 27) .. "»",
-    rank.describe(ranks, items, first.id))
-  assert(rank.describe(ranks, items, second.id):find("2 of 2 under", 1, true)
-    ~= nil, rank.describe(ranks, items, second.id))
-  assert(rank.describe(ranks, items, loose.id) == "unranked",
-    rank.describe(ranks, items, loose.id))
-  assert(rank.describe(ranks, items, top.id) == "outcome 1 of 1",
-    rank.describe(ranks, items, top.id))
-  assert(rank.describe(ranks, items, board.id) == "the board",
-    rank.describe(ranks, items, board.id))
-end

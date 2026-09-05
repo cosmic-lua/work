@@ -217,6 +217,30 @@ local function test_roots_containers_and_workable()
   check.must(idxmod.close(idx))
 end
 
+-- An outcome with no children of its own is still not workable — it
+-- is a direct child of the board, and decomposing it is triage's
+-- answer, never a take's, matching `_work.flow.role`.
+local function test_workable_excludes_a_childless_outcome()
+  local board = make({})
+  local outcome = make({parent = board.id})
+  local leaf = make({parent = outcome.id})
+  local idx = check.must(idxmod.open({board, outcome, leaf}))
+  local db = idx.db
+  local function ids(sql: string): {string: boolean}
+    local out: {string: boolean} = {}
+    for row in assert(db:query(sql)) do
+      local id = row.id as string -- cast: from any (sqlite row)
+      out[id] = true
+    end
+    return out
+  end
+  local workable = ids("SELECT id FROM workable")
+  assert(not workable[outcome.id],
+    "a childless outcome is still not workable: decomposing it is triage")
+  assert(workable[leaf.id], "a leaf below the outcome level is workable")
+  check.must(idxmod.close(idx))
+end
+
 -- Secondary indexes: `EXPLAIN QUERY PLAN` names them by name, pinned
 -- against the real connection rather than trusted to the DDL comment.
 

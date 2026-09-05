@@ -22,7 +22,10 @@
 --- level. The board item itself gets a `Rank` whose chain is empty,
 --- which sorts before every other chain (a strict prefix of all of
 --- them) — fitting, since nothing outranks the board, though nothing
---- ever queues it either.
+--- ever queues it either. Whether an item is ranked at all is never
+--- stored on the `Rank` — it is the empty chain (the board) or the
+--- outcome level's own position (`chain[1]`), so `is_ranked` derives it
+--- from the chain that is already there.
 ---
 --- Comparing two items walks both paths from the outcome level down to
 --- the first level where they name different ancestors. There, a
@@ -36,21 +39,14 @@
 ---
 --- Pure functions over a list of items: no store, no network. The
 --- module deliberately requires only `_work.item`, so `_work.flow` may
---- build on it without a cycle — `is_board`/`is_outcome` live in
---- `_work.flow` since they need more context than one item carries,
---- but finding the board by walking a list this module already holds
+--- build on it without a cycle — `is_outcome` lives in `_work.flow`
+--- since it needs more context than one item carries (its own parent's
+--- identity), but whether an item is the board (`item.is_parentless`)
 --- needs no such help.
 local item = require("_work.item")
 
 local type Item = item.Item
-
---- Items indexed by id.
-local type Index = {string: Item}
-
---- The most parent hops a walk to the board takes before giving up —
---- matches `_work.flow`'s own trace bound: deeper nesting than this is
---- its own design smell, and a chain this long is cyclic in practice.
-local MAX_DEPTH < const > = 16
+local type Index = item.Index
 
 --- One ancestor's position in ITS OWN parent's list — one entry of a
 --- `Rank.chain`.
@@ -64,12 +60,6 @@ end
 
 --- One item's rank: the outcome-down path a comparison walks.
 local record Rank
-  --- Whether this item's OUTCOME — its ancestor one level below the
-  --- board — appears in the board's own `order` — the only placement
-  --- test there is. False for an outcome itself absent from the list,
-  --- and for everything under it. True, trivially, for the board
-  --- itself (an empty chain has no outcome to fail the test).
-  ranked: boolean
   --- The ancestor chain from the outcome down to this item, inclusive
   --- — empty for the board itself, otherwise always at least one
   --- entry (the item itself), even when the walk to the board failed
@@ -84,27 +74,6 @@ end
 --- ranked.
 local type PosMap = {string: integer}
 local type PosCache = {string: PosMap}
-
---- Items indexed by id.
---- @param items {Item} All items
---- @return Index The index
-local function index_of(items: {Item}): Index
-  local out: Index = {}
-  for _, i in ipairs(items) do
-    out[i.id] = i
-  end
-  return out
-end
-
---- Whether `it` is the board: no parent. The one structural test this
---- module needs about a single item on its own — everything else
---- (`_work.flow.is_board`/`is_outcome`) needs more context than that,
---- which is exactly why this module requires only `_work.item`.
---- @param i Item The item
---- @return boolean True when parentless
-local function is_board(i: Item): boolean
-  return (i.parent or "") == ""
-end
 
 --- Whether `id` is a CURRENT real child of `parent_id`: it exists and
 --- its own `parent` field still names `parent_id`. A stale list entry
@@ -177,7 +146,7 @@ local function walk_to_outcome(index: Index, id: string): {string} | nil
   local chain: {string} = {}
   local seen: {string: boolean} = {}
   local cur = id
-  for _ = 1, MAX_DEPTH do
+  for _ = 1, item.MAX_DEPTH do
     if seen[cur] then
       return nil
     end
@@ -186,7 +155,7 @@ local function walk_to_outcome(index: Index, id: string): {string} | nil
     if i == nil then
       return nil
     end
-    if is_board(i) then
+    if item.is_parentless(i) then
       -- `rank_of` special-cases `id` itself being the board before
       -- this ever runs, so reaching one here means an ANCESTOR of
       -- `id` is a second parentless item — a broken board, not a path
@@ -198,7 +167,7 @@ local function walk_to_outcome(index: Index, id: string): {string} | nil
     if parent == nil then
       return nil
     end
-    if is_board(parent) then
+    if item.is_parentless(parent) then
       -- `cur` is the outcome: its own parent is the board, so the
       -- walk stops here without adding the board's own level.
       return chain
@@ -208,14 +177,14 @@ local function walk_to_outcome(index: Index, id: string): {string} | nil
   return nil
 end
 
---- One item's `Rank`: the board itself gets an empty chain, `ranked`
---- trivially true; everything else gets `ranked` from its outcome's
---- membership in the board's own `order`, and the chain from that
---- outcome down to itself, each level's position drawn from the level
---- above's own list (the board's `order`, at the top). A broken or
---- too-deep parent chain has no outcome to test membership of and no
---- path to walk, so it comes back unranked with a one-entry chain —
---- itself, unpositioned — which keeps every comparison total without
+--- One item's `Rank`: the board itself gets an empty chain (`is_ranked`
+--- reads that as trivially ranked); everything else gets the chain
+--- from its outcome down to itself, each level's position drawn from
+--- the level above's own list (the board's `order`, at the top) — the
+--- outcome level's own position (`chain[1]`) is what `is_ranked` reads
+--- as "not triage". A broken or too-deep parent chain has no outcome
+--- to walk to, so it comes back with a one-entry chain — itself,
+--- unpositioned — which keeps every comparison total without
 --- asserting a lineage the data does not honestly have.
 --- @param index Index Items by id
 --- @param cache PosCache Memo, filled in place
@@ -223,19 +192,17 @@ end
 --- @return Rank
 local function rank_of(index: Index, cache: PosCache, id: string): Rank
   local self = index[id]
-  if self ~= nil and is_board(self) then
-    return {ranked = true, chain = {}}
+  if self ~= nil and item.is_parentless(self) then
+    return {chain = {}}
   end
   local up = walk_to_outcome(index, id)
   if up == nil then
-    return {ranked = false, chain = {{id = id, position = -1}}}
+    return {chain = {{id = id, position = -1}}}
   end
   local n = #up
   local outcome_id = up[n]
   local outcome = index[outcome_id]
   local board_id = (outcome ~= nil) and outcome.parent or ""
-  local posmap0 = positions_for(board_id, index, cache)
-  local ranked = posmap0[outcome_id] ~= nil
   local chain: {Level} = {}
   for level = 1, n do
     local aid = up[n - level + 1]
@@ -246,17 +213,16 @@ local function rank_of(index: Index, cache: PosCache, id: string): Rank
     local posmap = positions_for(parent_id, index, cache)
     chain[level] = {id = aid, position = posmap[aid] or -1}
   end
-  return {ranked = ranked, chain = chain}
+  return {chain = chain}
 end
 
 --- Every item's `Rank`. Every queue the board renders sorts by what
---- this returns, so a derivation added here reaches `sorted`, `key`
---- and `describe` at once — there is no second ordering path to keep
---- in step.
+--- this returns, so a derivation added here reaches `sorted` and `key`
+--- at once — there is no second ordering path to keep in step.
 --- @param items {Item} All items
 --- @return {string: Rank} Rank by item id
 local function positions(items: {Item}): {string: Rank}
-  local index = index_of(items)
+  local index = item.by_id(items)
   local cache: PosCache = {}
   local out: {string: Rank} = {}
   for _, i in ipairs(items) do
@@ -266,14 +232,22 @@ local function positions(items: {Item}): {string: Rank}
 end
 
 --- Whether an item's outcome is positioned in the board's own `order`
---- — the whole of what "not triage" means. True for the board itself,
---- which has no outcome for the question to apply to.
+--- — the whole of what "not triage" means. True for the board itself
+--- (an empty chain has no outcome to fail the test); otherwise the
+--- outcome level's own position, `chain[1]`, is the only placement
+--- test there is.
 --- @param ranks {string: Rank} Rank by item id
 --- @param id string The item's id
 --- @return boolean
 local function is_ranked(ranks: {string: Rank}, id: string): boolean
   local r = ranks[id]
-  return r ~= nil and r.ranked
+  if r == nil then
+    return false
+  end
+  if #r.chain == 0 then
+    return true
+  end
+  return r.chain[1].position >= 0
 end
 
 --- FNV-1a over a string, folded to 32 bits: the seeded tie-break below
@@ -411,72 +385,6 @@ local function key(ranks: {string: Rank}, id: string): string
   return table.concat(fields, "/")
 end
 
---- The item named `id` in `items`, or nil.
---- @param items {Item} All items
---- @param id string The id to find
---- @return Item | nil
-local function find_item(items: {Item}, id: string): Item | nil
-  for _, i in ipairs(items) do
-    if i.id == id then
-      return i
-    end
-  end
-  return nil
-end
-
---- Mirrors `_work.tail.handle`'s 8-character convention (guillemet-
---- wrapped, underscore-divided tail) without requiring that module —
---- this one requires only `_work.item`, so a later `describe` caller
---- (`show`) sees the same rendering either way.
---- @param id string A full item id (a 27-char KSUID)
---- @return string "«XXXX_XXXX»"
-local function handle_of(id: string): string
-  local t = id:sub(20)
-  return "«" .. t:sub(1, 4) .. "_" .. t:sub(5, 8) .. "»"
-end
-
---- The render `show` uses for one item's rank: "3 of 7 under «HANDLE»"
---- for an item under an ordinary parent (7 = how many of its siblings
---- are positioned), "outcome 2 of 5" for a direct child of the board,
---- "the board" for the board itself, or "unranked" when the item's own
---- parent has no position for it.
---- @param ranks {string: Rank} Rank by item id
---- @param items {Item} All items
---- @param id string The item's id
---- @return string
-local function describe(ranks: {string: Rank}, items: {Item}, id: string):
-  string
-  local r = ranks[id]
-  local i = find_item(items, id)
-  if r == nil or i == nil then
-    return "unranked"
-  end
-  if #r.chain == 0 then
-    return "the board"
-  end
-  local own = r.chain[#r.chain]
-  if own.position < 0 then
-    return "unranked"
-  end
-  local parent_id = i.parent or ""
-  local total = 0
-  for _, other in ipairs(items) do
-    if (other.parent or "") == parent_id then
-      local orank = ranks[other.id]
-      if orank ~= nil and #orank.chain > 0
-      and orank.chain[#orank.chain].position >= 0 then
-        total = total + 1
-      end
-    end
-  end
-  local parent_item = find_item(items, parent_id)
-  if parent_item ~= nil and is_board(parent_item) then
-    return ("outcome %d of %d"):format(own.position + 1, total)
-  end
-  return ("%d of %d under %s"):format(own.position + 1, total,
-    handle_of(parent_id))
-end
-
 local record rank
   type Item = Item
   type Level = Level
@@ -486,7 +394,6 @@ local record rank
   sorted: function(list: {Item}, ranks: {string: Rank},
   seed?: string): {Item}
   key: function(ranks: {string: Rank}, id: string): string
-  describe: function(ranks: {string: Rank}, items: {Item}, id: string): string
 end
 
 local M: rank = {
@@ -494,7 +401,6 @@ local M: rank = {
   is_ranked = is_ranked,
   sorted = sorted,
   key = key,
-  describe = describe,
 }
 
 return M
