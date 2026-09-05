@@ -1,1 +1,0 @@
-queue_states needs review.is_queued/gh.pull's auto_merge/mergeable_state fields and act.QueueStates, none of which exist until fmFu_8dce's PR #1701 merges
