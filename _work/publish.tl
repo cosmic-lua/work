@@ -26,12 +26,19 @@ end
 
 --- Whether the store has an `origin` remote to publish to. A store
 --- without one is local-only: it publishes trivially, and the gates
---- that ask GitHub about a pull request have nothing to ask.
+--- that ask GitHub about a pull request have nothing to ask. Memoized
+--- on `s` — `git remote` never changes within one run, and this is
+--- asked more than once in some verbs (`sync`, then `publish`, then a
+--- verb's own pre-check), so only the first ask ever spawns it.
 --- @param s store.Store The store
 --- @return boolean True when origin exists
 local function has_origin(s: store.Store): boolean
-  local r = store.git(s, {"remote"})
-  return r ~= nil and r.ok and r.stdout:find("origin", 1, true) ~= nil
+  if not s.remote_present_read then
+    local r = store.git(s, {"remote"})
+    s.remote_present = r ~= nil and r.ok and r.stdout:find("origin", 1, true) ~= nil
+    s.remote_present_read = true
+  end
+  return s.remote_present
 end
 
 --- Pull concurrent state: a store with no origin is local-only and

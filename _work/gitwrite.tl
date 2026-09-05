@@ -85,7 +85,11 @@ local function plan_one(req: Request, it: item.Item,
   local old_sha = req.leased_sha[it.id] or refs.ZERO_SHA
   local old = req.leased_item[it.id]
   local old_spec = ""
-  if spec_replacement ~= nil then
+  -- An id never observed (not in the snapshot — `old_sha` still
+  -- `ZERO_SHA`) has no existing ref to hold a spec sidecar, so reading
+  -- one would only ever come back "" the hard way, one `cat-file -p`
+  -- per candidate ref against a ref that does not exist yet.
+  if spec_replacement ~= nil and old_sha ~= refs.ZERO_SHA then
     old_spec = req.read_spec(it.id)
   end
   local ops = fastimport.diff_item(old, it, spec_replacement, old_spec)
