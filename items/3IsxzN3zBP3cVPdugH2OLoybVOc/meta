@@ -1,9 +1,9 @@
 title: docs: cmd_new and init_repo comments stop one sentence short of what a fixture author needs
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-OLoy_bVOc-32638265
 pr: 36
 verdict: accept
 verdict_head: 47bb7c638afbe8279b677f620af76d88d435e6ce
 verdict_spec: c44a35047a7c87f2462a93f776517905a164a45c
+resolution: completed
 builders: build-OLoy_bVOc-32638265
