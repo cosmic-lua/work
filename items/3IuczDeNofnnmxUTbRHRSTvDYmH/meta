@@ -1,3 +1,4 @@
 title: gitboard: no read-only verb lists/filters items by state+priority — consolidate find/show into a query surface, and give spec --base a clean source
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+speccers: 6c1cdc09-b5cf-5890-910d-4a3944ba5600
