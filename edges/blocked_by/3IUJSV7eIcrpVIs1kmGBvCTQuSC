@@ -1,1 +1,0 @@
-the pinned cb39b65 checker's old discover misses _types/tlast_test.tl's second definition, so the migrated file fails _build/coldbuild_test.tl (unused function under generation 1) until the pin names a release carrying #1455
