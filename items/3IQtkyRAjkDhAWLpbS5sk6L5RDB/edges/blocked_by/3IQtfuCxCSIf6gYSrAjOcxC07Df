@@ -1,1 +1,0 @@
-the pin bump needs a cosmos release whose path.join returns plain string; bumping before it exists regenerates the same union
