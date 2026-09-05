@@ -2,5 +2,6 @@ title: gitboard perf: wall-clock scenarios per verb over a generated fixture boa
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-98RT_EE0A-32638265
+pr: 17
 builders: build-98RT_EE0A-32638265
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
