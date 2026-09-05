@@ -31,15 +31,26 @@ possible through any single call — the only path was `show <id>` once
 per item, and even that requires already knowing every id, which
 nothing enumerates.
 
-**A second, related gap in the same area:** `gitboard spec ID FILE
---base FILE` requires the caller to supply the CURRENT spec body byte-
-for-byte as `--base`, for its compare-and-swap. No verb emits just that
-— `show ID` interleaves it with `role`/`priority`/`bar`/history lines,
-so producing a `--base` file today means scraping `show`'s combined
-output by hand (this session did it with `awk '/^--- spec ---$/{...}'`
-against the `show` output, then trimmed the trailing history lines by a
-second pattern match) — a fragile, easy-to-get-subtly-wrong step for
-something the tool already has in hand at read time.
+**A second, related gap: `show`/`find` are prose-only, so every
+narrower need this session had was met by piping their output through
+an external text tool instead of gitboard itself** — every instance,
+this session, verbatim:
+
+    gitboard show 2>&1 | grep "^todo"
+    gitboard show $id 2>&1 | grep -E "^(parent|priority|state|bar):"     # run ~15 times,
+                                                                          # once per item inspected
+    gitboard show $id 2>&1 | sed -n '/--- spec ---/,/^  20/p' | head -25 # extracting just a spec body
+    awk '/^--- spec ---$/{flag=1; next} /^  [0-9]{4}-[0-9]{2}-[0-9]{2}T/{flag=0} flag'  # same, precise
+    gitboard find "the" 2>&1 | grep -c "^«"                              # counting hits
+
+Every one of these is a workaround for the same missing capability:
+`show`/`find` emit one fixed, human-formatted report with no way to
+select a section or a field. `gitboard spec ID FILE --base FILE`
+concretely depends on this gap: `--base` needs the CURRENT spec body
+byte-for-byte, and the only way to get it today is the `awk` line
+above, scraping `show`'s combined header/bar/spec/history output by
+hand — fragile, and easy to get subtly wrong (the history section's
+own lines can collide with a naive delimiter pattern).
 
 ## The question
 
@@ -68,21 +79,35 @@ rather than re-deriving it, and should default to a sane limit
 (unbounded output onto 997 items is its own usability problem) with an
 explicit `--limit`/`--all` to override.
 
-For the `spec --base` gap: the minimal fix is a flag on `show`
-(`show ID --spec-only`, printing nothing but the raw spec body,
-directly usable as a `--base`/`FILE` argument) — additive, no schema
-change. The alternative is deeper: change `spec`'s compare-and-swap to
-key off a hash/version stamp of the spec (recorded at write time)
-rather than the exact prior text, which removes the byte-exactness
-fragility entirely but changes the contract of every existing `--base`
-caller and is a larger schema change to weigh separately from the
-listing gap above.
+For the section/field-scraping gap, two shapes, not mutually
+exclusive:
+
+- **`show ID --section <fields|bar|spec|history>`**: prints exactly
+  that section as raw text, nothing else — directly usable as
+  `--base`/`FILE` for `spec`, or piped through `grep` for one field
+  without the surrounding report contaminating matches. Additive, no
+  schema change, and it would have replaced every `grep -E
+  "^(parent|priority|state|bar):"` and the `sed`-extracted spec body
+  above outright.
+- **`--json` (or a per-call `--field NAME`) on `show`**: structured,
+  machine-parseable output — the deeper fix for scripts (this session
+  included) that want a specific field (`priority`, `state`, `parent`)
+  without parsing prose at all, at the cost of a stable schema to
+  define and keep across the CLI (`show`, `find`, a future `list`
+  would all want to agree on one shape).
+
+`spec`'s compare-and-swap has a third, independent option worth naming:
+key `--base` off a hash/version stamp of the spec (recorded at write
+time) rather than exact prior text, removing the byte-exactness
+fragility entirely — a larger schema change to weigh separately from
+the display-format questions above, since it changes what every
+existing `--base` caller passes.
 
 ## Non-goals
 
-Not deciding which of the two listing designs (or the `--spec-only`
-flag vs. the hash-based `--base`) is correct — both carry real
-tradeoffs a refiner should weigh, not something to decide unilaterally
-while filing the gap. Not a performance question: `_work/find.tl`'s
-FTS5 index already answers these queries fast; the gap is purely in
-what the CLI surface exposes.
+Not deciding which listing design, which section/output-format shape,
+or the hash-based `--base` is correct — each carries real tradeoffs a
+refiner should weigh, not something to decide unilaterally while filing
+the gap. Not a performance question: `_work/find.tl`'s FTS5 index
+already answers these queries fast; the gap is purely in what the CLI
+surface exposes.
