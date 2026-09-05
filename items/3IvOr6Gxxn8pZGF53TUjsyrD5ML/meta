@@ -1,0 +1,3 @@
+title: CI: build and run MODE=cov o/cov/tool/lua/test on every PR
+parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
+target: cosmic-lua/cosmopolitan
