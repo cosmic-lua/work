@@ -1,36 +1,33 @@
 ## Evidence
 
-Parent item 3Isoczw9JmeVhX6X6NvBZCtZ5l7's coverage table (see its
-`## Findings`) classifies every function these three modules call:
-`gitready` uses `flow.by_id/is_blocked/item_problems/ready_gaps/role` and
-`prio.is_placed/positions`; `intake` uses `flow.in_state/is_blocked/
-ready_gaps/roots/untriaged` and `prio.is_placed`; `action` uses
-`flow.DOING_LIMIT/by_id/doing_refusal/in_state/is_blocked/ready_gaps/
-STAGE_*/stage_rank/substate/unified` and `prio.is_placed/positions`. All are
-`same` except `by_id` (superseded) and `ready_gaps` (unrelated to the
-index — stays a direct call to `_work.spec.ready_gaps`, not migrated).
-`action`'s `unified` and `stage_rank` calls need the lift/tie-break helper
-item (a) builds.
+Parent item 3Isoczw9JmeVhX6X6NvBZCtZ5l7's rigor pass (`## Findings`, section
+4) found `gitready.tl`, `intake.tl`, and `action.tl` each have ZERO
+`store.list`/`store.load` calls of their own (`grep -c "store\.list\|store\.
+load\b"` on each returns 0) — every `flow.*`/`prio.*` call in these three
+files operates on an `items`/`all`/`pos` parameter the CALLER already
+loaded. Tracing callers: `gitready.ready_problems` is reached from
+`gitshow.tl:206` (a read, migrated by «VkzD_q8u2») and from `gitverbs.
+tl:182` via `gitgate.review_debt_refusal` (a mutation, `take`'s own gate,
+which loads its own `store.list` for the commit lease regardless).
+`intake`/`action` are reached only from `gitview.tl`'s `status`/`next`
+paths (migrated by «VkzD_q8u2»). Once that lands, all three of these files
+already receive a cache-hydrated `{item.Item}` list from their callers, with
+zero code changes of their own — hydration reproduces `store.list`'s
+`{Item}` shape exactly (field-level proof in «VkzD_q8u2»'s Evidence), so
+nothing downstream can tell the difference.
 
 ## Change
 
-`_work/cacheread.tl` (built by follow-up (a), which this item is
-`blocked_by`) already exposes every function these three files need.
-Migrate `gitready`, `intake`, and `action`: swap
-`require("_work.flow")`/`require("_work.priority")` for
-`require("_work.cacheread")`, and each call site's `{Item}` argument for
-the cache handle. `ready_gaps` call sites are untouched (still
-`_work.spec.ready_gaps`, direct or via whatever re-export `cacheread`
-keeps for it). `DOING_LIMIT`/`STAGE_*` constant references stay pointed at
-`flow.tl` until item (e) relocates them. Extend `cacheread`'s differential
-tests (or add module-specific ones) only if these three exercise a shape
-the (a) tests do not already cover — cite which, if any, in this item's own
-findings.
+None. This item's entire premise — that `gitready`, `intake`, and `action`
+need their own `require`/argument swap — does not hold once the actual call
+graph is traced: they take `{Item}` from whichever caller loaded it, and
+«VkzD_q8u2» is what changes what that caller loads. There is no file this
+item can touch that «VkzD_q8u2» does not already cover. Recommendation from
+the research: resolve not-planned citing this finding.
 
 ## Non-goals
 
-Changing any view's definition or the STRICT schema; changing `gitready`'s,
-`intake`'s, or `action`'s printed output; touching any file outside these
-three plus `_work/cacheread.tl`'s call sites (never `cacheread.tl` itself —
-if a needed function is missing, that is a gap in (a) to raise, not to
-patch here); deleting `flow.tl`/`priority.tl`.
+Everything the parent's Non-goals already state; in particular, do not
+duplicate `gitready.ready_problems`'s spec-bar logic into a second,
+cache-specific implementation — it already runs correctly, unchanged,
+against whatever `{Item}` list its caller supplies.
