@@ -2,6 +2,8 @@ title: gitboard handle lookup: resolving «XXXX_XXXX» loads the whole board to 
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-GkFk_U7L5-32638265
-reviewer: review-GkFk_U7L5-f3a5b327
 pr: 22
+verdict: accept
+verdict_head: ee10b1059629dcd0d9285c740975bc32096eac8f
+verdict_spec: 5babe46301f95227822d032c25b9a836853550bf
 builders: build-GkFk_U7L5-32638265
