@@ -1,21 +1,22 @@
 #!/usr/bin/env cosmic
 -- `_work.ciobs`'s caching contract: a fresh observation is reused
--- without touching GitHub again, a stale one is refreshed and its new
--- state replaces the old, and `GITBOARD_CI_FRESH` forces past the
--- window on every call. `is_candidate` and `at_sync` get their own
--- coverage: the exact set `at_sync` walks, and that it observes a
--- stale candidate once, leaves a fresh one alone, and reports rather
--- than swallows an `observe` failure.
+-- without touching GitHub again, a deciding verb's own live read
+-- writes through so the very next render reuses it, and
+-- `GITBOARD_CI_FRESH` forces past the window on every call.
+-- `is_candidate` and `at_sync` get their own coverage: the exact set
+-- `at_sync` walks, and that it observes a stale candidate once, leaves
+-- a fresh one alone, and reports rather than swallows an `observe`
+-- failure.
 
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local ciobs = require("_work.ciobs")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
-local freshness = require("_work.freshness")
 local gh = require("_work.gh")
 local item = require("_work.item")
 local store = require("_work.store")
+local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
 local REPO < const > = "cosmic-lua/cosmic"
@@ -42,12 +43,14 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
   --- exists to make cheap on the second call.
   --- @param s store.Store The store
   --- @param c cachedb.Cache An open cache connection
+  --- @param repo string The item's repo field, "" when unset
   --- @param pr integer The PR number
   --- @return string | nil The state a render would show
-  local function render(s: store.Store, c: cachedb.Cache, pr: integer): string | nil
-    local state, age = ciobs.read(c, REPO, pr)
+  local function render(s: store.Store, c: cachedb.Cache, repo: string,
+      pr: integer): string | nil
+    local state, age = ciobs.read(c, repo, pr)
     if state == nil or not ciobs.fresh(age) then
-      state = ciobs.observe(s, c, REPO, pr)
+      state = ciobs.observe(s, c, repo, pr)
     end
     return state
   end
@@ -63,51 +66,54 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
         calls = calls + 1
         return {state = "green", head_sha = "aaa", runs = {}}, ""
       end, function(): boolean
-        assert(render(s, c, 1) == "green")
-        assert(render(s, c, 1) == "green")
+        assert(render(s, c, REPO, 1) == "green")
+        assert(render(s, c, REPO, 1) == "green")
         assert(calls == 1, "the second render never reaches GitHub: " .. tostring(calls))
         return true
       end)
     assert(cache.close(c))
   end
 
-  -- A row aged past the window is refreshed rather than reused, and the
-  -- fresh call's state (and head) replace what was cached — a pushed
-  -- head is exactly what ages a row out, since nothing here can learn of
-  -- one without spending the live call the window is there to bound.
-  local function test_a_stale_observation_is_refreshed_and_replaced()
-    local s = init_state_repo("ciobs-stale")
-    local c = assert(cache.open(s.root))
+  -- A deciding verb's own live read writes through to the cache: the
+  -- review-claim CI gate `_work/gitverbs.tl`'s `cmd_take` runs before
+  -- admitting a reviewer is the one `gh.head_checks` call site there,
+  -- and a `take --pr` handover reaches the same site the moment a
+  -- second session claims the review. The row shows that call's state
+  -- and head immediately, so the very next render reuses it rather
+  -- than paying for a call of its own — this is what closes the gap
+  -- `read`/`fresh` alone cannot: they never learn of a pushed head
+  -- until the window expires, but a decision that just asked GitHub
+  -- keeps the cache honest without waiting on it.
+  local function test_a_deciding_verbs_live_read_writes_through()
+    local s = init_state_repo("ciobs-write-through")
+    local _root, leaf = fixture.root_with_leaf(s)
+    fixture.give_spec(s, leaf)
+    assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+    assert(verbs.cmd_take(s, leaf, "builder-a", 11, false, "") == 0)
     local calls = 0
     with_head_checks(function(_s: store.Store, _pr: integer, _repo: string | nil):
         gh.HeadChecks | nil, string
         calls = calls + 1
-        if calls == 1 then
-          return {state = "green", head_sha = "aaa", runs = {}}, ""
-        end
-        return {state = "red", head_sha = "bbb", runs = {}}, ""
+        return {state = "green", head_sha = "ccc", runs = {}}, ""
       end, function(): boolean
-        assert(render(s, c, 2) == "green")
-        assert(calls == 1)
+        -- A different session claiming the review, with no new PR of
+        -- its own to record, is the review claim — the one live call
+        -- `_work/gitverbs.tl`'s `cmd_take` still makes.
+        assert(verbs.cmd_take(s, leaf, "reviewer-a", 0, false, "") == 0)
+        assert(calls == 1, "the review claim's own live call: " .. tostring(calls))
 
-        -- Backdate the row past the freshness window without waiting for
-        -- real time to pass — the same effect a push and 15 real minutes
-        -- would have.
-        assert(c.db:exec(
-            "UPDATE ci_checks SET observed_at = observed_at - ? WHERE repo = ? AND pr = ?",
-            {freshness.WINDOW_S + 1, REPO, 2}))
-        local cached, age = ciobs.read(c, REPO, 2)
-        assert(cached == "green", "the stale row still reads back its last state")
-        assert(not ciobs.fresh(age), "and is no longer trusted: age " .. tostring(age))
+        local it = assert(store.load(s, leaf))
+        local c = assert(cache.open(s.root))
+        local cached, age = ciobs.read(c, it.repo, it.pr)
+        assert(cached == "green", tostring(cached))
+        assert(ciobs.fresh(age), "the write-through row is fresh immediately")
 
-        assert(render(s, c, 2) == "red", "the refresh picks up the new head's state")
-        assert(calls == 2, "staleness earns exactly one more call: " .. tostring(calls))
-        local cached2, age2 = ciobs.read(c, REPO, 2)
-        assert(cached2 == "red", "and the row now holds the fresh state")
-        assert(ciobs.fresh(age2))
+        assert(render(s, c, it.repo, it.pr) == "green",
+          "the next render reads the written-through row")
+        assert(calls == 1, "and makes no call of its own: " .. tostring(calls))
+        assert(cache.close(c))
         return true
       end)
-    assert(cache.close(c))
   end
 
   -- `GITBOARD_CI_FRESH` forces past the window on every call, the CI
@@ -123,8 +129,8 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
         calls = calls + 1
         return {state = "green", head_sha = "aaa", runs = {}}, ""
       end, function(): boolean
-        assert(render(s, c, 3) == "green")
-        assert(render(s, c, 3) == "green")
+        assert(render(s, c, REPO, 3) == "green")
+        assert(render(s, c, REPO, 3) == "green")
         assert(calls == 2, "the override is felt on every render: " .. tostring(calls))
         return true
       end)

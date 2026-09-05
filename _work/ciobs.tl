@@ -11,10 +11,17 @@
 --- `_work/gitview.tl`'s `ci_states` is the one render-side caller: read
 --- first, observe only when the row is absent or has aged past the
 --- window — so a render pays the network at most once per item per
---- window, and a hot loop pays nothing. The verbs that DECIDE on CI
---- (`take --pr`, `verdict`, `done`, `_work/gitverbs.tl`) never touch
---- this cache; they keep the live read they always made, because a
---- decision needs the current word, not a recent one.
+--- window, and a hot loop pays nothing. A render cannot learn the
+--- CURRENT head without a live call — the very thing the window
+--- exists to bound — so a push is NOT detected until the row's own
+--- age forces a refresh: a row may lag a real push by up to the
+--- window. `live` closes most of that gap from the other end: the
+--- deciding verbs (`take --pr`, `_work/gitverbs.tl`) already make
+--- their own live read to decide, and `live` writes that result
+--- through to the cache as a side effect, so the row is fresh again
+--- the moment the flow itself learns of a new head — `verdict` and
+--- `done` read the PR directly (`gh.pull`), never `head_checks`, so
+--- they have nothing to write through here.
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local env = require("cosmic.env")
@@ -62,6 +69,49 @@ local function fresh(age_s: integer): boolean
   return age_s < freshness.WINDOW_S
 end
 
+--- Upsert an already-fetched `HeadChecks` into the row — the write
+--- half of `observe`, exposed on its own so `live` (and any other
+--- caller that already paid for a `head_checks` call for its own
+--- reasons) can keep the cache fresh without a second round trip.
+--- @param c cachedb.Cache An open cache connection
+--- @param repo string The item's repo field, "" when unset
+--- @param pr integer The PR number
+--- @param hc gh.HeadChecks The already-fetched result
+--- @return boolean True on success
+--- @return string Error message
+local function record_row(c: cachedb.Cache, repo: string, pr: integer,
+    hc: gh.HeadChecks): boolean, string
+  return c.db:exec([[
+    INSERT INTO ci_checks(repo, pr, head, state, observed_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(repo, pr) DO UPDATE SET head = excluded.head,
+      state = excluded.state, observed_at = excluded.observed_at
+  ]], {repo, pr, hc.head_sha, hc.state, os.time()})
+end
+
+local record ciobs
+  FRESH_ENV: string
+  read: function(c: cachedb.Cache, repo: string, pr: integer): string | nil, integer
+  fresh: function(age_s: integer): boolean
+  record: function(c: cachedb.Cache, repo: string, pr: integer, hc: gh.HeadChecks):
+  boolean, string
+  observe: function(s: store.Store, c: cachedb.Cache, repo: string, pr: integer):
+  string | nil, string
+  live: function(s: store.Store, repo: string, pr: integer): gh.HeadChecks | nil, string
+  is_candidate: function(it: item.Item): boolean
+  at_sync: function(s: store.Store): {string}
+end
+
+-- `record` is also a Teal keyword — only a call through the qualified
+-- `M.record` parses as one, so every caller here reaches the write
+-- half through `M` rather than the bare local, the same workaround
+-- `_work/lanes.tl`'s `report` uses for its own `M.record`.
+local M: ciobs = {
+  FRESH_ENV = FRESH_ENV,
+  read = read,
+  fresh = fresh,
+  record = record_row,
+}
+
 --- Read the pull request's checks live and upsert the row — the one
 --- live call `read` plus `fresh` allow at most once per item per
 --- window. Failure (no origin, no token, a network error) leaves
@@ -79,16 +129,42 @@ local function observe(s: store.Store, c: cachedb.Cache, repo: string,
   if hc == nil then
     return nil, err
   end
-  local ok, werr = c.db:exec([[
-    INSERT INTO ci_checks(repo, pr, head, state, observed_at) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(repo, pr) DO UPDATE SET head = excluded.head,
-      state = excluded.state, observed_at = excluded.observed_at
-  ]], {repo, pr, hc.head_sha, hc.state, os.time()})
+  local ok, werr = M.record(c, repo, pr, hc)
   if not ok then
     return nil, werr
   end
   return hc.state, ""
 end
+
+M.observe = observe
+
+--- The deciding verbs' own live read, writing through to the cache as
+--- a side effect: opens a connection itself (there is no already-open
+--- one at a decision site), records the result when the cache opens,
+--- and returns the SAME `gh.HeadChecks` a bare `gh.head_checks` call
+--- would — a decision reads the whole record (the sha, the run list),
+--- never only the state `observe`'s render path narrows to. A cache
+--- that will not even open is not this call's problem to fail over:
+--- the live result still returns exactly as it always did.
+--- @param s store.Store The store
+--- @param repo string The item's repo field, "" when unset
+--- @param pr integer The PR number
+--- @return gh.HeadChecks | nil The live result
+--- @return string Error message
+local function live(s: store.Store, repo: string, pr: integer): gh.HeadChecks | nil, string
+  local hc, err = gh.head_checks(s, pr, repo)
+  if hc == nil then
+    return nil, err
+  end
+  local c, _cerr = cache.open(s.root)
+  if c ~= nil then
+    local _ok, _werr = M.record(c, repo, pr, hc)
+    local _cok, _ccerr = cache.close(c)
+  end
+  return hc, ""
+end
+
+M.live = live
 
 --- Whether `it` is a candidate this module observes at all: an open
 --- review-stage item carrying a PR — the exact test `_work/gitview.tl`'s
@@ -100,6 +176,8 @@ local function is_candidate(it: item.Item): boolean
   return item.is_open(it) and flow.stage_rank(it) == flow.STAGE_REVIEW
   and (it.pr or 0) ~= 0
 end
+
+M.is_candidate = is_candidate
 
 --- Refresh every open review-stage item's observation that has aged
 --- past the window, the way `_work.lanes.at_sync` refreshes lane
@@ -136,23 +214,6 @@ local function at_sync(s: store.Store): {string}
   return lines
 end
 
-local record ciobs
-  FRESH_ENV: string
-  read: function(c: cachedb.Cache, repo: string, pr: integer): string | nil, integer
-  fresh: function(age_s: integer): boolean
-  observe: function(s: store.Store, c: cachedb.Cache, repo: string, pr: integer):
-  string | nil, string
-  is_candidate: function(it: item.Item): boolean
-  at_sync: function(s: store.Store): {string}
-end
-
-local M: ciobs = {
-  FRESH_ENV = FRESH_ENV,
-  read = read,
-  fresh = fresh,
-  observe = observe,
-  is_candidate = is_candidate,
-  at_sync = at_sync,
-}
+M.at_sync = at_sync
 
 return M

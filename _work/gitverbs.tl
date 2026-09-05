@@ -109,14 +109,16 @@ local function cmd_take(s: store.Store, id: string, session: string,
     -- is already a decided fact a reviewer can act on (a quick request
     -- changes), but a running one is not yet known either way, so
     -- claiming the review now only burns a reader on a verdict it
-    -- cannot give. `head_checks` reads nil on no GitHub reach (no
+    -- cannot give. `ciobs.live` reads nil on no GitHub reach (no
     -- origin, no token, a network error) — exactly the cases this
-    -- refuses nothing for, same as before this gate existed. One call
-    -- does the whole read: the sha and run list needed for the
-    -- refusal text ride the returned record, so nothing here
-    -- re-fetches the PR or its checks a second time.
+    -- refuses nothing for, same as before this gate existed — and
+    -- writes the result through to the render-side cache, so `next`
+    -- sees this exact head without a call of its own. One call does
+    -- the whole read: the sha and run list needed for the refusal
+    -- text ride the returned record, so nothing here re-fetches the
+    -- PR or its checks a second time.
     if (it.pr or 0) ~= 0 and not force then
-      local hc, _herr = gh.head_checks(s, it.pr, it.repo)
+      local hc, _herr = ciobs.live(s, it.repo, it.pr)
       if hc ~= nil and hc.state == "running" then
         local sha7 = "?"
         if hc.head_sha ~= "" then
