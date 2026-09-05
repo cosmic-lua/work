@@ -1,0 +1,3 @@
+title: gitbatch: a regression test that fails when the pipe-saturating round is not chunked
+parent: 3IszjUoYYOxuFeVKV0sbaNRtA4O
+target: cosmic-lua/work
