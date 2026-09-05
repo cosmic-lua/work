@@ -1,10 +1,10 @@
 title: gitread load: one cat-file --batch session for the three passes instead of three processes
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-baNR_tA4O-32638265
 pr: 29
 verdict: accept
 verdict_head: 714538459495c93ef6caa33907c8c51b9744647f
 verdict_spec: 2e48bf9acfc4fd7f20d0683f80ee04f526178070
+resolution: completed
 builders: build-baNR_tA4O-32638265
 speccers: build-baNR_tA4O-32638265
