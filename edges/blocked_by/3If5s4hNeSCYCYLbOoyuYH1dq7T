@@ -1,1 +1,0 @@
-cannot build the cosmic.sqlite Blob wrapper or bind dispatch until cosmopolitan ships value_type/column_type and cosmic bumps its 3p/cosmos pin to a release carrying them
