@@ -12,6 +12,7 @@
 local api = require("_work.api")
 local cachequery = require("_work.cachequery")
 local env = require("cosmic.env")
+local freshness = require("_work.freshness")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
@@ -40,8 +41,9 @@ local LANE_PARENT < const > = "3HyRdT1JQS7pCPgF3sZi2Deo66q"
 --- back-to-back reads a busy session (or an orchestrator polling
 --- `sync` in a loop) would otherwise pay for, while still catching a
 --- lane turning red the same day. Local to this checkout's `o/`, so
---- it says nothing about what another worktree observed.
-local FRESH_WINDOW_S < const > = 15 * 60
+--- it says nothing about what another worktree observed. Shared with
+--- `_work.ciobs` via `_work.freshness` rather than picked here alone.
+local FRESH_WINDOW_S < const > = freshness.WINDOW_S
 
 --- Set (to anything) to force a fresh read past the freshness window
 --- — the escape hatch for a session that knows a lane just finished

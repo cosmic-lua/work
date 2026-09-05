@@ -9,9 +9,10 @@
 --- that prints it: what a session reads is the contract, and a report
 --- that returns its lines can be asserted on without capturing
 --- stdout.
+local cache = require("_work.cache")
+local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
-local gh = require("_work.gh")
 local guide = require("_work.guidance")
 local health = require("_work.health")
 local item = require("_work.item")
@@ -49,27 +50,35 @@ local function claim_ages(s: store.Store, all: {item.Item}): health.Ages
 end
 
 --- CI check-run state for each open review-stage item that carries a
---- PR, read from GitHub once per render — one `gh.head_checks` call
---- per candidate, the same live-read shape `claim_ages` uses for
---- staleness, never one call per item on the board. `head_checks`
---- reads nil with no GitHub reach (no origin, no token, a network
---- error), and that id is simply left out of the map — exactly what
---- `action.tl`'s `phased_action` already treats as "unknown", offered
---- the same as it always was.
+--- PR, read from `_work.ciobs`'s cached observation — a live
+--- `gh.head_checks` call only for a candidate whose row is absent or
+--- has aged past the freshness window, never one call per item on
+--- every render. A candidate `ciobs` cannot report on (a cache that
+--- will not even open, an `observe` failure — no GitHub reach, no
+--- origin, no token, a network error) is simply left out of the map —
+--- exactly what `action.tl`'s `phased_action` already treats as
+--- "unknown", offered the same as it always was.
 --- @param s store.Store The store
 --- @param all {item.Item} Every item
 --- @return act.CiStates CI state by item id
 local function ci_states(s: store.Store, all: {item.Item}): act.CiStates
   local out: act.CiStates = {}
+  local c, _err = cache.open(s.root)
+  if c == nil then
+    return out
+  end
   for _, i in ipairs(all) do
-    if item.is_open(i) and flow.stage_rank(i) == flow.STAGE_REVIEW
-    and (i.pr or 0) ~= 0 then
-      local hc = gh.head_checks(s, i.pr, i.repo)
-      if hc ~= nil then
-        out[i.id] = hc.state
+    if ciobs.is_candidate(i) then
+      local state, age = ciobs.read(c, i.repo, i.pr)
+      if state == nil or not ciobs.fresh(age) then
+        state = ciobs.observe(s, c, i.repo, i.pr)
+      end
+      if state ~= nil then
+        out[i.id] = state
       end
     end
   end
+  local _ok, _cerr = cache.close(c)
   return out
 end
 

@@ -9,6 +9,8 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
+local cache = require("_work.cache")
+local ciobs = require("_work.ciobs")
 local fixture = require("_work.fixture")
 local gh = require("_work.gh")
 local review = require("_work.review")
@@ -254,6 +256,31 @@ local function test_running_and_red_refuse_to_emit_the_brief()
     function(): boolean
       local code = brief.cmd_brief(red_s, "review", red_leaf)
       assert(code ~= 0, "red refuses the brief too")
+      return true
+    end)
+end
+
+-- `ci_refusal`'s live read writes through to `_work.ciobs`'s cache the
+-- same way `take --pr`'s does (`_work/gitverbs.tl`'s own write-through
+-- test): a `gitboard brief review` a session runs before acting leaves
+-- the row set, so the render that follows has nothing left to fetch.
+local function test_a_review_briefs_live_read_writes_through()
+  local s = init_state_repo("brief-write-through")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  with_ci_fixture("green", "cafef00dfeedfacebeef1234567890abcdef1234",
+    function(): boolean
+      local code = brief.cmd_brief(s, "review", leaf)
+      assert(code == 0, "green emits the brief")
+
+      local it = assert(store.load(s, leaf))
+      local c = assert(cache.open(s.root))
+      local cached, age = ciobs.read(c, it.repo, it.pr)
+      assert(cached == "green", tostring(cached))
+      assert(ciobs.fresh(age), "the write-through row is fresh immediately")
+      assert(cache.close(c))
       return true
     end)
 end
