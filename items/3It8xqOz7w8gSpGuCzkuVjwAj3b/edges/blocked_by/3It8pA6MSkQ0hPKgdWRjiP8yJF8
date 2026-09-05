@@ -1,1 +1,0 @@
-needs cosmic.ksuid.new()/is_id to exist before it can be registered as a SQL function
