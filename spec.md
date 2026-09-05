@@ -77,3 +77,35 @@ object database) — this stays a thin, typed wrapper over shelling out to
 module — a separate, later item once this stabilizes, the same
 sequencing «Bb5n_SBqt» used for `_fuzz`; changing any function's
 contract from what the ported code already proves.
+
+## Refinement pass, 2026-09-05
+
+Two more pieces belong in this module's scope, found auditing the rest
+of `_work/*.tl` for promotion candidates:
+
+**`_work/fastimport.tl`'s item-agnostic core** (310 lines total; only
+`diff_item` — the item-to-`Op`-list diff — stays behind in gitboard).
+`Op{path, content}`, `CommitPlan{ref, from, mark, author/committer
+identities, message, ops}`, `git_date_now()` (pure `cosmic.time`
+formatting), `data_block`/`commit_block`/`build_stream` (pure string
+assembly of the `git fast-import` grammar), and `run(root, commits)`
+(shells `git fast-import --quiet --done`, feeding it `build_stream`'s
+output on stdin) together are a complete "build and execute one
+`git fast-import` stream for N commits across M refs in one process"
+library — a distinct technique from this item's existing scope (single-
+object plumbing in `gitobj.tl`, ref-level atomic push/fetch in
+`refs.tl`), and the scaling answer any cosmic project writing many
+records into git (a KV store, a wiki, an event log) would want instead
+of one `hash-object`/`mktree`/`commit-tree`/`update-ref` process per
+write. Lands as `cosmic/git/fastimport.tl` alongside the refs/objects
+split this item already proposes.
+
+**`_work/spec.tl`'s `revision`** (2 lines of logic): `hash.digest_hex("sha1",
+("blob %d\0%s"):format(#body, body))` — the exact bytes `git hash-object`
+would hash, computed with ZERO git process calls and no repository at
+all, already built entirely on public `cosmic.hash`. Complementary to
+`gitobj.tl`'s `hash_object` (which shells `git hash-object -w` to
+actually WRITE the blob and get its sha) rather than a duplicate: one
+computes, the other writes. Worth a one-function addition (e.g.
+`cosmic.git.blob_sha(content)`) so a caller who only needs the hash —
+to compare against a known blob, say — never pays for a process.
