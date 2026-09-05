@@ -1,1 +1,0 @@
-the compare step dies on the type skew before measuring, so the regression cannot even be re-measured in the lane until the skew fix lands

@@ -1,1 +1,0 @@
-the A/B is run and recorded, but the handover is refused: 'move 3ISWHyP7 check' demands --pr and this slice deliberately has no diff. Until 3ISltQMh settles what PR an evidence-only slice carries, this item cannot reach a reviewer, and re-running the measurement would only reproduce numbers already in its Result.
