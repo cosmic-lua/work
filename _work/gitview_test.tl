@@ -7,11 +7,13 @@
 -- `_work/gitshow_test.tl`; the one case that spans both, a repo mark
 -- rendered by two reports at once, stays here.
 
+local cache = require("_work.cache")
 local check = require("cosmic.check")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local fixture = require("_work.fixture")
 local gh = require("_work.gh")
+local refs = require("_work.refs")
 local show = require("_work.gitshow")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -412,4 +414,78 @@ local function test_live_next_skips_a_reviewable_item_with_ci_red()
         "a red head reads as the builder's move on a live next: " .. printed)
       return true
     end)
+end
+
+--- Three separate roots, each with one workable leaf claimed under
+--- its own builder — `claim_ages` only asks about a claimed item, so
+--- three is enough to prove the cost stays flat rather than growing
+--- with the count. `--force` skips the position gate the same way
+--- `handed_over` does; none of these go to review, so `claim`, not
+--- `reviewer`, is what makes each one eligible.
+--- @param s store.Store The store
+--- @return {string} The three claimed leaves' ids
+local function three_claimed_leaves(s: store.Store): {string}
+  local ids: {string} = {}
+  for k = 1, 3 do
+    local root = fixture.file_item(s, ("outcome %d"):format(k), "")
+    local leaf = fixture.file_item(s, ("workable slice %d"):format(k), root)
+    fixture.give_spec(s, leaf)
+    assert(verbs.cmd_take(s, leaf, ("builder-%d"):format(k), 0, true,
+        "test fixture: skip the position gate") == 0)
+    ids[#ids + 1] = leaf
+  end
+  return ids
+end
+
+-- This item's own claim: `list_via_cache` pays for exactly one
+-- `for-each-ref` snapshot (over `cachedb.WATCH_PATTERNS`, carrying
+-- every ref's committer date), and `claim_ages` — reading
+-- `s.touched_at`, which that one snapshot already populated — spawns
+-- none of its own, no matter how many items are claimed. The ground
+-- truth is read directly off `refs.committer_date_unix` before the
+-- counting stub goes up, so the assertion is against the real ref
+-- state a claim just wrote, not a second call to the code under test.
+local function test_claim_ages_costs_nothing_beyond_the_one_snapshot()
+  local s = fixture.init_state_repo("claim-ages-snapshot")
+  local ids = three_claimed_leaves(s)
+
+  local now = os.time()
+  local expected: {string: integer} = {}
+  for _, id in ipairs(ids) do
+    local ref = "refs/heads/items/" .. id
+    expected[id] = now - check.must(refs.committer_date_unix(s.root, ref))
+  end
+
+  -- Warmed first, the way a real session's second-and-later render
+  -- always finds the cache: `list_via_cache`'s own snapshot then
+  -- reuses the file rather than paying `rebuild`'s cost too.
+  local warm = check.must(cache.rebuild(s.root))
+  assert(cache.close(warm))
+
+  local all = check.must(view.list_via_cache(s))
+
+  local calls = 0
+  local real_fe = refs.for_each_ref
+  local real_cdu = refs.committer_date_unix
+  refs.for_each_ref = function(root: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    calls = calls + 1
+    return real_fe(root, patterns)
+  end
+  refs.committer_date_unix = function(root: string, ref: string): integer | nil, string
+    calls = calls + 1
+    return real_cdu(root, ref)
+  end
+  local ages = view.claim_ages(s, all)
+  refs.for_each_ref = real_fe
+  refs.committer_date_unix = real_cdu
+
+  assert(calls == 0, ("claim_ages should spawn nothing beyond the snapshot "
+      .. "list_via_cache already took: got %d"):format(calls))
+  for _, id in ipairs(ids) do
+    assert(ages[id] ~= nil, "a claimed item's age is reported: " .. id:sub(1, 8))
+    assert(math.abs(ages[id] - expected[id]) <= 2,
+      ("the age should match the fixture commit's own touch time: got %d, "
+        .. "wanted ~%d"):format(ages[id], expected[id]))
+  end
 end

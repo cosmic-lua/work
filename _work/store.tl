@@ -28,10 +28,12 @@ local refs = require("_work.refs")
 --- should credit, whether it is bounded, the lease (ref + tip) each id was last observed
 --- at, a SNAPSHOT of each id's item as observed (`leased_item` — independent of whatever a
 --- caller goes on to mutate `load`'s/`list`'s own returned `item.Item` into, since `save`'s
---- fast-import diff needs the ORIGINAL fields to compare against), `refs/heads/board/seq`'s
---- own observed tip, the refs a completed `save` still owes `publish` a push for, and every
---- id the most recent `list` found filed under both `refs/heads/items` and
---- `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only reader; `list`'s
+--- fast-import diff needs the ORIGINAL fields to compare against), each id's committer date
+--- from whichever ref snapshot a caller already took (`touched_at` — `_work.publish.touched_at`
+--- reads it first, falling back to its own one-ref process only for an id no snapshot named),
+--- `refs/heads/board/seq`'s own observed tip, the refs a completed `save` still owes `publish`
+--- a push for, and every id the most recent `list` found filed under both `refs/heads/items`
+--- and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only reader; `list`'s
 --- ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live here too).
 --- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
 --- same fields this module's `load`/`list` populate.
@@ -51,6 +53,7 @@ local record Store
   leased_ref: {string: string}
   leased_sha: {string: string}
   leased_item: {string: item.Item}
+  touched_at: {string: integer}
   observed_seq: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
@@ -171,9 +174,10 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {},
-    board_digest = "", fresh_lease = "", remote_url = "", remote_url_ok = false,
-    remote_url_read = false, remote_present = false, remote_present_read = false}
+    leased_sha = {}, leased_item = {}, touched_at = {}, observed_seq = "", pending = {},
+    duplicates = {}, board_digest = "", fresh_lease = "", remote_url = "",
+    remote_url_ok = false, remote_url_read = false, remote_present = false,
+    remote_present_read = false}
 end
 
 --- The full id a unique prefix names, resolved against the refs
