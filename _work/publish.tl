@@ -7,14 +7,17 @@
 --- fetch --prune`, which resets every local ref this checkout's mirror
 --- refspecs cover to the winner's value. There is no working tree to
 --- restore afterward — nothing here ever held one — so the recovery
---- is exactly that one fetch. `history` and `touched_at` read the
---- same refs back; `sync` is the same fetch, standalone. The git
+--- is exactly that one fetch. `history` reads the `events` cache when
+--- it is current, falling back to the same `git log` `touched_at`
+--- still always uses; `sync` is the fetch, standalone. The git
 --- identity every call runs under, and the `Store` it runs against,
 --- live in `_work.store`; every git command here goes back through
 --- its `git`/`git_ok`.
 local cache = require("_work.cache")
+local events = require("_work.events")
 local store = require("_work.store")
 local refs = require("_work.refs")
+local time = require("cosmic.time")
 
 --- One item mutation as git recorded it.
 local record Event
@@ -129,14 +132,85 @@ local function publish(s: store.Store): boolean, string
   return false, store.LOST_RACE
 end
 
+--- One full sha's current abbreviation width — a single trivial
+--- `git rev-parse --short`, not a walk, since that width is a property
+--- of the whole repository's object count rather than of any one
+--- commit: it is the same width `%h` would give any OTHER commit
+--- logged at this same moment. 7 (git's own floor) on any failure.
+--- @param s store.Store The store
+--- @param sample_sha string Any full sha already known to exist
+--- @return integer The width, in hex digits
+local function abbrev_width(s: store.Store, sample_sha: string): integer
+  local r = store.git_ok(s, {"rev-parse", "--short", sample_sha})
+  if r == nil or not r.ok then
+    return 7
+  end
+  return #(r.stdout:gsub("%s+$", ""))
+end
+
+--- `events.Row.at` back to the strict-ISO-8601 string `%cI` renders —
+--- always at a UTC (`+00:00`) offset, since the epoch integer the
+--- `events` table stores never carries the committer's original
+--- offset the way a live `%cI` reading does. Every commit this project
+--- writes is made by a process running in UTC (`_work.fastimport`'s
+--- own `git_date_now`, on every environment this board runs in), so
+--- this reconstructs the same string a live `%cI` read would — an
+--- assumption a non-UTC development machine could break for its OWN
+--- freshly made commits, never for the board's real history.
+--- @param epoch integer Unix seconds
+--- @return string | nil The ISO 8601 string, nil on a bad epoch
+local function iso8601_utc(epoch: integer): string | nil
+  local dt, _err = time.gmtime(epoch)
+  if dt == nil then
+    return nil
+  end
+  return ("%04d-%02d-%02dT%02d:%02d:%02d+00:00"):format(
+    dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec)
+end
+
+--- `history`'s cache path: `_work.events.read`, newest first, with
+--- each row's sha abbreviated and epoch rendered exactly as the
+--- `git log` fallback below would — nil (never a second-class empty
+--- result) on anything this cache cannot answer, which `history` reads
+--- as "fall through to the git log instead."
+--- @param s store.Store The store
+--- @param id string Item id
+--- @return {Event} | nil Newest-first events, nil to fall through
+local function events_from_cache(s: store.Store, id: string): {Event} | nil
+  local rows = events.read(s.root, id)
+  if rows == nil or #rows == 0 then
+    return nil
+  end
+  local width = abbrev_width(s, rows[#rows].sha)
+  local out: {Event} = {}
+  for i = #rows, 1, -1 do
+    local row = rows[i]
+    local at = iso8601_utc(row.at)
+    if at == nil then
+      return nil
+    end
+    out[#out + 1] = {sha = row.sha:sub(1, width), at = at, subject = row.subject}
+  end
+  return out
+end
+
 --- Mutation history, newest first: one item's when `id` names one —
---- `git log` on its own ref, O(item) not O(board) — or the whole
---- board's, merged across every item and ended ref, when it does not.
+--- from the `events` cache when it is current, `git log` on its own
+--- ref (O(item) not O(board)) otherwise — or the whole board's, merged
+--- across every item and ended ref, when `id` is nil (always `git
+--- log`; the cache carries no whole-board query for this).
 --- @param s store.Store The store
 --- @param id string Item id, or nil for every commit on every ref
 --- @return {Event} | nil Events, possibly empty
 --- @return string Error message
 local function history(s: store.Store, id?: string): {Event} | nil, string
+  local cached: {Event} | nil = nil
+  if id ~= nil then
+    cached = events_from_cache(s, id)
+  end
+  if cached ~= nil then
+    return cached
+  end
   local argv: {string} = {"log", "--format=%h\t%cI\t%s"}
   if id ~= nil then
     local ref = s.leased_ref[id]

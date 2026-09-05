@@ -217,6 +217,10 @@ local function test_a_handle_absent_from_the_cache_resolves_through_the_glob()
   check.must(cache.close(check.must(cache.open(s.root)))) -- primes o/board.db
   local id = file_item(s, "an item filed after the cache existed", "")
   local db = check.must(cachedb.open_conn(cachedb.path_of(s.root)))
+  -- `events.item` REFERENCES `items(id)`; the filing above already gave
+  -- this id one row there, so it goes first or the plain `items` delete
+  -- below trips that foreign key.
+  assert(db:exec("DELETE FROM events WHERE item = ?", {id}))
   assert(db:exec("DELETE FROM items WHERE id = ?", {id}))
   check.must(db:close())
   assert(gitboard.main("show", tail.handle(id), "--dir", s.root) == 0,

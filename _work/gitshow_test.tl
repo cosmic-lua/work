@@ -5,6 +5,7 @@
 -- take gate's problem list, the sidecar, the git history.
 
 local check = require("cosmic.check")
+local eventsmod = require("_work.events")
 local fixture = require("_work.fixture")
 local gitread = require("_work.gitread")
 local item = require("_work.item")
@@ -293,4 +294,33 @@ local function test_show_id_renders_the_spec_without_gitreads_single_file_read()
   assert(code == 0, "show should still succeed: " .. tostring(out))
   assert(out:find("Do exactly this.", 1, true) ~= nil,
     "the spec body must render from the loaded batch: " .. out)
+end
+
+-- `_work.publish.history`'s `events`-cache path must render `show ID`'s
+-- history block exactly as the `git log` fallback still does — the
+-- one existing behavior this whole cache is forbidden from changing.
+-- `_work.events.read` stubbed to nil forces the second capture onto
+-- the fallback (nothing else about the board moves between the two
+-- calls), so any divergence is the cache path's own, not drift in the
+-- board it is reading.
+local function test_show_id_history_matches_between_cache_and_git_log()
+  local s = init_state_repo("show-history-both-ways")
+  local id = file_item(s, "an item with history", "")
+  give_spec(s, id)
+  local from_cache_code, from_cache_out = show_and_capture(s, id)
+  assert(from_cache_code == 0, "show should succeed from the cache")
+
+  local real_read = eventsmod.read
+  eventsmod.read = function(_root: string, _id: string): {eventsmod.Row} | nil
+    return nil
+  end
+  local ok, code, out = pcall(show_and_capture, s, id)
+  eventsmod.read = real_read
+  if not ok then
+    error(code, 0)
+  end
+  assert(code == 0, "show should still succeed from the git log fallback")
+  assert(out == from_cache_out,
+    "the two histories must render byte-identically:\ncache:\n" .. from_cache_out
+    .. "\nfallback:\n" .. out)
 end

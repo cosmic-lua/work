@@ -19,6 +19,7 @@
 --- closing it — a plain rename only moves the one file it names, so a
 --- sidecar left behind under the temp name would otherwise become
 --- permanent litter.
+local cachedb_events = require("_work.cachedb_events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local hash = require("cosmic.hash")
@@ -63,7 +64,12 @@ local DB_FILENAME < const > = "board.db"
 --- vocabulary; `head` is the commit sha the state was observed
 --- against, so an observation is never trusted past its window: this
 --- table only ever holds the head that was current when it was last
---- written.
+--- written. `_work.cachedb_events.EXTRA_DDL` — the `events` table and
+--- `pr_rounds` view, split into its own file so this constant's own
+--- doc comment stays under the line cap — is appended below, so every
+--- caller of this constant sees one script with both halves; the
+--- schema fingerprint (built from `sqlite_master`, never source text)
+--- covers it exactly as if it were written inline here.
 local EXTRA_DDL < const > = [[
 CREATE TABLE cache_meta (
   k TEXT PRIMARY KEY,
@@ -84,7 +90,7 @@ CREATE TABLE ci_checks (
   observed_at INTEGER NOT NULL,
   PRIMARY KEY (repo, pr)
 ) STRICT, WITHOUT ROWID;
-]]
+]] .. cachedb_events.EXTRA_DDL
 
 --- The three ref namespaces the digest and the incremental patchers
 --- watch — every ref a mutation or a fetch can move. Exported so a
@@ -353,7 +359,14 @@ end
 --- `spec_body` nil means the caller made no spec change, so whatever
 --- `search` last held for this id carries over unread; the caller
 --- passes the current text (possibly "") whenever it DOES know it,
---- which for a fetch-path refresh is always.
+--- which for a fetch-path refresh is always. `events.item` REFERENCES
+--- `items(id)` too, and `index.delete_item` (below) never touches
+--- `events` — an id's history is never truth here, only the field data
+--- is being refreshed — so the delete half of this delete-then-reinsert
+--- would otherwise fail its own foreign key the moment that id already
+--- has an event row; `PRAGMA defer_foreign_keys` defers the check to
+--- this call's own transaction commit, by which point `insert_item`
+--- below has already put the row back.
 --- @param c Cache An open, schema-valid cache
 --- @param it item.Item The item, exactly as written
 --- @param spec_body string | nil Its current spec text; nil to keep
@@ -367,6 +380,10 @@ local function patch_item(c: Cache, it: item.Item, spec_body: string | nil): boo
     if row ~= nil then
       prior = row.spec as string -- cast: from any (sqlite row)
     end
+  end
+  local dfok, dferr = c.db:exec("PRAGMA defer_foreign_keys = ON")
+  if not dfok then
+    return false, dferr
   end
   local dok, derr = index.delete_item(c.db, it.id)
   if not dok then
