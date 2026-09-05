@@ -2,5 +2,6 @@ title: handle lookup follow-up: one ambiguity listing for both paths, delete the
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-SHGq_Ak4k-32638265
+reviewer: review-SHGq_Ak4k-32638265
 pr: 33
 builders: build-SHGq_Ak4k-32638265
