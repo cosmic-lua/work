@@ -56,7 +56,10 @@ derivation: a root must be ranked before anything under it is
 pullable, because the top level is where the board's owner answers
 "which of these outcomes matters more", and a capture filed as a root
 has not been asked it. Below the top level the parent already
-answered. That policy is the whole of what "triage" means.
+answered. That policy is the whole of what "triage" means. An
+unranked non-root is therefore pullable: it sorts after its ranked
+siblings, oldest first, and `take` never refuses it for lacking a
+position.
 
 ## Moves and stale entries
 
@@ -68,15 +71,22 @@ new siblings: the mover judged where it belongs, not how it compares
 to neighbours it has never been weighed against. Moving between roots
 is already the large rank change (a new prefix); one `rank` afterwards
 refines. `attach` accepts `--before`/`--after` so a move that knows
-its place lands in one commit on two refs.
+its place lands in one commit on two refs; there is no separate
+move-then-rank pair to run, and `rank` alone is the same-parent case.
 
 A whole subtree moves with its container and keeps its internal order:
 the container's own entry goes stale, its children's list is untouched.
 
 ## Verified outcomes are done roots
 
-A root whose win condition holds is `done --reason completed`, with the
-reason recorded the way `done` records one. Filing or attaching a
+A root whose win condition holds is `done --reason completed --by
+CHILD`, where CHILD is the verification item that carries the evidence:
+a child of the root whose own resolution is `completed`. `done` refuses
+a root with an open child, a CHILD that is not its completed child, or
+no `--by` at all, so a root cannot be verified by assertion; the child's
+id rides in the commit subject and the verdict line, so the log names
+the evidence. Retiring a root needs no child: `done --reason
+not-planned` asks only for the reason. Filing or attaching a
 child under a done root clears its resolution in the same commit,
 which is the hook that clears a held marker today (`gate.containered`
 in `_work/gitgate.tl`), so evidence against an outcome reopens it with
@@ -88,9 +98,9 @@ The held marker existed for two reasons that no longer hold: the
 reopen it said would need a verb built from scratch is the same
 child-filing hook, applied to `resolution` instead of `is_held`; and
 `done`'s gates protect a PR-bearing leaf, which a root never is, so a
-root's `done` asks only for a reason. Retiring an outcome rather than
-verifying it is `done --reason not-planned`, and the same child
-reopens either.
+root's `done` asks for the evidence instead: the completed child named
+by `--by`. The same filed child reopens a verified and a retired root
+alike.
 
 ## The verb surface
 
@@ -99,7 +109,7 @@ reopens either.
 | `compare A B` | `rank A --before B` | position, not relation; `--after`, `--last` |
 | `block A --on B --reason` | `attach B A` or `new --parent A` | the prerequisite is a child |
 | `unblock A B` | `attach B ELSEWHERE`, or `done B` | a child moves or ends |
-| `hold R --reason` | `done R --reason completed` | a verified root is done |
+| `hold R --reason` | `done R --reason completed --by CHILD` | verified by a completed child |
 | `unhold R` | file the evidence as a child | the only reopen path |
 | `attach ID PARENT` | same, plus `--before`/`--after` | move and place in one commit |
 
@@ -117,8 +127,9 @@ holds the same blob for roots. `_work/itemtree.tl` stays the one
 place the shape is written. The format marker bumps, and the
 migration is one commit on the board: each `beats` closure becomes a
 list under the common parent, each live `blocked_by` becomes a
-re-parent (the blocker under its waiter), each held root becomes a
-done one. The board's history keeps the old edges readable.
+re-parent (the blocker under its waiter), and the `held` marker is
+dropped (no root carries one). The board's history keeps the old
+edges readable.
 
 Concurrency is unchanged in kind and simpler in count. A `rank` is a
 commit on the parent's ref, pushed as the compare-and-swap every
@@ -203,14 +214,3 @@ the winner's count but never moves it out of its ancestor's band, so
 refusing it loses no working behaviour; and nearly every blocker is a
 sibling of what it blocks, which is a child that was filed beside its
 parent.
-
-## Open for review
-
-1. Should an unranked non-root sort after its ranked siblings (as
-   written) or be refused by `take` like an unranked root? The former
-   keeps a freshly filed child pullable; the latter makes every level
-   triage.
-2. `attach --before/--after`: one verb that moves and places, or two
-   commits. Written as one.
-3. Whether `done` on a root should require a completed verification
-   child, or only a reason. Written as only a reason, matching `hold`.
