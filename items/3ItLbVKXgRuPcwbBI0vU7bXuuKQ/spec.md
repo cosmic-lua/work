@@ -32,7 +32,11 @@ A refiner or decomposer following those briefs literally gets
 2. `_work/brief.tl` fills `<PRODUCT_ROOT>` for these kinds the same way it
    does for review (derived from `GITBOARD_DIR`, surviving unfilled and
    named on the closing line when unset); no second derivation.
-3. Tests: `_work/brief_test.tl` asserts the rendered refine and decompose
+3. The sentence "gitboard is already built in the board checkout." that
+   opens both templates' "Where to work" sections is corrected the way
+   #34 corrected the review templates' twin: the tool is the product
+   checkout's `bin/gitboard`, which runs the pinned release.
+4. Tests: `_work/brief_test.tl` asserts the rendered refine and decompose
    briefs contain `bin/gitboard` and not `o/bin/gitboard`, and that
    `<PRODUCT_ROOT>` fills for both. The sweep
    `grep -rn "o/bin/gitboard\|<BOARD_DIR>" _work/brieftext*.tl` goes to 0;
