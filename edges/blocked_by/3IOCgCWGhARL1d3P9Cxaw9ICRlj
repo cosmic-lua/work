@@ -1,1 +1,0 @@
-deleting test/tool/net before the salvage lands loses the JSON conformance corpus (jsontestsuite + json.org, ~1000 vendored lines) — tool/lua/test_data_formats.lua is a contract test, not a corpus one, so nothing else in the fork covers it
