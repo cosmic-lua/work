@@ -54,3 +54,31 @@ end
 local function test_head_state_is_none_with_no_runs_at_all()
   assert(gh.head_state({}) == "none", "an empty run list is none")
 end
+
+-- `latest_request_changes` is the pure selection `bounce_context`
+-- composes with a fetched review list — exercised directly against a
+-- synthetic list, the same way `head_state`'s siblings above exercise
+-- that classification directly rather than only through a stub
+-- standing in for the whole of a live read.
+local function test_latest_request_changes_picks_the_most_recent_by_submitted_at()
+  local finding = gh.latest_request_changes({
+      {state = "CHANGES_REQUESTED", body = "an older, already-fixed complaint",
+        submitted_at = "2024-01-01T00:00:00Z"},
+      {state = "APPROVED", body = "looks fine now",
+        submitted_at = "2024-01-03T00:00:00Z"},
+      {state = "CHANGES_REQUESTED", body = "the real, current finding",
+        submitted_at = "2024-01-02T00:00:00Z"},
+    })
+  assert(finding ~= nil and finding.body == "the real, current finding",
+    "the most recent CHANGES_REQUESTED review wins, by submitted_at "
+    .. "not list order")
+end
+
+local function test_latest_request_changes_is_nil_with_no_matching_review()
+  local finding = gh.latest_request_changes({
+      {state = "APPROVED", body = "lgtm", submitted_at = "2024-01-01T00:00:00Z"},
+      {state = "COMMENTED", body = "a passing remark",
+        submitted_at = "2024-01-02T00:00:00Z"},
+    })
+  assert(finding == nil, "no CHANGES_REQUESTED review at all is nil, not a guess")
+end

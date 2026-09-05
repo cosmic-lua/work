@@ -149,6 +149,34 @@ local function test_builder_rework_brief_survives_a_review_read_failure()
     end)
 end
 
+-- A reviewer's finding is ordinary review prose, not a placeholder
+-- source: `<CONST_NAME>`-shaped text inside it (this codebase's own
+-- naming convention, so entirely routine to write in a review) must
+-- never be reported as something the caller still owes a fill for.
+local function test_builder_rework_brief_does_not_mistake_review_prose_for_a_placeholder()
+  local s = init_state_repo("brief-rework-injection")
+  local _, leaf = root_with_leaf(s)
+  rework_item(s, leaf, 42)
+  with_reviews_fixture({
+      {state = "CHANGES_REQUESTED",
+        body = "please rename to <CONST_NAME> and check <ENV_VAR>",
+        submitted_at = "2024-01-01T00:00:00Z"},
+    }, function(): boolean
+      local code, out = brief_and_capture(s, "builder", leaf)
+      assert(code == 0)
+      assert(out:find("please rename to <CONST_NAME> and check <ENV_VAR>",
+          1, true) ~= nil,
+        "the finding still rides verbatim in the printed body: " .. out)
+      local verdict_line = out:match("[^\n]*$")
+      assert(verdict_line:find("<CONST_NAME>", 1, true) == nil,
+        "review prose shaped like a placeholder is not reported as "
+        .. "unfilled: " .. verdict_line)
+      assert(verdict_line:find("<ENV_VAR>", 1, true) == nil,
+        "same for the second one: " .. verdict_line)
+      return true
+    end)
+end
+
 -- A rework item whose PR carries no CHANGES_REQUESTED review at all
 -- (only an approval, say) leaves the placeholder unfilled the same way.
 local function test_builder_rework_brief_with_no_matching_review()

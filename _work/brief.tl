@@ -99,6 +99,32 @@ local function fill(text: string, values: {string: string}): string
   return out
 end
 
+--- The `values` `unfilled`'s scan should run against: identical to the
+--- real fill values except `BOUNCE_CONTEXT`, when set, is blanked.
+--- `BOUNCE_CONTEXT` is the one value carrying externally-authored text
+--- (a reviewer's quoted finding, `bounce_context`) rather than a board
+--- fact this tool controls, so a `<UPPER_SNAKE>`-shaped substring
+--- inside it — ordinary review prose like "rename to `<CONST_NAME>`"
+--- — must never be mistaken by `unfilled` for a placeholder the caller
+--- still owes a fill. The printed body always fills with the real
+--- `values`; only the scan uses this. Blanking the whole splice loses
+--- no real signal: the one placeholder `REWORK` deliberately leaves
+--- open, `<WORKTREE>`, already appears verbatim in `BUILDER`'s own
+--- body outside the splice, so the scan still reports it once.
+--- @param values {string: string} The real fill values
+--- @return {string: string} The values to scan a filled body with
+local function scan_values(values: {string: string}): {string: string}
+  if values["BOUNCE_CONTEXT"] == nil then
+    return values
+  end
+  local out: {string: string} = {}
+  for k, v in pairs(values) do
+    out[k] = v
+  end
+  out["BOUNCE_CONTEXT"] = ""
+  return out
+end
+
 --- The placeholders still unanswered in a filled body, first-seen
 --- order, each once.
 --- @param text string The filled template
@@ -276,7 +302,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string): integer
   end
   local body = fill(template, values) .. "\n\n" .. brieftext_friction.ASK
   print(body)
-  local left = unfilled(body)
+  local scan_body = fill(template, scan_values(values)) .. "\n\n" .. brieftext_friction.ASK
+  local left = unfilled(scan_body)
   local tail_note = "nothing left to fill — paste the body verbatim"
   if #left > 0 then
     tail_note = ("fill %s, then paste the body verbatim"):format(
