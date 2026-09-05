@@ -13,7 +13,11 @@
 --- `store.list`'s own format check (`_work.gitread`) is the
 --- board-readable precondition every other check here depends on — a
 --- board this tool cannot even read is reported as the one problem it
---- is, nothing else asked.
+--- is, nothing else asked. An `order` entry naming an id that is not a
+--- child of the item carrying it, and a `refs/heads/board/order` entry
+--- that is not a root, are audited here rather than in `item.problems`
+--- or `_work.flow`: both need the whole board's own parent-child shape
+--- to judge, which a single item's own fields cannot carry.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
@@ -30,9 +34,10 @@ local KNOWN_KINDS < const >: {string: boolean} = {
 }
 
 --- The structural problems `all` carries — pure over an already-loaded
---- board, no git of its own: dangling `parent`/`beats`/`blocked_by`/
---- other-kind edges, an unknown edge kind, a key two open items both
---- claim, a root with a `repo`, and every item's own `decode_problems`.
+--- board, no git of its own: dangling `parent`/`order`/`beats`/
+--- `blocked_by`/other-kind edges, an unknown edge kind, a key two open
+--- items both claim, a root with a `repo`, and every item's own
+--- `decode_problems`.
 --- @param all {item.Item} Every item
 --- @return {string} Problems, possibly empty
 local function structural_problems(all: {item.Item}): {string}
@@ -43,6 +48,12 @@ local function structural_problems(all: {item.Item}): {string}
     local id8 = it.id:sub(1, 8)
     if it.parent ~= "" and index[it.parent] == nil then
       out[#out + 1] = ("%s: parent %s does not exist"):format(id8, it.parent)
+    end
+    for _, o in ipairs(it.order or {}) do
+      local child = index[o]
+      if child == nil or child.parent ~= it.id then
+        out[#out + 1] = ("%s: order names %s, which is not a child of it"):format(id8, o)
+      end
     end
     for _, b in ipairs(it.beats or {}) do
       if index[b] == nil then
@@ -132,6 +143,27 @@ local function tree_problem(s: store.Store, it: item.Item, spec_body: string,
   return nil
 end
 
+--- `refs/heads/board/order`'s own findings: an entry naming an id that
+--- is not an item, or is an item but not a root. Pure over an
+--- already-loaded board and its observed root ranking — no git of its
+--- own.
+--- @param all {item.Item} Every item
+--- @param root_order {string} The board's own root ranking
+--- @return {string} Problems, possibly empty
+local function root_order_problems(all: {item.Item}, root_order: {string}): {string}
+  local index = flow.by_id(all)
+  local out: {string} = {}
+  for _, o in ipairs(root_order) do
+    local named = index[o]
+    if named == nil then
+      out[#out + 1] = ("refs/heads/board/order: names %s, which is not an item"):format(o)
+    elseif not item.is_root(named) then
+      out[#out + 1] = ("refs/heads/board/order: names %s, which is not a root"):format(o)
+    end
+  end
+  return out
+end
+
 --- The stale `refs/heads/board/lanes` finding: nothing writes it any more —
 --- the lane observation lives in the cache database instead — but a
 --- board carried over from before that move may still have one.
@@ -201,6 +233,9 @@ local function cmd_fsck(s: store.Store): integer
   end
   local specs = store.read_specs(s, ids)
   local problems = structural_problems(all)
+  for _, p in ipairs(root_order_problems(all, store.root_order(s))) do
+    problems[#problems + 1] = p
+  end
   -- One process for every item's observed tree, whatever the board's
   -- size — the batched form of `gitobj.tree_of`, which used to cost
   -- one `git rev-parse` PER item here.

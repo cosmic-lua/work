@@ -1,9 +1,9 @@
 --- An item's canonical git tree: the `meta` text blob, the optional
---- `spec.md` sidecar, the `held` marker blob, and the `edges/<kind>/<id>`
---- entries — and the two directions between that tree and an
---- `_work.item.Item`. This is the ONE place that shape is written, so
---- `_work.store`'s writer and reader, and the round-trip test, all
---- agree on it by construction.
+--- `spec.md` sidecar, the optional `order` blob, the `held` marker
+--- blob, and the `edges/<kind>/<id>` entries — and the two directions
+--- between that tree and an `_work.item.Item`. This is the ONE place
+--- that shape is written, so `_work.store`'s writer and reader, and
+--- the round-trip test, all agree on it by construction.
 ---
 --- `meta` carries every scalar field as one `key: value` line, keys in
 --- the order below; a zero value — "", 0, an empty list — is OMITTED,
@@ -13,6 +13,10 @@
 --- empty, and omitted when both are empty (`format_target`/
 --- `parse_target`). `held` is not a meta line at all: an empty marker
 --- blob at the path `held`, present exactly when `is_held` is true.
+--- `order` is not a meta line either: one blob, child ids one per
+--- line with a trailing newline, present only when this item has
+--- ranked at least one child (`encode_order`/`parse_order` — the same
+--- shape `refs/heads/board/order` carries for the board's own roots).
 --- `beats` and `blocked_by` are tree entries rather than meta lines
 --- because each entry is itself content: an empty marker blob for a
 --- beaten id, a reason blob for a blocker — both live under one
@@ -79,6 +83,34 @@ local function parse_target(target: string): string, string, string
   return target:sub(1, at1 - 1), target:sub(at1 + 1), ""
 end
 
+--- The `order` blob's text for a ranked list of ids: one per line,
+--- trailing newline, "" when the list is empty — the shared shape an
+--- item's own `order` blob and `refs/heads/board/order` both carry.
+--- @param ids {string} Ranked ids, in rank order
+--- @return string The blob text, "" for an empty list
+local function encode_order(ids: {string}): string
+  local parts: {string} = {}
+  for _, id in ipairs(ids) do
+    parts[#parts + 1] = id .. "\n"
+  end
+  return table.concat(parts)
+end
+
+--- Parse an `order` blob's text back into ranked ids. A blank line is
+--- skipped rather than read as an empty id, so trailing whitespace in
+--- a hand-edited blob does not become a phantom entry.
+--- @param text string The blob's content
+--- @return {string} Ranked ids, in rank order
+local function parse_order(text: string): {string}
+  local out: {string} = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    if line ~= "" then
+      out[#out + 1] = line
+    end
+  end
+  return out
+end
+
 --- The `meta` blob's text for one item. Every key in `META_KEYS`
 --- either contributes one `key: value\n` line or is skipped outright
 --- when its value is zero.
@@ -132,17 +164,18 @@ local function parse_meta(text: string): {string: string}
 end
 
 --- Build an `item.Item` from its tree's parts: the parsed `meta` map,
---- whether a `held` marker blob was present, the ids named under the
---- `edges/beats` and `edges/blocked_by` kinds (with each blocked_by
---- entry's reason blob content), and every OTHER kind this reader
---- found under `edges`, carried opaquely. Content problems (a
---- multiline title, a claimed root, a malformed `target`, ...) are
---- attached at `.decode_problems` rather than failing the build —
---- `item.decode`'s own tolerance, reused here so a store built from a
---- hand-edited commit still reads.
+--- whether a `held` marker blob was present, its `order` blob's
+--- already-parsed ids, the ids named under the `edges/beats` and
+--- `edges/blocked_by` kinds (with each blocked_by entry's reason blob
+--- content), and every OTHER kind this reader found under `edges`,
+--- carried opaquely. Content problems (a multiline title, a claimed
+--- root, a malformed `target`, ...) are attached at `.decode_problems`
+--- rather than failing the build — `item.decode`'s own tolerance,
+--- reused here so a store built from a hand-edited commit still reads.
 --- @param id string The item's id (the ref name's tail)
 --- @param meta {string: string} `parse_meta`'s output
 --- @param held boolean Whether a `held` marker blob was present
+--- @param order {string} This item's ranked children, from its `order` blob
 --- @param beats {string} Ids this item outranks
 --- @param blocked_by {string} Ids this item waits on
 --- @param block_reason {string: string} Blocker id -> reason
@@ -150,7 +183,8 @@ end
 --- reader does not interpret, kind -> id -> content
 --- @return item.Item The item, present even with content problems
 local function to_item(id: string, meta: {string: string}, held: boolean,
-    beats: {string}, blocked_by: {string}, block_reason: {string: string},
+    order: {string}, beats: {string}, blocked_by: {string},
+    block_reason: {string: string},
     other_edges: {string: {string: string}}): item.Item
   local repo, base, target_err = parse_target(meta.target or "")
   local it: item.Item = {
@@ -160,6 +194,7 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     repo = repo,
     base = base,
     key = meta.key or "",
+    order = order,
     beats = beats,
     blocked_by = blocked_by,
     block_reason = block_reason,
@@ -317,8 +352,9 @@ local function build_edges_tree(root: string, it: item.Item,
   return mktree_fn(root, subtrees)
 end
 
---- Build an item's git tree: `meta`, `spec.md` when given, `held` when
---- the item is held, and `edges` when it carries any. `write` chooses
+--- Build an item's git tree: `meta`, `spec.md` when given, `order`
+--- when it has ranked at least one child, `held` when the item is
+--- held, and `edges` when it carries any. `write` chooses
 --- between the two forms every blob and subtree this needs goes
 --- through: pure (the default — no process, nothing written, for a
 --- caller only comparing the resulting sha against one it already
@@ -353,6 +389,14 @@ local function build_tree(root: string, it: item.Item,
     end
     entries[#entries + 1] =
     {mode = "100644", otype = "blob", sha = spec_sha, name = "spec.md"}
+  end
+  if #(it.order or {}) > 0 then
+    local order_sha, oerr = hash_object_fn(root, encode_order(it.order))
+    if order_sha == nil then
+      return nil, oerr
+    end
+    entries[#entries + 1] =
+    {mode = "100644", otype = "blob", sha = order_sha, name = "order"}
   end
   -- The empty blob every marker (a `beats` entry, a reason-less
   -- `blocked_by`/other entry, the `held` marker itself) points at has
@@ -396,8 +440,11 @@ local record itemtree
   parse_target: function(target: string): string, string, string
   encode_meta: function(it: item.Item): string
   parse_meta: function(text: string): {string: string}
+  encode_order: function(ids: {string}): string
+  parse_order: function(text: string): {string}
   to_item: function(id: string, meta: {string: string}, held: boolean,
-  beats: {string}, blocked_by: {string}, block_reason: {string: string},
+  order: {string}, beats: {string}, blocked_by: {string},
+  block_reason: {string: string},
   other_edges: {string: {string: string}}): item.Item
   build_tree: function(root: string, it: item.Item,
   spec_body: string | nil, write?: boolean): string | nil, string
@@ -409,6 +456,8 @@ local M: itemtree = {
   parse_target = parse_target,
   encode_meta = encode_meta,
   parse_meta = parse_meta,
+  encode_order = encode_order,
+  parse_order = parse_order,
   to_item = to_item,
   build_tree = build_tree,
 }

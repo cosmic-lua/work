@@ -93,7 +93,9 @@ end
 --- already builds it as, never field by field), `spec.md` only when
 --- `spec_replacement` is given AND differs from `old_spec` (nil
 --- leaves the sidecar untouched — no read, no write, no path at all,
---- carried forward by `from`), `held` added or removed when `is_held`
+--- carried forward by `from`), `order` added, changed or removed when
+--- the ranked child list moved (compared as its own encoded blob, the
+--- same way `meta` is), `held` added or removed when `is_held`
 --- flips, and every `edges/<kind>/<id>` entry — `beats`, `blocked_by`,
 --- and every kind in `other_edges` — added, changed or removed against
 --- `old`'s own sets. `old` is nil for a brand-new item — every path
@@ -121,6 +123,18 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
       ops[#ops + 1] = {path = "spec.md", content = nil}
     else
       ops[#ops + 1] = {path = "spec.md", content = spec_replacement}
+    end
+  end
+  local old_order = ""
+  if old ~= nil then
+    old_order = itemtree.encode_order(old.order or {})
+  end
+  local new_order = itemtree.encode_order(new_it.order or {})
+  if new_order ~= old_order then
+    if new_order == "" then
+      ops[#ops + 1] = {path = "order", content = nil}
+    else
+      ops[#ops + 1] = {path = "order", content = new_order}
     end
   end
   local old_held = old ~= nil and old.is_held or false
