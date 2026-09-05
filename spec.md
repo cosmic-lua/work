@@ -65,6 +65,40 @@ class still 8 rows with `cosmic/searcher_test.tl	58` still present
 (`awk -F'\t' '$3=="dynamic name lookup"' docs/design/cast-sites.tsv`)
 — untouched by `1Lhz_38Wt`, exactly as its own spec recorded.
 
+**A first build attempt (2026-09-05, uncommitted-to-board) implemented
+the `## Change` below exactly and hit a real gap this refinement
+missed**: `bin/cosmic --make ci` failed at the `lint` stage —
+
+    docs/design/casts.md:275:1: doc-citation: docs/design/casts.md:275: the quoted line is not _make/init.tl:143 —
+    document has `local v = by_name("build") as Verb -- cast: the registry defines it`,
+    source has `local v = policy.must_verb(by_name, "build")`.
+
+`docs/design/casts.md`'s `### dynamic name lookup` section
+(`docs/design/casts.md:264-278`) fence-quotes `_make/init.tl:143` as
+its illustrative citation (`_cli/citations.tl`'s doc-citation check,
+which compares a fenced `-- <path>:<line>` block against the tree
+verbatim). This item's own Change rewrites that exact line, so the
+citation goes stale as a direct, unavoidable consequence of doing the
+`_make/init.tl` replacement — confirmed the check passes clean on the
+pre-change tree (`git stash`, `bin/cosmic --check lint
+docs/design/casts.md` → PASS) and fails only once the 7-site
+replacement lands.
+
+This is a citation-accuracy gap, not a reopening of the Non-goals
+wall below: the wall reserves the section's EXPLANATORY prose (the
+"What closes it here" paragraph, including its now-stale "wants a
+declared record" sentence about the searcher slot — `1Lhz_38Wt`
+already recorded that this sentence stays wrong until `zs1K_cWnY`
+rewrites it) for `zs1K_cWnY`. The fenced CODE CITATION right above
+that paragraph is a different thing: a mechanically-checked quote of
+one still-live site in the class, and after this item lands the only
+still-live site is `cosmic/searcher_test.tl:58`
+(`sed -n '58p' cosmic/searcher_test.tl` →
+`    local ok, why = pcall((s as function(string): any), missing)`,
+untouched by this item). Repointing the citation to that line keeps
+the section's fenced example accurate without rewriting a word of the
+explanatory prose the wall protects.
+
 ## Change
 
 - `_make/policy.tl`: add and export on `PolicyModule`
@@ -88,6 +122,26 @@ class still 8 rows with `cosmic/searcher_test.tl	58` still present
   passes without a section deletion. Do not delete
   `docs/design/casts.md`'s `### dynamic name lookup` section here —
   it still has a live row.
+- `docs/design/casts.md:274-275`: repoint ONLY the fenced citation's
+  header and quoted line — nothing else in the section — from
+
+  ```text
+  -- _make/init.tl:143
+    local v = by_name("build") as Verb -- cast: the registry defines it
+  ```
+
+  to
+
+  ```text
+  -- cosmic/searcher_test.tl:58
+    local ok, why = pcall((s as function(string): any), missing)
+  ```
+
+  Leave every other line of the section (the class description above
+  the fence and the entire "What closes it here" paragraph below it,
+  including its stale "wants a declared record" sentence) byte-for-byte
+  unchanged — that paragraph is `zs1K_cWnY`'s to rewrite, not this
+  item's.
 - `bin/cosmic --make ci` ends `ci: PASS`.
 
 ## Non-goals
@@ -95,8 +149,13 @@ class still 8 rows with `cosmic/searcher_test.tl	58` still present
 The `E*`/`SIG*` constant lookups (`binding constant by name`, 5 rows)
 are item `3ISJHfNY` — untouched here.
 
-`cosmic/searcher_test.tl:57-58`'s cast, the `dynamic name lookup`
-class's final row, and `docs/design/casts.md`'s prose for the class
-are `zs1K_cWnY`'s scope regardless of landing order between the two
-items — untouched here (mirrors `zs1K_cWnY`'s own Non-goals, which
-names this item's 7 sites as its own untouched half).
+`cosmic/searcher_test.tl:57-58`'s cast itself, the `dynamic name
+lookup` class's final row, and `docs/design/casts.md`'s EXPLANATORY
+prose for the class (the "What closes it here" paragraph) are
+`zs1K_cWnY`'s scope regardless of landing order between the two items
+— untouched here (mirrors `zs1K_cWnY`'s own Non-goals, which names
+this item's 7 sites as its own untouched half). The one exception,
+scoped narrowly above, is repointing the section's fenced citation
+line so it keeps quoting a real, still-live site — a mechanical
+consequence of this item's own edit to `_make/init.tl:143`, not a
+rewrite of the prose the wall protects.
