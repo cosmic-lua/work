@@ -25,6 +25,7 @@
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
+local gitread = require("_work.gitread")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
@@ -190,11 +191,22 @@ local function duplicate_ref_problems(s: store.Store): {string}
 end
 
 local function cmd_fsck(s: store.Store): integer
-  local all, lerr = store.list(s)
-  if all == nil then
+  -- A fresh git read, never the cache-backed `store.list`: this audit's
+  -- own job is checking the database against git, so it needs every
+  -- field git actually carries — `other_edges` (an unmigrated board's
+  -- `beats`/`blocked_by`, or any other kind this build does not
+  -- interpret) and the observed tree `tree_problem` re-encodes against
+  -- — neither of which the cache's schema carries at all.
+  local board, lerr = gitread.list(s.root)
+  if board == nil then
     print(lerr)
     return gate.verdict_line("fsck", false, "1 problem(s)")
   end
+  local all = board.items
+  for id, sha in pairs(board.shas_by_id) do
+    s.leased_sha[id] = sha
+  end
+  s.duplicates = board.duplicates
   local ids: {string} = {}
   local observed_shas: {string} = {}
   for _, it in ipairs(all) do

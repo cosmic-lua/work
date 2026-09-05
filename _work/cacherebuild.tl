@@ -66,7 +66,12 @@ local function rebuild(root: string): Cache | nil, string
   end
   local tx_ok, tx_err = db:transaction(function(tx: sqlite.Database): boolean, string
       for _, it in ipairs(board.items) do
-        local iok, ierr = index.insert_item(tx, it)
+        local lease: index.Lease = {
+          ref = board.refs_by_id[it.id] or "",
+          tip = board.shas_by_id[it.id] or "",
+          touched_at = board.touched_by_id[it.id] or 0,
+        }
+        local iok, ierr = index.insert_item(tx, it, lease)
         if not iok then
           return false, ierr
         end
@@ -114,6 +119,9 @@ local function rebuild(root: string): Cache | nil, string
   end
   if sok then
     sok, serr = cachedb.meta_set(db, "schema_fingerprint", fp)
+  end
+  if sok then
+    sok, serr = cachedb.meta_set(db, "seq_sha", board.seq_sha)
   end
   if not sok then
     local _c, _cerr = db:close()

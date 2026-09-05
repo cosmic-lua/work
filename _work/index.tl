@@ -16,6 +16,21 @@ local type Item = item.Item
 
 local DDL < const > = indexddl.DDL
 
+--- One item's write lease as a store read hydrates it from the
+--- `items` table: the branch it lives on, the commit sha at that
+--- branch's tip — what a mutation's compare-and-swap push is made
+--- against — and that tip's committer date, epoch seconds.
+local record Lease
+  ref: string
+  tip: string
+  touched_at: integer
+end
+
+--- The lease an item carries when nothing names one: an id no caller
+--- has ever recorded a ref/tip/touched_at for (a bare test fixture,
+--- say), never mistaken for a real lease since `ref`/`tip` are both "".
+local EMPTY_LEASE < const >: Lease = {ref = "", tip = "", touched_at = 0}
+
 --- The open connection plus the per-load problem strings `open`
 --- collected while inserting; `problems` adds the live, queried
 --- findings to these before returning.
@@ -60,13 +75,20 @@ end
 --- @param db sqlite.Database The connection
 --- @param items {Item} Every item to load
 --- @param problems {string} Problem lines, appended to on any refusal
-local function load_items(db: sqlite.Database, items: {Item}, problems: {string})
+--- @param leases {string: Lease} | nil Each id's write lease; an id
+--- absent (or the whole map nil) lands `EMPTY_LEASE` — a bare fixture
+--- with no ref/tip/touched_at of its own to carry
+local function load_items(db: sqlite.Database, items: {Item}, problems: {string},
+    leases?: {string: Lease})
   for _, it in ipairs(items) do
+    local lease = (leases ~= nil and leases[it.id]) or EMPTY_LEASE
     local landed = try(db, [[
       INSERT INTO items(id, title, parent, repo, base, key, claim, reviewer,
-        pr, result, verdict, verdict_head, verdict_spec, resolution)
+        pr, result, verdict, verdict_head, verdict_spec, resolution,
+        ref, tip, touched_at)
       VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :reviewer,
-        :pr, :result, :verdict, :verdict_head, :verdict_spec, :resolution)
+        :pr, :result, :verdict, :verdict_head, :verdict_spec, :resolution,
+        :ref, :tip, :touched_at)
     ]], {
         id = it.id, title = it.title, parent = it.parent or "",
         repo = it.repo or "", base = it.base or "", key = it.key or "",
@@ -74,6 +96,7 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",
         verdict_head = it.verdict_head or "", verdict_spec = it.verdict_spec or "",
         resolution = it.resolution or "",
+        ref = lease.ref, tip = lease.tip, touched_at = lease.touched_at,
       }, nil, problems, it.id)
     if landed then
       for seq, name in ipairs(it.builders or {}) do
@@ -266,11 +289,17 @@ end
 --- reuses directly.
 --- @param db sqlite.Database The connection
 --- @param it Item The item
+--- @param lease Lease | nil Its write lease; nil (a bare fixture with
+--- none to give) lands `EMPTY_LEASE`
 --- @return boolean True on success
 --- @return string Error message
-local function insert_item(db: sqlite.Database, it: Item): boolean, string
+local function insert_item(db: sqlite.Database, it: Item, lease?: Lease): boolean, string
   local row_problems: {string} = {}
-  load_items(db, {it}, row_problems)
+  local leases: {string: Lease} | nil = nil
+  if lease ~= nil then
+    leases = {[it.id] = lease}
+  end
+  load_items(db, {it}, row_problems, leases)
   if #row_problems > 0 then
     return false, table.concat(row_problems, "; ")
   end
@@ -279,12 +308,13 @@ end
 
 local record index
   type Index = Index
+  type Lease = Lease
   DDL: string
   open: function(items: {Item}, specs?: {string: string}): Index | nil, string
   problems: function(self: Index): {string}
   close: function(self: Index): boolean, string
   delete_item: function(db: sqlite.Database, id: string): boolean, string
-  insert_item: function(db: sqlite.Database, it: Item): boolean, string
+  insert_item: function(db: sqlite.Database, it: Item, lease?: Lease): boolean, string
 end
 
 local M: index = {

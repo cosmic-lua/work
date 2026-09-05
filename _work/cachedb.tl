@@ -44,11 +44,11 @@ local type Cache = index.Index
 --- therefore redundant for a DDL change specifically; it stays only
 --- as an escape hatch for forcing every clone to rebuild for a reason
 --- the fingerprint cannot see (a bug in how a row was interpreted, say).
---- Bumped to 4 for the removal of the `edges` table and the `held`
---- column (`_work.indexddl`'s DDL): the fingerprint alone already
---- forces the rebuild that change needs, and the bump is
---- belt-and-suspenders, matching this constant's own stated role.
-local SCHEMA_VERSION < const > = 4
+--- Bumped to 5 for `items` gaining `ref`/`tip`/`touched_at`
+--- (`_work.indexddl`'s DDL): the fingerprint alone already forces the
+--- rebuild that change needs, and the bump is belt-and-suspenders,
+--- matching this constant's own stated role.
+local SCHEMA_VERSION < const > = 5
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -378,20 +378,40 @@ end
 --- has an event row; `PRAGMA defer_foreign_keys` defers the check to
 --- this call's own transaction commit, by which point `insert_item`
 --- below has already put the row back.
+--- `lease` nil means the caller made no lease change — an item this
+--- patch is refreshing for some OTHER reason, whose ref/tip/touched_at
+--- carry over exactly as already recorded (or, absent any prior row,
+--- default to `refs/heads/items/<id>` and a zero tip, the shape a
+--- caller with no lease of its own to give and no earlier row to carry
+--- forward from lands).
 --- @param c Cache An open, schema-valid cache
 --- @param it item.Item The item, exactly as written
 --- @param spec_body string | nil Its current spec text; nil to keep
 --- whatever this id was last indexed with
+--- @param lease index.Lease | nil Its new write lease; nil to carry the
+--- prior one forward
 --- @return boolean True on success
 --- @return string Error message
-local function patch_item(c: Cache, it: item.Item, spec_body: string | nil): boolean, string
-  local prior: string | nil = nil
-  if spec_body == nil then
-    local row = c.db:query_one("SELECT spec FROM search WHERE id = ?", {it.id})
+local function patch_item(c: Cache, it: item.Item, spec_body: string | nil,
+    lease?: index.Lease): boolean, string
+  local prior_spec: string | nil = nil
+  local prior_lease: index.Lease | nil = nil
+  if spec_body == nil or lease == nil then
+    local row = c.db:query_one(
+      "SELECT ref, tip, touched_at, "
+      .. "(SELECT spec FROM search WHERE id = items.id) AS spec "
+      .. "FROM items WHERE id = ?", {it.id})
     if row ~= nil then
-      prior = row.spec as string -- cast: from any (sqlite row)
+      prior_spec = row.spec as string -- cast: from any (sqlite row)
+      prior_lease = {
+        ref = row.ref as string, -- cast: from any (sqlite row)
+        tip = row.tip as string, -- cast: from any (sqlite row)
+        touched_at = math.tointeger(row.touched_at as number) or 0, -- cast: from any (sqlite row)
+      }
     end
   end
+  local final_lease = lease or prior_lease
+  or {ref = "refs/heads/items/" .. it.id, tip = "", touched_at = 0}
   local dfok, dferr = c.db:exec("PRAGMA defer_foreign_keys = ON")
   if not dfok then
     return false, dferr
@@ -404,11 +424,11 @@ local function patch_item(c: Cache, it: item.Item, spec_body: string | nil): boo
   if not rok then
     return false, rerr
   end
-  local iok, ierr = index.insert_item(c.db, it)
+  local iok, ierr = index.insert_item(c.db, it, final_lease)
   if not iok then
     return false, ierr
   end
-  return find.reindex_item(c, it, spec_body or prior or "")
+  return find.reindex_item(c, it, spec_body or prior_spec or "")
 end
 
 --- Close the connection. Idempotent, like `Database.close` itself —
@@ -438,7 +458,8 @@ local record cachedb
   db_user_version: function(db: sqlite.Database): integer
   schema_fingerprint: function(db: sqlite.Database): string | nil, string
   expected_schema_fingerprint: function(): string | nil, string
-  patch_item: function(c: Cache, it: item.Item, spec_body: string | nil): boolean, string
+  patch_item: function(c: Cache, it: item.Item, spec_body: string | nil,
+  lease?: index.Lease): boolean, string
   close: function(c: Cache): boolean, string
 end
 

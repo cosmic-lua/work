@@ -15,8 +15,10 @@ local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
+local gitbatch = require("_work.gitbatch")
 local gitobj = require("_work.gitobj")
 local gitrank = require("_work.gitrank")
+local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
@@ -434,4 +436,60 @@ local function test_a_synced_outcome_rank_patches_the_cache_incrementally()
   assert(table.concat(board.order, " ") == root,
     ("the board's own order after the incremental patch: %s"):format(
       table.concat(board.order, " ")))
+end
+
+--- `store.list`, after an ordinary gated save, hydrates the saved
+--- item's lease with the save's OWN new tip straight from the cache —
+--- no fresh git object read at all, only the one `for-each-ref`
+--- snapshot every `list` call takes for its own freshness digest.
+--- Counted the way `_work/writepath_test.tl` counts git spawns: a
+--- counting wrapper ahead of the real function, restored once the call
+--- under test returns.
+local function test_store_list_after_a_save_returns_the_new_tip_without_a_git_read()
+  local s = init_state_repo("list-after-save-tip")
+  local id = file_item(s, "an item", "")
+  check.must(cache.close(check.must(cache.open(s.root))))
+
+  local it = check.must(store.load(s, id))
+  it.title = "retitled"
+  assert(gate.commit_and_publish(s, it, nil, "retitle", "set"))
+
+  local real_tip = (check.must(child.run(
+        {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
+    :gsub("%s+$", ""))
+
+  local for_each_ref_calls = 0
+  local real_for_each_ref = refs.for_each_ref
+  refs.for_each_ref = function(root: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    for_each_ref_calls = for_each_ref_calls + 1
+    return real_for_each_ref(root, patterns)
+  end
+  local batch_calls = 0
+  local real_batch_session = gitbatch.batch_session
+  gitbatch.batch_session = function(root: string): gitbatch.BatchSession | nil, string
+    batch_calls = batch_calls + 1
+    return real_batch_session(root)
+  end
+  local all, lerr = store.list(s)
+  refs.for_each_ref = real_for_each_ref
+  gitbatch.batch_session = real_batch_session
+  assert(all ~= nil, lerr)
+
+  assert(for_each_ref_calls == 1, ("store.list should cost exactly one "
+      .. "for-each-ref snapshot: got %d"):format(for_each_ref_calls))
+  assert(batch_calls == 0, ("store.list must not fall back to a git object "
+      .. "batch read: got %d"):format(batch_calls))
+  assert(s.leased_sha[id] == real_tip,
+    "the lease reflects the save's new tip, read from the cache: "
+    .. tostring(s.leased_sha[id]) .. " vs " .. real_tip)
+
+  local found_it: item.Item = nil
+  for _, i in ipairs(all) do
+    if i.id == id then
+      found_it = i
+    end
+  end
+  assert(found_it ~= nil and found_it.title == "retitled",
+    "store.list's own items carry the save's new title too")
 end

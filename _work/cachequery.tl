@@ -13,6 +13,16 @@ local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
 local tail = require("_work.tail")
 
+--- `leases`' result: every id's write lease, plus the board-wide
+--- `refs/heads/board/seq` tip a bounded mutation's own compare-and-swap
+--- push is made against.
+local record Leases
+  refs_by_id: {string: string}
+  shas_by_id: {string: string}
+  touched_at: {string: integer}
+  seq_sha: string
+end
+
 --- Every observed lane's last recorded conclusion, "" for a lane never
 --- recorded — `_work.lanes`' `read_state`, backed by the cache's
 --- `lanes` table instead of the committed `refs/heads/board/lanes`. A board
@@ -275,6 +285,38 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   return out, ""
 end
 
+--- Every item's write lease, straight from the cache's own `items`
+--- rows — the ref it lives on, the tip a mutation's compare-and-swap
+--- push is made against, and that tip's committer date — plus
+--- `refs/heads/board/seq`'s own recorded tip, `cache_meta.seq_sha`
+--- ("" for a board that has never minted a short key, or a cache built
+--- before this field existed). `_work.store.list`'s cache-backed
+--- hydration of `leased_ref`/`leased_sha`/`touched_at`/`observed_seq`.
+--- @param c cache.Cache The open cache
+--- @return Leases | nil Every id's lease, and the seq ref's own tip
+--- @return string Error message
+local function leases(c: cache.Cache): Leases | nil, string
+  local rows, err = c.db:query("SELECT id, ref, tip, touched_at FROM items")
+  if rows == nil then
+    return nil, err
+  end
+  local refs_by_id: {string: string} = {}
+  local shas_by_id: {string: string} = {}
+  local touched_at: {string: integer} = {}
+  for row in rows do
+    local id = row.id as string -- cast: from any (sqlite row)
+    refs_by_id[id] = row.ref as string -- cast: from any (sqlite row)
+    shas_by_id[id] = row.tip as string -- cast: from any (sqlite row)
+    touched_at[id] = math.tointeger(row.touched_at as number) or 0 -- cast: from any (sqlite row)
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+  return {refs_by_id = refs_by_id, shas_by_id = shas_by_id, touched_at = touched_at,
+    seq_sha = cachedb.meta_get(c.db, "seq_sha") or ""}, ""
+end
+
 --- `find TEXT...`: every hit for the joined query, ranked, one line
 --- each — handle, state, title, snippet — then the verdict line
 --- `gitboard-find: N hit(s)`. Opens the cache (rebuilding it when
@@ -303,6 +345,7 @@ local function cmd_find(root: string, text: string): integer
 end
 
 local record cachequery
+  type Leases = Leases
   lanes_read: function(root: string, known_digest?: string): {string: string}
   lanes_write: function(root: string, facts: {string: string},
   known_digest?: string): boolean, string
@@ -310,6 +353,7 @@ local record cachequery
   known_digest?: string): {string}
   resolve_tail: function(root: string, input: string): string | nil, string
   items: function(c: cache.Cache): {item.Item} | nil, string
+  leases: function(c: cache.Cache): Leases | nil, string
   cmd_find: function(root: string, text: string): integer
 end
 
@@ -319,6 +363,7 @@ local M: cachequery = {
   similar_lines = similar_lines,
   resolve_tail = resolve_tail,
   items = items,
+  leases = leases,
   cmd_find = cmd_find,
 }
 

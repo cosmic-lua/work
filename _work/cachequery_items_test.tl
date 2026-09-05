@@ -1,14 +1,17 @@
 #!/usr/bin/env cosmic
--- `_work.cachequery.items`'s hydration against `store.list`'s fresh git
--- read: field-for-field, item-for-item, IN ORDER — the differential
--- proof behind `_work/gitshow.tl`'s and `_work/gitview.tl`'s switch to
--- the cache's own SQL rows, committed rather than the throwaway script
--- that first checked it against the production board (937 items, 0
--- mismatches). Exercises every field that check covered on a small
--- hand-built fixture: `builders`/`speccers` (order matters there —
--- oldest first), and one item carrying an edge kind this build does
--- not interpret — present on the git-truthed side and absent on the
--- cache-hydrated one, since the cache carries no edge kind at all.
+-- `_work.cachequery.items`'s hydration against `_work.gitread.list`'s
+-- fresh read: field-for-field, item-for-item, IN ORDER — the
+-- differential proof behind `_work/gitshow.tl`'s and `_work/gitview.tl`'s
+-- switch to the cache's own SQL rows, committed rather than the
+-- throwaway script that first checked it against the production board
+-- (937 items, 0 mismatches). Exercises every field that check covered
+-- on a small hand-built fixture: `builders`/`speccers` (order matters
+-- there — oldest first), and one item carrying an edge kind this build
+-- does not interpret — present on the git-truthed side and absent on
+-- the cache-hydrated one, since the cache carries no edge kind at all.
+-- `gitread.list`, not `store.list`, is the git-truthed side here:
+-- `store.list` is itself cache-backed now, so it carries the same gap
+-- this test exists to pin.
 
 local cache = require("_work.cache")
 local cachequery = require("_work.cachequery")
@@ -16,6 +19,7 @@ local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local gitrank = require("_work.gitrank")
+local gitread = require("_work.gitread")
 local item = require("_work.item")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -36,7 +40,7 @@ local function as_set(a: {string}): {string: boolean}
 end
 
 --- `want` and `got` name the same ids, order-blind.
---- @param want {string} The `store.list` side
+--- @param want {string} The `gitread.list` side
 --- @param got {string} The `cachequery.items` side
 --- @param label string What is being compared, for the failure message
 local function assert_same_set(want: {string}, got: {string}, label: string)
@@ -51,7 +55,7 @@ end
 --- `speccers` are "oldest first" rosters, not sets: the cache's own
 --- `seq` column exists to keep this order across a patch, and this is
 --- what proves the hydration keeps it too.
---- @param want {string} The `store.list` side
+--- @param want {string} The `gitread.list` side
 --- @param got {string} The `cachequery.items` side
 --- @param label string What is being compared, for the failure message
 local function assert_same_order(want: {string}, got: {string}, label: string)
@@ -61,9 +65,9 @@ local function assert_same_order(want: {string}, got: {string}, label: string)
   end
 end
 
---- One item's fields, field-for-field, between `store.list`'s decode
+--- One item's fields, field-for-field, between `gitread.list`'s decode
 --- and `cachequery.items`'s hydration.
---- @param want item.Item The `store.list` item
+--- @param want item.Item The `gitread.list` item
 --- @param got item.Item The `cachequery.items` item
 local function assert_items_match(want: item.Item, got: item.Item)
   local id8 = want.id:sub(1, 8)
@@ -87,7 +91,7 @@ local function assert_items_match(want: item.Item, got: item.Item)
     id8 .. " decode_problems")
 end
 
-local function test_items_matches_store_list_field_for_field_and_in_order()
+local function test_items_matches_gitread_list_field_for_field_and_in_order()
   local s = init_state_repo("cachequery-items-hydrate")
   local root = file_item(s, "an outcome", "")
   local leaf1 = file_item(s, "a workable slice", root)
@@ -105,7 +109,7 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
   leaf_it.speccers = {"session-c"}
   assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with an edge and a roster"))
 
-  local want = check.must(store.list(s))
+  local want = check.must(gitread.list(s.root)).items
   local c = check.must(cache.open(s.root))
   local got = check.must(cachequery.items(c))
   assert(check.must(cache.close(c)))
@@ -125,7 +129,7 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
   assert_same_order(want_board.order, {root}, "the board's own order")
 
   -- The one field this differential deliberately does NOT match:
-  -- `store.list`'s fresh git read carries leaf1's edge kind
+  -- `gitread.list`'s fresh git read carries leaf1's edge kind
   -- (`item.Item.other_edges`), but the cache's schema has no `edges`
   -- table at all, so the hydrated side is always nil.
   local leaf1_want, leaf1_got: item.Item, item.Item
@@ -142,4 +146,4 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
   assert(leaf1_got ~= nil and leaf1_got.other_edges == nil,
     "the cache-hydrated side carries no edge kind at all")
 end
-test_items_matches_store_list_field_for_field_and_in_order()
+test_items_matches_gitread_list_field_for_field_and_in_order()

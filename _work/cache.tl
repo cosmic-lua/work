@@ -37,6 +37,7 @@
 --- against both.
 local cachedb = require("_work.cachedb")
 local cacherebuild = require("_work.cacherebuild")
+local cachewatch = require("_work.cachewatch")
 local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
@@ -120,20 +121,22 @@ end
 --- to fail over), confirm `before_digest` still matches what it has
 --- recorded (proof nothing else moved a ref out from under it since
 --- the caller took that snapshot), run `apply_fn` in one transaction,
---- then record `after_digest` — computed by the caller already when
---- known (a fetch's own post-fetch snapshot), one more `fresh_digest`
---- read when not (a save has no such snapshot to reuse). Any real
---- failure along the way heals (`heal`) rather than leaving the file
---- silently stale.
+--- then record the post-write ref state — `after_entries`, when the
+--- caller already took that snapshot (a fetch's own post-fetch read),
+--- one more `refs_snapshot` when not (a save has no such snapshot to
+--- reuse) — as `cache_meta`'s `refs_digest` and `seq_sha` both, so
+--- either path keeps `refs/heads/board/seq`'s own recorded tip current
+--- with no extra read of its own. Any real failure along the way heals
+--- (`heal`) rather than leaving the file silently stale.
 --- @param root string The store's root
 --- @param before_digest string | nil The pre-write digest
---- @param after_digest string | nil The post-write digest, when the
---- caller already knows it; nil to read it fresh
+--- @param after_entries {refs.RefEntry} | nil The post-write ref
+--- listing, when the caller already took it; nil to read one fresh
 --- @param apply_fn function(tx) Patches exactly the touched rows
 --- @return boolean True on success (including nothing to do)
 --- @return string Error message
 local function apply_patch(root: string, before_digest: string | nil,
-    after_digest: string | nil,
+    after_entries: {refs.RefEntry} | nil,
     apply_fn: function(sqlite.Database): boolean, string): boolean, string
   if before_digest == nil then
     return true, ""
@@ -157,16 +160,19 @@ local function apply_patch(root: string, before_digest: string | nil,
     local _c, _cerr = db:close()
     return heal(root, terr)
   end
-  local fresh = after_digest
-  if fresh == nil then
-    local computed, ferr = cachedb.fresh_digest(root)
-    if computed == nil then
+  local entries = after_entries
+  if entries == nil then
+    local fresh_entries, ferr = cachedb.refs_snapshot(root)
+    if fresh_entries == nil then
       local _c, _cerr = db:close()
       return heal(root, ferr)
     end
-    fresh = computed
+    entries = fresh_entries
   end
-  local mok, merr = cachedb.meta_set(db, "refs_digest", fresh)
+  local mok, merr = cachedb.meta_set(db, "refs_digest", cachedb.digest_of(entries))
+  if mok then
+    mok, merr = cachedb.meta_set(db, "seq_sha", cachewatch.seq_sha_of(entries))
+  end
   if not mok then
     local _c, _cerr = db:close()
     return heal(root, merr)
@@ -214,7 +220,20 @@ end
 --- cache is left exactly as it was, stale or absent, for the next
 --- `open` to rebuild.
 --- `written` names the ids with a new commit; one absent still gets its
---- fields patched, just no `events` row. `message` is the shared subject.
+--- fields patched, just no `events` row and no lease change (its
+--- ref/tip/touched_at carry forward exactly as already recorded — an
+--- `also` item a mutation's diff found nothing to write for). `message`
+--- is the shared subject.
+--- A written id's ref is read straight off the row this same patch is
+--- about to replace — an item's ref never changes once created — or,
+--- for an id with no prior row at all (a brand-new item), defaults to
+--- `refs/heads/items/<id>`: the only ref `_work.gitwrite` ever creates
+--- one under. `touched_at` is this call's own wall clock, the same
+--- approximation `events.apply_save`'s `at` already makes for the
+--- identical reason (`_work.fastimport.git_date_now()`'s exact value
+--- never leaves `_work.gitwrite`) — the two agree to the second in
+--- every ordinary case, and a rare drift self-heals at the next
+--- digest-mismatched rebuild.
 --- @param root string The store's root
 --- @param before_digest string | nil `guard`'s result, from before the write
 --- @param items {item.Item} `it`, then every `also` item, in that order
@@ -236,11 +255,20 @@ local function after_save(root: string, before_digest: string | nil,
         if i == 1 then
           body = spec_body
         end
-        local pok, perr = cachedb.patch_item(txc, it, body)
+        local new_sha = written[it.id]
+        local lease: index.Lease | nil = nil
+        if new_sha ~= nil and new_sha ~= "" then
+          local prior = tx:query_one("SELECT ref FROM items WHERE id = ?", {it.id})
+          local ref = "refs/heads/items/" .. it.id
+          if prior ~= nil then
+            ref = prior.ref as string -- cast: from any (sqlite row)
+          end
+          lease = {ref = ref, tip = new_sha, touched_at = now}
+        end
+        local pok, perr = cachedb.patch_item(txc, it, body, lease)
         if not pok then
           return false, perr
         end
-        local new_sha = written[it.id]
         if new_sha ~= nil and new_sha ~= "" then
           local eok, eerr = events.apply_save(tx, it.id, new_sha, now, message)
           if not eok then
@@ -261,16 +289,19 @@ end
 --- not find is genuinely gone (a locally pruned ref), which is a
 --- plain delete.
 --- `old_shas` is each touched id's previous sha (absent when new) —
---- `events.apply_fetch`'s `old..new`.
+--- `events.apply_fetch`'s `old..new`. `after_entries` is the fetch's
+--- own post-fetch ref listing (`around_fetch`'s own snapshot) — where
+--- every patched id's committer date is read from (`_work.cachewatch.touched_by_item`),
+--- with no further git read of its own.
 --- @param root string The store's root
 --- @param before_digest string | nil The pre-fetch digest
---- @param after_digest string The post-fetch digest, already known
+--- @param after_entries {refs.RefEntry} The post-fetch ref listing, already taken
 --- @param ids {string} Every item id whose sha changed, appeared, or disappeared
 --- @param old_shas {string: string} Each touched id's previously observed sha
 --- @return boolean True on success (including nothing to do)
 --- @return string Error message
 local function patch_fetched(root: string, before_digest: string | nil,
-    after_digest: string, ids: {string}, old_shas: {string: string}): boolean, string
+    after_entries: {refs.RefEntry}, ids: {string}, old_shas: {string: string}): boolean, string
   if #ids == 0 then
     return true, ""
   end
@@ -283,7 +314,8 @@ local function patch_fetched(root: string, before_digest: string | nil,
     shas[id] = l.sha
   end
   local specs = gitread.read_specs(root, shas, ids)
-  return apply_patch(root, before_digest, after_digest,
+  local touched_at = cachewatch.touched_by_item(after_entries)
+  return apply_patch(root, before_digest, after_entries,
     function(tx: sqlite.Database): boolean, string
       local txc: Cache = {db = tx, specs = {}, load_problems = {}}
       for _, id in ipairs(ids) do
@@ -298,7 +330,9 @@ local function patch_fetched(root: string, before_digest: string | nil,
             return false, rerr
           end
         else
-          local pok, perr = cachedb.patch_item(txc, l.it, specs[id] or "")
+          local lease: index.Lease = {ref = l.ref, tip = l.sha,
+            touched_at = touched_at[id] or 0}
+          local pok, perr = cachedb.patch_item(txc, l.it, specs[id] or "", lease)
           if not pok then
             return false, perr
           end
@@ -348,7 +382,7 @@ local function around_fetch(root: string, fetch_fn: function(): boolean, string)
     return ok, err
   end
   local _ok2, _err2 = patch_fetched(root, cachedb.digest_of(before_entries),
-    cachedb.digest_of(after_entries), touched, before_shas)
+    after_entries, touched, before_shas)
   return ok, err
 end
 

@@ -275,14 +275,24 @@ local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
 end
 
 -- `list` runs a FIXED number of git processes regardless of board
--- size: one `for-each-ref`, one `cat-file --batch` for every item's
--- meta/held/edges, one more for every edge kind's own subtree
--- content, and one more for every content blob (a blocked_by or
--- other-kind reason) — never one process per item. Counted by racing
--- `git` itself: a
--- counting wrapper ahead of the real binary on PATH, so every
--- invocation `_work.refs`/`_work.gitobj` make is caught, not just the
--- ones this test happens to know the argv for.
+-- size, whatever path it takes: `store.list` itself pays one
+-- `for-each-ref` snapshot for its own freshness digest, then reads
+-- through the board cache (`_work.cache.open`) — on a board this test
+-- deliberately keeps stale (every `seed` below writes through
+-- `storewrite.save` directly, bypassing `_work.gitgate.commit_and_publish`'s
+-- incremental hooks), every measured call pays a full cache rebuild:
+-- one more `for-each-ref` (`_work.gitread.list`'s own snapshot), one
+-- `cat-file --batch` SESSION for every item's meta/held/order/edges,
+-- every edge kind's own subtree content, and every content blob (a
+-- blocked_by or other-kind reason) — one persistent process for that
+-- whole session, never one per item or per round — one more
+-- `cat-file --batch` for every item's spec sidecar, one `git log` for
+-- the events table, and a final `for-each-ref` for the digest the
+-- rebuild records. Six processes total, not growing with item count.
+-- Counted by racing `git` itself: a counting wrapper ahead of the real
+-- binary on PATH, so every invocation `_work.refs`/`_work.gitobj`/
+-- `_work.events` make is caught, not just the ones this test happens
+-- to know the argv for.
 local function test_list_process_count_is_constant_as_items_grow()
   local root = init_state_repo("process-count")
   local s = check.must(store.open(root))
@@ -332,7 +342,7 @@ local function test_list_process_count_is_constant_as_items_grow()
   assert(small == big,
     ("list's process count must not grow with item count: %d (3 items) vs "
       .. "%d (15 items)"):format(small, big))
-  assert(small <= 4, ("at most 4 processes: got %d"):format(small))
+  assert(small <= 6, ("at most 6 processes: got %d"):format(small))
 end
 
 --- The whole-board render (`gitboard show`, bare) reads every open
