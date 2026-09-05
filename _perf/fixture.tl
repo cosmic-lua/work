@@ -38,6 +38,7 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local N_DEFAULT < const > = 1000
 local MIN_N < const > = 8
@@ -283,7 +284,7 @@ local function build(n?: integer): Fixture, string
     if it == nil then
       return nil, "decode root " .. id .. ": " .. derr
     end
-    local sok, serr2 = store.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
+    local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
       return nil, "save root " .. id .. ": " .. serr2
     end
@@ -304,7 +305,7 @@ local function build(n?: integer): Fixture, string
     if it == nil then
       return nil, "decode leaf " .. id .. ": " .. derr
     end
-    local sok, serr2 = store.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
+    local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
       return nil, "save leaf " .. id .. ": " .. serr2
     end

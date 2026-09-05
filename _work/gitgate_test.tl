@@ -21,6 +21,7 @@ local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local publish = require("_work.publish")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 
 local init_shared = fixture.init_shared
@@ -59,8 +60,8 @@ local function test_a_lost_race_drops_the_mutation_and_refuses()
   -- own, so the shared refs/heads/board/seq lease every bounded save
   -- advances is what puts them in each other's way here.
   local touched = make_item()
-  store.set_bounded(a, true)
-  assert(store.save(a, touched, "a moves the remote forward"))
+  storewrite.set_bounded(a, true)
+  assert(storewrite.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
 
   local mine = make_item()
@@ -79,8 +80,8 @@ end
 local function test_the_rerun_publishes_against_the_merged_state()
   local a, b = init_shared("gate-rerun")
   local touched = make_item()
-  store.set_bounded(a, true)
-  assert(store.save(a, touched, "a moves the remote forward"))
+  storewrite.set_bounded(a, true)
+  assert(storewrite.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
 
   local mine = make_item()
@@ -101,7 +102,7 @@ end
 local function test_the_merged_board_carries_the_doing_bound()
   local a, b = init_shared("gate-bound")
   for k = 1, flow.DOING_LIMIT do
-    assert(store.save(a, make_item({claim = ("wake-%d"):format(k)}),
+    assert(storewrite.save(a, make_item({claim = ("wake-%d"):format(k)}),
         "filler " .. fresh_id():sub(1, 8)))
   end
   assert(publish.publish(a))
@@ -166,9 +167,9 @@ local function test_second_claim_refusal_scopes_to_other_open_claims()
   local mine = make_item({claim = "me"})
   local theirs = make_item({claim = "someone-else"})
   local unclaimed = make_item()
-  assert(store.save(s, mine, "fixture: mine"))
-  assert(store.save(s, theirs, "fixture: theirs"))
-  assert(store.save(s, unclaimed, "fixture: unclaimed"))
+  assert(storewrite.save(s, mine, "fixture: mine"))
+  assert(storewrite.save(s, theirs, "fixture: theirs"))
+  assert(storewrite.save(s, unclaimed, "fixture: unclaimed"))
   local all = check.must(store.list(s))
   assert(gate.second_claim_refusal(s, all, unclaimed.id, "me") ~= nil,
     "a live claim on another item refuses")
@@ -201,7 +202,7 @@ local function foreign_leaf(name: string, body: string): store.Store, string
   write_spec(s, leaf, name, body)
   local it = check.must(store.load(s, leaf))
   it.repo = "whilp/cosmopolitan"
-  assert(store.save(s, it, "fixture: a repo written before the rule"))
+  assert(storewrite.save(s, it, "fixture: a repo written before the rule"))
   return s, leaf
 end
 
@@ -254,7 +255,7 @@ local function test_a_board_with_no_origin_skips_the_owner_rule()
   write_spec(s, leaf, "local", fixture.READY_SPEC)
   local it = check.must(store.load(s, leaf))
   it.repo = "whilp/cosmopolitan"
-  assert(store.save(s, it, "fixture: a repo on a local-only board"))
+  assert(storewrite.save(s, it, "fixture: a repo on a local-only board"))
   assert(owner.board_owner(s) == nil, "no origin, no owner")
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))

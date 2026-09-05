@@ -14,6 +14,7 @@ local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local gittake = require("_work.gittake")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -32,7 +33,7 @@ local function test_labels_differing_only_in_orch8_exclude_each_other()
   it.claim = "build-abcd1234-11111111"
   it.pr = 7
   it.builders = {it.claim}
-  assert(store.save(s, it, "fixture: handed over for review"))
+  assert(storewrite.save(s, it, "fixture: handed over for review"))
 
   local first = "review-abcd1234-aaaaaaaa"
   local second = "review-abcd1234-bbbbbbbb"
@@ -69,7 +70,7 @@ local function test_the_refusal_names_the_live_labels_orch8()
   it.claim = "build-cafefeed-11111111"
   it.pr = 3
   it.builders = {it.claim}
-  assert(store.save(s, it, "fixture: handed over for review"))
+  assert(storewrite.save(s, it, "fixture: handed over for review"))
 
   local holder = "review-cafefeed-aaaaaaaa"
   it = check.must(store.load(s, leaf))

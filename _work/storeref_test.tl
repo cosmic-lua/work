@@ -16,6 +16,7 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -99,13 +100,13 @@ local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
   local _, clones = init_shared("cas", 2)
   local a = check.must(store.open(clones[1]))
   for i = 1, flow.DOING_LIMIT - 1 do
-    assert(store.save(a, make_item(("busy-%d"):format(i)),
+    assert(storewrite.save(a, make_item(("busy-%d"):format(i)),
         ("busy %d"):format(i)))
   end
   local mine = make_item()
   local yours = make_item()
-  assert(store.save(a, mine, "new mine"))
-  assert(store.save(a, yours, "new yours"))
+  assert(storewrite.save(a, mine, "new mine"))
+  assert(storewrite.save(a, yours, "new yours"))
   assert(publish.publish(a))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b))
@@ -117,15 +118,15 @@ local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
   assert(store.list(a))
   local ia = check.must(store.load(a, mine.id))
   ia.claim = "session-a"
-  store.set_bounded(a, true)
-  assert(store.save(a, ia, "take mine by session-a"))
+  storewrite.set_bounded(a, true)
+  assert(storewrite.save(a, ia, "take mine by session-a"))
   assert(publish.publish(a))
 
   assert(store.list(b))
   local ib = check.must(store.load(b, yours.id))
   ib.claim = "session-b"
-  store.set_bounded(b, true)
-  assert(store.save(b, ib, "take yours by session-b"))
+  storewrite.set_bounded(b, true)
+  assert(storewrite.save(b, ib, "take yours by session-b"))
   local ok, err = publish.publish(b)
   assert(not ok, "the losing take must be refused")
   assert(err == store.LOST_RACE, "got: " .. err)
@@ -148,7 +149,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local _, clones = init_shared("atomic-multiref", 2)
   local a = check.must(store.open(clones[1]))
   local parent = make_item("session-a")
-  assert(store.save(a, parent, "new parent"))
+  assert(storewrite.save(a, parent, "new parent"))
   assert(publish.publish(a))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b))
@@ -158,7 +159,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   -- satisfied by coincidence.
   local pa = check.must(store.load(a, parent.id))
   pa.title = "retitled by a"
-  assert(store.save(a, pa, "set parent title"))
+  assert(storewrite.save(a, pa, "set parent title"))
   assert(publish.publish(a))
 
   -- b, still on the stale parent, writes a new child AND de-phases
@@ -166,7 +167,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local pb = check.must(store.load(b, parent.id))
   local kid = make_item()
   pb.claim = ""
-  assert(store.save(b, kid, "new kid", nil, {pb}))
+  assert(storewrite.save(b, kid, "new kid", nil, {pb}))
   local ok, err = publish.publish(b)
   assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
   assert(store.load(b, kid.id) == nil,
@@ -201,7 +202,7 @@ local function test_resolution_stays_on_the_items_ref_and_sets_resolution()
   local root = init_state_repo("no-move")
   local s = check.must(store.open(root))
   local it = make_item()
-  assert(store.save(s, it, "new item"))
+  assert(storewrite.save(s, it, "new item"))
   local before = item_refnames(root)
   local found_open = false
   for _, r in ipairs(before) do
@@ -212,7 +213,7 @@ local function test_resolution_stays_on_the_items_ref_and_sets_resolution()
   assert(found_open, "the item starts on refs/heads/items")
 
   it.resolution = "completed"
-  assert(store.save(s, it, "done " .. it.id:sub(1, 8)))
+  assert(storewrite.save(s, it, "done " .. it.id:sub(1, 8)))
   local after = item_refnames(root)
   local still_open, now_ended = false, false
   for _, r in ipairs(after) do
@@ -243,7 +244,7 @@ local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
   local root = init_state_repo("legacy-ended")
   local s = check.must(store.open(root))
   local it = make_item()
-  assert(store.save(s, it, "new item"))
+  assert(storewrite.save(s, it, "new item"))
   local sha = (check.must(child.run(
         {"git", "rev-parse", "refs/heads/items/" .. it.id}, {cwd = root})).stdout
     :gsub("%s+$", ""))
@@ -255,7 +256,7 @@ local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
   local s2 = check.must(store.open(root))
   local loaded = check.must(store.load(s2, it.id))
   loaded.resolution = "completed"
-  assert(store.save(s2, loaded, "done " .. it.id:sub(1, 8)))
+  assert(storewrite.save(s2, loaded, "done " .. it.id:sub(1, 8)))
 
   local after = item_refnames(root)
   local still_ended, now_items = false, false
@@ -302,14 +303,14 @@ local function test_list_process_count_is_constant_as_items_grow()
     local ids: {string} = {}
     for i = 1, n do
       local it = make_item()
-      assert(store.save(s, it, ("seed %d"):format(i)))
+      assert(storewrite.save(s, it, ("seed %d"):format(i)))
       ids[#ids + 1] = it.id
     end
     for i = 2, n do
       local it = check.must(store.load(s, ids[i]))
       it.blocked_by = {ids[1]}
       it.block_reason = {[ids[1]] = "seeding order"}
-      assert(store.save(s, it, "block"))
+      assert(storewrite.save(s, it, "block"))
     end
   end
 
@@ -356,7 +357,7 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
   local function seed(n: integer)
     for i = 1, n do
       local it = make_item()
-      assert(store.save(s, it, ("seed %d"):format(i),
+      assert(storewrite.save(s, it, ("seed %d"):format(i),
           ("spec body for item %d"):format(i)))
     end
   end
@@ -376,7 +377,7 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
   -- measured calls below find a cache file already there (and
   -- therefore pay the same digest-guard process `_work.cache.open`
   -- spends on every call) — every `seed` here writes through
-  -- `store.save` directly, bypassing the incremental hooks
+  -- `storewrite.save` directly, bypassing the incremental hooks
   -- `_work.gitgate.commit_and_publish` normally fires, so each
   -- measured call below finds the cache stale and rebuilds it, a
   -- fixed process count regardless of how many items that rebuild
@@ -412,13 +413,13 @@ local function test_show_one_item_process_count_is_constant_as_siblings_grow()
   assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
 
   local target = make_item()
-  assert(store.save(s, target, "seed target", "## Change\ndo the thing\n"))
+  assert(storewrite.save(s, target, "seed target", "## Change\ndo the thing\n"))
 
   --- Add `n` further open siblings, each with its own spec.
   local function seed_siblings(n: integer)
     for i = 1, n do
       local it = make_item()
-      assert(store.save(s, it, ("seed sibling %d"):format(i),
+      assert(storewrite.save(s, it, ("seed sibling %d"):format(i),
           ("## Change\nsibling change %d\n"):format(i)))
     end
   end

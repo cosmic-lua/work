@@ -3,7 +3,7 @@
 -- items (no git at all, for the checks that never survive a real
 -- write's own gates — a root with a repo, say), and `cmd_fsck` over
 -- two real boards: one healthy, one carrying a beats edge written
--- straight through `store.save` (`gitready`'s own checks are a take
+-- straight through `storewrite.save` (`gitready`'s own checks are a take
 -- gate, not a write gate, so this never touches them).
 
 local check = require("cosmic.check")
@@ -17,6 +17,7 @@ local index = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
@@ -56,7 +57,7 @@ local function test_a_healthy_board_has_no_problems()
 end
 
 -- A beats edge naming an id that is not an item — written straight
--- through `store.save`, never through a verb, since `_work.gitready`'s
+-- through `storewrite.save`, never through a verb, since `_work.gitready`'s
 -- own dangling-blocker check is a TAKE gate, never a write gate — is
 -- exactly what `fsck` exists to catch: nothing else on the board ever
 -- asks this question.
@@ -79,7 +80,7 @@ local function test_a_dangling_beats_edge_is_caught()
   local ghost = check.must(ksuid.encode(1690000001, ("\2"):rep(16)))
   local it = check.must(store.load(s, root))
   it.beats = {ghost}
-  assert(store.save(s, it, "hand-edited beats"))
+  assert(storewrite.save(s, it, "hand-edited beats"))
   local code, printed = fsck_and_capture(s)
   assert(code ~= 0, "a dangling beats edge is a problem: " .. printed)
   assert(printed:find("beats " .. ghost, 1, true) ~= nil, printed)
@@ -97,7 +98,7 @@ local function test_an_unknown_edge_kind_is_caught()
   local ghost = check.must(ksuid.encode(1690000004, ("\5"):rep(16)))
   local it = check.must(store.load(s, root))
   it.other_edges = {relates = {[ghost] = ""}}
-  assert(store.save(s, it, "hand-edited other_edges"))
+  assert(storewrite.save(s, it, "hand-edited other_edges"))
   local reread = check.must(store.load(s, root))
   local reread_edges = reread.other_edges
   assert(reread_edges ~= nil and reread_edges.relates ~= nil
@@ -188,7 +189,7 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
   -- ended/ holding the newer, descendant commit.
   local it = check.must(store.load(s, id))
   it.resolution = "completed"
-  assert(store.save(s, it, "done " .. id:sub(1, 8)))
+  assert(storewrite.save(s, it, "done " .. id:sub(1, 8)))
   local done_sha = (check.must(child.run(
         {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
     :gsub("%s+$", ""))

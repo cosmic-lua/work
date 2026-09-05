@@ -13,6 +13,7 @@ local gitspec = require("_work.gitspec")
 local fs = require("cosmic.fs")
 local publish = require("_work.publish")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
 local verbs = require("_work.gitverbs")
 local graph = require("_work.gitgraph")
@@ -37,7 +38,7 @@ local function test_the_spec_bar_is_the_items_own()
   local finding = file_item(s, "a finding", "")
   local stray = check.must(store.load(s, finding))
   stray.parent = "3HyArM3A3zHuRxn3VYCvKmUZ7KW"
-  assert(store.save(s, stray, "hand-edited parent"))
+  assert(storewrite.save(s, stray, "hand-edited parent"))
   local all = check.must(store.list(s))
   assert(#flow.graph_problems(all) > 0, "the board does have a problem")
   assert(#gitready.ready_problems(s, check.must(store.load(s, leaf)), all) == 0,
@@ -128,7 +129,7 @@ local function test_spec_bar_names_a_blocker_that_is_not_an_item()
   give_spec(s, leaf)
   local it = check.must(store.load(s, leaf))
   it.blocked_by = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
-  assert(store.save(s, it, "hand-edited blocker"))
+  assert(storewrite.save(s, it, "hand-edited blocker"))
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
     check.must(store.list(s)))
   assert(#problems == 1 and problems[1]:find("not an item", 1, true),
