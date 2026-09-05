@@ -2,7 +2,9 @@ title: cosmopolitan: unix.setsockopt's SO_RCVTIMEO/SNDTIMEO timeval shape has no
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmopolitan
 claim: build-keP3_sWNy-2305d922
-reviewer: review-keP3_sWNy-2305d922
 pr: 383
+verdict: accept
+verdict_head: 57cc8ae72a7c65c90b8b9012bb3dfde19859ec27
+verdict_spec: 4ab512ad9ed37e384e2884825a1cdc9d9ff42ece
 builders: build-keP3_sWNy-2305d922
 speccers: 2305d922-4768-559a-95be-2449dd99270f
