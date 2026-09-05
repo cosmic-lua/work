@@ -1,0 +1,3 @@
+title: docs symbol page: --docs <symbol> lists where the shipped guides and examples mention it, ranked by FTS5 with tokenchars keeping dotted names whole
+parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
+target: cosmic-lua/cosmic
