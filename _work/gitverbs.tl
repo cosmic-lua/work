@@ -1,6 +1,6 @@
 --- The state verbs: `take` (claim work, record its handover), `drop` (return a lease, the
---- item untouched), `done`, and the housekeeping `init` and `sync` — every `cmd_*` behind
---- `_work/gitboard.tl`'s dispatch that is not a graph mutation. The verbs that shape the
+--- item untouched), and `done` — every `cmd_*` behind `_work/gitboard.tl`'s dispatch that
+--- is not a graph mutation, the sync housekeeping, or `init`. The verbs that shape the
 --- graph — `new`, `attach`, `block` and its `unblock` half — are `_work.gitgraph`; the
 --- spec sidecar's own verb is `_work.gitspec`; the two takes `take` reaches by derivation
 --- — the review claim and the research handover — are `_work.gittake`. All of them run
@@ -17,13 +17,13 @@ local gh = require("_work.gh")
 local gittake = require("_work.gittake")
 local health = require("_work.health")
 local item = require("_work.item")
-local lanes = require("_work.lanes")
 local publish = require("_work.publish")
 local review = require("_work.review")
 local store = require("_work.store")
 
 -- `init` lives in `_work.gitboard` now — a two-line `store.init_repo`
 -- wrapper nothing else needed, moved to keep this file under its cap.
+-- `sync` lives in `_work.gitsync` now, for the same reason.
 
 --- take: claim an item, record its handover, or claim its review —
 --- which one is derived from the item's own facts, never declared.
@@ -462,24 +462,6 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     ("%s %s (%s)%s"):format(id:sub(1, 8), reason, from, returned))
 end
 
--- Lane health (`_work.lanes`) and PR CI observation (`_work.ciobs`):
--- each `at_sync` does its own observe pipeline and hands back the
--- lines to print, keeping this module under its 500-line cap. A `nil`
--- observe (offline, no token) prints and is never treated as red.
-local function cmd_sync(s: store.Store): integer
-  local ok, err = publish.sync(s)
-  if not ok then
-    return gate.verdict_line("sync", false, err)
-  end
-  for _, line in ipairs(lanes.at_sync(s)) do
-    print(line)
-  end
-  for _, line in ipairs(ciobs.at_sync(s)) do
-    print(line)
-  end
-  return gate.verdict_line("sync", true, "state is current")
-end
-
 local record gitverbs
   cmd_take: function(s: store.Store, id: string, session: string,
   pr: integer, force: boolean, why: string, result?: boolean): integer
@@ -487,14 +469,12 @@ local record gitverbs
   why: string, force: boolean): integer
   cmd_done: function(s: store.Store, id: string, reason: string,
   force: boolean, why: string): integer
-  cmd_sync: function(s: store.Store): integer
 end
 
 local M: gitverbs = {
   cmd_take = cmd_take,
   cmd_drop = cmd_drop,
   cmd_done = cmd_done,
-  cmd_sync = cmd_sync,
 }
 
 return M
