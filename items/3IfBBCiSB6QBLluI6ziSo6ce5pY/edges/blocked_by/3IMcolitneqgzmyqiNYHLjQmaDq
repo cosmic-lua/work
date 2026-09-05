@@ -1,1 +1,0 @@
-FTS5 is not compiled into the library today (probed: no such module: fts5), so there is nothing to move the search onto until the flag lands, releases, and the pin bumps

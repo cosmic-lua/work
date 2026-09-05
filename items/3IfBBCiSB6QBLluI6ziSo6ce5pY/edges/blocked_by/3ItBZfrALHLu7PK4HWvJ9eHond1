@@ -1,1 +1,0 @@
-the FTS5 search path needs MATCH escaping for free-typed queries (-, *, :, AND); J9eH_ond1 lands escape_token/match_all in cosmic.sqlite, so the doc search consumes them rather than carrying a copy
