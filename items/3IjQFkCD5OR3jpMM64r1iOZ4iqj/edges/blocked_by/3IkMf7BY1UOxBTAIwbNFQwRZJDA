@@ -1,1 +1,0 @@
-its Change bumps the cosmos pin inside its own PR, which now drags 40 upstream commits of wrapper-breaking contract changes in with it; the bump is its own item
