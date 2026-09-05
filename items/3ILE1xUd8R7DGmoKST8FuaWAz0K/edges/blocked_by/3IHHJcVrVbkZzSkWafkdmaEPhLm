@@ -1,1 +1,0 @@
-step 1 edits zipos.internal.h and every A/B in Acceptance is an incremental C build; a stale-header rebuild would measure the wrong binary
