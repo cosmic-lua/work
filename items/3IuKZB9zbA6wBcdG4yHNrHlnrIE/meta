@@ -1,0 +1,1 @@
+title: gitboard brief's 'cd /home' instruction is wrong — bin/gitboard lives in the product checkout, not /home
