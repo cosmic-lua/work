@@ -5,16 +5,24 @@
 --- directly) renders the same shape; the two are pinned against each
 --- other.
 ---
---- `dense_rank` is one entry's position among a parent's list, counting
+--- `dense_rank` is one CHILD's position among a parent's list, counting
 --- only entries that actually name a child of that parent (a stale
 --- entry — the old parent's leftover after `attach` moved the item, or
 --- a hand-edit naming something else entirely — is skipped and gets no
 --- position, the same rule `_work.gitfsck.structural_problems` already
---- uses to flag one). One join condition covers every parent
---- uniformly, the board included: its own `order` field ranks its
---- outcomes exactly the way any other item's `order` ranks its
---- children — `ranks.parent` is that parent's real id either way, and
---- real children have `items.parent` equal to it.
+--- uses to flag one) and collapsing a repeated entry to the ONE
+--- position its first appearance earned (`GROUP BY` before the
+--- `ROW_NUMBER()`, ordering the collapsed rows by each child's lowest
+--- stored position) — `_work.rank.dense_positions`'s own rule,
+--- "a repeated entry keeps the number its first appearance got."
+--- Without the collapse a child named twice would earn two rows here,
+--- and `rank_path` below (recursing through this view) would then walk
+--- every one of that child's own descendants twice over. One join
+--- condition covers every parent uniformly, the board included: its
+--- own `order` field ranks its outcomes exactly the way any other
+--- item's `order` ranks its children — `ranks.parent` is that parent's
+--- real id either way, and real children have `items.parent` equal to
+--- it.
 ---
 --- `rank_path` is `_work.rank.key`/`is_ranked`'s SQL counterpart: a
 --- recursive walk that starts at the board (`i.parent = ''`, key `''`,
@@ -67,9 +75,10 @@ local type Index = index.Index
 local EXTRA_DDL < const > = [[
 CREATE VIEW dense_rank AS
   SELECT r.parent AS parent, r.child AS child,
-    ROW_NUMBER() OVER (PARTITION BY r.parent ORDER BY r.position) AS pos
+    ROW_NUMBER() OVER (PARTITION BY r.parent ORDER BY MIN(r.position)) AS pos
   FROM ranks r
-  JOIN items c ON c.id = r.child AND c.parent = r.parent;
+  JOIN items c ON c.id = r.child AND c.parent = r.parent
+  GROUP BY r.parent, r.child;
 
 -- A field is exactly 28 characters either way: `0` plus the dense
 -- position zero-padded to 27 digits (`substr` of 27 zeros with the
