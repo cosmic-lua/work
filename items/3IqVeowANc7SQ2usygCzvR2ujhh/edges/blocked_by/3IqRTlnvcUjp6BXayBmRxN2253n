@@ -1,1 +1,0 @@
-the coverage check reads which agents an orchestrator claimed for off the minted label's orchestrator component, which does not exist until the label item lands
