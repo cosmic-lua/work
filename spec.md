@@ -145,9 +145,27 @@
   refine agent has not reported yet.
 
 ## candidates
-- (pending) doc note in `help review`/orchestrate about already-green PRs and
-  auto-merge not retroactively firing — staying here for triage, not filed as
-  its own item: only observed once, not yet confirmed as a repeat pattern.
+- **CONFIRMED, repeat pattern (2/2 this pass): doc note in `help
+  review`/orchestrate about already-green PRs and auto-merge not firing
+  promptly.** Both accepted PRs this pass (#1727, #1728) had ALL checks
+  already green before `enable_pr_auto_merge` was called, and neither
+  merged within the next ~20-35s of polling; both eventually merged on
+  their own (confirmed for #1727 via `pull_request_read`; #1728 confirmed
+  via a `Monitor`-driven poll loop against the GitHub REST API using
+  `$GITHUB_TOKEN`, since no further CI event fires for an already-settled
+  head to signal "check again"). Cost: ~2 `pull_request_read` polls per PR
+  this pass, plus setting up a poll loop for the second since no webhook
+  event exists for "the merge finally landed." Still staying here for
+  triage rather than filed as its own item — the fix would live in
+  `help review`'s accept-step doctrine text inside the `gitboard` tool
+  itself, whose source this session did not locate (likely outside the
+  3 in-scope repos, or inside `cosmic-lua/work`'s own tool source,
+  unconfirmed) — but the pattern is now confirmed, not speculative:
+  a future orchestrator pass should expect this delay on every
+  already-green accept and use a bounded poll (e.g. a `Monitor` loop
+  against the REST API with `$GITHUB_TOKEN`, since `pull_request_read`
+  has no equivalent "watch until merged" primitive) rather than treating
+  a few `pull_request_read` calls 15-20s apart as sufficient.
 - (pending) `help bar`/`help build` guidance: a spec whose `## Change` edits
   a line quoted verbatim by a `docs/design/*.md` fenced citation should say
   so explicitly, found by grepping `docs/design/*.md` for the exact
