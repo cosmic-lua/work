@@ -13,7 +13,17 @@
 --- import it makes against THIS tree, not a copy embedded in the pinned
 --- binary — confirmed by running it from this tree's root:
 ---
----   bin/cosmic /path/to/cosmic/_perf/run.tl --out o/perf/current.json
+---   PERF_BIN=$PWD/o/bin/gitboard \
+---     bin/cosmic /path/to/cosmic/_perf/run.tl --out o/perf/current.json
+---
+--- `PERF_BIN` is cosmic's own `_perf/run.tl` variable (`collect_meta`):
+--- without it, the results file's `bin`/`bin_sha` name whichever cosmic
+--- is RUNNING the harness — the same pinned `bin/cosmic` on every run —
+--- so two results files always read as the "same binary" to `gate.tl
+--- compare`'s identity check, whatever `GITBOARD_PERF_BIN` (below)
+--- pointed the SCENARIOS themselves at. The two must be set together
+--- and named the same file, never sync'd, only set independently by
+--- whoever invokes `run.tl` (`.github/workflows/perf.yml` sets both).
 ---
 --- discovers `_perf/bench/*_bench.tl` relative to the working directory
 --- (this repository), while resolving `_perf.harness`/`_perf.perf_types`

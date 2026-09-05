@@ -267,7 +267,12 @@ actually waits on. `.github/workflows/perf.yml` runs it daily,
 comparing today's tree against the latest published release; it gates
 nothing — a regression is reported, not blocked, the same as
 cosmic-lua/cosmic's own perf lane. To run it locally, from a checkout
-of cosmic-lua/cosmic (`bin/cosmic /path/to/cosmic/_perf/run.tl --out
-o/perf/current.json`, run from this repository's root after `bin/cosmic
---make build`); `GITBOARD_PERF_N` overrides the fixture's item count
-(default 1000) and `GITBOARD_PERF_BIN` the binary measured.
+of cosmic-lua/cosmic (`PERF_BIN=$PWD/o/bin/gitboard bin/cosmic
+/path/to/cosmic/_perf/run.tl --out o/perf/current.json`, run from this
+repository's root after `bin/cosmic --make build`); `GITBOARD_PERF_N`
+overrides the fixture's item count (default 1000), `GITBOARD_PERF_BIN`
+the binary the scenarios spawn, and `PERF_BIN` — cosmic's own
+`_perf/run.tl` variable — the binary the results file records as
+measured; set both to the same file, or a comparison's identity check
+reads every run as the same binary (whichever cosmic is running the
+harness) and refuses.

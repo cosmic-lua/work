@@ -96,11 +96,22 @@ jobs:
       # scenario's check() failure fails this step: it means the binary
       # answered WRONG, not slow, and that is a real finding whether or
       # not anything is published today.
+      #
+      # `PERF_BIN` names what `_perf/run.tl` records (`bin`/`bin_sha`)
+      # as the measured binary — distinct from `GITBOARD_PERF_BIN`
+      # (`_perf/bench/verbs_bench.tl`), which names what the SCENARIOS
+      # spawn. Left unset, `run.tl` records whichever cosmic is running
+      # the harness — the same pinned `bin/cosmic` on every invocation
+      # — so `gate.tl compare`'s identity check would read every run as
+      # the SAME binary and refuse regardless of what was actually
+      # measured; every `run.tl` invocation in this workflow sets both,
+      # to the same file.
       - name: measure gitboard twice
         timeout-minutes: 20
         run: |
           set -euxo pipefail
-          bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl selfcheck \
+          PERF_BIN="$PWD/o/bin/gitboard" \
+            bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl selfcheck \
             o/perf/perf.json o/perf/selfcheck.json
 
       # The baseline is NOT simply "the latest release": this repository
@@ -178,6 +189,7 @@ jobs:
                 | tee o/perf/compare.txt
             else
               GITBOARD_PERF_BIN="$PWD/o/perf/prev/gitboard" \
+              PERF_BIN="$PWD/o/perf/prev/gitboard" \
                 bin/cosmic /tmp/cosmic-perf-src/_perf/run.tl --out o/perf/prev/perf.json
               bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl compare \
                 o/perf/prev/perf.json o/perf/perf.json o/perf/selfcheck.json \
