@@ -1,9 +1,9 @@
 title: gitboard show/next: one for-each-ref per claimed item for claim ages — the snapshot already has every ref's committerdate
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-3r3o_GizJ-32638265
 pr: 35
 verdict: accept
 verdict_head: cbf7ac9eae31e7fb668c0cf17b0b2eebc3c7fa3c
 verdict_spec: dcb3de7c07670112fef7ef9b05b34805b1f475cc
+resolution: completed
 builders: build-3r3o_GizJ-32638265
