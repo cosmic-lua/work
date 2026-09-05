@@ -1,1 +1,0 @@
-store.tl is at 500/500 after #18; the one-snapshot-one-load write path adds store state and cannot land until the read/write split makes room
