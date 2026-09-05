@@ -45,7 +45,7 @@ measurements below and the follow-up item(s).
    (start from the 19 exact groups the sibling item lists, before that item cleans them,
    plus re-worded copies found by reading the 214 pairs above 0.72 — paste the ones
    kept) and at least 20 CONTROLS: blocks whose top hit is topically related and not a
-   copy (two functions in one module documenting adjacent behaviour). Every later
+   copy (two functions in one module documenting adjacent behavior). Every later
    signal is scored on this set.
 2. **Signal A, bm25 self-ratio** as prototyped: OR-query of the block's distinct
    terms (stopwords dropped, 3+ characters), `bm25()` of the best other hit over the
@@ -69,6 +69,126 @@ print(db:query_one("SELECT 1 AS ok FROM pragma_module_list WHERE name=?", {"fts5
 "present" or "absent")'` prints `present` — true after `bin/cosmic --make build` at this
 tree's cosmos pin; the report runs under the built binary via `--make run`, never the
 pinned release.
+
+## Result (measured 2026-09-05, tree d3bce22, `o/bin/cosmic` built fresh)
+
+Readiness probe reproduced: prints `present`. Approach reproduced at scale: a from-scratch
+extractor (doc-comment paragraphs split on a blank `---` separator line; markdown
+paragraphs split on blank lines, excluding headings/fences/lists/tables) over the whole
+tree (excluding `o/`, `3p/`, `testdata/`, and `CLAUDE.md` — a symlink to `AGENTS.md`,
+see Friction) found 707 files / 5598 blocks in ~1 s, 3053 candidate blocks (25–120
+tokens, 12+ distinct non-stopword terms ≥3 chars), 326 pairs above 0.72 in ~21 s —
+same order of magnitude as the prototype's 714/4876/2682/19129 ms/214, confirming the
+question is answerable at this scale without re-deriving the exact extraction rule.
+
+**Fixture** (25 TRUE blocks across 14 near-duplicate pairs/groups, 35 CONTROL blocks,
+all named `path:line` against tree d3bce22 — well over the 10/20 minimums):
+
+TRUE pairs (bm25 self-ratio / best-other, both directions where computed):
+| block | bm25 ratio | best other |
+|---|---|---|
+| `_build/casts.tl:83` | 0.9166 | `_build/nil_returns.tl:146` |
+| `_build/nil_returns.tl:146` | 0.9976 | `_build/casts.tl:83` |
+| `_build/casts.tl:48` | 0.9414 | `_build/nil_returns.tl:85` |
+| `_build/nil_returns.tl:85` | **0.8871** | `_build/casts.tl:48` |
+| `_make/readstamp.tl:37` | 0.9939 | `_make/refstamp.tl:42` |
+| `_make/envstamp.tl:29` | 0.9899 | `_make/readstamp.tl:37` |
+| `_make/readstamp.tl:65` | 0.9154 | `_make/envstamp.tl:69` |
+| `_make/envstamp.tl:69` | 0.9360 | `_make/refstamp.tl:106` |
+| `_make/refstamp.tl:42` | 0.9415 | `_make/readstamp.tl:37` |
+| `_make/refstamp.tl:106` | 0.9299 | `_make/envstamp.tl:69` |
+| `cosmic/url.tl:351` (safe_path) | 0.9631 | `cosmic/url.tl:360` |
+| `cosmic/url.tl:360` (safe_segment) | 0.9881 | `cosmic/url.tl:369` |
+| `cosmic/url.tl:369` (safe_host) | 0.9448 | `cosmic/url.tl:360` |
+| `cosmic/url.tl:378` (safe_fragment) | 0.9143 | `cosmic/url.tl:360` |
+| `cosmic/url.tl:387` (safe_param) | 0.9296 | `cosmic/url.tl:360` |
+| `cosmic/fs/find.tl:20` | 1.0000 | `cosmic/fs/find.tl:395` |
+| `cosmic/fs/find.tl:395` | 1.0000 | `cosmic/fs/find.tl:20` |
+| `docs/guides/checking.md:125` | 0.9353 | `docs/guides/gotchas.md:132` |
+| `docs/guides/gotchas.md:132` | 0.9226 | `docs/guides/checking.md:125` |
+| `cosmic/sandbox/landlock.tl:159` | 0.9713 | `cosmic/quicksand/caps.tl:46` |
+| `cosmic/quicksand/caps.tl:46` | 0.8913 | `cosmic/sandbox/landlock.tl:159` |
+| `_tool/coverage/baseline_test.tl:27` | 0.9872 | `_tool/coverage/baseline_corpus_guard_test.tl:24` |
+| `_tool/coverage/baseline_corpus_guard_test.tl:24` | 1.0130 | `_tool/coverage/baseline_test.tl:27` |
+| `_eval/checks/contained-task.tl:16` | 0.9716 | `_eval/checks/child-tcp.tl:57` |
+| `_eval/checks/multi-module-build.tl:39` | 1.0382 | `_eval/checks/contained-task.tl:16` |
+
+CONTROL blocks (bm25 self-ratio / closest-other, all genuinely different-content
+adjacent functions or doc paragraphs, not copies):
+| block | bm25 ratio | closest other |
+|---|---|---|
+| `cosmic/fs/dir.tl:72` (stat) | 0.8553 | `cosmic/fs/dir.tl:86` |
+| `cosmic/fs/dir.tl:86` (stat_link) | **0.9760** | `cosmic/fs/dir.tl:72` |
+| `cosmic/fs/dir.tl:113` (make_dir) | 0.8794 | `cosmic/fs/dir.tl:128` |
+| `cosmic/fs/dir.tl:128` (make_dirs) | 0.9420 | `cosmic/fs/dir.tl:113` |
+| `cosmic/string.tl:251` (pad_left) | 0.9688 | `cosmic/string.tl:270` |
+| `cosmic/string.tl:270` (pad_right) | 0.9677 | `cosmic/string.tl:251` |
+| `cosmic/check.tl:56` | 0.7677 | `cosmic/check.tl:77` |
+| `cosmic/check.tl:77` (equal) | 0.9026 | `cosmic/check.tl:56` |
+| `cosmic/signal.tl:149` (kill) | 0.9036 | `cosmic/signal.tl:162` |
+| `cosmic/signal.tl:162` (kill group) | 0.8097 | `cosmic/signal.tl:149` |
+| `cosmic/time.tl:273` | 0.8653 | `cosmic/time.tl:299` |
+| `cosmic/time.tl:299` | 0.8947 | `cosmic/time.tl:273` |
+| `cosmic/codec.tl:72` (decode_base64) | 0.9006 | `cosmic/codec.tl:102` |
+| `cosmic/codec.tl:102` (encode_base64url) | 0.7562 | `cosmic/codec.tl:72` |
+| `cosmic/proc/rusage.tl:36` (getrlimit) | 0.8767 | `cosmic/proc/rusage.tl:50` |
+| `cosmic/proc/rusage.tl:50` (setrlimit) | 0.6992 | `cosmic/proc/rusage.tl:36` |
+| `cosmic/proc/rusage.tl:82` (getpriority) | 0.8832 | `cosmic/proc/rusage.tl:95` |
+| `cosmic/proc/rusage.tl:95` (setpriority) | 0.7035 | `cosmic/proc/rusage.tl:82` |
+| `cosmic/_teal_engine.tl:187` (process_source) | 0.8822 | `cosmic/_teal_engine.tl:265` |
+| `cosmic/_teal_engine.tl:265` (process file) | 0.8709 | `cosmic/_teal_engine.tl:187` |
+| `cosmic/fs/path.tl:41` (is_file) | 0.9096 | `cosmic/fs/path.tl:52` |
+| `cosmic/fs/path.tl:52` (is_dir) | 0.9329 | `cosmic/fs/path.tl:41` |
+| `cosmic/fs/ops.tl:401` (statfs) | 0.9113 | `cosmic/fs/ops.tl:414` |
+| `cosmic/fs/ops.tl:414` (statfs_fd) | 0.6423 | `cosmic/fs/ops.tl:401` |
+| `cosmic/user.tl:72` (setresuid) | 0.9606 | `cosmic/user.tl:87` |
+| `cosmic/user.tl:87` (setresgid) | 0.9117 | `cosmic/user.tl:72` |
+| `cosmic/sandbox/unveil.tl:54` | 0.8786 | `cosmic/sandbox/pledge.tl:72` |
+| `cosmic/sandbox/pledge.tl:72` | 0.8041 | `cosmic/sandbox/unveil.tl:54` |
+| `cosmic/fetch/verbs_test.tl:42` | 0.9156 | `cosmic/fetch/init_test.tl:30` |
+| `cosmic/fetch/init_test.tl:30` | 0.8236 | `cosmic/fetch/verbs_test.tl:42` |
+| `_perf/gate.tl:172` | 0.8671 | `_perf/gate.tl:333` |
+| `_perf/gate.tl:333` | 0.8752 | `_perf/gate.tl:172` |
+| `_tool/example.tl:201` | 0.8699 | `_tool/benchmark.tl:228` |
+| `_tool/benchmark.tl:228` | 0.7203 | `_tool/example.tl:201` |
+| `_make/policy_test.tl:124` | 0.9163 | `_tool/coverage/baseline_test.tl:27` |
+
+**Signal A (bm25 self-ratio): worst TRUE = 0.8871, best CONTROL = 0.9760 →
+margin = −0.0890. FAILS** the ≥0.10 margin rule outright — multiple controls
+(`dir.tl` stat/stat_link 0.976, `string.tl` pad_left/pad_right 0.968/0.968,
+`user.tl` setresuid/setresgid 0.961, `_make/policy_test.tl` 0.916, `fs/path.tl`
+is_file/is_dir 0.910/0.933) score as high as or higher than genuine reworded
+near-duplicates (`nil_returns.tl:85`~`casts.tl:48` 0.887, `caps.tl:46`~`landlock.tl:159`
+0.891, `url.tl:378` (safe_fragment) 0.914). The bands fully overlap; there is no
+threshold, guessed or measured, that separates them. This reproduces, on prose
+blocks, the exact failure mode `_work/find.tl` recorded on board titles.
+
+**Signal B (token-set Jaccard, read from `fts5vocab`'s instance table, same
+`porter unicode61` tokens, no re-tokenizing): worst TRUE = 0.6667, best CONTROL =
+0.9677 → margin = −0.3011. FAILS more decisively than Signal A** — e.g.
+`cosmic/user.tl:87`~`:72` (a genuine control: setresgid vs. setresuid, same
+boilerplate phrasing) scores 0.9677 Jaccard, higher than all but the exact and
+near-exact TRUE pairs. Unlike bm25, plain Jaccard carries no IDF term-weighting,
+so the shared scaffolding vocabulary every doc comment in this style uses (`@param`,
+`string`, `boolean`, `Error`, `message`, `on`, `failure`, ...) inflates every
+pair's score roughly uniformly, control and duplicate alike, and separates worse than
+Signal A rather than better.
+
+**Decision (Change step 4/5): neither signal clears the required 0.10 margin, and
+both margins are negative — CONTROL blocks actually outscore the weakest TRUE
+near-duplicates on both signals.** Per step 5, the line ends here: the exact-duplicate
+gate remains the whole enforcement for prose; no `_tool/prose_similar.tl` /
+`_tool/prose_similar_test.tl` follow-up is warranted, and none is filed. Recommend
+closing this item with this record as its final state.
+
+Implementation notes for anyone attempting a different signal later: (1) the block
+extraction above (doc-comment paragraphs split on a blank `---` line; markdown
+paragraphs split on blank lines) is a reasonable approximation, not the sibling gate's
+exact rule — re-derive candidate counts before trusting them precisely. (2) A naive
+per-term-then-per-matching-doc Jaccard implementation is an O(fixture × terms × docs)
+query explosion that runs for minutes without progress; batch each candidate's
+shared-term lookup into one grouped `... WHERE term IN (...) GROUP BY doc` query and
+precompute per-doc term counts with a single upfront `GROUP BY doc` pass first.
 
 ## Non-goals
 
