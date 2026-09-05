@@ -1,1 +1,0 @@
-the checker refusal is defined as landing once the nil_returns floor is zero; the floor is 136 across 58 files until that sweep lands, so the refusal cannot be built before it
