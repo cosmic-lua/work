@@ -1,76 +1,76 @@
 ## Evidence
 
-Parent item 3Isoczw9JmeVhX6X6NvBZCtZ5l7's research (see its `## Findings`)
-found: `gitshow` calls `flow.binds/by_id/is_blocked/is_doing/role/substate`
-and `prio.key_of/order_of/positions`; `gitview` calls
-`flow.DOING_LIMIT/STAGE_REVIEW/by_id/doing_refusal/graph_problems/in_state/
-is_blocked/stage_rank/substate/untriaged` and `prio.positions`. Every one of
-these is classified `same` in the parent's coverage table except `by_id`
-(superseded by the cache handle) and the ORDER half of `in_state`/`stage_rank`/
-`unified`-shaped reads, which needs the lift+tie-break decision below.
+Parent item 3Isoczw9JmeVhX6X6NvBZCtZ5l7's research found `gitshow.tl` and
+`gitview.tl` are the ONLY two files, of the twelve `_work.flow`/`_work.
+priority` importers, that call `store.list`/`store.load` directly
+(`gitshow.tl:190,194`; `gitview.tl:221,343`) — every other importer
+(`gitready`, `intake`, `action`, `gitgate`, `health`) receives its `{Item}`
+list as a parameter from one of these two, and the remaining five
+(`gitverdict`, `gitverbs`, `gitgraph`, `gitcompare`, `gitfsck`) load their
+own fresh copy because they are mutations or a deliberately independent
+audit (full inventory and reasoning in the parent's `## Findings`).
 
-`_work.index_priority.ensure_views` (creates `has_edge`/`own`/`ancestors`/
-`band`/`unplaced`) is called nowhere outside its own test
-(`grep -rn "ensure_views" _work cmd` — only `index_priority.tl` and
-`index_priority_test.tl`). `_work/cache.tl`'s `rebuild` and
-`_work/cachedb.tl`'s `expected_schema_fingerprint` run `index.DDL` and
-`cachedb.EXTRA_DDL` but never `index_priority.EXTRA_DDL`, so `o/board.db`
-today carries none of the priority views.
+Measured against the production board (937 items): `store.list` costs
+144.3 ms; hydrating an equivalent `{item.Item}` list straight from
+`_work.cache`'s own SQL rows (`SELECT * FROM items` + `edges` +
+`builders`/`speccers`, grouped in Lua — no git object fetch, no
+`item.decode()` text parsing) costs 27.1 ms, a 5.3x speedup. Field-level
+equivalence was verified, not assumed: every one of the 937 items' 15
+scalar fields plus `beats`/`blocked_by`/`builders`/`speccers` (compared as
+sorted sets) matched between `store.list`'s output and the cache hydration
+— 0 mismatches.
 
-`cosmic.sqlite`'s `Database` record has no `create_function` (grep of
-`/home/user/cosmic/cosmic/sqlite/init.tl` and a runtime probe both confirm
-it: `type(db.create_function)` is `nil`, calling it raises "attempt to call
-a nil value"). The production board (930 items, 244 `blocked_by` edges)
-shows `priority.sorted`'s unseeded order diverging from
-`index_priority.order_ids` starting at rank 10 of 930, because blocker lift
-(`priority.lift`) is not modeled by any view.
+Neither `cmd_show` (`gitshow.tl`) nor `cmd_status`/`cmd_next` (`gitview.tl`)
+ever calls `gate.commit_and_publish` or otherwise writes through the
+`store.Store` handle after loading — `store.list`'s lease side effect
+(`s.leased_ref`/`leased_sha`/`leased_item`, used only by a SUBSEQUENT write
+through the same handle) is unused by all three, so dropping it is safe.
+
+Ready when: cosmic-lua/work#19 («M1Bw_JVNd», which edits `gitview.tl`) and
+«GkFk_U7L5» (which adds a query beside `find` in `cachequery.tl`) are on
+main — `git log --oneline origin/main | grep -c "3It2Kf7Z\|3It7RFOg"`
+prints 2 — so this lands on top of both instead of colliding.
 
 ## Change
 
-1. Wire the priority views into the persistent cache: add
-   `db:exec_script(index_priority.EXTRA_DDL)` to `_work/cache.tl`'s
-   `rebuild` (right after `cachedb.EXTRA_DDL`) and to
-   `_work/cachedb.tl`'s `expected_schema_fingerprint` (same spot).
-   `schema_fingerprint` is derived from `sqlite_master`, so this alone
-   forces every stale `o/board.db` to rebuild — no `SCHEMA_VERSION` bump
-   needed.
-2. Create `_work/cacheread.tl`: one function per `flow`/`priority` export
-   classified `same` in the parent's coverage table (`is_doing`, `substate`,
-   `has_open_children`, `role`, `in_state` membership, `doing_refusal`,
-   `is_blocked`, `binds`, `root_of`, `item_problems`, `graph_problems`,
-   `roots` placement/live/held, `untriaged`, `dominated`, `beaten_set`,
-   `has_out_edge`, `positions`'s `placed`/`band`/`own`, `key_of`,
-   `is_placed`, `cycle_problems`) — same name, same return record, taking
-   an already-open cache handle (`_work.cache.Cache`) instead of `{Item}`.
-   Add a lift-and-order helper that reads `own`/`band` from the views,
-   queries `SELECT id FROM open_items` and `SELECT from_id, to_id FROM
-   edges WHERE kind='blocked_by'`, and runs `priority.lift`'s existing
-   walk (adapted to these thin rows) plus the unchanged `fnv32` tie-break
-   in Teal — this backs `unified`, `in_state`'s full order, `stage_rank`,
-   and `roots`'s order, so their PRINTED output is byte-identical to
-   today's.
-3. Migrate `gitshow` and `gitview`: swap `require("_work.flow")`/
-   `require("_work.priority")` for `require("_work.cacheread")`, and each
-   call site's `{Item}`/`items` argument for the already-open cache handle
-   the verb obtains via `_work.cache.open`. `by_id` call sites are deleted
-   (superseded); nothing else about either file changes.
-4. Add differential assertions to `_work/index_test.tl`/
-   `_work/index_priority_test.tl` (or a new `_work/cacheread_test.tl`)
-   proving every migrated `cacheread` function agrees with its `flow`/
-   `priority` counterpart, mirroring `index_priority_test.tl`'s existing
-   pattern (fixture boards plus one random 300-item board) — extended with
-   a board carrying `blocked_by` edges, since none of today's fixtures do.
-5. Re-measure `show`/`next` against the production-board perf scenario
-   (`_perf/bench/verbs_bench.tl`); record the before/after in this item's
-   own findings.
+1. Add `_work.cachequery.items(c: cache.Cache): {item.Item} | nil, string`
+   (`_work/cachequery.tl`, 135 lines today, ample room): one query each
+   against `items`, `edges` (grouped by `from_id`/`kind` into `beats`,
+   `blocked_by` + `block_reason`, and `other_edges` for any other kind),
+   `builders`, and `speccers` (both ordered by `seq`), assembled into the
+   same `{item.Item}` shape `store.list` returns. No new view, table, or
+   schema change — reads the existing `items`/`edges`/`builders`/`speccers`
+   tables `_work.index`'s DDL already creates. The cache must be CURRENT
+   for the read: go through `cache.open`'s digest check (one ref snapshot,
+   the load it already does for `find`), and when the cache is stale or
+   absent let `cache.open` rebuild it first, as it does today.
+2. `gitshow.tl:190,194`: replace `store.load(s, id)` + `store.list(s)` with
+   one `cache.open(s.root)` + `cachequery.items(c)`; look up `it` as
+   `by_id[id]` (or scan the returned list) instead of a separate
+   `store.load`. Close the cache handle once done with it.
+3. `gitview.tl:221,343`: replace each `store.list(s)` with `cache.open(s.
+   root)` + `cachequery.items(c)`. Every downstream call
+   (`status_report`, `next_report`, `act.next_action`, `intake.*`,
+   `health.*`, `flow.*`, `prio.*`) is untouched — they already take
+   `{item.Item}`/`{Item}` as a plain parameter.
+4. Add a differential test (in `_work/cachequery_test.tl` or a new
+   `_work/cachequery_items_test.tl`) proving `cachequery.items` matches
+   `store.list` field-for-field on a fixture board carrying every field
+   this item's own script exercised (multiple `beats`/`blocked_by` edges
+   with reasons, an `other_edges` kind, `builders`/`speccers` entries,
+   `held`) — mirroring the proof in this item's own Evidence, but as a
+   committed test rather than a throwaway script.
+5. Re-measure `show`/`next` against `_perf/bench/verbs_bench.tl`; record
+   before/after in this item's own findings.
 
 ## Non-goals
 
-Changing any view's definition or the STRICT schema (the two new
-`db:exec_script` calls run EXISTING DDL, unchanged); changing `gitshow`'s
-or `gitview`'s printed output — every migrated function must match its
-Teal counterpart exactly on the production board, order included; touching
-`gitready`, `intake`, `action`, `gitgate`, `gitverdict`, `gitverbs`,
-`gitgraph`, `gitcompare`, `gitfsck`, or `health` (their own follow-ups);
-deleting `flow.tl`/`priority.tl` (item (e), blocked on this one and its
-siblings).
+Changing any view's definition or the STRICT schema (no view is read by
+this change at all); changing `gitshow`'s or `gitview`'s printed output —
+every downstream function runs unchanged, so output is byte-identical by
+construction, not merely by testing; touching `gitready.tl`, `intake.tl`,
+`action.tl`, `gitgate.tl`, `gitverdict.tl`, `gitverbs.tl`, `gitgraph.tl`,
+`gitcompare.tl`, `gitfsck.tl`, or `health.tl` (none need any change — see
+the parent's `## Findings`); touching `flow.tl` or `priority.tl` (neither
+needs any change, ever, under this design); building `_work/cacheread.tl`
+or any per-function SQL port (the original, superseded design).
