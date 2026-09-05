@@ -1,1 +1,0 @@
-no PR-shaped fix exists in release.yml or the perf-gate machinery (both behave exactly per D34/D35); the lane stays red until embed_extract_tree's +15.8% flag is confirmed as noise or bisected to a cause
