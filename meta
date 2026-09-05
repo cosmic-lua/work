@@ -2,6 +2,7 @@ title: gitboard mutation verbs: new snapshots the whole board four times and rea
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-5x5P_O61f-32638265
+reviewer: review-5x5P_O61f-f3a5b327
 pr: 23
 builders: build-5x5P_O61f-32638265
 speccers: 32638265-cf26-5d58-a274-cc23010d498c build-5x5P_O61f-32638265
