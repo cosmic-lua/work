@@ -1,16 +1,26 @@
+## Scope note — read before starting, this is NOT item lT1A_fWo4
+
+Board item `lT1A_fWo4` (completed, PR #1650) already settled that
+upstream `tl.Node` is a deliberately EMPTY interface (`o/3p/tl/tl.tl:
+673-675`) and that closing the 15 remaining `tl-compiler-surface` cast
+sites reading raw `Node` fields needs a `teal-language/tl` change no
+session here can make — its own Non-goals section says so explicitly,
+and that constraint stands. This item does NOT reopen that: it adds
+NO curation to `_types/gentl.tl`, does not touch `tl.d.tl`'s generated
+`tl.Node`, and stays `any` there exactly as `lT1A_fWo4` left it. What
+this item builds instead is a LOCAL, cosmic-side record — the same
+move `_tool/coverage/lines.tl:13-19` and `_tool/discover.tl` already
+make individually (their own narrow local `Node` type, populated by
+casting `tl.parse_program`'s `any` result), just written once, more
+completely, as a shared public module those two could converge onto
+later (not part of this item's diff — do not touch them).
+
 ## Change
 
-New `cosmic/ast/node.tl` (public module, `cosmic.ast.node`): a real
-`Node` record for `tl`'s parser output, replacing the erased `any` that
-`_types/gentl.tl` currently produces for it (`RECORD_FIELDS` in
-`_types/gentl.tl` keeps `Token`/`Comment`/`Error`/etc. as named records
-but not `Node` — confirmed by reading `_types/gentl.tl`'s `FUNCTIONS`/
-`RECORD_FIELDS` tables, neither lists `Node`). Every current internal
-consumer (`_tool/coverage/lines.tl:13-19`, `_tool/discover.tl`) instead
-re-declares its own narrow local `Node` record with only the fields it
-personally touches — this item is the one real, complete declaration
-those can eventually converge on (not part of this item's diff; do not
-touch existing callers).
+New `cosmic/ast/node.tl` (public module, `cosmic.ast.node`): a local
+`Node` record modeling `tl`'s real parser-output shape, built by
+casting `tl.parse_program`'s erased `any` return the same way every
+current consumer already does at its own call site.
 
 Port from `docs/design/ast-rewrite/tlgrep.tl` (branch
 `claude/teal-search-replace-1xq19s`, reference only — read it, don't
