@@ -1,1 +1,0 @@
-the cast-free spelling needs the patched checker, and build generation 1 compiles the whole tree under the PINNED one: PR #1416's build lane failed with 'cannot index key match in variable lua of type string | nil' at the three rewritten sites
