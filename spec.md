@@ -73,7 +73,7 @@ and `base = ""` indefinitely, and nothing until `brief` even looks.
    the missing field, same as `problems`'s own message) rather than
    guess, closing the exact incident above at its last remaining
    silent-default site rather than leaving it as a narrower window.
-6. Tests (`_work/item_test.tl`, `_work/gitgraph_test.tl`,
+6. Tests (`_work/item_test.tl`, `_work/gitattach_test.tl`,
    `_work/brief_test.tl`): a root with empty repo/base still passes
    (unchanged); a root with either set still fails (unchanged); a
    non-root with either empty now fails, naming the missing field; `new
