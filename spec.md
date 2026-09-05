@@ -41,17 +41,24 @@ by `next`/`show` from the cache and refreshed at most once per window.
 3. `_work/gitview.tl` `ci_states`: for each candidate, read the observation;
    when absent or older than the window, `observe` (one live call) — so a
    render pays the network at most once per item per window, and a hot
-   loop pays nothing. The row's `head` must equal the item's current PR
-   head to count as fresh; a pushed head invalidates it.
-4. `sync` refreshes every review-stage item's observation the way it
-   refreshes lanes, so a loop that syncs first never blocks `next` on
-   GitHub at all.
-5. The verbs that DECIDE on CI (`take --pr`, `verdict`, `done`) keep the
-   live read (`_work/gitverbs.tl:118`); only rendering reads the observation.
+   loop pays nothing. The row records the `head` it observed; a render
+   cannot learn the CURRENT head without the live call the window exists to
+   bound, so a pushed head is NOT detected by the render — a row may lag
+   a push by up to the window, and the module header says so in one
+   sentence. What keeps that lag out of the flow's decisions is 5 below.
+5. Write-through from the deciding verbs: `take --pr` (the verb a builder
+   runs after every push, `_work/gitverbs.tl:~118`) and any other verb that
+   calls `gh.head_checks` live keep their live read AND upsert its result
+   into `ci_checks` through `ciobs.observe`'s write path, so the row is
+   fresh again the moment the flow learns of a new head. `sync` refreshes
+   every review-stage item's observation the way it refreshes lanes, so a
+   loop that syncs first never blocks `next` on GitHub at all.
+4. (folded into 5.)
 6. Tests: a `_work/ciobs_test.tl` with `gh.head_checks` swapped for a
    counting stub on the module table: two renders inside the window make
-   one call; a head change makes a second; `GITBOARD_CI_FRESH=0` makes one
-   per render. Expected for the builder's own check: `next` on a board with
+   one call; `GITBOARD_CI_FRESH=0` makes one per render; a `take --pr`
+   with the live stub returning a new state leaves the row showing that
+   state and head with no further call from the next render. Expected for the builder's own check: `next` on a board with
    review items within a second of `show`.
 
 ## Non-goals
