@@ -16,6 +16,11 @@ on:
   # Every pull request, whatever its base: a change stacked on another
   # branch is gated the same as one against main.
   pull_request:
+  # The merge queue's own trigger: GitHub fires this for each queued
+  # merge candidate. The job's own name is the ruleset's required
+  # context, and a check run created on this trigger already attaches
+  # to the candidate's own head with no extra plumbing needed.
+  merge_group:
   workflow_dispatch:
 
 permissions:
