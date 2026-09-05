@@ -1,1 +1,0 @@
-cold-build rule, measured 2026-08-27 on 555873eb by the same mirror + coldbuild argv: the pinned 2026-08-27-cb39b65 checker loses cosmic/sqlite/advanced_test.tl:226,249 and cosmic/sqlite/close_test.tl:48,161 once migrated, refusing them as unused functions. The pin predates #1455 (2724a719); the tree's own checker passes all of them.
