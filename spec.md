@@ -34,7 +34,7 @@ prints 2 — so this lands on top of both instead of colliding.
 ## Change
 
 1. Add `_work.cachequery.items(c: cache.Cache): {item.Item} | nil, string`
-   (`_work/cachequery.tl`, 135 lines today, ample room): one query each
+   (`_work/cachequery.tl`, 141 lines today, ample room): one query each
    against `items`, `edges` (grouped by `from_id`/`kind` into `beats`,
    `blocked_by` + `block_reason`, and `other_edges` for any other kind),
    `builders`, and `speccers` (both ordered by `seq`), assembled into the
