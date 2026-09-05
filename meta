@@ -2,7 +2,7 @@ title: prose near-duplicates: measure whether an FTS5 bm25 self-ratio or token J
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
 claim: research-CCB2_BBra-5c8fc82c
-reviewer: research-CCB2_BBra-3c1cde43
+reviewer: review-CCB2_BBra-3c1cde43
 result: 07357ead73e78a14e39a2c53abf0d77ec0858628
 verdict_spec: a3149151c16891a1c8d752b2e9890dff935e949a
 builders: build-CCB2_BBra-5c8fc82c research-CCB2_BBra-5c8fc82c
