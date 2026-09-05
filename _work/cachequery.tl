@@ -6,7 +6,9 @@
 --- `_work.cache` so that module (the guard, `rebuild`, and the
 --- incremental save/fetch paths) stays under the repo's line cap.
 local cache = require("_work.cache")
+local cachedb = require("_work.cachedb")
 local find = require("_work.find")
+local fs = require("cosmic.fs")
 local sqlite = require("cosmic.sqlite")
 local tail = require("_work.tail")
 
@@ -96,6 +98,53 @@ local function similar_lines(root: string, title: string): {string}
   return out
 end
 
+--- A handle's tail resolved straight against the cache file, with
+--- none of `_work.cache.open`'s freshness guard: ids are immutable, so
+--- a hit is exact even when the file is stale for some OTHER reason —
+--- an item newer than the file simply misses, and the caller falls
+--- through to `_work.tail.resolve_glob` exactly as an absent cache
+--- does. Opens the file directly (no rebuild, no digest check), so a
+--- hit costs no process at all; a missing file, an unreadable one, or
+--- a query failure all return the same "fall through" answer as a
+--- miss — only two or more hits are reported back as a refusal.
+--- @param root string The store's root
+--- @param input string What a session typed
+--- @return string | nil The resolved id; nil either to fall through or to refuse
+--- @return string "" to fall through; an ambiguity message to refuse
+local function resolve_tail(root: string, input: string): string | nil, string
+  local path = cachedb.path_of(root)
+  if not fs.is_file(path) then
+    return nil, ""
+  end
+  local db, _err = cachedb.open_conn(path)
+  if db == nil then
+    return nil, ""
+  end
+  local rows, _qerr = db:query(
+    "SELECT id FROM items WHERE lower(id) LIKE '%' || lower(?)", {tail.normalize(input)})
+  if rows == nil then
+    local _c, _cerr = db:close()
+    return nil, ""
+  end
+  local ids: {string} = {}
+  for row in rows do
+    ids[#ids + 1] = row.id as string -- cast: from any (sqlite row)
+  end
+  local ierr = rows:err()
+  local _c, _cerr = db:close()
+  if ierr or #ids == 0 then
+    return nil, ""
+  end
+  if #ids == 1 then
+    return ids[1], ""
+  end
+  local tails: {string} = {}
+  for _, id in ipairs(ids) do
+    tails[#tails + 1] = id:sub(20)
+  end
+  return nil, ("%s is ambiguous: %s"):format(input, table.concat(tails, " "))
+end
+
 --- `find TEXT...`: every hit for the joined query, ranked, one line
 --- each — handle, state, title, snippet — then the verdict line
 --- `gitboard-find: N hit(s)`. Opens the cache (rebuilding it when
@@ -128,6 +177,7 @@ local record cachequery
   lanes_write: function(root: string, facts: {string: string},
   known_digest?: string): boolean, string
   similar_lines: function(root: string, title: string): {string}
+  resolve_tail: function(root: string, input: string): string | nil, string
   cmd_find: function(root: string, text: string): integer
 end
 
@@ -135,6 +185,7 @@ local M: cachequery = {
   lanes_read = lanes_read,
   lanes_write = lanes_write,
   similar_lines = similar_lines,
+  resolve_tail = resolve_tail,
   cmd_find = cmd_find,
 }
 
