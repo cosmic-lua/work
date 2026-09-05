@@ -1,1 +1,0 @@
-the ensure-or-fail option needs the C entry point that distinguishes registered / already-present / unavailable, plus a cosmos release and a 3p/cosmos/cosmos_pin.tl bump to reach cosmic

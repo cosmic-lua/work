@@ -1,1 +1,0 @@
-the pinned cosmos release lacks register_extension/lsqlite3.Extension (landed in 405d8840, after the FTS5 commit utpf_HTkH targets); needs confirming/bumping before this item's premise holds
