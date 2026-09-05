@@ -7,7 +7,7 @@
 --- caller outside tests: a fetch can land a version nobody observed
 --- directly, so it always rereads the ids it moved, in one batch
 --- rather than one `_work.gitread.load` per id.
-local gitobj = require("_work.gitobj")
+local gitbatch = require("_work.gitbatch")
 local gitread = require("_work.gitread")
 local refs = require("_work.refs")
 
@@ -15,7 +15,7 @@ local type Loaded = gitread.Loaded
 
 --- Load a specific set of items by id: one `for-each-ref` for the set,
 --- then their meta/held/edges, edge-kind subtrees, and content blobs
---- over one `gitobj.batch_session`. An id present in
+--- over one `gitbatch.batch_session`. An id present in
 --- neither namespace (a locally pruned ref) is simply absent from the
 --- result, never an error: the caller reads that the same way
 --- `_work.cache.patch_item`'s deleted-item branch always has, as
@@ -74,12 +74,12 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
     queries[#queries + 1] = r.sha .. ":held"
     queries[#queries + 1] = r.sha .. ":edges"
   end
-  local sess, serr = gitobj.batch_session(root)
+  local sess, serr = gitbatch.batch_session(root)
   if sess == nil then
     return nil, serr
   end
   local batch, berr = sess:request(queries)
-  if batch == nil then return gitobj.session_fail(sess, berr) end
+  if batch == nil then return gitbatch.session_fail(sess, berr) end
   local kinds_by_ref: {string: {string: string}} = {}
   local kind_queries: {string} = {}
   for _, r in ipairs(resolved) do
@@ -93,7 +93,7 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
     end
   end
   local kind_batch, kerr = sess:request(kind_queries)
-  if kind_batch == nil then return gitobj.session_fail(sess, kerr) end
+  if kind_batch == nil then return gitbatch.session_fail(sess, kerr) end
   local blob_queries: {string} = {}
   for _, r in ipairs(resolved) do
     local kinds = kinds_by_ref[r.refname]

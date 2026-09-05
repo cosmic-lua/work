@@ -81,6 +81,24 @@ local function test_load_of_an_item_with_edges_spawns_one_cat_file_process()
     .. calls)
 end
 
+-- `list`'s three rounds — same shape as `load`'s, across every item on
+-- the board at once — likewise run over ONE `cat-file --batch`
+-- session, not one process per round, regardless of how many items
+-- the board holds.
+local function test_list_of_a_board_with_edges_spawns_one_cat_file_process()
+  local s = init_state_repo("list-one-spawn")
+  local blocker = file_item(s, "a blocker", "")
+  local id = file_item(s, "an item", "")
+  assert(graph.cmd_block(s, id, blocker, false, "waiting on the blocker") == 0)
+
+  local calls = cat_file_spawns(function(): boolean
+      check.must(gitread.list(s.root))
+      return true
+    end)
+  assert(calls == 1, "a list with edges must cost exactly one cat-file spawn: "
+    .. calls)
+end
+
 -- `load`'s own parameter-driven fast path: given the ref and sha for
 -- `id` already, it never repeats the for-each-ref that found them.
 local function test_load_with_a_known_ref_and_sha_never_calls_for_each_ref()
