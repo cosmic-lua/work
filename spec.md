@@ -79,28 +79,67 @@ to:
 ```
 
 **2. `_types/tlast.tl`** (381 lines today — `wc -l _types/tlast.tl` — 119
-under the cap). One site, local to `tag_of`; no helper needed, just an
-explicitly `any`-typed local in place of the cast. Change line 158,
-currently:
+under the cap; the fix below adds 1 line, to 382, still 118 under).
+One site, local to `tag_of`; no helper needed, just an explicitly
+`any`-typed local in place of the cast.
+
+**Corrected 2026-09-05, after a build attempt**: the ORIGINAL one-line
+replacement this refinement first specified —
+`local mt: any = getmetatable(t)` — does not type-check. A builder
+implementing it hit, and this refinement reproduced independently
+against the pinned checker (`o/bin/cosmic --check types --include-dir .
+--include-dir o/_types/types_gen _types/tlast.tl`):
+
+```
+_types/tlast.tl:159:11: error: types are not comparable for equality: metatable<{<any type> : <any type>}> (inferred at _types/tlast.tl:158:33) and {<any type> : <any type>}
+```
+
+Root cause: `t` is declared `{any: any}`, so `getmetatable(t)` infers
+the concrete typename `metatable<{any: any}>`. tl's stock
+`narrowed_declaration` mechanism (documented in this tree's own
+`3p/tl/tl_patch/integer.tl`) re-narrows a `local x: T = init` local's
+flow-tracked type down to its initializer's inferred type whenever
+that is narrower than the declared one — so the declared `any` on
+`mt` is re-narrowed back to that concrete `metatable<...>` type, which
+is then not comparable via `==` to the plain `{any: any}`-typed
+`type_mt`, reproducing the exact cast the site used to need. The
+`array_marker: any` precedent above avoids this because
+`cosmo.jsonarray({})`'s return is itself `any`, with no concrete table
+type for `getmetatable` to narrow against; it does not carry over
+verbatim to `tag_of`'s concretely-`{any: any}`-typed argument.
+
+`narrowed_declaration` fires only on the COMBINED `local x: T = init`
+form; splitting the declaration and the assignment across two
+statements keeps `mt` at its declared `any` with nothing to re-narrow
+from, since a plain assignment (not an initializing declaration) does
+not trigger it. Verified against the pinned checker
+(`o/bin/cosmic --check types --include-dir . --include-dir
+o/_types/types_gen _types/tlast.tl` → `Type check passed:
+_types/tlast.tl`, on this file in isolation with only this one change
+applied).
+
+Change line 158, currently:
 
 ```
     local mt = getmetatable(t) as {any: any} -- cast: metatable identity compare
 ```
 
-to:
+to TWO lines:
 
 ```
-    local mt: any = getmetatable(t)
+    local mt: any
+    mt = getmetatable(t)
 ```
 
 The two comparisons on the following lines (`mt == type_mt`, `mt ~=
-nil`) are unchanged — both already compare against this now-`any` local.
-This file sits outside `cosmic/`, so it cannot reach a helper declared
-under `cosmic/` unless that helper is public (AGENTS.md: "a module under
-`cosmic/` may not be required from outside `cosmic/` unless it is
-public"); the Goal's "without `cosmic/**` gaining a public name it does
-not want" rules that out, and a duplicate one-line local is cheaper than
-either a new public module or a shared home outside both trees.
+nil`) are unchanged — both already compare against this now-`any`
+local. This file sits outside `cosmic/`, so it cannot reach a helper
+declared under `cosmic/` unless that helper is public (AGENTS.md: "a
+module under `cosmic/` may not be required from outside `cosmic/`
+unless it is public"); the Goal's "without `cosmic/**` gaining a
+public name it does not want" rules that out, and a duplicate
+two-line local is cheaper than either a new public module or a shared
+home outside both trees.
 
 **3. `cosmic/check.tl`** (388 lines today — `wc -l cosmic/check.tl` — 112
 under the cap). The metamethod-fetch helper's two call sites
@@ -286,3 +325,12 @@ through a real `serialize` and byte-compares two runs).
 - **`check.refuses` and `check.is_exposed`'s own casts are untouched.**
   They are `type-defeating test probe` sites, a different class with
   its own item.
+- **No `3p/tl/tl_patch/` entry for `narrowed_declaration`'s behavior
+  here.** `3p/tl/tl_patch/integer.tl` already carries a patch that
+  skips `narrowed_declaration` for a different narrow case (a number
+  local narrowed to integer); generalizing that patch to also skip a
+  `metatable<T>` re-narrow is a checker-behavior change with its own
+  cold-build staging concerns (see `1Lhz_38Wt`/`zs1K_cWnY` on this
+  board for the shape such a change takes), not a mechanical part of
+  closing 9 cast sites. The two-statement declare/assign split is the
+  in-scope fix.
