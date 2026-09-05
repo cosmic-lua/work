@@ -1,9 +1,9 @@
 title: docs symbol page: --docs <symbol> lists where the shipped guides and examples mention it, ranked by FTS5 with tokenchars keeping dotted names whole
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
-claim: build-ev5V_lF1l-5c8fc82c
 pr: 1722
 verdict: accept
 verdict_head: 31dbb92a239a7fe3505eaae965a8ff8460299518
 verdict_spec: 29c5121bd275ac4e16f2d140735e9edc01ebf8a6
+resolution: completed
 builders: build-ev5V_lF1l-5c8fc82c
