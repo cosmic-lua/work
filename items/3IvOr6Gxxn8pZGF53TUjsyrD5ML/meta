@@ -1,3 +1,5 @@
 title: CI: build and run MODE=cov o/cov/tool/lua/test on every PR
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
+claim: build-jsyr_D5ML-a159f2f2
+builders: build-jsyr_D5ML-a159f2f2
