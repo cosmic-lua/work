@@ -1,9 +1,9 @@
 title: handle lookup follow-up: one ambiguity listing for both paths, delete the dead tail.resolve, assert the all-digit skip
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-SHGq_Ak4k-32638265
 pr: 33
 verdict: accept
 verdict_head: 26df74f8c8c6820d2ab1dcf9bf36b655654bbff5
 verdict_spec: bd524e38fc83ed8bf58dcc98e0aa48b8ab95d360
+resolution: completed
 builders: build-SHGq_Ak4k-32638265
