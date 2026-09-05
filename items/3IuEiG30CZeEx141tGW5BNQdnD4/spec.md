@@ -145,27 +145,25 @@
   refine agent has not reported yet.
 
 ## candidates
-- **CONFIRMED, repeat pattern (2/2 this pass): doc note in `help
-  review`/orchestrate about already-green PRs and auto-merge not firing
-  promptly.** Both accepted PRs this pass (#1727, #1728) had ALL checks
-  already green before `enable_pr_auto_merge` was called, and neither
-  merged within the next ~20-35s of polling; both eventually merged on
-  their own (confirmed for #1727 via `pull_request_read`; #1728 confirmed
-  via a `Monitor`-driven poll loop against the GitHub REST API using
-  `$GITHUB_TOKEN`, since no further CI event fires for an already-settled
-  head to signal "check again"). Cost: ~2 `pull_request_read` polls per PR
-  this pass, plus setting up a poll loop for the second since no webhook
-  event exists for "the merge finally landed." Still staying here for
-  triage rather than filed as its own item — the fix would live in
-  `help review`'s accept-step doctrine text inside the `gitboard` tool
-  itself, whose source this session did not locate (likely outside the
-  3 in-scope repos, or inside `cosmic-lua/work`'s own tool source,
-  unconfirmed) — but the pattern is now confirmed, not speculative:
-  a future orchestrator pass should expect this delay on every
-  already-green accept and use a bounded poll (e.g. a `Monitor` loop
-  against the REST API with `$GITHUB_TOKEN`, since `pull_request_read`
-  has no equivalent "watch until merged" primitive) rather than treating
-  a few `pull_request_read` calls 15-20s apart as sufficient.
+- **ROOT CAUSE FOUND (was misdiagnosed at first): the delay between
+  `enable_pr_auto_merge` and an actual merge on an already-green PR is
+  `cosmic-lua/cosmic`'s branch-protection MERGE QUEUE, not a slow
+  auto-merge mechanism.** Observed on both accepted PRs this pass
+  (#1727, #1728): all checks green before `enable_pr_auto_merge`, no
+  merge for the next 20-35s of `pull_request_read` polling. Originally
+  logged here as "auto-merge doesn't retroactively fire for an
+  already-green PR" — that framing was wrong. A `pull_request.enqueued`
+  webhook event ("The PR was added to the merge queue... GitHub will
+  merge it automatically when it reaches the front of the queue and its
+  checks pass") arrived for #1728 partway through this session's own
+  poll loop, which is the actual mechanism: enabling auto-merge enqueues
+  the PR, and the queue's own processing time is the delay, not a defect
+  in `enable_pr_auto_merge` or in the doctrine. No countermeasure needed
+  beyond correcting this session's own model — expect an enqueue delay
+  (tens of seconds, observed) after every accept on this repo, and treat
+  a `pull_request.enqueued` event as confirmation to keep waiting, not a
+  problem. Kept here only as a corrected note for the next orchestrator
+  pass reading this log, not filed as an item: there is nothing to fix.
 - (pending) `help bar`/`help build` guidance: a spec whose `## Change` edits
   a line quoted verbatim by a `docs/design/*.md` fenced citation should say
   so explicitly, found by grepping `docs/design/*.md` for the exact
