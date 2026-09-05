@@ -7,19 +7,24 @@
 --- fetch --prune`, which resets every local ref this checkout's mirror
 --- refspecs cover to the winner's value. There is no working tree to
 --- restore afterward — nothing here ever held one — so the recovery
---- is exactly that one fetch. `history` and `touched_at` read the
---- same refs back; `sync` is the same fetch, standalone. The git
+--- is exactly that one fetch. `history` reads the `events` cache when
+--- it is current, falling back to the same `git log` `touched_at`
+--- still always uses; `sync` is the fetch, standalone. The git
 --- identity every call runs under, and the `Store` it runs against,
 --- live in `_work.store`; every git command here goes back through
 --- its `git`/`git_ok`.
 local cache = require("_work.cache")
+local events = require("_work.events")
 local store = require("_work.store")
 local refs = require("_work.refs")
 
 --- One item mutation as git recorded it.
 local record Event
   sha: string
-  --- ISO 8601 commit time.
+  --- UTC, `YYYY-MM-DDTHH:MM:SSZ` — the same `Z`-suffixed form
+  --- `_work.gitshow`'s own `opened:` line prints, and (see `history`'s
+  --- own doc comment) rendered the same way regardless of source, so
+  --- it never depends on the host's git version or its `TZ`.
   at: string
   subject: string
 end
@@ -129,15 +134,89 @@ local function publish(s: store.Store): boolean, string
   return false, store.LOST_RACE
 end
 
+--- The fixed width `history` abbreviates every sha to, on both paths —
+--- the same "gitboard renders its own, rather than trusting the git
+--- binary installed" decision `iso8601_z` makes for the timestamp:
+--- `%h`'s width is `core.abbrev`'s call, live and per-repository, so a
+--- cache path abbreviating to whatever git would choose either asks
+--- git directly (a process this table exists to avoid) or risks
+--- disagreeing with a later `%h` read as the repository grows past 7
+--- hex digits' worth of objects. This project's boards are nowhere
+--- near that scale, so a fixed 7 — git's own historical floor, and
+--- what `%h` gives on every board this ratchet has run against — is
+--- the simpler, git-version-independent choice.
+local ABBREV_LEN < const > = 7
+
+--- One epoch, rendered `YYYY-MM-DDTHH:MM:SSZ` — the single formatter
+--- `history` runs EVERY commit time through, cache-sourced or
+--- git-sourced alike (see `history`'s own doc comment for why: `%cI`
+--- prints a different suffix on a different git version for the exact
+--- same UTC instant, which a byte-identical render cannot tolerate).
+--- `!` forces `os.date` to UTC regardless of the host's own `TZ`, the
+--- same call `_work.gitshow`'s `opened:` line already makes.
+--- @param epoch integer Unix seconds
+--- @return string The UTC timestamp
+local function iso8601_z(epoch: integer): string
+  return os.date("!%Y-%m-%dT%H:%M:%SZ", epoch) as string -- cast: os.date with a format string always returns string
+end
+
+--- `history`'s cache path: `_work.events.read`, newest first, with
+--- each row's sha abbreviated and epoch rendered exactly as the
+--- `git log` fallback below would — nil (never a second-class empty
+--- result) on anything this cache cannot answer, which `history` reads
+--- as "fall through to the git log instead."
+--- @param s store.Store The store
+--- @param id string Item id
+--- @return {Event} | nil Newest-first events, nil to fall through
+local function events_from_cache(s: store.Store, id: string): {Event} | nil
+  local rows = events.read(s.root, id)
+  if rows == nil or #rows == 0 then
+    return nil
+  end
+  local out: {Event} = {}
+  for i = #rows, 1, -1 do
+    local row = rows[i]
+    out[#out + 1] = {sha = row.sha:sub(1, ABBREV_LEN), at = iso8601_z(row.at),
+      subject = row.subject}
+  end
+  return out
+end
+
 --- Mutation history, newest first: one item's when `id` names one —
---- `git log` on its own ref, O(item) not O(board) — or the whole
---- board's, merged across every item and ended ref, when it does not.
+--- from the `events` cache when it is current, `git log` on its own
+--- ref (O(item) not O(board)) otherwise — or the whole board's, merged
+--- across every item and ended ref, when `id` is nil (always `git
+--- log`; the cache carries no whole-board query for this).
+---
+--- FORMAT: both `sha` and `at` are rendered by ONE Lua path regardless
+--- of source, cache or fallback — `at` is `iso8601_z` run over `%ct`
+--- (raw epoch seconds), never git's own `%cI` (a different offset
+--- suffix on a different git version for the exact same UTC instant,
+--- `+00:00` vs. `Z`, which a byte-identical render cannot tolerate);
+--- `sha` is `%H` (the full hash) sliced to `ABBREV_LEN` in Lua, never
+--- git's own `%h` (whose abbreviation width is `core.abbrev`'s live
+--- call, not a fixed fact this table could store and reproduce
+--- exactly). Either divergence would make `show ID`'s history block
+--- a fact of the git binary installed rather than of the commits
+--- themselves; routing both through the same formatters instead makes
+--- it `Z`-form UTC with 7-hex shas unconditionally — the timestamp
+--- form matching `_work.gitshow`'s own `opened:` line — and costs the
+--- fallback nothing extra: `%H` is no more expensive to print than
+--- `%h`, and the cache path now spawns no git process of its own at
+--- all for a `show ID` served warm.
 --- @param s store.Store The store
 --- @param id string Item id, or nil for every commit on every ref
 --- @return {Event} | nil Events, possibly empty
 --- @return string Error message
 local function history(s: store.Store, id?: string): {Event} | nil, string
-  local argv: {string} = {"log", "--format=%h\t%cI\t%s"}
+  local cached: {Event} | nil = nil
+  if id ~= nil then
+    cached = events_from_cache(s, id)
+  end
+  if cached ~= nil then
+    return cached
+  end
+  local argv: {string} = {"log", "--format=%H\t%ct\t%s"}
   if id ~= nil then
     local ref = s.leased_ref[id]
     if ref == nil then
@@ -170,9 +249,12 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
   end
   local out: {Event} = {}
   for line in r.stdout:gmatch("([^\n]+)") do
-    local sha, at, subject = line:match("^(%S+)\t(%S+)\t(.*)$")
-    if sha then
-      out[#out + 1] = {sha = sha, at = at, subject = subject}
+    local sha, at_str, subject = line:match("^(%S+)\t(%S+)\t(.*)$")
+    if sha and at_str then
+      local at = math.tointeger(tonumber(at_str))
+      if at then
+        out[#out + 1] = {sha = sha:sub(1, ABBREV_LEN), at = iso8601_z(at), subject = subject}
+      end
     end
   end
   return out

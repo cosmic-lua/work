@@ -313,6 +313,15 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   -- when the caller loaded by id rather than by listing the board)
   -- falls through to that fresh read exactly as before.
   local before_digest = cache.guard(s.root, s.board_digest)
+  -- A pre-write snapshot of exactly the shas this save might move —
+  -- `after_save` below diffs it against `s.leased_sha` post-write to
+  -- tell which of `it`/`also` actually landed a new commit (a diff
+  -- can find nothing to write for one of them), which is the only way
+  -- to know without `_work.storewrite`/`_work.gitwrite` surfacing it.
+  local before_shas: {string: string} = {[it.id] = s.leased_sha[it.id]}
+  for _, x in ipairs(also or {}) do
+    before_shas[x.id] = s.leased_sha[x.id]
+  end
   local saved, serr = storewrite.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then
     return saved, serr
@@ -325,7 +334,14 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   for _, x in ipairs(also or {}) do
     items[#items + 1] = x
   end
-  cache.after_save(s.root, before_digest, items, body)
+  local written: {string: string} = {}
+  for _, x in ipairs(items) do
+    local new_sha = s.leased_sha[x.id]
+    if new_sha ~= nil and new_sha ~= before_shas[x.id] then
+      written[x.id] = new_sha
+    end
+  end
+  cache.after_save(s.root, before_digest, items, body, message, written)
   return publish.publish(s)
 end
 

@@ -36,6 +36,7 @@
 --- with `around_fetch` — a `Store` dependency here would close a cycle
 --- against both.
 local cachedb = require("_work.cachedb")
+local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
@@ -120,6 +121,11 @@ local function rebuild(root: string): Cache | nil, string
   if not eok then
     local _c, _cerr = db:close()
     return nil, eerr
+  end
+  local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
+  if not evok then
+    local _c, _cerr = db:close()
+    return nil, everr
   end
   local pvok, pverr = db:exec(("PRAGMA user_version = %d"):format(SCHEMA_VERSION))
   if not pvok then
@@ -329,16 +335,21 @@ end
 --- has recorded — a mismatch (or a nil guard) is silently skipped: the
 --- cache is left exactly as it was, stale or absent, for the next
 --- `open` to rebuild.
+--- `written` names the ids with a new commit; one absent still gets its
+--- fields patched, just no `events` row. `message` is the shared subject.
 --- @param root string The store's root
 --- @param before_digest string | nil `guard`'s result, from before the write
 --- @param items {item.Item} `it`, then every `also` item, in that order
---- @param spec_body string | nil `items[1]`'s replacement spec, nil to
---- leave it alone
+--- @param spec_body string | nil `items[1]`'s replacement spec, nil to leave it alone
+--- @param message string The commit subject this save wrote
+--- @param written {string: string} Item id -> new sha, for ids that got a new commit
 local function after_save(root: string, before_digest: string | nil,
-    items: {item.Item}, spec_body: string | nil)
+    items: {item.Item}, spec_body: string | nil, message: string,
+    written: {string: string})
   if #items == 0 then
     return
   end
+  local now = os.time()
   local _ok, _err = apply_patch(root, before_digest, nil,
     function(tx: sqlite.Database): boolean, string
       local txc: Cache = {db = tx, specs = {}, load_problems = {}}
@@ -350,6 +361,13 @@ local function after_save(root: string, before_digest: string | nil,
         local pok, perr = cachedb.patch_item(txc, it, body)
         if not pok then
           return false, perr
+        end
+        local new_sha = written[it.id]
+        if new_sha ~= nil and new_sha ~= "" then
+          local eok, eerr = events.apply_save(tx, it.id, new_sha, now, message)
+          if not eok then
+            return false, eerr
+          end
         end
       end
       return true, ""
@@ -364,15 +382,17 @@ end
 --- than trusting anything already in memory. An id `load_many` did
 --- not find is genuinely gone (a locally pruned ref), which is a
 --- plain delete.
+--- `old_shas` is each touched id's previous sha (absent when new) —
+--- `events.apply_fetch`'s `old..new`.
 --- @param root string The store's root
 --- @param before_digest string | nil The pre-fetch digest
 --- @param after_digest string The post-fetch digest, already known
---- @param ids {string} Every item id whose sha changed, appeared, or
---- disappeared
+--- @param ids {string} Every item id whose sha changed, appeared, or disappeared
+--- @param old_shas {string: string} Each touched id's previously observed sha
 --- @return boolean True on success (including nothing to do)
 --- @return string Error message
 local function patch_fetched(root: string, before_digest: string | nil,
-    after_digest: string, ids: {string}): boolean, string
+    after_digest: string, ids: {string}, old_shas: {string: string}): boolean, string
   if #ids == 0 then
     return true, ""
   end
@@ -403,6 +423,10 @@ local function patch_fetched(root: string, before_digest: string | nil,
           local pok, perr = cachedb.patch_item(txc, l.it, specs[id] or "")
           if not pok then
             return false, perr
+          end
+          local eok, eerr = events.apply_fetch(tx, root, id, old_shas[id] or "", l.sha)
+          if not eok then
+            return false, eerr
           end
         end
       end
@@ -437,13 +461,13 @@ local function around_fetch(root: string, fetch_fn: function(): boolean, string)
   if after_entries == nil then
     return ok, err
   end
-  local touched = cachedb.changed_ids(cachedb.shas_by_item(before_entries),
-    cachedb.shas_by_item(after_entries))
+  local before_shas = cachedb.shas_by_item(before_entries)
+  local touched = cachedb.changed_ids(before_shas, cachedb.shas_by_item(after_entries))
   if #touched == 0 then
     return ok, err
   end
   local _ok2, _err2 = patch_fetched(root, cachedb.digest_of(before_entries),
-    cachedb.digest_of(after_entries), touched)
+    cachedb.digest_of(after_entries), touched, before_shas)
   return ok, err
 end
 
@@ -456,7 +480,8 @@ local record cache
   close: function(c: Cache): boolean, string
   guard: function(root: string, known_digest?: string): string | nil
   after_save: function(root: string, before_digest: string | nil,
-  items: {item.Item}, spec_body: string | nil)
+  items: {item.Item}, spec_body: string | nil, message: string,
+  written: {string: string})
   around_fetch: function(root: string,
   fetch_fn: function(): boolean, string): boolean, string
 end
