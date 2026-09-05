@@ -2,8 +2,8 @@ title: cosmic.sqlite: three small additions — atomic WAL rebuild, schema finge
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
 claim: build-J9eH_ond1-5c8fc82c
-reviewer: review-J9eH_ond1-5c8fc82c
 pr: 1723
-verdict_head: 85cc919577669721590e9907e36ad4be084df25b
+verdict: accept
+verdict_head: 3558f1b03d49368b600c62659dd0dc049bc52579
 verdict_spec: 9be1110780e4df0289fe3441f917b2f0dc3b3c1d
 builders: build-J9eH_ond1-5c8fc82c
