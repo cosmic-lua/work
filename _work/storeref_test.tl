@@ -397,7 +397,15 @@ end
 --- `_work.overlap`'s Change-section collision check — one batch
 --- (`store.read_specs`), not one `cat-file -p` per sibling, so the
 --- process count `gitshow.cmd_show` spends on one item must stay flat
---- as the number of siblings around it grows.
+--- as the number of siblings around it grows. `gitshow.cmd_show` now
+--- reads the item list through `_work.cache`/`_work.cachequery` (see
+--- `test_whole_board_show_process_count_is_constant_as_items_grow`,
+--- above, for the identical caveat on `cmd_status`): the warm-up call
+--- below and the seeding through `storewrite.save` directly (bypassing
+--- the incremental hooks `_work.gitgate.commit_and_publish` normally
+--- fires) means both measured calls find the cache already there but
+--- stale, and pay the same fixed rebuild cost, regardless of how many
+--- items that rebuild reads.
 local function test_show_one_item_process_count_is_constant_as_siblings_grow()
   local root = init_state_repo("show-id-process-count")
   local s = check.must(store.open(root))
@@ -435,6 +443,10 @@ local function test_show_one_item_process_count_is_constant_as_siblings_grow()
     return #(fs.read(counter_file) or "")
   end
 
+  -- Warm the cache once first, against `target` alone, so both
+  -- measured calls below find a cache file already there — see the
+  -- doc comment above.
+  show_id_process_count()
   seed_siblings(3)
   local small = show_id_process_count()
   seed_siblings(12)

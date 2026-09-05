@@ -9,6 +9,8 @@
 --- and the `cmd_` half owns the store reads: what a session reads is
 --- the contract, and a report that returns its lines can be asserted
 --- on without capturing stdout.
+local cache = require("_work.cache")
+local cachequery = require("_work.cachequery")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
@@ -187,13 +189,31 @@ end
 --- @param id string The item id or an unambiguous prefix
 --- @return integer Exit code
 local function cmd_show(s: store.Store, id: string): integer
+  -- The target item itself still comes from `store.load`, not the
+  -- cache: a resolved id's lease (`resolve_id`'s own glob or prefix
+  -- match) is what lets `publish.history` below skip its own
+  -- exact-ref `for-each-ref` — a lease the cache carries no ref/sha
+  -- column to preserve — and a cache silently missing exactly this
+  -- row (stale in a way its own digest guard cannot catch) must never
+  -- read as "no such item" for the one item a session named directly.
+  -- Only `all` — every OTHER item, for role/priority/overlap context —
+  -- comes from the cache; that whole-board read is `store.list`'s
+  -- expensive half, not this one.
   local it, lerr = store.load(s, id)
   if it == nil then
     return verdict_line("show", false, lerr)
   end
-  local all, aerr = store.list(s)
+  local c, cerr = cache.open(s.root)
+  if c == nil then
+    return verdict_line("show", false, cerr)
+  end
+  local all, aerr = cachequery.items(c)
+  local close_ok, close_err = cache.close(c)
   if all == nil then
     return verdict_line("show", false, aerr)
+  end
+  if not close_ok then
+    return verdict_line("show", false, close_err)
   end
   -- `git log` is the one read the load never carries — the item's
   -- history lives only in its commits, so this stays a deliberate

@@ -9,6 +9,7 @@ local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
+local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
 local tail = require("_work.tail")
 
@@ -148,6 +149,149 @@ local function resolve_tail(root: string, input: string): string | nil, string
   return nil, ("%s is ambiguous: %s"):format(input, table.concat(tails, " "))
 end
 
+--- Hydrate every item straight from the cache's own SQL rows — one
+--- query each against `items`, `edges` (grouped by `from_id`/`kind`
+--- into `beats`, `blocked_by` + `block_reason`, and `other_edges` for
+--- any other kind), `builders`, and `speccers` (both ordered by
+--- `seq`) — into the same `{item.Item}` shape `store.list` returns:
+--- no git object fetch, no `item.decode()`/`_work.itemtree.to_item`
+--- text parsing. `decode_problems` is reproduced the same way
+--- `to_item` sets it: `item.problems(it)` is a pure function of the
+--- item's own fields, so recomputing it once every field above is in
+--- place matches a fresh decode's own tolerance snapshot for any
+--- problem `problems()` can see from the assembled fields — the one
+--- thing this cannot recover is a raw `target:` line's own
+--- malformed-content wording (folded away once `repo`/`base` land as
+--- split columns), which a well-formed board never has anyway. The
+--- cache must be CURRENT for this to answer for the live board — call
+--- `cache.open` first, which rebuilds when stale or absent, exactly
+--- as `find`/`new` already do; a cold clone pays that rebuild's full
+--- git read once, the same cost `store.list` always paid.
+--- @param c cache.Cache The open cache
+--- @return {item.Item} | nil Every item, sorted by id like `store.list`
+--- @return string Error message
+local function items(c: cache.Cache): {item.Item} | nil, string
+  local order: {string} = {}
+  local by_id: {string: item.Item} = {}
+  local rows, err = c.db:query([[
+    SELECT id, title, parent, repo, base, key, claim, reviewer, pr,
+      result, verdict, verdict_head, verdict_spec, resolution, held
+    FROM items ORDER BY id
+  ]])
+  if rows == nil then
+    return nil, err
+  end
+  for row in rows do
+    local id = row.id as string -- cast: from any (sqlite row)
+    order[#order + 1] = id
+    by_id[id] = {
+      id = id,
+      title = row.title as string, -- cast: from any (sqlite row)
+      parent = row.parent as string, -- cast: from any (sqlite row)
+      repo = row.repo as string, -- cast: from any (sqlite row)
+      base = row.base as string, -- cast: from any (sqlite row)
+      key = row.key as string, -- cast: from any (sqlite row)
+      beats = {},
+      blocked_by = {},
+      block_reason = {},
+      other_edges = {},
+      claim = row.claim as string, -- cast: from any (sqlite row)
+      builders = {},
+      speccers = {},
+      reviewer = row.reviewer as string, -- cast: from any (sqlite row)
+      pr = math.tointeger(row.pr as number) or 0, -- cast: from any (sqlite row)
+      result = row.result as string, -- cast: from any (sqlite row)
+      verdict = row.verdict as string, -- cast: from any (sqlite row)
+      verdict_head = row.verdict_head as string, -- cast: from any (sqlite row)
+      verdict_spec = row.verdict_spec as string, -- cast: from any (sqlite row)
+      resolution = row.resolution as string, -- cast: from any (sqlite row)
+      is_held = (math.tointeger(row.held as number) or 0) == 1, -- cast: from any (sqlite row)
+    }
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+
+  local edge_rows, eqerr = c.db:query("SELECT kind, from_id, to_id, reason FROM edges")
+  if edge_rows == nil then
+    return nil, eqerr
+  end
+  for row in edge_rows do
+    local kind = row.kind as string -- cast: from any (sqlite row)
+    local from_id = row.from_id as string -- cast: from any (sqlite row)
+    local to_id = row.to_id as string -- cast: from any (sqlite row)
+    local reason = row.reason as string -- cast: from any (sqlite row)
+    local it = by_id[from_id]
+    if it ~= nil then
+      if kind == "beats" then
+        it.beats[#it.beats + 1] = to_id
+      elseif kind == "blocked_by" then
+        it.blocked_by[#it.blocked_by + 1] = to_id
+        if reason ~= "" then
+          it.block_reason[to_id] = reason
+        end
+      else
+        local oe: {string: {string: string}} = it.other_edges or {}
+        it.other_edges = oe
+        local idmap = oe[kind]
+        if idmap == nil then
+          idmap = {}
+          oe[kind] = idmap
+        end
+        idmap[to_id] = reason
+      end
+    end
+  end
+  local eierr = edge_rows:err()
+  if eierr then
+    return nil, eierr
+  end
+
+  local builder_rows, bqerr = c.db:query("SELECT item, session FROM builders ORDER BY item, seq")
+  if builder_rows == nil then
+    return nil, bqerr
+  end
+  for row in builder_rows do
+    local id = row.item as string -- cast: from any (sqlite row)
+    local it = by_id[id]
+    if it ~= nil then
+      it.builders[#it.builders + 1] = row.session as string -- cast: from any (sqlite row)
+    end
+  end
+  local bierr = builder_rows:err()
+  if bierr then
+    return nil, bierr
+  end
+
+  local speccer_rows, sqerr = c.db:query("SELECT item, session FROM speccers ORDER BY item, seq")
+  if speccer_rows == nil then
+    return nil, sqerr
+  end
+  for row in speccer_rows do
+    local id = row.item as string -- cast: from any (sqlite row)
+    local it = by_id[id]
+    if it ~= nil then
+      it.speccers[#it.speccers + 1] = row.session as string -- cast: from any (sqlite row)
+    end
+  end
+  local sierr = speccer_rows:err()
+  if sierr then
+    return nil, sierr
+  end
+
+  local out: {item.Item} = {}
+  for _, id in ipairs(order) do
+    local it = by_id[id]
+    local bad = item.problems(it)
+    if #bad > 0 then
+      it.decode_problems = bad
+    end
+    out[#out + 1] = it
+  end
+  return out, ""
+end
+
 --- `find TEXT...`: every hit for the joined query, ranked, one line
 --- each — handle, state, title, snippet — then the verdict line
 --- `gitboard-find: N hit(s)`. Opens the cache (rebuilding it when
@@ -182,6 +326,7 @@ local record cachequery
   similar_lines: function(root: string, title: string,
   known_digest?: string): {string}
   resolve_tail: function(root: string, input: string): string | nil, string
+  items: function(c: cache.Cache): {item.Item} | nil, string
   cmd_find: function(root: string, text: string): integer
 end
 
@@ -190,6 +335,7 @@ local M: cachequery = {
   lanes_write = lanes_write,
   similar_lines = similar_lines,
   resolve_tail = resolve_tail,
+  items = items,
   cmd_find = cmd_find,
 }
 
