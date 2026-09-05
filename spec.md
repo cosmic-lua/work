@@ -64,6 +64,35 @@
   `gitboard done utpf_HTkH --reason not-planned --force --why "..."` citing PR
   #1705, then removed the now-unneeded worktree/branch.
 
+## build LbjX_BhTY (claude) — stopped short, blocked+released, 501s, 65 tool calls, in=124 out=2168 cache_read=5829385 cache_create=107469
+- goal: implement items 1–4 of the flags `--`-terminator item, then item 5 (a test
+  that `cosmic --docs -- "--recipe"` reaches the handler intact, per the spec's own
+  claim that this "already" works). actually happened: items 1–4 landed clean,
+  committed at `7cc369f`, all green; item 5's premise is FALSE on this tree — `cosmic
+  --docs -- "--recipe"` silently drops the query and prints the full module index
+  instead. Root cause is one layer up from this item's scope: `cmd/cosmic/main.tl`'s
+  `parse_args()` pre-scan treats the FIRST bare `--` as cosmic's own
+  option/script-name boundary, so a `--` meant to terminate `--docs`'s own optional
+  argument gets consumed there before `cosmic.flags` ever sees the value;
+  `_cli/args.tl`'s `resolve_optional_arg` independently has the same bail-on-`--`
+  shape. ~15 of the agent's 65 tool calls went to pinning this down (a debug script
+  via `cosmic.child`, then tracing `_cli/args.tl` and the dispatcher's pre-scan) —
+  the builder's own friction entry says a one-line comment at the pre-scan's `if a ==
+  "--"` branch would have saved most of it. Builder correctly stopped rather than
+  widening scope into the dispatcher, left the diff (items 1–4 plus the now-failing
+  item-5 regression test) committed unpushed on `3ItQ4xOm`. contributed: the spec's
+  Evidence asserted an unverified fact about a DIFFERENT layer (the dispatcher, not
+  `cosmic.flags`) as settled; nothing wrong with the build doctrine — this is exactly
+  "re-run the spec's measured commands" catching a false premise before it reached a
+  PR. orchestrator action: filed «WgbGUO99» (the dispatcher bug, full repro +
+  root-cause trace ported from the report), `block LbjX_BhTY WgbGUO99`, `drop
+  LbjX_BhTY --force` (the agent had already reported, so its own claim was no longer
+  live) — the committed-but-unpushed diff stays on the branch/worktree for the
+  respec once the blocker lands. secondary: also caught a bare `cosmic file.tl`
+  reading as a passed test with zero output (not enrolled without `--make test`,
+  per D29) — cost ~3 calls, no tree/doc gap, a habit note in the agent's own
+  friction section.
+
 ## candidates
 - none passing the spec bar this pass. Deferred, not lost: the two pre-existing
   unparented triage items («KGOw_xnx8» friction: 2026-09-05 work9-routine,
