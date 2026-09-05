@@ -2,9 +2,9 @@ title: cache: an events table from each item's commit chain — PR rounds, verdi
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-KYPX_s06P-32638265
-reviewer: review-KYPX_s06P-32638265
 pr: 38
-verdict_head: 5a2a8df4f092ac78105b040f8f32aea5c00ff2e7
+verdict: accept
+verdict_head: f3361dd3d8cf237dc27f133572747a0ce8a7db67
 verdict_spec: 2daeca8a4e75c045629865e8fcce5d4e69588e59
 builders: build-KYPX_s06P-32638265
 speccers: build-KYPX_s06P-32638265
