@@ -1,4 +1,4 @@
-title: cacheread: migrate gitready, intake, and action off flow.tl/priority.tl
+title: gitready/intake/action: no migration needed — they take {Item} from the caller that loads it (research finding, closes with no code)
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
