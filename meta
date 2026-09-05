@@ -1,3 +1,5 @@
 title: builder brief: auto-fill the rework hand-back (BOUNCE_CONTEXT, worktree reuse, push-not-new-PR) from the item's own verdict/pr
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
+claim: build-qgFj_DaXr-f3a5b327
+builders: build-qgFj_DaXr-f3a5b327
