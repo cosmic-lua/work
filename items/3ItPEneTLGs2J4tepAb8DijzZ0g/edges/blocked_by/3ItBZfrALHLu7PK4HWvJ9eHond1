@@ -1,0 +1,1 @@
+fts.search's MATCH escaping reuses escape_token/match_all/match_any from J9eH_ond1; building them here again would be the duplication the item exists to end
