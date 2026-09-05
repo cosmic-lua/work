@@ -1,1 +1,0 @@
-shares the same undeclared-tuple-sharing shape as unix.nanosleep; needs the archetype's fix mechanism decided first so sigaction lands consistent with it
