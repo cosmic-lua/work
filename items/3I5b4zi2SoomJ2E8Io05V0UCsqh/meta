@@ -1,2 +1,3 @@
 title: board item import leaves HTML entities (&#39;/&#34;) undecoded in facts blocks, breaking automated ready-bar checks
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 resolution: not-planned
