@@ -1,1 +1,0 @@
-reject reopened the decision: current spec's 'no regression, dismiss' conclusion is stale and contradicted by 3IpIfJ5G's accepted finding (regression, +4.15%, 92% same-direction) plus this review's own third independent re-run (~+4.4%) — needs the goal owner's call (one more day-separated session vs. short-circuit to the static fix) before this item can be reworked
