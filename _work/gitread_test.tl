@@ -8,8 +8,10 @@
 -- ref nor sha given, `load` falls back to its usual single for-each-ref.
 
 local check = require("cosmic.check")
+local child = require("cosmic.child")
 local fixture = require("_work.fixture")
 local gitread = require("_work.gitread")
+local graph = require("_work.gitgraph")
 local refs = require("_work.refs")
 local store = require("_work.store")
 
@@ -35,6 +37,66 @@ local function for_each_ref_calls(f: function(): boolean): integer
     error(err, 0)
   end
   return calls
+end
+
+--- Count `child.start` calls that spawn `git cat-file --batch` across
+--- `f`, restoring the real function whether `f` succeeds or throws —
+--- the same swap-and-restore pattern as `for_each_ref_calls` above.
+--- @param f function(): boolean The body to run under the counting stub
+--- @return integer Calls made during `f`
+local function cat_file_spawns(f: function(): boolean): integer
+  local calls = 0
+  local real = child.start
+  child.start = function(argv: {string}, opts?: child.Options): child.Handle | nil, string
+    if argv[1] == "git" and argv[2] == "cat-file" then
+      calls = calls + 1
+    end
+    return real(argv, opts)
+  end
+  local ok, err = pcall(f)
+  child.start = real
+  if not ok then
+    error(err, 0)
+  end
+  return calls
+end
+
+-- `load`'s three rounds — meta/held/edges, each edge kind's own
+-- subtree, and every content blob — run over ONE `cat-file --batch`
+-- session (`_work.gitobj.batch_session`), not one process per round.
+-- An item with a real `blocked_by` edge exercises all three rounds
+-- with non-empty queries, so an unconverted round would show up here
+-- as a second (or third) spawn, not merely as an idle no-op call.
+local function test_load_of_an_item_with_edges_spawns_one_cat_file_process()
+  local s = init_state_repo("one-spawn")
+  local blocker = file_item(s, "a blocker", "")
+  local id = file_item(s, "an item", "")
+  assert(graph.cmd_block(s, id, blocker, false, "waiting on the blocker") == 0)
+
+  local calls = cat_file_spawns(function(): boolean
+      check.must(gitread.load(s.root, id))
+      return true
+    end)
+  assert(calls == 1, "a load with edges must cost exactly one cat-file spawn: "
+    .. calls)
+end
+
+-- `list`'s three rounds — same shape as `load`'s, across every item on
+-- the board at once — likewise run over ONE `cat-file --batch`
+-- session, not one process per round, regardless of how many items
+-- the board holds.
+local function test_list_of_a_board_with_edges_spawns_one_cat_file_process()
+  local s = init_state_repo("list-one-spawn")
+  local blocker = file_item(s, "a blocker", "")
+  local id = file_item(s, "an item", "")
+  assert(graph.cmd_block(s, id, blocker, false, "waiting on the blocker") == 0)
+
+  local calls = cat_file_spawns(function(): boolean
+      check.must(gitread.list(s.root))
+      return true
+    end)
+  assert(calls == 1, "a list with edges must cost exactly one cat-file spawn: "
+    .. calls)
 end
 
 -- `load`'s own parameter-driven fast path: given the ref and sha for

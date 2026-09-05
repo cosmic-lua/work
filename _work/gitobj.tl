@@ -1,17 +1,21 @@
 --- Low-level git object plumbing: computing blob and tree ids in Lua
 --- (no process, nothing written — `hash_object`/`mktree`), writing
---- them for real when a caller needs the object to exist
---- (`hash_object_write`/`mktree_write`), building commits with
---- independent author/committer identities and an `Op:` trailer,
---- batch-reading blob and raw tree content and every item's observed
---- tree in as few processes as possible, and parsing a raw tree
---- object's bytes back into entries. Every store operation that
---- touches git objects (as opposed to refs, `_work.refs`) goes
---- through here, so the exact argv shapes stay in one place.
+--- them for real when needed (`hash_object_write`/`mktree_write`),
+--- building commits with independent author/committer identities and
+--- an `Op:` trailer, batch-reading blob and tree content in as few
+--- processes as possible, and parsing a raw tree's bytes into
+--- entries. Every store operation touching git objects (never refs,
+--- `_work.refs`) goes through here, keeping argv shapes in one place.
 local child = require("cosmic.child")
 local codec = require("cosmic.codec")
 local env = require("cosmic.env")
+local gitbatch = require("_work.gitbatch")
 local hash = require("cosmic.hash")
+
+--- The batch-entry and session machinery `cat_file_batch` wraps —
+--- split out to `_work.gitbatch`, whose type this module re-exports as
+--- its own for every existing caller.
+local type BatchEntry = gitbatch.BatchEntry
 
 --- The sha1 of the empty blob, the same object `git hash-object` gives
 --- an empty string — used for `beats/<id>` markers, which carry no
@@ -26,13 +30,6 @@ local record TreeEntry
   otype: string -- "blob" | "tree"
   sha: string -- 40 lowercase hex
   name: string
-end
-
---- One object `cat_file_batch` read back.
-local record BatchEntry
-  otype: string -- "blob" | "tree" | "commit"
-  size: integer
-  content: string
 end
 
 --- The sha1 blob id for content, computed in Lua: no process spawned,
@@ -282,12 +279,13 @@ local function commit_tree(root: string, spec: CommitSpec): string | nil, string
   return (r.stdout:gsub("%s+$", ""))
 end
 
---- Read a batch of objects in one `git cat-file --batch` process.
---- Each query is a git rev spec: `<ref>:meta`, `<sha>:edges/blocked_by/<id>`,
---- a bare sha, and so on. Content is read by exact byte count, so
---- binary content (a raw tree object) round-trips intact; a missing
---- path or object is simply absent from the result rather than an
---- error, matching git's own `<query> missing` answer.
+--- Read a batch of objects in one `git cat-file --batch` process: the
+--- one-shot form of `_work.gitbatch`'s session, for a caller with a
+--- single round to ask — a caller with several dependent rounds
+--- (`_work.gitread.load`/`.list`, `_work.gitreadmany.load_many`) wants
+--- `gitbatch.batch_session` directly, to pay for one process rather
+--- than one per round. A missing path or object is simply absent from
+--- the result, matching git's own `<query> missing` answer.
 --- @param root string The repository root
 --- @param queries {string} Rev specs to read, may be empty
 --- @return {string: BatchEntry} | nil One entry per query git could resolve
@@ -297,43 +295,19 @@ local function cat_file_batch(root: string,
   if #queries == 0 then
     return {}
   end
-  local r, err = child.run({"git", "cat-file", "--batch"},
-    {cwd = root, stdin = table.concat(queries, "\n") .. "\n"})
-  if r == nil then
-    return nil, err
+  local sess, serr = gitbatch.batch_session(root)
+  if sess == nil then
+    return nil, serr
   end
-  if not r.ok then
-    return nil, ("git cat-file --batch failed: %s"):format(r.stderr)
+  local out, oerr = sess:request(queries)
+  if out == nil then
+    return gitbatch.session_fail(sess, oerr)
   end
-  -- Responses come back one per query, in the SAME order as stdin —
-  -- that ordering, not the header text, is what ties a result back to
-  -- the query string that produced it, so a caller can ask the same
-  -- rev spec twice (two items sharing a blocker's reason blob) and
-  -- get two independent entries.
-  local out: {string: BatchEntry} = {}
-  local buf = r.stdout
-  local pos = 1
-  for _, query in ipairs(queries) do
-    local nl = buf:find("\n", pos, true)
-    if nl == nil then
-      return nil, ("cat-file --batch: truncated output after %d bytes"):format(pos - 1)
-    end
-    local header = buf:sub(pos, nl - 1)
-    if header:match(" missing$") then
-      pos = nl + 1
-    else
-      local otype, size_s = header:match("^%S+ (%S+) (%d+)$")
-      if otype == nil then
-        return nil, ("cat-file --batch: unparseable header: %s"):format(header)
-      end
-      local size = math.tointeger(tonumber(size_s))
-      local content_start = nl + 1
-      local content_end = content_start + size - 1
-      out[query] = {otype = otype, size = size, content = buf:sub(content_start, content_end)}
-      pos = content_end + 2 -- skip the object's own trailing "\n"
-    end
+  local _cok, cerr = sess:close()
+  if not _cok then
+    return nil, cerr
   end
-  return out, ""
+  return out
 end
 
 --- Bytes to lowercase hex.

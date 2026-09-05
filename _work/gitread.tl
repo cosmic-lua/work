@@ -10,14 +10,14 @@
 --- exported for `_work.gitreadmany.load_many` to reuse the same rule);
 --- `list` also reports every duplicate it found in `Board.duplicates`
 --- so `_work.gitfsck` can name it for a human to clear. Split out of
---- `_work.store` so that module stays under its line cap;
---- `_work.store` is the only caller of `load`/`list` outside tests —
---- `_work.gitreadmany.load_many`, a named-id-set batch `_work.cache`'s
---- fetch-path refresh uses, is split into its own file for the same
---- line-cap reason, built on the helpers this module exports below.
+--- `_work.store` to stay under its line cap; `_work.store` is the only
+--- caller of `load`/`list` outside tests. `_work.gitreadmany.load_many`
+--- — a named-id-set batch `_work.cache`'s fetch-path refresh uses — is
+--- split out the same way, built on the helpers this module exports below.
 local cachedb = require("_work.cachedb")
 local child = require("cosmic.child")
 local format = require("_work.format")
+local gitbatch = require("_work.gitbatch")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
@@ -46,12 +46,11 @@ end
 
 --- The whole board as `list` found it: every item, its ref and tip
 --- (`refs_by_id`/`shas_by_id` — the write lease for each),
---- `refs/heads/board/seq`'s own tip, "" when the ref does not exist yet,
---- every id `list` found filed under both namespaces at once, and the
---- digest of the `for-each-ref` snapshot this pass took over exactly
---- `_work.cachedb`'s own watched patterns — `_work.cache.open`'s
---- validation check when a caller already has this snapshot in hand,
---- so it never repeats the `for-each-ref` `list` just paid for.
+--- `refs/heads/board/seq`'s own tip, "" when absent, every id `list`
+--- found filed under both namespaces at once, and the digest of the
+--- `for-each-ref` snapshot this pass took over exactly `_work.cachedb`'s
+--- watched patterns — `_work.cache.open`'s check when a caller already
+--- has this snapshot, so it never repeats the `for-each-ref` `list` paid for.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
@@ -97,11 +96,10 @@ local function content_blob_shas(kinds: {string: string},
 end
 
 --- Build one item from its tip's `meta`/`held`/`edges` — shared by
---- `load` (one item, its own processes) and `list` (the whole board,
---- in a fixed handful of processes total) so the tree-to-Item
---- translation is written once. `batch`, `kind_batch` and
---- `blob_batch` are the caller's already-read `cat-file --batch`
---- results; nothing here starts a process.
+--- `load` and `list`, each over their own `gitbatch.batch_session`, so
+--- the tree-to-Item translation is written once. `batch`, `kind_batch`
+--- and `blob_batch` are the caller's already-read answers; nothing
+--- here starts a process.
 --- @param id string The item id
 --- @param sha string The tip commit this item's tree came from
 --- @param batch {string: gitobj.BatchEntry} The meta/held/edges batch
@@ -195,13 +193,10 @@ local function lease_decode(ticket: string, id: string): string, string
   return tref, tsha
 end
 
---- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`
---- — and, on the rare board where one id lives under both at once,
---- picking the winner `pick_duplicate` names rather than whichever
---- `for-each-ref` happened to list first. `known_ref`/`known_sha` skip
---- this for-each-ref entirely when the caller already resolved them
---- unambiguously (`_work.store.resolve`'s own snapshot, or a prior
---- `list`'s lease).
+--- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`,
+--- resolving a rare double-filed id via `pick_duplicate`; `known_ref`/`known_sha`
+--- skip that for-each-ref when already resolved (`_work.store.resolve`'s own
+--- snapshot, or a prior `list`'s lease). The three rounds share one `gitbatch.batch_session`.
 --- @param root string The repository root
 --- @param id string Item id
 --- @param known_ref string | nil The id's ref, already resolved
@@ -229,11 +224,12 @@ local function load_item(root: string, id: string,
       ref, sha = kept.refname, kept.sha
     end
   end
-  local batch, berr = gitobj.cat_file_batch(root,
-    {sha .. ":meta", sha .. ":held", sha .. ":edges"})
-  if batch == nil then
-    return nil, berr
+  local sess, serr = gitbatch.batch_session(root)
+  if sess == nil then
+    return nil, serr
   end
+  local batch, berr = sess:request({sha .. ":meta", sha .. ":held", sha .. ":edges"})
+  if batch == nil then return gitbatch.session_fail(sess, berr) end
   local edges_entry = batch[sha .. ":edges"]
   local kinds: {string: string} = {}
   if edges_entry ~= nil then
@@ -243,14 +239,15 @@ local function load_item(root: string, id: string,
   for _, ksha in pairs(kinds) do
     kind_queries[#kind_queries + 1] = ksha
   end
-  local kind_batch, kerr = gitobj.cat_file_batch(root, kind_queries)
-  if kind_batch == nil then
-    return nil, kerr
-  end
-  local blob_batch, rerr = gitobj.cat_file_batch(root,
-    content_blob_shas(kinds, kind_batch))
+  local kind_batch, kerr = sess:request(kind_queries)
+  if kind_batch == nil then return gitbatch.session_fail(sess, kerr) end
+  local blob_batch, rerr = sess:request(content_blob_shas(kinds, kind_batch))
+  local _cok, cerr = sess:close()
   if blob_batch == nil then
     return nil, rerr
+  end
+  if not _cok then
+    return nil, cerr
   end
   local it, ierr = build_item(id, sha, batch, kind_batch, blob_batch)
   if it == nil then
@@ -260,17 +257,17 @@ local function load_item(root: string, id: string,
 end
 
 --- Every item in the store, done ones included: one `for-each-ref`
---- (also reading `refs/heads/board/seq`'s and `refs/heads/board/format`'s tips),
---- one `cat-file --batch` for every item's `meta`/`held`/`edges` PLUS
---- the format marker's own blob, one more for every edge kind's own
---- subtree content, and one more for every content blob (a
---- `blocked_by` or other-kind reason) — four processes total, never
---- one per item, PLUS one `merge-base --is-ancestor` for every id this
---- pass finds filed under both namespaces at once — rare, so it never
---- shows up in the fixed-process-count tests. The format check happens
---- here, once, rather than in every reader: a board on a layout this
---- tool cannot trust is refused before anything else it read alongside
---- the marker is believed.
+--- (also reading `refs/heads/board/seq`'s and `refs/heads/board/format`'s
+--- tips), then one `gitbatch.batch_session` for all three rounds — every
+--- item's `meta`/`held`/`edges` plus the format marker's blob, every edge
+--- kind's own subtree content, and every content blob (a `blocked_by` or
+--- other-kind reason) — two processes total, never one per item or
+--- round, PLUS one `merge-base --is-ancestor` for every id this pass
+--- finds filed under both namespaces at once — rare, so it never shows
+--- up in the fixed-process-count tests. The format check happens here,
+--- once, rather than in every reader: a board on a layout this tool
+--- cannot trust is refused before anything else it read alongside the
+--- marker is believed.
 --- @param root string The repository root
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
@@ -341,10 +338,12 @@ local function list(root: string): Board | nil, string
     queries[#queries + 1] = r.sha .. ":held"
     queries[#queries + 1] = r.sha .. ":edges"
   end
-  local batch, berr = gitobj.cat_file_batch(root, queries)
-  if batch == nil then
-    return nil, berr
+  local sess, serr = gitbatch.batch_session(root)
+  if sess == nil then
+    return nil, serr
   end
+  local batch, berr = sess:request(queries)
+  if batch == nil then return gitbatch.session_fail(sess, berr) end
   local format_content = ""
   if format_sha ~= "" then
     local entry = batch[format_sha .. ":format"]
@@ -354,7 +353,7 @@ local function list(root: string): Board | nil, string
   end
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
-    return nil, frefusal
+    return gitbatch.session_fail(sess, frefusal)
   end
   local kinds_by_id: {string: {string: string}} = {}
   local kind_queries: {string} = {}
@@ -368,10 +367,8 @@ local function list(root: string): Board | nil, string
       end
     end
   end
-  local kind_batch, kerr = gitobj.cat_file_batch(root, kind_queries)
-  if kind_batch == nil then
-    return nil, kerr
-  end
+  local kind_batch, kerr = sess:request(kind_queries)
+  if kind_batch == nil then return gitbatch.session_fail(sess, kerr) end
   local blob_queries: {string} = {}
   for _, r in ipairs(item_refs) do
     local kinds = kinds_by_id[r.refname]
@@ -381,9 +378,13 @@ local function list(root: string): Board | nil, string
       end
     end
   end
-  local blob_batch, rerr = gitobj.cat_file_batch(root, blob_queries)
+  local blob_batch, rerr = sess:request(blob_queries)
+  local _cok, cerr = sess:close()
   if blob_batch == nil then
     return nil, rerr
+  end
+  if not _cok then
+    return nil, cerr
   end
   local items: {item.Item} = {}
   local refs_by_id: {string: string} = {}
@@ -405,10 +406,9 @@ local function list(root: string): Board | nil, string
     duplicates = duplicates, refs_digest = refs_digest}
 end
 
---- An item's spec sidecar, "" when absent, tried against every
---- candidate ref in order — `_work.store` passes the observed ref
---- alone when known, or both `refs/heads/items/<id>` and `refs/heads/ended/<id>`
---- otherwise.
+--- An item's spec sidecar, "" when absent, tried against every candidate
+--- ref in order — `_work.store` passes the observed ref alone when known,
+--- or both `refs/heads/items/<id>` and `refs/heads/ended/<id>` otherwise.
 --- @param root string The repository root
 --- @param candidates {string} Ref names to try, in order
 --- @return string The spec markdown, possibly empty

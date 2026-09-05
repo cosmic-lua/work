@@ -21,6 +21,7 @@ return {
   ["_work/format.tl"] = {["covered"] = 46, ["total"] = 53},
   ["_work/freshness.tl"] = {["covered"] = 3, ["total"] = 3},
   ["_work/gh.tl"] = {["covered"] = 23, ["total"] = 66},
+  ["_work/gitbatch.tl"] = {["covered"] = 65, ["total"] = 74},
   ["_work/gitboard.tl"] = {["covered"] = 246, ["total"] = 338},
   ["_work/gitcompare.tl"] = {["covered"] = 90, ["total"] = 99},
   ["_work/gitfriction.tl"] = {["covered"] = 50, ["total"] = 56},
