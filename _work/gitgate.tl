@@ -342,7 +342,8 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
       written[x.id] = new_sha
     end
   end
-  cache.after_save(s.root, before_digest, items, body, message, written)
+  cache.after_save(s.root, before_digest, items, body, message, written,
+    s.written_at)
   return publish.publish(s)
 end
 

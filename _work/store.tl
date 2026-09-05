@@ -61,6 +61,9 @@ local record Store
   leased_sha: {string: string}
   leased_item: {string: item.Item}
   touched_at: {string: integer}
+  --- The epoch second the most recent `save` stamped on its commits;
+  --- 0 before any save.
+  written_at: integer
   observed_seq: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
@@ -148,7 +151,7 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, touched_at = {}, observed_seq = "",
+    leased_sha = {}, leased_item = {}, touched_at = {}, written_at = 0, observed_seq = "",
     pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
     remote_url = "", remote_url_ok = false, remote_url_read = false,
     remote_present = false, remote_present_read = false}

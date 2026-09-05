@@ -72,6 +72,9 @@ local record Outcome
   changed: boolean
   seq_changed: boolean
   new_seq_sha: string
+  --- The epoch second stamped as every commit's author and committer
+  --- date, so a cache patch records the same instant git did.
+  written_at: integer
 end
 
 --- One item's commit as planned, plus the bookkeeping the post-import
@@ -143,9 +146,10 @@ end
 --- @return Outcome | nil What moved
 --- @return string Error message
 local function save_batch(req: Request): Outcome | nil, string
-  local out: Outcome = {pushes = {}, new_ref = {}, new_sha = {}, changed = false,
-    seq_changed = false, new_seq_sha = ""}
   local now = fastimport.git_date_now()
+  local written_at = math.tointeger(tonumber(now:match("^(%d+)"))) or os.time()
+  local out: Outcome = {pushes = {}, new_ref = {}, new_sha = {}, changed = false,
+    seq_changed = false, new_seq_sha = "", written_at = written_at}
   local commits: {fastimport.CommitPlan} = {}
   local planned: {Planned} = {}
   for idx, it in ipairs(req.items) do

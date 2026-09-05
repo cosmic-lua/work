@@ -228,12 +228,11 @@ end
 --- about to replace — an item's ref never changes once created — or,
 --- for an id with no prior row at all (a brand-new item), defaults to
 --- `refs/heads/items/<id>`: the only ref `_work.gitwrite` ever creates
---- one under. `touched_at` is this call's own wall clock, the same
---- approximation `events.apply_save`'s `at` already makes for the
---- identical reason (`_work.fastimport.git_date_now()`'s exact value
---- never leaves `_work.gitwrite`) — the two agree to the second in
---- every ordinary case, and a rare drift self-heals at the next
---- digest-mismatched rebuild.
+--- one under. `touched_at`, and the `at` `events.apply_save` records,
+--- are `written_at` — the epoch second the write stamped on every
+--- commit it made — so the cache and the git log agree exactly; this
+--- call's own clock is the fallback for a caller that has no write to
+--- report.
 --- @param root string The store's root
 --- @param before_digest string | nil `guard`'s result, from before the write
 --- @param items {item.Item} `it`, then every `also` item, in that order
@@ -242,11 +241,11 @@ end
 --- @param written {string: string} Item id -> new sha, for ids that got a new commit
 local function after_save(root: string, before_digest: string | nil,
     items: {item.Item}, spec_body: string | nil, message: string,
-    written: {string: string})
+    written: {string: string}, written_at?: integer)
   if #items == 0 then
     return
   end
-  local now = os.time()
+  local now = written_at or os.time()
   local _ok, _err = apply_patch(root, before_digest, nil,
     function(tx: sqlite.Database): boolean, string
       local txc: Cache = {db = tx, specs = {}, load_problems = {}}
@@ -396,7 +395,7 @@ local record cache
   guard: function(root: string, known_digest?: string): string | nil
   after_save: function(root: string, before_digest: string | nil,
   items: {item.Item}, spec_body: string | nil, message: string,
-  written: {string: string})
+  written: {string: string}, written_at?: integer)
   around_fetch: function(root: string,
   fetch_fn: function(): boolean, string): boolean, string
 end
