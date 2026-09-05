@@ -6,7 +6,6 @@
 
 local check = require("cosmic.check")
 local env = require("cosmic.env")
-local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
 local cache = require("_work.cache")
@@ -181,8 +180,15 @@ local function test_review_brief_needs_the_handover()
   unpin_session()
   assert(code == 0, "the recorded PR unlocks the review brief")
   assert(out:find("--pr 42", 1, true) ~= nil, "the PR number is filled")
-  assert(out:find(fs.absolute_path(s.root), 1, true) ~= nil,
-    "the board worktree's absolute path is filled in")
+  assert(out:find("bin/gitboard verdict", 1, true) ~= nil,
+    "the verdict command names the product checkout's bin/gitboard: " .. out)
+  assert(out:find("o/bin/gitboard", 1, true) == nil,
+    "the stale o/bin/gitboard path is gone: " .. out)
+  assert(out:find("<PRODUCT_ROOT>", 1, true) ~= nil,
+    "with no GITBOARD_DIR to derive it from, the placeholder survives: "
+    .. out)
+  assert(out:find("<PRODUCT_ROOT>", #out - 200, true) ~= nil,
+    "the verdict line names it among the survivors: " .. out:sub(#out - 200))
   assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
     "the placeholder is gone — the brief mints and fills the label itself")
   local label = ("review-%s-deadbeef"):format(tail.bare(leaf))
@@ -193,6 +199,33 @@ local function test_review_brief_needs_the_handover()
   assert(out:find("claim it as " .. label, 1, true) ~= nil,
     "the verdict line repeats it, so an orchestrator claims under the "
     .. "identical string before ever spawning the agent")
+end
+
+-- `<PRODUCT_ROOT>` is `GITBOARD_DIR`'s parent's parent — the checkout
+-- root `bin/gitboard` itself execs from, since it exports
+-- `GITBOARD_DIR` as `<root>/o/board` before handing off to the pinned
+-- binary.
+local function test_product_root_fills_from_gitboard_dir()
+  local s = init_state_repo("brief-product-root")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 7, false, "") == 0)
+  pin_session("f005cafe00001234dead")
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
+  local code, out = brief_and_capture(s, "review", leaf)
+  if prior == nil then
+    local _ok, _err = env.unset("GITBOARD_DIR")
+  else
+    check.must(env.set("GITBOARD_DIR", prior))
+  end
+  unpin_session()
+  assert(code == 0, "the recorded PR unlocks the review brief")
+  assert(out:find("cd /home/user/product\n", 1, true) ~= nil,
+    "PRODUCT_ROOT is GITBOARD_DIR's parent's parent: " .. out)
+  assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
+    "the placeholder is gone once GITBOARD_DIR answers it")
 end
 
 -- Green and a repo with no checks at all both earn the brief — a
@@ -340,8 +373,10 @@ local function test_review_brief_of_a_research_handover()
         .. "  --session %s"):format(leaf, label), 1, true) ~= nil,
     "the verdict command carries neither --pr nor --head, and the "
     .. "minted label filled in: " .. out)
-  assert(out:find(fs.absolute_path(s.root), 1, true) ~= nil,
-    "the board worktree's absolute path is filled in")
+  assert(out:find("bin/gitboard verdict", 1, true) ~= nil,
+    "the verdict command names the product checkout's bin/gitboard: " .. out)
+  assert(out:find("o/bin/gitboard", 1, true) == nil,
+    "the stale o/bin/gitboard path is gone: " .. out)
   assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
     "the placeholder is gone — the brief mints and fills the label itself")
 end
