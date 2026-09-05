@@ -1,1 +1,0 @@
-needs a cosmic release built from a commit at/after 1Lhz_38Wt's merge, with bin/cosmic.pin bumped to it, before gen1's checker has the new union arm
