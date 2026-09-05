@@ -32,13 +32,15 @@ else is the same snapshot and the same load, repeated: a `new` spends about
 A mutation verb takes ONE ref snapshot and ONE load before it writes, and
 re-reads only the refs it wrote. Ready when: «cwi5_ntHB» (the read verbs'
 single snapshot, same store/cache seam) is merged — `git log --oneline
-origin/main | grep -c 3IssPSUD` prints 1 — so this lands on top of it
-instead of colliding with it in `_work/store.tl` and `_work/cache.tl`.
+origin/main | grep -c "(#18)"` prints 1 (squash merges carry the PR
+number, not the branch) — and the store split «Bkbr_5S1U» (PR #21, `grep -c
+"(#21)"` prints 1) is on main, so the write half lives in
+`_work/storewrite.tl` and this lands on top of both.
 
 1. Find every `refs.for_each_ref` and `gitread.load` call reachable from
    `new`/`compare`/`block`/`take`/`done` (start at `_work/gitverbs.tl`,
    `_work/gitwrite.tl`, `_work/publish.tl`, `_work/store.tl`,
-   `_work/cache.tl`; `grep -n "for_each_ref\|gitread.load\|load_many"
+   `_work/storewrite.tl`, `_work/cache.tl`; `grep -n "for_each_ref\|gitread.load\|load_many"
    _work/*.tl | grep -v _test` is the sweep — paste its count into the
    PR). The store already holds the snapshot and the loaded Items; the
    lease check before the write, the cache's digest check, and the post-save
