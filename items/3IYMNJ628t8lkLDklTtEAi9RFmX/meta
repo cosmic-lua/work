@@ -1,3 +1,4 @@
 title: casts: the 10 metatable-access sites behind an identity-compare and a metamethod-fetch helper
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+speccers: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7
