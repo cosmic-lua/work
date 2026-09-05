@@ -2,6 +2,7 @@ title: cosmopolitan: definitions-coverage ratchet checks arity, not per-slot typ
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
 claim: build-sTmy_8tBZ-a159f2f2
+reviewer: review-sTmy_8tBZ-a159f2f2
 pr: 385
 builders: a159f2f2-3b4f-5606-8a43-0caade3fcb90 build-sTmy_8tBZ-a159f2f2
 speccers: fe06cb27-50b8-5666-a033-c8f08b932d33 a159f2f2-3b4f-5606-8a43-0caade3fcb90
