@@ -109,3 +109,35 @@ actually WRITE the blob and get its sha) rather than a duplicate: one
 computes, the other writes. Worth a one-function addition (e.g.
 `cosmic.git.blob_sha(content)`) so a caller who only needs the hash —
 to compare against a known blob, say — never pays for a process.
+
+## Addendum, 2026-09-05: what landed in gitboard since this was written
+
+The evidence above predates cosmic-lua/work#16-#35. The plumbing worth
+porting grew; the port carries these too, in the same directory:
+
+- `_work/gitbatch.tl` (168 lines): `batch_session(root)`, ONE
+  `git cat-file --batch` process answering successive dependent rounds of
+  queries, written in 64-query chunks so neither pipe fills before the
+  other drains (work#29's deadlock finding; `_work/gitbatch_test.tl`'s
+  pipe-saturating case is the regression test). `gitobj.cat_file_batch`
+  is now its one-shot wrapper. The pipe plumbing (`fd.pipe(O_CLOEXEC)`,
+  `child.start` with `stdin = reader`) moves with it.
+- The one-process log walk: `git log --format='%H %ct %P %s' <tips>`
+  attributed to refs by first-parent chains (work's events table,
+  «KYPX_s06P») and `publish.history`'s `%h\t%cI\t%s` parse — `log(root,
+  tips) -> {Commit}` with sha, time, parents, subject.
+- The ref-snapshot digest: `refs.for_each_ref` now emits `%(refname)
+  %(objectname) %(committerdate:unix)` (work#35) and
+  `_work/cachedb.tl`'s `digest_of(entries)` hashes the sorted
+  `refname sha` lines — `snapshot(root, patterns) -> {RefEntry}, digest`.
+- `_work/gh.tl:21-66`: `git remote get-url origin` parsed to an
+  `owner/repo` slug, both GitHub URL shapes, `.git` dropped —
+  `remote_slug(root, remote?)`, memoization left to the caller.
+- `_work/fixture.tl` (242 lines): `init_state_repo`, `init_shared` (a
+  bare origin plus a clone), `commits`, `commit_author_email` — a
+  hermetic-repository test fixture every `cosmic.git` test needs anyway,
+  as `cosmic/git/testing.tl` (or a `_testing` sibling if the public
+  surface should not carry it).
+
+Line budget: with these the port is five or six files, not two; the
+split named above is a first guess, the counts decide.
