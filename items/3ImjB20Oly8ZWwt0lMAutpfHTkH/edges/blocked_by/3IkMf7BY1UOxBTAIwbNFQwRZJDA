@@ -1,1 +1,0 @@
-the FTS5 pin bump cannot be partial: any release >= d88e994fc drags the whole exact-contract window in, which is 3IkMf7BY's one-PR adaptation (its target >= 405d8840d already carries FTS5); at pickup re-measure — the pin and main_handlers.tl's mkstemp callers will already be done, leaving only the pragma_module_list fts5 proof
