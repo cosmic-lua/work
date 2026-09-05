@@ -179,7 +179,11 @@ local function resolve_glob(root: string, input: string): Resolved | nil, string
     return {id = ids[1], ref = ref, sha = sha}
   end
   if #ids > 1 then
-    return nil, ("%s is ambiguous: %s"):format(input, table.concat(ids, " "))
+    local tails: {string} = {}
+    for i, id in ipairs(ids) do
+      tails[i] = id:sub(20)
+    end
+    return nil, ("%s is ambiguous: %s"):format(input, table.concat(tails, " "))
   end
   local t = normalize(input)
   if t:match("%a") == nil then
@@ -206,7 +210,11 @@ local function resolve_glob(root: string, input: string): Resolved | nil, string
     return nil, ("no item matches tail %s"):format(input)
   end
   if #ci_ids > 1 then
-    return nil, ("%s is ambiguous: %s"):format(input, table.concat(ci_ids, " "))
+    local ci_tails: {string} = {}
+    for i, id in ipairs(ci_ids) do
+      ci_tails[i] = id:sub(20)
+    end
+    return nil, ("%s is ambiguous: %s"):format(input, table.concat(ci_tails, " "))
   end
   local _, cref, csha = distinct_ids(ci_found)
   return {id = ci_ids[1], ref = cref, sha = csha}
