@@ -234,6 +234,106 @@ written when it reports, in a later pass's log.
   «3ItQ6kLa» rather than left here, since it already carries a full respec
   with the two required decisions and file names.
 
+## build jiP8_yJF8 rework (Sonnet 5) — pushed fix commit aa9716c, 287s, 22 tool calls, tokens in=46 out=345 cache_read=1319602 cache_create=46615, first edit call 6, 0 errors, 1 repeated read
+
+- **Orchestrator note, not the agent's:** `gitboard brief builder` (the
+  same command used for a fresh pull) does not distinguish a rework from
+  a first build: it printed "on a fresh branch `3It8pA6M`, branched off
+  the latest `origin/main`" and step 8 "Open a PR from `3It8pA6M`" even
+  though the branch already existed (pushed, PR #1718 open) and needed
+  reuse, not recreation. Also left `<BOUNCE_CONTEXT>` an empty,
+  unsubstituted placeholder — the tool does not fetch or inject the
+  actual `request-changes` PR comment; that was mine to fetch
+  (`pull_request_read` `get_comments`) and hand-paste. Cost: rewriting
+  the "Where to work" and "What to do" push/PR sections by hand and
+  composing the bounce context myself before spawning, rather than the
+  brief carrying it. **Improvement:** `gitboard brief builder` could
+  detect `state: rework` (vs `state: todo`) and emit a rework-specific
+  template — reuse the existing branch, fetch and inline the PR's
+  `request-changes` comment as `<BOUNCE_CONTEXT>`, and change the
+  push/PR steps to "existing branch, no new PR." This is a real gate/tool
+  gap, not a doc note — left as a candidate below.
+- **Separately, a mistake of my own while acting on the above:** setting
+  up the rework worktree, a `cd "$SCRATCH/worktrees/jiP8_yJF8"` silently
+  failed (the directory didn't exist — the original build's worktree had
+  vanished from disk while git's own `worktree list` still called it
+  "prunable"), and the following `git reset --hard origin/3It8pA6M` ran
+  in the shell's PREVIOUS working directory instead: `/home/user/cosmic`,
+  the main checkout, on `claude/inspiring-shannon-pv8esr` — the branch
+  this task is meant to develop on. That branch had no unique commits
+  (freshly checked out from `origin/main`), was never pushed with the
+  bad content, and `git reflog` gave its exact prior tip, so
+  `git reset --hard c39fc2f` fully recovered it with zero loss — but the
+  near-miss cost ~4 extra commands to diagnose and fix, and could have
+  been serious on a branch that actually carried work. **Contributed:**
+  chaining `cd <maybe-missing-dir>; git ...` in one Bash call without
+  checking the `cd`'s own exit status — a failed `cd` doesn't abort a
+  non `set -e` script, so the following destructive command ran in the
+  wrong directory. **Improvement:** always use `git -C <absolute-path>`
+  for worktree operations instead of `cd` chaining, and never run
+  `reset --hard`/`checkout .`/`clean -f` in a compound command whose
+  `cd` could have silently failed — exactly the kind of check the "run
+  `git status` before any destructive command" rule exists for, applied
+  here one command too late. No board item filed — this is a
+  session-conduct lesson, not a tool or spec gap.
+- **Agent's own report:** no friction — a straightforward, well-scoped
+  mechanical refactor the reviewer's comment already pointed at; the
+  existing tests required no changes.
+
+## review jiP8_yJF8 (2nd pass, Sonnet 5) (Sonnet 5) — accept, auto-merge enabled, 311s, 30 tool calls, tokens in=56 out=2163 cache_read=1833583 cache_create=57642, first edit call 17, 1 error result, 3 repeated commands
+
+- **Goal (agent's own report):** get PR status/diff/CI. **What happened:**
+  the review brief's example commands assume the `gh` CLI, which is not
+  installed in this environment; one failed call, then switched to the
+  `mcp__github__*` tools via `ToolSearch`. **Contributed:** the brief
+  template (shared across review kinds) was written assuming `gh` without
+  checking. **Improvement:** the brief could name the GitHub MCP tools as
+  the available path rather than assuming `gh` — folded into the same
+  brief-template candidate as «jiP8_yJF8»'s rework-detection gap above,
+  since both are "the brief assumed an environment fact it should have
+  checked or stated as conditional."
+- **Transcript-measured:** one Bash error (`grep ... cosmic/ksuid.tl`:
+  "No such file or directory") — the agent's first grep ran before `cd`ing
+  into its own fresh clone; self-corrected on the next call (3 repeated
+  reads of the same file afterward, consistent with the actual
+  verification work, not thrashing). Independently re-derived the
+  fix's correctness (diffed old/new `ksuid.tl`, confirmed `rand.bytes`/
+  `time.now` are genuinely non-nilable, re-ran the mutation test in a
+  fresh clone) rather than trusting the builder's report — exactly the
+  distance-from-the-builder posture `help review` asks for, done well.
+
+## review Ng6q_dpp2 handover (Sonnet 5) — accept, 671s, 71 tool calls, tokens in=144 out=3053 cache_read=6341650 cache_create=105008, first edit call 58, 1 error result, 3 repeated commands
+
+- **Goal (agent's own report):** reproduce the `load_extension` grep
+  exactly as the spec states it (`grep -n load_extension
+  o/_types/types_gen/cosmo/lsqlite3.d.tl`). **What happened:** failed
+  ("No such file or directory") in the `cosmic-lua/work` checkout the
+  review runs from — `o/_types/types_gen/` is only ever materialized by
+  a project defining `cosmic/**`, which `work` does not. Cost ~10 tool
+  calls and a full `cosmic-lua/cosmic` fetch+build (~6 min) to determine
+  this and get the equivalent answer there instead. **Contributed:** the
+  research item's own spec (and the follow-up item «3ItRr8C8», which
+  repeats the identical bare path) never names which repo's checkout the
+  command runs against — true of the original research pass too (see
+  its own friction entry, already on the board via
+  3IsofrTyVSLXpZtxrx5Ng6qdpp2's history), so this is the SAME gap
+  surfacing a second time, once per session that re-runs the probe.
+  **Improvement:** the follow-up item «3ItRr8C8»'s spec should be
+  corrected before it is pulled to say explicitly "run from a
+  cosmic-lua/cosmic checkout" (or give the equivalent command verified to
+  work from `work` itself: extracting `.types/cosmo/lsqlite3.d.tl` from
+  the pinned binary's zip, which the reviewer confirmed gives the
+  identical answer) — a respec, not a new item, since «3ItRr8C8» already
+  exists and is otherwise unchanged.
+- **Transcript-measured, notable:** this review independently re-derived
+  both signals from scratch (its own TF-IDF and hashed-trigram
+  implementations, not the researcher's code) and got matching results
+  to four decimal places on Signal B — real, expensive, adversarial
+  verification rather than trusting the researcher's numbers; the one
+  Bash "error" logged is the `load_extension` path miss above, not a
+  thrash. 979 vs. the researched-and-recorded 959 items is live board
+  churn during the pass, correctly not treated as a defect.
+
 ## candidates
 
 - «jiP8_yJF8»-shape repo mis-defaulting: `gitboard new`/`set`/`spec` filing
@@ -248,3 +348,24 @@ written when it reports, in a later pass's log.
   should become `block` edges at refine time — stays here for triage: a
   doctrine-sentence fix (`skills/work/decompose.md` or `gitboard help bar`),
   not a code gate; the exact wording is a refiner call.
+- `gitboard brief builder` does not distinguish a rework (`state: rework`)
+  from a first pull: it prints "fresh branch ... off origin/main" and an
+  "open a PR" step even when the branch and PR already exist, and leaves
+  `<BOUNCE_CONTEXT>` an empty placeholder rather than fetching and
+  inlining the PR's `request-changes` comment; the review brief
+  separately assumes the `gh` CLI, unavailable in this environment,
+  instead of naming the GitHub MCP tools actually available — stays here
+  for triage: both are real gaps in `_work/brieftext.tl`'s templates, not
+  mine to patch mid-pass, but concrete and reproducible (this pass hit
+  both once each).
+- `_work/testdata/similar_pairs.tl`'s planned extension-availability probe
+  (`grep -n load_extension o/_types/types_gen/cosmo/lsqlite3.d.tl`) does
+  not name which repo checkout it runs against, and fails outright from a
+  bare `cosmic-lua/work` clone (that generator only runs for a project
+  defining `cosmic/**`) — hit identically by both the original research
+  pass and its review. **Filed as a respec, not left here**: «3ItRr8C8»
+  (the embedding-stage follow-up item, still `todo`, not yet pulled)
+  should have this probe corrected in its own spec text before anyone
+  builds it — either "run from a cosmic-lua/cosmic checkout" or the
+  equivalent verified-working command from `work` itself (extract
+  `.types/cosmo/lsqlite3.d.tl` from the pinned binary's zip).
