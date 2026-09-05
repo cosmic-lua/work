@@ -16,6 +16,7 @@ local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
 local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
 local verbs = require("_work.gitverbs")
@@ -342,4 +343,30 @@ local function test_two_processes_racing_the_cache_never_corrupts_it()
   local it_y = check.must(store.load(s, id_y))
   assert(it_x.title == "x, renamed by process one", it_x.title)
   assert(it_y.title == "y, renamed by process two", it_y.title)
+end
+
+-- `open`'s digest check is `_work.refs.for_each_ref` under the hood
+-- (`cachedb.fresh_digest`) — a caller that already took that exact
+-- snapshot (`_work.store.list`'s own, say) hands its digest straight
+-- in and the check never repeats the process.
+local function test_open_with_a_known_digest_skips_for_each_ref()
+  local s = init_state_repo("known-digest")
+  file_item(s, "an item", "")
+  check.must(cache.close(check.must(cache.open(s.root))))
+  local digest = check.must(cachedb.fresh_digest(s.root))
+
+  local calls = 0
+  local real_for_each_ref = refs.for_each_ref
+  refs.for_each_ref = function(root: string, patterns: {string}):
+    {refs.RefEntry} | nil, string
+    calls = calls + 1
+    return real_for_each_ref(root, patterns)
+  end
+  local ok, c = pcall(cache.open, s.root, digest)
+  refs.for_each_ref = real_for_each_ref
+  if not ok then
+    error(c, 0)
+  end
+  assert(calls == 0, "a known digest must skip open's own for-each-ref: " .. calls)
+  check.must(cache.close(c as cache.Cache)) -- cast: pcall erases the union
 end

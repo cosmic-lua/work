@@ -1,21 +1,17 @@
---- The item store: every item lives as a git ref — `refs/heads/items/<id>`
---- for an ordinary item, `refs/heads/ended/<id>` for one resolved before
---- this rule (`ended/` is legacy: read, never written) — whose tip
---- commit's tree is the item's current state (`_work.itemtree`'s
---- canonical shape) and whose parent chain is its history. A
---- resolution sets `resolution` on whichever ref the item already
---- lives on; it never moves the ref. There is no working tree to hold
---- them: `open` needs only a git repository, and a mutation writes git
---- objects and updates refs directly, never a file. Publishing that to
---- a remote, and reading the log back, live in `_work.publish`, which
---- calls back into `git`/`git_ok` here for the same deterministic tool
---- identity every store call uses.
+--- The item store: every item lives as a git ref — `refs/heads/items/<id>` for an ordinary
+--- item, `refs/heads/ended/<id>` for one resolved before this rule (`ended/` is legacy:
+--- read, never written) — whose tip commit's tree is the item's current state
+--- (`_work.itemtree`'s canonical shape) and whose parent chain is its history. A resolution
+--- sets `resolution` on whichever ref the item already lives on; it never moves the ref.
+--- There is no working tree to hold them: `open` needs only a git repository, and a
+--- mutation writes git objects and updates refs directly, never a file. Publishing that to
+--- a remote, and reading the log back, live in `_work.publish`, which calls back into
+--- `git`/`git_ok` here for the same deterministic tool identity every store call uses.
 ---
---- The read and write mechanics are `_work.gitread`/`_work.gitwrite`,
---- split out to keep this file under its line cap; this module is the
---- orchestration — which lease each write compares against, and what
---- a verb sets through `set_session`/`set_op`/`set_bounded` before it
---- calls `save`, whose own signature carries none of that.
+--- The read and write mechanics are `_work.gitread`/`_work.gitwrite`, split out to keep
+--- this file under its line cap; this module is the orchestration — which lease each write
+--- compares against, and what a verb sets through `set_session`/`set_op`/`set_bounded`
+--- before it calls `save`, whose own signature carries none of that.
 local child = require("cosmic.child")
 local format = require("_work.format")
 local fs = require("cosmic.fs")
@@ -25,17 +21,15 @@ local item = require("_work.item")
 local refs = require("_work.refs")
 
 --- One open state repository. Every field but `root` is working state
---- a single verb invocation accumulates: the session and `Op:` trailer
---- the next `save` should credit, whether it is bounded, the lease
---- (ref + tip) each id was last observed at, a SNAPSHOT of each id's
---- item as observed (`leased_item` — independent of whatever a caller
---- goes on to mutate `load`'s/`list`'s own returned `item.Item`
---- into, since `save`'s fast-import diff needs the ORIGINAL fields to
---- compare against), `refs/heads/board/seq`'s own observed tip, the
---- refs a completed `save` still owes `publish` a push for, and every
---- id the most recent `list` found filed under both `refs/heads/items`
---- and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the
---- only reader).
+--- a single verb invocation accumulates: the session and `Op:` trailer the next `save`
+--- should credit, whether it is bounded, the lease (ref + tip) each id was last observed
+--- at, a SNAPSHOT of each id's item as observed (`leased_item` — independent of whatever a
+--- caller goes on to mutate `load`'s/`list`'s own returned `item.Item` into, since `save`'s
+--- fast-import diff needs the ORIGINAL fields to compare against), `refs/heads/board/seq`'s
+--- own observed tip, the refs a completed `save` still owes `publish` a push for, and every
+--- id the most recent `list` found filed under both `refs/heads/items` and
+--- `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only reader; `list`'s
+--- ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live here too).
 local record Store
   root: string
   session: string
@@ -47,6 +41,8 @@ local record Store
   observed_seq: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
+  board_digest: string
+  fresh_lease: string
 end
 
 --- The refusal a lost push race earns, exported so a verb can tell it
@@ -157,7 +153,8 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {}}
+    leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {},
+    board_digest = "", fresh_lease = ""}
 end
 
 --- Record the session `save` should credit as author for whatever it
@@ -219,6 +216,9 @@ local function resolve(s: Store, prefix: string): string | nil, string
   if #matches > 1 then
     return nil, ("%s is ambiguous: %s"):format(prefix, table.concat(matches, " "))
   end
+  if #found == 1 then -- never the ambiguous case; see the Store doc
+    s.fresh_lease = gitread.lease_encode(matches[1], found[1].refname, found[1].sha)
+  end
   return matches[1]
 end
 
@@ -266,13 +266,15 @@ end
 --- Load one item, remembering its ref and tip as the lease `save`
 --- writes against next, and a snapshot of its fields as observed —
 --- the baseline `save`'s fast-import diff compares the mutated item
---- against.
+--- against — `resolve`'s one-shot lease for this id, when it just set one.
 --- @param s Store The store
 --- @param id string Item id
 --- @return item.Item | nil The item
 --- @return string Error message; "no item <id>" when absent
 local function load_item(s: Store, id: string): item.Item | nil, string
-  local loaded, err = gitread.load(s.root, id)
+  local ref, sha = gitread.lease_decode(s.fresh_lease, id)
+  s.fresh_lease = ""
+  local loaded, err = gitread.load(s.root, id, ref, sha)
   if loaded == nil then
     return nil, err
   end
@@ -301,6 +303,7 @@ local function list(s: Store): {item.Item} | nil, string
   end
   s.observed_seq = board.seq_sha
   s.duplicates = board.duplicates
+  s.board_digest = board.refs_digest
   return board.items
 end
 
@@ -380,15 +383,13 @@ end
 --- NOTHING moved.
 --- @param s Store The store
 --- @param it item.Item The item
---- @param message string Commit subject, shared by every commit this
---- call makes
---- @param spec string Replacement spec markdown for `it`; nil leaves
---- its sidecar exactly as observed
+--- @param message string Commit subject, shared by every commit this call makes
+--- @param spec string Replacement spec markdown for `it`; nil leaves its sidecar
+--- exactly as observed
 --- @param also {item.Item} Further items to write in the same mutation
 --- @return boolean True on success — a no-op mutation succeeds too
---- @return string "" on an ordinary success; on a no-op, the
---- `is_noop`-testable "nothing to record: ..." message; the failure
---- detail otherwise
+--- @return string "" on an ordinary success; on a no-op, the `is_noop`-testable
+--- "nothing to record: ..." message; the failure detail otherwise
 local function save(s: Store, it: item.Item, message: string,
     spec?: string, also?: {item.Item}): boolean, string
   local batch: {item.Item} = {it}
@@ -418,6 +419,7 @@ local function save(s: Store, it: item.Item, message: string,
   if not outcome.changed then
     return true, NOOP_PREFIX .. ("%s leaves the board unchanged"):format(message)
   end
+  s.fresh_lease = ""
   local written_by_id: {string: item.Item} = {}
   for _, x in ipairs(batch) do
     written_by_id[x.id] = x
