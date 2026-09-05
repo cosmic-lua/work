@@ -1,1 +1,0 @@
-cold-build rule, measured 2026-08-27 on 555873eb by the same mirror + coldbuild argv: the pinned 2026-08-27-cb39b65 checker loses cosmic/_teal_ast_test.tl:23 (test_artifact_cache_thaws) and cosmic/fd_read_test.tl:99 (test_sync_moved_to_fs) once migrated, refusing them as unused functions. The pin predates #1455 (2724a719); the tree's own checker passes all of them.
