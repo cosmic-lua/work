@@ -12,6 +12,7 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitbatch = require("_work.gitbatch")
 local gitobj = require("_work.gitobj")
+local proc = require("cosmic.proc")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -84,6 +85,38 @@ local function test_batch_session_answers_a_round_larger_than_one_chunk()
     assert(entry.content == "item " .. tostring(i), "entry " .. i .. " has its own content")
   end
   assert(check.must(sess:close()))
+end
+
+-- A round whose request bytes AND answer bytes both exceed a pipe's
+-- 64KB buffer is the actual hazard chunking guards against — a large
+-- COUNT of tiny queries (the round-larger-than-one-chunk test above)
+-- never fills either pipe on its own, and passes even with chunking
+-- disabled. Run in a bounded, throwaway subprocess: a regression here
+-- is exactly the shape that hangs indefinitely rather than answering
+-- wrong, so `timeout` turns that into a failed assertion within
+-- seconds instead of a stuck suite.
+local function test_batch_session_answers_a_pipe_saturating_round()
+  local root = fresh_repo("pipe-saturating")
+  local payload = ("y"):rep(2000)
+  local sha = check.must(gitobj.hash_object_write(root, payload))
+  local n = 12000 -- request lines alone: 12000 * 41 bytes =~ 490 KB
+  local exe = check.must(proc.interpreter())
+  local script = ([[
+    local gitbatch = require("_work.gitbatch")
+    local sess = assert(gitbatch.batch_session(%q))
+    local queries = {}
+    for i = 1, %d do queries[i] = %q end
+    local out = assert(sess:request(queries))
+    local entry = out[%q]
+    if entry == nil or entry.content ~= %q then
+      os.exit(1)
+    end
+    assert(sess:close())
+    os.exit(0)
+  ]]):format(root, n, sha, sha, payload)
+  local r = check.must(child.run({"timeout", "-k", "5", "20", exe, "-e", script}))
+  assert(r.ok, "a pipe-saturating round must answer within 20s, not deadlock: code="
+    .. tostring(r.code) .. " stderr=" .. tostring(r.stderr))
 end
 
 -- `close` is safe after a failed `request` — the shape every
