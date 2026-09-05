@@ -1,1 +1,0 @@
-documents the is_held marker, gitboard hold/unhold, and the reopen-on-new-child behavior the board-tooling item builds; must land second so the docs and decision record describe what was actually built, not a design that may shift in review
