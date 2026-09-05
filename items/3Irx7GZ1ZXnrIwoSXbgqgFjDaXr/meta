@@ -2,6 +2,7 @@ title: builder brief: auto-fill the rework hand-back (BOUNCE_CONTEXT, worktree r
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
 claim: build-qgFj_DaXr-f3a5b327
+reviewer: review-qgFj_DaXr-f3a5b327-v2
 pr: 27
 verdict_head: 5e13f443b15ae40fd6a386de2d37e4e8443f3917
 verdict_spec: 8ec55675c63ffe0c6c64cdfca26dceddab542651
