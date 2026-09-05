@@ -1,7 +1,9 @@
 title: cosmic-lua/work now requires the GitHub merge queue — accepted PRs can't land: no auto-merge, no merge-queue API access from this session's tooling
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 claim: build-c77H_v0vS-f3a5b327
-reviewer: review-c77H_v0vS-f3a5b327
 pr: 31
+verdict: accept
+verdict_head: 530e0dff97533cbb6b04145c957201e8fecbef67
+verdict_spec: 8e1cceae15b9446187d60695d266313eb6b08f11
 builders: build-c77H_v0vS-f3a5b327
 speccers: f3a5b327-2851-53ff-b838-1a75b6338d05
