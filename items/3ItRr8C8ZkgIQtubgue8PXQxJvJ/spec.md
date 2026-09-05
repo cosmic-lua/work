@@ -21,11 +21,16 @@ while unrelated-but-templated control pairs (sequential migration
 batches, sibling pin-bump releases, parallel census slices) routinely
 score 0.86–0.93 under the same signals — the discriminator is meaning,
 not shared tokens/shingles, which only a semantic embedding reaches.
-`grep -n load_extension` against `o/_types/types_gen/cosmo/lsqlite3.d.tl`
-returns nothing, and the only extension surface is a fixed,
-statically-linked registry with no vector/ANN member — sqlite-vec (or
-any loadable vector extension) is unavailable; brute-force cosine in
-Teal is the only path. `--make ci` runs inside a loopback-only network
+`grep -n load_extension` against a `cosmic-lua/cosmic` checkout's
+`o/_types/types_gen/cosmo/lsqlite3.d.tl` (built via `bin/cosmic --make
+build` — that generator only runs for a project defining `cosmic/**`,
+which `cosmic-lua/work` itself does not, confirmed independently by two
+sessions hitting "No such file or directory" from a bare `work` clone;
+the equivalent probe from `work` itself is extracting
+`.types/cosmo/lsqlite3.d.tl` from the pinned binary's own zip) returns
+nothing, and the only extension surface is a fixed, statically-linked
+registry with no vector/ANN member — sqlite-vec (or any loadable vector
+extension) is unavailable; brute-force cosine in Teal is the only path. `--make ci` runs inside a loopback-only network
 namespace (no outbound calls at test time), and `o/board.db` is a
 derived, rebuildable-from-git cache — anything embedding-derived stored
 there must degrade cleanly when absent, never block a rebuild.
