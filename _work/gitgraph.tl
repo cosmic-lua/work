@@ -34,7 +34,10 @@ local store = require("_work.store")
 --- File a new item into the graph, todo if it has a parent and triage
 --- otherwise. `spec` is nil to leave the tree with no `spec.md` at
 --- all — an empty string would instead write an EMPTY `spec.md`,
---- which is a different, visible outcome.
+--- which is a different, visible outcome. Mints a fresh id; a caller
+--- that needs a chosen id (a fixture, a replay) builds the `item.Item`
+--- and calls `storewrite.save` directly — see
+--- `_work/storeinit_test.tl`'s `seed_one_item`.
 --- @param s store.Store The store
 --- @param title string The item's title
 --- @param parent string The parent id, or "" to file it without one

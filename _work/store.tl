@@ -139,7 +139,10 @@ end
 --- patterns beside it, never replacing what was there, so a plain
 --- `git pull` on the branch keeps working. There is no `items/`
 --- directory to create — every item lives as a ref, not a file — so a
---- fresh repository with nothing filed yet needs nothing else here.
+--- fresh repository with nothing filed yet needs nothing else here —
+--- for a board with nothing filed. A clone of a populated origin still
+--- needs `publish.sync` before its `refs/heads/items/*` exist locally;
+--- the verbs' `--dir` path assumes it ran.
 --- @param dir string The directory to prepare
 --- @return boolean True on success
 --- @return string Error message
