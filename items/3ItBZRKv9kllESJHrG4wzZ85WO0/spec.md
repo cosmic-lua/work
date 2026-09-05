@@ -28,10 +28,19 @@ reached for twice inside one codebase already.
 No such helper exists in cosmic today: `grep -rli "heading\|## .*section"
 cosmic/*.tl` (2026-09-05) returns nothing markdown-structural.
 
+Named `cosmic.headings` rather than `cosmic.markdown` deliberately:
+«h6OJ_bQ48» already claims that name for a full lowdown-bound
+parser/renderer, a much larger undertaking. The two are complementary,
+not competing — this ships a small, already-proven regex-based scanner
+now; a real AST-based parser landing later could subsume it (or not —
+a cheap heading-section scan may still be worth keeping even once a
+full parser exists, the way `cosmic.uuid` and the filed `cosmic.ksuid`
+coexist rather than one replacing the other). Whoever builds either
+should read the other's spec first.
+
 ## Change
 
-1. `cosmic/markdown.tl` (or wherever fits — check `cosmic/`'s existing
-   naming for prose/doc-adjacent utilities first): port `sections`
+1. `cosmic/headings.tl` (or wherever fits): port `sections`
    near-verbatim as a generic markdown heading-section scanner, and
    `ready_gaps` generalized to `required_sections(body, names)` (or
    similar) taking the required heading list as an explicit argument
