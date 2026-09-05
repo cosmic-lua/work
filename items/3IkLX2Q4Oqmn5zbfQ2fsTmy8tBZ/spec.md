@@ -126,14 +126,89 @@ run — this task never touches the product tree):**
    see Non-goals.
 2. For each such binding compute its **success-only arity**: the
    largest literal `return <integer>;` directly in its own body.
-   Do NOT reuse `max_returns` for this number — that function
-   correctly resolves a call like `return LuaUnixSysretErrno(...)`
-   into arity 3 (which is exactly right for the existing total-slot
-   bound, `arity_vio`, that this new check leaves untouched), but that
-   resolved 3 must be excluded here, or every candidate would
-   trivially read as arity ≥ 2 and the check would be vacuous. In this
-   codebase's convention a success path always returns a literal count
-   directly (visible in every candidate above); only the failure path
+   Do NOT reuse `max_returns` for this number. Confirmed by running
+   `max_returns` itself (copied verbatim from
+   `tool/lua/test_definitions_coverage.lua` lines 1253-1293) against
+   the real bodies of `LuaUnixTiocgwinsz` and `LuaUnixSysretErrno`
+   (`third_party/lua/cosmo/lunix.c`), fed through a standalone harness
+   run with `bin/cosmic` (cosmic-lua/cosmic's embedded Lua) — reproduce
+   with the script below saved as `/tmp/verify_max_returns.lua`
+   (`sysret_body.txt`/`tioc_body.txt` are just those two functions'
+   source text, copy-pasted verbatim from `lunix.c` into their own
+   files next to it):
+   ```lua
+   local MACRO_RETURNS, NORETURN_C, C_BODIES = {}, {}, {}
+   local function slurp(p) local f=assert(io.open(p,"r")) local s=f:read("*a") f:close() return s end
+   C_BODIES.LuaUnixSysretErrno = slurp("sysret_body.txt")
+   C_BODIES.LuaUnixTiocgwinsz = slurp("tioc_body.txt")
+   local arity_memo = {}
+   local function max_returns(fname, seen)
+     if arity_memo[fname] ~= nil then
+       if arity_memo[fname] == false then return nil end
+       return arity_memo[fname]
+     end
+     local body = C_BODIES[fname]
+     if not body then return nil end
+     seen = seen or {}
+     if seen[fname] then return nil end
+     seen[fname] = true
+     local best, unknown = nil, false
+     for macro, n in pairs(MACRO_RETURNS) do
+       if body:find("%f[%w_]" .. macro .. "%s*%(") then
+         if not best or n > best then best = n end
+       end
+     end
+     for stmt in body:gmatch("return%s+([^;]+);") do
+       local lit = stmt:match("^(%d+)%s*$")
+       local call = stmt:match("^([%w_]+)%s*%(")
+       if lit then
+         local n = tonumber(lit)
+         if not best or n > best then best = n end
+       elseif call and NORETURN_C[call] then
+       elseif call then
+         local n = max_returns(call, seen)
+         if n then if not best or n > best then best = n end else unknown = true end
+       else
+         unknown = true
+       end
+     end
+     seen[fname] = nil
+     local result = (not unknown) and best or nil
+     arity_memo[fname] = result or false
+     return result
+   end
+   local function success_only_arity(fname)
+     local body, best = C_BODIES[fname], nil
+     for stmt in body:gmatch("return%s+([^;]+);") do
+       local lit = stmt:match("^(%d+)%s*$")
+       if lit then local n = tonumber(lit) if not best or n > best then best = n end end
+     end
+     return best
+   end
+   print("max_returns(LuaUnixSysretErrno) =", max_returns("LuaUnixSysretErrno"))
+   print("max_returns(LuaUnixTiocgwinsz) =", max_returns("LuaUnixTiocgwinsz"))
+   print("success_only_arity(LuaUnixTiocgwinsz) =", success_only_arity("LuaUnixTiocgwinsz"))
+   ```
+   `max_returns` itself is copied verbatim from
+   `tool/lua/test_definitions_coverage.lua` lines 1253-1293; run:
+   ```
+   $ bin/cosmic /tmp/verify_max_returns.lua
+   max_returns(LuaUnixSysretErrno) =	3
+   max_returns(LuaUnixTiocgwinsz) =	3
+   success_only_arity(LuaUnixTiocgwinsz) =	2
+   ```
+   `max_returns` resolves `LuaUnixTiocgwinsz` to 3 — exactly right for
+   the existing total-slot bound, `arity_vio`, that this new check
+   leaves untouched — because it recurses into
+   `return LuaUnixSysretErrno(...)` and takes the max across ALL
+   return statements, literal and resolved alike. That resolved 3
+   must be excluded here, or every candidate would trivially read as
+   arity ≥ 2 and the check would be vacuous, which is exactly what
+   the harness's separate `success_only_arity` function (the largest
+   literal `return N;` directly in the body, ignoring calls) confirms
+   returns 2 for `LuaUnixTiocgwinsz`. In this codebase's convention a
+   success path always returns a literal count directly (visible in
+   every candidate the earlier scan found); only the failure path
    delegates to a helper call.
 3. When success-only arity is ≥ 2, read the declared type text of that
    binding's 2nd `---@return` line in `tool/net/definitions.lua`
@@ -141,10 +216,23 @@ run — this task never touches the product tree):**
    already does: walk back over the contiguous `---` block above
    `function unix.<name>(` or `function unix.<Class>:<name>(`) and fail
    unless that type text contains the whole token `string` — matched
-   on a word boundary the way `qbare` already matches `any`/`table`
-   (`%f[%w]string%f[%W]`), so it accepts `integer|string`,
-   `string|integer`, or any wider union, but doesn't false-positive on
-   an unrelated identifier that merely contains the substring.
+   with the frontier pattern `%f[%w]string%f[%W]`. This file already
+   uses `%f[%W]` word-end frontiers for exactly this "whole token, not
+   a substring" purpose — confirmed with
+   `grep -n '%f\[%W\]' tool/lua/test_definitions_coverage.lua`,
+   which shows `qbare`'s own `t:match("^any%f[%W]")` and
+   `t:match("^table%f[%W]")` (lines 977-978) plus two more call sites
+   at lines 514 and 1074. `qbare`'s uses anchor with `^` because they
+   test whether the ENTIRE declared type is bare `any`/`table`; this
+   check instead needs `string` to match anywhere inside a union
+   (`integer|string`, `string|integer`), so it pairs a leading
+   `%f[%w]` frontier with the trailing `%f[%W]` one instead of
+   anchoring to `^` — same word-boundary technique as `qbare`, adapted
+   because the token being hunted here isn't required to lead the
+   type text. This still accepts `integer|string`, `string|integer`,
+   or any wider union, and doesn't false-positive on an unrelated
+   identifier that merely contains the substring (e.g. a hypothetical
+   `stringly` type name).
    - Slot 1 needs no new check: the failure triple's `nil` is already
      covered by every `T|nil` narrowing rule the rest of the file
      enforces.
