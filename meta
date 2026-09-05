@@ -2,4 +2,4 @@ title: graph: require repo/base explicitly on new --parent and attach, and refus
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work@main
 builders: build-HlNE_YWL2-e1847cac
-speccers: f3a5b327-2851-53ff-b838-1a75b6338d05
+speccers: f3a5b327-2851-53ff-b838-1a75b6338d05 ead169b5-25ad-5efa-90ef-b2d3f58f67f6
