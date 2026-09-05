@@ -134,21 +134,18 @@ local function publish(s: store.Store): boolean, string
   return false, store.LOST_RACE
 end
 
---- One full sha's current abbreviation width — a single trivial
---- `git rev-parse --short`, not a walk, since that width is a property
---- of the whole repository's object count rather than of any one
---- commit: it is the same width `%h` would give any OTHER commit
---- logged at this same moment. 7 (git's own floor) on any failure.
---- @param s store.Store The store
---- @param sample_sha string Any full sha already known to exist
---- @return integer The width, in hex digits
-local function abbrev_width(s: store.Store, sample_sha: string): integer
-  local r = store.git_ok(s, {"rev-parse", "--short", sample_sha})
-  if r == nil or not r.ok then
-    return 7
-  end
-  return #(r.stdout:gsub("%s+$", ""))
-end
+--- The fixed width `history` abbreviates every sha to, on both paths —
+--- the same "gitboard renders its own, rather than trusting the git
+--- binary installed" decision `iso8601_z` makes for the timestamp:
+--- `%h`'s width is `core.abbrev`'s call, live and per-repository, so a
+--- cache path abbreviating to whatever git would choose either asks
+--- git directly (a process this table exists to avoid) or risks
+--- disagreeing with a later `%h` read as the repository grows past 7
+--- hex digits' worth of objects. This project's boards are nowhere
+--- near that scale, so a fixed 7 — git's own historical floor, and
+--- what `%h` gives on every board this ratchet has run against — is
+--- the simpler, git-version-independent choice.
+local ABBREV_LEN < const > = 7
 
 --- One epoch, rendered `YYYY-MM-DDTHH:MM:SSZ` — the single formatter
 --- `history` runs EVERY commit time through, cache-sourced or
@@ -176,11 +173,10 @@ local function events_from_cache(s: store.Store, id: string): {Event} | nil
   if rows == nil or #rows == 0 then
     return nil
   end
-  local width = abbrev_width(s, rows[#rows].sha)
   local out: {Event} = {}
   for i = #rows, 1, -1 do
     local row = rows[i]
-    out[#out + 1] = {sha = row.sha:sub(1, width), at = iso8601_z(row.at),
+    out[#out + 1] = {sha = row.sha:sub(1, ABBREV_LEN), at = iso8601_z(row.at),
       subject = row.subject}
   end
   return out
@@ -192,16 +188,22 @@ end
 --- across every item and ended ref, when `id` is nil (always `git
 --- log`; the cache carries no whole-board query for this).
 ---
---- FORMAT: `at` is `iso8601_z` run over `%ct` (raw epoch seconds) on
---- BOTH paths, never git's own `%cI` — `%cI` prints a different
---- offset suffix on different git versions for the exact same UTC
---- instant (`+00:00` vs. `Z`), which a cache path that stores only the
---- epoch cannot reproduce, and a byte-identical render cannot tolerate
---- either way. Routing the fallback through the same Lua formatter the
---- cache path already uses makes `show ID`'s history block `Z`-form
---- UTC unconditionally — the same form `_work.gitshow`'s `opened:`
---- line prints — rather than a fact of the git binary that happens to
---- be installed.
+--- FORMAT: both `sha` and `at` are rendered by ONE Lua path regardless
+--- of source, cache or fallback — `at` is `iso8601_z` run over `%ct`
+--- (raw epoch seconds), never git's own `%cI` (a different offset
+--- suffix on a different git version for the exact same UTC instant,
+--- `+00:00` vs. `Z`, which a byte-identical render cannot tolerate);
+--- `sha` is `%H` (the full hash) sliced to `ABBREV_LEN` in Lua, never
+--- git's own `%h` (whose abbreviation width is `core.abbrev`'s live
+--- call, not a fixed fact this table could store and reproduce
+--- exactly). Either divergence would make `show ID`'s history block
+--- a fact of the git binary installed rather than of the commits
+--- themselves; routing both through the same formatters instead makes
+--- it `Z`-form UTC with 7-hex shas unconditionally — the timestamp
+--- form matching `_work.gitshow`'s own `opened:` line — and costs the
+--- fallback nothing extra: `%H` is no more expensive to print than
+--- `%h`, and the cache path now spawns no git process of its own at
+--- all for a `show ID` served warm.
 --- @param s store.Store The store
 --- @param id string Item id, or nil for every commit on every ref
 --- @return {Event} | nil Events, possibly empty
@@ -214,7 +216,7 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
   if cached ~= nil then
     return cached
   end
-  local argv: {string} = {"log", "--format=%h\t%ct\t%s"}
+  local argv: {string} = {"log", "--format=%H\t%ct\t%s"}
   if id ~= nil then
     local ref = s.leased_ref[id]
     if ref == nil then
@@ -251,7 +253,7 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
     if sha and at_str then
       local at = math.tointeger(tonumber(at_str))
       if at then
-        out[#out + 1] = {sha = sha, at = iso8601_z(at), subject = subject}
+        out[#out + 1] = {sha = sha:sub(1, ABBREV_LEN), at = iso8601_z(at), subject = subject}
       end
     end
   end

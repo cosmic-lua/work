@@ -41,36 +41,59 @@ CREATE TABLE events (
 CREATE INDEX events_pr ON events(pr) WHERE pr <> 0;
 CREATE INDEX events_verb ON events(verb);
 
--- One row per (item, pr): the round's first `take ... pr:N` time, how
--- many `verdict` rows the round drew, and when (if ever) one of them
--- was an accept. A round with no accept yet — still under review, or
--- sent back for rework under a later `pr:M` — carries `accepted_at`
--- NULL, which is how "every item whose PR was reworked before
--- acceptance" reads: more than one row per item, at most one of them
--- with a non-null `accepted_at`. `verdict`'s own subject never repeats
--- `pr:N` (only `take` does — `_work.gitverdict`'s subject carries no
--- such token), so a round's bounds are read off `seq`: from its own
--- `take` up to (not including) the item's next `take`, open-ended
--- for the item's last round.
+-- One row per (item, pr) — NOT per `take` event: the normal flow after
+-- a `request changes` is fix, then re-take the SAME pr to ask for
+-- review again, which writes a SECOND `take ... pr:N` commit with the
+-- identical N. Grouping on `take` rows alone (a first attempt at this
+-- view did) reads that as a second round every time, so "reworked
+-- before acceptance" was a false positive on 38 of the live board's 39
+-- flagged items. `takes` below merges every RUN of consecutive
+-- same-pr `take` rows into one group with the classic gaps-and-islands
+-- trick — `ROW_NUMBER() OVER (whole item)` minus `ROW_NUMBER() OVER
+-- (this pr only)` is constant across a run and changes the moment the
+-- pr does, whether it changes to a new number or BACK to an old one
+-- (a real second round under a reused pr, not the same run) — so
+-- `rounds` collapses each run to its first `take`'s time, and `bounded`
+-- reads a round's span off the NEXT round's start, open-ended for an
+-- item's last one. `verdicts`/`accepted_at` then count within that
+-- whole span, so a same-pr re-take never starts a fresh count. A round
+-- with no accept yet — still under review, or superseded by a later
+-- pr before one landed — carries `accepted_at` NULL, which is how
+-- "every item whose PR was reworked before acceptance" reads: more
+-- than one row per item, at most one of them with a non-null
+-- `accepted_at`. `verdict`'s own subject never carries `pr:N` — only
+-- `take` does — so nothing here reads `pr` off a verdict row.
 CREATE VIEW pr_rounds AS
-SELECT
-  t.item AS item,
-  t.pr AS pr,
-  t.at AS taken_at,
-  (SELECT COUNT(*) FROM events v WHERE v.item = t.item AND v.verb = 'verdict'
-    AND v.seq > t.seq AND v.seq < t.next_seq) AS verdicts,
-  (SELECT MAX(v.at) FROM events v WHERE v.item = t.item AND v.verb = 'verdict'
-    AND v.seq > t.seq AND v.seq < t.next_seq
-    AND v.subject LIKE 'verdict % accept%') AS accepted_at
-FROM (
+WITH takes AS (
   SELECT item, pr, seq, at,
+    ROW_NUMBER() OVER (PARTITION BY item ORDER BY seq)
+      - ROW_NUMBER() OVER (PARTITION BY item, pr ORDER BY seq) AS grp
+  FROM events
+  WHERE verb = 'take' AND pr <> 0
+),
+rounds AS (
+  SELECT item, pr, grp, MIN(seq) AS start_seq, MIN(at) AS taken_at
+  FROM takes
+  GROUP BY item, pr, grp
+),
+bounded AS (
+  SELECT r.item, r.pr, r.taken_at, r.start_seq,
     COALESCE(
-      (SELECT MIN(seq) FROM events later
-        WHERE later.item = e.item AND later.verb = 'take' AND later.seq > e.seq),
-      9223372036854775807) AS next_seq
-  FROM events e
-  WHERE e.verb = 'take' AND e.pr <> 0
-) AS t;
+      (SELECT MIN(r2.start_seq) FROM rounds r2
+        WHERE r2.item = r.item AND r2.start_seq > r.start_seq),
+      9223372036854775807) AS end_seq
+  FROM rounds r
+)
+SELECT
+  b.item AS item,
+  b.pr AS pr,
+  b.taken_at AS taken_at,
+  (SELECT COUNT(*) FROM events v WHERE v.item = b.item AND v.verb = 'verdict'
+    AND v.seq > b.start_seq AND v.seq < b.end_seq) AS verdicts,
+  (SELECT MAX(v.at) FROM events v WHERE v.item = b.item AND v.verb = 'verdict'
+    AND v.seq > b.start_seq AND v.seq < b.end_seq
+    AND v.subject LIKE 'verdict % accept%') AS accepted_at
+FROM bounded b;
 ]]
 
 local record cachedb_events

@@ -24,6 +24,7 @@ local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
 local init_shared = fixture.init_shared
+local file_item = fixture.file_item
 local give_spec = fixture.give_spec
 
 --- `verb`/`session`/`pr` for one subject, asserted in one call.
@@ -239,12 +240,14 @@ local function test_fetch_patch_lands_new_rows()
 end
 
 -- The three questions the Evidence section poses, each one SELECT
--- against `pr_rounds` — the fixture is `leaf_id`'s rework round from
--- `test_rebuild_equals_the_per_item_log`, rebuilt fresh here so this
--- test does not depend on that one's ordering.
+-- against `pr_rounds` — `leaf_id` genuinely reworked across two PRs,
+-- `steady_id` merely re-taken TWICE on the SAME pr (request changes,
+-- fix, re-take pr:6 again, accept — the ordinary flow, and the exact
+-- shape that once made 38 of the live board's 39 flagged items false
+-- positives: a same-pr re-take is one round, not two).
 local function test_pr_rounds_answers_the_three_questions()
   local s = init_state_repo("events-pr-rounds")
-  local _root_id, leaf_id = fixture.root_with_leaf(s)
+  local root_id, leaf_id = fixture.root_with_leaf(s)
   give_spec(s, leaf_id)
   assert(verbs.cmd_take(s, leaf_id, "session-a", 0, false, "") == 0)
   assert(verbs.cmd_take(s, leaf_id, "session-a", 5, false, "") == 0)
@@ -252,7 +255,32 @@ local function test_pr_rounds_answers_the_three_questions()
   assert(verbs.cmd_take(s, leaf_id, "session-a", 9, false, "") == 0)
   assert(vrd.cmd_verdict(s, leaf_id, "accept", 9, "def5678") == 0)
 
+  local steady_id = file_item(s, "a same-pr retake item", root_id)
+  give_spec(s, steady_id)
+  assert(verbs.cmd_take(s, steady_id, "session-b", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, steady_id, "session-b", 6, false, "") == 0)
+  assert(vrd.cmd_verdict(s, steady_id, "request changes", 6, "cafe111") == 0)
+  assert(verbs.cmd_take(s, steady_id, "session-b", 6, false, "") == 0)
+  assert(vrd.cmd_verdict(s, steady_id, "accept", 6, "cafe222") == 0,
+    "the accept judges a new head on the same pr")
+
   local c = check.must(cache.open(s.root))
+
+  -- The re-take is one round, not two: exactly one pr_rounds row,
+  -- carrying BOTH verdicts and the ORIGINAL take's time, not the
+  -- re-take's.
+  local steady_rounds = check.must(c.db:query(
+      "SELECT pr, taken_at, verdicts, accepted_at FROM pr_rounds WHERE item = ?",
+      {steady_id}))
+  local steady_count = 0
+  for row in steady_rounds do
+    steady_count = steady_count + 1
+    assert(row.pr == 6, "the one round is pr 6")
+    assert(row.verdicts == 2, "both verdicts count toward the one round")
+    assert(row.accepted_at ~= nil, "the round did land an accept")
+  end
+  assert(steady_count == 1, ("a same-pr retake must not fork into two "
+      .. "rounds: got %d"):format(steady_count))
 
   -- 1) Which PR heads did this item see, and when.
   local heads = check.must(c.db:query(
@@ -275,16 +303,21 @@ local function test_pr_rounds_answers_the_three_questions()
   assert(still_open.accepted_at == nil, "pr 5 was never accepted")
 
   -- 3) Every item whose PR was reworked before acceptance: more than
-  -- one pr_rounds row.
+  -- one pr_rounds row. The genuinely reworked leaf is named; the
+  -- same-pr retake, one round under one pr, is not.
   local reworked = check.must(c.db:query(
       "SELECT item FROM pr_rounds GROUP BY item HAVING COUNT(*) > 1"))
-  local found = false
+  local found, wrongly_found = false, false
   for row in reworked do
     if row.item == leaf_id then
       found = true
     end
+    if row.item == steady_id then
+      wrongly_found = true
+    end
   end
   assert(found, "the reworked leaf should be named")
+  assert(not wrongly_found, "a same-pr retake must not read as reworked")
 
   check.must(cache.close(c))
 end
