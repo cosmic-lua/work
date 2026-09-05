@@ -200,6 +200,77 @@ local function head_state(runs: {review.CheckRun}): string
   return "green"
 end
 
+--- One review left on a pull request, reduced to what a rework
+--- hand-back needs: whether it requested changes, its verbatim body,
+--- and when it landed. GitHub returns every review a PR has ever
+--- carried (approvals, plain comments, dismissed rounds too), oldest
+--- first with no ordering guarantee a caller should rely on — picking
+--- the one that matters is `latest_request_changes`, not this read.
+local record Review
+  --- "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING"
+  state: string
+  body: string
+  --- ISO 8601 UTC, GitHub's own format — string-comparable as-is
+  --- because every field is fixed-width and the zone is always "Z".
+  submitted_at: string
+end
+
+--- The reviews left on a pull request.
+--- @param s store.Store The store
+--- @param number integer The PR number
+--- @param repo string | nil The item's repo field, when it carries one
+--- @return {Review} | nil The reviews
+--- @return string Error message
+local function reviews(s: store.Store, number: integer, repo: string | nil):
+  {Review} | nil, string
+  local slugged, serr = slug(s, repo)
+  if slugged == nil then
+    return nil, serr
+  end
+  local path = ("/repos/%s/pulls/%d/reviews"):format(slugged, number)
+  local res, err = api.call("GET", path, s.root)
+  if res == nil then
+    return nil, err
+  end
+  if not api.is_success(res.status) then
+    return nil, api.error_of("GET", path, res)
+  end
+  local out: {Review} = {}
+  local v = res.value
+  if not (v is {any}) then
+    return out
+  end
+  for _, entry in ipairs(v) do
+    if entry is {string: any} then
+      out[#out + 1] = {
+        state = tostring(entry["state"] or ""),
+        body = tostring(entry["body"] or ""),
+        submitted_at = tostring(entry["submitted_at"] or ""),
+      }
+    end
+  end
+  return out
+end
+
+--- The pure selection behind a rework hand-back: the most recent
+--- CHANGES_REQUESTED review, or nil when none stands — every other
+--- state (an approval, a plain comment, a dismissed round) is not what
+--- a builder reworks against. "Most recent" is decided by
+--- `submitted_at`, never by list order, so a later round's finding
+--- always wins over an earlier one GitHub happens to list after it.
+--- @param revs {Review} The PR's reviews
+--- @return Review | nil The most recent CHANGES_REQUESTED review
+local function latest_request_changes(revs: {Review}): Review | nil
+  local latest: Review | nil = nil
+  for _, r in ipairs(revs) do
+    if r.state == "CHANGES_REQUESTED"
+    and (latest == nil or r.submitted_at > latest.submitted_at) then
+      latest = r
+    end
+  end
+  return latest
+end
+
 --- Composes `pull` and `checks` in ONE call each — the same one-read
 --- discipline `gitverdict.cmd_verdict` and `gitready.handover_refusal`
 --- already hold. Fails exactly when either underlying read does — no
@@ -229,16 +300,22 @@ local record gh
   review.Pull | nil, string
   checks: function(s: store.Store, sha: string, repo: string | nil):
   {review.CheckRun} | nil, string
+  reviews: function(s: store.Store, number: integer, repo: string | nil):
+  {Review} | nil, string
+  latest_request_changes: function(revs: {Review}): Review | nil
   head_state: function(runs: {review.CheckRun}): string
   head_checks: function(s: store.Store, number: integer, repo: string | nil):
   HeadChecks | nil, string
   type HeadChecks = HeadChecks
+  type Review = Review
 end
 
 local M: gh = {
   slug = slug,
   pull = pull,
   checks = checks,
+  reviews = reviews,
+  latest_request_changes = latest_request_changes,
   head_state = head_state,
   head_checks = head_checks,
 }
