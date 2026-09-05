@@ -100,8 +100,12 @@ local function cmd_compare(s: store.Store, winner: string,
   end
   -- The standing after the write, not the edge just made: one edge is
   -- a judgment, and what the session wants to see is where the item
-  -- now sits once transitivity has closed everything it implies.
-  local band, own = prio.key_of(prio.positions(store.list(s) or all), winner)
+  -- now sits once transitivity has closed everything it implies. `it`
+  -- and `lo` are elements of `all` (`index` maps into it by reference,
+  -- never a copy), so the `beats` edits above already left `all`
+  -- showing exactly what was just committed — a second `store.list`
+  -- would only re-read, in full, the board this call already holds.
+  local band, own = prio.key_of(prio.positions(all), winner)
   return gate.verdict_line("compare", true,
     ("%s now outranks %s%s (band %d, outranks %d)"):format(winner:sub(1, 8),
       loser:sub(1, 8), note, band, own))

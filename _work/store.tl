@@ -35,6 +35,14 @@ local refs = require("_work.refs")
 --- ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live here too).
 --- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
 --- same fields this module's `load`/`list` populate.
+---
+--- `remote_url`/`remote_present` are a second memo, of the two ad hoc
+--- git facts `_work.gh.slug` and `_work.publish.has_origin` each read
+--- with their own process: `git remote get-url origin` and `git
+--- remote`, neither of which changes within one run, so the first read
+--- of each is the only one that ever has to happen — the `_read` flags
+--- distinguish "not asked yet" from "asked, and the answer was empty
+--- or an error," which an empty string alone cannot.
 local record Store
   root: string
   session: string
@@ -48,6 +56,11 @@ local record Store
   duplicates: {gitread.Duplicate}
   board_digest: string
   fresh_lease: string
+  remote_url: string
+  remote_url_ok: boolean
+  remote_url_read: boolean
+  remote_present: boolean
+  remote_present_read: boolean
 end
 
 --- The refusal a lost push race earns, exported so a verb can tell it
@@ -159,7 +172,8 @@ local function open(root: string): Store | nil, string
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
     leased_sha = {}, leased_item = {}, observed_seq = "", pending = {}, duplicates = {},
-    board_digest = "", fresh_lease = ""}
+    board_digest = "", fresh_lease = "", remote_url = "", remote_url_ok = false,
+    remote_url_read = false, remote_present = false, remote_present_read = false}
 end
 
 --- The full id a unique prefix names, resolved against the refs
