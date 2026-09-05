@@ -87,3 +87,63 @@ Moving `_cli/lint`'s per-file rules onto the db — `--check lint <file>` runs o
 file with no build, and a lexer pass per file is its correct cost. Replacing the
 committed baselines. Any change to `o/project.mk` or the `embed/cosmic.mk` rules.
 Shipping the db in the artifact.
+
+## Result (2026-09-05, re-verified at HEAD d3bce22)
+
+**NO-ADOPT.** Rule (a) fails, which is determinative — (b) and (c) are moot.
+
+Evidence re-run: baselines unchanged (`casts.tl` 143 lines, `nil_returns.tl` 221
+lines, 364 together; `674` total moved to `675` by one unrelated line elsewhere,
+same shape).
+
+Prototype: `_build/tree_gen.tl`-shaped script (thrown away, never committed) lexing
+the same `lint_sources ∩ TREES` set the five ratchets already cover — 601 `.tl`
+files, 4,851,141 bytes (4.63 MB, matching the spec's cited figure) — into
+`file`/`token`/`definition`/`doc_block` tables in `o/tree.db`
+(`journal_mode=OFF`, `synchronous=OFF`, one transaction). Measured on a 4-core
+2.1 GHz / 15 GB sandbox, at least as fast as a typical CI runner:
+
+| measurement | value |
+|---|---|
+| tokens / definitions / doc blocks | 612,706 / 5,450 / 18,394 |
+| generation wall time, cold, naive row-by-row insert (4 runs) | 3.1–3.8 s, median ≈3.3 s |
+| generation wall time, 500-row batched `INSERT...VALUES` | 2.7–3.3 s |
+| pure `tl.lex` cost alone, no db writes (reference) | 671–767 ms |
+| `o/tree.db` file size | 54.12 MB (≈11.6× the 4.63 MB source) |
+| query 1 (casts, `SELECT...WHERE text='as'`) | 1 ms; matches `_build/casts_baseline.tl` exactly (137 casts, 62 files) |
+| query 2 (nil-returns, full token scan replayed through the existing stateful frame-walk) | 1.6–2.0 s; matches `_build/nil_returns_baseline.tl` exactly (136 sites, 57 files) |
+| today's two ratchets run directly, no db, for comparison | casts 630–840 ms + nil_returns 726–1001 ms ≈ 1.4–1.8 s combined |
+
+**(a) generator under 2 s: FAILS.** 2.7–3.8 s measured across both insert
+strategies, 35–90% over budget, on hardware at least as fast as CI's. Not a fixable
+implementation slip: pure `tl.lex` alone already costs 670–770 ms with zero writes,
+so the floor for "lex plus persist to a queryable db" sits close to 1 s, and the
+naive-vs-batched comparison shows persistence (not lexing) dominates the remaining
+2+ seconds regardless of insert strategy.
+
+**(b) shorter together than 364 lines: doubtful, not tested to a verdict** (moot
+under (a)). Casts collapses to one SQL line, but `nil_returns`' count is a stateful,
+ordered frame-stack walk (tracking function/record/block nesting) that is not
+expressible as a declarative query — the prototype needed ~230 lines of
+`_cli/nilreturn.tl`'s algorithm copied over unchanged, adapted only to read a
+pre-lexed token array. The token table replaces LEXING for this ratchet, not the
+algorithm, so the realistic saving is only the ~20–30 lines of `fs.find`/`TREES`/
+testdata-exclusion boilerplate each file carries today.
+
+**(c) incremental via sha-keying: plausible, not exercised** (moot under (a)). The
+`file.sha` column and skip-unchanged design are sound (matches `_tool/doc/index.tl`'s
+rule) but were never built out, since (a) already ends the line.
+
+**Why the mechanism doesn't generalize:** the hypothesis — one shared token table
+turns five walks into cheap queries — holds for casts (1 ms, exact match) but not
+for the ratchet whose logic is inherently stateful. Even ignoring the >2 s generation
+budget, answering just `casts` + `nil_returns` from the db costs ≈3.3 s (build) + 0 s
++ 1.8 s ≈ 5.1 s total, worse than running today's five independent walks back-to-back
+(casts ≈0.7–0.8 s + nil_returns ≈0.7–1.0 s + dupes ≈0.12 s + public_surface ≈0 s +
+cast_sites ≈0.7 s ≈ 2.3–2.5 s today). The up-front generation cost this item would
+impose on every gate run is not recoverable by the savings it produces.
+
+No decision record is filed (rule failed at step (a), so steps 3–4 do not apply).
+No follow-up items are drafted, since they were explicitly gated on the record
+landing. This item ends here, `not-planned`, with the measurements above as the
+record of why.
