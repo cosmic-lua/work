@@ -195,13 +195,11 @@ local function lease_decode(ticket: string, id: string): string, string
   return tref, tsha
 end
 
---- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`
---- — and, on the rare board where one id lives under both at once,
---- picking the winner `pick_duplicate` names rather than whichever
---- `for-each-ref` happened to list first. `known_ref`/`known_sha` skip
---- this for-each-ref entirely when the caller already resolved them
---- unambiguously (`_work.store.resolve`'s own snapshot, or a prior
---- `list`'s lease).
+--- Load one item by id, looking in `refs/heads/items` then `refs/heads/ended`,
+--- resolving a rare double-filed id via `pick_duplicate`; `known_ref`/`known_sha`
+--- skip that for-each-ref when the caller already resolved them unambiguously
+--- (`_work.store.resolve`'s own snapshot, or a prior `list`'s lease). The three
+--- cat-file rounds run over one `gitobj.batch_session`.
 --- @param root string The repository root
 --- @param id string Item id
 --- @param known_ref string | nil The id's ref, already resolved
@@ -229,11 +227,12 @@ local function load_item(root: string, id: string,
       ref, sha = kept.refname, kept.sha
     end
   end
-  local batch, berr = gitobj.cat_file_batch(root,
-    {sha .. ":meta", sha .. ":held", sha .. ":edges"})
-  if batch == nil then
-    return nil, berr
+  local sess, serr = gitobj.batch_session(root)
+  if sess == nil then
+    return nil, serr
   end
+  local batch, berr = sess:request({sha .. ":meta", sha .. ":held", sha .. ":edges"})
+  if batch == nil then return gitobj.session_fail(sess, berr) end
   local edges_entry = batch[sha .. ":edges"]
   local kinds: {string: string} = {}
   if edges_entry ~= nil then
@@ -243,14 +242,15 @@ local function load_item(root: string, id: string,
   for _, ksha in pairs(kinds) do
     kind_queries[#kind_queries + 1] = ksha
   end
-  local kind_batch, kerr = gitobj.cat_file_batch(root, kind_queries)
-  if kind_batch == nil then
-    return nil, kerr
-  end
-  local blob_batch, rerr = gitobj.cat_file_batch(root,
-    content_blob_shas(kinds, kind_batch))
+  local kind_batch, kerr = sess:request(kind_queries)
+  if kind_batch == nil then return gitobj.session_fail(sess, kerr) end
+  local blob_batch, rerr = sess:request(content_blob_shas(kinds, kind_batch))
+  local _cok, cerr = sess:close()
   if blob_batch == nil then
     return nil, rerr
+  end
+  if not _cok then
+    return nil, cerr
   end
   local it, ierr = build_item(id, sha, batch, kind_batch, blob_batch)
   if it == nil then

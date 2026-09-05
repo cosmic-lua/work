@@ -1,16 +1,15 @@
 --- Low-level git object plumbing: computing blob and tree ids in Lua
 --- (no process, nothing written — `hash_object`/`mktree`), writing
---- them for real when a caller needs the object to exist
---- (`hash_object_write`/`mktree_write`), building commits with
---- independent author/committer identities and an `Op:` trailer,
---- batch-reading blob and raw tree content and every item's observed
---- tree in as few processes as possible, and parsing a raw tree
---- object's bytes back into entries. Every store operation that
---- touches git objects (as opposed to refs, `_work.refs`) goes
---- through here, so the exact argv shapes stay in one place.
+--- them for real when needed (`hash_object_write`/`mktree_write`),
+--- building commits with independent author/committer identities and
+--- an `Op:` trailer, batch-reading blob and tree content in as few
+--- processes as possible, and parsing a raw tree's bytes into
+--- entries. Every store operation touching git objects (never refs,
+--- `_work.refs`) goes through here, keeping argv shapes in one place.
 local child = require("cosmic.child")
 local codec = require("cosmic.codec")
 local env = require("cosmic.env")
+local fd = require("cosmic.fd")
 local hash = require("cosmic.hash")
 
 --- The sha1 of the empty blob, the same object `git hash-object` gives
@@ -282,12 +281,130 @@ local function commit_tree(root: string, spec: CommitSpec): string | nil, string
   return (r.stdout:gsub("%s+$", ""))
 end
 
---- Read a batch of objects in one `git cat-file --batch` process.
---- Each query is a git rev spec: `<ref>:meta`, `<sha>:edges/blocked_by/<id>`,
---- a bare sha, and so on. Content is read by exact byte count, so
---- binary content (a raw tree object) round-trips intact; a missing
---- path or object is simply absent from the result rather than an
---- error, matching git's own `<query> missing` answer.
+--- One `git cat-file --batch` process, answering one round of queries at a time — one process for a caller's several DEPENDENT rounds.
+local record BatchSession
+  _handle: child.Handle
+  _writer: fd.Handle
+  _buf: string
+  _closed: boolean
+  --- One round: blocks until every query has its answer, a missing object included, without crossing into a later round's bytes.
+  --- @param queries {string} Rev specs to read, may be empty
+  --- @return {string: BatchEntry} | nil One entry per query git could resolve
+  --- @return string Error message
+  request: function(self: BatchSession, queries: {string}): {string: BatchEntry} | nil, string
+  --- Send stdin EOF and reap the process; idempotent, even after a failed `request`.
+  --- @return boolean
+  --- @return string Error message
+  close: function(self: BatchSession): boolean, string
+end
+
+--- Attach BatchSession's methods to an already-started process and its stdin pipe's writer end.
+--- @param handle child.Handle The started `git cat-file --batch`
+--- @param writer fd.Handle This session's own end of its stdin pipe
+--- @return BatchSession
+local function make_session(handle: child.Handle, writer: fd.Handle): BatchSession
+  local sess: BatchSession = {_handle = handle, _writer = writer, _buf = "", _closed = false}
+
+  function sess:request(queries: {string}): {string: BatchEntry} | nil, string
+    if #queries == 0 then
+      return {}
+    end
+    local out: {string: BatchEntry} = {}
+    for _, query in ipairs(queries) do
+      -- One query, then its full answer, before the next query —
+      -- never the whole round up front, or a large round can fill
+      -- both pipes (its unread output, our unwritten queries) with
+      -- neither side draining.
+      local line = query .. "\n"
+      local off = 0
+      while off < #line do
+        local n, werr = self._writer:write(line:sub(off + 1))
+        if n == nil then
+          return nil, werr
+        end
+        off = off + n
+      end
+      while true do
+        local nl = self._buf:find("\n", 1, true)
+        if nl ~= nil then
+          local header = self._buf:sub(1, nl - 1)
+          if header:match(" missing$") then
+            self._buf = self._buf:sub(nl + 1)
+            break
+          end
+          local otype, size_s = header:match("^%S+ (%S+) (%d+)$")
+          if otype == nil then
+            return nil, ("cat-file --batch: unparseable header: %s"):format(header)
+          end
+          local size = math.tointeger(tonumber(size_s))
+          if #self._buf >= nl + size + 1 then
+            out[query] = {otype = otype, size = size, content = self._buf:sub(nl + 1, nl + size)}
+            self._buf = self._buf:sub(nl + size + 2) -- past the object's own trailing "\n"
+            break
+          end
+        end
+        local chunk, rerr = self._handle:read()
+        if chunk == nil then
+          return nil, rerr or "cat-file --batch: unexpected eof"
+        end
+        self._buf = self._buf .. chunk
+      end
+    end
+    return out
+  end
+
+  function sess:close(): boolean, string
+    if self._closed then
+      return true
+    end
+    self._closed = true
+    local _wok, _werr = self._writer:close()
+    local _r, werr = self._handle:wait()
+    if werr ~= nil then
+      return false, werr
+    end
+    return true
+  end
+
+  return sess
+end
+
+--- Start one `git cat-file --batch` process for several dependent
+--- rounds (`request`), closed by the caller when done (`close`).
+--- @param root string The repository root
+--- @return BatchSession | nil
+--- @return string Error message
+local function batch_session(root: string): BatchSession | nil, string
+  -- CLOEXEC, or the child's un-dup'd writer copy survives into git and
+  -- keeps the pipe open, so closing OUR writer never reaches EOF.
+  local p, perr = fd.pipe(fd.O_CLOEXEC)
+  if p == nil then
+    return nil, perr
+  end
+  local h, herr = child.start({"git", "cat-file", "--batch"}, {cwd = root, stdin = p.reader})
+  if h == nil then
+    local _ok, _err = p:close()
+    return nil, herr
+  end
+  -- The child holds its own dup2'd copy; only this session's writer decides EOF.
+  local _rok, _rerr = p.reader:close()
+  return make_session(h, p.writer)
+end
+
+--- Close a session and forward a round's failure, so an early return never leaves the process running.
+--- @param sess BatchSession The session to close
+--- @param err string The error to forward
+--- @return nil
+--- @return string The same error
+local function session_fail(sess: BatchSession, err: string): nil, string
+  local _ok, _err = sess:close()
+  return nil, err
+end
+
+--- Read a batch of objects in one `git cat-file --batch` process — the
+--- one-shot form of `BatchSession`, for a single round; a caller with
+--- several dependent rounds wants `batch_session` directly. A missing
+--- path or object is simply absent from the result.
 --- @param root string The repository root
 --- @param queries {string} Rev specs to read, may be empty
 --- @return {string: BatchEntry} | nil One entry per query git could resolve
@@ -297,43 +414,19 @@ local function cat_file_batch(root: string,
   if #queries == 0 then
     return {}
   end
-  local r, err = child.run({"git", "cat-file", "--batch"},
-    {cwd = root, stdin = table.concat(queries, "\n") .. "\n"})
-  if r == nil then
-    return nil, err
+  local sess, serr = batch_session(root)
+  if sess == nil then
+    return nil, serr
   end
-  if not r.ok then
-    return nil, ("git cat-file --batch failed: %s"):format(r.stderr)
+  local out, oerr = sess:request(queries)
+  if out == nil then
+    return session_fail(sess, oerr)
   end
-  -- Responses come back one per query, in the SAME order as stdin —
-  -- that ordering, not the header text, is what ties a result back to
-  -- the query string that produced it, so a caller can ask the same
-  -- rev spec twice (two items sharing a blocker's reason blob) and
-  -- get two independent entries.
-  local out: {string: BatchEntry} = {}
-  local buf = r.stdout
-  local pos = 1
-  for _, query in ipairs(queries) do
-    local nl = buf:find("\n", pos, true)
-    if nl == nil then
-      return nil, ("cat-file --batch: truncated output after %d bytes"):format(pos - 1)
-    end
-    local header = buf:sub(pos, nl - 1)
-    if header:match(" missing$") then
-      pos = nl + 1
-    else
-      local otype, size_s = header:match("^%S+ (%S+) (%d+)$")
-      if otype == nil then
-        return nil, ("cat-file --batch: unparseable header: %s"):format(header)
-      end
-      local size = math.tointeger(tonumber(size_s))
-      local content_start = nl + 1
-      local content_end = content_start + size - 1
-      out[query] = {otype = otype, size = size, content = buf:sub(content_start, content_end)}
-      pos = content_end + 2 -- skip the object's own trailing "\n"
-    end
+  local _cok, cerr = sess:close()
+  if not _cok then
+    return nil, cerr
   end
-  return out, ""
+  return out
 end
 
 --- Bytes to lowercase hex.
@@ -372,6 +465,7 @@ local record gitobj
   EMPTY_BLOB_SHA: string
   type TreeEntry = TreeEntry
   type BatchEntry = BatchEntry
+  type BatchSession = BatchSession
   type CommitSpec = CommitSpec
   hash_object: function(root: string, content: string): string | nil, string
   hash_object_write: function(root: string, content: string): string | nil, string
@@ -381,6 +475,8 @@ local record gitobj
   mktree: function(root: string, entries: {TreeEntry}): string | nil, string
   mktree_write: function(root: string, entries: {TreeEntry}): string | nil, string
   commit_tree: function(root: string, spec: CommitSpec): string | nil, string
+  batch_session: function(root: string): BatchSession | nil, string
+  session_fail: function(sess: BatchSession, err: string): nil, string
   cat_file_batch: function(root: string,
   queries: {string}): {string: BatchEntry} | nil, string
   parse_tree: function(raw: string): {TreeEntry}
@@ -395,6 +491,8 @@ local M: gitobj = {
   mktree = mktree,
   mktree_write = mktree_write,
   commit_tree = commit_tree,
+  batch_session = batch_session,
+  session_fail = session_fail,
   cat_file_batch = cat_file_batch,
   parse_tree = parse_tree,
 }
