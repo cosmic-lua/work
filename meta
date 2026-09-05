@@ -1,3 +1,3 @@
 title: gitboard never packs its own local checkout — no gc/repack anywhere in _work/*.tl, so a long-lived o/board risks the same loose-object slowdown fsck/show/next pay
-parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+parent: 3IvL2wUvcjnmW8CFTHMrV1061nP
 target: cosmic-lua/work
