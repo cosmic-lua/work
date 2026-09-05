@@ -1,1 +1,0 @@
-the cast retire needs the pinned checker to know PackTable<any>; the pin moves only after the first post-2026-08-26 release ships narrow-pack-n
