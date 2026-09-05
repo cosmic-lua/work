@@ -16,10 +16,12 @@ name: perf
 # uses, safely past cosmic-lua/cosmic's 06:00 release window whose
 # pinned binary (`bin/cosmic.pin`) this repository's whole build runs
 # under. This repository's own `release.yml` publishes continuously (one
-# release per push to main, no daily cron of its own), so "the latest
-# release" it measures against is whichever gitboard build happens to be
-# newest when this lane runs — not a fixed daily snapshot the way
-# cosmic-lua/cosmic's is.
+# release per push to main, no daily cron of its own), so the newest
+# release is usually built from the exact commit this job measures —
+# comparing a binary against itself is refused by `gate.tl compare`
+# (by design). The baseline is therefore the newest release whose OWN
+# source commit is NOT the commit being measured (see the "compare
+# against the latest release" step below), never simply "the latest".
 on:
   schedule:
     - cron: '0 9 * * *'
@@ -57,8 +59,8 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       # The harness (`_perf/run.tl`, `_perf/gate.tl`, `_perf/harness.tl`,
-      # `_perf/perf_types.tl`, `_perf/compare.tl`, `_perf/baseline.tl`)
-      # lives in cosmic-lua/cosmic, not here (`_perf/bench/verbs_bench.tl`'s
+      # `_perf/perf_types.tl`, `_perf/compare.tl`) lives in
+      # cosmic-lua/cosmic, not here (`_perf/bench/verbs_bench.tl`'s
       # header records the probe that decided this) — this checks out its
       # `main` once, read-only, for the scripts alone; nothing here builds
       # or gates cosmic-lua/cosmic itself.
@@ -97,32 +99,67 @@ jobs:
       - name: measure gitboard twice
         timeout-minutes: 20
         run: |
-          set -eux
+          set -euxo pipefail
           bin/cosmic /tmp/cosmic-perf-src/_perf/gate.tl selfcheck \
             o/perf/perf.json o/perf/selfcheck.json
 
-      # The baseline is the latest gitboard RELEASE's binary, downloaded
-      # here and measured on the SAME fixture as above (determinism, not
-      # a shared file) — never a stored number, and never the live board
-      # or a network call from inside a scenario. A `perf-compare: FAIL`
-      # verdict fails this step and this job, and nothing else: no
-      # release waits on it. A `perf-baseline: FAIL` (network or API
-      # failure) fails the step too; the next scheduled run retries.
-      # `perf-compare: SKIP (no baseline)` still succeeds.
+      # The baseline is NOT simply "the latest release": this repository
+      # publishes one on every push to main, so the newest release is
+      # usually built from the exact commit this job is measuring, and
+      # `gate.tl compare` correctly refuses a binary compared against
+      # itself (`binaries: base ... current ... (same)`) — a refusal
+      # this lane must NOT read as "clean" now that pipefail (below)
+      # lets it redden the lane. So the releases list is read directly
+      # (`gh api`) and filtered to the newest one whose OWN source
+      # commit — the 7-char sha its tag carries, `YYYY-MM-DD-<sha7>`
+      # (release.yml) — is NOT a prefix of the commit being measured:
+      # skip forward past this commit's own release(s) to the next
+      # older one that still carries a `gitboard` asset. Which tag was
+      # picked is printed before anything is downloaded. A brand-new
+      # repository with no such release SKIPs the compare with a clear
+      # notice rather than failing — there is nothing wrong to report.
+      #
+      # The chosen release's binary is measured on the SAME fixture as
+      # above (determinism, not a shared file) — never a stored number,
+      # and never the live board or a network call from inside a
+      # scenario. `pipefail` (set below) is load-bearing: without it the
+      # `if/else...fi`'s exit status is `tee`'s, always 0, and a real
+      # `perf-compare: FAIL` would never reach the `$rc` check and would
+      # never redden this job. A `perf-compare: FAIL` verdict fails this
+      # step and this job, and nothing else: no release waits on it.
+      # Failing to even LIST releases (network or API failure) fails the
+      # step immediately, distinct from the ordinary "nothing to compare
+      # against yet" skip; the next scheduled run retries either way.
       - name: compare against the latest release
         timeout-minutes: 20
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -ux
+          set -uxo pipefail
           rc=0
-          bin/cosmic /tmp/cosmic-perf-src/_perf/baseline.tl \
-            --repo ${{ github.repository }} --asset gitboard \
-            --out o/perf/prev/gitboard | tee o/perf/baseline.txt
-          if grep -q "^perf-baseline: SKIP" o/perf/baseline.txt; then
-            echo "perf-compare: SKIP (no baseline: no published release carries gitboard)" \
-              > o/perf/compare.txt
+          if ! releases=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30"); then
+            echo "perf-baseline: FAIL (could not list releases)" | tee o/perf/baseline.txt >&2
+            exit 1
+          fi
+          tag=$(echo "$releases" | jq -r --arg sha "$GITHUB_SHA" '
+              [ .[]
+                | select(.draft == false)
+                | . + {rel_sha: (.tag_name | capture("-(?<s>[0-9a-f]{7})$").s // "")}
+                | select(.rel_sha != "")
+                | select((.assets // []) | any(.name == "gitboard"))
+                | select((.rel_sha as $s | ($sha | startswith($s))) | not)
+              ]
+              | sort_by(.created_at) | reverse
+              | (.[0].tag_name // "")
+            ')
+          if [ -z "$tag" ]; then
+            echo "perf-baseline: SKIP (no release predates this commit)" > o/perf/baseline.txt
+            echo "perf-compare: SKIP (no baseline)" > o/perf/compare.txt
           else
+            echo "perf-baseline: OK $tag" > o/perf/baseline.txt
+            mkdir -p o/perf/prev
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern gitboard --dir o/perf/prev
             chmod +x o/perf/prev/gitboard
             GITBOARD_PERF_BIN="$PWD/o/perf/prev/gitboard" \
               bin/cosmic /tmp/cosmic-perf-src/_perf/run.tl --out o/perf/prev/perf.json
@@ -137,7 +174,7 @@ jobs:
           if [ "$rc" -ne 0 ]; then
             [ -f o/perf/compare.txt ] && cat o/perf/compare.txt >&2
             tail -n1 o/perf/baseline.txt >&2
-            echo "perf: main regressed against the latest gitboard release. Nothing is blocked and nothing was withheld: this lane reports." >&2
+            echo "perf: main regressed against release $tag. Nothing is blocked and nothing was withheld: this lane reports." >&2
             echo "  re-run this workflow to re-measure: a real regression reproduces, noise does not." >&2
             exit "$rc"
           fi
