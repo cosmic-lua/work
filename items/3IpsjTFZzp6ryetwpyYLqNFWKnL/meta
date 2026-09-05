@@ -2,5 +2,6 @@ title: tl integer-strict rule: is_a-comparison shape is a near no-op — narrowe
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-LqNF_WKnL-2305d922
+pr: 1726
 builders: build-LqNF_WKnL-2305d922
 speccers: 2305d922-4768-559a-95be-2449dd99270f
