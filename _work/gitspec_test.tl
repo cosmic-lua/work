@@ -121,23 +121,6 @@ local function test_spec_refuses_a_stale_base()
     "carrying the text it meant to write")
 end
 
--- A blocker id with no item behind it never blocks, so it reads as
--- "sequenced" and pulls anyway. The spec bar is where that is caught.
-local function test_spec_bar_names_a_blocker_that_is_not_an_item()
-  local s = init_state_repo("dangling")
-  local _, leaf = root_with_leaf(s)
-  give_spec(s, leaf)
-  local it = check.must(store.load(s, leaf))
-  it.blocked_by = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
-  assert(storewrite.save(s, it, "hand-edited blocker"))
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
-  assert(#problems == 1 and problems[1]:find("not an item", 1, true),
-    "the bar names it: " .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "and the take is refused")
-end
-
 -- The fixture the read-access bar exists for: a spec whose own
 -- commands clone a repository the item's `repo` field does not name
 -- and nothing declares. Modeled on the spec that bounced 3IKuRFN5 —
@@ -201,21 +184,6 @@ local function test_the_items_own_repo_needs_no_declaring()
     check.must(store.list(s)))
   assert(#problems == 0, "the item's own repo is not a gap: "
     .. table.concat(problems, "; "))
-end
-
--- A real blocker refuses the take and names what to finish first;
--- recording the order is `block`'s, and the take frees when it ends.
-local function test_a_recorded_blocker_sequences_the_take()
-  local s = init_state_repo("mirror")
-  local goal, leaf = root_with_leaf(s)
-  local blocker = file_item(s, "the one that lands first", goal)
-  give_spec(s, leaf)
-  assert(graph.cmd_block(s, leaf, blocker, false, "sequenced behind it") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "the recorded order holds the take")
-  assert(verbs.cmd_done(s, blocker, "completed", false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "and frees it when the blocker ends")
 end
 
 -- The reproduced incident: a foreign session silently replacing the
@@ -352,7 +320,7 @@ local function test_next_carries_the_last_drops_why()
       "the builder session hit its budget", false) == 0)
   local all = check.must(store.list(s))
   local report = view.next_report_live(s, all, view.read_specs(s, all),
-    "", {})
+    "", {}, nil)
   assert(report:find("last drop:", 1, true) ~= nil, report)
   assert(report:find("the builder session hit its budget", 1, true) ~= nil,
     report)

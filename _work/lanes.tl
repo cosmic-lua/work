@@ -244,7 +244,7 @@ local function file_repair(s: store.Store, lane: string): boolean, string
   local title = ("lane repair: %s is red"):format(lane)
   local it: item.Item = {
     id = ksuid.new(), title = title, parent = LANE_PARENT, repo = "",
-    beats = {}, blocked_by = {}, block_reason = {}, claim = "",
+    order = {}, claim = "",
     builders = {}, reviewer = "", pr = 0, verdict = "", verdict_head = "",
     verdict_spec = "", resolution = "", key = lane,
   }

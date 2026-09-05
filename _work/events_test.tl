@@ -1,9 +1,9 @@
 #!/usr/bin/env cosmic
 -- `_work.events`: `parse_subject` over every distinct subject shape
 -- the log carries today (`_work.gitverbs.tl:239,307,330,430`,
--- `_work.gitgraph.tl:116,176,397`, `_work.gitverdict.tl:292`,
--- `_work.gitcompare.tl:93,147`) plus the legacy ones a real board
--- still holds; `walk` (via a forced `_work.cache.rebuild`) against an
+-- `_work.gitgraph.tl:116,176,397`, `_work.gitverdict.tl:292`) plus the
+-- legacy ones a real board still holds; `walk` (via a forced
+-- `_work.cache.rebuild`) against an
 -- independent per-item `git log` for a fixture with three items and a
 -- rework round; the save patch keeping `seq` contiguous with no
 -- rebuild in between; the fetch patch landing an external commit; and
@@ -50,17 +50,17 @@ local function test_parse_subject_current_verbs()
   assert_parsed("new a1b2c3d4 a title here", "new", "", 0)
   assert_parsed("attach a1b2c3d4 under b2c3d4e5", "attach", "", 0)
   assert_parsed("spec a1b2c3d4", "spec", "", 0)
-  assert_parsed("block a1b2c3d4 on b2c3d4e5: reason text", "block", "", 0)
-  assert_parsed("compare a1b2c3d4 over b2c3d4e5", "compare", "", 0)
   assert_parsed("set a1b2c3d4 title base", "set", "", 0)
   assert_parsed("drop a1b2c3d4: went stale", "drop", "", 0)
   assert_parsed("drop a1b2c3d4 review: handing back", "drop", "", 0)
-  assert_parsed("hold a1b2c3d4 verified manually against staging", "hold", "", 0)
 end
 
 -- Legacy leading tokens (`_work.flowstats`'s own header names the same
 -- set) never refuse — every field just stays at its default, and the
--- subject itself is still there for a reader that cares.
+-- subject itself is still there for a reader that cares. `block`,
+-- `compare`, `hold`, `unblock`, `unhold` and `uncompare` are legacy
+-- too: no verb writes them any more, but a real board's history still
+-- carries them.
 local function test_parse_subject_legacy_shapes()
   assert_parsed("move a1b2c3d4 to a new parent", "move", "", 0)
   assert_parsed("gitboard: legacy migration line", "gitboard:", "", 0)
@@ -70,6 +70,9 @@ local function test_parse_subject_legacy_shapes()
   assert_parsed("retitle a1b2c3d4 a new title", "retitle", "", 0)
   assert_parsed("uncompare a1b2c3d4 b2c3d4e5", "uncompare", "", 0)
   assert_parsed("repo a1b2c3d4 owner/name", "repo", "", 0)
+  assert_parsed("block a1b2c3d4 on b2c3d4e5: reason text", "block", "", 0)
+  assert_parsed("compare a1b2c3d4 over b2c3d4e5", "compare", "", 0)
+  assert_parsed("hold a1b2c3d4 verified manually against staging", "hold", "", 0)
 end
 
 --- One item's ref, resolved the same way `_work.publish.history` does.

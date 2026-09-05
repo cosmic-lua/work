@@ -98,7 +98,7 @@ Then, by verdict:
 - reject: close the PR with a comment explaining what was
   fundamentally wrong. If the approach failed because a decision is
   open, tell the orchestrator in your report so the question is
-  filed and the item blocked on it.
+  filed as a child of the item and the item dropped.
 
 ## Final report
 
@@ -120,7 +120,7 @@ Title: <TITLE>
 This is a RESEARCH SLICE: its deliverable is board state, not a
 diff — no PR to fetch, no CI to read. Under judgment is the spec
 below as it stands on the board: its recorded probes, its findings,
-and the captures it names (items filed with `new`/`attach`/`block`).
+and the captures it names (items filed with `new`/`attach`/`rank`).
 
 ## The spec under review (verbatim)
 
@@ -142,11 +142,11 @@ reads well.
    and pasted output; a claim with neither is inference, and a gap
    to quote.
 3. The captures landed: for each item the spec says it filed
-   (`new`/`attach`/`block`), find it on the board (`show`, or `git
+   (`new`/`attach`/`rank`), find it on the board (`show`, or `git
    grep -il '<phrase>' $(git for-each-ref --format='%(refname)'
    refs/heads/items refs/heads/ended)` in the board checkout) and check that it
-   sits under the parent the spec names, carries the blocker edge it
-   names, and meets the bar (`help bar`).
+   sits under the parent the spec names, carries the rank it names,
+   and meets the bar (`help bar`).
 4. The walls held: every `## Non-goals` line honored — no product
    tree touched, no PR opened by this slice.
 5. It serves the outcome: judge the recommendation against the
@@ -183,7 +183,8 @@ Then, by verdict:
   it returned. The claimant reworks the spec in place.
 - reject: say what was fundamentally wrong with the recommendation.
   If it failed because a decision is open, tell the orchestrator in
-  your report so the question is filed and the item blocked on it.
+  your report so the question is filed as a child of the item and
+  the item dropped.
 
 ## Final report
 

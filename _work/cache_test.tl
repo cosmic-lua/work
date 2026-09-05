@@ -7,13 +7,16 @@
 
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
+local cachequery = require("_work.cachequery")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
-local cmp = require("_work.gitcompare")
 local find = require("_work.find")
 local fixture = require("_work.fixture")
+local flow = require("_work.flow")
 local fs = require("cosmic.fs")
+local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
+local gitrank = require("_work.gitrank")
 local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
@@ -60,6 +63,26 @@ local function test_a_hand_moved_ref_forces_a_rebuild()
   local row = check.must(c.db:query_one("SELECT title FROM items WHERE id = ?", {id}))
   assert(row.title == "changed behind the tool's back",
     "the digest mismatch forced a rebuild: " .. tostring(row.title))
+  check.must(cache.close(c))
+end
+
+-- The board's own outcome ranking is not a special case: it is the
+-- board item's own `order` field, so ranking an outcome moves the
+-- board item's OWN ref, under `refs/heads/items` — a digest move the
+-- ordinary watched patterns already cover, with nothing extra needed.
+local function test_ranking_an_outcome_moves_the_recorded_digest()
+  local s = init_state_repo("board-order-digest")
+  local root = file_item(s, "an outcome", "")
+  check.must(cache.close(check.must(cache.open(s.root))))
+
+  assert(gitrank.cmd_rank(s, root, "", "", true) == 0)
+
+  local c = check.must(cache.open(s.root))
+  local found = check.must(refs.for_each_ref(s.root,
+      {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
+  local fresh = cachedb.digest_of(found)
+  assert(cachedb.meta_get(c.db, "refs_digest") == fresh,
+    "the cache's recorded digest reflects the board item's own ref moving")
   check.must(cache.close(c))
 end
 
@@ -190,7 +213,7 @@ end
 --- Every table the cache's schema carries — `_work.index`'s own plus
 --- `_work.find`'s search table and `_work.cache`'s own two.
 local CACHE_TABLES < const >: {string} = {
-  "items", "edges", "builders", "speccers", "search", "cache_meta", "lanes",
+  "items", "ranks", "builders", "speccers", "search", "cache_meta", "lanes",
 }
 
 --- Compare `s`'s LIVE, incrementally maintained cache file against a
@@ -230,16 +253,14 @@ end
 
 -- The equality ratchet (D6): a sequence of saves in clone A — a
 -- BOUNDED save (a fresh take against the doing bound), an ENDED move
--- (done), and an EDGE change (compare) — each checked against a cold
--- rebuild; then B syncs, saves of its own, and A syncs LAST, so A's
--- cache takes the fetch path rather than the save path, checked once
--- more.
+-- (done), and a RANK change (an item's own `order`) — each checked
+-- against a cold rebuild; then B syncs, saves of its own, and A syncs
+-- LAST, so A's cache takes the fetch path rather than the save path,
+-- checked once more.
 local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   local a, b = init_shared("cache-ratchet")
   local root_a, leaf_a = fixture.root_with_leaf(a)
   fixture.give_spec(a, leaf_a)
-  local outcome_b = file_item(a, "the second outcome, unrelated", "")
-  assert(cmp.cmd_compare(a, outcome_b, root_a) == 0)
   assert(publish.sync(b))
 
   -- 1) BOUNDED: a fresh take against the doing bound leases and
@@ -251,15 +272,27 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   assert(verbs.cmd_done(a, leaf_a, "completed", true, "test: no PR to review") == 0)
   assert_cache_matches_cold_rebuild(a, "after an ended move")
 
-  -- 3) EDGE: a `beats` edge lands on the winner's own row.
+  -- 3) RANK: an item's own `order` changes — `ranks` rows at
+  -- `parent = root_a`. `store.list` first, matching every other step
+  -- here (each a real verb that lists the whole board before writing):
+  -- a fresh `a.board_digest` is what lets `commit_and_publish`'s own
+  -- guard match the cache file's currently recorded one, rather than a
+  -- stale digest from `take`'s list call two steps back silently
+  -- skipping this patch.
   local other_leaf = file_item(a, "another workable slice", root_a)
-  assert(cmp.cmd_compare(a, other_leaf, outcome_b) == 0)
-  assert_cache_matches_cold_rebuild(a, "after an edge change")
+  check.must(store.list(a))
+  local root_it = check.must(store.load(a, root_a))
+  root_it.order = {other_leaf}
+  assert(gate.commit_and_publish(a, root_it, nil, "rank root_a's child",
+      "rank"))
+  assert_cache_matches_cold_rebuild(a, "after an order change")
 
   -- B syncs onto everything A just did, then makes a save of its own.
   assert(publish.sync(b))
   local b_leaf = file_item(b, "a slice b files", root_a)
-  assert(cmp.cmd_compare(b, b_leaf, other_leaf) == 0)
+  local b_leaf_it = check.must(store.load(b, b_leaf))
+  b_leaf_it.claim = "session-b"
+  assert(gate.commit_and_publish(b, b_leaf_it, nil, "claim b_leaf", "take"))
 
   -- A syncs LAST: its cache takes the FETCH path, not the save path.
   assert(publish.sync(a))
@@ -369,4 +402,36 @@ local function test_open_with_a_known_digest_skips_for_each_ref()
   end
   assert(calls == 0, "a known digest must skip open's own for-each-ref: " .. calls)
   check.must(cache.close(c as cache.Cache)) -- cast: pcall erases the union
+end
+
+-- The board's own outcome ranking is an ordinary item field, so a
+-- fetch that moves the board item's own ref (ranking an outcome moves
+-- it, the same as any other write to the board item) patches the
+-- cache incrementally exactly like any other item's move: no special
+-- "leave it stale" path is needed for it any more.
+local function test_a_synced_outcome_rank_patches_the_cache_incrementally()
+  local a, b = init_shared("outcome-rank-fetch")
+  local root = file_item(a, "an outcome", "")
+  assert(publish.sync(b))
+  check.must(cache.close(check.must(cache.open(b.root))))
+  local before_raw = check.must(sqlite.open(cache.path_of(b.root)))
+  local before_digest = check.must(cachedb.meta_get(before_raw, "refs_digest"))
+  check.must(before_raw:close())
+
+  assert(gitrank.cmd_rank(a, root, "", "", true) == 0)
+  assert(publish.sync(b))
+
+  local after_raw = check.must(sqlite.open(cache.path_of(b.root)))
+  local after_digest = check.must(cachedb.meta_get(after_raw, "refs_digest"))
+  check.must(after_raw:close())
+  assert(after_digest ~= before_digest,
+    "the fetch's incremental patch records the board item's moved digest directly")
+
+  local c = check.must(cache.open(b.root))
+  local all = check.must(cachequery.items(c))
+  check.must(cache.close(c))
+  local board = check.must(flow.find_board(all))
+  assert(table.concat(board.order, " ") == root,
+    ("the board's own order after the incremental patch: %s"):format(
+      table.concat(board.order, " ")))
 end

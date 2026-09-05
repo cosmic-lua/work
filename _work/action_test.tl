@@ -32,12 +32,16 @@ local function make(over: {string: any}): Item
   return check.must(item.decode(t))
 end
 
---- A placed root: it outranks a spent peer, so everything beneath it
---- has a position.
+--- A ranked outcome: the board it belongs to stands in `items` too,
+--- its own `order` naming just this outcome, so everything beneath it
+--- — and only it — is ranked.
+--- @param items {Item} The item list to append the board and the outcome to
+--- @return Item root
 local function placed_root(items: {Item}): Item
-  local spent = make({resolution = "completed"})
-  local root = make({beats = spent.id})
-  items[#items + 1] = spent
+  local board = make({})
+  local root = make({parent = board.id})
+  board.order = {root.id}
+  items[#items + 1] = board
   items[#items + 1] = root
   return root
 end
@@ -174,22 +178,18 @@ local function test_rework_returns_to_its_builder_first()
     "a live rework claim holds like any other: " .. other.kind)
 end
 
-local function test_pull_skips_what_is_blocked_and_what_misses_the_bar()
+local function test_pull_skips_what_misses_the_bar()
   local items: {Item} = {}
   local root = placed_root(items)
-  local blocker = make({parent = root.id, claim = "other"})
-  local blocked = make({parent = root.id, blocked_by = blocker.id})
   local unrefined = make({parent = root.id})
   local free = make({parent = root.id})
-  items[#items + 1] = blocker
-  items[#items + 1] = blocked
   items[#items + 1] = unrefined
   items[#items + 1] = free
   local specs = ready_specs(items)
   specs[unrefined.id] = "## Non-goals\nno Change decided yet\n"
   local a = act.next_action(items, specs, "me")
   assert(a.kind == "pull" and a.item.id == free.id,
-    ("blocked and unrefined items are skipped: %s %s"):format(a.kind,
+    ("an unrefined item is skipped: %s %s"):format(a.kind,
       a.item and a.item.id or ""))
 end
 
@@ -233,85 +233,23 @@ local function test_the_decision_carries_alternates_across_rungs()
     "rung order holds within the list: " .. alts[1].kind)
 end
 
-local function test_all_blocked_names_the_chain_root()
-  local items: {Item} = {}
-  local root = placed_root(items)
-  local bottom = make({parent = root.id, claim = "other"})
-  local waiting = make({parent = root.id, blocked_by = bottom.id})
-  items[#items + 1] = bottom
-  items[#items + 1] = waiting
-  local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
-  assert(a.kind == "unblock" and a.item.id == bottom.id,
-    ("every takeable item blocked names the chain bottom: %s %s"):format(
-      a.kind, a.item and a.item.id:sub(1, 8) or ""))
-end
-
-local function test_an_open_blocker_holds_the_merge_off_the_offer()
-  local items: {Item} = {}
-  local root = placed_root(items)
-  local peer = make({parent = root.id, claim = "other"})
-  local accepted = make({parent = root.id, claim = "who", pr = 7,
-      verdict = "accept", blocked_by = peer.id})
-  items[#items + 1] = peer
-  items[#items + 1] = accepted
-  local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
-  assert(a.kind ~= "finish" or a.item.id ~= accepted.id,
-    "a binding blocker holds the merge back: " .. a.kind)
-  assert(a.kind == "none",
-    "nothing else is offered either: " .. a.kind)
-  assert(a.reason:find("accepted item", 1, true)
-    and a.reason:find("merges are held", 1, true),
-    "the held merge is named: " .. a.reason)
-  peer.resolution = "completed"
-  local b = act.next_action(items, specs, "me")
-  assert(b.kind == "finish" and b.item.id == accepted.id,
-    "ending the blocker returns it to the finish offer: " .. b.kind)
-end
-
--- A blocked accepted HANDOVER has no PR, so there is no merge for the
--- blocker to hold back — it is `done ID` that stays withheld — and
--- the terminal reason must not claim a merge on its behalf.
-local function test_an_open_blocker_on_a_handover_never_claims_a_merge()
-  local items: {Item} = {}
-  local root = placed_root(items)
-  local peer = make({parent = root.id, claim = "other"})
-  local accepted = make({parent = root.id, claim = "who", builders = "who",
-      result = ("ab"):rep(32), verdict = "accept", blocked_by = peer.id})
-  items[#items + 1] = peer
-  items[#items + 1] = accepted
-  local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
-  assert(a.kind ~= "finish" or a.item.id ~= accepted.id,
-    "a binding blocker holds the finish back: " .. a.kind)
-  assert(a.kind == "none",
-    "nothing else is offered either: " .. a.kind)
-  assert(a.reason:find("accepted item", 1, true),
-    "the hold is named: " .. a.reason)
-  assert(not a.reason:find("merges are held", 1, true)
-    and not a.reason:find("merge", 1, true),
-    "and no merge is claimed for a handover: " .. a.reason)
-  assert(a.reason:find("`done ID`", 1, true),
-    "done is named instead: " .. a.reason)
-  peer.resolution = "completed"
-  local b = act.next_action(items, specs, "me")
-  assert(b.kind == "finish" and b.item.id == accepted.id,
-    "ending the blocker returns it to the finish offer: " .. b.kind)
-end
-
+-- A blocker edge never gates the rework/building stage — it only
+-- ever recorded landing order for accepted work, and that hold is
+-- gone too: a claimed item in flight is offered to finish regardless
+-- of what it names in `blocked_by`, an edge kind this build does not
+-- interpret.
 local function test_a_blocked_building_item_is_still_offered()
   local items: {Item} = {}
   local root = placed_root(items)
   local peer = make({parent = root.id, claim = "other"})
-  local building = make({parent = root.id, claim = "me",
-      blocked_by = peer.id})
+  local building = make({parent = root.id, claim = "me"})
+  building.other_edges = {blocked_by = {[peer.id] = ""}}
   items[#items + 1] = peer
   items[#items + 1] = building
   local specs = ready_specs(items)
   local a = act.next_action(items, specs, "me")
   assert(a.kind == "finish" and a.item.id == building.id,
-    "a blocker records landing order, not a build to finish: " .. a.kind)
+    "a blocker edge never gates a build to finish: " .. a.kind)
 end
 
 -- A lane repair is the pull that cannot wait: it outranks ordinary
@@ -390,30 +328,15 @@ local function test_lane_repair_is_admitted_at_the_doing_bound()
     "the repair is still offered at the bound: " .. a.kind)
 end
 
--- A blocked repair waits on its blocker exactly like any other pull —
--- the lane class changes ordering, never the block/take relationship.
-local function test_a_blocked_repair_does_not_jump_its_blocker()
-  local items: {Item} = {}
-  local root = placed_root(items)
-  local blocker = make({parent = root.id, claim = "other"})
-  local repair = make({parent = root.id, key = "release.yml",
-      blocked_by = blocker.id})
-  items[#items + 1] = blocker
-  items[#items + 1] = repair
-  local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
-  assert(a.kind ~= "pull" or a.item.id ~= repair.id,
-    "a blocked repair is not offered as the pull: " .. a.kind)
-end
-
 local function test_none_names_the_binding_fact()
-  -- The root is deliberately unplaced with an open child, so no
+  -- The outcome is deliberately UNRANKED with an open child, so no
   -- intake rung fires: it is not triage (it has children), nothing is
-  -- todo, and it is not a placed root to decompose. What remains is
+  -- todo, and it is not a ranked outcome to decompose. What remains is
   -- the fact that binds — another session's live claim.
-  local root = make({})
+  local board = make({})
+  local root = make({parent = board.id})
   local theirs = make({parent = root.id, claim = "other"})
-  local items: {Item} = {root, theirs}
+  local items: {Item} = {board, root, theirs}
   local specs = ready_specs(items)
   local a = act.next_action(items, specs, "me")
   assert(a.kind == "none", "nothing here is mine to move: " .. a.kind)

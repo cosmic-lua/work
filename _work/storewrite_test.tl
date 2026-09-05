@@ -19,6 +19,7 @@ local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -75,6 +76,14 @@ local function init_shared(name: string, clones: integer): string, {string}
     local dir = fs.join(base, ("clone%d"):format(i))
     git(base, {"clone", "-q", bare, dir})
     git(dir, {"config", "core.createObject", "rename"})
+    if i > 1 then
+      -- The first clone's own `init_repo` mints the board (and
+      -- best-effort pushes it); fetch it down before this clone's own
+      -- `init_repo` runs, so it finds that board already there
+      -- instead of minting a second one.
+      assert(refs.ensure_refspecs(dir))
+      assert(refs.fetch_prune(dir))
+    end
     assert(store.init_repo(dir))
     out[#out + 1] = dir
   end
@@ -199,6 +208,30 @@ local function test_save_succeeds_on_a_no_op()
   assert(err:find("nothing to record", 1, true), "got: " .. err)
   assert(commit_count(root) == before, "and no commit is made")
 end
+
+-- An item's own `order` — the ranked child ids it carries — is an
+-- ordinary field like any other: it round-trips through `save`/`load`
+-- exactly as `claim` does above.
+local function test_an_items_order_round_trips_through_save_and_load()
+  local root = init_state_repo("item-order-roundtrip")
+  local s = check.must(store.open(root))
+  local parent = make_item()
+  local kid1 = make_item()
+  local kid2 = make_item()
+  assert(storewrite.save(s, parent, "new parent", nil, {kid1, kid2}))
+  parent.order = {kid1.id, kid2.id}
+  assert(storewrite.save(s, parent, "rank the children"))
+  local loaded = check.must(store.load(s, parent.id))
+  assert(#loaded.order == 2 and loaded.order[1] == kid1.id and loaded.order[2] == kid2.id,
+    "order round-trips in rank order: " .. table.concat(loaded.order, ","))
+end
+
+-- The board's own outcome ranking is not a separate mechanism at all:
+-- it is the board item's own `order` field, an ordinary `save` like
+-- any other item's — covered by `_work/gitrank_test.tl`'s
+-- `test_rank_among_outcomes_writes_and_reads_back` and
+-- `test_an_outcome_rank_survives_a_rebase`, which exercise it through
+-- the real `rank` verb rather than a bespoke write path here.
 
 local function test_publish_fast_forward()
   local bare, clones = init_shared("ff", 2)

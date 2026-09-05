@@ -56,12 +56,6 @@ local NOTES < const >: {string: {string}} = {
     "Then `show ID`: the spec sidecar is the spec; re-run its measured "
     .. "commands before building.",
   },
-  ["unblock"] = {
-    "Every takeable item waits on an open blocker, so nothing pulls however "
-    .. "deep the queue is. The item named is the chain's deepest open one.",
-    "Resolving it is whatever its own state calls for. When the reason recorded "
-    .. "on the edge no longer binds, drop the edge with `unblock ID BLOCKER`.",
-  },
   ["refine"] = {
     "Drive the highest-placed todo item toward the spec bar: `show ID` names "
     .. "the gaps, `spec ID FILE --base BASE` writes the refinement back.",
@@ -71,20 +65,19 @@ local NOTES < const >: {string: {string}} = {
     .. "seconds.",
   },
   ["triage"] = {
-    "An unplaced capture awaits a decision. `attach ID PARENT` makes it todo "
-    .. "under the outcome its evidence serves; `compare ID OTHER` makes it an "
-    .. "outcome itself.",
-    "No outcome fits? Attach under the lowest-placed one regardless: it outranks "
-    .. "nothing, `attach` re-parents freely, and an unplaced item can never be "
-    .. "taken.",
+    "An unranked outcome awaits a decision. `rank ID --before X | --after "
+    .. "X | --last` positions it among the board's outcomes; `attach ID "
+    .. "PARENT` moves it under something else instead.",
+    "No outcome fits? Rank it last regardless: it outranks nothing, and an "
+    .. "unranked item can never be taken.",
     "Or end it: `done ID` when landed work covers it, `--reason not-planned` for "
     .. "a dead end.",
   },
   ["intake"] = {
-    "Decompose the highest-placed root that no live work drives: "
-    .. "`new \"an outcome\" --parent ID`.",
+    "Decompose the highest-placed outcome that no live work drives: "
+    .. "`new \"a piece of it\" --parent ID`.",
     "A child inherits the position of what it hangs under; ordering a NEW "
-    .. "outcome against the existing roots takes a `compare`.",
+    .. "outcome against the existing ones takes a `rank`.",
   },
   ["none"] = {
     "Nothing on the board is this session's to move, and the reason above names "

@@ -21,8 +21,8 @@ local item = require("_work.item")
 local act = require("_work.action")
 local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local refs = require("_work.refs")
 local sess = require("_work.session")
 local store = require("_work.store")
@@ -148,12 +148,16 @@ end
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function status_report(all: {item.Item}, specs: act.Specs,
-    ages?: health.Ages, lane_facts?: {string: string}): {string}, string
+    ages?: health.Ages, lane_facts?: {string: string}):
+  {string}, string
   local aged = ages or {}
-  local index = flow.by_id(all)
-  local pos = prio.positions(all)
+  -- Selection and stage-bucketing stay `flow`'s (todo vs. doing, stage
+  -- order) — this is only the RENDER order laid over what it returns,
+  -- so every queue on this page reads in the one order `show ID`
+  -- describes for a single item.
+  local ranks = rank.positions(all)
   local out: {string} = {}
-  local doing = flow.in_state(all, "doing", pos)
+  local doing = rank.sorted(flow.in_state(all, "doing", ranks), ranks)
   out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
   for _, i in ipairs(doing) do
     local marks = (" [%s]"):format(flow.substate(i))
@@ -162,7 +166,6 @@ local function status_report(all: {item.Item}, specs: act.Specs,
     if i.result ~= "" then
       marks = marks .. (" result:%s"):format(i.result:sub(1, 7))
     end
-    if flow.is_blocked(i, index) then marks = marks .. " [blocked]" end
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
     if health.is_stale(i, aged) then
       marks = marks .. (" [claim stale %dh]"):format(
@@ -182,10 +185,10 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   if flagged ~= "" then
     out[#out + 1] = flagged
   end
-  local todo = flow.in_state(all, "todo", pos)
+  local todo = rank.sorted(flow.in_state(all, "todo", ranks), ranks)
   local pullable = 0
   for _, i in ipairs(todo) do
-    if act.passes_bar(i, specs, pos) and not flow.is_blocked(i, index) then
+    if act.passes_bar(i, specs, ranks) then
       pullable = pullable + 1
     end
   end
@@ -193,27 +196,23 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   for k = 1, math.min(#todo, TODO_SHOWN) do
     local i = todo[k]
     local marks = ""
-    if act.passes_bar(i, specs, pos) then
+    if act.passes_bar(i, specs, ranks) then
       marks = " [pullable]"
     end
-    if flow.is_blocked(i, index) then marks = marks .. " [blocked]" end
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
     out[#out + 1] = ("  %s%s"):format(id_line(i), marks)
   end
   if #todo > TODO_SHOWN then
     out[#out + 1] = ("  ... %d more"):format(#todo - TODO_SHOWN)
   end
-  -- Untriaged roots render item by item: they are not workable yet,
-  -- and this is the one list of them anyone gets.
-  local triage = flow.untriaged(all)
+  -- Untriaged outcomes render item by item: they are not workable
+  -- yet, and this is the one list of them anyone gets.
+  local triage = rank.sorted(flow.untriaged(all), ranks)
   out[#out + 1] = ("%-6s %d"):format("triage", #triage)
   for _, f in ipairs(triage) do
     out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
   end
   local graph = flow.graph_problems(all)
-  for _, p in ipairs(health.blocker_cycle_problems(all)) do
-    graph[#graph + 1] = p
-  end
   for _, p in ipairs(graph) do
     out[#out + 1] = "  graph: " .. p
   end
@@ -226,6 +225,13 @@ local function status_report(all: {item.Item}, specs: act.Specs,
     verdict = ("%s; %d graph problem(s)"):format(verdict, #graph)
   end
   return out, verdict
+end
+
+--- `list_via_cache`'s result: every item read off the one open cache —
+--- a record rather than a bare list, so a later field can join it
+--- without changing every caller's shape.
+local record Board
+  items: {item.Item}
 end
 
 --- Every item via the board cache instead of a fresh git read —
@@ -245,9 +251,9 @@ end
 --- read is not fatal here: `known_digest` is left nil, and `cache.open`
 --- falls back to taking its own.
 --- @param s store.Store The store
---- @return {item.Item} | nil Every item
+--- @return Board | nil Every item
 --- @return string Error message
-local function list_via_cache(s: store.Store): {item.Item} | nil, string
+local function list_via_cache(s: store.Store): Board | nil, string
   local found, _ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
   local known_digest: string | nil = nil
   if found ~= nil then
@@ -272,16 +278,17 @@ local function list_via_cache(s: store.Store): {item.Item} | nil, string
   if not close_ok then
     return nil, close_err
   end
-  return all
+  return {items = all}, ""
 end
 
 --- Bare `show`: the whole board. Named `cmd_status` for the report it
 --- prints; the verdict line says `show`, the verb that reaches it.
 local function cmd_status(s: store.Store): integer
-  local all, aerr = list_via_cache(s)
-  if all == nil then
+  local board, aerr = list_via_cache(s)
+  if board == nil then
     return verdict_line("show", false, aerr)
   end
+  local all = board.items
   -- An unsynced board has no lanes_state.tl at all, and read_state
   -- reports that the same way it reports every lane already at its
   -- last-recorded value: an empty map. That is also, and only, what
@@ -355,7 +362,8 @@ local function next_report(all: {item.Item}, specs: act.Specs,
   -- The session seeds the tie-break, so concurrent sessions asking
   -- the same board fan out across items no judgment separates
   -- instead of converging on one.
-  return render_action(act.next_action(all, specs, session, ages, session), specs)
+  return render_action(
+    act.next_action(all, specs, session, ages, session), specs)
 end
 
 --- The reason named by an item's most recent board commit, when that
@@ -389,7 +397,8 @@ end
 local function next_report_live(s: store.Store, all: {item.Item},
     specs: act.Specs, session?: string, ages?: health.Ages,
     ci?: act.CiStates): string
-  local action = act.next_action(all, specs, session, ages, session, ci)
+  local action = act.next_action(all, specs, session, ages,
+    session, ci)
   if action.kind == "pull" and action.item then
     local events = publish.history(s, action.item.id)
     if events and events[1] then
@@ -400,19 +409,22 @@ local function next_report_live(s: store.Store, all: {item.Item},
 end
 
 local function cmd_next(s: store.Store, session?: string): integer
-  local all, aerr = list_via_cache(s)
-  if all == nil then
+  local board, aerr = list_via_cache(s)
+  if board == nil then
     return verdict_line("next", false, aerr)
   end
+  local all = board.items
   return verdict_line("next", true,
     next_report_live(s, all, read_specs(s, all), session, claim_ages(s, all),
       ci_states(s, all)))
 end
 
 local record gitview
+  type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
   status_report: function(all: {item.Item}, specs: act.Specs,
-  ages?: health.Ages, lane_facts?: {string: string}): {string}, string
+  ages?: health.Ages, lane_facts?: {string: string}):
+  {string}, string
   next_report: function(all: {item.Item}, specs: act.Specs,
   session?: string, ages?: health.Ages): string
   next_report_live: function(s: store.Store, all: {item.Item},
@@ -423,7 +435,7 @@ local record gitview
   -- Exported only so `_work/gitview_test.tl` can verify the process
   -- count directly: production code reaches both through `cmd_status`/
   -- `cmd_next`.
-  list_via_cache: function(s: store.Store): {item.Item} | nil, string
+  list_via_cache: function(s: store.Store): Board | nil, string
   claim_ages: function(s: store.Store, all: {item.Item}): health.Ages
   cmd_status: function(s: store.Store): integer
   cmd_next: function(s: store.Store, session?: string): integer

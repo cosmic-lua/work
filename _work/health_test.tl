@@ -1,11 +1,9 @@
 #!/usr/bin/env cosmic
 -- The stall detectors are pure over the item list plus caller-supplied
--- ages: staleness never fires without evidence, a blocker cycle is
--- reported by name, and a chain walk bottoms at the deepest open
--- blocker a stalled take waits behind.
+-- ages: a claim or review claim never reads stale without evidence,
+-- and only past its own lease.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
 local health = require("_work.health")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -41,39 +39,6 @@ local function test_staleness_needs_a_claim_and_an_age_past_the_lease()
     "an unclaimed item has no claim to go stale")
   assert(health.stale_hours(claimed, {[claimed.id] = 5 * 60 * 60}) == 5,
     "hours render whole")
-end
-
-local function test_a_blocker_cycle_is_reported_by_name()
-  local root = make({})
-  local x = make({parent = root.id})
-  local y = make({parent = root.id, blocked_by = x.id})
-  -- The verb refuses this edge; a race between two checkouts does not.
-  x.blocked_by = {y.id}
-  local items: {item.Item} = {root, x, y}
-  local problems = health.blocker_cycle_problems(items)
-  assert(#problems == 2, "both cycle members report: " .. #problems)
-  assert(problems[1]:find("returns to itself", 1, true),
-    "and the line says what it is: " .. problems[1])
-  x.blocked_by = {}
-  assert(#health.blocker_cycle_problems(items) == 0,
-    "a broken cycle reports nothing")
-end
-
-local function test_chain_root_is_the_deepest_open_blocker()
-  local root = make({})
-  local bottom = make({parent = root.id})
-  local middle = make({parent = root.id, blocked_by = bottom.id})
-  local top = make({parent = root.id, blocked_by = middle.id})
-  local items: {item.Item} = {root, bottom, middle, top}
-  local index = flow.by_id(items)
-  assert(health.chain_root(index, top).id == bottom.id,
-    "the walk bottoms at the free item")
-  assert(health.chain_root(index, bottom).id == bottom.id,
-    "a free item is its own root")
-  -- An ended blocker does not bind, so the chain stops above it.
-  bottom.resolution = "completed"
-  assert(health.chain_root(index, top).id == middle.id,
-    "a closed blocker ends the walk")
 end
 
 local function test_review_staleness_runs_on_its_own_shorter_lease()

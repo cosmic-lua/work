@@ -13,8 +13,11 @@ local refs = require("_work.refs")
 
 local function test_for_each_ref_parses_the_committer_date()
   local s = fixture.init_state_repo("refs-committer-date")
-  local id = fixture.file_item(s, "an outcome", "")
+  -- The window must bracket the WRITE, not start after it: sampling
+  -- `before` once the commit already exists lets a second boundary
+  -- land between the two and read `touched` as earlier than `before`.
   local before = os.time()
+  local id = fixture.file_item(s, "an outcome", "")
   local found = check.must(refs.for_each_ref(s.root, {"refs/heads/items/" .. id}))
   local after = os.time()
   assert(#found == 1, "the fixture item's own ref, and only it: " .. #found)

@@ -1,9 +1,9 @@
 --- An item's canonical git tree: the `meta` text blob, the optional
---- `spec.md` sidecar, the `held` marker blob, and the `edges/<kind>/<id>`
---- entries — and the two directions between that tree and an
---- `_work.item.Item`. This is the ONE place that shape is written, so
---- `_work.store`'s writer and reader, and the round-trip test, all
---- agree on it by construction.
+--- `spec.md` sidecar, the optional `order` blob, and the
+--- `edges/<kind>/<id>` entries — and the two directions between that
+--- tree and an `_work.item.Item`. This is the ONE place that shape is
+--- written, so `_work.store`'s writer and reader, and the round-trip
+--- test, all agree on it by construction.
 ---
 --- `meta` carries every scalar field as one `key: value` line, keys in
 --- the order below; a zero value — "", 0, an empty list — is OMITTED,
@@ -11,24 +11,29 @@
 --- their tree too. `repo`/`base` collapse into one `target` line,
 --- written `owner/name@branch`, `owner/name` alone when `base` is
 --- empty, and omitted when both are empty (`format_target`/
---- `parse_target`). `held` is not a meta line at all: an empty marker
---- blob at the path `held`, present exactly when `is_held` is true.
---- `beats` and `blocked_by` are tree entries rather than meta lines
---- because each entry is itself content: an empty marker blob for a
---- beaten id, a reason blob for a blocker — both live under one
---- `edges` subtree, alongside any OTHER kind this reader does not
---- interpret (`item.Item.other_edges`), so a kind this build predates
---- round-trips through it unchanged. Git sorts a tree's own entries by
---- name, so decoding one back loses whatever ORDER the fields were
---- written in — immaterial here, since every reader of an edge kind
---- treats it as a set, never a sequence.
+--- `parse_target`). `order` is not a meta line either: one blob, child
+--- ids one per line with a trailing newline, present only when this
+--- item has ranked at least one child (`encode_order`/`parse_order` —
+--- the same shape the board's own item carries for its own outcomes,
+--- since it holds their list exactly like any other parent holds its
+--- children's).
+---
+--- `edges/<kind>/<id>` entries carry every edge kind this build does
+--- not interpret, each by id (`item.Item.other_edges`): an empty
+--- marker blob or a reason blob, depending on what the kind that wrote
+--- it meant, so a kind this build predates round-trips through
+--- unchanged. Git sorts a tree's own entries by name, so decoding one
+--- back loses whatever ORDER the fields were written in — immaterial
+--- here, since every reader of an edge kind treats it as a set, never
+--- a sequence. A `held` blob at the tree root is the same kind of
+--- thing one level up: unknown to this build, its presence recorded as
+--- a decode problem rather than read into a field.
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 
 --- Scalar meta keys, in the order they are written. `target` (the
 --- combined `repo`/`base`) sits where `_work.item.Item` declares
---- `parent`'s neighbor; `id`, `beats`, `blocked_by` and `held` are not
---- `meta` lines at all.
+--- `parent`'s neighbor; `id` and `held` are not `meta` lines at all.
 local META_KEYS < const >: {string} = {
   "title", "parent", "target", "key", "claim", "reviewer", "pr",
   "result", "verdict", "verdict_head", "verdict_spec", "resolution",
@@ -77,6 +82,34 @@ local function parse_target(target: string): string, string, string
     ("target must have at most one @: %s"):format(target)
   end
   return target:sub(1, at1 - 1), target:sub(at1 + 1), ""
+end
+
+--- The `order` blob's text for a ranked list of ids: one per line,
+--- trailing newline, "" when the list is empty — the shape every
+--- item's own `order` blob carries, the board's own included.
+--- @param ids {string} Ranked ids, in rank order
+--- @return string The blob text, "" for an empty list
+local function encode_order(ids: {string}): string
+  local parts: {string} = {}
+  for _, id in ipairs(ids) do
+    parts[#parts + 1] = id .. "\n"
+  end
+  return table.concat(parts)
+end
+
+--- Parse an `order` blob's text back into ranked ids. A blank line is
+--- skipped rather than read as an empty id, so trailing whitespace in
+--- a hand-edited blob does not become a phantom entry.
+--- @param text string The blob's content
+--- @return {string} Ranked ids, in rank order
+local function parse_order(text: string): {string}
+  local out: {string} = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    if line ~= "" then
+      out[#out + 1] = line
+    end
+  end
+  return out
 end
 
 --- The `meta` blob's text for one item. Every key in `META_KEYS`
@@ -132,26 +165,23 @@ local function parse_meta(text: string): {string: string}
 end
 
 --- Build an `item.Item` from its tree's parts: the parsed `meta` map,
---- whether a `held` marker blob was present, the ids named under the
---- `edges/beats` and `edges/blocked_by` kinds (with each blocked_by
---- entry's reason blob content), and every OTHER kind this reader
---- found under `edges`, carried opaquely. Content problems (a
---- multiline title, a claimed root, a malformed `target`, ...) are
---- attached at `.decode_problems` rather than failing the build —
---- `item.decode`'s own tolerance, reused here so a store built from a
---- hand-edited commit still reads.
+--- whether a `held` marker blob was present at the tree root, its
+--- `order` blob's already-parsed ids, and every edge kind found under
+--- `edges`, carried opaquely. Content problems (a multiline title, a
+--- claimed parentless item, a malformed `target`, ...) are attached at
+--- `.decode_problems` rather than failing the build — `item.decode`'s
+--- own tolerance, reused here so a store built from a hand-edited
+--- commit still reads. `held` is unknown to this build: its presence
+--- adds a decode problem naming it rather than setting a field.
 --- @param id string The item's id (the ref name's tail)
 --- @param meta {string: string} `parse_meta`'s output
 --- @param held boolean Whether a `held` marker blob was present
---- @param beats {string} Ids this item outranks
---- @param blocked_by {string} Ids this item waits on
---- @param block_reason {string: string} Blocker id -> reason
---- @param other_edges {string: {string: string}} Every edge kind this
---- reader does not interpret, kind -> id -> content
+--- @param order {string} This item's ranked children, from its `order` blob
+--- @param other_edges {string: {string: string}} Every edge kind found
+--- under `edges`, kind -> id -> content
 --- @return item.Item The item, present even with content problems
 local function to_item(id: string, meta: {string: string}, held: boolean,
-    beats: {string}, blocked_by: {string}, block_reason: {string: string},
-    other_edges: {string: {string: string}}): item.Item
+    order: {string}, other_edges: {string: {string: string}}): item.Item
   local repo, base, target_err = parse_target(meta.target or "")
   local it: item.Item = {
     id = id,
@@ -160,9 +190,7 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     repo = repo,
     base = base,
     key = meta.key or "",
-    beats = beats,
-    blocked_by = blocked_by,
-    block_reason = block_reason,
+    order = order,
     other_edges = other_edges,
     claim = meta.claim or "",
     builders = {},
@@ -174,7 +202,6 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     verdict_head = meta.verdict_head or "",
     verdict_spec = meta.verdict_spec or "",
     resolution = meta.resolution or "",
-    is_held = held,
   }
   for name in (meta.builders or ""):gmatch("%S+") do
     it.builders[#it.builders + 1] = name
@@ -186,6 +213,9 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
   if target_err ~= "" then
     bad[#bad + 1] = target_err
   end
+  if held then
+    bad[#bad + 1] = "held: marker this build does not interpret"
+  end
   if #bad > 0 then
     it.decode_problems = bad
   end
@@ -193,11 +223,9 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
 end
 
 --- Build one `edges` subtree's worth of `<id> -> content` entries: an
---- empty marker for every `beats` id (`content_of` always "" there), a
---- reason blob for every `blocked_by` or other-kind id (`content_of`
---- the reason, "" writing the same empty marker). Empty when `ids` is
---- empty, so the caller never adds an entry for a kind with nothing in
---- it.
+--- empty marker where `content_of` returns "", a reason blob
+--- otherwise. Empty when `ids` is empty, so the caller never adds an
+--- entry for a kind with nothing in it.
 --- @param root string The repository root
 --- @param ids {string} Ids under this kind
 --- @param content_of function(id: string): string Each id's blob
@@ -236,10 +264,9 @@ local function kind_entries(root: string, ids: {string},
   return out, ""
 end
 
---- Build the `edges` subtree: one further subtree per non-empty kind —
---- `beats` (markers), `blocked_by` (reasons), and every kind in
---- `it.other_edges` (its own content per id) — omitted entirely (""
---- rather than the empty tree's sha) when nothing has any entries, so
+--- Build the `edges` subtree: one further subtree per non-empty kind
+--- in `it.other_edges` (its own content per id), omitted entirely ("")
+--- rather than the empty tree's sha when nothing has any entries, so
 --- an item with no edges at all carries no `edges` path.
 --- @param root string The repository root
 --- @param it item.Item The item
@@ -259,39 +286,6 @@ local function build_edges_tree(root: string, it: item.Item,
     mktree_fn: function(root: string, entries: {gitobj.TreeEntry}): string | nil, string):
   string | nil, string
   local subtrees: {gitobj.TreeEntry} = {}
-  local function add_kind(name: string, ids: {string},
-      content_of?: function(id: string): string): string
-    if #ids == 0 then
-      return ""
-    end
-    local get_content = content_of
-    if get_content == nil then
-      get_content = function(_id: string): string
-        return ""
-      end
-    end
-    local entries, eerr = kind_entries(root, ids, get_content, empty_blob, hash_object_fn)
-    if entries == nil then
-      return eerr
-    end
-    local sha, terr = mktree_fn(root, entries)
-    if sha == nil then
-      return terr
-    end
-    subtrees[#subtrees + 1] = {mode = "40000", otype = "tree", sha = sha, name = name}
-    return ""
-  end
-  local berr = add_kind("beats", it.beats or {}, nil)
-  if berr ~= "" then
-    return nil, berr
-  end
-  local blocked_ids: {string} = it.blocked_by or {}
-  local blerr = add_kind("blocked_by", blocked_ids, function(id: string): string
-      return (it.block_reason or {})[id] or ""
-    end)
-  if blerr ~= "" then
-    return nil, blerr
-  end
   local kinds: {string} = {}
   for kind in pairs(it.other_edges or {}) do
     kinds[#kinds + 1] = kind
@@ -304,12 +298,17 @@ local function build_edges_tree(root: string, it: item.Item,
       ids[#ids + 1] = id
     end
     table.sort(ids)
-    local oerr = add_kind(kind, ids, function(id: string): string
+    local entries, eerr = kind_entries(root, ids, function(id: string): string
         return idmap[id] or ""
-      end)
-    if oerr ~= "" then
-      return nil, oerr
+      end, empty_blob, hash_object_fn)
+    if entries == nil then
+      return nil, eerr
     end
+    local sha, terr = mktree_fn(root, entries)
+    if sha == nil then
+      return nil, terr
+    end
+    subtrees[#subtrees + 1] = {mode = "40000", otype = "tree", sha = sha, name = kind}
   end
   if #subtrees == 0 then
     return "", ""
@@ -317,14 +316,14 @@ local function build_edges_tree(root: string, it: item.Item,
   return mktree_fn(root, subtrees)
 end
 
---- Build an item's git tree: `meta`, `spec.md` when given, `held` when
---- the item is held, and `edges` when it carries any. `write` chooses
---- between the two forms every blob and subtree this needs goes
---- through: pure (the default — no process, nothing written, for a
---- caller only comparing the resulting sha against one it already
---- has, `_work.gitfsck`'s whole-board audit) or writing (a handful of
---- small objects actually landed in the odb, for a caller that
---- follows this with `commit_tree` against the sha it gets back).
+--- Build an item's git tree: `meta`, `spec.md` when given, `order`
+--- when it has ranked at least one child, and `edges` when it carries
+--- any. `write` chooses between the two forms every blob and subtree
+--- this needs goes through: pure (the default — no process, nothing
+--- written, for a caller only comparing the resulting sha against one
+--- it already has, `_work.gitfsck`'s whole-board audit) or writing (a
+--- handful of small objects actually landed in the odb, for a caller
+--- that follows this with `commit_tree` against the sha it gets back).
 --- @param root string The repository root
 --- @param it item.Item The item
 --- @param spec_body string | nil The spec sidecar; nil or "" omits `spec.md`
@@ -354,9 +353,16 @@ local function build_tree(root: string, it: item.Item,
     entries[#entries + 1] =
     {mode = "100644", otype = "blob", sha = spec_sha, name = "spec.md"}
   end
-  -- The empty blob every marker (a `beats` entry, a reason-less
-  -- `blocked_by`/other entry, the `held` marker itself) points at has
-  -- to actually exist in THIS repository's object database before a
+  if #(it.order or {}) > 0 then
+    local order_sha, oerr = hash_object_fn(root, encode_order(it.order))
+    if order_sha == nil then
+      return nil, oerr
+    end
+    entries[#entries + 1] =
+    {mode = "100644", otype = "blob", sha = order_sha, name = "order"}
+  end
+  -- The empty blob every reason-less edge entry points at has to
+  -- actually exist in THIS repository's object database before a
   -- WRITING `mktree_fn` will link to it — `git hash-object -w` on ""
   -- always resolves to the same well-known sha, so writing it here is
   -- idempotent and cheap, and it is written at most once per tree even
@@ -372,13 +378,6 @@ local function build_tree(root: string, it: item.Item,
       empty_sha = sha
     end
     return empty_sha, ""
-  end
-  if it.is_held then
-    local eb, eerr = empty_blob()
-    if eb == nil then
-      return nil, eerr
-    end
-    entries[#entries + 1] = {mode = "100644", otype = "blob", sha = eb, name = "held"}
   end
   local edges_sha, eerr2 = build_edges_tree(root, it, empty_blob, hash_object_fn, mktree_fn)
   if edges_sha == nil then
@@ -396,9 +395,10 @@ local record itemtree
   parse_target: function(target: string): string, string, string
   encode_meta: function(it: item.Item): string
   parse_meta: function(text: string): {string: string}
+  encode_order: function(ids: {string}): string
+  parse_order: function(text: string): {string}
   to_item: function(id: string, meta: {string: string}, held: boolean,
-  beats: {string}, blocked_by: {string}, block_reason: {string: string},
-  other_edges: {string: {string: string}}): item.Item
+  order: {string}, other_edges: {string: {string: string}}): item.Item
   build_tree: function(root: string, it: item.Item,
   spec_body: string | nil, write?: boolean): string | nil, string
 end
@@ -409,6 +409,8 @@ local M: itemtree = {
   parse_target = parse_target,
   encode_meta = encode_meta,
   parse_meta = parse_meta,
+  encode_order = encode_order,
+  parse_order = parse_order,
   to_item = to_item,
   build_tree = build_tree,
 }

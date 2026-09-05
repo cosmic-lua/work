@@ -11,12 +11,12 @@ local env = require("cosmic.env")
 local action = require("_work.action")
 local api = require("_work.api")
 local cache = require("_work.cache")
-local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local gitready = require("_work.gitready")
 local gitobj = require("_work.gitobj")
+local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
 local refs = require("_work.refs")
@@ -190,17 +190,17 @@ end
 -- fate: `next` (`_work.action.next_action`) offers it, and `take`
 -- (`_work.gitready.ready_problems` plus `flow.doing_refusal`, the exact
 -- pair `cmd_take` calls) admits it. Placed the way the real repair
--- parent (G8) already is on the live board — one comparison on the
--- parent, inherited by every child minted under it — so the only
--- variable under test is the sidecar `file_repair` now writes.
+-- parent (G8) already is on the live board — ranked among the roots,
+-- inherited by every child minted under it — so the only variable
+-- under test is the sidecar `file_repair` now writes.
 local function test_a_minted_repair_is_offered_and_admitted()
   local s = init_state_repo("mint-admitted")
+  local board = check.must(flow.find_board(check.must(store.list(s))))
   local parent = check.must(item.decode({id = lanes.LANE_PARENT,
-        title = "lane repair outcome"}))
+        title = "lane repair outcome", parent = board.id}))
   assert(storewrite.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
-  local peer_id = fixture.file_item(s, "a peer outcome", "")
-  assert(cmp.cmd_compare(s, parent.id, peer_id) == 0,
-    "compare should be accepted")
+  assert(gitrank.cmd_rank(s, parent.id, "", "", true) == 0,
+    "rank should be accepted")
 
   assert(lanes.mint(s, RED))
   local all = check.must(store.list(s))

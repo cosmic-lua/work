@@ -1,19 +1,16 @@
 #!/usr/bin/env cosmic
 -- The lost-race contract end to end, through real verbs: a mutation
 -- whose guards were decided against pre-race state is never replayed
--- onto the merged board. The two shapes that used to slip through a
--- clean rebase — reciprocal blocks landing a cycle, and the last two
--- children of one container closing at once with nobody re-phasing
--- the parent — are refused with LOST_RACE, and the RE-RUN, deciding
--- afresh against the merged state, does the right thing the stale
--- run could not see.
+-- onto the merged board. The shape that used to slip through a clean
+-- rebase — the last two children of one container closing at once
+-- with nobody re-phasing the parent — is refused with LOST_RACE, and
+-- the RE-RUN, deciding afresh against the merged state, does the
+-- right thing the stale run could not see.
 
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local gitboard = require("_work.gitboard")
-local graph = require("_work.gitgraph")
-local health = require("_work.health")
 local item = require("_work.item")
 local publish = require("_work.publish")
 local store = require("_work.store")
@@ -21,41 +18,6 @@ local verbs = require("_work.gitverbs")
 
 local init_shared = fixture.init_shared
 local file_item = fixture.file_item
-
--- Reciprocal `block` from two checkouts used to merge cleanly and
--- land a cycle no verb's own check ever saw, back when a single
--- shared branch meant EVERY mutation contended with every other. Each
--- side's edge now lives on its own item's ref (x's block writes only
--- x's ref, y's only y's), so nothing puts two DIFFERENT items'
--- blocks in each other's way UNLESS blocking is bounded — which the
--- add path is, exactly because `flow.waits_on`'s cycle check is a
--- whole-board read the same way the doing bound's is: it advances and
--- leases `refs/heads/board/seq`, so the second, stale block is the one that
--- loses that lease and is refused with LOST_RACE. Its re-run — reading
--- the winner's edge — refuses as the deadlock it is. No cycle at any
--- point.
-local function test_a_lost_block_race_cannot_land_a_cycle()
-  local a, b = init_shared("race-block")
-  local x = file_item(a, "x, the one that waits", "")
-  local y = file_item(a, "y, the one it waits on", "")
-  assert(publish.sync(b))
-
-  assert(graph.cmd_block(a, x, y, false, "x needs y's contract") == 0)
-  -- b's read predates a's edge, exactly the reciprocal-block race.
-  assert(graph.cmd_block(b, y, x, false, "y needs x's contract") ~= 0,
-    "the losing block is refused, not replayed")
-  local after = check.must(store.list(b))
-  assert(#health.blocker_cycle_problems(after) == 0,
-    "no cycle landed anywhere")
-  -- The re-run decides against the merged board: the edge would
-  -- deadlock both, and the verb's own guard says so.
-  assert(graph.cmd_block(b, y, x, false, "y needs x's contract") ~= 0,
-    "the re-run meets the cycle guard")
-  assert(#(check.must(store.load(b, y)).blocked_by or {}) == 0,
-    "and writes no edge")
-  assert(#(check.must(store.load(b, x)).blocked_by or {}) == 1,
-    "the winner's edge stands alone")
-end
 
 -- Concurrent `done` of a container's last two children, each read as
 -- still open by the OTHER session: under a single shared branch this

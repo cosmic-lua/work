@@ -13,11 +13,13 @@
 --- `_work.store` to stay under its line cap; `_work.store` is the only
 --- caller of `load`/`list` outside tests. `_work.gitreadmany.load_many`
 --- — a named-id-set batch `_work.cache`'s fetch-path refresh uses — is
---- split out the same way, built on the helpers this module exports below.
+--- split out the same way, on the helpers this module exports below;
+--- `_work.gitboardstate` holds the two board-level refs' own reading.
 local cachedb = require("_work.cachedb")
 local child = require("cosmic.child")
 local format = require("_work.format")
 local gitbatch = require("_work.gitbatch")
+local gitboardstate = require("_work.gitboardstate")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
@@ -46,11 +48,13 @@ end
 
 --- The whole board as `list` found it: every item, its ref and tip
 --- (`refs_by_id`/`shas_by_id` — the write lease for each),
---- `refs/heads/board/seq`'s own tip, "" when absent, every id `list`
---- found filed under both namespaces at once, and the digest of the
---- `for-each-ref` snapshot this pass took over exactly `_work.cachedb`'s
---- watched patterns — `_work.cache.open`'s check when a caller already
---- has this snapshot, so it never repeats the `for-each-ref` `list` paid for.
+--- `refs/heads/board/seq`'s own tip, every id `list` found filed under
+--- both namespaces at once, and the digest of the `for-each-ref`
+--- snapshot this pass took over exactly `_work.cachedb`'s watched
+--- patterns — `_work.cache.open`'s check when a caller already has
+--- this snapshot, never repeating the read. The board's own outcome
+--- ranking is not a separate field here: it is one of `items`' own
+--- `.order`, read the same way every item's is.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
@@ -73,40 +77,38 @@ local function edge_kinds(edges_content: string): {string: string}
   return out
 end
 
---- Every blob sha whose CONTENT a kind's own ids need — every
---- `blocked_by` and other-kind entry (the reason), never a `beats`
---- entry (an unread marker) — across whichever kinds `kinds` names.
+--- Every blob sha whose CONTENT a kind's own ids need — every entry
+--- across whichever kinds `kinds` names, marker or reason alike; a
+--- marker's blob is simply "" once fetched.
 --- @param kinds {string: string} Kind name -> subtree sha
 --- @param kind_batch {string: gitobj.BatchEntry} Each subtree's own content
 --- @return {string} Blob shas to fetch
 local function content_blob_shas(kinds: {string: string},
     kind_batch: {string: gitobj.BatchEntry}): {string}
   local out: {string} = {}
-  for kind, sha in pairs(kinds) do
-    if kind ~= "beats" then
-      local entry = kind_batch[sha]
-      if entry ~= nil then
-        for _, e in ipairs(gitobj.parse_tree(entry.content)) do
-          out[#out + 1] = e.sha
-        end
+  for _, sha in pairs(kinds) do
+    local entry = kind_batch[sha]
+    if entry ~= nil then
+      for _, e in ipairs(gitobj.parse_tree(entry.content)) do
+        out[#out + 1] = e.sha
       end
     end
   end
   return out
 end
 
---- Build one item from its tip's `meta`/`held`/`edges` — shared by
---- `load` and `list`, each over their own `gitbatch.batch_session`, so
---- the tree-to-Item translation is written once. `batch`, `kind_batch`
---- and `blob_batch` are the caller's already-read answers; nothing
---- here starts a process.
+--- Build one item from its tip's `meta`/`held`/`order`/`edges` —
+--- shared by `load` and `list`, each over their own
+--- `gitbatch.batch_session`, so the tree-to-Item translation is
+--- written once. `batch`, `kind_batch` and `blob_batch` are the
+--- caller's already-read answers; nothing here starts a process.
 --- @param id string The item id
 --- @param sha string The tip commit this item's tree came from
---- @param batch {string: gitobj.BatchEntry} The meta/held/edges batch
+--- @param batch {string: gitobj.BatchEntry} The meta/held/order/edges batch
 --- @param kind_batch {string: gitobj.BatchEntry} Each edge kind's own
 --- subtree content, by subtree sha
---- @param blob_batch {string: gitobj.BatchEntry} Every content blob
---- (a blocked_by or other-kind reason), by blob sha
+--- @param blob_batch {string: gitobj.BatchEntry} Every content blob (an
+--- edge kind's own reason or marker), by blob sha
 --- @return item.Item | nil The item
 --- @return string Error message; set only when `meta` itself is missing
 local function build_item(id: string, sha: string,
@@ -119,40 +121,24 @@ local function build_item(id: string, sha: string,
   end
   local meta = itemtree.parse_meta(meta_entry.content)
   local held = batch[sha .. ":held"] ~= nil
-  local beats: {string} = {}
-  local blocked_by: {string} = {}
-  local block_reason: {string: string} = {}
+  local order_entry = batch[sha .. ":order"]
+  local order = itemtree.parse_order(order_entry ~= nil and order_entry.content or "")
   local other_edges: {string: {string: string}} = {}
   local edges_entry = batch[sha .. ":edges"]
   if edges_entry ~= nil then
     for kind, ksha in pairs(edge_kinds(edges_entry.content)) do
       local kind_entry = kind_batch[ksha]
       if kind_entry ~= nil then
-        local ids = gitobj.parse_tree(kind_entry.content)
-        if kind == "beats" then
-          for _, e in ipairs(ids) do
-            beats[#beats + 1] = e.name
-          end
-        elseif kind == "blocked_by" then
-          for _, e in ipairs(ids) do
-            blocked_by[#blocked_by + 1] = e.name
-            local blob = blob_batch[e.sha]
-            if blob ~= nil and blob.content ~= "" then
-              block_reason[e.name] = blob.content
-            end
-          end
-        else
-          local idmap: {string: string} = {}
-          for _, e in ipairs(ids) do
-            local blob = blob_batch[e.sha]
-            idmap[e.name] = blob ~= nil and blob.content or ""
-          end
-          other_edges[kind] = idmap
+        local idmap: {string: string} = {}
+        for _, e in ipairs(gitobj.parse_tree(kind_entry.content)) do
+          local blob = blob_batch[e.sha]
+          idmap[e.name] = blob ~= nil and blob.content or ""
         end
+        other_edges[kind] = idmap
       end
     end
   end
-  return itemtree.to_item(id, meta, held, beats, blocked_by, block_reason, other_edges)
+  return itemtree.to_item(id, meta, held, order, other_edges)
 end
 
 --- Which of two refs for the same id — one under `refs/heads/items`, one
@@ -228,7 +214,7 @@ local function load_item(root: string, id: string,
   if sess == nil then
     return nil, serr
   end
-  local batch, berr = sess:request({sha .. ":meta", sha .. ":held", sha .. ":edges"})
+  local batch, berr = sess:request({sha .. ":meta", sha .. ":held", sha .. ":order", sha .. ":edges"})
   if batch == nil then return gitbatch.session_fail(sess, berr) end
   local edges_entry = batch[sha .. ":edges"]
   local kinds: {string: string} = {}
@@ -257,22 +243,29 @@ local function load_item(root: string, id: string,
 end
 
 --- Every item in the store, done ones included: one `for-each-ref`
---- (also reading `refs/heads/board/seq`'s and `refs/heads/board/format`'s
---- tips), then one `gitbatch.batch_session` for all three rounds — every
---- item's `meta`/`held`/`edges` plus the format marker's blob, every edge
---- kind's own subtree content, and every content blob (a `blocked_by` or
---- other-kind reason) — two processes total, never one per item or
+--- (also reading the two board-level refs' tips), then one
+--- `gitbatch.batch_session` for all three rounds — every item's
+--- `meta`/`held`/`order`/`edges` plus the format marker's, every edge
+--- kind's own subtree content, and every content blob an edge kind's
+--- own entry names — two processes total, never one per item or
 --- round, PLUS one `merge-base --is-ancestor` for every id this pass
---- finds filed under both namespaces at once — rare, so it never shows
---- up in the fixed-process-count tests. The format check happens here,
---- once, rather than in every reader: a board on a layout this tool
---- cannot trust is refused before anything else it read alongside the
---- marker is believed.
+--- finds filed under both namespaces at once — rare, so it never
+--- shows up in the fixed-process-count tests. The format check happens
+--- here, once,
+--- rather than in every reader: a board on a layout this tool cannot
+--- trust is refused before anything else it read alongside it is
+--- believed.
+--- `allow_old_format` lets `gitboard migrate` — the one verb layout 1
+--- is not refused for — read a board `format.refusal` would otherwise
+--- refuse: the bypass applies ONLY when the marker actually reads "1",
+--- never to a missing marker or an unknown future version, both of
+--- which stay refused exactly as before. Every other caller omits it.
 --- @param root string The repository root
+--- @param allow_old_format boolean | nil True to read past a layout-1 refusal
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
-local function list(root: string): Board | nil, string
+local function list(root: string, allow_old_format?: boolean): Board | nil, string
   local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
   if found == nil then
     return nil, ferr
@@ -280,14 +273,9 @@ local function list(root: string): Board | nil, string
   local refs_digest = cachedb.digest_of(found)
   local items_by_id: {string: refs.RefEntry} = {}
   local ended_by_id: {string: refs.RefEntry} = {}
-  local seq_sha = ""
-  local format_sha = ""
+  local board_refs = gitboardstate.refs_new()
   for _, r in ipairs(found) do
-    if r.refname == "refs/heads/board/seq" then
-      seq_sha = r.sha
-    elseif r.refname == "refs/heads/board/format" then
-      format_sha = r.sha
-    else
+    if not gitboardstate.absorb(board_refs, r.refname, r.sha) then
       local is_items = r.refname:sub(1, #"refs/heads/items/") == "refs/heads/items/"
       local is_ended = r.refname:sub(1, #"refs/heads/ended/") == "refs/heads/ended/"
       if is_items or is_ended then
@@ -330,12 +318,11 @@ local function list(root: string): Board | nil, string
       return a.id < b.id
     end)
   local queries: {string} = {}
-  if format_sha ~= "" then
-    queries[#queries + 1] = format_sha .. ":format"
-  end
+  gitboardstate.append_queries(board_refs, queries)
   for _, r in ipairs(item_refs) do
     queries[#queries + 1] = r.sha .. ":meta"
     queries[#queries + 1] = r.sha .. ":held"
+    queries[#queries + 1] = r.sha .. ":order"
     queries[#queries + 1] = r.sha .. ":edges"
   end
   local sess, serr = gitbatch.batch_session(root)
@@ -344,16 +331,13 @@ local function list(root: string): Board | nil, string
   end
   local batch, berr = sess:request(queries)
   if batch == nil then return gitbatch.session_fail(sess, berr) end
-  local format_content = ""
-  if format_sha ~= "" then
-    local entry = batch[format_sha .. ":format"]
-    if entry ~= nil then
-      format_content = entry.content
-    end
-  end
+  local format_content = gitboardstate.read(board_refs, batch)
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
-    return gitbatch.session_fail(sess, frefusal)
+    local trimmed = (format_content or ""):gsub("%s+$", "")
+    if not (allow_old_format and trimmed == "1") then
+      return gitbatch.session_fail(sess, frefusal)
+    end
   end
   local kinds_by_id: {string: {string: string}} = {}
   local kind_queries: {string} = {}
@@ -402,8 +386,9 @@ local function list(root: string): Board | nil, string
   table.sort(items, function(a: item.Item, b: item.Item): boolean
       return a.id < b.id
     end)
-  return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id, seq_sha = seq_sha,
-    duplicates = duplicates, refs_digest = refs_digest}
+  return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id,
+    seq_sha = board_refs.seq_sha, duplicates = duplicates,
+    refs_digest = refs_digest}
 end
 
 --- An item's spec sidecar, "" when absent, tried against every candidate
@@ -468,7 +453,7 @@ local record gitread
   lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
   known_ref?: string, known_sha?: string): Loaded | nil, string
-  list: function(root: string): Board | nil, string
+  list: function(root: string, allow_old_format?: boolean): Board | nil, string
   read_spec: function(root: string, candidates: {string}): string
   read_specs: function(root: string, shas_by_id: {string: string},
   ids: {string}): {string: string}

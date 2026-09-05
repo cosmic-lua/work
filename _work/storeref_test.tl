@@ -308,8 +308,7 @@ local function test_list_process_count_is_constant_as_items_grow()
     end
     for i = 2, n do
       local it = check.must(store.load(s, ids[i]))
-      it.blocked_by = {ids[1]}
-      it.block_reason = {[ids[1]] = "seeding order"}
+      it.other_edges = {blocked_by = {[ids[1]] = "seeding order"}}
       assert(storewrite.save(s, it, "block"))
     end
   end

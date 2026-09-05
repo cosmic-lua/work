@@ -34,12 +34,15 @@ local function make(over: {string: any}): Item
   return check.must(item.decode(t))
 end
 
---- A placed root: it outranks a spent peer, so everything beneath it
---- has a position.
+--- A ranked outcome: the board it belongs to stands in `items` too,
+--- its own `order` naming just this outcome, so everything beneath it
+--- — and only it — is ranked.
+--- @return Item root
 local function placed_root(items: {Item}): Item
-  local spent = make({resolution = "completed"})
-  local root = make({beats = spent.id})
-  items[#items + 1] = spent
+  local board = make({})
+  local root = make({parent = board.id})
+  board.order = {root.id}
+  items[#items + 1] = board
   items[#items + 1] = root
   return root
 end
@@ -56,15 +59,16 @@ local function ready_specs(items: {Item}): act.Specs
 end
 
 -- Auto-merge armed is enough on its own, even with an ordinary
--- `mergeable_state` — the two conditions are an OR. The root is
+-- `mergeable_state` — the two conditions are an OR. The outcome is
 -- deliberately unplaced with an open child (the same shape
 -- `action_ci_test.tl` uses) so no intake rung has anything to offer
 -- instead.
 local function test_auto_merge_armed_is_not_offered()
-  local root = make({})
+  local board = make({})
+  local root = make({parent = board.id})
   local accepted = make({parent = root.id, claim = "who", pr = 2,
       verdict = "accept"})
-  local items: {Item} = {root, accepted}
+  local items: {Item} = {board, root, accepted}
   local specs = ready_specs(items)
   local p: review.Pull = {number = 2, auto_merge = true,
     mergeable_state = "clean"}
@@ -79,10 +83,11 @@ end
 -- `mergeable_state == "queued"` alone, with no auto-merge field set at
 -- all, is the other half of the OR: the repo's merge queue took it.
 local function test_mergeable_state_queued_is_not_offered()
-  local root = make({})
+  local board = make({})
+  local root = make({parent = board.id})
   local accepted = make({parent = root.id, claim = "who", pr = 3,
       verdict = "accept"})
-  local items: {Item} = {root, accepted}
+  local items: {Item} = {board, root, accepted}
   local specs = ready_specs(items)
   local p: review.Pull = {number = 3, mergeable_state = "queued"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}

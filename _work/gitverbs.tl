@@ -1,15 +1,17 @@
 --- The state verbs: `take` (claim work, record its handover), `drop` (return a lease, the
 --- item untouched), and `done` — every `cmd_*` behind `_work/gitboard.tl`'s dispatch that
 --- is not a graph mutation, the sync housekeeping, or `init`. The verbs that shape the
---- graph — `new`, `attach`, `block` and its `unblock` half — are `_work.gitgraph`; the
+--- graph — `new` and `attach` — are `_work.gitgraph`; the
 --- spec sidecar's own verb is `_work.gitspec`; the two takes `take` reaches by derivation
---- — the review claim and the research handover — are `_work.gittake`. All of them run
+--- — the review claim and the research handover — are `_work.gittake`; `done`'s own gates
+--- on the board and an outcome (`--by CHILD`) are `_work.gitdoneroot`. All of them run
 --- over `_work.store` (persistence) and `_work.flow` (policy). Verbs receive FULL ids —
 --- the dispatcher resolves prefixes — and every verb prints a `gitboard-<verb>:` verdict
 --- line and returns its exit code. Mutations commit locally and publish through
 --- `publish.publish`, whose rejected-push path drops the mutation whole, re-syncs, and
 --- refuses — re-running the verb re-applies every gate against the merged board.
 local ciobs = require("_work.ciobs")
+local doneroot = require("_work.gitdoneroot")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
@@ -155,19 +157,6 @@ local function cmd_take(s: store.Store, id: string, session: string,
   end
   local was_todo = not flow.is_doing(it)
   if was_todo then
-    local blocked: {string} = {}
-    local index = flow.by_id(all)
-    for _, b in ipairs(it.blocked_by or {}) do
-      if flow.binds(index, b) then
-        blocked[#blocked + 1] = b:sub(1, 8)
-      end
-    end
-    if #blocked > 0 and not force then
-      return gate.verdict_line("take", false,
-        ("REFUSED: %s waits on %s — finish the blocker first, or drop "
-          .. "the edge if it no longer binds"):format(id:sub(1, 8),
-          table.concat(blocked, " ")))
-    end
     if not force then
       local problems = gitready.ready_problems(s, it, all)
       if #problems > 0 then
@@ -264,11 +253,11 @@ end
 --- stopped: a drop says the WORKER did (a dead wave agent, a session
 --- out of budget, a review nobody can finish), so the item is safe to
 --- re-offer as-is. An item that cannot proceed — a spec gap, a
---- reopened decision — is not dropped bare: the question becomes its
---- own item (`new`, parented so it is placed), the item `block`s on
---- it, and only then does the claim return, so it waits on the answer
---- instead of bouncing cold to a session that would hit the same
---- wall. Never refused for flow; the one guard is somebody else's
+--- reopened decision — is not dropped bare: the question becomes a
+--- CHILD of this item (`new --parent <ID>`), and only then does the
+--- claim return; the item is a container until the child resolves,
+--- and the child's `done` frees it with no further verb. Never
+--- refused for flow; the one guard is somebody else's
 --- LIVE claim (a takeover of the abandoning kind, said on the
 --- record). Claim, handover (PR or research result), and any standing
 --- verdict clear together: what remains is the item, its spec, its
@@ -285,7 +274,8 @@ local function cmd_drop(s: store.Store, id: string, session: string,
     return gate.verdict_line("drop", false,
       "REFUSED: a drop names why the session lets go — pass --why "
       .. "'<the worker-side reason>'. An ITEM that cannot proceed is "
-      .. "not dropped bare: `new` the question and `block` on it first")
+      .. "not dropped bare: file the question as a child "
+      .. "(`new --parent <ID>`), then drop")
   end
   -- One `store.list`: it carries this item's lease too.
   local all, aerr = store.list(s)
@@ -334,23 +324,23 @@ local function cmd_drop(s: store.Store, id: string, session: string,
   if not ok then
     return gate.verdict_line("drop", false, err)
   end
-  -- Which queue the released item lands in decides the line: blocked
-  -- items wait on their question, bare todo is re-offered as-is, and
-  -- the bare line names the block-first recovery while the dropping
+  -- The bare line names the child-first recovery while the dropping
   -- session still has the context to file the question.
-  if flow.is_blocked(it, flow.by_id(all)) then
-    return gate.verdict_line("drop", true,
-      ("%s released — it waits on its open blocker(s), not the queue")
-      :format(id:sub(1, 8)))
-  end
   return gate.verdict_line("drop", true,
     ("%s is todo again, re-offered as-is — a bare drop says the item "
-      .. "is fine; if it cannot proceed, `new` the question and "
-      .. "`block %s <question>` first"):format(id:sub(1, 8), id:sub(1, 8)))
+      .. "is fine; if it cannot proceed, file the question as a child "
+      .. "(`new --parent %s <question>`), then drop"):format(
+      id:sub(1, 8), id:sub(1, 8)))
 end
 
+--- done: end an item, recording why. The board- and outcome-specific
+--- gates (the board refused outright; `--by CHILD` on a verified
+--- outcome) are `_work.gitdoneroot`; every gate below is unchanged,
+--- since the board carries no claim, PR or builders (`item.problems`)
+--- for any of them to fire on.
+--- @param by string | nil The completed child verifying an outcome, "" off one
 local function cmd_done(s: store.Store, id: string, reason: string,
-    force: boolean, why: string): integer
+    force: boolean, why: string, by?: string): integer
   local forced = gate.force_refusal(force, why)
   if forced then
     return gate.verdict_line("done", false, "REFUSED: " .. forced)
@@ -366,6 +356,11 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   local it = flow.by_id(all)[id]
   if it == nil then
     return gate.verdict_line("done", false, ("no item %s"):format(id))
+  end
+  local by_id = by or ""
+  local refusal = doneroot.done_refusal(all, it, reason, by_id)
+  if refusal then
+    return gate.verdict_line("done", false, "REFUSED: " .. refusal)
   end
   -- An open PR is work mid-review: ending the item under it makes the
   -- diff vanish from the board while it still exists on GitHub. An
@@ -427,10 +422,15 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   end
   it.claim = ""
   it.reviewer = ""
-  it.is_held = false
   it.resolution = reason
+  -- CHILD rides the commit subject and the verdict line: the log names
+  -- the evidence a verified outcome stands on.
+  local by_note = ""
+  if by_id ~= "" then
+    by_note = (" by %s"):format(by_id:sub(1, 8))
+  end
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("done %s %s (from %s)%s"):format(id:sub(1, 8), reason, from,
+    ("done %s %s%s (from %s)%s"):format(id:sub(1, 8), reason, by_note, from,
       gate.forced_suffix(force, why)), "done")
   if not ok then
     return gate.verdict_line("done", false, err)
@@ -459,7 +459,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     end
   end
   return gate.verdict_line("done", true,
-    ("%s %s (%s)%s"):format(id:sub(1, 8), reason, from, returned))
+    ("%s %s%s (%s)%s"):format(id:sub(1, 8), reason, by_note, from, returned))
 end
 
 local record gitverbs
@@ -468,7 +468,7 @@ local record gitverbs
   cmd_drop: function(s: store.Store, id: string, session: string,
   why: string, force: boolean): integer
   cmd_done: function(s: store.Store, id: string, reason: string,
-  force: boolean, why: string): integer
+  force: boolean, why: string, by?: string): integer
 end
 
 local M: gitverbs = {

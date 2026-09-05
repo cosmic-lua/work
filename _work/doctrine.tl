@@ -25,24 +25,17 @@ local PAGES < const >: {Page} = {
     body = [[
 One prioritized queue of items in this repository (cosmic-lua/work),
 operated only through gitboard verbs. An item's ROLE is its position
-in the graph: a parentless item is a root (an outcome, or a captured
-finding awaiting triage), an item with open children is a container
-being decomposed, and a parented leaf is workable. Importance is a
-RELATION, not a field: `compare A B` commits "A outranks B", every
-rendered order derives from the accumulated edges, and age is the
-last word among
-items no comparison separates. An item no edge reaches (at any
-height) is unplaced — invisible to every queue and refused by `take`
-— so triage it: attach it under the outcome its evidence serves,
-compare it in, or end it. When nobody is around to rank it, attach it
-under the lowest-placed outcome it plausibly serves and say so.
+in the graph: the parentless item is the board; its children are the
+outcomes; an item with open children is a container being decomposed;
+and a childless item below the outcome level is workable. How the
+queue orders itself, and what makes an outcome triage, is `help order`.
 
-A comparison that would put NEW work above existing work belongs to
-the goal owner — it answers "which is the better cosmic". Post the
-pair (in chat, or in the session's report when nobody is watching)
-and keep working; the answer lands as a `compare` whenever it
+A rank change among OUTCOMES — putting new work above existing work —
+belongs to the goal owner: it answers "which is the better cosmic".
+Post the pair (in chat, or in the session's report when nobody is
+watching) and keep working; the answer lands as a `rank` whenever it
 arrives. Outcome prose lives in docs/goals.md on cosmic's own main;
-reordering outcomes is comparisons plus a goals.md PR.
+reordering outcomes is a rank change plus a goals.md PR.
 
 An open workable leaf is in exactly one of two states; everything
 finer derives from facts the item already carries:
@@ -57,29 +50,29 @@ finer derives from facts the item already carries:
 
 Two exits from doing, split by which side stopped. A gap in the ITEM
 — a spec that cannot answer, a reopened decision, a falsified
-premise — files the question as its own item, blocks this one on it,
-then releases the claim: the item waits on the answer, not the
-queue, and the question's `done` unblocks it by itself (`help
-block`). A bare `drop` is the WORKER-side release — a dead session,
-a spent budget — and asserts the item is fine to re-offer as-is
-(`help drop`).
+premise — files the question as a CHILD of this item (`new --parent
+<ID>`), then drops the claim: the item is a container until the
+child resolves, and the child's `done` frees it with no further verb
+(`help order`). A bare `drop` is the WORKER-side release — a dead
+session, a spent budget — and asserts the item is fine to re-offer
+as-is (`help drop`).
 
 Two WIP rules: each worker holds ONE claim, and one bound covers
 `doing` as a whole — at the limit, taking NEW work is refused until
 something in flight finishes; finishing motions are never refused.
 Work flows right to left — finishing beats starting — and that is
 ONE derived order, not advice: every queue ranks stage first
-(accepted, review, rework, building, lane repair, todo) and the
-comparison order within a stage, age last. Stage is
-lexicographically supreme — no comparison edge lifts a todo item
-past a waiting verdict, because an unreviewed diff is a wasting
-asset and a hot pull's delay is at most one review. `next` offers
-the queue's head, and `take` refuses what a visibly unclaimed
-verdict outranks. Do what `next` names and ask again — acting moves
-the board, so the second answer derives from the board the first
-left behind. Stop when it says `none`: do not invent work. Beyond
-the queue: triage what arrived, refine the top of todo, decompose
-an undriven outcome — in that order.
+(accepted, review, rework, building, lane repair, todo) and rank
+order within a stage, age last (`help order`). Stage is
+lexicographically supreme — no rank moves a todo item past a
+waiting verdict, because an unreviewed diff is a wasting asset and a
+hot pull's delay is at most one review. `next` offers the queue's
+head, and `take` refuses a todo pull while a review awaits,
+unclaimed. Do what `next` names and ask again — acting moves the
+board, so the second answer derives from the board the first left
+behind. Stop when it says `none`: do not invent work. Beyond the
+queue: triage what arrived, refine the top of todo, decompose an
+undriven outcome — in that order.
 
 Session identity: never pass --session — the tool derives a
 unique-per-run identity from the environment, and an invented name
@@ -100,17 +93,33 @@ Hard rules:
 - the spec bar is never lowered to make an item pullable, and the
   doing bound never widened to admit one more take. --force exists
   for repair, not for flow.
-- build the spec, not your memory of intent; gaps discovered
-  mid-build go back to the board (block-first), never into the diff.
+- build the spec, not your memory of intent; a gap discovered
+  mid-build goes back to the board as a child of the stuck item,
+  never into the diff.
 - nothing merges without a fresh-context review, and no session
   accepts its own work.
 - findings become items, never widened diffs.
-- every workable item has a position in the priority order — place
-  it or end it, however good the idea.
+- every workable item has its place — rank it, attach it, or end
+  it, however good the idea (`help order`).
 - repo conventions are never relaxed: the repo's gate and its
   AGENTS.md bind every PR. When a convention keeps tripping
   sessions, the fix is a countermeasure item, never an exception.
 - a mutation the board already holds is a no-op that succeeds.
+]]},
+
+  {name = "order", title = "how items are ordered",
+    body = [[
+An item's rank is a path: its position among its siblings at each
+level down from the board, the one parentless item. Rank among
+siblings is a position in a list the parent holds; siblings not in
+the list follow it, by age. An outcome the board's list does not
+position, and everything under it, is triage.
+
+In practice: `rank ID --before|--after|--last` moves an item among
+its siblings, an outcome against other outcomes the same way;
+`new`/`attach --before X`/`--after X` places it there the moment it
+arrives; an unranked outcome, and everything under it, is triage; an
+unranked child still pulls, just after its ranked siblings.
 ]]},
 
   {name = "bar", title = "the spec bar: what makes an item pullable",
@@ -170,12 +179,12 @@ the smell threshold, not a rule). An "and" between two independent
 changes in `Change` means cut it in two. Prefer file-disjoint
 siblings — two specs growing one file near a line cap collide at
 the merge, a failure neither diff can see. Real landing order is a
-`blocked_by` edge; research is an item whose deliverable is
+rank (`help order`); research is an item whose deliverable is
 recorded findings and follow-up items, not code.
 
 Goal context is the parent chain — there is no Goal section.
-Dependencies are `blocked_by` edges — there is no Enablement
-section. Enablement is still the highest-leverage work: when the
+Dependencies are children — there is no Enablement section.
+Enablement is still the highest-leverage work: when the
 same wrong turn appears twice, file the countermeasure as an
 ordinary item, preferring a gate in core over a doc, and a doc over
 a skill — gates transfer to every future session; prose does not.
@@ -191,12 +200,14 @@ a skill — gates transfer to every future session; prose does not.
    runs first, and not ready is a bare drop, not a bounce. Numbers
    moved but the shape holds: refresh them in place (`spec ID FILE
    --base BASE`) and proceed. A fresh fact that breaks the shape or
-   reopens a decision: file the question as its own item, block this
-   one on it, then release the claim (`help block` has the order). A
-   bounce is a good outcome — the bar failing loudly instead of a
-   silent wrong guess — and answering the question may well be your
-   own next action; do that from the spec and the tree, not from
-   what you remember wanting.
+   reopens a decision: file the question as a CHILD of this item
+   (`new --parent <ID>`), then drop the claim — the item is a
+   container until the child resolves, and the child's `done` frees
+   it with no further verb (`help order`). A bounce is a good
+   outcome — the bar failing loudly instead of a silent wrong guess —
+   and answering the question may well be your own next action; do
+   that from the spec and the tree, not from what you remember
+   wanting.
 3. One item = one fresh branch off the latest default branch, named
    for the id's first 8 characters = one PR. Never stack a second
    item on a branch, and never reuse a branch whose PR is open.
@@ -258,7 +269,7 @@ a review that only reads has verified nothing:
    spec states untouched.
 4. Conventions hold — the repo's AGENTS.md binds; anything a gate
    should have caught but did not is itself a finding to file.
-5. It serves the outcome — walk the parent chain to the root and
+5. It serves the outcome — walk the parent chain to the outcome and
    judge the diff against it. A green gate on a change that misses
    the point means the SPEC was wrong: fix the spec, never wave the
    diff through.
@@ -276,10 +287,11 @@ merges directly), then `done ID`. `request
 changes` — the concrete gaps quoted on the PR; the claimant reworks
 on the same PR. `reject` — the approach is wrong: close the PR,
 record what was learned, clear the claim. A reject that reopens a
-decision uses the block-first exit: file the question as an item
-and block this one on it, so the learning holds the item back until
-answered. Rejection is cheap by design; wrong work merged is
-expensive. A research item takes the same verdicts, re-running its
+decision files the question as a child of the item, then drops the
+claim: the item is a container until the child resolves, and the
+child's `done` frees it with no further verb (`help order`).
+Rejection is cheap by design; wrong work merged is expensive. A
+research item takes the same verdicts, re-running its
 recorded checks in place of a diff — checks its spec carries because
 whoever claimed it (an orchestrator applying a `brief research ID`
 agent's recommendation, or a solo session) already wrote them there.
@@ -339,10 +351,10 @@ checkout or push rights to this board repository:
   a diff — no product PR) still gets a claim and a spawned agent, via
   `brief research ID` in place of `brief builder ID`: the agent does
   the measuring and drafts its recommendation — the item's full new
-  spec, and each capture ready for `new`/`attach`/`block` — but never
+  spec, and each capture ready for `new`/`attach`/`rank` — but never
   runs a `gitboard` command itself, even when the item's own spec
   tells it to. Applying that recommendation (`spec`, then `new` /
-  `attach` / `block` per drafted capture) is yours, same as landing a
+  `attach` / `rank` per drafted capture) is yours, same as landing a
   PR is, and so is the handover: `take ID --result` once it is
   applied — only then does the claimed, PR-less item await a
   `verdict`.

@@ -3,14 +3,13 @@
 -- not only the first — accepts a rendered handle, and a handle that
 -- names nothing is refused the same way a bad prefix is. The verbs
 -- themselves are exercised with resolved ids elsewhere
--- (`_work/gitcompare_test.tl`, `_work/gitgraph_test.tl`); this is the
+-- (`_work/gitrank_test.tl`, `_work/gitgraph_test.tl`); this is the
 -- dispatch layer in `_work/gitboard.tl` that resolves what a session
 -- typed before a verb ever sees it.
 
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local check = require("cosmic.check")
-local cmp = require("_work.gitcompare")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitboard = require("_work.gitboard")
@@ -61,31 +60,18 @@ local function test_attach_resolves_a_handle_form_parent()
   assert(it.parent == root, "and the attach actually landed")
 end
 
--- `compare`'s OTHER slot: same handle form, same resolution.
-local function test_compare_resolves_a_handle_form_other()
-  local s = init_state_repo("compare-handle")
-  local low = file_item(s, "the lesser outcome", "")
-  local high = file_item(s, "the greater outcome", "")
-  assert(gitboard.main("compare", high, tail.handle(low), "--dir", s.root) == 0,
-    "a handle-form OTHER should resolve")
-  local winner = check.must(store.load(s, high))
-  assert(#winner.beats == 1 and winner.beats[1] == low,
-    "and the comparison actually landed")
-end
-
 -- A handle naming nothing is refused cleanly in a secondary slot too
 -- — no crash, just the same "no item matches" store gives arg 1.
 local function test_secondary_slot_refuses_a_handle_that_matches_nothing()
-  local s = init_state_repo("compare-handle-miss")
-  local low = file_item(s, "the lesser outcome", "")
-  local high = file_item(s, "the greater outcome", "")
-  assert(gitboard.main("compare", high, "«ZZZZ_ZZZZ»", "--dir", s.root) ~= 0,
+  local s = init_state_repo("attach-handle-miss")
+  local child = file_item(s, "the item to place", "")
+  local goal = file_item(s, "an outcome", "")
+  local before_parent = check.must(store.load(s, child)).parent
+  assert(gitboard.main("attach", child, "«ZZZZ_ZZZZ»", "--dir", s.root) ~= 0,
     "a handle matching nothing is refused")
-  local winner = check.must(store.load(s, high))
-  assert(#winner.beats == 0, "and nothing was recorded")
-  local loser = check.must(store.load(s, low))
-  assert(#loser.beats == 0, "the unrelated item is untouched")
-  assert(cmp.cmd_compare(s, high, low) == 0,
+  local unmoved = check.must(store.load(s, child))
+  assert(unmoved.parent == before_parent, "and nothing was recorded")
+  assert(gitboard.main("attach", child, goal, "--dir", s.root) == 0,
     "the store is still writable after the refusal")
 end
 

@@ -8,12 +8,16 @@
 --- sits in the dependency graph, the same way a file's role in cosmic
 --- emerges from its position:
 ---
----   a root
----     with open children is a container being decomposed
----     with none          is untriaged — captured, not yet placed
----   a parented item
----     with open children is a container being decomposed
----     with none          is workable
+---   the board  the one parentless item — never workable, never taken
+---   an outcome a direct child of the board — decomposed, never taken
+---   a container any item with open children, being decomposed
+---   work       a childless item below the outcome level
+---
+--- The depth tests that tell these apart (`_work.flow.is_board`,
+--- `_work.flow.is_outcome`) need more than one item to answer, so they
+--- live in `_work.flow`, not here; this file only validates per-item
+--- shape (fields, exclusivity rules) and, where a rule needs no more
+--- than "does this item have a parent at all", tests that directly.
 ---
 --- A workable item's state is DERIVED from the facts it carries,
 --- never declared: open and unclaimed with no PR is `todo`; a claim
@@ -22,8 +26,8 @@
 --- per-item shape (fields, exclusivity rules).
 ---
 --- There is no goal tier either: every item is the same record, and
---- what makes one more important than another is a committed
---- comparison (`beats`), never a field asserting its own rank. The
+--- what makes one more important than another is its position in the
+--- rank path (`_work.rank`), never a field asserting its own rank. The
 --- outcome prose that gives the tree its meaning lives in
 --- `docs/goals.md` on cosmic's own `main` and is read by people, not
 --- by this.
@@ -31,14 +35,21 @@ local identity = require("_work.identity")
 local ksuid = require("_work.ksuid")
 local shape = require("cosmic.shape")
 
+--- The most parent hops a walk up the tree takes before giving up:
+--- deeper nesting than this is its own design smell, and a chain this
+--- long is cyclic in practice. `_work.rank` and `_work.flow` both walk
+--- parent chains and share this one bound.
+local MAX_DEPTH < const > = 16
+
 local record Item
   --- The filename stem and the one name other items use: a KSUID.
   id: string
   title: string
-  --- The id this item decomposes; "" for roots.
+  --- The id this item decomposes; "" for the board, the one parentless
+  --- item.
   parent: string
-  --- The owner/name the item's PR lands in. Roots carry no repo at
-  --- all (`problems` refuses one that does); every workable item
+  --- The owner/name the item's PR lands in. The board carries no repo
+  --- at all (`problems` refuses one that does); every workable item
   --- should name one explicitly — most target `_work.product.REPO`,
   --- the product repo this board exists to move work on, and an item
   --- whose PR targets this board repository's own machinery instead
@@ -56,20 +67,10 @@ local record Item
   --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN
   --- item may carry a given key.
   key: string
-  --- Items this one is ranked ABOVE, each by id: the priority
-  --- relation, recorded on the winner of a comparison. Stored as one
-  --- "id id" string — the literal domain has no lists. Any item may
-  --- carry them; the order itself is derived in `_work.priority`.
-  beats: {string}
-  --- Open items this one waits on. Stored as one "id id" string —
-  --- the literal domain has no lists.
-  blocked_by: {string}
-  --- Why each blocker binds, by blocker id: what concretely cannot
-  --- proceed until it ends. A block is one cheap command with
-  --- board-wide flow consequences, and the reason is what lets a
-  --- later session judge whether the edge still holds. Entries whose
-  --- blocker left `blocked_by` are pruned on the next write.
-  block_reason: {string: string}
+  --- This item's ranked children, in rank order. Stored as one "id id"
+  --- string — the literal domain has no lists. Empty when it has
+  --- ranked none; an unranked child is simply absent from the list.
+  order: {string}
   --- Edge kinds this reader does not interpret, carried opaquely so a
   --- tree written by a newer reader round-trips unchanged: kind -> id
   --- -> content (the reason, possibly ""). Never rendered by any verb
@@ -127,10 +128,6 @@ local record Item
   --- Why a finished item ended: "completed" | "not-planned"; "" while
   --- open. A non-empty resolution IS what "done" means.
   resolution: string
-  --- Whether this root's win condition is verified to hold. A marker,
-  --- not an ending: the root stays open and keeps its place in the
-  --- order; intake walks past it, and evidence filed under it clears it.
-  is_held: boolean
   --- Content problems `decode` found on this item (`problems(it)`,
   --- possibly several), carried alongside a successful decode instead
   --- of failing it — a read-time snapshot, not a stored fact: nil for
@@ -144,9 +141,9 @@ end
 --- the literal domain omits zero values on write (see `encode`), so
 --- an absent key is ordinary, not a mismatch — and nothing here is
 --- coerced: a wrong-typed field is a refusal, not a silent zero.
---- `blocked_by`, `beats` and `builders` validate as the space-joined
---- strings the file actually carries; splitting them into lists is a
---- transform `decode` still does after validation.
+--- `order` and `builders` validate as the space-joined strings the
+--- file actually carries; splitting them into lists is a transform
+--- `decode` still does after validation.
 local SPEC < const > = shape.record({
     id = shape.optional(shape.string),
     title = shape.optional(shape.string),
@@ -154,9 +151,7 @@ local SPEC < const > = shape.record({
     repo = shape.optional(shape.string),
     base = shape.optional(shape.string),
     key = shape.optional(shape.string),
-    beats = shape.optional(shape.string),
-    blocked_by = shape.optional(shape.string),
-    block_reason = shape.optional(shape.map(shape.string)),
+    order = shape.optional(shape.string),
     claim = shape.optional(shape.string),
     builders = shape.optional(shape.string),
     speccers = shape.optional(shape.string),
@@ -167,7 +162,6 @@ local SPEC < const > = shape.record({
     verdict_head = shape.optional(shape.string),
     verdict_spec = shape.optional(shape.string),
     resolution = shape.optional(shape.string),
-    is_held = shape.optional(shape.boolean),
   })
 
 --- The type `shape.into` hands `decode` back: SPEC typed, with every
@@ -181,9 +175,7 @@ local record Raw
   repo: string | nil
   base: string | nil
   key: string | nil
-  beats: string | nil
-  blocked_by: string | nil
-  block_reason: {string: string} | nil
+  order: string | nil
   claim: string | nil
   builders: string | nil
   speccers: string | nil
@@ -194,7 +186,6 @@ local record Raw
   verdict_head: string | nil
   verdict_spec: string | nil
   resolution: string | nil
-  is_held: boolean | nil
 end
 
 --- The valid `verdict` values, exported so a schema carrying its own
@@ -222,12 +213,32 @@ local function is_open(it: Item): boolean
   return (it.resolution or "") == ""
 end
 
---- Whether an item is a root: no parent. A root with open children
---- organizes a subtree; a childless one is awaiting triage.
+--- Whether an item is parentless — the board, in a well-formed tree,
+--- and the one shape check this file itself needs (below): a second
+--- parentless item is a fsck finding (`_work.gitfsck`), never this
+--- module's to decide. `_work.flow.is_board` is the one other caller
+--- that needs this test; everywhere else that used to ask "is this a
+--- root" now asks a depth question `_work.flow` alone can answer
+--- (`is_board`, `is_outcome`).
 --- @param it Item The item
 --- @return boolean True when parentless
-local function is_root(it: Item): boolean
+local function is_parentless(it: Item): boolean
   return (it.parent or "") == ""
+end
+
+--- Items indexed by id.
+local type Index = {string: Item}
+
+--- Every item indexed by its own id — the one lookup nearly every
+--- graph walk in `_work.rank` and `_work.flow` needs first.
+--- @param items {Item} All items
+--- @return Index Items by id
+local function by_id(items: {Item}): Index
+  local out: Index = {}
+  for _, i in ipairs(items) do
+    out[i.id] = i
+  end
+  return out
 end
 
 --- The problems an item has on its own, empty when it is valid. One
@@ -256,18 +267,13 @@ local function problems(it: Item): {string}
   if not is_open(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= "") then
     out[#out + 1] = "a done item holds no claim and no review"
   end
-  if is_root(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= ""
+  if is_parentless(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= ""
     or (it.pr or 0) ~= 0
     or (it.verdict or "") ~= "" or (it.repo or "") ~= ""
     or (it.base or "") ~= "") then
     out[#out + 1] =
-    "claim/reviewer/pr/verdict/repo/base belong to worked items, not roots"
-  end
-  if not is_root(it) and it.is_held then
-    out[#out + 1] = "is_held marks an outcome root; a parented item is never held"
-  end
-  if not is_open(it) and it.is_held then
-    out[#out + 1] = "is_held marks an open root; a done item never carries it"
+    "claim/reviewer/pr/verdict/repo/base belong to worked items, never the "
+    .. "board"
   end
   if (it.pr or 0) ~= 0 and (it.result or "") ~= "" then
     out[#out + 1] = "pr and result never both stand: a deliverable is a diff "
@@ -282,18 +288,6 @@ local function problems(it: Item): {string}
   end
   if (it.base or "") ~= "" and not it.base:match("^[%w%-%._/]+$") then
     out[#out + 1] = ("base must be a branch name: %s"):format(it.base)
-  end
-  local blocked_seen: {string: boolean} = {}
-  for _, b in ipairs(it.blocked_by or {}) do
-    if not ksuid.is_id(b) then
-      out[#out + 1] = ("blocked_by names a non-id: %s"):format(tostring(b))
-    elseif b == it.id then
-      out[#out + 1] = "blocked_by names the item itself; nothing waits on itself"
-    elseif blocked_seen[b] then
-      out[#out + 1] = ("blocked_by repeats %s"):format(b)
-    else
-      blocked_seen[b] = true
-    end
   end
   local built_seen: {string: boolean} = {}
   for _, name in ipairs(it.builders or {}) do
@@ -311,17 +305,17 @@ local function problems(it: Item): {string}
       specced_seen[name] = true
     end
   end
-  local beats_seen: {string: boolean} = {}
-  for _, b in ipairs(it.beats or {}) do
-    if not ksuid.is_id(b) then
-      out[#out + 1] = ("beats names a non-id: %s"):format(tostring(b))
-    elseif b == it.id then
-      out[#out + 1] = "beats names the item itself; nothing outranks itself"
-    elseif beats_seen[b] then
-      out[#out + 1] = ("beats repeats %s"):format(b)
-    else
-      beats_seen[b] = true
-    end
+  return out
+end
+
+--- Split one of the space-joined list fields (`order`, `builders`,
+--- `speccers`) back into a list.
+--- @param joined string | nil The space-joined field; "" or nil is empty
+--- @return {string} The list, possibly empty
+local function split_ids(joined: string | nil): {string}
+  local out: {string} = {}
+  for ref in (joined or ""):gmatch("%S+") do
+    out[#out + 1] = ref
   end
   return out
 end
@@ -337,8 +331,8 @@ end
 ---
 --- This fails hard only on genuine corruption: an unparseable literal
 --- or a field of the wrong type (`shape.into` against `SPEC`, below).
---- A CONTENT problem — `problems(it)` non-empty: a claimed root, a
---- repeated blocker, and so on — does not fail the decode; the
+--- A CONTENT problem — `problems(it)` non-empty: a claimed parentless
+--- item, a repeated blocker, and so on — does not fail the decode; the
 --- constructed `Item` comes back with `problems(it)` attached at
 --- `.decode_problems` instead (`is_flagged` reads it) — a historical
 --- commit written by an older or less careful writer still replays.
@@ -350,26 +344,9 @@ local function decode(t: {string: any}): Item | nil, string
   if not raw then
     return nil, err
   end
-  local blocked: {string} = {}
-  for ref in (raw.blocked_by or ""):gmatch("%S+") do
-    blocked[#blocked + 1] = ref
-  end
-  local reasons: {string: string} = {}
-  for k, v in pairs(raw.block_reason or {}) do
-    reasons[k] = v
-  end
-  local beats: {string} = {}
-  for ref in (raw.beats or ""):gmatch("%S+") do
-    beats[#beats + 1] = ref
-  end
-  local builders: {string} = {}
-  for name in (raw.builders or ""):gmatch("%S+") do
-    builders[#builders + 1] = name
-  end
-  local speccers: {string} = {}
-  for name in (raw.speccers or ""):gmatch("%S+") do
-    speccers[#speccers + 1] = name
-  end
+  local order = split_ids(raw.order)
+  local builders = split_ids(raw.builders)
+  local speccers = split_ids(raw.speccers)
   local it: Item = {
     id = raw.id or "",
     title = raw.title or "",
@@ -377,9 +354,7 @@ local function decode(t: {string: any}): Item | nil, string
     repo = raw.repo or "",
     base = raw.base or "",
     key = raw.key or "",
-    beats = beats,
-    blocked_by = blocked,
-    block_reason = reasons,
+    order = order,
     claim = raw.claim or "",
     builders = builders,
     speccers = speccers,
@@ -390,7 +365,6 @@ local function decode(t: {string: any}): Item | nil, string
     verdict_head = raw.verdict_head or "",
     verdict_spec = raw.verdict_spec or "",
     resolution = raw.resolution or "",
-    is_held = raw.is_held or false,
   }
   local bad = problems(it)
   if #bad > 0 then
@@ -422,27 +396,7 @@ local function encode(it: Item): {string: any}
   if (it.repo or "") ~= "" then t.repo = it.repo end
   if (it.base or "") ~= "" then t.base = it.base end
   if (it.key or "") ~= "" then t.key = it.key end
-  if #(it.beats or {}) > 0 then
-    t.beats = table.concat(it.beats, " ")
-  end
-  if #(it.blocked_by or {}) > 0 then
-    t.blocked_by = table.concat(it.blocked_by, " ")
-    -- Reasons ride only for blockers still named, so an entry whose
-    -- edge was dropped heals on the next write, the way a duplicate
-    -- blocker does.
-    local reasons: {string: string} = {}
-    local any_reason = false
-    for _, b in ipairs(it.blocked_by) do
-      local why = (it.block_reason or {})[b]
-      if why ~= nil and why ~= "" then
-        reasons[b] = why
-        any_reason = true
-      end
-    end
-    if any_reason then
-      t.block_reason = reasons
-    end
-  end
+  if #(it.order or {}) > 0 then t.order = table.concat(it.order, " ") end
   if (it.claim or "") ~= "" then t.claim = it.claim end
   if #(it.builders or {}) > 0 then
     t.builders = table.concat(it.builders, " ")
@@ -457,17 +411,19 @@ local function encode(it: Item): {string: any}
   if (it.verdict_head or "") ~= "" then t.verdict_head = it.verdict_head end
   if (it.verdict_spec or "") ~= "" then t.verdict_spec = it.verdict_spec end
   if (it.resolution or "") ~= "" then t.resolution = it.resolution end
-  if it.is_held then t.is_held = true end
   return t
 end
 
 local record item
   type Item = Item
+  type Index = Index
+  MAX_DEPTH: integer
   VERDICTS: {string: boolean}
   RESOLUTIONS: {string: boolean}
   is_open: function(it: Item): boolean
-  is_root: function(it: Item): boolean
+  is_parentless: function(it: Item): boolean
   is_flagged: function(it: Item): boolean
+  by_id: function(items: {Item}): Index
   problems: function(it: Item): {string}
   identity_refusal: function(session: string): string
   record_involvement: function(list: {string}, session: string): boolean, string
@@ -476,11 +432,13 @@ local record item
 end
 
 local M: item = {
+  MAX_DEPTH = MAX_DEPTH,
   VERDICTS = VERDICTS,
   RESOLUTIONS = RESOLUTIONS,
   is_open = is_open,
-  is_root = is_root,
+  is_parentless = is_parentless,
   is_flagged = is_flagged,
+  by_id = by_id,
   problems = problems,
   identity_refusal = identity.identity_refusal,
   record_involvement = identity.record_involvement,

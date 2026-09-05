@@ -3,13 +3,14 @@
 --- only in its commits (every mutation is one commit on the item's
 --- ref with a self-describing subject — `take <id8> by <session>
 --- pr:N`, `verdict <id8> accept by <session> ...`, `done`, `new`,
---- `attach`, `spec`, `block`, `compare`, `set`, `drop`, `hold`,
---- `_work.gitverbs`/`_work.gitgraph`/`_work.gitverdict`/
---- `_work.gitcompare`), and the index carries only an item's CURRENT
---- scalars. `parse_subject` reads that fixed-but-not-total grammar
---- (today's leading tokens plus legacy `move`, `gitboard:`, `board:`,
---- `migrate:`, `work:`, `retitle`, `uncompare`, `repo` — none of them
---- refused, every field left at its default on anything unparsed) into
+--- `attach`, `spec`, `rank`, `set`, `drop` (`_work.gitverbs`/
+--- `_work.gitgraph`/`_work.gitverdict`/`_work.gitrank`), and the index
+--- carries only an item's CURRENT scalars. `parse_subject` reads that
+--- fixed-but-not-total grammar (today's leading tokens plus legacy
+--- `move`, `gitboard:`, `board:`, `migrate:`, `work:`, `retitle`,
+--- `block`, `compare`, `hold`, `unblock`, `unhold`, `uncompare`,
+--- `repo` — none of them refused, every field left at its default on
+--- anything unparsed) into
 --- `verb`/`session`/`pr`; `walk` fills a rebuild's whole `events`
 --- table in one `git log` process; `since` reads one ref's new
 --- commits for the fetch patch; `_work.cache` calls `fill_rebuild`,

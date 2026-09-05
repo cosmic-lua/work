@@ -137,9 +137,11 @@ local function test_a_research_handover_review_cites_no_pr()
     "a diff's review still cites the PR and head: " .. diff_text)
   assert(table.concat(guidance.lines("review"), " ") == diff_text,
     "and with no item, the diff reading stands")
+  local board = fresh_id()
   local root = fresh_id()
   local report = view.next_report({
-      check.must(item.decode({id = root, title = "an outcome"})),
+      check.must(item.decode({id = board, title = "board"})),
+      check.must(item.decode({id = root, title = "an outcome", parent = board})),
       check.must(item.decode({id = fresh_id(), title = "a slice", parent = root,
             claim = "who", builders = "who", result = ("ab"):rep(32)})),
     }, {}, "me")

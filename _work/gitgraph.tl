@@ -1,10 +1,9 @@
---- The graph verbs: `new`, `attach`, `block` and its `unblock` half —
---- the mutations that shape the item GRAPH (an item's existence, a
---- parent edge, a blocker edge) rather than moving work state, which
---- is `_work.gitverbs`. `set` lives here too: not a graph edge, but
---- the other class of fact nothing else moves — an item's own
---- destination (`title`, `repo`, `base`), fixed at file time and
---- otherwise stuck once a refinement outgrows it.
+--- The graph verbs: `new` and `attach` — the mutations that shape the
+--- item GRAPH (an item's existence, a parent edge) rather than moving
+--- work state, which is `_work.gitverbs`. `set` lives here too: not a
+--- graph edge, but the other class of fact nothing else moves — an
+--- item's own destination (`title`, `repo`, `base`), fixed at file
+--- time and otherwise stuck once a refinement outgrows it.
 ---
 --- Verbs receive FULL ids — the dispatcher
 --- resolves prefixes — and every verb prints a `gitboard-<verb>:`
@@ -13,13 +12,16 @@
 --- drops the mutation whole, re-syncs, and refuses — re-running the
 --- verb re-applies every gate against the merged board.
 ---
---- Decomposition and triage are both `attach`: giving an item a
---- parent is the whole operation, because roles derive from the graph
---- — a captured item becomes work by gaining a parent, and a workable
---- item becomes a container the moment a child attaches under it.
---- Priority is the other half of triage and has its own verb,
---- `compare`, because an item can be placed without being adopted and
---- adopted without being compared.
+--- Decomposition and re-triage are both `attach`: moving an item's
+--- parent is the whole operation, because roles derive from the
+--- graph — an outcome becomes work by gaining a parent other than the
+--- board, and a workable item becomes a container the moment a child
+--- attaches under it. Rank is the other half of triage and has its
+--- own verb, `rank`, because an item can be placed without being
+--- moved and moved without being ranked. `new` with no `--parent`
+--- files under the board — the one parentless item — the same
+--- position `attach` never needs to move an item TO, since only
+--- `init` creates it.
 local cachequery = require("_work.cachequery")
 local flow = require("_work.flow")
 local friction = require("_work.gitfriction")
@@ -27,31 +29,58 @@ local gate = require("_work.gitgate")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
-local prio = require("_work.priority")
+local rank = require("_work.gitrank")
 local session = require("_work.session")
 local store = require("_work.store")
 
---- File a new item into the graph, todo if it has a parent and triage
---- otherwise. `spec` is nil to leave the tree with no `spec.md` at
---- all — an empty string would instead write an EMPTY `spec.md`,
---- which is a different, visible outcome. Mints a fresh id; a caller
---- that needs a chosen id (a fixture, a replay) builds the `item.Item`
---- and calls `storewrite.save` directly — see
---- `_work/storeinit_test.tl`'s `seed_one_item`.
+--- Add `x` to `list` unless some entry already shares its id — the
+--- merge `cmd_new`/`cmd_attach` use to fold a parent placement
+--- mutated into `also` alongside whatever `gate.containered` already
+--- put there, without writing the same item twice in one commit.
+--- @param list {item.Item} The items a mutation already writes
+--- @param x item.Item The item to add
+--- @return {item.Item} `list`, mutated in place and returned
+local function add_once(list: {item.Item}, x: item.Item): {item.Item}
+  for _, y in ipairs(list) do
+    if y.id == x.id then
+      return list
+    end
+  end
+  list[#list + 1] = x
+  return list
+end
+
+--- File a new item into the graph, todo if it lands below the outcome
+--- level, triage if it lands directly under the board. `spec` is nil
+--- to leave the tree with no `spec.md` at all — an empty string would
+--- instead write an EMPTY `spec.md`, which is a different, visible
+--- outcome. Mints a fresh id; a caller that needs a chosen id (a
+--- fixture, a replay) builds the `item.Item` and calls
+--- `storewrite.save` directly — see `_work/storeinit_test.tl`'s
+--- `seed_one_item`.
 --- @param s store.Store The store
 --- @param title string The item's title
---- @param parent string The parent id, or "" to file it without one
+--- @param parent string The parent id, or "" to file it under the
+--- board — refused when this repository has no board yet (`init`
+--- creates one)
 --- @param spec string | nil Sidecar prose to write, or nil to write none
 --- @param repo string The item's repo field; nil becomes "". Refused
 --- under a foreign owner unless `spec` names it under `## Access`
 --- @param force boolean | nil File a `friction:` item over an incomplete
 --- roll call — a pass whose transcripts are gone
 --- @param why string | nil Why --force was needed
+--- @param before string | nil Place it immediately before this sibling
+--- under `parent` (the board, when `parent` is "")
+--- @param after string | nil Place it immediately after this sibling
+--- under `parent`; at most one of before/after
 --- @return integer 0 on success, 1 otherwise
 local function cmd_new(s: store.Store, title: string, parent: string,
-    spec: string | nil, repo: string, force?: boolean, why?: string): integer
+    spec: string | nil, repo: string, force?: boolean, why?: string,
+    before?: string, after?: string): integer
   local frc = force or false
   local rsn = why or ""
+  local bfr = before or ""
+  local aft = after or ""
   local forced = gate.force_refusal(frc, rsn)
   if forced then
     return gate.verdict_line("new", false, "REFUSED: " .. forced)
@@ -78,17 +107,24 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     end
   end
   local index = flow.by_id(all)
-  local parent_item: item.Item = nil
-  if parent ~= "" then
-    parent_item = index[parent]
-    if parent_item == nil then
-      return gate.verdict_line("new", false, ("no item %s"):format(parent))
+  -- No `--parent` means "under the board" — found as the one
+  -- parentless item, never a second field to keep in step with it.
+  local parent_id = parent
+  if parent_id == "" then
+    local board = flow.find_board(all)
+    if board == nil then
+      return gate.verdict_line("new", false,
+        "REFUSED: this board has no board item yet — run `gitboard init`")
     end
+    parent_id = board.id
+  end
+  local parent_item = index[parent_id]
+  if parent_item == nil then
+    return gate.verdict_line("new", false, ("no item %s"):format(parent_id))
   end
   local it: item.Item = {
-    id = ksuid.new(), title = title, parent = parent, repo = repo or "",
-    beats = {},
-    blocked_by = {}, claim = "", pr = 0, verdict = "",
+    id = ksuid.new(), title = title, parent = parent_id, repo = repo or "",
+    order = {}, claim = "", pr = 0, verdict = "",
     verdict_head = "", resolution = "",
   }
   local bad = item.problems(it)
@@ -113,9 +149,13 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- by design — the queue intake writes into can always accept,
   -- which is what keeps the cheap decision cheap. The bound binds at
   -- take, where committing to work is the expensive decision.
-  local also: {item.Item} = {}
-  if parent_item ~= nil then
-    also = gate.containered(parent_item)
+  local also = gate.containered(parent_item, index)
+  if bfr ~= "" or aft ~= "" then
+    local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
+    if not placed then
+      return gate.verdict_line("new", false, perr)
+    end
+    also = add_once(also, parent_item)
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
@@ -123,21 +163,31 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if not ok then
     return gate.verdict_line("new", false, err)
   end
-  local entered = "triage — attach it under something, or compare it"
-  if parent ~= "" then
-    entered = "todo"
+  local entered = "todo"
+  if flow.is_board(parent_item) then
+    entered = "triage — rank it among the outcomes, or attach it under a "
+    .. "ranked outcome"
   end
   return gate.verdict_line("new", true, ("%s enters %s"):format(it.id, entered))
 end
 
 --- Give an item a parent, moving it from triage into todo. Refuses a
 --- self-parent, a missing id on either side, and a parent whose own
---- chain would cycle back to the item being attached.
+--- chain would cycle back to the item being attached. `before`/`after`
+--- place it among its new siblings in the same commit — X must
+--- already be a positioned child of `parent`, the same rule `rank`
+--- itself enforces; the item's position under whatever parent it is
+--- LEAVING is never rewritten, and stays meaningless there once it
+--- has left.
 --- @param s store.Store The store
 --- @param id string The item gaining a parent
 --- @param parent string The new parent id
+--- @param before string | nil Place it immediately before this sibling
+--- @param after string | nil Place it immediately after this sibling;
+--- at most one of before/after
 --- @return integer 0 on success, 1 otherwise
-local function cmd_attach(s: store.Store, id: string, parent: string): integer
+local function cmd_attach(s: store.Store, id: string, parent: string,
+    before?: string, after?: string): integer
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("attach", false, aerr)
@@ -154,8 +204,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string): integer
   if id == parent then
     return gate.verdict_line("attach", false, "an item cannot parent itself")
   end
-  local up = flow.root_of(parent_item, index)
-  if up == nil then
+  if not flow.reaches_board(parent_item, index) then
     return gate.verdict_line("attach", false,
       ("%s's own parent chain is broken"):format(parent:sub(1, 8)))
   end
@@ -177,9 +226,18 @@ local function cmd_attach(s: store.Store, id: string, parent: string): integer
   if #bad > 0 then
     return gate.verdict_line("attach", false, table.concat(bad, "; "))
   end
+  local also = gate.containered(parent_item, index)
+  if (before or "") ~= "" or (after or "") ~= "" then
+    local placed, perr = rank.place_under(parent_item, id, before or "",
+      after or "", index)
+    if not placed then
+      return gate.verdict_line("attach", false, perr)
+    end
+    also = add_once(also, parent_item)
+  end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("attach %s under %s"):format(id:sub(1, 8), parent:sub(1, 8)),
-    "attach", gate.containered(parent_item))
+    "attach", also)
   if not ok then
     return gate.verdict_line("attach", false, err)
   end
@@ -194,146 +252,10 @@ local function cmd_attach(s: store.Store, id: string, parent: string): integer
     ("%s now under %s%s"):format(id:sub(1, 8), parent:sub(1, 8), workable))
 end
 
---- block/unblock: the `blocked_by` field as a verb, so the landing
---- order between two slices is recorded the same way every other
---- board fact is — one mutation, one commit, one refusal when it does
---- not hold. Hand-editing the field was the standing workaround, and
---- it wrote duplicate ids and ids of items that do not exist; both
---- are refused here, and an existing duplicate is collapsed by the
---- next write.
----
---- A block RECORDS ITS REASON: one cheap command sequences whole
---- chains behind the blocker, and an edge nobody can later judge —
---- does this still bind, or did the spec grow its own workaround? —
---- can only be resolved by whoever remembers writing it. The reason
---- travels on the item (`block_reason`), rendered by `show`, and is
---- what a session weighs before dropping the edge.
---- @param s store.Store The store
---- @param id string The waiting item
---- @param blocker string The item it waits on
---- @param remove boolean True to drop the blocker instead of adding it
---- @param reason string What concretely cannot proceed; required to add
---- @return integer 0 on success, 1 otherwise
-local function cmd_block(s: store.Store, id: string, blocker: string,
-    remove: boolean, reason: string): integer
-  local verb = remove and "unblock" or "block"
-  if not remove and (reason or ""):match("%S") == nil then
-    return gate.verdict_line(verb, false,
-      "REFUSED: a block records why the edge binds — pass --reason "
-      .. "'<what concretely cannot proceed until the blocker ends>'")
-  end
-  local all, aerr = store.list(s)
-  if all == nil then
-    return gate.verdict_line(verb, false, aerr)
-  end
-  local index = flow.by_id(all)
-  local it = index[id]
-  if it == nil then
-    return gate.verdict_line(verb, false, ("no item %s"):format(id))
-  end
-  if index[blocker] == nil then
-    return gate.verdict_line(verb, false, ("no item %s"):format(blocker))
-  end
-  if id == blocker then
-    return gate.verdict_line(verb, false, "an item cannot block itself")
-  end
-  -- A blocker that already waits on this item, through any chain,
-  -- would leave both permanently unpullable — and `next` would say
-  -- nothing, because it just skips what is blocked.
-  if not remove and flow.waits_on(index, blocker, id) then
-    return gate.verdict_line(verb, false,
-      ("%s already waits on %s — blocking would deadlock both"):format(
-        blocker:sub(1, 8), id:sub(1, 8)))
-  end
-  local kept: {string} = {}
-  local seen: {string: boolean} = {}
-  local had = false
-  for _, b in ipairs(it.blocked_by or {}) do
-    if b == blocker then
-      had = true
-    elseif not seen[b] then
-      seen[b] = true
-      kept[#kept + 1] = b
-    end
-  end
-  if remove and not had then
-    return gate.verdict_line(verb, false,
-      ("%s does not wait on %s"):format(id:sub(1, 8), blocker:sub(1, 8)))
-  end
-  -- An edge that already exists is compared, not blindly refused: the
-  -- SAME reason re-run leaves the item untouched, so `save`'s own
-  -- no-op success closes it out; a DIFFERENT reason replaces the
-  -- stored one in place — one mutation, where the old refusal forced
-  -- an unblock+block pair with a race window where the edge was
-  -- briefly gone.
-  local had_reason = (it.block_reason or {})[blocker]
-  local updating = not remove and had and had_reason ~= reason
-  if remove or updating or not had then
-    if not remove then
-      kept[#kept + 1] = blocker
-    end
-    it.blocked_by = kept
-    local reasons = it.block_reason or {}
-    if remove then
-      reasons[blocker] = nil
-    else
-      reasons[blocker] = reason
-    end
-    it.block_reason = reasons
-  end
-  -- Guidance for the add path, decided against the same board the
-  -- gates read. Both notes are the block-first procedure's edges: a
-  -- blocker no comparison reaches is one `take` refuses, so the chain
-  -- would park behind work nobody can pull (a blocker LIFTS its order
-  -- from its waiters, but never its placement); and a claim is
-  -- `drop`'s to release — this verb is a graph edit and must not
-  -- touch a lease, least of all somebody else's.
-  local notes = ""
-  if not remove then
-    if not prio.is_placed(prio.positions(all), blocker) then
-      notes = notes .. ("; blocker %s is UNPLACED — attach or compare "
-        .. "it, or nobody can take it and this chain stays parked")
-      :format(blocker:sub(1, 8))
-    end
-    if (it.claim or "") ~= "" then
-      notes = notes .. ("; the claim on %s still stands — `drop` "
-        .. "releases it"):format(id:sub(1, 8))
-    end
-  end
-  -- Bounded on the add path only: `flow.waits_on` just decided this
-  -- edge deadlocks nothing against the board THIS checkout read, and
-  -- two reciprocal blocks from two checkouts touch two DIFFERENT
-  -- items' refs — nothing else would put them in each other's way, so
-  -- without the seq lease both could land and the pair would cycle.
-  -- Removing an edge can never create one, so `unblock` stays
-  -- unbounded, contending only with another writer of the same item.
-  local ok, err = gate.commit_and_publish(s, it, nil,
-    ("%s %s on %s"):format(verb, id:sub(1, 8), blocker:sub(1, 8)), verb, nil,
-    nil, not remove)
-  if not ok then
-    return gate.verdict_line(verb, false, err)
-  end
-  if store.is_noop(err) then
-    return gate.verdict_line(verb, true, err)
-  end
-  if updating then
-    return gate.verdict_line(verb, true,
-      ("%s still waits on %s — reason updated%s"):format(
-        id:sub(1, 8), blocker:sub(1, 8), notes))
-  end
-  local shape = "now waits on"
-  if remove then
-    shape = "no longer waits on"
-  end
-  return gate.verdict_line(verb, true,
-    ("%s %s %s (%d blocker(s))%s"):format(id:sub(1, 8), shape,
-      blocker:sub(1, 8), #kept, notes))
-end
-
 --- set: repair one of the three destination-fact fields directly —
 --- `title`, `repo`, `base` — the fields no other verb moves once an
 --- item is filed. Flow fields (claim, pr, verdict, resolution, parent,
---- blocked_by, key) have their own verbs and gates; `set` refuses
+--- key) have their own verbs and gates; `set` refuses
 --- them by not existing for them — the dispatcher's flag spec never
 --- declares those long names on this command, so passing one is an
 --- unrecognized-flag refusal before `set` is ever called.
@@ -412,10 +334,10 @@ end
 
 local record gitgraph
   cmd_new: function(s: store.Store, title: string, parent: string,
-  spec: string | nil, repo: string, force?: boolean, why?: string): integer
-  cmd_attach: function(s: store.Store, id: string, parent: string): integer
-  cmd_block: function(s: store.Store, id: string, blocker: string,
-  remove: boolean, reason: string): integer
+  spec: string | nil, repo: string, force?: boolean, why?: string,
+  before?: string, after?: string): integer
+  cmd_attach: function(s: store.Store, id: string, parent: string,
+  before?: string, after?: string): integer
   cmd_set: function(s: store.Store, id: string, title: string | nil,
   repo: string | nil, new_base: string | nil): integer
 end
@@ -423,7 +345,6 @@ end
 local M: gitgraph = {
   cmd_new = cmd_new,
   cmd_attach = cmd_attach,
-  cmd_block = cmd_block,
   cmd_set = cmd_set,
 }
 

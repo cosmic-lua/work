@@ -60,6 +60,32 @@ local function test_init_repo_is_idempotent_over_an_existing_git()
   assert(store.init_repo(root), "a second call over the same tree is a yes")
 end
 
+-- `init_repo` creates the board item — titled "board", the one
+-- parentless item — on a repository that has none, and a second call
+-- over the same tree mints no second one.
+local function test_init_repo_creates_exactly_one_board()
+  local root = fs.join(tmpdir, "init-board")
+  assert(fs.remove_all(root))
+  assert(store.init_repo(root))
+
+  local function board_count(): integer
+    local s = check.must(store.open(root))
+    local all = check.must(store.list(s))
+    local boards = 0
+    for _, it in ipairs(all) do
+      if (it.parent or "") == "" then
+        boards = boards + 1
+        assert(it.title == "board", "the board is titled \"board\": " .. it.title)
+      end
+    end
+    return boards
+  end
+
+  assert(board_count() == 1, "init_repo mints exactly one board")
+  assert(store.init_repo(root), "a second call over the same tree is a yes")
+  assert(board_count() == 1, "a second init_repo mints no second board")
+end
+
 -- A clone that already has an `origin` gets the mirror refspecs ADDED
 -- to `remote.origin.fetch` — the whole lost-race recovery depends on
 -- every clone fetching the same three patterns.
@@ -155,10 +181,10 @@ local function test_list_refuses_a_wrong_format_version()
   assert(store.init_repo(root))
   local s = check.must(store.open(root))
   seed_one_item(s)
-  rewrite_format(root, "2\n")
+  rewrite_format(root, "99\n")
   local all, lerr = store.list(s)
   assert(all == nil, "a board on a version this tool does not know is refused")
-  assert(lerr:find("2", 1, true) ~= nil and lerr:find(format.CURRENT, 1, true) ~= nil,
+  assert(lerr:find("99", 1, true) ~= nil and lerr:find(format.CURRENT, 1, true) ~= nil,
     "the refusal names both versions: " .. lerr)
 end
 
@@ -176,15 +202,18 @@ local function test_list_refuses_a_missing_marker_with_items_present()
   assert(lerr:find("format", 1, true) ~= nil, "got: " .. lerr)
 end
 
--- The same board, empty (nothing ever filed), with no marker either:
--- `init_repo` is what writes one, and a scratch repo before that has
--- run has nothing else to be inconsistent with — so this is fine, not
--- a refusal.
+-- The same board, empty (nothing ever filed, no marker, no board
+-- item), before `init_repo` has ever run: a plain `git init` with
+-- nothing else on it has nothing to be inconsistent with — so this is
+-- fine, not a refusal. `init_repo` is what writes the marker AND the
+-- board item together, so there is no longer a mid-way state where one
+-- exists and the other does not — a truly virgin repository is the
+-- only "empty, no marker" case left to test.
 local function test_list_accepts_a_missing_marker_on_an_empty_board()
   local root = fs.join(tmpdir, "format-missing-empty")
   assert(fs.remove_all(root))
-  assert(store.init_repo(root))
-  git(root, {"update-ref", "-d", "refs/heads/board/format"})
+  assert(fs.make_dirs(root))
+  git(root, {"init", "-q"})
   local s = check.must(store.open(root))
   local all = check.must(store.list(s))
   assert(#all == 0, "an empty board with no marker still reads: " .. #all)

@@ -29,14 +29,21 @@
 --- comparisons are roots placed against a peer), 172/920 (19%) carry a
 --- `blocked_by` edge, and every item (920/920) carries a `spec.md`. The
 --- ratios below are those measurements; `build` reproduces them, not the
---- literal counts, so they hold at any `n`.
+--- literal counts, so they hold at any `n`. `beats` and `blocked_by` are
+--- edge kinds this build no longer interprets — modeled here on
+--- `Item.other_edges`, exactly as an unmigrated board's real tree
+--- entries land — since the fixture's job is the SHAPE of what `git
+--- for-each-ref`/`cat-file --batch` walk, not the field a decode reads
+--- it into.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
+local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -110,11 +117,15 @@ end
 --- `gitboard init` (`store.init_repo`) would add — every scenario that
 --- mutates gets its OWN such clone from `setup`, so one scenario's
 --- writes are never the residue another scenario's `fn` reads. `git
---- clone` alone only populates `refs/remotes/origin/*`; a plain
---- `gitboard init` right after it adds the mirror refspecs but fetches
---- nothing on its own (by design — a truly fresh board has nothing to
---- fetch), so this also runs the one sync a real session would run
---- before its first verb against a clone of an already-populated board.
+--- clone` alone only populates `refs/remotes/origin/*`, so the mirror
+--- refspecs and a fetch run FIRST here, before `store.init_repo`: `bare`
+--- already carries the board `build` minted, and `init_repo` only
+--- checks this checkout's own LOCAL refs before deciding whether to
+--- mint one of its own, so a clone that has not yet fetched anything
+--- would otherwise see none and mint a second, spurious board. Once
+--- fetched, `init_repo`'s own board check finds the real one and does
+--- nothing further; `publish.sync` after it is the one an ordinary
+--- session runs before its first verb, same as always.
 --- @param bare string The bare origin
 --- @param dest string Where to clone it; removed first if present
 --- @return string The clone's path
@@ -123,13 +134,21 @@ local function fresh_clone(bare: string, dest: string): string, string
   assert(fs.remove_all(dest))
   git(fs.dirname(dest), {"clone", "-q", bare, dest})
   git(dest, {"config", "core.createObject", "rename"})
+  local specs_ok, serr = refs.ensure_refspecs(dest)
+  if not specs_ok then
+    return nil, "ensure_refspecs: " .. serr
+  end
+  local fok, ferr = refs.fetch_prune(dest)
+  if not fok then
+    return nil, "fetch_prune: " .. ferr
+  end
   local iok, ierr = store.init_repo(dest)
   if not iok then
     return nil, "init_repo: " .. ierr
   end
-  local s, serr = store.open(dest)
+  local s, oerr = store.open(dest)
   if s == nil then
-    return nil, serr
+    return nil, oerr
   end
   local sok, syerr = publish.sync(s)
   if not sok then
@@ -153,15 +172,14 @@ local record Fixture
   --- at directly, no cloning of their own.
   clone: string
   n: integer
-  --- An existing root, always open: `show ID`'s target and `new`'s
+  --- An existing outcome, always open: `show ID`'s target and `new`'s
   --- `--parent`.
   sample_id: string
-  --- `compare`'s winner and loser — two roots the fixture already placed
-  --- against each other, so the scenario's repeated calls re-record the
-  --- SAME judgment (a no-op after the first, exactly as re-running a real
-  --- `compare` does).
-  compare_winner: string
-  compare_loser: string
+  --- `rank`'s target: an outcome the fixture already ranked LAST in
+  --- the board's own `order`, so the scenario's repeated `rank ID
+  --- --last` calls re-record the SAME position (a no-op after the
+  --- first, exactly as re-running a real `rank` does).
+  rank_target: string
   --- Open, unclaimed, PR-less leaves `done` may resolve one at a time.
   done_pool: {string}
 end
@@ -208,10 +226,10 @@ local function build(n?: integer): Fixture, string
     leaf_ids[i] = ids[num_roots + i]
   end
 
-  -- `beats` is recorded on the WINNER only (`_work.gitcompare`): chain the
-  -- roots first (root k beats root k+1, so every root but the last has a
-  -- placement), then, if the target needs more winners than roots supply,
-  -- pair up leaves the same way.
+  -- `beats` is recorded on the WINNER only: chain the roots first (root
+  -- k beats root k+1, so every root but the last has a placement), then,
+  -- if the target needs more winners than roots supply, pair up leaves
+  -- the same way.
   local winner_target = math.max(1, round(total * BEATS_WINNER_RATIO))
   local beats_of: {string: string} = {}
   local made = 0
@@ -242,9 +260,8 @@ local function build(n?: integer): Fixture, string
 
   -- `blocked_by`: a strictly-increasing chain over the OPEN leaves (never
   -- the ones `resolution_of` just closed, or `next` would have nothing to
-  -- walk past) — leaf i waits on leaf i-1, which can never cycle, so this
-  -- needs none of `cmd_block`'s own deadlock check (bypassed along with
-  -- the rest of that verb).
+  -- walk past) — leaf i waits on leaf i-1, which can never cycle, so
+  -- nothing here needs a deadlock check.
   local blocked_target = round(total * BLOCKED_RATIO)
   local blocker_of: {string: string} = {}
   local open_start = resolved_count + 1
@@ -274,15 +291,30 @@ local function build(n?: integer): Fixture, string
   if s == nil then
     return nil, serr
   end
+  -- `init_repo` just minted the board on this brand-new bare origin —
+  -- the one parentless item every "root" below is filed under, an
+  -- outcome rather than a second parentless item of its own.
+  local seeded, lerr = store.list(s)
+  if seeded == nil then
+    return nil, "list after init_repo: " .. lerr
+  end
+  local board = flow.find_board(seeded)
+  if board == nil then
+    return nil, "init_repo minted no board"
+  end
+  local board_id = board.id
 
   for k = 1, num_roots do
     local id = root_ids[k]
     local it, derr = item.decode({
-        id = id, title = ("fixture root %04d"):format(k),
-        beats = beats_of[id] or "",
+        id = id, title = ("fixture root %04d"):format(k), parent = board_id,
       })
     if it == nil then
       return nil, "decode root " .. id .. ": " .. derr
+    end
+    local winner = beats_of[id]
+    if winner ~= nil then
+      it.other_edges = {beats = {[winner] = ""}}
     end
     local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
@@ -294,21 +326,42 @@ local function build(n?: integer): Fixture, string
     local parent = root_ids[((i - 1) % num_roots) + 1]
     local raw: {string: any} = {
       id = id, title = ("fixture leaf %06d"):format(i), parent = parent,
-      beats = beats_of[id] or "", resolution = resolution_of[id] or "",
+      resolution = resolution_of[id] or "",
     }
-    local blocker = blocker_of[id]
-    if blocker ~= nil then
-      raw.blocked_by = blocker
-      raw.block_reason = {[blocker] = "waiting on a prerequisite"}
-    end
     local it, derr = item.decode(raw)
     if it == nil then
       return nil, "decode leaf " .. id .. ": " .. derr
+    end
+    local edges: {string: {string: string}} = {}
+    local winner = beats_of[id]
+    if winner ~= nil then
+      edges.beats = {[winner] = ""}
+    end
+    local blocker = blocker_of[id]
+    if blocker ~= nil then
+      edges.blocked_by = {[blocker] = "waiting on a prerequisite"}
+    end
+    if next(edges) ~= nil then
+      it.other_edges = edges
     end
     local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
       return nil, "save leaf " .. id .. ": " .. serr2
     end
+  end
+
+  -- Outcomes ranked in id order, in the board item's own `order` field
+  -- — an ordinary item write like any other: `rank_target` — the last
+  -- one — is already exactly where a repeated `rank ID --last` would
+  -- put it.
+  local board_it, blerr = store.load(s, board_id)
+  if board_it == nil then
+    return nil, "load board: " .. blerr
+  end
+  board_it.order = root_ids
+  local ook, oerr = storewrite.save(s, board_it, "seed root order")
+  if not ook then
+    return nil, "save board order: " .. oerr
   end
 
   local pok, perr = publish.publish(s)
@@ -319,7 +372,7 @@ local function build(n?: integer): Fixture, string
   return {
     root = root_dir, bare = bare, clone = clone_dir, n = total,
     sample_id = root_ids[1],
-    compare_winner = root_ids[1], compare_loser = root_ids[2],
+    rank_target = root_ids[num_roots],
     done_pool = done_pool,
   }
 end

@@ -1,9 +1,9 @@
 --- The `show ID` verb: one item rendered whole — fields, derived
---- state, priority standing, blockers, spec, history, and the same
---- problem list `take` enforces as its spec bar, so what would refuse
---- a pull is visible on the read that precedes it. Its own module
---- rather than a third report inside `_work.gitview`, which sits
---- against the repo's 500-line rule.
+--- state, rank, spec, history, and the same problem list
+--- `take` enforces as its spec bar, so what would refuse a pull is
+--- visible on the read that precedes it. Its own module rather than a
+--- third report inside `_work.gitview`, which sits against the repo's
+--- 500-line rule.
 ---
 --- Like every read verb, the report is PURE over already-read state
 --- and the `cmd_` half owns the store reads: what a session reads is
@@ -17,13 +17,77 @@ local gitready = require("_work.gitready")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local overlap = require("_work.overlap")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
 local verdict_line = gate.verdict_line
+
+--- The item named `id` in `items`, or nil.
+--- @param items {item.Item} All items
+--- @param id string The id to find
+--- @return item.Item | nil
+local function find_item(items: {item.Item}, id: string): item.Item | nil
+  for _, i in ipairs(items) do
+    if i.id == id then
+      return i
+    end
+  end
+  return nil
+end
+
+--- Mirrors `_work.tail.handle`'s 8-character convention (guillemet-
+--- wrapped, underscore-divided tail) without requiring that module.
+--- @param id string A full item id (a 27-char KSUID)
+--- @return string "«XXXX_XXXX»"
+local function handle_of(id: string): string
+  local t = id:sub(20)
+  return "«" .. t:sub(1, 4) .. "_" .. t:sub(5, 8) .. "»"
+end
+
+--- The render for one item's rank: "3 of 7 under «HANDLE»" for an item
+--- under an ordinary parent (7 = how many of its siblings are
+--- positioned), "outcome 2 of 5" for a direct child of the board, "the
+--- board" for the board itself, or "unranked" when the item's own
+--- parent has no position for it.
+--- @param ranks {string: rank.Rank} Rank by item id
+--- @param items {item.Item} All items
+--- @param id string The item's id
+--- @return string
+local function describe(ranks: {string: rank.Rank}, items: {item.Item},
+    id: string): string
+  local r = ranks[id]
+  local i = find_item(items, id)
+  if r == nil or i == nil then
+    return "unranked"
+  end
+  if #r.chain == 0 then
+    return "the board"
+  end
+  local own = r.chain[#r.chain]
+  if own.position < 0 then
+    return "unranked"
+  end
+  local parent_id = i.parent or ""
+  local total = 0
+  for _, other in ipairs(items) do
+    if (other.parent or "") == parent_id then
+      local orank = ranks[other.id]
+      if orank ~= nil and #orank.chain > 0
+      and orank.chain[#orank.chain].position >= 0 then
+        total = total + 1
+      end
+    end
+  end
+  local parent_item = find_item(items, parent_id)
+  if parent_item ~= nil and item.is_parentless(parent_item) then
+    return ("outcome %d of %d"):format(own.position + 1, total)
+  end
+  return ("%d of %d under %s"):format(own.position + 1, total,
+    handle_of(parent_id))
+end
 
 --- One word for where an item stands: how it ended, else its derived
 --- state while in flight, else todo.
@@ -42,13 +106,15 @@ end
 --- One item's fields, role, spec, spec-bar problems, and history.
 --- @param it item.Item The item
 --- @param all {item.Item} Every item
+--- @param ranks {string: rank.Rank} Rank by item id (`rank.positions`)
 --- @param body string Its spec sidecar, "" when it has none
 --- @param events {publish.Event} Its git history, newest first
 --- @param problems {string} The take gate's problem list, possibly empty
 --- @param overlaps {string} `_work.overlap`'s pre-rendered lines, possibly empty
 --- @return {string} The lines to print
 --- @return string The verdict detail
-local function show_report(it: item.Item, all: {item.Item}, body: string,
+local function show_report(it: item.Item, all: {item.Item},
+    ranks: {string: rank.Rank}, body: string,
     events: {publish.Event}, problems: {string},
     overlaps?: {string}): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
@@ -65,30 +131,7 @@ local function show_report(it: item.Item, all: {item.Item}, body: string,
   if item.is_open(it) and flow.role(it, all) == "work" then
     out[#out + 1] = ("state: %s"):format(state_of(it))
   end
-  local at = prio.positions(all)
-  local band, own = prio.key_of(at, it.id)
-  if band < 0 then
-    out[#out + 1] = "priority: unplaced — nothing has been compared against it"
-  else
-    out[#out + 1] = ("priority: band %d, outranks %d"):format(band, own)
-  end
-  -- `priority` is what was RECORDED; this is what orders the item when
-  -- a blocker edge moved it off that. A session reading a queue has to
-  -- be able to see why something sorted where it did, or a lift reads
-  -- as a bug in the sort.
-  local lift_band, _lift_own, frees = prio.order_of(at, it.id)
-  if frees > 0 then
-    local from = ""
-    local source = (at[it.id] or {}).lifted_from or ""
-    if source ~= "" then
-      from = (", ordered at band %d for %s"):format(lift_band,
-        source:sub(1, 8))
-    end
-    out[#out + 1] = ("unblocks: %d open item(s)%s"):format(frees, from)
-  end
-  if #it.beats > 0 then
-    out[#out + 1] = "outranks: " .. table.concat(it.beats, " ")
-  end
+  out[#out + 1] = ("rank: %s"):format(describe(ranks, all, it.id))
   if it.claim ~= "" then out[#out + 1] = ("claim: %s"):format(it.claim) end
   if it.reviewer ~= "" then
     out[#out + 1] = ("reviewer: %s"):format(it.reviewer)
@@ -125,33 +168,6 @@ local function show_report(it: item.Item, all: {item.Item}, body: string,
       out[#out + 1] = ("verdict: %s (head %s%s)"):format(it.verdict,
         it.verdict_head, moved)
     end
-  end
-  -- Which edges still bind is `flow.binds`, the same predicate
-  -- `flow.is_blocked` is built from, so this heading, the `[blocked]`
-  -- mark and `next`'s skipping cannot disagree about what holds an
-  -- item up. The cleared half is printed too: it is the record of what
-  -- this item waited on.
-  local index = flow.by_id(all)
-  local binding: {string} = {}
-  local cleared: {string} = {}
-  for _, b in ipairs(it.blocked_by) do
-    if flow.binds(index, b) then
-      binding[#binding + 1] = b
-    else
-      cleared[#cleared + 1] = b
-    end
-  end
-  if #binding > 0 then
-    out[#out + 1] = "blocked by: " .. table.concat(binding, " ")
-    for _, b in ipairs(binding) do
-      local why = (it.block_reason or {})[b]
-      if why ~= nil and why ~= "" then
-        out[#out + 1] = ("  %s: %s"):format(b:sub(1, 8), why)
-      end
-    end
-  end
-  if #cleared > 0 then
-    out[#out + 1] = "blockers cleared: " .. table.concat(cleared, " ")
   end
   if it.resolution ~= "" then
     out[#out + 1] = ("resolution: %s"):format(it.resolution)
@@ -196,7 +212,7 @@ local function cmd_show(s: store.Store, id: string): integer
   -- column to preserve — and a cache silently missing exactly this
   -- row (stale in a way its own digest guard cannot catch) must never
   -- read as "no such item" for the one item a session named directly.
-  -- Only `all` — every OTHER item, for role/priority/overlap context —
+  -- Only `all` — every OTHER item, for role/rank/overlap context —
   -- comes from the cache; that whole-board read is `store.list`'s
   -- expensive half, not this one.
   local it, lerr = store.load(s, id)
@@ -215,6 +231,7 @@ local function cmd_show(s: store.Store, id: string): integer
   if not close_ok then
     return verdict_line("show", false, close_err)
   end
+  local ranks = rank.positions(all)
   -- `git log` is the one read the load never carries — the item's
   -- history lives only in its commits, so this stays a deliberate
   -- process rather than folding into a batch.
@@ -244,7 +261,8 @@ local function cmd_show(s: store.Store, id: string): integer
   else
     body = store.read_spec(s, id)
   end
-  local lines, verdict = show_report(it, all, body, events, problems, overlaps)
+  local lines, verdict = show_report(it, all, ranks, body, events, problems,
+    overlaps)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -252,13 +270,17 @@ local function cmd_show(s: store.Store, id: string): integer
 end
 
 local record gitshow
-  show_report: function(it: item.Item, all: {item.Item}, body: string,
+  describe: function(ranks: {string: rank.Rank}, items: {item.Item},
+  id: string): string
+  show_report: function(it: item.Item, all: {item.Item},
+  ranks: {string: rank.Rank}, body: string,
   events: {publish.Event}, problems: {string},
   overlaps?: {string}): {string}, string
   cmd_show: function(s: store.Store, id: string): integer
 end
 
 local M: gitshow = {
+  describe = describe,
   show_report = show_report,
   cmd_show = cmd_show,
 }

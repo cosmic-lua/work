@@ -118,10 +118,10 @@ end
 -- it is returned rather than saved.
 local function test_containered_clears_the_locks()
   local untouched = make_item()
-  assert(#gate.containered(untouched) == 0,
+  assert(#gate.containered(untouched, {}) == 0,
     "an unclaimed parent has nothing to clear")
   local held = make_item({claim = "session-A", reviewer = "review-1"})
-  local out = gate.containered(held)
+  local out = gate.containered(held, {})
   assert(#out == 1 and out[1].claim == "" and out[1].reviewer == "",
     "the claim and the review clear together")
 end

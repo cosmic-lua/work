@@ -6,8 +6,8 @@
 --
 -- Two different claims. SAFETY: every action the ordering names is
 -- one the verbs would carry out — no take the doing bound refuses, no
--- pull of something blocked or bar-failing, no claim of another
--- session's live work. LIVENESS: a board holding only finishable work
+-- pull of something bar-failing, no claim of another session's live
+-- work. LIVENESS: a board holding only finishable work
 -- drains to nothing. Safety without liveness refuses everything;
 -- liveness without safety is the livelock this file keeps out, where
 -- `next` names an action, the gate rejects it, and the answer repeats.
@@ -79,9 +79,13 @@ end
 local function signature(items: {Item}, specs: act.Specs): string
   local parts: {string} = {}
   for _, i in ipairs(items) do
+    local blocked = 0
+    for _ in pairs(((i.other_edges or {}).blocked_by) or {}) do
+      blocked = blocked + 1
+    end
     parts[#parts + 1] = ("%s:%s:%s:%s:%d:%s:%d:%d"):format(i.id:sub(1, 8),
       (i.parent or ""):sub(1, 8), i.resolution or "", i.claim or "",
-      i.pr or 0, i.verdict or "", #(i.blocked_by or {}),
+      i.pr or 0, i.verdict or "", blocked,
       #(specs[i.id] or ""))
   end
   return table.concat(parts, "|")
@@ -151,15 +155,16 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     return nil
   end
   if a.kind == "triage" then
-    -- Adoption under a placed root, which is the branch of triage that
-    -- keeps an item alive; `attach` is ungated, so neither is this.
-    local placed = flow.roots(items)
-    if #placed == 0 then
+    -- Adoption under a ranked outcome, which is the branch of triage
+    -- that keeps an item alive; `attach` is ungated, so neither is
+    -- this.
+    local ranked = flow.outcomes(items)
+    if #ranked == 0 then
       it.resolution = "not-planned"
       return nil
     end
-    it.parent = placed[1].id
-    gate.containered(placed[1])
+    it.parent = ranked[1].id
+    gate.containered(ranked[1], flow.by_id(items))
     return nil
   end
   if a.kind == "intake" then
@@ -168,31 +173,17 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     end
     local born = make({parent = it.id})
     items[#items + 1] = born
-    gate.containered(it)
-    return nil
-  end
-  if a.kind == "unblock" then
-    -- The walk resolves a stall the way a session's `unblock` does
-    -- after judging the recorded reasons: edges waiting on the named
-    -- chain root are dropped. The verb is ungated, so neither is this.
-    for _, i in ipairs(items) do
-      local kept: {string} = {}
-      for _, b in ipairs(i.blocked_by or {}) do
-        if b ~= it.id then
-          kept[#kept + 1] = b
-        end
-      end
-      i.blocked_by = kept
-    end
+    gate.containered(it, flow.by_id(items))
     return nil
   end
   return ("unhandled action kind: %s"):format(a.kind)
 end
 
---- A board nobody wrote by hand: three roots chained by comparisons so
---- every one is placed, leaves scattered across the states, most specs
---- already at the bar, a few blocker edges and foreign claims, and a
---- couple of unplaced captures for the triage queue.
+--- A board nobody wrote by hand: the board item, three outcomes ranked
+--- in its own `order` so every one is ranked, leaves scattered across
+--- the states, most specs already at the bar, a few blocker edges and
+--- foreign claims, and a couple of unranked captures for the triage
+--- queue.
 --- @param r Rng The generator
 --- @param leaves integer How many workable leaves to scatter
 --- @param session string The session the walk will ask as
@@ -201,10 +192,11 @@ end
 local function generate(r: Rng, leaves: integer,
     session: string): {Item}, act.Specs
   local alone = roll(r, 3) == 1
-  local roots: {Item} = {make({}), make({}), make({})}
-  roots[1].beats = {roots[2].id}
-  roots[2].beats = {roots[3].id}
-  local items: {Item} = {roots[1], roots[2], roots[3]}
+  local board = make({})
+  local roots: {Item} = {make({parent = board.id}), make({parent = board.id}),
+    make({parent = board.id})}
+  board.order = {roots[1].id, roots[2].id, roots[3].id}
+  local items: {Item} = {board, roots[1], roots[2], roots[3]}
   local specs: act.Specs = {}
   local workable: {Item} = {}
   for _ = 1, leaves do
@@ -250,8 +242,10 @@ local function generate(r: Rng, leaves: integer,
   for _ = 1, roll(r, 4) do
     local waiter = workable[roll(r, #workable)]
     local on = workable[roll(r, #workable)]
-    if waiter.id ~= on.id and #waiter.blocked_by == 0 then
-      waiter.blocked_by = {on.id}
+    local waiter_edges = waiter.other_edges
+    if waiter.id ~= on.id and (waiter_edges == nil
+      or waiter_edges.blocked_by == nil) then
+      waiter.other_edges = {blocked_by = {[on.id] = ""}}
     end
   end
   for _ = 1, roll(r, 3) do
@@ -274,10 +268,7 @@ local function test_no_walk_ever_names_an_action_the_gates_refuse()
       if a.kind == "none" or a.item == nil then
         break
       end
-      local index = flow.by_id(items)
       if a.kind == "pull" then
-        assert(not flow.is_blocked(a.item, index),
-          ("seed %d: pulled a blocked item"):format(seed))
         assert((a.item.claim or "") == "" and (a.item.pr or 0) == 0,
           ("seed %d: pulled in-flight work"):format(seed))
         assert(#flow.ready_gaps(specs[a.item.id] or "") == 0,
@@ -342,15 +333,13 @@ local function actor(items: {Item}, wake: integer): string
 end
 
 -- LIVENESS. A board whose work is all finishable drains to nothing.
--- The second root is CLOSED: it places the first through the
--- comparison without being an open root itself, which would draw an
--- intake before the first's subtree had finished.
 local function test_a_finishable_board_drains_to_nothing()
   for seed = 1, 12 do
     local r = rng(seed + 500)
-    local spent = make({resolution = "completed"})
-    local root = make({beats = spent.id})
-    local items: {Item} = {spent, root}
+    local board = make({})
+    local root = make({parent = board.id})
+    board.order = {root.id}
+    local items: {Item} = {board, root}
     local specs: act.Specs = {}
     local children: {Item} = {}
     for _ = 1, 6 do
@@ -400,11 +389,12 @@ end
 -- judge, the same as any other claim. A rework whose claimant stopped
 -- waking surfaces when the lease expires, as a takeover.
 local function test_a_rework_is_its_builders_until_the_lease_expires()
-  local spent = make({resolution = "completed"})
-  local root = make({beats = spent.id})
+  local board = make({})
+  local root = make({parent = board.id})
+  board.order = {root.id}
   local reworking = make({parent = root.id, claim = "session-A",
       pr = 7, verdict = "request changes", verdict_head = "abc123"})
-  local items: {Item} = {spent, root, reworking}
+  local items: {Item} = {board, root, reworking}
   local specs: act.Specs = {[reworking.id] = READY}
   local builder = act.next_action(items, specs, "session-A")
   assert(builder.kind == "finish" and builder.item.id == reworking.id,
@@ -413,7 +403,8 @@ local function test_a_rework_is_its_builders_until_the_lease_expires()
   assert(other.kind ~= "finish",
     "a live rework claim holds like any other: " .. other.kind)
   local stale: {string: integer} = {[reworking.id] = 5 * 60 * 60}
-  local takeover = act.next_action(items, specs, "session-B", stale)
+  local takeover = act.next_action(items, specs, "session-B",
+    stale)
   assert(takeover.kind == "finish" and takeover.item.id == reworking.id,
     "a stale rework claim is anyone's: " .. takeover.kind)
 end

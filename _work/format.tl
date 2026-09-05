@@ -11,7 +11,7 @@ local child = require("cosmic.child")
 local gitobj = require("_work.gitobj")
 local refs = require("_work.refs")
 
-local CURRENT < const > = "1"
+local CURRENT < const > = "2"
 
 --- The `format` blob's content: the version text plus its own
 --- trailing newline, the same shape every other text blob this store
@@ -48,6 +48,10 @@ local function refusal(found: string, has_items: boolean): string | nil
       .. "items — this is an old layout this tool predates; expected format "
       .. "%s (run `gitboard init` to write the marker, once every other "
       .. "clone of this board has moved past whatever changed it)"):format(CURRENT)
+  end
+  if trimmed == "1" then
+    return ("refs/heads/board/format is 1, this tool expects %s — run "
+      .. "`gitboard migrate` to move this board onto the current layout"):format(CURRENT)
   end
   return ("refs/heads/board/format is %s, this tool expects %s — it cannot safely "
     .. "read or write this board"):format(trimmed, CURRENT)

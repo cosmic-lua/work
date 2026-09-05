@@ -11,14 +11,14 @@ break every checkout's push-as-compare-and-swap at once.
 ```
 (no items/ directory — every item is a git ref, not a file)
 _work/       the machinery: gitboard (CLI), gitverbs (mutations),
-             gitcompare (the priority relation as a verb), gitview
+             gitrank (the rank verb), gitview
              (reads), gitgate (the spec bar, the doing bound, and the
              commit-and-publish every mutation goes through), store
              (git-backed persistence over the ref layout — gitobj,
              refs, gitread, gitwrite and itemtree are its object,
              ref, read and canonical-tree layers), flow (the derived states and graph rules),
-             priority (the comparison relation and the order derived
-             from it), spec (the spec bar's section grammar), item
+             rank (the rank path every queue is ordered by), spec
+             (the spec bar's section grammar), item
              (the record), ksuid (ids)
 cmd/gitboard the binary this repository builds: `o/bin/gitboard`
 bin/cosmic   the trust root: fetches the one pinned cosmic and execs it
@@ -61,26 +61,32 @@ once rather than surfacing the corruption.
 Every item is a git ref — `refs/heads/items/<ksuid>` — whose tip commit's
 tree carries its fields (a `meta` blob of `key: value` lines,
 `repo`/`base` collapsed into one `target` line), its spec prose
-(`spec.md`, present only when it has one), a `held` marker (present
-only when the item is held), and its edges (one blob per related item
-under `edges/<kind>/<id>` — `beats`, `blocked_by`, and any other kind a
-newer writer names, carried opaquely by an older reader); the tree
-shape is `_work/itemtree.tl`, the ONE place it is written. Resolving an
+(`spec.md`, present only when it has one), and its ranked children (an
+optional `order` blob, present only on a parent that has ranked at least one
+child — child ids one per line, in rank order); the tree shape is
+`_work/itemtree.tl`, the ONE place it is written. Resolving an
 item sets its `resolution` field on that same ref, an ordinary write
 like any other — `refs/heads/ended/<ksuid>` is the layout new items were
 filed under before this rule; every reader still reads it, but nothing
 writes a new entry there any more, so a resolved item stays exactly
 where it already was.
-`refs/heads/board/seq` and `refs/heads/board/format` hold board-wide state the
-same way, outside the per-item namespace — scheduled-lane health used
-to be a third such ref (`refs/heads/board/lanes`) but now lives only in the
-local `o/board.db` cache, never committed; see above.
+`refs/heads/board/seq` and `refs/heads/board/format` hold board-wide
+state the same way, outside the per-item namespace. The board itself
+carries no separate ref of its own: it is the one item with no
+parent, `refs/heads/items/<ksuid>` like any other, and its `order`
+blob ranks its outcomes the same way any parent's `order` ranks its
+children — scheduled-lane health
+used to be a fourth such ref (`refs/heads/board/lanes`) but now lives
+only in the local `o/board.db` cache, never committed; see above.
 `refs/heads/board/format`'s tree holds one blob, `format`, naming the layout
 version every reader checks before trusting anything else it read
 alongside it (`_work/format.tl`) — a board on a version this tool does
 not know, or missing the marker while it already carries items, is
 refused rather than silently misread; `gitboard init` writes the
-marker on a board that has neither yet. Nothing here is a file in the
+marker on a board that has neither yet. `gitboard migrate` is the one
+verb an old layout-1 board is not refused for: it mints the board item,
+ranks every parent's children by their old `beats`/`blocked_by` edges,
+and bumps the marker to the current layout in one push. Nothing here is a file in the
 working tree: a read is `git for-each-ref`/`cat-file --batch` against
 the ref layout, and a write is one `git fast-import` stream
 (`_work/fastimport.tl`) — `_work/store.tl` and the modules beside it
@@ -88,9 +94,11 @@ are the whole of that mechanism. Every verb and render still addresses
 an item by the 8-character handle (bare or wrapped, either divider,
 case-tolerant) or an unambiguous prefix. `gitboard fsck` is the
 read-only, offline whole-board audit no single verb ever asks:
-dangling `parent` or `edges/<kind>/<id>` references, an edge kind this
-build does not interpret, an item's tree not re-encoding to what it
-was read from, two open items sharing a key, a root carrying a `repo`,
+a dangling `parent`, an edge kind this build does not interpret (an
+unmigrated board's), a stale `order` entry, an item's tree not
+re-encoding to what it was read from, two open items sharing a key, a
+second parentless item (there is meant to be exactly one — the
+board), a parentless item carrying a `repo`,
 an id filed under both `refs/heads/items` and `refs/heads/ended` at
 once (the pushing credential can create and update a branch but never
 delete one, so an id can end up in both places only by hand, never by
@@ -112,23 +120,14 @@ taking NEW work is refused at the limit, finishing motions never
 are.
 
 Roles derive from the graph — there is no kind field and no goal
-tier: an item with open children is a container being decomposed, a
-parentless one is a root, and a parented leaf is workable (the only
+tier: the one parentless item is the board, its children are the
+outcomes, an item with open children is a container being decomposed,
+and a childless item below the outcome level is workable (the only
 thing with a board state).
 
-Which items matter more is a RELATION, not a number an item asserts
-about itself. `compare A B` commits one judgment — A outranks B — as
-an edge on the winner, and `_work/priority.tl` derives every order
-from the accumulated edges: transitivity closes the pairs nobody was
-asked about, a comparison at any height places everything beneath it,
-and age is the last word among items no comparison separates. An item
-no edge reaches, at any height, is UNPLACED, and that is exactly what
-the triage queue holds; `take` refuses work with no position, so an
-unplaced item is never pulled. A cycle
-is reported, never averaged away: it means the comparison question was
-ambiguous, so the pair is restated and re-asked.
+How the board orders itself, top to bottom, is `gitboard help order`.
 
-The outcome prose those roots stand for lives in `docs/goals.md` on
+The outcome prose those outcomes stand for lives in `docs/goals.md` on
 cosmic-lua/cosmic's `main`. It is context a planner reads to interpret
 and adjust the tree — nothing here derives from it, and nothing checks
 it.
@@ -196,11 +195,11 @@ a deletion.
 
 A mutation's PUSH is always the compare-and-swap, leased against each
 ref's observed tip — so only a BOUNDED mutation (one whose gate reads
-the whole board before deciding, today `take`ing NEW work and the
-add half of `block`, both against a shared `refs/heads/board/seq` lease)
-fetches the remote's state before it builds anything: two of those
-racing each other need to see the same seq tip, or the lease decides
-nothing. Every other mutation never touches `refs/heads/board/seq`, so it
+the whole board before deciding, today `take`ing NEW work, against a
+shared `refs/heads/board/seq` lease) fetches the remote's state before
+it builds anything: two takes racing each other need to see the same
+seq tip, or the lease decides nothing. Every other mutation never
+touches `refs/heads/board/seq`, so it
 builds straight against this checkout's own local refs and pushes —
 a stale lease is simply refused as `LOST_RACE` by the push itself,
 recovered exactly as any lost race is, costing the extra round trip
@@ -258,7 +257,7 @@ imported here as findings at triage.
 
 `_perf/bench/verbs_bench.tl` times `o/bin/gitboard`'s verbs (`show`,
 `show ID`, `next`, `find`, `fsck`, `sync`, a cache-cold `show`, and the
-mutations `new`, `compare`, `done`) wall-clock, one process spawn per
+mutations `new`, `rank`, `done`) wall-clock, one process spawn per
 call, against a synthetic board `_perf/fixture.tl` generates in a local
 bare origin plus a clone — deterministic, no network, never the live
 board — in the proportions a real board carries. gitboard's cost is

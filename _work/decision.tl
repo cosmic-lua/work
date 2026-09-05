@@ -17,7 +17,7 @@ local type Item = item.Item
 --- checked against this table, so a kind added to the ordering is a
 --- kind those tables are made to answer for.
 local KINDS < const >: {string} = {
-  "finish", "review", "pull", "unblock", "refine", "triage", "intake",
+  "finish", "review", "pull", "refine", "triage", "intake",
   "none",
 }
 
@@ -25,7 +25,7 @@ local KINDS < const >: {string} = {
 local record Action
   --- One of `KINDS`.
   kind: string
-  --- The item the action targets; nil for intake-with-no-root and none.
+  --- The item the action targets; nil for intake-with-no-outcome and none.
   item: Item
   --- The rule that chose this action, stated for the human/agent.
   reason: string

@@ -156,10 +156,10 @@ end
 -- original incident's multiline title) can no longer even reach
 -- storage looking multiline — the line format is what refuses it now,
 -- before `item.problems` ever gets a say. The tolerance this pins is
--- the same one either way: a content-invalid item — here, a ROOT
--- hand-edited to carry a claim, a shape only `write_unchecked` can
--- produce — must not abort `list`; the rest still reads, the bad one
--- comes back flagged, not dropped, and write-refusal is unchanged.
+-- the same one either way: a content-invalid item — here, a PARENTLESS
+-- item hand-edited to carry a claim, a shape only `write_unchecked`
+-- can produce — must not abort `list`; the rest still reads, the bad
+-- one comes back flagged, not dropped, and write-refusal is unchanged.
 local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
   local root = init_state_repo("list-tolerant")
   local s = check.must(store.open(root))
@@ -168,17 +168,18 @@ local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
   local bad = check.must(item.decode({id = fresh_id(), title = "a root"}))
   bad.claim = "session-x"
   local ok, serr = store.stage(s, bad)
-  assert(not ok and serr:find("belong to worked items, not roots", 1, true) ~= nil,
+  assert(not ok and serr:find("belong to worked items, never the board", 1, true) ~= nil,
     "stage refuses the same shape: " .. tostring(serr))
   write_unchecked(s, bad)
   local all = check.must(store.list(s))
-  assert(#all == 2, "the bad record is included, not dropped: got " .. #all)
+  -- The board `init_repo` minted, `good`, and `bad`.
+  assert(#all == 3, "the bad record is included, not dropped: got " .. #all)
   for _, it in ipairs(all) do
     assert(item.is_flagged(it) == (it.id == bad.id), "flagged iff bad")
   end
   local summary = store.flagged_summary(all)
   assert(summary:find(bad.id:sub(1, 8), 1, true) and
-    summary:find("belong to worked items, not roots", 1, true), "summary: " .. summary)
+    summary:find("belong to worked items, never the board", 1, true), "summary: " .. summary)
 end
 
 -- Repairability falls out: `set` loads through this same tolerant

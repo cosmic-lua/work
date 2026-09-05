@@ -32,12 +32,15 @@ local function make(over: {string: any}): Item
   return check.must(item.decode(t))
 end
 
---- A placed root: it outranks a spent peer, so everything beneath it
---- has a position.
+--- A ranked outcome: the board it belongs to stands in `items` too,
+--- its own `order` naming just this outcome, so everything beneath it
+--- — and only it — is ranked.
+--- @return Item root
 local function placed_root(items: {Item}): Item
-  local spent = make({resolution = "completed"})
-  local root = make({beats = spent.id})
-  items[#items + 1] = spent
+  local board = make({})
+  local root = make({parent = board.id})
+  board.order = {root.id}
+  items[#items + 1] = board
   items[#items + 1] = root
   return root
 end
@@ -72,14 +75,15 @@ end
 
 -- A head still running is not yet known either way — refused at
 -- `take` for the same reason, and never offered here either. The
--- root is deliberately UNPLACED with an open child, the same shape
+-- outcome is deliberately UNRANKED with an open child, the same shape
 -- `action_test.tl`'s own `test_none_names_the_binding_fact` uses, so
 -- no intake rung has anything to offer instead: it has children (not
--- triage) and is not a placed root to decompose.
+-- triage) and is not a ranked outcome to decompose.
 local function test_a_running_head_is_not_offered()
-  local root = make({})
+  local board = make({})
+  local root = make({parent = board.id})
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
-  local items: {Item} = {root, reviewable}
+  local items: {Item} = {board, root, reviewable}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "running"}
   local a = act.next_action(items, specs, "me", nil, "", ci)
@@ -93,9 +97,10 @@ end
 -- so it renders differently from "running" even though neither is
 -- offered.
 local function test_a_red_head_is_not_offered_and_reads_as_the_builders()
-  local root = make({})
+  local board = make({})
+  local root = make({parent = board.id})
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
-  local items: {Item} = {root, reviewable}
+  local items: {Item} = {board, root, reviewable}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "red"}
   local a = act.next_action(items, specs, "me", nil, "", ci)
@@ -138,15 +143,16 @@ end
 -- CI-running item nobody here built stays in the tally. The count
 -- says how many were tallied, so it must name only that one — not the
 -- distance-refused item too, which would make "1 item(s)" sit next to
--- two names. Unplaced root with two open children, the same shape
+-- two names. Unranked outcome with two open children, the same shape
 -- `test_a_running_head_is_not_offered` uses, so no intake rung fires
 -- instead.
 local function test_ci_names_matches_the_tallied_count()
-  local root = make({})
+  local board = make({})
+  local root = make({parent = board.id})
   local mine = make({parent = root.id, claim = "who", pr = 2,
       builders = "me"})
   local theirs = make({parent = root.id, claim = "who", pr = 3})
-  local items: {Item} = {root, mine, theirs}
+  local items: {Item} = {board, root, mine, theirs}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[mine.id] = "running", [theirs.id] = "running"}
   local a = act.next_action(items, specs, "me", nil, "", ci)

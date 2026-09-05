@@ -98,24 +98,6 @@ local function test_superset_on_a_broken_chain_past_the_direct_parent()
   assert_superset({a, b})
 end
 
-local function test_superset_on_a_priority_cycle()
-  local a = make({})
-  local b = make({beats = a.id})
-  a.beats = {b.id}
-  assert_superset({a, b})
-end
-
-local function test_superset_on_a_two_level_cycle_and_a_container()
-  local top = make({})
-  local mid = make({parent = top.id})
-  local leaf1 = make({parent = mid.id})
-  local leaf2 = make({parent = mid.id, resolution = "completed"})
-  local a = make({})
-  local b = make({beats = a.id})
-  a.beats = {b.id}
-  assert_superset({top, mid, leaf1, leaf2, a, b})
-end
-
 --- One board mixing every role and state this file's other tests
 --- exercise, shared by the state/substate agreement test below.
 --- @return {item.Item} The board
@@ -235,6 +217,30 @@ local function test_roots_containers_and_workable()
   check.must(idxmod.close(idx))
 end
 
+-- An outcome with no children of its own is still not workable — it
+-- is a direct child of the board, and decomposing it is triage's
+-- answer, never a take's, matching `_work.flow.role`.
+local function test_workable_excludes_a_childless_outcome()
+  local board = make({})
+  local outcome = make({parent = board.id})
+  local leaf = make({parent = outcome.id})
+  local idx = check.must(idxmod.open({board, outcome, leaf}))
+  local db = idx.db
+  local function ids(sql: string): {string: boolean}
+    local out: {string: boolean} = {}
+    for row in assert(db:query(sql)) do
+      local id = row.id as string -- cast: from any (sqlite row)
+      out[id] = true
+    end
+    return out
+  end
+  local workable = ids("SELECT id FROM workable")
+  assert(not workable[outcome.id],
+    "a childless outcome is still not workable: decomposing it is triage")
+  assert(workable[leaf.id], "a leaf below the outcome level is workable")
+  check.must(idxmod.close(idx))
+end
+
 -- Secondary indexes: `EXPLAIN QUERY PLAN` names them by name, pinned
 -- against the real connection rather than trusted to the DDL comment.
 
@@ -258,17 +264,6 @@ local function test_workable_view_uses_the_parent_index()
   local plan = plan_of(idx.db, "SELECT * FROM workable")
   assert(plan:find("items_parent", 1, true),
     "workable's plan does not name items_parent:\n" .. plan)
-  check.must(idxmod.close(idx))
-end
-
-local function test_dangling_edge_query_uses_the_edges_index()
-  local idx = check.must(idxmod.open({make({})}))
-  local plan = plan_of(idx.db, [[
-      SELECT kind, from_id, to_id FROM edges e
-      WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.id = e.to_id)
-    ]])
-  assert(plan:find("edges_to", 1, true),
-    "the dangling-edge query's plan does not name edges_to:\n" .. plan)
   check.must(idxmod.close(idx))
 end
 

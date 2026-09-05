@@ -9,8 +9,8 @@ local flow = require("_work.flow")
 local gh = require("_work.gh")
 local item = require("_work.item")
 local owner = require("_work.gitowner")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local review = require("_work.review")
 local spec = require("_work.spec")
 local store = require("_work.store")
@@ -101,7 +101,7 @@ local function undeclared_repos(it: item.Item, body: string): {string}
 end
 
 --- The problems that keep an item from being taken: it must be
---- workable, placed in the priority order, its spec must fill the
+--- workable, its outcome must be ranked, its spec must fill the
 --- spec-bar sections, its own chain must be traceable, and its
 --- `repo` must be somewhere a claiming session can land a diff. The
 --- one list `check` reports and `take` enforces.
@@ -119,21 +119,13 @@ local function ready_problems(s: store.Store, it: item.Item,
   if r ~= "work" then
     out[#out + 1] = ("%s is a %s, not workable"):format(it.id:sub(1, 8), r)
   end
-  -- Placement is ordinal — where does this sit against everything
-  -- else — so an item nothing has been compared against, at any
-  -- height, has no answer to it and cannot be queued honestly.
-  if not prio.is_placed(prio.positions(all), it.id) then
-    out[#out + 1] = ("%s has no position in the priority order — compare "
-      .. "it against something with `gitboard compare <id> <id>`, or attach "
-      .. "it under an item that has one"):format(it.id:sub(1, 8))
-  end
-  -- A blocker id with no item behind it never blocks (`flow.is_blocked`
-  -- reasons about state the board holds), so a mistyped one reads as
-  -- "sequenced" and pulls anyway. The bar is where that is caught.
-  for _, b in ipairs(it.blocked_by or {}) do
-    if index[b] == nil then
-      out[#out + 1] = ("blocked_by names %s, which is not an item"):format(b)
-    end
+  -- Rank is a path from the outcome: an item whose outcome is not in
+  -- the board's own `order` has no answer to "where does this sit
+  -- against everything else" and cannot be queued honestly.
+  if not rank.is_ranked(rank.positions(all), it.id) then
+    out[#out + 1] = ("%s's outcome is unranked — rank the outcome first "
+      .. "(`gitboard rank <outcome>`), or attach it under an item that "
+      .. "already is"):format(it.id:sub(1, 8))
   end
   local spec_body = body or store.read_spec(s, it.id)
   for _, gap in ipairs(flow.ready_gaps(spec_body)) do

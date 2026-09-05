@@ -13,6 +13,7 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local fixture = require("_work.fixture")
 local gh = require("_work.gh")
+local rank = require("_work.rank")
 local refs = require("_work.refs")
 local show = require("_work.gitshow")
 local store = require("_work.store")
@@ -28,6 +29,7 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
+local BOARD < const > = fresh_id()
 local GOAL < const > = fresh_id()
 local CONTAINER < const > = fresh_id()
 local LEAF < const > = fresh_id()
@@ -54,19 +56,22 @@ local function lit(s: string): string
   return (s:gsub("%-", "%%-"))
 end
 
---- The standing fixture: a placed root (it outranks LESSER, which is
---- what gives everything beneath it a position), a container under it
---- with one child in flight and one fresh todo leaf.
+--- The standing fixture: the board, a placed outcome (it outranks
+--- LESSER, which is what gives everything beneath it a position, via
+--- the board's own `order`), a container under it with one child in
+--- flight and one fresh todo leaf.
 local function board_items(): {item.Item}
   return {
-    check.must(item.decode({id = GOAL, title = "a goal", beats = LESSER})),
+    check.must(item.decode({id = GOAL, title = "a goal", parent = BOARD})),
     check.must(item.decode({id = CONTAINER, title = "a container",
           parent = GOAL})),
     check.must(item.decode({id = LEAF, title = "a leaf", parent = CONTAINER,
           claim = "session-a", pr = 42})),
     check.must(item.decode({id = FRESH, title = "a fresh leaf",
           parent = GOAL})),
-    check.must(item.decode({id = LESSER, title = "a lesser outcome"})),
+    check.must(item.decode({id = LESSER, title = "a lesser outcome", parent = BOARD})),
+    check.must(item.decode({id = BOARD, title = "board",
+          order = GOAL .. " " .. LESSER})),
   }
 end
 
@@ -96,13 +101,13 @@ local function test_status_renders_doing_against_the_bound()
   assert(verdict == "doing 1/10", verdict)
 end
 
--- Untriaged roots render item by item under the triage count: with
+-- Untriaged outcomes render item by item under the triage count: with
 -- `tree` gone, this is the one list of them anyone gets.
 local function test_status_lists_the_triage_queue()
   local items = board_items()
   local capture = fresh_id()
   items[#items + 1] = check.must(item.decode({id = capture,
-        title = "a capture"}))
+        title = "a capture", parent = BOARD}))
   local lines = view.status_report(items, full_specs())
   assert(has(lines, "^triage 1$"), table.concat(lines, "\n"))
   assert(has(lines, "^  " .. lit(tail.handle(capture)) .. " a capture$"),
@@ -263,7 +268,8 @@ local function test_repo_is_rendered_in_show_and_status()
         repo = "whilp/cosmopolitan"}))
   all[#all + 1] = scoped
 
-  local show_lines = show.show_report(scoped, all, "", {}, {})
+  local ranks = rank.positions(all)
+  local show_lines = show.show_report(scoped, all, ranks, "", {}, {})
   assert(has(show_lines, "^repo: whilp/cosmopolitan$"),
     "show prints a repo line: " .. table.concat(show_lines, "\n"))
 
@@ -280,7 +286,7 @@ local function test_repo_is_rendered_in_show_and_status()
   assert(not leaf_line:find("whilp/cosmopolitan", 1, true),
     "the same-repo LEAF is unmarked: " .. leaf_line)
 
-  local default_show = show.show_report(all[3], all, "", {}, {})
+  local default_show = show.show_report(all[3], all, ranks, "", {}, {})
   assert(not has(default_show, "^repo:"),
     "an item with no repo prints no repo line: "
     .. table.concat(default_show, "\n"))
@@ -462,7 +468,9 @@ local function test_claim_ages_costs_nothing_beyond_the_one_snapshot()
   local warm = check.must(cache.rebuild(s.root))
   assert(cache.close(warm))
 
-  local all = check.must(view.list_via_cache(s))
+  local board, lerr = view.list_via_cache(s)
+  assert(board ~= nil, lerr)
+  local all = board.items
 
   local calls = 0
   local real_fe = refs.for_each_ref

@@ -15,6 +15,7 @@ local fixture = require("_work.fixture")
 local gate = require("_work.gitgate")
 local gitsync = require("_work.gitsync")
 local spec = require("_work.spec")
+local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 local graph = require("_work.gitgraph")
 local vrd = require("_work.gitverdict")
@@ -77,30 +78,35 @@ local function test_take_refuses_a_flag_shaped_session()
   assert(check.must(store.load(s, leaf)).reviewer == "", "and no reviewer is recorded")
 end
 
--- An unplaced item is refused at take: placement is ordinal, and an
--- item nothing has been compared against cannot be queued honestly.
-local function test_take_refuses_unplaced_work()
-  local s = init_state_repo("unplaced")
-  local capture = file_item(s, "an unplaced root", "")
+-- Work under an unranked root is refused at take: rank is a path from
+-- the root, and a root nothing has ranked cannot be queued honestly.
+local function test_take_refuses_work_under_an_unranked_root()
+  local s = init_state_repo("unranked")
+  local capture = file_item(s, "an unranked root", "")
   local kid = file_item(s, "its child", capture)
   give_spec(s, kid)
   assert(verbs.cmd_take(s, kid, "session-a", 0, false, "") ~= 0,
-    "work under an unplaced root has no position")
+    "work under an unranked root has no rank path")
 end
 
--- A blocked item is refused at take, and the refusal names the
--- blocker so the session knows what to finish first.
-local function test_take_refuses_a_blocked_item()
+-- A `blocked_by` edge never refuses a take: it is an edge kind this
+-- build does not interpret, hand-written straight through
+-- `storewrite.save` — no verb writes it any more — and the rank path
+-- is the whole of the queue and the gate now, so an edge recorded on
+-- the item is not part of it.
+local function test_take_is_never_refused_by_an_open_blocker()
   local s = init_state_repo("blocked")
   local goal, leaf = root_with_leaf(s)
   local blocker = file_item(s, "lands first", goal)
   give_spec(s, leaf)
-  assert(graph.cmd_block(s, leaf, blocker, false, "the API lands there") == 0)
-  local code = verbs.cmd_take(s, leaf, "session-a", 0, false, "")
-  assert(code ~= 0, "an open blocker refuses the take")
-  assert(verbs.cmd_done(s, blocker, "completed", false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.other_edges = {blocked_by = {[blocker] = ""}}
+  assert(storewrite.save(s, it, "hand-edited blocked_by"))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "a closed blocker no longer binds")
+    "an open blocker never gates the take")
+  local reloaded_edges = check.must(store.load(s, leaf)).other_edges
+  assert(reloaded_edges ~= nil and reloaded_edges.blocked_by[blocker] == "",
+    "the edge still stands untouched")
 end
 
 -- The doing bound binds NEW takes only: at the limit a take of todo
@@ -193,26 +199,25 @@ local function test_take_refuses_a_pull_past_an_unclaimed_verdict()
     "a recorded reviewer clears the debt and the queue moves again")
 end
 
--- A drop returns the lease and touches nothing else: an edge wired mid-build (the block-
--- first exit for an item that cannot proceed) survives the drop, so the released item
--- waits on its question instead of re-entering the pull queue.
+-- A drop returns the lease and touches nothing else: a blocker edge
+-- hand-wired mid-build survives the drop untouched, since this verb
+-- clears claims and verdicts, never the item's other fields.
 local function test_drop_leaves_blockers_standing()
   local s = init_state_repo("drop-blocked")
   local goal, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
   local question = file_item(s, "which premise still holds?", goal)
-  assert(graph.cmd_block(s, leaf, question, false,
-      "the measured premise no longer reproduces") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.other_edges = {blocked_by = {[question] = ""}}
+  assert(storewrite.save(s, it, "hand-edited blocked_by"))
   assert(verbs.cmd_drop(s, leaf, "session-a",
       "blocked on the question", false) == 0)
   local dropped = check.must(store.load(s, leaf))
   assert(dropped.claim == "", "the lease returned")
-  assert(#dropped.blocked_by == 1 and dropped.blocked_by[1] == question,
-    "the blocker edge survives the drop")
-  local index = flow.by_id(check.must(store.list(s)))
-  assert(flow.is_blocked(dropped, index),
-    "the released item waits on its open question")
+  local dropped_edges = dropped.other_edges
+  assert(dropped_edges ~= nil and dropped_edges.blocked_by[question] == "",
+    "the blocker edge survives the drop untouched")
 end
 
 -- Another session's live claim refuses a drop without force: the
@@ -309,13 +314,15 @@ local function test_done_says_when_a_container_is_workable_again()
 end
 
 -- The already-recorded case: `done` again with the same reason is a no-op that succeeds.
+-- `not-planned`: this lone root has no completed child to name as `--by`
+-- evidence, and `completed` on a root now requires one.
 local function test_done_again_is_a_noop_success()
   local s = init_state_repo("done-noop")
   local id = file_item(s, "a lone item", "")
-  assert(verbs.cmd_done(s, id, "completed", false, "") == 0)
+  assert(verbs.cmd_done(s, id, "not-planned", false, "") == 0)
   local before, seen, old_print = commits(s), "", _G.print
   _G.print = function(msg: any) seen = tostring(msg) end
-  local again = verbs.cmd_done(s, id, "completed", false, "")
+  local again = verbs.cmd_done(s, id, "not-planned", false, "")
   _G.print = old_print
   assert(again == 0 and commits(s) == before
     and seen:find("nothing to record", 1, true) ~= nil, seen)

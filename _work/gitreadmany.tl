@@ -14,8 +14,8 @@ local refs = require("_work.refs")
 local type Loaded = gitread.Loaded
 
 --- Load a specific set of items by id: one `for-each-ref` for the set,
---- then their meta/held/edges, edge-kind subtrees, and content blobs
---- over one `gitbatch.batch_session`. An id present in
+--- then their meta/held/order/edges, edge-kind subtrees, and content
+--- blobs over one `gitbatch.batch_session`. An id present in
 --- neither namespace (a locally pruned ref) is simply absent from the
 --- result, never an error: the caller reads that the same way
 --- `_work.cache.patch_item`'s deleted-item branch always has, as
@@ -72,6 +72,7 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
   for _, r in ipairs(resolved) do
     queries[#queries + 1] = r.sha .. ":meta"
     queries[#queries + 1] = r.sha .. ":held"
+    queries[#queries + 1] = r.sha .. ":order"
     queries[#queries + 1] = r.sha .. ":edges"
   end
   local sess, serr = gitbatch.batch_session(root)

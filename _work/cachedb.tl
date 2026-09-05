@@ -44,7 +44,11 @@ local type Cache = index.Index
 --- therefore redundant for a DDL change specifically; it stays only
 --- as an escape hatch for forcing every clone to rebuild for a reason
 --- the fingerprint cannot see (a bug in how a row was interpreted, say).
-local SCHEMA_VERSION < const > = 2
+--- Bumped to 4 for the removal of the `edges` table and the `held`
+--- column (`_work.indexddl`'s DDL): the fingerprint alone already
+--- forces the rebuild that change needs, and the bump is
+--- belt-and-suspenders, matching this constant's own stated role.
+local SCHEMA_VERSION < const > = 4
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -199,8 +203,11 @@ end
 --- change-detection (an extra or slightly delayed patch), never to
 --- the item data itself, which `_work.gitread.load_many`/`list`
 --- always resolve with the real ancestry check. `refs/heads/board/*`
---- entries carry no id and are dropped here — `_work.cache.around_fetch`
---- diffs those through the whole digest instead.
+--- entries carry no id and are dropped here — `board/seq` and
+--- `board/format` moving is caught through the whole digest instead
+--- (`_work.cache.around_fetch`); the board's own outcome ranking is
+--- an ordinary item's `.order` field, so a change to it moves the
+--- BOARD ITEM's own sha and is caught right here like any other item.
 --- @param entries {refs.RefEntry} A ref listing
 --- @return {string: string} Item id -> sha
 local function shas_by_item(entries: {refs.RefEntry}): {string: string}
@@ -352,10 +359,14 @@ local function expected_schema_fingerprint(): string | nil, string
   return fp
 end
 
---- Refresh or drop one item's rows — `items`/`edges`/`builders`/
+--- Refresh or drop one item's rows — `items`/`ranks`/`builders`/
 --- `speccers` (`_work.index`) and `search` (`_work.find`) — from what
 --- the caller already holds, no git read at all: `_work.cache`'s
 --- save-path and fetch-path patchers both reduce to this for one item.
+--- `ranks` here is the item's OWN ranked-children list (`parent =
+--- it.id`) — the board item's own `order` field patches the exact same
+--- way, since it holds its outcomes' list like any other parent holds
+--- its children's.
 --- `spec_body` nil means the caller made no spec change, so whatever
 --- `search` last held for this id carries over unread; the caller
 --- passes the current text (possibly "") whenever it DOES know it,

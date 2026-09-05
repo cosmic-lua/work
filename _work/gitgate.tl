@@ -15,8 +15,8 @@ local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
 local item = require("_work.item")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -230,7 +230,8 @@ local function review_debt_refusal(items: {item.Item}, session: string,
     return nil
   end
   local first = debt[1]
-  for _, i in ipairs(flow.unified(items, prio.positions(items))) do
+  local ranks = rank.positions(items)
+  for _, i in ipairs(flow.unified(items, ranks)) do
     if flow.stage_rank(i) == flow.STAGE_REVIEW
     and (i.reviewer or "") == ""
     and distance_refusal(i, session) == nil then
@@ -347,22 +348,31 @@ end
 
 --- The locks a decomposition clears on the parent that just gained a
 --- child: it is no longer workable, so a claim or review standing on
---- it locks nothing anyone can build. A hold clears the same way: new
---- evidence under a held root is the claim that its win condition no
---- longer holds, so the marker leaves in the commit that files it.
+--- it locks nothing anyone can build. A DONE outcome reopens the same
+--- way: filing or attaching a child under it is evidence against it,
+--- so its resolution clears too — verified and retired outcomes
+--- alike, no separate verb. The board itself never carries a
+--- resolution to reopen (`_work.gitdoneroot` refuses `done` on it
+--- outright), so `index` is only ever consulted to tell an outcome
+--- from anything else.
 ---
 --- Returned rather than saved, so the caller commits it TOGETHER with
 --- the child; committed on its own it would survive a refused child.
 --- @param parent item.Item The item that gained a child
+--- @param index flow.Index Every item by id, to test whether `parent`
+--- is an outcome
 --- @return {item.Item} The parent when it changed, empty otherwise
-local function containered(parent: item.Item): {item.Item}
+local function containered(parent: item.Item, index: flow.Index): {item.Item}
+  local reopened = flow.is_outcome(parent, index) and (parent.resolution or "") ~= ""
   if (parent.claim or "") == "" and (parent.reviewer or "") == ""
-  and not parent.is_held then
+  and not reopened then
     return {}
   end
   parent.claim = ""
   parent.reviewer = ""
-  parent.is_held = false
+  if reopened then
+    parent.resolution = ""
+  end
   return {parent}
 end
 
@@ -382,7 +392,7 @@ local record gitgate
   commit_and_publish: function(s: store.Store, it: item.Item, body: string,
   message: string, verb: string, also?: {item.Item}, session?: string,
   bounded?: boolean): boolean, string
-  containered: function(parent: item.Item): {item.Item}
+  containered: function(parent: item.Item, index: flow.Index): {item.Item}
 end
 
 local M: gitgate = {
