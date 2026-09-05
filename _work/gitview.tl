@@ -10,6 +10,7 @@
 --- that returns its lines can be asserted on without capturing
 --- stdout.
 local cache = require("_work.cache")
+local cachedb = require("_work.cachedb")
 local cachequery = require("_work.cachequery")
 local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
@@ -22,16 +23,18 @@ local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
 local prio = require("_work.priority")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local sess = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
 local verdict_line = gate.verdict_line
 
---- Seconds since each claimed item's last board commit, read from git
---- once per render. Only claimed items are asked about — staleness is
---- a property of a claim — so the cost is a handful of `git log -1`
---- calls, not one per item on the board.
+--- Seconds since each claimed item's last board commit. Costs no git
+--- process of its own: `list_via_cache` already took one `for-each-ref`
+--- snapshot over every watched ref for this render and left its
+--- committer dates in `s.touched_at`, so `publish.touched_at` reads
+--- that instead of spawning one `for-each-ref` per claimed item.
 --- @param s store.Store The store
 --- @param all {item.Item} Every item
 --- @return health.Ages Ages by item id
@@ -231,11 +234,33 @@ end
 --- `find`/`new` already go through. Neither `cmd_status` nor
 --- `cmd_next` writes through `s` afterward, so the lease `store.list`
 --- would have set on it is never missed.
+---
+--- Takes, itself, the `for-each-ref` snapshot `cache.open`'s own guard
+--- would otherwise take internally — over `cachedb.WATCH_PATTERNS` —
+--- and passes the resulting digest into `cache.open` as `known_digest`
+--- so the guard's freshness check reuses it rather than repeating the
+--- same process. Keeps every ref's committer date from that one
+--- snapshot in `s.touched_at`, so `claim_ages` never has to ask git
+--- again for a claimed item's touch time. A snapshot that fails to
+--- read is not fatal here: `known_digest` is left nil, and `cache.open`
+--- falls back to taking its own.
 --- @param s store.Store The store
 --- @return {item.Item} | nil Every item
 --- @return string Error message
 local function list_via_cache(s: store.Store): {item.Item} | nil, string
-  local c, cerr = cache.open(s.root)
+  local found, _ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
+  local known_digest: string | nil = nil
+  if found ~= nil then
+    known_digest = cachedb.digest_of(found)
+    for _, r in ipairs(found) do
+      local id = r.refname:match("^refs/heads/items/(.+)$")
+      or r.refname:match("^refs/heads/ended/(.+)$")
+      if id then
+        s.touched_at[id] = r.touched
+      end
+    end
+  end
+  local c, cerr = cache.open(s.root, known_digest)
   if c == nil then
     return nil, cerr
   end
@@ -395,6 +420,11 @@ local record gitview
   ci?: act.CiStates): string
   bounce_note: function(subject: string): string
   read_specs: function(s: store.Store, all: {item.Item}): act.Specs
+  -- Exported only so `_work/gitview_test.tl` can verify the process
+  -- count directly: production code reaches both through `cmd_status`/
+  -- `cmd_next`.
+  list_via_cache: function(s: store.Store): {item.Item} | nil, string
+  claim_ages: function(s: store.Store, all: {item.Item}): health.Ages
   cmd_status: function(s: store.Store): integer
   cmd_next: function(s: store.Store, session?: string): integer
 end
@@ -406,6 +436,8 @@ local M: gitview = {
   next_report_live = next_report_live,
   bounce_note = bounce_note,
   read_specs = read_specs,
+  list_via_cache = list_via_cache,
+  claim_ages = claim_ages,
   cmd_status = cmd_status,
   cmd_next = cmd_next,
 }

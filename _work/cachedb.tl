@@ -87,7 +87,12 @@ CREATE TABLE ci_checks (
 ]]
 
 --- The three ref namespaces the digest and the incremental patchers
---- watch — every ref a mutation or a fetch can move.
+--- watch — every ref a mutation or a fetch can move. Exported so a
+--- caller that wants to take this exact snapshot itself — passing the
+--- resulting digest into `_work.cache.open` as `known_digest`, so the
+--- guard's own otherwise-fresh `for-each-ref` is skipped — reads it
+--- from here rather than repeating the list (`_work.gitview.list_via_cache`,
+--- which also wants the same snapshot's committer dates).
 local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}
 
 --- The cache file's path for a given store root.
@@ -391,6 +396,7 @@ local record cachedb
   type Cache = Cache
   SCHEMA_VERSION: integer
   EXTRA_DDL: string
+  WATCH_PATTERNS: {string}
   path_of: function(root: string): string
   open_conn: function(path: string): sqlite.Database | nil, string
   wipe: function(root: string)
@@ -411,6 +417,7 @@ end
 local M: cachedb = {
   SCHEMA_VERSION = SCHEMA_VERSION,
   EXTRA_DDL = EXTRA_DDL,
+  WATCH_PATTERNS = WATCH_PATTERNS,
   path_of = path_of,
   open_conn = open_conn,
   wipe = wipe,

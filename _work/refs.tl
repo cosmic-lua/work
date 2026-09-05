@@ -16,6 +16,7 @@ local ZERO_SHA < const > = ("0"):rep(40)
 local record RefEntry
   refname: string
   sha: string
+  touched: integer
 end
 
 --- One ref this push moves: `old` is the lease (the tip observed at
@@ -27,17 +28,21 @@ local record PushSpec
   old: string
 end
 
---- List every ref under the given patterns, with its current object.
---- One process for however many patterns are given — `store.list`
---- passes `refs/heads/items` and `refs/heads/ended` together so the whole board
---- comes back from a single `for-each-ref`.
+--- List every ref under the given patterns, with its current object and
+--- committer date. One process for however many patterns are given —
+--- `store.list` passes `refs/heads/items` and `refs/heads/ended`
+--- together so the whole board comes back from a single
+--- `for-each-ref` — and the committer date rides along in the same
+--- pass, so a caller that already takes this snapshot never needs a
+--- second process per ref to learn when it was last touched
+--- (`_work.publish.touched_at`).
 --- @param root string The repository root
 --- @param patterns {string} Ref path prefixes, e.g. "refs/heads/items"
 --- @return {RefEntry} | nil The refs found, possibly empty
 --- @return string Error message
 local function for_each_ref(root: string, patterns: {string}): {RefEntry} | nil, string
   local argv: {string} = {"git", "for-each-ref",
-    "--format=%(refname) %(objectname)"}
+    "--format=%(refname) %(objectname) %(committerdate:unix)"}
   for _, p in ipairs(patterns) do
     argv[#argv + 1] = p
   end
@@ -50,9 +55,10 @@ local function for_each_ref(root: string, patterns: {string}): {RefEntry} | nil,
   end
   local out: {RefEntry} = {}
   for line in r.stdout:gmatch("([^\n]+)") do
-    local refname, sha = line:match("^(%S+) (%S+)$")
+    local refname, sha, touched = line:match("^(%S+) (%S+) (%S+)$")
     if refname then
-      out[#out + 1] = {refname = refname, sha = sha}
+      out[#out + 1] = {refname = refname, sha = sha,
+        touched = math.tointeger(tonumber(touched)) or 0}
     end
   end
   return out

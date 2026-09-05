@@ -102,6 +102,10 @@ local function publish(s: store.Store): boolean, string
   -- it, silently treating real fields as unchanged and skipping the
   -- `meta` write a brand-new root commit still needs.
   s.leased_item = {}
+  -- Same reasoning as the lease reset above: a snapshot's committer
+  -- date is only as trustworthy as the ref it was read from, and
+  -- `fetch_prune` is about to move that ref out from under it.
+  s.touched_at = {}
   local synced, serr = cache.around_fetch(s.root, function(): boolean, string
       return refs.fetch_prune(s.root)
     end)
@@ -175,12 +179,23 @@ local function history(s: store.Store, id?: string): {Event} | nil, string
 end
 
 --- When an item's ref was last committed, as epoch seconds — the fact
---- claim staleness is judged from (`_work.health`).
+--- claim staleness is judged from (`_work.health`). Read from
+--- `s.touched_at` when a caller already took a ref snapshot that
+--- named this id (`_work.gitview.list_via_cache`'s own digest
+--- snapshot, say) — the common case for a board-wide render, where it
+--- costs nothing beyond the snapshot already paid for. The per-ref
+--- `committer_date_unix` process below is the fallback, run only for
+--- an id no such snapshot carried (a fresh store nothing has listed
+--- yet).
 --- @param s store.Store The store
 --- @param id string Item id
 --- @return integer | nil Epoch seconds of the last commit on its ref
 --- @return string Error message, also when it has no history
 local function touched_at(s: store.Store, id: string): integer | nil, string
+  local known = s.touched_at[id]
+  if known ~= nil then
+    return known
+  end
   local ref = s.leased_ref[id]
   if ref ~= nil then
     return refs.committer_date_unix(s.root, ref)
