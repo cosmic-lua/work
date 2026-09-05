@@ -1,5 +1,5 @@
 title: graph: require repo/base explicitly on new --parent and attach, and refuse brief's silent base guess
-parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work@main
 builders: build-HlNE_YWL2-e1847cac
 speccers: f3a5b327-2851-53ff-b838-1a75b6338d05
