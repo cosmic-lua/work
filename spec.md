@@ -44,6 +44,13 @@ behaviour for a 600-line `README.md` (one file-length diagnostic
 carrying "not Teal/Lua source"), so the prose cap is pinned in the
 same test.
 
+The trap is already documented: `docs/guides/quickstart.md:29-32` tells
+the reader to keep the binary outside the project or list it in
+`.cosmicignore` because "a 10MB executable fails the file-length rule
+in a confusing way". With the rule skipping binaries, delete that
+caution (a gate over a doc, per the bar) — measured: `grep -n
+"OUTSIDE the project" docs/guides/quickstart.md` → one hit, line 29.
+
 ## Non-goals
 
 No change to which files the walk sees, to `.cosmicignore`, or to the
