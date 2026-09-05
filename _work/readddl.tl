@@ -79,10 +79,10 @@ CREATE VIEW stage AS
   JOIN state st ON st.id = w.id
   JOIN substate sub ON sub.id = w.id;
 
--- queue: every open work item with its stage and rank-path key —
--- `_work.flow.unified`'s order minus the seeded per-session tie-break
--- (that stays policy, applied by `next` over rows this view leaves
--- tied on `id`). An item whose own parent chain is absent from
+-- queue: every open work item with its stage and rank-path key, in
+-- the order every verb walks: stage, then key, then id. The seeded
+-- per-session tie-break stays policy, applied by `next` over rows
+-- this view leaves tied on `id`. An item whose own parent chain is absent from
 -- `rank_path` (broken or deeper than 16 levels) still queues, with the
 -- same one-field fallback key `_work.rank.key` gives it: "1" plus its
 -- own id, which is already `_work.rank.FIELD_WIDTH` characters for a
@@ -115,9 +115,7 @@ CREATE VIEW outcome_descendants AS
 
 -- outcomes: the board's positioned open children, with `live` = 1 iff
 -- an open, non-outcome item's parent chain reaches it before reaching
--- the board (`_work.flow.outcomes` plus `_work.flow.live_outcomes`;
--- an outcome never counts as its own live descendant, matching
--- `live_outcomes`'s own "not is_outcome" exclusion).
+-- the board; an outcome never counts as its own live descendant.
 CREATE VIEW outcomes AS
   SELECT o.id AS id, rp.key AS key,
     CASE WHEN EXISTS (

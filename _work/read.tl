@@ -17,8 +17,9 @@ local index = require("_work.index")
 
 local type Index = index.Index
 
---- One `queue` row: a work item's place in `_work.flow.unified`'s
---- order, minus the seeded per-session tie-break.
+--- One `queue` row: a work item's place in the one queue every verb
+--- walks — stage first, then rank-path key, then id — before the
+--- seeded per-session tie-break `next` applies over tied rows.
 local record QueueRow
   id: string
   stage: integer
@@ -26,8 +27,8 @@ local record QueueRow
 end
 
 --- One `outcomes` row: a positioned outcome plus whether an open
---- non-outcome item already stands under it
---- (`_work.flow.outcomes`/`_work.flow.live_outcomes`).
+--- non-outcome item already stands under it (`live`), which is what
+--- intake reads to skip an outcome that has work in flight.
 local record OutcomeRow
   id: string
   key: string
@@ -213,8 +214,8 @@ local function reaches_board(c: Index, id: string): boolean | nil, string
   return true, ""
 end
 
---- The one unified queue: stage first, then rank-path key, then id —
---- `_work.flow.unified`'s order minus the seeded tie-break.
+--- The one unified queue: stage first, then rank-path key, then id.
+--- The seeded per-session tie-break is policy, applied by `next`.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @return {QueueRow} | nil
 --- @return string Error message
