@@ -1,4 +1,6 @@
 title: casts: map-view-of-a-declared-value's 'knowable in every case' claim is false for quicksand/box/merge.tl:135, and cast-sites.tsv's fetch/init.tl:388 row is stale after a4ba83e3
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
+claim: build-cVOC_iLy7-3c1cde43
+builders: build-cVOC_iLy7-3c1cde43
 speccers: 3c1cde43-b57b-53a6-9b5e-5d6e14979b25
