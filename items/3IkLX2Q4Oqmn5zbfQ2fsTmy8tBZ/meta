@@ -1,3 +1,4 @@
 title: cosmopolitan: definitions-coverage ratchet checks arity, not per-slot type — a shared-slot mislabeling can pass both before and after its own fix
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
 target: cosmic-lua/cosmopolitan
+speccers: fe06cb27-50b8-5666-a033-c8f08b932d33
