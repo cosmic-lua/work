@@ -1,0 +1,3 @@
+title: gitboard handle lookup: resolving «XXXX_XXXX» loads the whole board to match eight characters git's own glob matches in 7 ms — one for-each-ref, or zero with the cache
+parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+target: cosmic-lua/work
