@@ -1,1 +1,0 @@
-same tuple-sharing shape as unix.nanosleep despite an honest annotation; needs the archetype's fix mechanism decided first so localtime lands consistent with it
