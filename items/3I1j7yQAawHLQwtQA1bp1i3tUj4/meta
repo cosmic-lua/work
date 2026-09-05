@@ -1,3 +1,4 @@
 title: cosmic.fuzz: a published fuzzing facility user projects can point at their own code
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
 target: cosmic-lua/cosmic
+speccers: fc09a540-18f6-5543-a2f5-4cd00ba22649

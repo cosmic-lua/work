@@ -176,3 +176,35 @@ bisection only on an actual crash), not per iteration and not behind an
 opt-in flag, so no `*_fuzz_test.tl` file changes. That settles the open
 "opt-in vs. default" question this epic's spec posed for child 5: the
 earlier framing measured the wrong granularity.
+
+## Refinement pass, 2026-09-05
+
+Status check against the live board: children 1-5 have LANDED (1:
+3I1iGY7Z, 2: 3I7PCerj, 3: 3IAAzhND, 4: 3I7PFJE7, 5: 3IAXDNwC). Child 6
+(corpus persistence, 3IBFBWtc / «gKs0_PfCy») is filed but currently
+BLOCKED on «3IGXZ7Gg» — a test cannot find its own source directory
+(`fs.dirname(arg[0])` resolves to `o/`), so a committed corpus's default
+location cannot be specified and `FUZZ_SAVE` would write into the build
+tree. Children 7, 8 and 9 remain unfiled.
+
+Two facts worth carrying into child 8 (the publishing move) when it is
+filed: first, `_fuzz/source.tl`'s own header comment — "Internal to
+`_fuzz`: no shrinking exists yet, so this is not ready to be
+`cosmic.fuzz`'s public surface" — is now STALE. Child 3 (shrinking) and
+child 5 (crash isolation) both landed after that comment was written; the
+specific blocker it names no longer holds, and the comment should be
+corrected or removed as part of whichever child touches that file next,
+so a reader does not take a resolved objection as still live.
+
+Second, concrete evidence for the epic's own stated outcome ("a user
+project can fuzz its own code with one import"): cosmic-lua/work (the
+gitboard tool) needed exactly this and could not have it, so PR
+cosmic-lua/work#20 (2026-09-05) copied `_fuzz/driver.tl`, `source.tl` and
+`shrink.tl` verbatim into that repo to fuzz `_work.itemtree` and
+`_work.priority`'s parsers — a real, dated instance of the distribution
+cost this epic exists to remove, not a hypothetical one. «Bb5n_SBqt»
+("gitboard: drop the copied _fuzz/driver.tl+source.tl+shrink.tl once
+cosmic.fuzz publishes") is filed in cosmic-lua/work, blocked on this
+epic, to retire that copy once child 8 lands — a live downstream
+consumer child 8's design should keep in mind (its `Options` contract
+change would need to reach that copy too, until the migration happens).
