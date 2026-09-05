@@ -2,6 +2,7 @@ title: gitboard read verbs: one ref snapshot per run — show takes two snapshot
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-cwi5_ntHB-32638265
+reviewer: review-cwi5_ntHB-32638265
 pr: 18
 builders: build-cwi5_ntHB-32638265
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
