@@ -30,6 +30,19 @@ small, but it is now 2/2 independent fresh-context agents this single
 pass hitting the identical wrong turn from the identical brief text —
 not a one-off misreading.
 
+**Likely NOT the same bug `TE1u_Un2i` (PR #34) and `U7bX_uuKQ` (PR #37)
+already fixed and merged** — those replaced a stale `cd <BOARD_DIR>; \
+o/bin/gitboard verdict` with `cd <PRODUCT_ROOT>; bin/gitboard verdict`.
+The text this session actually received from `gitboard brief review`
+this pass already uses the POST-fix form (`bin/gitboard`, not
+`o/bin/gitboard`) — but `<PRODUCT_ROOT>` itself resolved to the literal
+string `/home`, not the actual product checkout path
+(`/home/user/cosmic` in this environment). So the remaining bug looks
+like it is in HOW `<PRODUCT_ROOT>` gets resolved/substituted for a
+checkout nested one level deeper than whatever the substitution logic
+assumes (e.g. `/home/<user>` vs. this environment's
+`/home/user/<repo>`), not the already-fixed template text itself.
+
 ## The question
 
 Where does `gitboard brief`'s template text live (the source this
