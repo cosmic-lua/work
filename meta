@@ -1,9 +1,9 @@
 title: cosmic.ksuid: a public K-Sortable Unique ID module, ported from _work/ksuid.tl
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/cosmic
-claim: build-jiP8_yJF8-4597e9df
 pr: 1718
 verdict: accept
 verdict_head: aa9716c8e809e81b301af37800f0bf53c80185c6
 verdict_spec: c9e2dff6ec730078e215b0b0110f41226e75c0d4
+resolution: completed
 builders: build-jiP8_yJF8-4597e9df
