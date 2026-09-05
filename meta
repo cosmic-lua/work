@@ -1,4 +1,6 @@
 title: gitboard show/next: hydrate {Item} from the cache instead of a fresh git read — 144 ms to 27 ms, field-identical over 937 items
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+claim: build-VkzD_q8u2-32638265
+builders: build-VkzD_q8u2-32638265
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
