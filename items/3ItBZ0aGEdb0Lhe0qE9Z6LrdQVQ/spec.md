@@ -52,3 +52,52 @@ returns nothing.
 Anything board-shaped (`_work.gh`'s `Pull`/`CheckRun` records, PR/review
 reads) — that stays in gitboard, built on top of the published module,
 as its own later migration; GraphQL support; webhook verification.
+
+## Addendum, 2026-09-05: the cache is SQLite, with a calls ledger
+
+Settled while diagnosing a day of GitHub rate-limit refusals. The
+ported module's response cache is one SQLite file, not a directory of
+literal files, for three reasons the file cache cannot meet:
+
+- `_work/api.tl`'s `write_cache` goes through `literal.format_file`,
+  which writes in place — no temp-and-rename — so two processes
+  writing one key can leave a torn entry. The `body_sha256` check
+  turns that into a miss, and a miss is a charged call, the thing the
+  cache exists to avoid. cosmic-lua/work's «CVYc_iYdJ» makes several
+  subagents share one product checkout's cache at once, so concurrent
+  writers are the normal case. WAL mode with a busy timeout settles it.
+- Accounting. "Who is spending the quota" took a hand-run measurement
+  today (`x-ratelimit-used` before and after each verb). A `calls`
+  table — `at`, `method`, `path`, `status`, `counted` (0 for a 304),
+  `remaining`, `reset`, `caller` (an optional label the caller passes,
+  the verb name in gitboard's case) — makes it one SELECT.
+- Growth and eviction: 51 files today, never pruned; a `last_used`
+  column and one DELETE bound it.
+
+Shape:
+
+1. `cosmic/github/cache.tl`: `open(path)` opening (creating) the file
+   in WAL mode with `busy_timeout`; tables `responses(key TEXT PRIMARY
+   KEY, method, path, etag, status INTEGER, body BLOB, body_sha256,
+   fetched_at INTEGER, last_used INTEGER)`, `calls(...)` as above, and
+   `rate(id INTEGER PRIMARY KEY CHECK (id = 1), remaining, reset)`;
+   `read`/`write`/`touch`, `record_call`, `read_rate`/`write_rate`,
+   `evict(older_than_s)`, `spend(since_s) -> {path, counted, n}` (the
+   accounting query, exposed so a caller need not know the schema).
+   The key stays `sha256(method .. " " .. path)` so nothing about
+   `reconcile` changes.
+2. `call(method, path, opts)` takes the cache path (or an opened cache)
+   in `opts`, never a repo root — the public module knows no board —
+   and a `caller` label for the ledger.
+3. The cache file is the CALLER's, beside whatever else it derives:
+   gitboard's lands at `o/board/o/gh.db`, NOT inside `board.db`, which
+   is wiped and rebuilt on any digest or schema mismatch and would
+   discard every ETag with it.
+4. Tests: a torn-write race is not testable cheaply, but two
+   `cosmic.child` processes writing the same key 100 times must leave
+   one well-formed row and no error; `spend` over a fixture ledger
+   answers "counted calls in the last hour by path"; a 304 records
+   `counted = 0`.
+5. gitboard keeps `_work/api.tl`'s file cache until this lands in a
+   release and the port replaces it; the migration is a cold cache,
+   nothing to convert.
