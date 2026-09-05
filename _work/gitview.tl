@@ -21,7 +21,6 @@ local item = require("_work.item")
 local act = require("_work.action")
 local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
 local rank = require("_work.rank")
 local refs = require("_work.refs")
@@ -153,15 +152,13 @@ local function status_report(all: {item.Item}, specs: act.Specs,
     ages?: health.Ages, lane_facts?: {string: string}, root_order?: {string}):
   {string}, string
   local aged = ages or {}
-  local index = flow.by_id(all)
-  local pos = prio.positions(all)
   -- Selection and stage-bucketing stay `flow`'s (todo vs. doing, stage
   -- order) — this is only the RENDER order laid over what it returns,
   -- so every queue on this page reads in the one order `show ID`
   -- describes for a single item.
   local ranks = rank.positions(all, root_order or {})
   local out: {string} = {}
-  local doing = rank.sorted(flow.in_state(all, "doing", pos), ranks)
+  local doing = rank.sorted(flow.in_state(all, "doing", ranks), ranks)
   out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
   for _, i in ipairs(doing) do
     local marks = (" [%s]"):format(flow.substate(i))
@@ -170,7 +167,6 @@ local function status_report(all: {item.Item}, specs: act.Specs,
     if i.result ~= "" then
       marks = marks .. (" result:%s"):format(i.result:sub(1, 7))
     end
-    if flow.is_blocked(i, index) then marks = marks .. " [blocked]" end
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
     if health.is_stale(i, aged) then
       marks = marks .. (" [claim stale %dh]"):format(
@@ -190,10 +186,10 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   if flagged ~= "" then
     out[#out + 1] = flagged
   end
-  local todo = rank.sorted(flow.in_state(all, "todo", pos), ranks)
+  local todo = rank.sorted(flow.in_state(all, "todo", ranks), ranks)
   local pullable = 0
   for _, i in ipairs(todo) do
-    if act.passes_bar(i, specs, pos) and not flow.is_blocked(i, index) then
+    if act.passes_bar(i, specs, ranks) then
       pullable = pullable + 1
     end
   end
@@ -201,10 +197,9 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   for k = 1, math.min(#todo, TODO_SHOWN) do
     local i = todo[k]
     local marks = ""
-    if act.passes_bar(i, specs, pos) then
+    if act.passes_bar(i, specs, ranks) then
       marks = " [pullable]"
     end
-    if flow.is_blocked(i, index) then marks = marks .. " [blocked]" end
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
     out[#out + 1] = ("  %s%s"):format(id_line(i), marks)
   end
@@ -213,15 +208,12 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   end
   -- Untriaged roots render item by item: they are not workable yet,
   -- and this is the one list of them anyone gets.
-  local triage = rank.sorted(flow.untriaged(all), ranks)
+  local triage = rank.sorted(flow.untriaged(all, root_order or {}), ranks)
   out[#out + 1] = ("%-6s %d"):format("triage", #triage)
   for _, f in ipairs(triage) do
     out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
   end
   local graph = flow.graph_problems(all)
-  for _, p in ipairs(health.blocker_cycle_problems(all)) do
-    graph[#graph + 1] = p
-  end
   for _, p in ipairs(graph) do
     out[#out + 1] = "  graph: " .. p
   end
@@ -370,13 +362,15 @@ end
 --- @param specs act.Specs Sidecar body by id
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Seconds since last board commit, by id
+--- @param root_order {string} The board's root ranking, in rank order
 --- @return string The action, its target, the rule behind it, and its guidance
 local function next_report(all: {item.Item}, specs: act.Specs,
-    session?: string, ages?: health.Ages): string
+    session?: string, ages?: health.Ages, root_order?: {string}): string
   -- The session seeds the tie-break, so concurrent sessions asking
   -- the same board fan out across items no judgment separates
   -- instead of converging on one.
-  return render_action(act.next_action(all, specs, session, ages, session), specs)
+  return render_action(
+    act.next_action(all, specs, root_order or {}, session, ages, session), specs)
 end
 
 --- The reason named by an item's most recent board commit, when that
@@ -406,11 +400,13 @@ end
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param ci act.CiStates CI state by item id, absent when unknown
+--- @param root_order {string} The board's root ranking, in rank order
 --- @return string The action, its target, the rule behind it, and its guidance
 local function next_report_live(s: store.Store, all: {item.Item},
     specs: act.Specs, session?: string, ages?: health.Ages,
-    ci?: act.CiStates): string
-  local action = act.next_action(all, specs, session, ages, session, ci)
+    ci?: act.CiStates, root_order?: {string}): string
+  local action = act.next_action(all, specs, root_order or {}, session, ages,
+    session, ci)
   if action.kind == "pull" and action.item then
     local events = publish.history(s, action.item.id)
     if events and events[1] then
@@ -428,7 +424,7 @@ local function cmd_next(s: store.Store, session?: string): integer
   local all = board.items
   return verdict_line("next", true,
     next_report_live(s, all, read_specs(s, all), session, claim_ages(s, all),
-      ci_states(s, all)))
+      ci_states(s, all), board.root_order))
 end
 
 local record gitview
@@ -438,10 +434,10 @@ local record gitview
   ages?: health.Ages, lane_facts?: {string: string}, root_order?: {string}):
   {string}, string
   next_report: function(all: {item.Item}, specs: act.Specs,
-  session?: string, ages?: health.Ages): string
+  session?: string, ages?: health.Ages, root_order?: {string}): string
   next_report_live: function(s: store.Store, all: {item.Item},
   specs: act.Specs, session?: string, ages?: health.Ages,
-  ci?: act.CiStates): string
+  ci?: act.CiStates, root_order?: {string}): string
   bounce_note: function(subject: string): string
   read_specs: function(s: store.Store, all: {item.Item}): act.Specs
   -- Exported only so `_work/gitview_test.tl` can verify the process

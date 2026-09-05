@@ -321,7 +321,7 @@ local function test_next_carries_the_last_drops_why()
       "the builder session hit its budget", false) == 0)
   local all = check.must(store.list(s))
   local report = view.next_report_live(s, all, view.read_specs(s, all),
-    "", {})
+    "", {}, nil, store.root_order(s))
   assert(report:find("last drop:", 1, true) ~= nil, report)
   assert(report:find("the builder session hit its budget", 1, true) ~= nil,
     report)

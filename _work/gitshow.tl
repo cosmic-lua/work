@@ -220,7 +220,7 @@ local function cmd_show(s: store.Store, id: string): integer
     end
     local bodies = store.read_specs(s, ids)
     body = bodies[it.id] or ""
-    problems = gitready.ready_problems(s, it, all, body)
+    problems = gitready.ready_problems(s, it, all, root_order, body)
     overlaps = overlap.lines(it.id, bodies)
   else
     body = store.read_spec(s, id)

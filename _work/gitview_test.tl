@@ -58,6 +58,9 @@ end
 --- The standing fixture: a placed root (it outranks LESSER, which is
 --- what gives everything beneath it a position), a container under it
 --- with one child in flight and one fresh todo leaf.
+--- The root list for `board_items`: the goal outranks the lesser outcome.
+local ROOTS < const >: {string} = {GOAL, LESSER}
+
 local function board_items(): {item.Item}
   return {
     check.must(item.decode({id = GOAL, title = "a goal", beats = LESSER})),
@@ -82,7 +85,7 @@ local function full_specs(): {string: string}
 end
 
 local function test_status_renders_doing_against_the_bound()
-  local lines, verdict = view.status_report(board_items(), full_specs())
+  local lines, verdict = view.status_report(board_items(), full_specs(), nil, nil, ROOTS)
   assert(has(lines, "^doing  1/10$"), table.concat(lines, "\n"))
   assert(has(lines, "%[review%]"), "the substate shows")
   assert(has(lines, "@session%-a"), "so does the claim")
@@ -104,7 +107,7 @@ local function test_status_lists_the_triage_queue()
   local capture = fresh_id()
   items[#items + 1] = check.must(item.decode({id = capture,
         title = "a capture"}))
-  local lines = view.status_report(items, full_specs())
+  local lines = view.status_report(items, full_specs(), nil, nil, ROOTS)
   assert(has(lines, "^triage 1$"), table.concat(lines, "\n"))
   assert(has(lines, "^  " .. lit(tail.handle(capture)) .. " a capture$"),
     "each untriaged root is listed with its wrapped handle, not the "
@@ -188,7 +191,8 @@ local function test_status_prints_one_summary_line_for_flagged_items()
 end
 
 local function test_next_names_one_action_and_its_rule()
-  local report = view.next_report(board_items(), full_specs())
+  local report = view.next_report(board_items(), full_specs(), nil, nil,
+    ROOTS)
   assert(report:find("review", 1, true)
     and report:find(tail.handle(LEAF), 1, true),
     "a PR awaiting a verdict is judged before anything is pulled: "
@@ -220,7 +224,7 @@ local function test_next_alternate_carries_an_overlap_annotation()
   specs[SECOND] = table.concat({
       "## Change", "Also touch `_work/brief.tl`.",
     }, "\n")
-  local report = view.next_report(items, specs)
+  local report = view.next_report(items, specs, nil, nil, ROOTS)
   assert(report:find("or: pull " .. tail.handle(FRESH)
       .. " a fresh leaf — overlaps: " .. tail.handle(SECOND)
       .. " on _work/brief.tl", 1, true),
