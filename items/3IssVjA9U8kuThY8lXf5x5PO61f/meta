@@ -1,6 +1,5 @@
 title: gitboard mutation verbs: new snapshots the whole board four times and reads a spec that does not exist yet — 14 gitboard-spawned git processes where 6 suffice
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: build-5x5P_O61f-32638265
 builders: build-5x5P_O61f-32638265
 speccers: 32638265-cf26-5d58-a274-cc23010d498c build-5x5P_O61f-32638265
