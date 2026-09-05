@@ -1,0 +1,3 @@
+title: cosmic.flags: a positional that begins with a dash is refused with no mention of the -- terminator, and neither help() nor the docs name it
+parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
+target: cosmic-lua/cosmic
