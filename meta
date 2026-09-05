@@ -1,3 +1,5 @@
 title: gitboard handle ambiguity refusal: resolve_glob joins ids, resolve_tail joins tails — the two new paths in PR #22 disagree with each other and with the spec's 'same ambiguity message' bar
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+claim: build-x1RK_21oE-f3a5b327
+builders: build-x1RK_21oE-f3a5b327
 speccers: f3a5b327-2851-53ff-b838-1a75b6338d05
