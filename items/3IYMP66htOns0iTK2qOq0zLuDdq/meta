@@ -1,10 +1,10 @@
 title: casts: _make's verb registry returns a typed Verb, closing the 8 dynamic-name-lookup sites
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: build-q0zL_uDdq-eceb7aa0
 pr: 1728
 verdict: accept
 verdict_head: 39ea079dd11a9146c770ea1dd8bab15134757bea
 verdict_spec: d10406b9885153a9ed29383ed5445daafc993915
+resolution: completed
 builders: build-q0zL_uDdq-g7h8 build-q0zL_uDdq-q7r8 eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7 build-q0zL_uDdq-eceb7aa0
 speccers: 617186a3-6ded-5f05-a74a-6054c4631945 eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7
