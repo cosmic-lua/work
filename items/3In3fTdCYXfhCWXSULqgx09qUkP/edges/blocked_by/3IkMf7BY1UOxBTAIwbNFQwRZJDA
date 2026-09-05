@@ -1,1 +1,0 @@
-3IkMf7BY's un-narrowed spec targets the newest cosmos release, at or after 2026.09.02-405d8840d, so this question closes as satisfied once it lands: verify register_extension/lsqlite3.Extension in the generated cosmo/lsqlite3.d.tl and done
