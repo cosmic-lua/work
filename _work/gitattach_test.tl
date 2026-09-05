@@ -109,9 +109,10 @@ local function test_attach_refuses_placing_against_an_unpositioned_sibling()
   local s = init_state_repo("attach-unpositioned")
   local goal, leaf = root_with_leaf(s)
   local mover = file_item(s, "a mover", "")
+  local before_parent = check.must(store.load(s, mover)).parent
   assert(graph.cmd_attach(s, mover, goal, leaf, "") ~= 0,
     "leaf carries no position among goal's children yet")
-  assert(check.must(store.load(s, mover)).parent == "",
+  assert(check.must(store.load(s, mover)).parent == before_parent,
     "the refused attach never wrote anything")
 end
 

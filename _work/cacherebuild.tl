@@ -1,9 +1,10 @@
 --- `_work.cache`'s cold-build path, split out to keep that module under
---- its line cap: every item and spec a root's board carries,
+--- its line cap: every item and spec the board carries,
 --- `_work.index`'s tables (including its `ranks` rows — each item's
---- own children from `insert_item`, and the board's own root list,
---- which has no single item to carry it, from `insert_root_order`),
---- `_work.find`'s search table, `cache_meta` and `lanes` — written to a
+--- own children from `insert_item`, the board item's own outcome
+--- ranking included, since it is an ordinary `.order` field like any
+--- other item's), `_work.find`'s search table, `cache_meta` and
+--- `lanes` — written to a
 --- temp file beside the real path and renamed into place once
 --- complete, so a reader never sees a half-built file. The temp
 --- connection is dropped out of WAL (`journal_mode = DELETE`, which
@@ -69,10 +70,6 @@ local function rebuild(root: string): Cache | nil, string
         if not iok then
           return false, ierr
         end
-      end
-      local rok, rerr = index.insert_root_order(tx, board.root_order)
-      if not rok then
-        return false, rerr
       end
       return true, ""
     end)

@@ -168,7 +168,7 @@ local function dangling_parents(self: Index): {string}
 end
 
 --- Open items whose ancestor walk, bounded the same 16 hops
---- `_work.flow` uses, never reaches a root — a broken
+--- `_work.flow` uses, never reaches the board — a broken
 --- or cyclic parent chain past the immediate parent, which the load's
 --- own per-row check (a missing DIRECT parent) cannot see. A chain
 --- that walks into a dangling parent id simply has no row to join
@@ -277,31 +277,6 @@ local function insert_item(db: sqlite.Database, it: Item): boolean, string
   return true, ""
 end
 
---- Replace the board's own root ranking (`ranks` rows at `parent =
---- ''`) with `root_order` — delete then reinsert, the one-parent
---- pattern `delete_item`/`insert_item` apply to an ordinary item's own
---- children, applied here to the board itself. A malformed ranking (a
---- duplicate id, an id naming no root) lands verbatim; flagging that is
---- `_work.gitfsck.root_order_problems`'s job, not this loader's.
---- @param db sqlite.Database The connection
---- @param root_order {string} The board's root ranking, in rank order
---- @return boolean True on success
---- @return string Error message
-local function insert_root_order(db: sqlite.Database, root_order: {string}): boolean, string
-  local dok, derr = db:exec("DELETE FROM ranks WHERE parent = ''")
-  if not dok then
-    return false, derr
-  end
-  for pos, child in ipairs(root_order) do
-    local iok, ierr = db:exec(
-      "INSERT INTO ranks(parent, position, child) VALUES ('', ?, ?)", {pos, child})
-    if not iok then
-      return false, ierr
-    end
-  end
-  return true, ""
-end
-
 local record index
   type Index = Index
   DDL: string
@@ -310,7 +285,6 @@ local record index
   close: function(self: Index): boolean, string
   delete_item: function(db: sqlite.Database, id: string): boolean, string
   insert_item: function(db: sqlite.Database, it: Item): boolean, string
-  insert_root_order: function(db: sqlite.Database, root_order: {string}): boolean, string
 end
 
 local M: index = {
@@ -319,7 +293,6 @@ local M: index = {
   problems = problems,
   close = close,
   delete_item = delete_item,
-  insert_root_order = insert_root_order,
   insert_item = insert_item,
 }
 

@@ -14,6 +14,8 @@ local cache = require("_work.cache")
 local cachequery = require("_work.cachequery")
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
+local flow = require("_work.flow")
+local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -95,7 +97,7 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
   local root_it = check.must(store.load(s, root))
   root_it.order = {leaf2, leaf3, leaf1}
   assert(storewrite.save(s, root_it, "rank the children"))
-  assert(storewrite.save_root_order(s, {root}, "rank the roots"))
+  assert(gitrank.cmd_rank(s, root, "", "", true) == 0, "rank the outcome")
 
   local leaf_it = check.must(store.load(s, leaf1))
   leaf_it.other_edges = {relates = {[leaf2] = "see also"}}
@@ -104,10 +106,8 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
   assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with an edge and a roster"))
 
   local want = check.must(store.list(s))
-  local want_root_order = store.root_order(s)
   local c = check.must(cache.open(s.root))
   local got = check.must(cachequery.items(c))
-  local got_root_order = check.must(cachequery.root_order(c))
   assert(check.must(cache.close(c)))
 
   assert(#want == #got, ("%d vs %d items"):format(#want, #got))
@@ -117,7 +117,12 @@ local function test_items_matches_store_list_field_for_field_and_in_order()
         i, g.id:sub(1, 8), w.id:sub(1, 8)))
     assert_items_match(w, g)
   end
-  assert_same_order(want_root_order, got_root_order, "root_order")
+  -- The board's own outcome ranking is one of `want`/`got` above like
+  -- any other item's `.order` field — `assert_items_match` already
+  -- covers it — so this only pins that the outcome actually landed in
+  -- the board's own order rather than going unchecked.
+  local want_board = check.must(flow.find_board(want))
+  assert_same_order(want_board.order, {root}, "the board's own order")
 
   -- The one field this differential deliberately does NOT match:
   -- `store.list`'s fresh git read carries leaf1's edge kind

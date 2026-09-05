@@ -99,10 +99,9 @@ end
 --- @param a act.Action The action to carry out
 --- @param session string The acting session
 --- @param r Rng The generator, consulted for the review verdict
---- @param root_order {string} The board's root list
 --- @return string | nil What refused it, nil when it was carried out
 local function apply(items: {Item}, specs: act.Specs, a: act.Action,
-    session: string, r: Rng, root_order: {string}): string | nil
+    session: string, r: Rng): string | nil
   local it = a.item
   if a.kind == "finish" then
     local sub = flow.substate(it)
@@ -156,15 +155,16 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     return nil
   end
   if a.kind == "triage" then
-    -- Adoption under a ranked root, which is the branch of triage that
-    -- keeps an item alive; `attach` is ungated, so neither is this.
-    local ranked = flow.roots(items, root_order)
+    -- Adoption under a ranked outcome, which is the branch of triage
+    -- that keeps an item alive; `attach` is ungated, so neither is
+    -- this.
+    local ranked = flow.roots(items)
     if #ranked == 0 then
       it.resolution = "not-planned"
       return nil
     end
     it.parent = ranked[1].id
-    gate.containered(ranked[1])
+    gate.containered(ranked[1], flow.by_id(items))
     return nil
   end
   if a.kind == "intake" then
@@ -173,28 +173,30 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     end
     local born = make({parent = it.id})
     items[#items + 1] = born
-    gate.containered(it)
+    gate.containered(it, flow.by_id(items))
     return nil
   end
   return ("unhandled action kind: %s"):format(a.kind)
 end
 
---- A board nobody wrote by hand: three roots ranked among the board's
---- roots so every one is ranked, leaves scattered across the states,
---- most specs already at the bar, a few blocker edges and foreign
---- claims, and a couple of unranked captures for the triage queue.
+--- A board nobody wrote by hand: the board item, three outcomes ranked
+--- in its own `order` so every one is ranked, leaves scattered across
+--- the states, most specs already at the bar, a few blocker edges and
+--- foreign claims, and a couple of unranked captures for the triage
+--- queue.
 --- @param r Rng The generator
 --- @param leaves integer How many workable leaves to scatter
 --- @param session string The session the walk will ask as
 --- @return {Item} A legal board
 --- @return act.Specs The sidecars
---- @return {string} The board's root list
 local function generate(r: Rng, leaves: integer,
-    session: string): {Item}, act.Specs, {string}
+    session: string): {Item}, act.Specs
   local alone = roll(r, 3) == 1
-  local roots: {Item} = {make({}), make({}), make({})}
-  local root_order: {string} = {roots[1].id, roots[2].id, roots[3].id}
-  local items: {Item} = {roots[1], roots[2], roots[3]}
+  local board = make({})
+  local roots: {Item} = {make({parent = board.id}), make({parent = board.id}),
+    make({parent = board.id})}
+  board.order = {roots[1].id, roots[2].id, roots[3].id}
+  local items: {Item} = {board, roots[1], roots[2], roots[3]}
   local specs: act.Specs = {}
   local workable: {Item} = {}
   for _ = 1, leaves do
@@ -249,7 +251,7 @@ local function generate(r: Rng, leaves: integer,
   for _ = 1, roll(r, 3) do
     items[#items + 1] = make({})
   end
-  return items, specs, root_order
+  return items, specs
 end
 
 -- SAFETY. Over boards nobody wrote by hand, every action the ordering
@@ -259,10 +261,10 @@ end
 local function test_no_walk_ever_names_an_action_the_gates_refuse()
   for seed = 1, 40 do
     local r = rng(seed)
-    local items, specs, root_order = generate(r, 18, "wake-0")
+    local items, specs = generate(r, 18, "wake-0")
     for step = 1, 150 do
       local session = ("wake-%d"):format(step // 3)
-      local a = act.next_action(items, specs, root_order, session)
+      local a = act.next_action(items, specs, session)
       if a.kind == "none" or a.item == nil then
         break
       end
@@ -281,7 +283,7 @@ local function test_no_walk_ever_names_an_action_the_gates_refuse()
           :format(seed))
       end
       local before = signature(items, specs)
-      local bad = apply(items, specs, a, session, r, root_order)
+      local bad = apply(items, specs, a, session, r)
       assert(bad == nil, ("seed %d step %d: %s was refused: %s"):format(
           seed, step, a.kind, bad or ""))
       assert(signature(items, specs) ~= before,
@@ -298,14 +300,14 @@ end
 local function test_a_solo_session_never_names_an_answer_it_cannot_act_on()
   for seed = 1, 25 do
     local r = rng(seed + 900)
-    local items, specs, root_order = generate(r, 30, "solo")
+    local items, specs = generate(r, 30, "solo")
     for step = 1, 200 do
-      local a = act.next_action(items, specs, root_order, "solo")
+      local a = act.next_action(items, specs, "solo")
       if a.kind == "none" or a.item == nil then
         break
       end
       local before = signature(items, specs)
-      local bad = apply(items, specs, a, "solo", r, root_order)
+      local bad = apply(items, specs, a, "solo", r)
       assert(bad == nil, ("seed %d step %d: %s was refused: %s"):format(
           seed, step, a.kind, bad or ""))
       assert(signature(items, specs) ~= before,
@@ -334,9 +336,10 @@ end
 local function test_a_finishable_board_drains_to_nothing()
   for seed = 1, 12 do
     local r = rng(seed + 500)
-    local root = make({})
-    local root_order: {string} = {root.id}
-    local items: {Item} = {root}
+    local board = make({})
+    local root = make({parent = board.id})
+    board.order = {root.id}
+    local items: {Item} = {board, root}
     local specs: act.Specs = {}
     local children: {Item} = {}
     for _ = 1, 6 do
@@ -350,7 +353,7 @@ local function test_a_finishable_board_drains_to_nothing()
     for step = 1, 400 do
       steps = step
       local session = actor(items, wake)
-      local a = act.next_action(items, specs, root_order, session)
+      local a = act.next_action(items, specs, session)
       -- An `intake`, or nothing at all, ends a WAKE rather than the
       -- walk: the next one is a different session, and what this one
       -- left standing is the first thing it sees. Two idle wakes in a
@@ -363,7 +366,7 @@ local function test_a_finishable_board_drains_to_nothing()
         wake = wake + 1
       else
         idle = 0
-        local bad = apply(items, specs, a, session, r, root_order)
+        local bad = apply(items, specs, a, session, r)
         assert(bad == nil, ("seed %d step %d: %s was refused: %s"):format(
             seed, step, a.kind, bad or ""))
         if roll(r, 3) == 1 then
@@ -386,20 +389,21 @@ end
 -- judge, the same as any other claim. A rework whose claimant stopped
 -- waking surfaces when the lease expires, as a takeover.
 local function test_a_rework_is_its_builders_until_the_lease_expires()
-  local root = make({})
-  local root_order: {string} = {root.id}
+  local board = make({})
+  local root = make({parent = board.id})
+  board.order = {root.id}
   local reworking = make({parent = root.id, claim = "session-A",
       pr = 7, verdict = "request changes", verdict_head = "abc123"})
-  local items: {Item} = {root, reworking}
+  local items: {Item} = {board, root, reworking}
   local specs: act.Specs = {[reworking.id] = READY}
-  local builder = act.next_action(items, specs, root_order, "session-A")
+  local builder = act.next_action(items, specs, "session-A")
   assert(builder.kind == "finish" and builder.item.id == reworking.id,
     "the builder picks its own rework up: " .. builder.kind)
-  local other = act.next_action(items, specs, root_order, "session-B")
+  local other = act.next_action(items, specs, "session-B")
   assert(other.kind ~= "finish",
     "a live rework claim holds like any other: " .. other.kind)
   local stale: {string: integer} = {[reworking.id] = 5 * 60 * 60}
-  local takeover = act.next_action(items, specs, root_order, "session-B",
+  local takeover = act.next_action(items, specs, "session-B",
     stale)
   assert(takeover.kind == "finish" and takeover.item.id == reworking.id,
     "a stale rework claim is anyone's: " .. takeover.kind)

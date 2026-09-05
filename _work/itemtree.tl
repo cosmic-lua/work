@@ -167,7 +167,7 @@ end
 --- whether a `held` marker blob was present at the tree root, its
 --- `order` blob's already-parsed ids, and every edge kind found under
 --- `edges`, carried opaquely. Content problems (a multiline title, a
---- claimed root, a malformed `target`, ...) are attached at
+--- claimed parentless item, a malformed `target`, ...) are attached at
 --- `.decode_problems` rather than failing the build — `item.decode`'s
 --- own tolerance, reused here so a store built from a hand-edited
 --- commit still reads. `held` is unknown to this build: its presence

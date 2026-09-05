@@ -31,13 +31,13 @@ local CSPEC: flags.CommandSpec = {
         .. "--force --why files it anyway (a pass whose transcripts are "
         .. "gone).",
         flags = {dir_flag(),
-          {long = "parent", arg = "ID", help = "the item this decomposes"},
+          {long = "parent", arg = "ID", help = "the item this decomposes; "
+            .. "default is the board — the item files as an outcome"},
           {long = "before", arg = "X",
-            help = "place it immediately before X among its new siblings "
-            .. "(needs --parent)"},
+            help = "place it immediately before X among its new siblings"},
           {long = "after", arg = "X",
             help = "place it immediately after X among its new siblings "
-            .. "(needs --parent; at most one of --before/--after)"},
+            .. "(at most one of --before/--after)"},
           {long = "spec-file", arg = "FILE", help = "spec markdown sidecar"},
           {long = "repo", arg = "OWNER/NAME",
             help = "the repo its PR lands in; default is the board's origin"},
@@ -57,12 +57,12 @@ local CSPEC: flags.CommandSpec = {
             help = "place it immediately after X among PARENT's children "
             .. "(at most one of --before/--after)"}}}},
     {name = "rank", summary = "position ID among its siblings: before or "
-      .. "after X, or last; roots rank against roots",
+      .. "after X, or last; outcomes rank against outcomes",
       spec = {usage = "ID --before X | --after X | --last [options]",
         summary = "position ID among its siblings: before or after X, or "
         .. "last.\n\nID and X must be siblings — the same parent, or both "
-        .. "roots. X absent from its\nparent's order is refused as "
-        .. "unpositioned: rank X first, or use --last.",
+        .. "outcomes (children of the board). X absent from its\nparent's "
+        .. "order is refused as unpositioned: rank X first, or use --last.",
         flags = {dir_flag(),
           {long = "before", arg = "X", help = "place ID immediately before X"},
           {long = "after", arg = "X", help = "place ID immediately after X"},
@@ -154,11 +154,11 @@ local CSPEC: flags.CommandSpec = {
             .. "(the session built or specced this item) — repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "done", summary = "end ID, recording why (an accepted PR is "
-      .. "verified merged first; a root's `completed` needs --by CHILD)",
+      .. "verified merged first; an outcome's `completed` needs --by CHILD)",
       spec = {usage = "ID [options]", flags = {dir_flag(),
           {long = "reason", arg = "REASON", default = "completed",
             help = "completed or not-planned"},
-          {long = "by", arg = "CHILD", help = "a root's evidence: its "
+          {long = "by", arg = "CHILD", help = "an outcome's evidence: its "
             .. "completed child, required with --reason completed"},
           {long = "force", help = "end an item under an unjudged PR, or "
             .. "without reading its merge"},

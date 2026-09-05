@@ -29,6 +29,7 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
+local BOARD < const > = fresh_id()
 local GOAL < const > = fresh_id()
 local CONTAINER < const > = fresh_id()
 local LEAF < const > = fresh_id()
@@ -55,22 +56,22 @@ local function lit(s: string): string
   return (s:gsub("%-", "%%-"))
 end
 
---- The standing fixture: a placed root (it outranks LESSER, which is
---- what gives everything beneath it a position), a container under it
---- with one child in flight and one fresh todo leaf.
---- The root list for `board_items`: the goal outranks the lesser outcome.
-local ROOTS < const >: {string} = {GOAL, LESSER}
-
+--- The standing fixture: the board, a placed outcome (it outranks
+--- LESSER, which is what gives everything beneath it a position, via
+--- the board's own `order`), a container under it with one child in
+--- flight and one fresh todo leaf.
 local function board_items(): {item.Item}
   return {
-    check.must(item.decode({id = GOAL, title = "a goal"})),
+    check.must(item.decode({id = GOAL, title = "a goal", parent = BOARD})),
     check.must(item.decode({id = CONTAINER, title = "a container",
           parent = GOAL})),
     check.must(item.decode({id = LEAF, title = "a leaf", parent = CONTAINER,
           claim = "session-a", pr = 42})),
     check.must(item.decode({id = FRESH, title = "a fresh leaf",
           parent = GOAL})),
-    check.must(item.decode({id = LESSER, title = "a lesser outcome"})),
+    check.must(item.decode({id = LESSER, title = "a lesser outcome", parent = BOARD})),
+    check.must(item.decode({id = BOARD, title = "board",
+          order = GOAL .. " " .. LESSER})),
   }
 end
 
@@ -85,7 +86,7 @@ local function full_specs(): {string: string}
 end
 
 local function test_status_renders_doing_against_the_bound()
-  local lines, verdict = view.status_report(board_items(), full_specs(), nil, nil, ROOTS)
+  local lines, verdict = view.status_report(board_items(), full_specs())
   assert(has(lines, "^doing  1/10$"), table.concat(lines, "\n"))
   assert(has(lines, "%[review%]"), "the substate shows")
   assert(has(lines, "@session%-a"), "so does the claim")
@@ -100,14 +101,14 @@ local function test_status_renders_doing_against_the_bound()
   assert(verdict == "doing 1/10", verdict)
 end
 
--- Untriaged roots render item by item under the triage count: with
+-- Untriaged outcomes render item by item under the triage count: with
 -- `tree` gone, this is the one list of them anyone gets.
 local function test_status_lists_the_triage_queue()
   local items = board_items()
   local capture = fresh_id()
   items[#items + 1] = check.must(item.decode({id = capture,
-        title = "a capture"}))
-  local lines = view.status_report(items, full_specs(), nil, nil, ROOTS)
+        title = "a capture", parent = BOARD}))
+  local lines = view.status_report(items, full_specs())
   assert(has(lines, "^triage 1$"), table.concat(lines, "\n"))
   assert(has(lines, "^  " .. lit(tail.handle(capture)) .. " a capture$"),
     "each untriaged root is listed with its wrapped handle, not the "
@@ -191,8 +192,7 @@ local function test_status_prints_one_summary_line_for_flagged_items()
 end
 
 local function test_next_names_one_action_and_its_rule()
-  local report = view.next_report(board_items(), full_specs(), nil, nil,
-    ROOTS)
+  local report = view.next_report(board_items(), full_specs())
   assert(report:find("review", 1, true)
     and report:find(tail.handle(LEAF), 1, true),
     "a PR awaiting a verdict is judged before anything is pulled: "
@@ -224,7 +224,7 @@ local function test_next_alternate_carries_an_overlap_annotation()
   specs[SECOND] = table.concat({
       "## Change", "Also touch `_work/brief.tl`.",
     }, "\n")
-  local report = view.next_report(items, specs, nil, nil, ROOTS)
+  local report = view.next_report(items, specs)
   assert(report:find("or: pull " .. tail.handle(FRESH)
       .. " a fresh leaf — overlaps: " .. tail.handle(SECOND)
       .. " on _work/brief.tl", 1, true),
@@ -268,7 +268,7 @@ local function test_repo_is_rendered_in_show_and_status()
         repo = "whilp/cosmopolitan"}))
   all[#all + 1] = scoped
 
-  local ranks = rank.positions(all, {})
+  local ranks = rank.positions(all)
   local show_lines = show.show_report(scoped, all, ranks, "", {}, {})
   assert(has(show_lines, "^repo: whilp/cosmopolitan$"),
     "show prints a repo line: " .. table.concat(show_lines, "\n"))

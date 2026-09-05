@@ -12,13 +12,16 @@
 --- drops the mutation whole, re-syncs, and refuses — re-running the
 --- verb re-applies every gate against the merged board.
 ---
---- Decomposition and triage are both `attach`: giving an item a
---- parent is the whole operation, because roles derive from the graph
---- — a captured item becomes work by gaining a parent, and a workable
---- item becomes a container the moment a child attaches under it.
---- Rank is the other half of triage and has its own verb, `rank`,
---- because an item can be placed without being adopted and adopted
---- without being ranked.
+--- Decomposition and re-triage are both `attach`: moving an item's
+--- parent is the whole operation, because roles derive from the
+--- graph — an outcome becomes work by gaining a parent other than the
+--- board, and a workable item becomes a container the moment a child
+--- attaches under it. Rank is the other half of triage and has its
+--- own verb, `rank`, because an item can be placed without being
+--- moved and moved without being ranked. `new` with no `--parent`
+--- files under the board — the one parentless item — the same
+--- position `attach` never needs to move an item TO, since only
+--- `init` creates it.
 local cachequery = require("_work.cachequery")
 local flow = require("_work.flow")
 local friction = require("_work.gitfriction")
@@ -47,16 +50,19 @@ local function add_once(list: {item.Item}, x: item.Item): {item.Item}
   return list
 end
 
---- File a new item into the graph, todo if it has a parent and triage
---- otherwise. `spec` is nil to leave the tree with no `spec.md` at
---- all — an empty string would instead write an EMPTY `spec.md`,
---- which is a different, visible outcome. Mints a fresh id; a caller
---- that needs a chosen id (a fixture, a replay) builds the `item.Item`
---- and calls `storewrite.save` directly — see
---- `_work/storeinit_test.tl`'s `seed_one_item`.
+--- File a new item into the graph, todo if it lands below the outcome
+--- level, triage if it lands directly under the board. `spec` is nil
+--- to leave the tree with no `spec.md` at all — an empty string would
+--- instead write an EMPTY `spec.md`, which is a different, visible
+--- outcome. Mints a fresh id; a caller that needs a chosen id (a
+--- fixture, a replay) builds the `item.Item` and calls
+--- `storewrite.save` directly — see `_work/storeinit_test.tl`'s
+--- `seed_one_item`.
 --- @param s store.Store The store
 --- @param title string The item's title
---- @param parent string The parent id, or "" to file it without one
+--- @param parent string The parent id, or "" to file it under the
+--- board — refused when this repository has no board yet (`init`
+--- creates one)
 --- @param spec string | nil Sidecar prose to write, or nil to write none
 --- @param repo string The item's repo field; nil becomes "". Refused
 --- under a foreign owner unless `spec` names it under `## Access`
@@ -64,9 +70,9 @@ end
 --- roll call — a pass whose transcripts are gone
 --- @param why string | nil Why --force was needed
 --- @param before string | nil Place it immediately before this sibling
---- under `parent`; needs `parent` — a root ranks with `rank`, not `new`
+--- under `parent` (the board, when `parent` is "")
 --- @param after string | nil Place it immediately after this sibling
---- under `parent`; needs `parent`, and at most one of before/after
+--- under `parent`; at most one of before/after
 --- @return integer 0 on success, 1 otherwise
 local function cmd_new(s: store.Store, title: string, parent: string,
     spec: string | nil, repo: string, force?: boolean, why?: string,
@@ -75,11 +81,6 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   local rsn = why or ""
   local bfr = before or ""
   local aft = after or ""
-  if parent == "" and (bfr ~= "" or aft ~= "") then
-    return gate.verdict_line("new", false,
-      "REFUSED: --before/--after need --parent — a root ranks with "
-      .. "`rank`, not `new`")
-  end
   local forced = gate.force_refusal(frc, rsn)
   if forced then
     return gate.verdict_line("new", false, "REFUSED: " .. forced)
@@ -106,15 +107,23 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     end
   end
   local index = flow.by_id(all)
-  local parent_item: item.Item = nil
-  if parent ~= "" then
-    parent_item = index[parent]
-    if parent_item == nil then
-      return gate.verdict_line("new", false, ("no item %s"):format(parent))
+  -- No `--parent` means "under the board" — found as the one
+  -- parentless item, never a second field to keep in step with it.
+  local parent_id = parent
+  if parent_id == "" then
+    local board = flow.find_board(all)
+    if board == nil then
+      return gate.verdict_line("new", false,
+        "REFUSED: this board has no board item yet — run `gitboard init`")
     end
+    parent_id = board.id
+  end
+  local parent_item = index[parent_id]
+  if parent_item == nil then
+    return gate.verdict_line("new", false, ("no item %s"):format(parent_id))
   end
   local it: item.Item = {
-    id = ksuid.new(), title = title, parent = parent, repo = repo or "",
+    id = ksuid.new(), title = title, parent = parent_id, repo = repo or "",
     order = {}, claim = "", pr = 0, verdict = "",
     verdict_head = "", resolution = "",
   }
@@ -140,16 +149,13 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- by design — the queue intake writes into can always accept,
   -- which is what keeps the cheap decision cheap. The bound binds at
   -- take, where committing to work is the expensive decision.
-  local also: {item.Item} = {}
-  if parent_item ~= nil then
-    also = gate.containered(parent_item)
-    local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
-    if perr ~= "" then
-      return gate.verdict_line("new", false, perr)
-    end
-    if placed then
-      also = add_once(also, parent_item)
-    end
+  local also = gate.containered(parent_item, index)
+  local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
+  if perr ~= "" then
+    return gate.verdict_line("new", false, perr)
+  end
+  if placed then
+    also = add_once(also, parent_item)
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
@@ -157,9 +163,10 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if not ok then
     return gate.verdict_line("new", false, err)
   end
-  local entered = "triage — rank it among the roots, or attach it under a ranked root"
-  if parent ~= "" then
-    entered = "todo"
+  local entered = "todo"
+  if flow.is_board(parent_item) then
+    entered = "triage — rank it among the outcomes, or attach it under a "
+    .. "ranked outcome"
   end
   return gate.verdict_line("new", true, ("%s enters %s"):format(it.id, entered))
 end
@@ -197,8 +204,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if id == parent then
     return gate.verdict_line("attach", false, "an item cannot parent itself")
   end
-  local up = flow.root_of(parent_item, index)
-  if up == nil then
+  if not flow.reaches_board(parent_item, index) then
     return gate.verdict_line("attach", false,
       ("%s's own parent chain is broken"):format(parent:sub(1, 8)))
   end
@@ -220,7 +226,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if #bad > 0 then
     return gate.verdict_line("attach", false, table.concat(bad, "; "))
   end
-  local also = gate.containered(parent_item)
+  local also = gate.containered(parent_item, index)
   local placed, perr = rank.place_under(parent_item, id, before or "", after or "", index)
   if perr ~= "" then
     return gate.verdict_line("attach", false, perr)

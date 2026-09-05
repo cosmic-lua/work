@@ -19,6 +19,7 @@ local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -75,6 +76,14 @@ local function init_shared(name: string, clones: integer): string, {string}
     local dir = fs.join(base, ("clone%d"):format(i))
     git(base, {"clone", "-q", bare, dir})
     git(dir, {"config", "core.createObject", "rename"})
+    if i > 1 then
+      -- The first clone's own `init_repo` mints the board (and
+      -- best-effort pushes it); fetch it down before this clone's own
+      -- `init_repo` runs, so it finds that board already there
+      -- instead of minting a second one.
+      assert(refs.ensure_refspecs(dir))
+      assert(refs.fetch_prune(dir))
+    end
     assert(store.init_repo(dir))
     out[#out + 1] = dir
   end
@@ -217,67 +226,12 @@ local function test_an_items_order_round_trips_through_save_and_load()
     "order round-trips in rank order: " .. table.concat(loaded.order, ","))
 end
 
--- The board's own root ranking has no item behind it at all: it lives
--- on `refs/heads/board/order` alone, written by `save_root_order` (no
--- verb calls it yet) and read back by `store.list`/`store.root_order`
--- the same way `store.list` already surfaces `refs/heads/board/seq`.
-local function test_the_board_root_order_round_trips_through_save_and_list()
-  local root = init_state_repo("root-order-roundtrip")
-  local s = check.must(store.open(root))
-  local r1 = make_item()
-  local r2 = make_item()
-  r1.parent, r2.parent = "", ""
-  assert(storewrite.save(s, r1, "new r1", nil, {r2}))
-  assert(#store.root_order(s) == 0, "no root ranking has been written yet")
-  assert(storewrite.save_root_order(s, {r1.id, r2.id}, "rank the roots"))
-  assert(#store.root_order(s) == 2 and store.root_order(s)[1] == r1.id,
-    "save_root_order updates the store's own observed ranking")
-
-  -- A fresh store handle re-reads it straight from git, through `list`.
-  local s2 = check.must(store.open(root))
-  check.must(store.list(s2))
-  local got = store.root_order(s2)
-  assert(#got == 2 and got[1] == r1.id and got[2] == r2.id,
-    "the board's root ranking round-trips: " .. table.concat(got, ","))
-end
-
--- Writing the SAME ranking again is a no-op, exactly like an unchanged
--- item save — `is_noop`-testable, and no new commit on the ref.
-local function test_writing_the_same_root_order_again_is_a_no_op()
-  local root = init_state_repo("root-order-noop")
-  local s = check.must(store.open(root))
-  local r1 = make_item()
-  r1.parent = ""
-  assert(storewrite.save(s, r1, "new r1"))
-  assert(storewrite.save_root_order(s, {r1.id}, "rank the roots"))
-  local ok, err = storewrite.save_root_order(s, {r1.id}, "rank the roots again")
-  assert(ok, "an unchanged ranking is still a success: " .. tostring(err))
-  assert(store.is_noop(err), "is_noop recognizes it: " .. err)
-end
-
--- `refs/heads/board/order` rides the same `+refs/heads/board/*:...`
--- mirror refspec `refs/heads/board/seq`/`format` already fetch and push
--- through — confirmed here rather than assumed: a root ranking
--- published from one clone reaches a `sync` on another, with no code
--- of its own in `_work.publish`.
-local function test_the_board_root_order_publishes_and_syncs()
-  local bare, clones = init_shared("root-order-sync", 2)
-  assert(bare)
-  local a = check.must(store.open(clones[1]))
-  local r1 = make_item()
-  r1.parent = ""
-  assert(storewrite.save(a, r1, "new r1"))
-  assert(publish.publish(a))
-  assert(storewrite.save_root_order(a, {r1.id}, "rank the roots"))
-  assert(publish.publish(a))
-
-  local b = check.must(store.open(clones[2]))
-  assert(publish.sync(b))
-  check.must(store.list(b))
-  local got = store.root_order(b)
-  assert(#got == 1 and got[1] == r1.id,
-    "the root ranking reaches the second clone: " .. table.concat(got, ","))
-end
+-- The board's own outcome ranking is not a separate mechanism at all:
+-- it is the board item's own `order` field, an ordinary `save` like
+-- any other item's — covered by `_work/gitrank_test.tl`'s
+-- `test_rank_among_outcomes_writes_and_reads_back` and
+-- `test_an_outcome_rank_survives_a_rebase`, which exercise it through
+-- the real `rank` verb rather than a bespoke write path here.
 
 local function test_publish_fast_forward()
   local bare, clones = init_shared("ff", 2)

@@ -101,31 +101,30 @@ local function undeclared_repos(it: item.Item, body: string): {string}
 end
 
 --- The problems that keep an item from being taken: it must be
---- workable, its root must be ranked, its spec must fill the
+--- workable, its outcome must be ranked, its spec must fill the
 --- spec-bar sections, its own chain must be traceable, and its
 --- `repo` must be somewhere a claiming session can land a diff. The
 --- one list `check` reports and `take` enforces.
 --- @param s store.Store The store
 --- @param it item.Item The item
 --- @param all {item.Item} Every item
---- @param root_order {string} The board's root list
 --- @param body string | nil Its spec sidecar, when the caller already
 --- has it (a batched `read_specs`, say) — nil to read it here
 --- @return {string} Problems, empty when the item meets the bar
 local function ready_problems(s: store.Store, it: item.Item,
-    all: {item.Item}, root_order: {string}, body?: string): {string}
+    all: {item.Item}, body?: string): {string}
   local index = flow.by_id(all)
   local out = flow.item_problems(it, index)
   local r = flow.role(it, all)
   if r ~= "work" then
     out[#out + 1] = ("%s is a %s, not workable"):format(it.id:sub(1, 8), r)
   end
-  -- Rank is a path from the root: an item whose root is not in the
-  -- board's own root list has no answer to "where does this sit
+  -- Rank is a path from the outcome: an item whose outcome is not in
+  -- the board's own `order` has no answer to "where does this sit
   -- against everything else" and cannot be queued honestly.
-  if not rank.is_ranked(rank.positions(all, root_order), it.id) then
-    out[#out + 1] = ("%s's root is unranked — rank the root first "
-      .. "(`gitboard rank <root>`), or attach it under an item that "
+  if not rank.is_ranked(rank.positions(all), it.id) then
+    out[#out + 1] = ("%s's outcome is unranked — rank the outcome first "
+      .. "(`gitboard rank <outcome>`), or attach it under an item that "
       .. "already is"):format(it.id:sub(1, 8))
   end
   local spec_body = body or store.read_spec(s, it.id)
@@ -154,7 +153,7 @@ local record gitready
   number: integer): string
   undeclared_repos: function(it: item.Item, body: string): {string}
   ready_problems: function(s: store.Store, it: item.Item,
-  all: {item.Item}, root_order: {string}, body?: string): {string}
+  all: {item.Item}, body?: string): {string}
 end
 
 local M: gitready = {

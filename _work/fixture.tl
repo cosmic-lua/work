@@ -13,6 +13,7 @@ local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
+local refs = require("_work.refs")
 local store = require("_work.store")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
@@ -64,7 +65,12 @@ end
 --- A bare "remote" with nothing filed yet, plus two clones — each
 --- carrying the mirror refspecs `store.init_repo` writes once it sees
 --- their `origin`, the same way a real `gitboard init` after a clone
---- would.
+--- would. The first clone's `init_repo` mints the board (titled
+--- "board") and best-effort pushes it; the second clone FETCHES before
+--- its own `init_repo` runs, so it finds that board already there
+--- instead of minting a second one — `init_repo` has no way to see a
+--- remote's state on its own, only what this checkout has already
+--- fetched.
 local function init_shared(name: string): store.Store, store.Store
   local base = fs.join(tmpdir, "verbs-shared-" .. name)
   assert(fs.remove_all(base))
@@ -72,15 +78,20 @@ local function init_shared(name: string): store.Store, store.Store
   local bare = fs.join(base, "remote.git")
   git(base, {"init", "-q", "--bare", bare})
   git(bare, {"config", "core.createObject", "rename"})
-  local out: {store.Store} = {}
-  for i = 1, 2 do
-    local dir = fs.join(base, ("clone%d"):format(i))
-    git(base, {"clone", "-q", bare, dir})
-    git(dir, {"config", "core.createObject", "rename"})
-    assert(store.init_repo(dir))
-    out[#out + 1] = check.must(store.open(dir))
-  end
-  return out[1], out[2]
+  local dir1 = fs.join(base, "clone1")
+  git(base, {"clone", "-q", bare, dir1})
+  git(dir1, {"config", "core.createObject", "rename"})
+  assert(store.init_repo(dir1))
+  local s1 = check.must(store.open(dir1))
+
+  local dir2 = fs.join(base, "clone2")
+  git(base, {"clone", "-q", bare, dir2})
+  git(dir2, {"config", "core.createObject", "rename"})
+  assert(refs.ensure_refspecs(dir2))
+  assert(refs.fetch_prune(dir2))
+  assert(store.init_repo(dir2))
+  local s2 = check.must(store.open(dir2))
+  return s1, s2
 end
 
 --- Point a store's origin at GitHub for READING while its pushes keep
@@ -192,11 +203,12 @@ local function give_spec(s: store.Store, id: string)
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
 end
 
---- An organizing root with one workable leaf under it, both filed
---- through `new`. The root is RANKED last among roots so that it —
---- and everything beneath it — is ranked: an unranked root would leave
---- its leaf unpullable, which is the rule under test elsewhere, not a
---- property of this fixture.
+--- An organizing outcome (filed under the board by `new`'s own default,
+--- since `parent` is "") with one workable leaf under it, both filed
+--- through `new`. The outcome is RANKED last among the board's
+--- outcomes so that it — and everything beneath it — is ranked: an
+--- unranked outcome would leave its leaf unpullable, which is the rule
+--- under test elsewhere, not a property of this fixture.
 local function root_with_leaf(s: store.Store): string, string
   local root = file_item(s, "an outcome", "")
   local _peer = file_item(s, "a lesser outcome", "")

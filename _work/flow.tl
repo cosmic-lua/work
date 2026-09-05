@@ -1,11 +1,18 @@
 --- The flow rules over the item graph: pure functions over a list of
 --- items, no network and no filesystem. There are no kinds — an
---- item's ROLE derives from its position in the graph, and this
---- module is where that derivation lives:
+--- item's ROLE derives from its DEPTH in the graph, and this module is
+--- where that derivation lives:
 ---
----   container an item with open children (being decomposed)
----   root      a parentless item, organizing or awaiting a decision
----   work      a parented leaf — the only role with a state
+---   board     the one parentless item — never workable, never taken
+---   container any item with open children (being decomposed)
+---   outcome   a direct child of the board — decomposed, never taken
+---   work      a childless item below the outcome level
+---
+--- The board and outcome tests (`is_board`, `is_outcome`) live here
+--- rather than on `_work.item.Item` because they need more than one
+--- item to answer: `is_board` alone is a single-item parentless check,
+--- but `is_outcome` has to look the item's own parent up to see
+--- whether THAT is the board.
 ---
 --- A workable item's STATE derives from the facts it carries, never
 --- from a declared column:
@@ -151,18 +158,55 @@ local function has_open_children(items: {Item}, id: string): boolean
   return false
 end
 
---- The role an item's graph position gives it. A root with children
---- and a parented one with children are both something being
---- decomposed, so nothing distinguishes them here.
+--- Whether `i` is the board: the one item with no parent.
+--- @param i Item The item
+--- @return boolean True when parentless
+local function is_board(i: Item): boolean
+  return it.is_parentless(i)
+end
+
+--- Whether `i` is an outcome: a direct child of the board. Needs
+--- `index` to look its own parent up — a single item cannot answer
+--- this about itself.
+--- @param i Item The item
+--- @param index Index Items by id
+--- @return boolean True when `i`'s own parent is the board
+local function is_outcome(i: Item, index: Index): boolean
+  local parent = index[i.parent or ""]
+  return parent ~= nil and is_board(parent)
+end
+
+--- The item with no parent, "" when there is one to have, found by
+--- walking `items` in order (`store.list`'s own id order) so the
+--- choice is deterministic even on a board `fsck` would flag for
+--- carrying more than one such item.
+--- @param items {Item} All items
+--- @return Item | nil The board, nil when none is filed yet
+local function find_board(items: {Item}): Item | nil
+  for _, i in ipairs(items) do
+    if is_board(i) then
+      return i
+    end
+  end
+  return nil
+end
+
+--- The role an item's graph position gives it: the board first (its
+--- own open children would otherwise read as a container), then
+--- decomposition (a container, board or not), then whether it is a
+--- direct child of the board, then plain work.
 --- @param i Item The item
 --- @param items {Item} All items
---- @return string "container" | "root" | "work"
+--- @return string "board" | "container" | "outcome" | "work"
 local function role(i: Item, items: {Item}): string
+  if is_board(i) then
+    return "board"
+  end
   if has_open_children(items, i.id) then
     return "container"
   end
-  if it.is_root(i) then
-    return "root"
+  if is_outcome(i, by_id(items)) then
+    return "outcome"
   end
   return "work"
 end
@@ -246,15 +290,40 @@ local function doing_refusal(items: {Item}, taking?: Item): string | nil
   :format(n, DOING_LIMIT)
 end
 
---- The root an item's parent chain reaches, or nil for a broken or
---- cyclic chain.
+--- Whether `i`'s parent chain eventually reaches the board — the
+--- structural soundness test `item_problems`/`graph_problems` use.
+--- False for a broken or cyclic chain, or one that runs past
+--- `MAX_DEPTH` hops without reaching it.
 --- @param i Item The item
 --- @param index Index Items by id
---- @return Item | nil The root
-local function root_of(i: Item, index: Index): Item | nil
+--- @return boolean True when the chain reaches the board
+local function reaches_board(i: Item, index: Index): boolean
   local cur = i
   for _ = 1, MAX_DEPTH do
-    if it.is_root(cur) then
+    if is_board(cur) then
+      return true
+    end
+    cur = index[cur.parent]
+    if cur == nil then
+      return false
+    end
+  end
+  return false
+end
+
+--- The outcome an item's parent chain reaches — itself when it is one
+--- — or nil when the chain is broken, cyclic, or belongs to the board
+--- itself (which has no outcome ancestor).
+--- @param i Item The item
+--- @param index Index Items by id
+--- @return Item | nil The outcome
+local function outcome_of(i: Item, index: Index): Item | nil
+  local cur = i
+  for _ = 1, MAX_DEPTH do
+    if is_board(cur) then
+      return nil
+    end
+    if is_outcome(cur, index) then
       return cur
     end
     cur = index[cur.parent]
@@ -266,7 +335,7 @@ local function root_of(i: Item, index: Index): Item | nil
 end
 
 --- ONE item's graph problems: a parent that does not exist, and a
---- chain that never reaches a root. Placement is not asked here —
+--- chain that never reaches the board. Placement is not asked here —
 --- an unplaced item is the triage queue's to report, and the take
 --- gate is where placement refuses work — so an unrelated item's
 --- broken chain can never refuse a take that has nothing to do with
@@ -277,14 +346,14 @@ end
 --- @return {string} Problems, possibly empty
 local function item_problems(i: Item, index: Index): {string}
   local out: {string} = {}
-  if not it.is_root(i) and index[i.parent] == nil then
+  if not is_board(i) and index[i.parent] == nil then
     out[#out + 1] = ("%s: parent %s does not exist"):format(i.id, i.parent)
     return out
   end
   if not it.is_open(i) then
     return out
   end
-  if root_of(i, index) == nil then
+  if not reaches_board(i, index) then
     out[#out + 1] = ("%s: parent chain is broken or cyclic"):format(i.id)
   end
   return out
@@ -304,31 +373,29 @@ local function graph_problems(items: {Item}): {string}
   return out
 end
 
---- The open roots that are RANKED, in rank order, each with whether
---- live work already drives it (an open item whose parent chain
---- reaches it). Nothing marks a root as important: standing in the
---- board's own root list is the only claim to importance the board
---- recognises.
+--- The open outcomes that are RANKED — positioned in the board's own
+--- `order` — in rank order, each with whether live work already
+--- drives it (an open descendant whose parent chain reaches it).
+--- Nothing marks an outcome as important: standing in the board's own
+--- list is the only claim to importance the board recognises.
 --- @param items {Item} All items
---- @param root_order {string} The board's root list
---- @return {Item} Open ranked roots, rank order
---- @return {string: boolean} root id -> has live work
-local function roots(items: {Item}, root_order: {string}): {Item},
-  {string: boolean}
+--- @return {Item} Open ranked outcomes, rank order
+--- @return {string: boolean} outcome id -> has live work
+local function roots(items: {Item}): {Item}, {string: boolean}
   local index = by_id(items)
-  local ranks = rank.positions(items, root_order)
+  local ranks = rank.positions(items)
   local out: {Item} = {}
   local live: {string: boolean} = {}
   for _, i in ipairs(items) do
     if it.is_open(i) then
-      if it.is_root(i) then
+      if is_outcome(i, index) then
         if rank.is_ranked(ranks, i.id) then
           out[#out + 1] = i
         end
-      else
-        local root = root_of(i, index)
-        if root ~= nil then
-          live[root.id] = true
+      elseif not is_board(i) then
+        local outcome = outcome_of(i, index)
+        if outcome ~= nil then
+          live[outcome.id] = true
         end
       end
     end
@@ -336,23 +403,24 @@ local function roots(items: {Item}, root_order: {string}): {Item},
   return rank.sorted(out, ranks), live
 end
 
---- The triage queue: open roots absent from the board's root list.
---- Captured evidence, nothing decomposing it, nothing having adopted
---- it, and no claim yet about how much it matters — which is exactly
---- the state triage exists to resolve, by ranking it among the roots,
---- attaching it under something ranked, or ending it.
+--- The triage queue: open outcomes the board's own `order` does not
+--- position. Captured evidence, nothing decomposing it, nothing
+--- having adopted it, and no claim yet about how much it matters —
+--- which is exactly the state triage exists to resolve, by ranking it
+--- among the outcomes, attaching it under one already ranked, or
+--- ending it.
 ---
---- Ranked is what separates this queue from intake: a root somebody
---- HAS ranked is an outcome the planner decomposes (`roots`), even
+--- Ranked is what separates this queue from intake: an outcome
+--- somebody HAS ranked is one the planner decomposes (`roots`), even
 --- with no children yet.
 --- @param items {Item} All items
---- @param root_order {string} The board's root list
---- @return {Item} Unranked roots, age order
-local function untriaged(items: {Item}, root_order: {string}): {Item}
-  local ranks = rank.positions(items, root_order)
+--- @return {Item} Unranked outcomes, age order
+local function untriaged(items: {Item}): {Item}
+  local index = by_id(items)
+  local ranks = rank.positions(items)
   local out: {Item} = {}
   for _, i in ipairs(items) do
-    if it.is_open(i) and it.is_root(i)
+    if it.is_open(i) and is_outcome(i, index)
     and not has_open_children(items, i.id)
     and not rank.is_ranked(ranks, i.id) then
       out[#out + 1] = i
@@ -378,16 +446,19 @@ local record flow
   seed?: string): {Item}
   by_id: function(items: {Item}): Index
   has_open_children: function(items: {Item}, id: string): boolean
+  is_board: function(i: Item): boolean
+  is_outcome: function(i: Item, index: Index): boolean
+  find_board: function(items: {Item}): Item | nil
   role: function(i: Item, items: {Item}): string
   in_state: function(items: {Item}, state: string,
   ranks: {string: rank.Rank}, seed?: string): {Item}
   doing_refusal: function(items: {Item}, taking?: Item): string | nil
-  root_of: function(i: Item, index: Index): Item | nil
+  reaches_board: function(i: Item, index: Index): boolean
+  outcome_of: function(i: Item, index: Index): Item | nil
   item_problems: function(i: Item, index: Index): {string}
   graph_problems: function(items: {Item}): {string}
-  roots: function(items: {Item}, root_order: {string}): {Item},
-  {string: boolean}
-  untriaged: function(items: {Item}, root_order: {string}): {Item}
+  roots: function(items: {Item}): {Item}, {string: boolean}
+  untriaged: function(items: {Item}): {Item}
   ready_gaps: function(body: string): {string}
 end
 
@@ -405,10 +476,14 @@ local M: flow = {
   unified = unified,
   by_id = by_id,
   has_open_children = has_open_children,
+  is_board = is_board,
+  is_outcome = is_outcome,
+  find_board = find_board,
   role = role,
   in_state = in_state,
   doing_refusal = doing_refusal,
-  root_of = root_of,
+  reaches_board = reaches_board,
+  outcome_of = outcome_of,
   item_problems = item_problems,
   graph_problems = graph_problems,
   roots = roots,

@@ -23,11 +23,12 @@
 --- index has to load it anyway to report on it.
 ---
 --- `ranks` carries one row per entry of every item's own `order` list
---- (`parent` = that item's id) and of the board's root list (`parent`
---- = ''), `position` the entry's 1-based index in the list AS STORED —
---- a stale or otherwise non-child entry lands verbatim; deriving a
---- clean dense ranking from it is `_work.index_rank`'s job, not the
---- load's.
+--- (`parent` = that item's id) — the board's own outcome ranking
+--- included, since it is an ordinary item's `order` field like any
+--- other, not a separate table — `position` the entry's 1-based index
+--- in the list AS STORED — a stale or otherwise non-child entry lands
+--- verbatim; deriving a clean dense ranking from it is
+--- `_work.index_rank`'s job, not the load's.
 local DDL < const > = [[
 CREATE TABLE items (
   id TEXT PRIMARY KEY,
@@ -47,7 +48,7 @@ CREATE TABLE items (
 ) STRICT, WITHOUT ROWID;
 
 -- One row per entry of every item's own `order` list (`parent` = that
--- item's id) and of the board's root list (`parent` = '') — see the
+-- item's id, the board's own outcome ranking included) — see the
 -- module header. `child` deliberately carries no foreign key, the same
 -- exception `edges.to_id` gets.
 CREATE TABLE ranks (
@@ -77,8 +78,8 @@ CREATE UNIQUE INDEX one_open_item_per_key
 -- `parent` and a rank's `child` carry no foreign key (see the module
 -- header), so nothing here forces their use — but both are join/filter
 -- keys on every read: `containers` and `workable` filter items by
--- parent, `broken_chains`' walk searches for roots by `parent = ''` at
--- every recursive step, and `_work.index_rank`'s dense-position view
+-- parent, `broken_chains`' walk searches for the board by `parent = ''`
+-- at every recursive step, and `_work.index_rank`'s dense-position view
 -- joins `ranks.child` against `items` once per rank entry.
 -- `EXPLAIN QUERY PLAN` confirms SQLite picks these over a full scan
 -- for both.
@@ -88,6 +89,7 @@ CREATE INDEX ranks_child ON ranks(child);
 CREATE VIEW open_items AS
   SELECT * FROM items WHERE resolution = '';
 
+-- The board: the one parentless item, in a well-formed tree.
 CREATE VIEW roots AS
   SELECT * FROM items WHERE parent = '';
 

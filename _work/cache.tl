@@ -320,15 +320,10 @@ end
 --- whose sha changed, appeared, or disappeared. The fetch's own result
 --- passes through unchanged either way; a cache that cannot be read,
 --- or was already stale, is left for the next `open` to rebuild, never
---- a reason to fail the fetch.
----
---- A moved `refs/heads/board/order` skips the patch entirely, even
---- when items also moved: the root list (`ranks` at `parent = ''`) has
---- no single item's patch to ride along with, so patching the items
---- while leaving that move unapplied would record a digest the file no
---- longer actually matches. Leaving `refs_digest` at its pre-fetch
---- value costs only the ordinary stale-cache path: the next `open`
---- rebuilds, picking up everything at once.
+--- a reason to fail the fetch. The board's own outcome ranking needs no
+--- special case here: it is the board item's own `.order` field, so a
+--- change to it moves the board item's sha, and `changed_ids` (below)
+--- already patches whatever item id moved.
 --- @param root string The store's root
 --- @param fetch_fn function() -> boolean, string  The fetch to run
 --- @return boolean True on success
@@ -345,9 +340,6 @@ local function around_fetch(root: string, fetch_fn: function(): boolean, string)
   end
   local after_entries = cachedb.refs_snapshot(root)
   if after_entries == nil then
-    return ok, err
-  end
-  if cachedb.board_order_sha(before_entries) ~= cachedb.board_order_sha(after_entries) then
     return ok, err
   end
   local before_shas = cachedb.shas_by_item(before_entries)

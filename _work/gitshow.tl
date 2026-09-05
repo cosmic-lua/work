@@ -160,7 +160,6 @@ local function cmd_show(s: store.Store, id: string): integer
     return verdict_line("show", false, cerr)
   end
   local all, aerr = cachequery.items(c)
-  local root_order, _oerr = cachequery.root_order(c)
   local close_ok, close_err = cache.close(c)
   if all == nil then
     return verdict_line("show", false, aerr)
@@ -168,7 +167,7 @@ local function cmd_show(s: store.Store, id: string): integer
   if not close_ok then
     return verdict_line("show", false, close_err)
   end
-  local ranks = rank.positions(all, root_order)
+  local ranks = rank.positions(all)
   -- `git log` is the one read the load never carries — the item's
   -- history lives only in its commits, so this stays a deliberate
   -- process rather than folding into a batch.
@@ -193,7 +192,7 @@ local function cmd_show(s: store.Store, id: string): integer
     end
     local bodies = store.read_specs(s, ids)
     body = bodies[it.id] or ""
-    problems = gitready.ready_problems(s, it, all, root_order, body)
+    problems = gitready.ready_problems(s, it, all, body)
     overlaps = overlap.lines(it.id, bodies)
   else
     body = store.read_spec(s, id)

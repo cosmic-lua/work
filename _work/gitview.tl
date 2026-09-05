@@ -145,18 +145,17 @@ end
 --- @param specs act.Specs Sidecar body by id
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param lane_facts {string: string} | nil Lane state, nil when unsynced
---- @param root_order {string} The board's root ranking, in rank order
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function status_report(all: {item.Item}, specs: act.Specs,
-    ages?: health.Ages, lane_facts?: {string: string}, root_order?: {string}):
+    ages?: health.Ages, lane_facts?: {string: string}):
   {string}, string
   local aged = ages or {}
   -- Selection and stage-bucketing stay `flow`'s (todo vs. doing, stage
   -- order) — this is only the RENDER order laid over what it returns,
   -- so every queue on this page reads in the one order `show ID`
   -- describes for a single item.
-  local ranks = rank.positions(all, root_order or {})
+  local ranks = rank.positions(all)
   local out: {string} = {}
   local doing = rank.sorted(flow.in_state(all, "doing", ranks), ranks)
   out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
@@ -206,9 +205,9 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   if #todo > TODO_SHOWN then
     out[#out + 1] = ("  ... %d more"):format(#todo - TODO_SHOWN)
   end
-  -- Untriaged roots render item by item: they are not workable yet,
-  -- and this is the one list of them anyone gets.
-  local triage = rank.sorted(flow.untriaged(all, root_order or {}), ranks)
+  -- Untriaged outcomes render item by item: they are not workable
+  -- yet, and this is the one list of them anyone gets.
+  local triage = rank.sorted(flow.untriaged(all), ranks)
   out[#out + 1] = ("%-6s %d"):format("triage", #triage)
   for _, f in ipairs(triage) do
     out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
@@ -228,13 +227,11 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   return out, verdict
 end
 
---- `list_via_cache`'s result: every item plus the board's root
---- ranking, read off the one open cache together — a record rather
---- than a third return slot, since slot 1 here admits nil
---- (`guide.lint`'s `fallible-returns` rule).
+--- `list_via_cache`'s result: every item read off the one open cache —
+--- a record rather than a bare list, so a later field can join it
+--- without changing every caller's shape.
 local record Board
   items: {item.Item}
-  root_order: {string}
 end
 
 --- Every item via the board cache instead of a fresh git read —
@@ -252,11 +249,9 @@ end
 --- snapshot in `s.touched_at`, so `claim_ages` never has to ask git
 --- again for a claimed item's touch time. A snapshot that fails to
 --- read is not fatal here: `known_digest` is left nil, and `cache.open`
---- falls back to taking its own. Also reads the board's root ranking
---- off the same open cache, so a render that needs both never pays for
---- a second open.
+--- falls back to taking its own.
 --- @param s store.Store The store
---- @return Board | nil Every item, and the board's root ranking
+--- @return Board | nil Every item
 --- @return string Error message
 local function list_via_cache(s: store.Store): Board | nil, string
   local found, _ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
@@ -276,7 +271,6 @@ local function list_via_cache(s: store.Store): Board | nil, string
     return nil, cerr
   end
   local all, ierr = cachequery.items(c)
-  local root_order, _oerr = cachequery.root_order(c)
   local close_ok, close_err = cache.close(c)
   if all == nil then
     return nil, ierr
@@ -284,7 +278,7 @@ local function list_via_cache(s: store.Store): Board | nil, string
   if not close_ok then
     return nil, close_err
   end
-  return {items = all, root_order = root_order}, ""
+  return {items = all}, ""
 end
 
 --- Bare `show`: the whole board. Named `cmd_status` for the report it
@@ -307,7 +301,7 @@ local function cmd_status(s: store.Store): integer
     lane_facts = facts
   end
   local lines, verdict = status_report(all, read_specs(s, all),
-    claim_ages(s, all), lane_facts, board.root_order)
+    claim_ages(s, all), lane_facts)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -362,15 +356,14 @@ end
 --- @param specs act.Specs Sidecar body by id
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Seconds since last board commit, by id
---- @param root_order {string} The board's root ranking, in rank order
 --- @return string The action, its target, the rule behind it, and its guidance
 local function next_report(all: {item.Item}, specs: act.Specs,
-    session?: string, ages?: health.Ages, root_order?: {string}): string
+    session?: string, ages?: health.Ages): string
   -- The session seeds the tie-break, so concurrent sessions asking
   -- the same board fan out across items no judgment separates
   -- instead of converging on one.
   return render_action(
-    act.next_action(all, specs, root_order or {}, session, ages, session), specs)
+    act.next_action(all, specs, session, ages, session), specs)
 end
 
 --- The reason named by an item's most recent board commit, when that
@@ -400,12 +393,11 @@ end
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param ci act.CiStates CI state by item id, absent when unknown
---- @param root_order {string} The board's root ranking, in rank order
 --- @return string The action, its target, the rule behind it, and its guidance
 local function next_report_live(s: store.Store, all: {item.Item},
     specs: act.Specs, session?: string, ages?: health.Ages,
-    ci?: act.CiStates, root_order?: {string}): string
-  local action = act.next_action(all, specs, root_order or {}, session, ages,
+    ci?: act.CiStates): string
+  local action = act.next_action(all, specs, session, ages,
     session, ci)
   if action.kind == "pull" and action.item then
     local events = publish.history(s, action.item.id)
@@ -424,20 +416,20 @@ local function cmd_next(s: store.Store, session?: string): integer
   local all = board.items
   return verdict_line("next", true,
     next_report_live(s, all, read_specs(s, all), session, claim_ages(s, all),
-      ci_states(s, all), board.root_order))
+      ci_states(s, all)))
 end
 
 local record gitview
   type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
   status_report: function(all: {item.Item}, specs: act.Specs,
-  ages?: health.Ages, lane_facts?: {string: string}, root_order?: {string}):
+  ages?: health.Ages, lane_facts?: {string: string}):
   {string}, string
   next_report: function(all: {item.Item}, specs: act.Specs,
-  session?: string, ages?: health.Ages, root_order?: {string}): string
+  session?: string, ages?: health.Ages): string
   next_report_live: function(s: store.Store, all: {item.Item},
   specs: act.Specs, session?: string, ages?: health.Ages,
-  ci?: act.CiStates, root_order?: {string}): string
+  ci?: act.CiStates): string
   bounce_note: function(subject: string): string
   read_specs: function(s: store.Store, all: {item.Item}): act.Specs
   -- Exported only so `_work/gitview_test.tl` can verify the process

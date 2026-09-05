@@ -6,6 +6,7 @@
 -- file cap.
 
 local check = require("cosmic.check")
+local flow = require("_work.flow")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
@@ -48,15 +49,43 @@ local function test_new_after_files_and_places_in_one_publish()
     .. table.concat(reparent.order, ","))
 end
 
--- `--before`/`--after` name a sibling under the NEW parent, so they
--- are refused with no `--parent` at all — a root has no such list;
--- `rank` places roots.
-local function test_new_refuses_before_after_with_no_parent()
-  local s = init_state_repo("new-rootless")
-  local _goal, leaf = root_with_leaf(s)
-  assert(rank.cmd_rank(s, leaf, "", "", true) == 0)
-  assert(graph.cmd_new(s, "a stray", "", nil, "", nil, "", leaf, "") ~= 0,
-    "--before with no --parent is refused")
+-- `new` with no `--parent` files under the board; `--before`/`--after`
+-- name a sibling among the board's OTHER outcomes the same way any
+-- other parent's do, since the board holds its own `order` exactly
+-- like any other parent holds its children's.
+local function test_new_with_no_parent_places_among_the_boards_outcomes()
+  local s = init_state_repo("new-board-outcome")
+  local goal, _leaf = root_with_leaf(s)
+  local before_ids: {string: boolean} = {}
+  for _, i in ipairs(check.must(store.list(s))) do
+    before_ids[i.id] = true
+  end
+  local before_commits = commits(s)
+  assert(graph.cmd_new(s, "a sibling outcome", "", nil, "", nil, "", goal, "") == 0,
+    "new --before goal with no --parent places it among the board's outcomes")
+  assert(commits(s) == before_commits + 2,
+    "one push, two commits: the new outcome and the board's own order")
+  local all = check.must(store.list(s))
+  local board = check.must(flow.find_board(all))
+  local found: string = nil
+  for _, i in ipairs(all) do
+    if not before_ids[i.id] then
+      found = i.id
+    end
+  end
+  assert(found ~= nil, "the new item is on the board")
+  assert(check.must(store.load(s, found)).parent == board.id,
+    "under the board")
+  local reboard = check.must(store.load(s, board.id))
+  local at: integer = nil
+  local goal_at: integer = nil
+  for k, v in ipairs(reboard.order) do
+    if v == found then at = k end
+    if v == goal then goal_at = k end
+  end
+  assert(at ~= nil and goal_at ~= nil and at == goal_at - 1,
+    "the new outcome lands immediately before goal: "
+    .. table.concat(reboard.order, ","))
 end
 
 -- X has to already be a positioned child of the NEW parent.

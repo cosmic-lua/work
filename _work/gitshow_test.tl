@@ -29,6 +29,7 @@ local function next_id(): string
   return check.must(ksuid.encode(1700000000 + seq, ("\0"):rep(16)))
 end
 
+local BOARD < const > = next_id()
 local ROOT < const > = next_id()
 local UNDER < const > = next_id()
 local WORK < const > = next_id()
@@ -51,27 +52,30 @@ local function matched(lines: {string}, pattern: string): boolean
   return false
 end
 
---- A root, a container under it holding one claimed build, a fresh
---- todo leaf, and a second, unranked root.
+--- The board, an outcome under it with a container holding one
+--- claimed build, a fresh todo leaf, and a second, unranked outcome.
+--- Appended last so every existing index (`all[1]` through `all[5]`)
+--- keeps naming what it always did.
 local function a_board(): {item.Item}
   return {
-    check.must(item.decode({id = ROOT, title = "an outcome"})),
+    check.must(item.decode({id = ROOT, title = "an outcome", parent = BOARD})),
     check.must(item.decode({id = UNDER, title = "a container", parent = ROOT})),
     check.must(item.decode({id = WORK, title = "a slice", parent = UNDER,
           claim = "session-a", pr = 42})),
     check.must(item.decode({id = ADRIFT, title = "a fresh leaf",
           parent = ROOT})),
-    check.must(item.decode({id = BEATEN, title = "a lesser outcome"})),
+    check.must(item.decode({id = BEATEN, title = "a lesser outcome", parent = BOARD})),
+    check.must(item.decode({id = BOARD, title = "board"})),
   }
 end
 
---- `a_board()`'s rank map with no root ranking recorded — every
---- assertion below that is not itself about the `rank:` line is
---- indifferent to its exact text.
+--- `a_board()`'s rank map with no outcome ranking recorded on the
+--- board — every assertion below that is not itself about the `rank:`
+--- line is indifferent to its exact text.
 --- @param all {item.Item} Every item
 --- @return {string: rank.Rank} Rank by item id
 local function board_ranks(all: {item.Item}): {string: rank.Rank}
-  return rank.positions(all, {})
+  return rank.positions(all)
 end
 
 local function test_show_prints_fields_role_and_history()
@@ -223,12 +227,13 @@ end
 
 -- `show ID` prints one `rank:` line from `_work.rank.describe` — a
 -- ranked child names its position and its parent's handle, an
--- unranked one (its parent's list skips it) reads "unranked", and a
--- root reads its position among roots.
+-- unranked one (its parent's list skips it) reads "unranked", and an
+-- outcome reads its position among the board's other outcomes.
 local function test_show_prints_the_rank_line_for_a_ranked_child()
   local all = a_board()
   all[1].order = {UNDER, ADRIFT}
-  local ranks = rank.positions(all, {ROOT})
+  all[6].order = {ROOT}
+  local ranks = rank.positions(all)
   local lines = show.show_report(all[2], all, ranks, "", {}, {})
   assert(matched(lines, "^rank: 1 of 2 under .+$"), table.concat(lines, "\n"))
 end
@@ -236,16 +241,18 @@ end
 local function test_show_prints_unranked_for_a_child_missing_from_the_order()
   local all = a_board()
   all[1].order = {ADRIFT}
-  local ranks = rank.positions(all, {ROOT})
+  all[6].order = {ROOT}
+  local ranks = rank.positions(all)
   local lines = show.show_report(all[2], all, ranks, "", {}, {})
   assert(matched(lines, "^rank: unranked$"), table.concat(lines, "\n"))
 end
 
-local function test_show_prints_the_rank_line_for_a_root()
+local function test_show_prints_the_rank_line_for_an_outcome()
   local all = a_board()
-  local ranks = rank.positions(all, {ROOT, BEATEN})
+  all[6].order = {ROOT, BEATEN}
+  local ranks = rank.positions(all)
   local lines = show.show_report(all[1], all, ranks, "", {}, {})
-  assert(matched(lines, "^rank: root 1 of 2$"), table.concat(lines, "\n"))
+  assert(matched(lines, "^rank: outcome 1 of 2$"), table.concat(lines, "\n"))
 end
 
 --- Run `show.cmd_show` against a real store and capture what it

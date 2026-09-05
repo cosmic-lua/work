@@ -241,12 +241,13 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   end
 
   -- Every item's own ranked-children list, `ranks` rows at `parent =
-  -- <item id>` (the board's own root list, `parent = ''`, is
-  -- `root_order`'s job below, not an item's `.order` field) — ordered
-  -- by `position`, the stored 1-based index, stale entries included
-  -- exactly as `item.order` carries them from a fresh git read.
+  -- <item id>` — the board's own outcome ranking included, since it is
+  -- an ordinary item's `.order` field like any other, not a separate
+  -- table — ordered by `position`, the stored 1-based index, stale
+  -- entries included exactly as `item.order` carries them from a
+  -- fresh git read.
   local rank_rows, rqerr = c.db:query(
-    "SELECT parent, child FROM ranks WHERE parent <> '' ORDER BY parent, position")
+    "SELECT parent, child FROM ranks ORDER BY parent, position")
   if rank_rows == nil then
     return nil, rqerr
   end
@@ -270,30 +271,6 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       it.decode_problems = bad
     end
     out[#out + 1] = it
-  end
-  return out, ""
-end
-
---- The board's own root ranking, straight from the cache's `ranks`
---- table (`parent = ''`) — the cache-backed counterpart to
---- `store.root_order`, so a caller that only has an open cache (never
---- a fresh `store.list`) can still read it with no git of its own.
---- @param c cache.Cache The open cache
---- @return {string} Ranked root ids, in rank order, possibly empty
---- @return string Error message
-local function root_order(c: cache.Cache): {string}, string
-  local out: {string} = {}
-  local rows, err = c.db:query(
-    "SELECT child FROM ranks WHERE parent = '' ORDER BY position")
-  if rows == nil then
-    return out, err
-  end
-  for row in rows do
-    out[#out + 1] = row.child as string -- cast: from any (sqlite row)
-  end
-  local rerr = rows:err()
-  if rerr then
-    return {}, rerr
   end
   return out, ""
 end
@@ -333,7 +310,6 @@ local record cachequery
   known_digest?: string): {string}
   resolve_tail: function(root: string, input: string): string | nil, string
   items: function(c: cache.Cache): {item.Item} | nil, string
-  root_order: function(c: cache.Cache): {string}, string
   cmd_find: function(root: string, text: string): integer
 end
 
@@ -343,7 +319,6 @@ local M: cachequery = {
   similar_lines = similar_lines,
   resolve_tail = resolve_tail,
   items = items,
-  root_order = root_order,
   cmd_find = cmd_find,
 }
 

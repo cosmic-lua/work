@@ -70,10 +70,12 @@ like any other — `refs/heads/ended/<ksuid>` is the layout new items were
 filed under before this rule; every reader still reads it, but nothing
 writes a new entry there any more, so a resolved item stays exactly
 where it already was.
-`refs/heads/board/seq`, `refs/heads/board/format`, and
-`refs/heads/board/order` (the board's own root ranking, the same
-blob shape a parent's ranked children take) hold board-wide state
-the same way, outside the per-item namespace — scheduled-lane health
+`refs/heads/board/seq` and `refs/heads/board/format` hold board-wide
+state the same way, outside the per-item namespace. The board itself
+carries no separate ref of its own: it is the one item with no
+parent, `refs/heads/items/<ksuid>` like any other, and its `order`
+blob ranks its outcomes the same way any parent's `order` ranks its
+children — scheduled-lane health
 used to be a fourth such ref (`refs/heads/board/lanes`) but now lives
 only in the local `o/board.db` cache, never committed; see above.
 `refs/heads/board/format`'s tree holds one blob, `format`, naming the layout
@@ -92,7 +94,8 @@ read-only, offline whole-board audit no single verb ever asks:
 a dangling `parent`, an edge kind this build does not interpret (an
 unmigrated board's), a stale `order` entry, an item's tree not
 re-encoding to what it was read from, two open items sharing a key, a
-root carrying a `repo`,
+second parentless item (there is meant to be exactly one — the
+board), a parentless item carrying a `repo`,
 an id filed under both `refs/heads/items` and `refs/heads/ended` at
 once (the pushing credential can create and update a branch but never
 delete one, so an id can end up in both places only by hand, never by
@@ -114,13 +117,14 @@ taking NEW work is refused at the limit, finishing motions never
 are.
 
 Roles derive from the graph — there is no kind field and no goal
-tier: an item with open children is a container being decomposed, a
-parentless one is a root, and a parented leaf is workable (the only
+tier: the one parentless item is the board, its children are the
+outcomes, an item with open children is a container being decomposed,
+and a childless item below the outcome level is workable (the only
 thing with a board state).
 
 How the board orders itself, top to bottom, is `gitboard help order`.
 
-The outcome prose those roots stand for lives in `docs/goals.md` on
+The outcome prose those outcomes stand for lives in `docs/goals.md` on
 cosmic-lua/cosmic's `main`. It is context a planner reads to interpret
 and adjust the tree — nothing here derives from it, and nothing checks
 it.

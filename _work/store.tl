@@ -19,8 +19,11 @@
 local child = require("cosmic.child")
 local format = require("_work.format")
 local fs = require("cosmic.fs")
+local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
+local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
 
 --- One open state repository. Every field but `root` is working state
@@ -31,14 +34,13 @@ local refs = require("_work.refs")
 --- fast-import diff needs the ORIGINAL fields to compare against), each id's committer date
 --- from whichever ref snapshot a caller already took (`touched_at` — `_work.publish.touched_at`
 --- reads it first, falling back to its own one-ref process only for an id no snapshot named),
---- `refs/heads/board/seq`'s own observed tip, the board's own root ranking as OBSERVED
---- (`observed_root_order`) and `refs/heads/board/order`'s own observed tip
---- (`observed_order_sha`) — the diff baseline and lease a root-order write is made against,
---- the same role `leased_item`/`leased_sha` play for one item — the refs a completed `save`
---- still owes `publish` a push for, and every id the most recent `list` found filed under both
+--- `refs/heads/board/seq`'s own observed tip, the refs a completed `save` still owes
+--- `publish` a push for, and every id the most recent `list` found filed under both
 --- `refs/heads/items` and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only
 --- reader; `list`'s ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live
---- here too).
+--- here too). The board's own outcome ranking carries no separate lease of its own any
+--- more — it is the board item's `.order` field, leased exactly like any other item's through
+--- `leased_ref`/`leased_sha`.
 --- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
 --- same fields this module's `load`/`list` populate.
 ---
@@ -59,8 +61,6 @@ local record Store
   leased_item: {string: item.Item}
   touched_at: {string: integer}
   observed_seq: string
-  observed_root_order: {string}
-  observed_order_sha: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
   board_digest: string
@@ -137,12 +137,76 @@ local function git_ok(s: Store, argv: {string}): child.Result | nil, string
   return r
 end
 
+--- Create the board item — the one parentless item, titled "board" —
+--- on a repository that has none yet: a repository already carrying
+--- one (a clone of an already-initialized board, or a second call over
+--- the same tree) is untouched. Mirrors `format.ensure`'s own shape:
+--- the tree, commit, and ref are written directly (`itemtree.build_tree`
+--- with `write`, `gitobj.commit_tree`, `refs.update_ref`), then
+--- best-effort pushed to `origin` when one exists, so the first clone
+--- of a brand-new board is also the one that puts it on the remote for
+--- every later clone to fetch — a plain (non-forced) push that loses to
+--- a board another clone already pushed just means this checkout has
+--- not fetched it yet, resolved the same way any other stale ref is.
+--- @param dir string The directory to prepare
+--- @return boolean True on success
+--- @return string Error message
+local function ensure_board(dir: string): boolean, string
+  local board, berr = gitread.list(dir)
+  if board == nil then
+    return false, berr
+  end
+  for _, existing in ipairs(board.items) do
+    if (existing.parent or "") == "" then
+      return true, ""
+    end
+  end
+  local id = ksuid.new()
+  local it: item.Item = {
+    id = id, title = "board", parent = "", repo = "", base = "", key = "",
+    order = {}, claim = "", builders = {}, speccers = {}, reviewer = "",
+    pr = 0, result = "", verdict = "", verdict_head = "", verdict_spec = "",
+    resolution = "",
+  }
+  local tree_sha, terr = itemtree.build_tree(dir, it, nil, true)
+  if tree_sha == nil then
+    return false, terr
+  end
+  local commit_sha, cerr = gitobj.commit_tree(dir, {
+      tree = tree_sha, parents = {}, message = "board",
+      author_name = "Claude", author_email = "noreply@anthropic.com",
+      committer_name = "Claude", committer_email = "noreply@anthropic.com",
+    })
+  if commit_sha == nil then
+    return false, cerr
+  end
+  local moved, uerr =
+  refs.update_ref(dir, "refs/heads/items/" .. id, commit_sha, refs.ZERO_SHA)
+  if not moved then
+    return false, uerr
+  end
+  local has_origin = child.run({"git", "remote"}, {cwd = dir})
+  if has_origin ~= nil and has_origin.ok
+  and has_origin.stdout:find("origin", 1, true) ~= nil then
+    -- Best-effort, exactly as `format.ensure`'s own push is: a losing
+    -- push here just means another clone's push already landed the
+    -- board, which the next ordinary fetch picks up like any other
+    -- stale ref.
+    local _pushed, _perr = child.run({"git", "-c", "push.negotiate=false", "push",
+        "origin", "refs/heads/items/" .. id}, {cwd = dir})
+  end
+  return true, ""
+end
+
 --- Create a state repository at `dir`: a git repository (initialized
 --- when none is there yet), with the mirror refspecs ADDED to
 --- `remote.origin.fetch` (`refs.ensure_refspecs`; `sync` adds them too,
---- so a plain clone needs no `init` to read the board), and `refs/heads/board/format` created (and
---- best-effort pushed) when this repository has none yet
---- (`format.ensure`). `git clone` already gave `origin` its own
+--- so a plain clone needs no `init` to read the board), `refs/heads/board/format`
+--- created (and best-effort pushed) when this repository has none yet
+--- (`format.ensure`), and the board item itself created the same way
+--- when this repository carries none (`ensure_board`) — the one
+--- parentless item `new` files under when no `--parent` names
+--- something else. `git clone` already gave `origin` its own
 --- default refspec for the checked-out branch (how the machinery
 --- itself stays pullable) — this only adds the three item-ref
 --- patterns beside it, never replacing what was there, so a plain
@@ -170,7 +234,11 @@ local function init_repo(dir: string): boolean, string
   if not ensured then
     return false, eerr
   end
-  return true
+  local boarded, boerr = ensure_board(dir)
+  if not boarded then
+    return false, boerr
+  end
+  return true, ""
 end
 
 --- Open a state repository checkout. The root must be a git
@@ -184,10 +252,9 @@ local function open(root: string): Store | nil, string
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
     leased_sha = {}, leased_item = {}, touched_at = {}, observed_seq = "",
-    observed_root_order = {}, observed_order_sha = "", pending = {},
-    duplicates = {}, board_digest = "", fresh_lease = "", remote_url = "",
-    remote_url_ok = false, remote_url_read = false, remote_present = false,
-    remote_present_read = false}
+    pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
+    remote_url = "", remote_url_ok = false, remote_url_read = false,
+    remote_present = false, remote_present_read = false}
 end
 
 --- The full id a unique prefix names, resolved against the refs
@@ -310,19 +377,9 @@ local function list(s: Store): {item.Item} | nil, string
     s.leased_item[it.id] = snapshot_item(it)
   end
   s.observed_seq = board.seq_sha
-  s.observed_root_order = board.root_order
-  s.observed_order_sha = board.order_sha
   s.duplicates = board.duplicates
   s.board_digest = board.refs_digest
   return board.items
-end
-
---- The board's own root ranking, as the most recent `list` observed
---- it — empty before the first `list` call, or on a board with none.
---- @param s Store The store
---- @return {string} Ranked root ids, in rank order, possibly empty
-local function root_order(s: Store): {string}
-  return s.observed_root_order
 end
 
 --- Every id the most recent `list` found filed under both
@@ -386,7 +443,6 @@ local record store
   read_specs: function(s: Store, ids: {string}): {string: string}
   snapshot_item: function(it: item.Item): item.Item | nil
   list: function(s: Store): {item.Item} | nil, string
-  root_order: function(s: Store): {string}
   duplicates: function(s: Store): {gitread.Duplicate}
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
@@ -406,7 +462,6 @@ local M: store = {
   read_specs = read_specs,
   snapshot_item = snapshot_item,
   list = list,
-  root_order = root_order,
   duplicates = duplicates,
   flagged_summary = flagged_summary,
   stage = stage,

@@ -195,8 +195,9 @@ end
 -- under test is the sidecar `file_repair` now writes.
 local function test_a_minted_repair_is_offered_and_admitted()
   local s = init_state_repo("mint-admitted")
+  local board = check.must(flow.find_board(check.must(store.list(s))))
   local parent = check.must(item.decode({id = lanes.LANE_PARENT,
-        title = "lane repair outcome"}))
+        title = "lane repair outcome", parent = board.id}))
   assert(storewrite.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
   assert(gitrank.cmd_rank(s, parent.id, "", "", true) == 0,
     "rank should be accepted")
@@ -210,13 +211,12 @@ local function test_a_minted_repair_is_offered_and_admitted()
   for _, it in ipairs(all) do
     specs[it.id] = store.read_spec(s, it.id)
   end
-  local root_order = store.root_order(s)
-  local a = action.next_action(all, specs, root_order)
+  local a = action.next_action(all, specs)
   assert(a.kind == "pull" and a.item.id == repair.id,
     "next offers the minted repair: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
 
-  local problems = gitready.ready_problems(s, repair, all, root_order)
+  local problems = gitready.ready_problems(s, repair, all)
   assert(#problems == 0,
     "take admits it too: " .. table.concat(problems, "; "))
   assert(flow.doing_refusal(all, repair) == nil,

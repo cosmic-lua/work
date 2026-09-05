@@ -8,12 +8,16 @@
 --- sits in the dependency graph, the same way a file's role in cosmic
 --- emerges from its position:
 ---
----   a root
----     with open children is a container being decomposed
----     with none          is untriaged — captured, not yet placed
----   a parented item
----     with open children is a container being decomposed
----     with none          is workable
+---   the board  the one parentless item — never workable, never taken
+---   an outcome a direct child of the board — decomposed, never taken
+---   a container any item with open children, being decomposed
+---   work       a childless item below the outcome level
+---
+--- The depth tests that tell these apart (`_work.flow.is_board`,
+--- `_work.flow.is_outcome`) need more than one item to answer, so they
+--- live in `_work.flow`, not here; this file only validates per-item
+--- shape (fields, exclusivity rules) and, where a rule needs no more
+--- than "does this item have a parent at all", tests that directly.
 ---
 --- A workable item's state is DERIVED from the facts it carries,
 --- never declared: open and unclaimed with no PR is `todo`; a claim
@@ -35,10 +39,11 @@ local record Item
   --- The filename stem and the one name other items use: a KSUID.
   id: string
   title: string
-  --- The id this item decomposes; "" for roots.
+  --- The id this item decomposes; "" for the board, the one parentless
+  --- item.
   parent: string
-  --- The owner/name the item's PR lands in. Roots carry no repo at
-  --- all (`problems` refuses one that does); every workable item
+  --- The owner/name the item's PR lands in. The board carries no repo
+  --- at all (`problems` refuses one that does); every workable item
   --- should name one explicitly — most target `_work.product.REPO`,
   --- the product repo this board exists to move work on, and an item
   --- whose PR targets this board repository's own machinery instead
@@ -202,11 +207,16 @@ local function is_open(it: Item): boolean
   return (it.resolution or "") == ""
 end
 
---- Whether an item is a root: no parent. A root with open children
---- organizes a subtree; a childless one is awaiting triage.
+--- Whether an item is parentless — the board, in a well-formed tree,
+--- and the one shape check this file itself needs (below): a second
+--- parentless item is a fsck finding (`_work.gitfsck`), never this
+--- module's to decide. `_work.flow.is_board` is the one other caller
+--- that needs this test; everywhere else that used to ask "is this a
+--- root" now asks a depth question `_work.flow` alone can answer
+--- (`is_board`, `is_outcome`).
 --- @param it Item The item
 --- @return boolean True when parentless
-local function is_root(it: Item): boolean
+local function is_parentless(it: Item): boolean
   return (it.parent or "") == ""
 end
 
@@ -236,12 +246,13 @@ local function problems(it: Item): {string}
   if not is_open(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= "") then
     out[#out + 1] = "a done item holds no claim and no review"
   end
-  if is_root(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= ""
+  if is_parentless(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= ""
     or (it.pr or 0) ~= 0
     or (it.verdict or "") ~= "" or (it.repo or "") ~= ""
     or (it.base or "") ~= "") then
     out[#out + 1] =
-    "claim/reviewer/pr/verdict/repo/base belong to worked items, not roots"
+    "claim/reviewer/pr/verdict/repo/base belong to worked items, never the "
+    .. "board"
   end
   if (it.pr or 0) ~= 0 and (it.result or "") ~= "" then
     out[#out + 1] = "pr and result never both stand: a deliverable is a diff "
@@ -299,8 +310,8 @@ end
 ---
 --- This fails hard only on genuine corruption: an unparseable literal
 --- or a field of the wrong type (`shape.into` against `SPEC`, below).
---- A CONTENT problem — `problems(it)` non-empty: a claimed root, a
---- repeated blocker, and so on — does not fail the decode; the
+--- A CONTENT problem — `problems(it)` non-empty: a claimed parentless
+--- item, a repeated blocker, and so on — does not fail the decode; the
 --- constructed `Item` comes back with `problems(it)` attached at
 --- `.decode_problems` instead (`is_flagged` reads it) — a historical
 --- commit written by an older or less careful writer still replays.
@@ -387,7 +398,7 @@ local record item
   VERDICTS: {string: boolean}
   RESOLUTIONS: {string: boolean}
   is_open: function(it: Item): boolean
-  is_root: function(it: Item): boolean
+  is_parentless: function(it: Item): boolean
   is_flagged: function(it: Item): boolean
   problems: function(it: Item): {string}
   identity_refusal: function(session: string): string
@@ -400,7 +411,7 @@ local M: item = {
   VERDICTS = VERDICTS,
   RESOLUTIONS = RESOLUTIONS,
   is_open = is_open,
-  is_root = is_root,
+  is_parentless = is_parentless,
   is_flagged = is_flagged,
   problems = problems,
   identity_refusal = identity.identity_refusal,

@@ -106,15 +106,22 @@ end
 -- names directly — a second, full `store.list` call after the write,
 -- to report the new standing, which loaded the whole board's
 -- cat-file batches a second time. Ranking a CHILD under its parent
--- (not a root) exercises the same `commit_and_publish` path `new`
--- above does — a root's own `rank` writes `refs/heads/board/order`
--- directly and never touches the cache, which is a different count.
+-- exercises the same `commit_and_publish` path `new` above does —
+-- an outcome's own `rank` (the board's own `order`) goes through the
+-- identical path too, since the board is simply its parent.
 local function test_rank_reads_the_board_once_not_twice()
   local a, _b = fixture.init_shared("rank-load-count")
   assert(graph.cmd_new(a, "an outcome", "", nil, "") == 0)
   local seeded = check.must(store.list(a))
-  assert(#seeded == 1, "one root should be on the board: got " .. #seeded)
-  local root = seeded[1].id
+  assert(#seeded == 2, "the board plus one outcome should be on the board: got "
+    .. #seeded)
+  local root: string = nil
+  for _, i in ipairs(seeded) do
+    if (i.parent or "") ~= "" then
+      root = i.id
+    end
+  end
+  assert(root ~= nil, "the new outcome is on the board")
   assert(graph.cmd_new(a, "a piece of it", root, nil, "") == 0)
   local all = check.must(store.list(a))
   local kid: string = nil

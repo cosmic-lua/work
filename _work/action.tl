@@ -320,14 +320,13 @@ end
 --- guessing.
 --- @param items {Item} All items
 --- @param specs Specs Spec sidecar body, by item id
---- @param root_order {string} The board's root list
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param seed string Per-session tie-break seed, "" for age order
 --- @param ci CiStates CI state by item id, absent when unknown
 --- @param merge_queue QueueStates Accepted items already queued to merge
 --- @return Action The decision
-local function next_action(items: {Item}, specs: Specs, root_order: {string},
+local function next_action(items: {Item}, specs: Specs,
     session?: string, ages?: health.Ages, seed?: string, ci?: CiStates,
     merge_queue?: QueueStates): Action
   local who = session or ""
@@ -335,7 +334,7 @@ local function next_action(items: {Item}, specs: Specs, root_order: {string},
   local salt = seed or ""
   local cim = ci or {}
   local qm = merge_queue or {}
-  local ranks = rank.positions(items, root_order)
+  local ranks = rank.positions(items)
   local ph = phased_action(items, specs, who, ranks, aged, salt, cim, qm)
   local phased = ph.action
   if phased then
@@ -355,7 +354,7 @@ local function next_action(items: {Item}, specs: Specs, root_order: {string},
         ph.suppressed),
     }
   end
-  local taking = intake.intake_action(items, specs, ranks, root_order)
+  local taking = intake.intake_action(items, specs, ranks)
   if taking then
     return taking
   end
@@ -414,7 +413,7 @@ local record action
   phased_action: function(items: {Item}, specs: Specs,
   session: string, ranks: {string: rank.Rank}, ages: health.Ages,
   seed: string, ci?: CiStates, merge_queue?: QueueStates): Phased
-  next_action: function(items: {Item}, specs: Specs, root_order: {string},
+  next_action: function(items: {Item}, specs: Specs,
   session?: string, ages?: health.Ages, seed?: string, ci?: CiStates,
   merge_queue?: QueueStates): Action
 end

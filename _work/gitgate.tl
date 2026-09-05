@@ -213,10 +213,9 @@ end
 --- @param items {item.Item} All items
 --- @param session string The session asking to pull
 --- @param taking item.Item The item about to be taken
---- @param root_order {string} The board's root list
 --- @return string | nil The refusal
 local function review_debt_refusal(items: {item.Item}, session: string,
-    taking: item.Item, root_order: {string}): string | nil
+    taking: item.Item): string | nil
   if (taking.key or "") ~= "" then
     return nil
   end
@@ -231,7 +230,7 @@ local function review_debt_refusal(items: {item.Item}, session: string,
     return nil
   end
   local first = debt[1]
-  local ranks = rank.positions(items, root_order)
+  local ranks = rank.positions(items)
   for _, i in ipairs(flow.unified(items, ranks)) do
     if flow.stage_rank(i) == flow.STAGE_REVIEW
     and (i.reviewer or "") == ""
@@ -349,17 +348,22 @@ end
 
 --- The locks a decomposition clears on the parent that just gained a
 --- child: it is no longer workable, so a claim or review standing on
---- it locks nothing anyone can build. A DONE root reopens the same
---- way: filing or attaching a child under it is evidence against the
---- outcome, so its resolution clears too — verified and retired roots
---- alike, no separate verb.
+--- it locks nothing anyone can build. A DONE outcome reopens the same
+--- way: filing or attaching a child under it is evidence against it,
+--- so its resolution clears too — verified and retired outcomes
+--- alike, no separate verb. The board itself never carries a
+--- resolution to reopen (`_work.gitdoneroot` refuses `done` on it
+--- outright), so `index` is only ever consulted to tell an outcome
+--- from anything else.
 ---
 --- Returned rather than saved, so the caller commits it TOGETHER with
 --- the child; committed on its own it would survive a refused child.
 --- @param parent item.Item The item that gained a child
+--- @param index flow.Index Every item by id, to test whether `parent`
+--- is an outcome
 --- @return {item.Item} The parent when it changed, empty otherwise
-local function containered(parent: item.Item): {item.Item}
-  local reopened = item.is_root(parent) and (parent.resolution or "") ~= ""
+local function containered(parent: item.Item, index: flow.Index): {item.Item}
+  local reopened = flow.is_outcome(parent, index) and (parent.resolution or "") ~= ""
   if (parent.claim or "") == "" and (parent.reviewer or "") == ""
   and not reopened then
     return {}
@@ -382,13 +386,13 @@ local record gitgate
   distance_refusal: function(it: item.Item, session: string): string
   review_debt: function(items: {item.Item}, session: string): {item.Item}
   review_debt_refusal: function(items: {item.Item}, session: string,
-  taking: item.Item, root_order: {string}): string
+  taking: item.Item): string
   second_claim_refusal: function(s: store.Store, all: {item.Item},
   id: string, session: string): string
   commit_and_publish: function(s: store.Store, it: item.Item, body: string,
   message: string, verb: string, also?: {item.Item}, session?: string,
   bounded?: boolean): boolean, string
-  containered: function(parent: item.Item): {item.Item}
+  containered: function(parent: item.Item, index: flow.Index): {item.Item}
 end
 
 local M: gitgate = {

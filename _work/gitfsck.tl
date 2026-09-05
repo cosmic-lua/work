@@ -5,21 +5,23 @@
 --- `edges/<kind>/<id>` naming an id that is not an item, an edge kind
 --- this build does not interpret (an unmigrated board's `beats` or
 --- `blocked_by`, or any other kind no build here has ever known), more
---- than one OPEN item claiming the same key, a root carrying a `repo`
---- it should never have, an id filed under both `refs/heads/items` and
---- `refs/heads/ended` at once (the residue of a resolution whose
---- atomic push landed the create half of an old-style namespace move
---- and lost the delete half — the pushing credential can create and
---- update a branch but never delete one), and any item the store's own
---- tolerant decode had to flag. `store.list`'s own format check
---- (`_work.gitread`) is the board-readable precondition every other
---- check here depends on — a board this tool cannot even read is
---- reported as the one problem it is, nothing else asked. An `order`
---- entry naming an id that is not a child of the item carrying it, and
---- a `refs/heads/board/order` entry that is not a root, are audited
---- here rather than in `item.problems` or `_work.flow`: both need the
---- whole board's own parent-child shape to judge, which a single
---- item's own fields cannot carry.
+--- than one OPEN item claiming the same key, a second parentless item
+--- (there is meant to be exactly one — the board), a board (or any
+--- other parentless item) carrying a `repo` it should never have, an
+--- id filed under both `refs/heads/items` and `refs/heads/ended` at
+--- once (the residue of a resolution whose atomic push landed the
+--- create half of an old-style namespace move and lost the delete half
+--- — the pushing credential can create and update a branch but never
+--- delete one), and any item the store's own tolerant decode had to
+--- flag. `store.list`'s own format check (`_work.gitread`) is the
+--- board-readable precondition every other check here depends on — a
+--- board this tool cannot even read is reported as the one problem it
+--- is, nothing else asked. An `order` entry naming an id that is not a
+--- child of the item carrying it is audited here rather than in
+--- `item.problems` or `_work.flow`: both need the whole board's own
+--- parent-child shape to judge, which a single item's own fields
+--- cannot carry — the board's own `order` is one such item's field
+--- like any other, so the same check already covers it.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
@@ -31,14 +33,16 @@ local store = require("_work.store")
 --- The structural problems `all` carries — pure over an already-loaded
 --- board, no git of its own: dangling `parent`/`order` edges, every
 --- edge kind an item carries (this build interprets none, so each is
---- reported), a key two open items both claim, a root with a `repo`,
---- and every item's own `decode_problems`.
+--- reported), a key two open items both claim, a second parentless
+--- item, a parentless item with a `repo`, and every item's own
+--- `decode_problems`.
 --- @param all {item.Item} Every item
 --- @return {string} Problems, possibly empty
 local function structural_problems(all: {item.Item}): {string}
   local index = flow.by_id(all)
   local out: {string} = {}
   local key_holder: {string: string} = {}
+  local parentless: {string} = {}
   for _, it in ipairs(all) do
     local id8 = it.id:sub(1, 8)
     if it.parent ~= "" and index[it.parent] == nil then
@@ -77,13 +81,20 @@ local function structural_problems(all: {item.Item}): {string}
         key_holder[it.key] = id8
       end
     end
-    if item.is_root(it) and (it.repo or "") ~= "" then
-      out[#out + 1] = ("%s: a root carries repo %s — a root takes no repo"):format(
-        id8, it.repo)
+    if flow.is_board(it) then
+      parentless[#parentless + 1] = id8
+      if (it.repo or "") ~= "" then
+        out[#out + 1] = ("%s: a parentless item carries repo %s — the board "
+          .. "takes no repo"):format(id8, it.repo)
+      end
     end
     for _, p in ipairs(it.decode_problems or {}) do
       out[#out + 1] = ("%s: flagged: %s"):format(id8, p)
     end
+  end
+  if #parentless > 1 then
+    out[#out + 1] = ("%d parentless items — exactly one is meant to exist "
+      .. "(the board): %s"):format(#parentless, table.concat(parentless, ", "))
   end
   return out
 end
@@ -124,27 +135,6 @@ local function tree_problem(s: store.Store, it: item.Item, spec_body: string,
       observed_tree:sub(1, 7))
   end
   return nil
-end
-
---- `refs/heads/board/order`'s own findings: an entry naming an id that
---- is not an item, or is an item but not a root. Pure over an
---- already-loaded board and its observed root ranking — no git of its
---- own.
---- @param all {item.Item} Every item
---- @param root_order {string} The board's own root ranking
---- @return {string} Problems, possibly empty
-local function root_order_problems(all: {item.Item}, root_order: {string}): {string}
-  local index = flow.by_id(all)
-  local out: {string} = {}
-  for _, o in ipairs(root_order) do
-    local named = index[o]
-    if named == nil then
-      out[#out + 1] = ("refs/heads/board/order: names %s, which is not an item"):format(o)
-    elseif not item.is_root(named) then
-      out[#out + 1] = ("refs/heads/board/order: names %s, which is not a root"):format(o)
-    end
-  end
-  return out
 end
 
 --- The stale `refs/heads/board/lanes` finding: nothing writes it any more —
@@ -216,9 +206,6 @@ local function cmd_fsck(s: store.Store): integer
   end
   local specs = store.read_specs(s, ids)
   local problems = structural_problems(all)
-  for _, p in ipairs(root_order_problems(all, store.root_order(s))) do
-    problems[#problems + 1] = p
-  end
   -- One process for every item's observed tree, whatever the board's
   -- size — the batched form of `gitobj.tree_of`, which used to cost
   -- one `git rev-parse` PER item here.

@@ -66,10 +66,11 @@ local function test_secondary_slot_refuses_a_handle_that_matches_nothing()
   local s = init_state_repo("attach-handle-miss")
   local child = file_item(s, "the item to place", "")
   local goal = file_item(s, "an outcome", "")
+  local before_parent = check.must(store.load(s, child)).parent
   assert(gitboard.main("attach", child, "«ZZZZ_ZZZZ»", "--dir", s.root) ~= 0,
     "a handle matching nothing is refused")
   local unmoved = check.must(store.load(s, child))
-  assert(unmoved.parent == "", "and nothing was recorded")
+  assert(unmoved.parent == before_parent, "and nothing was recorded")
   assert(gitboard.main("attach", child, goal, "--dir", s.root) == 0,
     "the store is still writable after the refusal")
 end

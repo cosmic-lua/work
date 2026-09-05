@@ -3,7 +3,8 @@
 -- back in and validates, and the two round-trip through cosmic.literal
 -- byte-for-byte. The per-item rules pin the emergent-role invariants a
 -- single file can carry: only parented items hold coordination
--- fields, roots hold none of them, and done items hold no locks.
+-- fields, a parentless one holds none of them, and done items hold no
+-- locks.
 
 local check = require("cosmic.check")
 local item = require("_work.item")
@@ -30,9 +31,9 @@ local function has_problem(it: item.Item, needle: string): boolean
   return false
 end
 
-local function test_root_round_trips_minimal()
+local function test_parentless_round_trips_minimal()
   local it = check.must(item.decode(base()))
-  assert(item.is_root(it) and item.is_open(it), "a bare item is an open root")
+  assert(item.is_parentless(it) and item.is_open(it), "a bare item is open and parentless")
   local t = item.encode(it)
   local keys = 0
   for _ in pairs(t) do
@@ -58,12 +59,12 @@ local function test_worked_item_round_trips()
   assert(back.claim == "session-a" and back.pr == 456, "coordination fields")
 end
 
-local function test_roots_hold_no_locks()
+local function test_parentless_items_hold_no_locks()
   local claimed = base()
   claimed.claim = "session-a"
   local it = check.must(item.decode(claimed))
-  assert(has_problem(it, "not roots"),
-    "a claimed root decodes flagged: "
+  assert(has_problem(it, "never the board"),
+    "a claimed parentless item decodes flagged: "
     .. table.concat(it.decode_problems or {}, "; "))
 end
 
@@ -161,16 +162,16 @@ local function test_repo_scopes_a_workable_items_pr()
     "a malformed repo decodes flagged: "
     .. table.concat(gflagged.decode_problems or {}, "; "))
 
-  local rooted = base()
-  rooted.repo = "whilp/cosmopolitan"
-  local rflagged = check.must(item.decode(rooted))
-  assert(has_problem(rflagged, "not roots"),
-    "a repo on a root decodes flagged: "
+  local rootless = base()
+  rootless.repo = "whilp/cosmopolitan"
+  local rflagged = check.must(item.decode(rootless))
+  assert(has_problem(rflagged, "never the board"),
+    "a repo on a parentless item decodes flagged: "
     .. table.concat(rflagged.decode_problems or {}, "; "))
 end
 
 -- `base` mirrors `repo`: a plain branch-name shape, round-trips,
--- omitted at zero, and refused on a root the same way repo is.
+-- omitted at zero, and refused on a parentless item the same way repo is.
 local function test_base_names_the_prs_target_branch()
   local t = base()
   t.parent = PARENT
@@ -194,11 +195,11 @@ local function test_base_names_the_prs_target_branch()
     "a malformed base decodes flagged: "
     .. table.concat(gflagged.decode_problems or {}, "; "))
 
-  local rooted = base()
-  rooted.base = "release"
-  local rflagged = check.must(item.decode(rooted))
-  assert(has_problem(rflagged, "not roots"),
-    "a base on a root decodes flagged: "
+  local rootless = base()
+  rootless.base = "release"
+  local rflagged = check.must(item.decode(rootless))
+  assert(has_problem(rflagged, "never the board"),
+    "a base on a parentless item decodes flagged: "
     .. table.concat(rflagged.decode_problems or {}, "; "))
 end
 

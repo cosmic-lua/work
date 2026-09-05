@@ -25,12 +25,12 @@ local PAGES < const >: {Page} = {
     body = [[
 One prioritized queue of items in this repository (cosmic-lua/work),
 operated only through gitboard verbs. An item's ROLE is its position
-in the graph: a parentless item is a root (an outcome, or a captured
-finding awaiting triage), an item with open children is a container
-being decomposed, and a parented leaf is workable. How the queue
-orders itself, and what makes a root triage, is `help order`.
+in the graph: the parentless item is the board; its children are the
+outcomes; an item with open children is a container being decomposed;
+and a childless item below the outcome level is workable. How the
+queue orders itself, and what makes an outcome triage, is `help order`.
 
-A rank change among ROOTS — putting new work above existing work —
+A rank change among OUTCOMES — putting new work above existing work —
 belongs to the goal owner: it answers "which is the better cosmic".
 Post the pair (in chat, or in the session's report when nobody is
 watching) and keep working; the answer lands as a `rank` whenever it
@@ -109,17 +109,17 @@ Hard rules:
 
   {name = "order", title = "how items are ordered",
     body = [[
-An item's rank is a path: its root's rank among roots, then its
-rank among its siblings at each level down. Rank among siblings is
-a position in a list the parent holds; siblings not in the list
-follow it, by age. A root not in the board's list, and everything
-under it, is triage.
+An item's rank is a path: its position among its siblings at each
+level down from the board, the one parentless item. Rank among
+siblings is a position in a list the parent holds; siblings not in
+the list follow it, by age. An outcome the board's list does not
+position, and everything under it, is triage.
 
 In practice: `rank ID --before|--after|--last` moves an item among
-its siblings, a root against other roots the same way; `new`/`attach
---before X`/`--after X` places it there the moment it arrives; an
-unranked root, and everything under it, is triage; an unranked child
-still pulls, just after its ranked siblings.
+its siblings, an outcome against other outcomes the same way;
+`new`/`attach --before X`/`--after X` places it there the moment it
+arrives; an unranked outcome, and everything under it, is triage; an
+unranked child still pulls, just after its ranked siblings.
 ]]},
 
   {name = "bar", title = "the spec bar: what makes an item pullable",
@@ -269,7 +269,7 @@ a review that only reads has verified nothing:
    spec states untouched.
 4. Conventions hold — the repo's AGENTS.md binds; anything a gate
    should have caught but did not is itself a finding to file.
-5. It serves the outcome — walk the parent chain to the root and
+5. It serves the outcome — walk the parent chain to the outcome and
    judge the diff against it. A green gate on a change that misses
    the point means the SPEC was wrong: fix the spec, never wave the
    diff through.

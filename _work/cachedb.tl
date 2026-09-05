@@ -205,9 +205,9 @@ end
 --- always resolve with the real ancestry check. `refs/heads/board/*`
 --- entries carry no id and are dropped here — `board/seq` and
 --- `board/format` moving is caught through the whole digest instead
---- (`_work.cache.around_fetch`); `board/order` moving gets its own
---- check (`board_order_sha`, below), since a root-list change needs
---- patching `ranks` at `parent = ''`, which no single ITEM id names.
+--- (`_work.cache.around_fetch`); the board's own outcome ranking is
+--- an ordinary item's `.order` field, so a change to it moves the
+--- BOARD ITEM's own sha and is caught right here like any other item.
 --- @param entries {refs.RefEntry} A ref listing
 --- @return {string: string} Item id -> sha
 local function shas_by_item(entries: {refs.RefEntry}): {string: string}
@@ -225,20 +225,6 @@ local function shas_by_item(entries: {refs.RefEntry}): {string: string}
     end
   end
   return out
-end
-
---- `refs/heads/board/order`'s own tip, "" when absent — the one
---- `_work.cache.around_fetch` compares before/after to decide whether
---- the board's root list moved.
---- @param entries {refs.RefEntry} A ref listing
---- @return string The tip sha, "" when the ref is not there
-local function board_order_sha(entries: {refs.RefEntry}): string
-  for _, e in ipairs(entries) do
-    if e.refname == "refs/heads/board/order" then
-      return e.sha
-    end
-  end
-  return ""
 end
 
 --- Item ids whose sha differs between two `shas_by_item` maps —
@@ -377,10 +363,10 @@ end
 --- `speccers` (`_work.index`) and `search` (`_work.find`) — from what
 --- the caller already holds, no git read at all: `_work.cache`'s
 --- save-path and fetch-path patchers both reduce to this for one item.
---- `ranks` here is only the item's OWN ranked-children list (`parent =
---- it.id`) — the board's root list lives at `parent = ''` and has no
---- single item to reduce this to; `_work.cache.rebuild` patches that
---- one directly from `Board.root_order`.
+--- `ranks` here is the item's OWN ranked-children list (`parent =
+--- it.id`) — the board item's own `order` field patches the exact same
+--- way, since it holds its outcomes' list like any other parent holds
+--- its children's.
 --- `spec_body` nil means the caller made no spec change, so whatever
 --- `search` last held for this id carries over unread; the caller
 --- passes the current text (possibly "") whenever it DOES know it,
@@ -446,7 +432,6 @@ local record cachedb
   refs_snapshot: function(root: string): {refs.RefEntry} | nil, string
   fresh_digest: function(root: string): string | nil, string
   shas_by_item: function(entries: {refs.RefEntry}): {string: string}
-  board_order_sha: function(entries: {refs.RefEntry}): string
   changed_ids: function(before: {string: string}, after: {string: string}): {string}
   meta_get: function(db: sqlite.Database, k: string): string | nil
   meta_set: function(db: sqlite.Database, k: string, v: string): boolean, string
@@ -468,7 +453,6 @@ local M: cachedb = {
   refs_snapshot = refs_snapshot,
   fresh_digest = fresh_digest,
   shas_by_item = shas_by_item,
-  board_order_sha = board_order_sha,
   changed_ids = changed_ids,
   meta_get = meta_get,
   meta_set = meta_set,

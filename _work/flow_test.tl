@@ -1,8 +1,9 @@
 #!/usr/bin/env cosmic
 -- The flow rules are pure functions over item lists. What they pin is
 -- the emergent-role and derived-state claims themselves: with no kind
--- field and no phase field anywhere, a parentless item reads as a
--- root, one with open children as a container, and a parented leaf as
+-- field and no phase field anywhere, the one parentless item reads as
+-- the board, its direct child as an outcome, one with open children
+-- as a container, and a childless item below the outcome level as
 -- workable — todo while unclaimed and PR-less, doing otherwise, with
 -- the substate read off the same facts. Plus the one doing bound and
 -- the graph problems `status` reports. What a session DOES with all
@@ -33,19 +34,22 @@ local function make(over: {string: any}): item.Item
 end
 
 local function test_roles_emerge_from_the_graph()
-  local top = make({})
-  local captured = make({})
-  local epic = make({parent = top.id})
+  local board = make({})
+  local outcome = make({parent = board.id})
+  local capture = make({parent = board.id})
+  local epic = make({parent = outcome.id})
   local leaf = make({parent = epic.id})
-  local items: {item.Item} = {top, captured, epic, leaf}
-  assert(flow.role(top, items) == "container", "a root with children")
-  assert(flow.role(captured, items) == "root", "a childless root")
+  local items: {item.Item} = {board, outcome, capture, epic, leaf}
+  assert(flow.role(board, items) == "board", "the parentless item is the board")
+  assert(flow.role(outcome, items) == "container", "an outcome with children")
+  assert(flow.role(capture, items) == "outcome", "a childless direct child of the board")
   assert(flow.role(epic, items) == "container", "open children")
-  assert(flow.role(leaf, items) == "work", "parented leaf")
+  assert(flow.role(leaf, items) == "work", "a childless item below the outcome level")
 end
 
 local function test_state_derives_from_the_facts()
-  local goal = make({})
+  local board = make({})
+  local goal = make({parent = board.id})
   local fresh = make({parent = goal.id})
   local claimed = make({parent = goal.id, claim = "session-A"})
   local handed = make({parent = goal.id, claim = "session-A", pr = 7})
@@ -65,7 +69,8 @@ end
 -- carries: an accept reads as the ordinary "accepted" wait until the
 -- caller has actually read the PR and found it already queued.
 local function test_substate_queued_is_a_caller_supplied_fact()
-  local goal = make({})
+  local board = make({})
+  local goal = make({parent = board.id})
   local judged = make({parent = goal.id, claim = "session-A", pr = 7,
       verdict = "accept"})
   assert(flow.substate(judged) == "accepted",
@@ -80,7 +85,8 @@ end
 -- ranks as "review" at the one declaration every reader derives from,
 -- and a verdict on it stands the same way.
 local function test_a_research_handover_awaits_a_verdict()
-  local goal = make({})
+  local board = make({})
+  local goal = make({parent = board.id})
   local handed = make({parent = goal.id, claim = "session-A",
       builders = "session-A", result = ("ab"):rep(32)})
   assert(flow.is_doing(handed), "the claim makes it doing")
@@ -95,24 +101,26 @@ local function test_a_research_handover_awaits_a_verdict()
 end
 
 local function test_in_state_holds_open_workable_leaves_only()
-  local goal = make({})
+  local board = make({})
+  local goal = make({parent = board.id})
   local todo = make({parent = goal.id})
   local doing = make({parent = goal.id, claim = "session-A"})
   local done = make({parent = goal.id, resolution = "completed"})
-  local capture = make({})
-  local items: {item.Item} = {goal, todo, doing, done, capture}
-  local ranks = rank.positions(items, {})
+  local capture = make({parent = board.id})
+  local items: {item.Item} = {board, goal, todo, doing, done, capture}
+  local ranks = rank.positions(items)
   local todos = flow.in_state(items, "todo", ranks)
   assert(#todos == 1 and todos[1].id == todo.id,
-    "roots, containers, doing and done items are not todo")
+    "the board, outcomes, containers, doing and done items are not todo")
   local doings = flow.in_state(items, "doing", ranks)
   assert(#doings == 1 and doings[1].id == doing.id,
     "only the claimed leaf is doing")
 end
 
 local function test_the_doing_bound_binds_new_takes_only()
-  local root = make({})
-  local items: {item.Item} = {root}
+  local board = make({})
+  local root = make({parent = board.id})
+  local items: {item.Item} = {board, root}
   for k = 1, flow.DOING_LIMIT - 1 do
     items[#items + 1] = make({parent = root.id,
         claim = ("wake-%d"):format(k)})
@@ -126,29 +134,31 @@ local function test_the_doing_bound_binds_new_takes_only()
 end
 
 local function test_graph_problems()
-  local goal = make({})
-  local finding = make({})
+  local board = make({})
+  local finding = make({parent = board.id})
   local orphan = make({parent = fresh_id()})
-  local epic = make({parent = goal.id})
+  local epic = make({parent = board.id})
   local kid = make({parent = epic.id})
-  local items: {item.Item} = {goal, finding, orphan, epic, kid}
+  local items: {item.Item} = {board, finding, orphan, epic, kid}
   local problems = flow.graph_problems(items)
   local text = table.concat(problems, "\n")
   assert(text:find("does not exist", 1, true), "orphan parent: " .. text)
   assert(#problems == 1, "nothing else is a graph problem: " .. text)
 end
 
-local function test_untriaged_holds_unranked_childless_roots()
-  local ranked = make({})
-  local capture = make({})
-  -- An unranked root already being decomposed is not triage either —
-  -- only a CHILDLESS, unranked root is.
-  local decomposing = make({})
+local function test_untriaged_holds_unranked_childless_outcomes()
+  local board = make({})
+  local ranked = make({parent = board.id})
+  local capture = make({parent = board.id})
+  -- An unranked outcome already being decomposed is not triage either
+  -- — only a CHILDLESS, unranked outcome is.
+  local decomposing = make({parent = board.id})
   local child = make({parent = decomposing.id})
-  local items: {item.Item} = {ranked, capture, decomposing, child}
-  local queue = flow.untriaged(items, {ranked.id})
+  board.order = {ranked.id}
+  local items: {item.Item} = {board, ranked, capture, decomposing, child}
+  local queue = flow.untriaged(items)
   assert(#queue == 1 and queue[1].id == capture.id,
-    "a ranked root and an unranked root under decomposition are not triage")
+    "a ranked outcome and an unranked outcome under decomposition are not triage")
 end
 
 -- The unified order: ONE queue, stage first — accepted, review,
@@ -156,7 +166,8 @@ end
 -- stage. Stage is lexicographically supreme: no rank lifts a todo
 -- item past a waiting verdict, however high it ranks.
 local function test_unified_ranks_stage_before_rank_path()
-  local goal = make({})
+  local board = make({})
+  local goal = make({parent = board.id})
   local accepted = make({parent = goal.id, claim = "s1", pr = 4,
       verdict = "accept"})
   local reviewable = make({parent = goal.id, claim = "s2", pr = 5})
@@ -168,7 +179,7 @@ local function test_unified_ranks_stage_before_rank_path()
   local hot = make({parent = goal.id})
   goal.order = {hot.id, accepted.id, reviewable.id, reworking.id,
     building.id, repair.id}
-  local items: {item.Item} = {goal, hot, repair, building,
+  local items: {item.Item} = {board, goal, hot, repair, building,
     reworking, reviewable, accepted}
   assert(flow.stage_rank(accepted) == flow.STAGE_ACCEPTED)
   assert(flow.stage_rank(reviewable) == flow.STAGE_REVIEW)
@@ -176,7 +187,7 @@ local function test_unified_ranks_stage_before_rank_path()
   assert(flow.stage_rank(building) == flow.STAGE_BUILDING)
   assert(flow.stage_rank(repair) == flow.STAGE_REPAIR)
   assert(flow.stage_rank(hot) == flow.STAGE_TODO)
-  local ranks = rank.positions(items, {goal.id})
+  local ranks = rank.positions(items)
   local queue = flow.unified(items, ranks)
   local order: {string} = {}
   for _, i in ipairs(queue) do
@@ -184,7 +195,7 @@ local function test_unified_ranks_stage_before_rank_path()
   end
   -- …and still ranks last: stage beats rank path, rank path only
   -- breaks ties within a stage.
-  assert(#queue == 6, "every open workable item, roots excluded")
+  assert(#queue == 6, "every open workable item, the board and outcomes excluded")
   assert(order[1] == accepted.id and order[2] == reviewable.id
     and order[3] == reworking.id and order[4] == building.id
     and order[5] == repair.id and order[6] == hot.id,
@@ -194,12 +205,13 @@ end
 -- Within one stage the rank path decides: a higher-ranked todo item
 -- comes before its unranked sibling.
 local function test_unified_breaks_stage_ties_by_rank_path()
-  local goal = make({})
+  local board = make({})
+  local goal = make({parent = board.id})
   local plain = make({parent = goal.id})
   local hot = make({parent = goal.id})
   goal.order = {hot.id}
-  local items: {item.Item} = {goal, plain, hot}
-  local ranks = rank.positions(items, {goal.id})
+  local items: {item.Item} = {board, goal, plain, hot}
+  local ranks = rank.positions(items)
   local queue = flow.unified(items, ranks)
   assert(#queue == 2 and queue[1].id == hot.id and queue[2].id == plain.id,
     "the rank path holds within the stage")

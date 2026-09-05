@@ -12,15 +12,16 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local find = require("_work.find")
 local fixture = require("_work.fixture")
+local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
+local gitrank = require("_work.gitrank")
 local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
@@ -65,25 +66,23 @@ local function test_a_hand_moved_ref_forces_a_rebuild()
   check.must(cache.close(c))
 end
 
--- `refs/heads/board/order` lives under the `refs/heads/board` pattern
--- `_work.cachedb`'s watch already covers (the same one `board/seq` and
--- `board/format` ride) — this slice adds no code to cache.tl/cachedb.tl
--- for it, so this pins that the coverage already holds: writing a root
--- ranking (`storewrite.save_root_order`, no verb calls it yet) moves
--- the digest `open` recorded, the same way any other watched ref does.
-local function test_a_board_order_write_moves_the_recorded_digest()
+-- The board's own outcome ranking is not a special case: it is the
+-- board item's own `order` field, so ranking an outcome moves the
+-- board item's OWN ref, under `refs/heads/items` — a digest move the
+-- ordinary watched patterns already cover, with nothing extra needed.
+local function test_ranking_an_outcome_moves_the_recorded_digest()
   local s = init_state_repo("board-order-digest")
   local root = file_item(s, "an outcome", "")
   check.must(cache.close(check.must(cache.open(s.root))))
 
-  assert(storewrite.save_root_order(s, {root}, "rank the roots"))
+  assert(gitrank.cmd_rank(s, root, "", "", true) == 0)
 
   local c = check.must(cache.open(s.root))
   local found = check.must(refs.for_each_ref(s.root,
       {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
   local fresh = cachedb.digest_of(found)
   assert(cachedb.meta_get(c.db, "refs_digest") == fresh,
-    "the cache's recorded digest reflects refs/heads/board/order")
+    "the cache's recorded digest reflects the board item's own ref moving")
   check.must(cache.close(c))
 end
 
@@ -405,15 +404,13 @@ local function test_open_with_a_known_digest_skips_for_each_ref()
   check.must(cache.close(c as cache.Cache)) -- cast: pcall erases the union
 end
 
--- `refs/heads/board/order` moving during a fetch skips the incremental
--- patch entirely (`_work.cache.around_fetch`'s `board_order_sha`
--- check): the root list lives at `ranks` rows `parent = ''`, which no
--- single item's patch touches, so recording a fresh digest without
--- also patching it would claim the file matches the board when it does
--- not. The file is left exactly as it stood — stale, by design — and
--- the next `open` rebuilds, picking up the new root order correctly.
-local function test_a_synced_root_order_change_leaves_the_cache_stale_until_the_next_open()
-  local a, b = init_shared("root-order-fetch")
+-- The board's own outcome ranking is an ordinary item field, so a
+-- fetch that moves the board item's own ref (ranking an outcome moves
+-- it, the same as any other write to the board item) patches the
+-- cache incrementally exactly like any other item's move: no special
+-- "leave it stale" path is needed for it any more.
+local function test_a_synced_outcome_rank_patches_the_cache_incrementally()
+  local a, b = init_shared("outcome-rank-fetch")
   local root = file_item(a, "an outcome", "")
   assert(publish.sync(b))
   check.must(cache.close(check.must(cache.open(b.root))))
@@ -421,22 +418,20 @@ local function test_a_synced_root_order_change_leaves_the_cache_stale_until_the_
   local before_digest = check.must(cachedb.meta_get(before_raw, "refs_digest"))
   check.must(before_raw:close())
 
-  -- `save_root_order` only commits locally; a real verb's `commit_and_publish`
-  -- pushes too (`_work.gitgate`), which this mimics directly since no
-  -- verb calls `save_root_order` yet.
-  assert(storewrite.save_root_order(a, {root}, "rank the roots"))
-  assert(publish.publish(a))
+  assert(gitrank.cmd_rank(a, root, "", "", true) == 0)
   assert(publish.sync(b))
 
   local after_raw = check.must(sqlite.open(cache.path_of(b.root)))
   local after_digest = check.must(cachedb.meta_get(after_raw, "refs_digest"))
   check.must(after_raw:close())
-  assert(after_digest == before_digest,
-    "a root-order fetch must not mark the file fresh without patching it")
+  assert(after_digest ~= before_digest,
+    "the fetch's incremental patch records the board item's moved digest directly")
 
   local c = check.must(cache.open(b.root))
-  local got = check.must(cachequery.root_order(c))
+  local all = check.must(cachequery.items(c))
   check.must(cache.close(c))
-  assert(table.concat(got, " ") == root,
-    ("root_order after the forced rebuild: %s"):format(table.concat(got, " ")))
+  local board = check.must(flow.find_board(all))
+  assert(table.concat(board.order, " ") == root,
+    ("the board's own order after the incremental patch: %s"):format(
+      table.concat(board.order, " ")))
 end

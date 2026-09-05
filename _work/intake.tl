@@ -5,7 +5,7 @@
 --- already in flight.
 ---
 --- The rungs, in order: triage what arrived, refine the top of todo
---- toward the spec bar, and decompose an undriven root. Triage first
+--- toward the spec bar, and decompose an undriven outcome. Triage first
 --- because it is the cheap decision (is this real, and under which
 --- outcome) and the starvable one — an unplaced capture is invisible
 --- to every queue, and an inbox nobody empties is a channel that only
@@ -42,17 +42,16 @@ end
 --- @param items {Item} All items
 --- @param specs Specs Spec sidecar body, by item id
 --- @param ranks {string: rank.Rank} Rank by item id
---- @param root_order {string} The board's root list
 --- @return Action | nil The decision
 local function intake_action(items: {Item}, specs: Specs,
-    ranks: {string: rank.Rank}, root_order: {string}): Action | nil
-  local triage = flow.untriaged(items, root_order)
+    ranks: {string: rank.Rank}): Action | nil
+  local triage = flow.untriaged(items)
   if #triage > 0 then
     return {
       kind = "triage",
       item = triage[1],
-      reason = ("%d root(s) await triage — rank it among the roots "
-        .. "(`rank`), attach it under a ranked root, or end it"):format(
+      reason = ("%d outcome(s) await triage — rank it among the outcomes "
+        .. "(`rank`), attach it under a ranked outcome, or end it"):format(
         #triage),
     }
   end
@@ -65,7 +64,7 @@ local function intake_action(items: {Item}, specs: Specs,
       .. "refine it until `check` passes",
     }
   end
-  local ordered, live = flow.roots(items, root_order)
+  local ordered, live = flow.roots(items)
   for _, g in ipairs(ordered) do
     if not live[g.id] then
       return {
@@ -76,11 +75,11 @@ local function intake_action(items: {Item}, specs: Specs,
       }
     end
   end
-  -- Only worth saying when there ARE ranked roots: with none, "every
-  -- open root has live work" is vacuously true and tells a session
+  -- Only worth saying when there ARE ranked outcomes: with none, "every
+  -- open outcome has live work" is vacuously true and tells a session
   -- nothing about why it has been handed no work.
   if #ordered > 0 then
-    return {kind = "intake", reason = "every open root has live work — "
+    return {kind = "intake", reason = "every open outcome has live work — "
       .. "work backwards from the highest-ranked one with slack"}
   end
   return nil
@@ -91,7 +90,7 @@ local record intake
   refinable: function(items: {Item}, specs: Specs,
   ranks: {string: rank.Rank}): Item | nil
   intake_action: function(items: {Item}, specs: Specs,
-  ranks: {string: rank.Rank}, root_order: {string}): Action | nil
+  ranks: {string: rank.Rank}): Action | nil
 end
 
 local M: intake = {

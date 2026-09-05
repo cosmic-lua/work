@@ -262,7 +262,18 @@ local function test_rank_is_a_total_deterministic_order()
         if g == nil then
           return false, "generated input did not decode: " .. tostring(derr)
         end
-        local ranks = rank.positions(g.items, g.root_order)
+        -- `rank.positions` reads a board's outcome ranking off the
+        -- board ITEM's own `order` field now, not a second argument:
+        -- fold the generator's separately drawn root list onto
+        -- whichever item in the graph is parentless (the board, in
+        -- the new model) — a no-op draw when nothing in the graph is.
+        for _, it in ipairs(g.items) do
+          if (it.parent or "") == "" then
+            it.order = g.root_order
+            break
+          end
+        end
+        local ranks = rank.positions(g.items)
         if type(ranks) ~= "table" then
           return false, "positions did not return a table"
         end
@@ -273,7 +284,7 @@ local function test_rank_is_a_total_deterministic_order()
 
         -- Identical across two runs: neither positions nor sorted may
         -- leak table-iteration order into the render.
-        local ranks_again = rank.positions(g.items, g.root_order)
+        local ranks_again = rank.positions(g.items)
         local sorted_again = rank.sorted(g.items, ranks_again)
         for i, it in ipairs(sorted1) do
           if sorted_again[i].id ~= it.id then

@@ -8,17 +8,14 @@
 --- a save that tried to create `refs/heads/ended/<id>` and delete
 --- `refs/heads/items/<id>` in the same push could land the create and
 --- lose the delete, leaving one id filed under both namespaces —
---- `_work.gitread` is where a reader tolerates and dedupes that. A
---- request may also carry a new root ranking for
---- `refs/heads/board/order`, written as one more commit in the same
---- stream, leased against its own observed tip exactly as
---- `refs/heads/board/seq` is — the one write that can stand ALONE, with
---- no item in the batch at all. Split out of `_work.store` so that
+--- `_work.gitread` is where a reader tolerates and dedupes that. The
+--- board's own outcome ranking is not a separate write here: it is one
+--- of `req.items`' own `.order` field, diffed and committed exactly
+--- like any other item's. Split out of `_work.store` so that
 --- module stays under its line cap; `_work.store` is the only caller
 --- outside tests.
 local fastimport = require("_work.fastimport")
 local item = require("_work.item")
-local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
 
 --- The tool's own git identity — the committer on every commit, and
@@ -48,22 +45,13 @@ local record Request
   leased_item: {string: item.Item}
   bounded: boolean
   seq_sha: string
-  --- A new root ranking to write to `refs/heads/board/order`; nil
-  --- leaves that ref untouched. `observed_root_order` is what it stood
-  --- at when this was decided (the diff baseline, "" content when
-  --- empty or never observed); `order_sha` is that ref's own observed
-  --- tip, the lease this write is made against.
-  root_order: {string} | nil
-  observed_root_order: {string}
-  order_sha: string
   read_spec: function(id: string): string
 end
 
 --- What `save_batch` did: the refs to push, each item's new ref and
 --- tip (for the caller to update its own lease table with), whether
 --- anything changed at all, and — for a bounded mutation — whether
---- `refs/heads/board/seq` moved and its new tip; `order_changed`/
---- `new_order_sha` are the same pair for `refs/heads/board/order`.
+--- `refs/heads/board/seq` moved and its new tip.
 local record Outcome
   pushes: {refs.PushSpec}
   new_ref: {string: string}
@@ -71,8 +59,6 @@ local record Outcome
   changed: boolean
   seq_changed: boolean
   new_seq_sha: string
-  order_changed: boolean
-  new_order_sha: string
 end
 
 --- One item's commit as planned, plus the bookkeeping the post-import
@@ -141,7 +127,7 @@ end
 --- @return string Error message
 local function save_batch(req: Request): Outcome | nil, string
   local out: Outcome = {pushes = {}, new_ref = {}, new_sha = {}, changed = false,
-    seq_changed = false, new_seq_sha = "", order_changed = false, new_order_sha = ""}
+    seq_changed = false, new_seq_sha = ""}
   local now = fastimport.git_date_now()
   local commits: {fastimport.CommitPlan} = {}
   local planned: {Planned} = {}
@@ -154,34 +140,6 @@ local function save_batch(req: Request): Outcome | nil, string
     if plan ~= nil then
       commits[#commits + 1] = plan
       planned[#planned + 1] = p
-    end
-  end
-  -- A root-order-only mutation touches no item at all, so this has to
-  -- run BEFORE the no-op check below can see it.
-  local order_written = false
-  local order_old = ""
-  if req.root_order ~= nil then
-    local new_order_content = itemtree.encode_order(req.root_order)
-    local old_order_content = itemtree.encode_order(req.observed_root_order or {})
-    if new_order_content ~= old_order_content then
-      if (req.order_sha or "") ~= "" then
-        order_old = req.order_sha
-      end
-      local order_from: string = nil
-      if order_old ~= "" then
-        order_from = order_old
-      end
-      local order_content: string = nil
-      if new_order_content ~= "" then
-        order_content = new_order_content
-      end
-      commits[#commits + 1] = {
-        ref = "refs/heads/board/order", from = order_from, author_name = TOOL_NAME,
-        author_email = TOOL_EMAIL, author_date = now, committer_name = TOOL_NAME,
-        committer_email = TOOL_EMAIL, committer_date = now, message = req.message,
-        op = req.op or "", ops = {{path = "order", content = order_content}},
-      }
-      order_written = true
     end
   end
   if #commits == 0 then
@@ -217,9 +175,6 @@ local function save_batch(req: Request): Outcome | nil, string
   if req.bounded then
     patterns[#patterns + 1] = "refs/heads/board/seq"
   end
-  if order_written then
-    patterns[#patterns + 1] = "refs/heads/board/order"
-  end
   local found, ferr = refs.for_each_ref(req.root, patterns)
   if found == nil then
     return nil, ("fast-import applied, but its result could not be read back: %s")
@@ -251,15 +206,6 @@ local function save_batch(req: Request): Outcome | nil, string
     end
     out.pushes[#out.pushes + 1] = {ref = "refs/heads/board/seq", old = seq_old}
     out.seq_changed, out.new_seq_sha = true, new_seq
-  end
-  if order_written then
-    local new_order = new_sha_of["refs/heads/board/order"]
-    if new_order == nil or new_order == order_old then
-      return nil, "fast-import did not fast-forward refs/heads/board/order — refused "
-      .. "(unexpected local state)"
-    end
-    out.pushes[#out.pushes + 1] = {ref = "refs/heads/board/order", old = order_old}
-    out.order_changed, out.new_order_sha = true, new_order
   end
   out.changed = true
   return out, ""

@@ -1,23 +1,22 @@
 --- The `rank` verb: an item's position among its siblings — before,
---- after, or last in a shared parent's `order`, or among roots in
---- `refs/heads/board/order` when neither ID nor X has one. `place_under`
---- is the same placement math `_work.gitgraph`'s `attach`/`new` reuse
---- for their own `--before`/`--after`, so a child that already knows
---- where it goes lands parented and positioned in one commit.
+--- after, or last in the shared parent's `order`, the board's own
+--- `order` included, since the board holds its outcomes' list exactly
+--- as any other parent holds its children's. `place_under` is the
+--- same placement math `_work.gitgraph`'s `attach`/`new` reuse for
+--- their own `--before`/`--after`, so a child that already knows where
+--- it goes lands parented and positioned in one commit.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
-local publish = require("_work.publish")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 
---- One id's parent, described for a sibling-mismatch refusal: "a
---- root" for "", "under <handle>" otherwise.
---- @param p string A parent id, "" for a root
+--- One id's parent, described for a sibling-mismatch refusal: "the
+--- board" for "", "under <handle>" otherwise.
+--- @param p string A parent id, "" for the board
 --- @return string The description
 local function parent_desc(p: string): string
   if p == "" then
-    return "a root"
+    return "the board"
   end
   return ("under %s"):format(p:sub(1, 8))
 end
@@ -36,7 +35,7 @@ end
 --- @param before string X to place ID before; "" when unused
 --- @param after string X to place ID after; "" when unused
 --- @param last boolean True when ID goes last regardless of X
---- @param where string "among the roots" or "under <parent handle>"
+--- @param where string "under <parent handle>"
 --- @return string The description
 local function describe(before: string, after: string, last: boolean,
     where: string): string
@@ -147,11 +146,13 @@ local function place_under(parent_item: item.Item, id: string, before: string,
   return true, ""
 end
 
---- rank: position ID among its siblings — before X, after X, or last
---- — same-parent items against each other, roots against roots. The
---- parent's `order` (or, for two roots, `refs/heads/board/order`) is
---- the one blob this writes; it never touches `refs/heads/board/seq` —
---- the parent's own ref (or the order ref's own tip) is the lease.
+--- rank: position ID among its siblings — before X, after X, or last —
+--- same-parent items against each other, an outcome against other
+--- outcomes the same way (the board is simply its parent, holding its
+--- outcomes' `order` exactly as any parent holds its children's). The
+--- parent's `order` is the one blob this writes; it never touches
+--- `refs/heads/board/seq` — the parent's own ref is the lease. Refused
+--- on the board itself: it has no siblings to rank among.
 --- @param s store.Store The store
 --- @param id string The item to position
 --- @param before string X to place ID before; "" when unused
@@ -182,6 +183,11 @@ local function cmd_rank(s: store.Store, id: string, before: string, after: strin
       ("REFUSED: %s is done (%s) — a finished item's position is history, "
         .. "not a repair target"):format(id:sub(1, 8), it.resolution))
   end
+  local parent_id = it.parent or ""
+  if parent_id == "" then
+    return gate.verdict_line("rank", false,
+      "REFUSED: the board has no siblings to rank among")
+  end
   local x = before
   if x == "" then
     x = after
@@ -198,50 +204,27 @@ local function cmd_rank(s: store.Store, id: string, before: string, after: strin
       return gate.verdict_line("rank", false, sibling_refusal(it, xit))
     end
   end
-  local parent_id = it.parent or ""
-  if parent_id ~= "" then
-    local parent_item = index[parent_id]
-    if parent_item == nil then
-      return gate.verdict_line("rank", false,
-        ("%s's parent is broken: no item %s"):format(id:sub(1, 8), parent_id))
-    end
-    local new_order, perr = place(parent_item.order or {}, id, before, after, last)
-    if new_order == nil then
-      return gate.verdict_line("rank", false, "REFUSED: " .. perr)
-    end
-    parent_item.order = new_order
-    local where = ("under %s"):format(parent_id:sub(1, 8))
-    local ok, err = gate.commit_and_publish(s, parent_item, nil,
-      ("rank %s %s"):format(id:sub(1, 8), describe(before, after, last, where)), "rank")
-    if not ok then
-      return gate.verdict_line("rank", false, err)
-    end
-    if store.is_noop(err) then
-      return gate.verdict_line("rank", true, err)
-    end
-    return gate.verdict_line("rank", true,
-      ("%s now ranks %s"):format(id:sub(1, 8), describe(before, after, last, where)))
+  local parent_item = index[parent_id]
+  if parent_item == nil then
+    return gate.verdict_line("rank", false,
+      ("%s's parent is broken: no item %s"):format(id:sub(1, 8), parent_id))
   end
-  local new_order, perr = place(store.root_order(s), id, before, after, last)
+  local new_order, perr = place(parent_item.order or {}, id, before, after, last)
   if new_order == nil then
     return gate.verdict_line("rank", false, "REFUSED: " .. perr)
   end
-  local ok, err = storewrite.save_root_order(s, new_order,
-    ("rank %s %s"):format(id:sub(1, 8),
-      describe(before, after, last, "among the roots")))
+  parent_item.order = new_order
+  local where = ("under %s"):format(parent_id:sub(1, 8))
+  local ok, err = gate.commit_and_publish(s, parent_item, nil,
+    ("rank %s %s"):format(id:sub(1, 8), describe(before, after, last, where)), "rank")
   if not ok then
     return gate.verdict_line("rank", false, err)
   end
   if store.is_noop(err) then
     return gate.verdict_line("rank", true, err)
   end
-  local pok, puberr = publish.publish(s)
-  if not pok then
-    return gate.verdict_line("rank", false, puberr)
-  end
   return gate.verdict_line("rank", true,
-    ("%s now ranks %s"):format(id:sub(1, 8),
-      describe(before, after, last, "among the roots")))
+    ("%s now ranks %s"):format(id:sub(1, 8), describe(before, after, last, where)))
 end
 
 local record gitrank

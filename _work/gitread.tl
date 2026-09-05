@@ -14,7 +14,7 @@
 --- caller of `load`/`list` outside tests. `_work.gitreadmany.load_many`
 --- — a named-id-set batch `_work.cache`'s fetch-path refresh uses — is
 --- split out the same way, on the helpers this module exports below;
---- `_work.gitboardstate` holds the three board-level refs' own reading.
+--- `_work.gitboardstate` holds the two board-level refs' own reading.
 local cachedb = require("_work.cachedb")
 local child = require("cosmic.child")
 local format = require("_work.format")
@@ -48,20 +48,18 @@ end
 
 --- The whole board as `list` found it: every item, its ref and tip
 --- (`refs_by_id`/`shas_by_id` — the write lease for each),
---- `refs/heads/board/seq`'s own tip, the board's own root ranking
---- (`root_order`) and `refs/heads/board/order`'s own tip (`order_sha`
---- — the lease its own write is made against), both "" when absent,
---- every id `list` found filed under both namespaces at once, and the
---- digest of the `for-each-ref` snapshot this pass took over exactly
---- `_work.cachedb`'s watched patterns — `_work.cache.open`'s check when
---- a caller already has this snapshot, never repeating the read.
+--- `refs/heads/board/seq`'s own tip, every id `list` found filed under
+--- both namespaces at once, and the digest of the `for-each-ref`
+--- snapshot this pass took over exactly `_work.cachedb`'s watched
+--- patterns — `_work.cache.open`'s check when a caller already has
+--- this snapshot, never repeating the read. The board's own outcome
+--- ranking is not a separate field here: it is one of `items`' own
+--- `.order`, read the same way every item's is.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
   shas_by_id: {string: string}
   seq_sha: string
-  root_order: {string}
-  order_sha: string
   duplicates: {Duplicate}
   refs_digest: string
 end
@@ -245,15 +243,15 @@ local function load_item(root: string, id: string,
 end
 
 --- Every item in the store, done ones included: one `for-each-ref`
---- (also reading the three board-level refs' tips), then one
+--- (also reading the two board-level refs' tips), then one
 --- `gitbatch.batch_session` for all three rounds — every item's
---- `meta`/`held`/`order`/`edges` plus the format marker's and the
---- board's own `order` blob, every edge kind's own subtree content,
---- and every content blob an edge kind's own entry names — two
---- processes total, never one per item or round, PLUS one
---- `merge-base --is-ancestor` for every id this pass finds filed under
---- both namespaces at once — rare, so it never shows up in the
---- fixed-process-count tests. The format check happens here, once,
+--- `meta`/`held`/`order`/`edges` plus the format marker's, every edge
+--- kind's own subtree content, and every content blob an edge kind's
+--- own entry names — two processes total, never one per item or
+--- round, PLUS one `merge-base --is-ancestor` for every id this pass
+--- finds filed under both namespaces at once — rare, so it never
+--- shows up in the fixed-process-count tests. The format check happens
+--- here, once,
 --- rather than in every reader: a board on a layout this tool cannot
 --- trust is refused before anything else it read alongside it is
 --- believed.
@@ -327,7 +325,7 @@ local function list(root: string): Board | nil, string
   end
   local batch, berr = sess:request(queries)
   if batch == nil then return gitbatch.session_fail(sess, berr) end
-  local format_content, root_order = gitboardstate.read(board_refs, batch)
+  local format_content = gitboardstate.read(board_refs, batch)
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
     return gitbatch.session_fail(sess, frefusal)
@@ -380,8 +378,7 @@ local function list(root: string): Board | nil, string
       return a.id < b.id
     end)
   return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id,
-    seq_sha = board_refs.seq_sha, root_order = root_order,
-    order_sha = board_refs.order_sha, duplicates = duplicates,
+    seq_sha = board_refs.seq_sha, duplicates = duplicates,
     refs_digest = refs_digest}
 end
 

@@ -1,10 +1,10 @@
 --- The state verbs: `take` (claim work, record its handover), `drop` (return a lease, the
 --- item untouched), and `done` — every `cmd_*` behind `_work/gitboard.tl`'s dispatch that
 --- is not a graph mutation, the sync housekeeping, or `init`. The verbs that shape the
---- graph — `new`, `attach`, `block` and its `unblock` half — are `_work.gitgraph`; the
+--- graph — `new` and `attach` — are `_work.gitgraph`; the
 --- spec sidecar's own verb is `_work.gitspec`; the two takes `take` reaches by derivation
 --- — the review claim and the research handover — are `_work.gittake`; `done`'s own gates
---- on a ROOT (`--by CHILD`) are `_work.gitdoneroot`. All of them run
+--- on the board and an outcome (`--by CHILD`) are `_work.gitdoneroot`. All of them run
 --- over `_work.store` (persistence) and `_work.flow` (policy). Verbs receive FULL ids —
 --- the dispatcher resolves prefixes — and every verb prints a `gitboard-<verb>:` verdict
 --- line and returns its exit code. Mutations commit locally and publish through
@@ -158,8 +158,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
   local was_todo = not flow.is_doing(it)
   if was_todo then
     if not force then
-      local root_order = store.root_order(s)
-      local problems = gitready.ready_problems(s, it, all, root_order)
+      local problems = gitready.ready_problems(s, it, all)
       if #problems > 0 then
         for _, p in ipairs(problems) do
           print("  " .. p)
@@ -172,7 +171,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
       if bound then
         return gate.verdict_line("take", false, "REFUSED: " .. bound)
       end
-      local unreviewed = gate.review_debt_refusal(all, session, it, root_order)
+      local unreviewed = gate.review_debt_refusal(all, session, it)
       if unreviewed then
         return gate.verdict_line("take", false, "REFUSED: " .. unreviewed)
       end
@@ -334,11 +333,12 @@ local function cmd_drop(s: store.Store, id: string, session: string,
       id:sub(1, 8), id:sub(1, 8)))
 end
 
---- done: end an item, recording why. A ROOT's own gates
---- (`--by CHILD` on a verified outcome) are `_work.gitdoneroot`; every
---- gate below is unchanged, since a root carries no claim, PR or
---- builders (`item.problems`) for any of them to fire on.
---- @param by string | nil The completed child verifying a root, "" off one
+--- done: end an item, recording why. The board- and outcome-specific
+--- gates (the board refused outright; `--by CHILD` on a verified
+--- outcome) are `_work.gitdoneroot`; every gate below is unchanged,
+--- since the board carries no claim, PR or builders (`item.problems`)
+--- for any of them to fire on.
+--- @param by string | nil The completed child verifying an outcome, "" off one
 local function cmd_done(s: store.Store, id: string, reason: string,
     force: boolean, why: string, by?: string): integer
   local forced = gate.force_refusal(force, why)
@@ -424,7 +424,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   it.reviewer = ""
   it.resolution = reason
   -- CHILD rides the commit subject and the verdict line: the log names
-  -- the evidence a verified root stands on.
+  -- the evidence a verified outcome stands on.
   local by_note = ""
   if by_id ~= "" then
     by_note = (" by %s"):format(by_id:sub(1, 8))
