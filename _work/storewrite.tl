@@ -137,8 +137,7 @@ end
 --- against the tip `store.list` last observed for it — the
 --- board-level counterpart to `save`, for a mutation that touches no
 --- item at all (`refs/heads/board/seq` plays no part: the ref's own
---- tip is the lease, per `docs/design/order.md`). No verb calls this
---- yet.
+--- tip is the lease).
 --- @param s store.Store The store
 --- @param ids {string} The new root ranking, in rank order
 --- @param message string Commit subject

@@ -28,8 +28,26 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local prio = require("_work.priority")
+local rank = require("_work.gitrank")
 local session = require("_work.session")
 local store = require("_work.store")
+
+--- Add `x` to `list` unless some entry already shares its id — the
+--- merge `cmd_new`/`cmd_attach` use to fold a parent placement
+--- mutated into `also` alongside whatever `gate.containered` already
+--- put there, without writing the same item twice in one commit.
+--- @param list {item.Item} The items a mutation already writes
+--- @param x item.Item The item to add
+--- @return {item.Item} `list`, mutated in place and returned
+local function add_once(list: {item.Item}, x: item.Item): {item.Item}
+  for _, y in ipairs(list) do
+    if y.id == x.id then
+      return list
+    end
+  end
+  list[#list + 1] = x
+  return list
+end
 
 --- File a new item into the graph, todo if it has a parent and triage
 --- otherwise. `spec` is nil to leave the tree with no `spec.md` at
@@ -47,11 +65,23 @@ local store = require("_work.store")
 --- @param force boolean | nil File a `friction:` item over an incomplete
 --- roll call — a pass whose transcripts are gone
 --- @param why string | nil Why --force was needed
+--- @param before string | nil Place it immediately before this sibling
+--- under `parent`; needs `parent` — a root ranks with `rank`, not `new`
+--- @param after string | nil Place it immediately after this sibling
+--- under `parent`; needs `parent`, and at most one of before/after
 --- @return integer 0 on success, 1 otherwise
 local function cmd_new(s: store.Store, title: string, parent: string,
-    spec: string | nil, repo: string, force?: boolean, why?: string): integer
+    spec: string | nil, repo: string, force?: boolean, why?: string,
+    before?: string, after?: string): integer
   local frc = force or false
   local rsn = why or ""
+  local bfr = before or ""
+  local aft = after or ""
+  if parent == "" and (bfr ~= "" or aft ~= "") then
+    return gate.verdict_line("new", false,
+      "REFUSED: --before/--after need --parent — a root ranks with "
+      .. "`rank`, not `new`")
+  end
   local forced = gate.force_refusal(frc, rsn)
   if forced then
     return gate.verdict_line("new", false, "REFUSED: " .. forced)
@@ -116,6 +146,13 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   local also: {item.Item} = {}
   if parent_item ~= nil then
     also = gate.containered(parent_item)
+    local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
+    if perr ~= "" then
+      return gate.verdict_line("new", false, perr)
+    end
+    if placed then
+      also = add_once(also, parent_item)
+    end
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
@@ -132,12 +169,21 @@ end
 
 --- Give an item a parent, moving it from triage into todo. Refuses a
 --- self-parent, a missing id on either side, and a parent whose own
---- chain would cycle back to the item being attached.
+--- chain would cycle back to the item being attached. `before`/`after`
+--- place it among its new siblings in the same commit — X must
+--- already be a positioned child of `parent`, the same rule `rank`
+--- itself enforces; the item's position under whatever parent it is
+--- LEAVING is never rewritten, and stays meaningless there once it
+--- has left.
 --- @param s store.Store The store
 --- @param id string The item gaining a parent
 --- @param parent string The new parent id
+--- @param before string | nil Place it immediately before this sibling
+--- @param after string | nil Place it immediately after this sibling;
+--- at most one of before/after
 --- @return integer 0 on success, 1 otherwise
-local function cmd_attach(s: store.Store, id: string, parent: string): integer
+local function cmd_attach(s: store.Store, id: string, parent: string,
+    before?: string, after?: string): integer
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("attach", false, aerr)
@@ -177,9 +223,17 @@ local function cmd_attach(s: store.Store, id: string, parent: string): integer
   if #bad > 0 then
     return gate.verdict_line("attach", false, table.concat(bad, "; "))
   end
+  local also = gate.containered(parent_item)
+  local placed, perr = rank.place_under(parent_item, id, before or "", after or "", index)
+  if perr ~= "" then
+    return gate.verdict_line("attach", false, perr)
+  end
+  if placed then
+    also = add_once(also, parent_item)
+  end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("attach %s under %s"):format(id:sub(1, 8), parent:sub(1, 8)),
-    "attach", gate.containered(parent_item))
+    "attach", also)
   if not ok then
     return gate.verdict_line("attach", false, err)
   end
@@ -412,8 +466,10 @@ end
 
 local record gitgraph
   cmd_new: function(s: store.Store, title: string, parent: string,
-  spec: string | nil, repo: string, force?: boolean, why?: string): integer
-  cmd_attach: function(s: store.Store, id: string, parent: string): integer
+  spec: string | nil, repo: string, force?: boolean, why?: string,
+  before?: string, after?: string): integer
+  cmd_attach: function(s: store.Store, id: string, parent: string,
+  before?: string, after?: string): integer
   cmd_block: function(s: store.Store, id: string, blocker: string,
   remove: boolean, reason: string): integer
   cmd_set: function(s: store.Store, id: string, title: string | nil,
