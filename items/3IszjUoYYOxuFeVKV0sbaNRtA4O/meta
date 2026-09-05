@@ -2,7 +2,9 @@ title: gitread load: one cat-file --batch session for the three passes instead o
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-baNR_tA4O-32638265
-reviewer: review-baNR_tA4O-f3a5b327
 pr: 29
+verdict: request changes
+verdict_head: 36d570153f84fdf8e229519d8a475e86f17457cd
+verdict_spec: 2e48bf9acfc4fd7f20d0683f80ee04f526178070
 builders: build-baNR_tA4O-32638265
 speccers: build-baNR_tA4O-32638265
