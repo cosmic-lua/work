@@ -7,9 +7,9 @@ When the checker refuses a call to a name that left, the error itself
 says where it went. Two hint sites already exist and both are
 message-shaped, so the change is one gone-tree index and two lookups.
 
-**Index.** `cosmic/_gone/index.tl` — wait: nothing under `_gone/` may
-be a module anything requires; put it in `_tool/gone.tl` (new, ~80
-lines, embedded through the import closure like `_tool/surface.tl`).
+**Index.** `_tool/gone.tl` (new, ~80 lines, embedded through the
+import closure like `_tool/surface.tl`; not under `cosmic/_gone/`
+itself, since nothing there may be a module anything requires).
 `index(): {string: Entry} | nil, string` lexes every
 `/zip/.tl/cosmic/_gone/**.tl` once per process, lazily, and returns
 entries keyed two ways so a hint can be answered from what a message
