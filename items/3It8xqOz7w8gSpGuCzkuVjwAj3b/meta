@@ -1,0 +1,1 @@
+title: cosmic.sqlite: expose ksuid() as a registered SQL scalar function
