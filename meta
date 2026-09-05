@@ -2,7 +2,9 @@ title: casts: map-view-of-a-declared-value's 'knowable in every case' claim is f
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
 claim: build-cVOC_iLy7-3c1cde43
-reviewer: review-cVOC_iLy7-3c1cde43
 pr: 1724
+verdict: accept
+verdict_head: aefecb55458ab4fc9a3ecf2606c0f141fdf12586
+verdict_spec: cb4965b66784f40bb6ef65773df7922f4dfc923c
 builders: build-cVOC_iLy7-3c1cde43
 speccers: 3c1cde43-b57b-53a6-9b5e-5d6e14979b25
