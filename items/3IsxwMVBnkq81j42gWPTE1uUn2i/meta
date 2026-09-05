@@ -5,4 +5,5 @@ pr: 34
 verdict: accept
 verdict_head: d39d8abf0576d6e3371439aa0126fb7ebc28c2d4
 verdict_spec: 9e5a4bd68d1b7b13576a8a56682ac05cb54caf71
+resolution: completed
 builders: build-TE1u_Un2i-32638265
