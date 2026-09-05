@@ -2,6 +2,7 @@ title: docs: a function's @return tag count equals its signature's declared slot
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-CtYH_Gmrg-5c8fc82c
+reviewer: review-CtYH_Gmrg-5c8fc82c
 pr: 1719
 verdict_head: 8b58e1b5959e479712a22d411c57fb32873c97c1
 verdict_spec: bd7248f9be2bfee156668d9080de6515b5893388
