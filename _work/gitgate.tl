@@ -15,8 +15,8 @@ local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
 local item = require("_work.item")
-local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -213,9 +213,10 @@ end
 --- @param items {item.Item} All items
 --- @param session string The session asking to pull
 --- @param taking item.Item The item about to be taken
+--- @param root_order {string} The board's root list
 --- @return string | nil The refusal
 local function review_debt_refusal(items: {item.Item}, session: string,
-    taking: item.Item): string | nil
+    taking: item.Item, root_order: {string}): string | nil
   if (taking.key or "") ~= "" then
     return nil
   end
@@ -230,7 +231,8 @@ local function review_debt_refusal(items: {item.Item}, session: string,
     return nil
   end
   local first = debt[1]
-  for _, i in ipairs(flow.unified(items, prio.positions(items))) do
+  local ranks = rank.positions(items, root_order)
+  for _, i in ipairs(flow.unified(items, ranks)) do
     if flow.stage_rank(i) == flow.STAGE_REVIEW
     and (i.reviewer or "") == ""
     and distance_refusal(i, session) == nil then
@@ -383,7 +385,7 @@ local record gitgate
   distance_refusal: function(it: item.Item, session: string): string
   review_debt: function(items: {item.Item}, session: string): {item.Item}
   review_debt_refusal: function(items: {item.Item}, session: string,
-  taking: item.Item): string
+  taking: item.Item, root_order: {string}): string
   second_claim_refusal: function(s: store.Store, all: {item.Item},
   id: string, session: string): string
   commit_and_publish: function(s: store.Store, it: item.Item, body: string,

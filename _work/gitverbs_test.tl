@@ -77,30 +77,30 @@ local function test_take_refuses_a_flag_shaped_session()
   assert(check.must(store.load(s, leaf)).reviewer == "", "and no reviewer is recorded")
 end
 
--- An unplaced item is refused at take: placement is ordinal, and an
--- item nothing has been compared against cannot be queued honestly.
-local function test_take_refuses_unplaced_work()
-  local s = init_state_repo("unplaced")
-  local capture = file_item(s, "an unplaced root", "")
+-- Work under an unranked root is refused at take: rank is a path from
+-- the root, and a root nothing has ranked cannot be queued honestly.
+local function test_take_refuses_work_under_an_unranked_root()
+  local s = init_state_repo("unranked")
+  local capture = file_item(s, "an unranked root", "")
   local kid = file_item(s, "its child", capture)
   give_spec(s, kid)
   assert(verbs.cmd_take(s, kid, "session-a", 0, false, "") ~= 0,
-    "work under an unplaced root has no position")
+    "work under an unranked root has no rank path")
 end
 
--- A blocked item is refused at take, and the refusal names the
--- blocker so the session knows what to finish first.
-local function test_take_refuses_a_blocked_item()
+-- An open blocker no longer refuses a take: the edge still records
+-- what it recorded, but the rank path is the whole of the queue and
+-- the gate now, and a blocker is not part of it.
+local function test_take_is_never_refused_by_an_open_blocker()
   local s = init_state_repo("blocked")
   local goal, leaf = root_with_leaf(s)
   local blocker = file_item(s, "lands first", goal)
   give_spec(s, leaf)
   assert(graph.cmd_block(s, leaf, blocker, false, "the API lands there") == 0)
-  local code = verbs.cmd_take(s, leaf, "session-a", 0, false, "")
-  assert(code ~= 0, "an open blocker refuses the take")
-  assert(verbs.cmd_done(s, blocker, "completed", false, "") == 0)
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "a closed blocker no longer binds")
+    "an open blocker never gates the take")
+  assert(check.must(store.load(s, leaf)).blocked_by[1] == blocker,
+    "the edge still stands — this verb is a graph edit, not a lease")
 end
 
 -- The doing bound binds NEW takes only: at the limit a take of todo

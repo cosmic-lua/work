@@ -32,14 +32,14 @@ local function make(over: {string: any}): Item
   return check.must(item.decode(t))
 end
 
---- A placed root: it outranks a spent peer, so everything beneath it
---- has a position.
-local function placed_root(items: {Item}): Item
-  local spent = make({resolution = "completed"})
-  local root = make({beats = spent.id})
-  items[#items + 1] = spent
+--- A ranked root: it stands in the board's own root list, so
+--- everything beneath it — and only it — is ranked.
+--- @return Item root
+--- @return {string} root_order naming just this root
+local function placed_root(items: {Item}): Item, {string}
+  local root = make({})
   items[#items + 1] = root
-  return root
+  return root, {root.id}
 end
 
 local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
@@ -59,12 +59,12 @@ end
 local function test_green_and_none_are_offered_as_the_review()
   for _, state in ipairs({"green", "none"}) do
     local items: {Item} = {}
-    local root = placed_root(items)
+    local root, root_order = placed_root(items)
     local reviewable = make({parent = root.id, claim = "who", pr = 2})
     items[#items + 1] = reviewable
     local specs = ready_specs(items)
     local ci: act.CiStates = {[reviewable.id] = state}
-    local a = act.next_action(items, specs, "me", nil, "", ci)
+    local a = act.next_action(items, specs, root_order, "me", nil, "", ci)
     assert(a.kind == "review" and a.item.id == reviewable.id,
       ("state %s should still be offered: %s"):format(state, a.kind))
   end
@@ -72,17 +72,17 @@ end
 
 -- A head still running is not yet known either way — refused at
 -- `take` for the same reason, and never offered here either. The
--- root is deliberately UNPLACED with an open child, the same shape
+-- root is deliberately UNRANKED with an open child, the same shape
 -- `action_test.tl`'s own `test_none_names_the_binding_fact` uses, so
 -- no intake rung has anything to offer instead: it has children (not
--- triage) and is not a placed root to decompose.
+-- triage) and is not a ranked root to decompose.
 local function test_a_running_head_is_not_offered()
   local root = make({})
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
   local items: {Item} = {root, reviewable}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "running"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = act.next_action(items, specs, {}, "me", nil, "", ci)
   assert(a.kind ~= "review", "a running head is not offered: " .. a.kind)
   assert(a.kind == "none", "and nothing else fires either: " .. a.kind)
   assert(a.reason:find("ci running", 1, true) ~= nil,
@@ -98,7 +98,7 @@ local function test_a_red_head_is_not_offered_and_reads_as_the_builders()
   local items: {Item} = {root, reviewable}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "red"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = act.next_action(items, specs, {}, "me", nil, "", ci)
   assert(a.kind ~= "review", "a red head is not offered: " .. a.kind)
   assert(a.reason:find("ci red — builder's", 1, true) ~= nil,
     "the reason names it as the builder's move: " .. a.reason)
@@ -108,14 +108,14 @@ end
 -- item is still offered ahead of "nothing to do".
 local function test_a_ci_blocked_review_never_holds_a_pull_back()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, root_order = placed_root(items)
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
   local fresh = make({parent = root.id})
   items[#items + 1] = reviewable
   items[#items + 1] = fresh
   local specs = ready_specs(items)
   local ci: act.CiStates = {[reviewable.id] = "running"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = act.next_action(items, specs, root_order, "me", nil, "", ci)
   assert(a.kind == "pull" and a.item.id == fresh.id,
     "a pullable item is still offered: " .. a.kind)
 end
@@ -124,10 +124,10 @@ end
 -- passes — a reviewable item is offered exactly as it always was.
 local function test_no_ci_map_offers_the_review_as_before()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, root_order = placed_root(items)
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
   items[#items + 1] = reviewable
-  local a = act.next_action(items, ready_specs(items), "me")
+  local a = act.next_action(items, ready_specs(items), root_order, "me")
   assert(a.kind == "review" and a.item.id == reviewable.id,
     "no CI map is not a refusal: " .. a.kind)
 end
@@ -138,7 +138,7 @@ end
 -- CI-running item nobody here built stays in the tally. The count
 -- says how many were tallied, so it must name only that one — not the
 -- distance-refused item too, which would make "1 item(s)" sit next to
--- two names. Unplaced root with two open children, the same shape
+-- two names. Unranked root with two open children, the same shape
 -- `test_a_running_head_is_not_offered` uses, so no intake rung fires
 -- instead.
 local function test_ci_names_matches_the_tallied_count()
@@ -149,7 +149,7 @@ local function test_ci_names_matches_the_tallied_count()
   local items: {Item} = {root, mine, theirs}
   local specs = ready_specs(items)
   local ci: act.CiStates = {[mine.id] = "running", [theirs.id] = "running"}
-  local a = act.next_action(items, specs, "me", nil, "", ci)
+  local a = act.next_action(items, specs, {}, "me", nil, "", ci)
   assert(a.kind == "none", "nothing else fires: " .. a.kind)
   assert(a.reason:find("1 item(s) await CI", 1, true) ~= nil,
     "the count reflects only what was tallied: " .. a.reason)

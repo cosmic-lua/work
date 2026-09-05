@@ -4,15 +4,15 @@
 -- field and no phase field anywhere, a parentless item reads as a
 -- root, one with open children as a container, and a parented leaf as
 -- workable — todo while unclaimed and PR-less, doing otherwise, with
--- the substate read off the same facts. Plus the one doing bound, the
--- blocker relation, and the graph problems `status` reports. What a
--- session DOES with all this is `_work/action_test.tl`.
+-- the substate read off the same facts. Plus the one doing bound and
+-- the graph problems `status` reports. What a session DOES with all
+-- this is `_work/action_test.tl`.
 
 local check = require("cosmic.check")
 local flow = require("_work.flow")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
-local prio = require("_work.priority")
+local rank = require("_work.rank")
 
 local counter = 0
 
@@ -101,11 +101,11 @@ local function test_in_state_holds_open_workable_leaves_only()
   local done = make({parent = goal.id, resolution = "completed"})
   local capture = make({})
   local items: {item.Item} = {goal, todo, doing, done, capture}
-  local pos = prio.positions(items)
-  local todos = flow.in_state(items, "todo", pos)
+  local ranks = rank.positions(items, {})
+  local todos = flow.in_state(items, "todo", ranks)
   assert(#todos == 1 and todos[1].id == todo.id,
     "roots, containers, doing and done items are not todo")
-  local doings = flow.in_state(items, "doing", pos)
+  local doings = flow.in_state(items, "doing", ranks)
   assert(#doings == 1 and doings[1].id == doing.id,
     "only the claimed leaf is doing")
 end
@@ -125,23 +125,6 @@ local function test_the_doing_bound_binds_new_takes_only()
     "at the bound a new take is refused: " .. tostring(over))
 end
 
-local function test_blocked_items_are_skipped()
-  local goal = make({})
-  local open_blocker = make({parent = goal.id, claim = "session-A"})
-  local blocked = make({parent = goal.id, blocked_by = open_blocker.id})
-  local free = make({parent = goal.id})
-  local items: {item.Item} = {goal, open_blocker, blocked, free}
-  local index = flow.by_id(items)
-  assert(flow.is_blocked(blocked, index), "open blocker blocks")
-  assert(not flow.is_blocked(free, index), "no blocker")
-  local done_blocker = make({parent = goal.id, resolution = "completed"})
-  local was_blocked = make({parent = goal.id,
-      blocked_by = done_blocker.id})
-  local later = flow.by_id({goal, done_blocker, was_blocked})
-  assert(not flow.is_blocked(was_blocked, later),
-    "a done blocker does not block")
-end
-
 local function test_graph_problems()
   local goal = make({})
   local finding = make({})
@@ -155,48 +138,25 @@ local function test_graph_problems()
   assert(#problems == 1, "nothing else is a graph problem: " .. text)
 end
 
-local function test_waits_on_follows_a_blocker_chain()
-  local goal = make({})
-  local a = make({parent = goal.id})
-  local b = make({parent = goal.id, blocked_by = a.id})
-  local c = make({parent = goal.id, blocked_by = b.id})
-  local index = flow.by_id({goal, a, b, c})
-  assert(flow.waits_on(index, c.id, a.id), "c waits on a through b")
-  assert(not flow.waits_on(index, a.id, c.id), "and a waits on nothing")
-end
-
-local function test_waits_on_terminates_on_a_cycle_already_in_the_data()
-  local goal = make({})
-  local a = make({parent = goal.id})
-  local b = make({parent = goal.id, blocked_by = a.id})
-  a.blocked_by = {b.id}
-  local index = flow.by_id({goal, a, b})
-  assert(flow.waits_on(index, a.id, b.id), "the cycle is still reported")
-  local elsewhere = make({parent = goal.id})
-  assert(not flow.waits_on(index, a.id, elsewhere.id),
-    "and a walk that finds nothing still returns rather than spinning")
-end
-
-local function test_untriaged_holds_unplaced_childless_roots()
-  local placed = make({})
-  local lesser = make({})
-  placed.beats = {lesser.id}
+local function test_untriaged_holds_unranked_childless_roots()
+  local ranked = make({})
   local capture = make({})
-  local adopted = make({parent = placed.id})
-  local items: {item.Item} = {placed, lesser, capture, adopted}
-  local queue = flow.untriaged(items)
+  -- An unranked root already being decomposed is not triage either —
+  -- only a CHILDLESS, unranked root is.
+  local decomposing = make({})
+  local child = make({parent = decomposing.id})
+  local items: {item.Item} = {ranked, capture, decomposing, child}
+  local queue = flow.untriaged(items, {ranked.id})
   assert(#queue == 1 and queue[1].id == capture.id,
-    "compared roots and adopted leaves are not triage")
+    "a ranked root and an unranked root under decomposition are not triage")
 end
 
 -- The unified order: ONE queue, stage first — accepted, review,
--- rework, building, lane repair, todo — then the priority order
--- within a stage. Stage is lexicographically supreme: no comparison
--- edge lifts a todo item past a waiting verdict, however hot.
-local function test_unified_ranks_stage_before_priority()
-  local lesser = make({})
+-- rework, building, lane repair, todo — then rank path within a
+-- stage. Stage is lexicographically supreme: no rank lifts a todo
+-- item past a waiting verdict, however high it ranks.
+local function test_unified_ranks_stage_before_rank_path()
   local goal = make({})
-  goal.beats = {lesser.id}
   local accepted = make({parent = goal.id, claim = "s1", pr = 4,
       verdict = "accept"})
   local reviewable = make({parent = goal.id, claim = "s2", pr = 5})
@@ -204,11 +164,11 @@ local function test_unified_ranks_stage_before_priority()
       verdict = "request changes"})
   local building = make({parent = goal.id, claim = "s4"})
   local repair = make({parent = goal.id, key = "release.yml"})
+  -- The todo item ranks first among goal's children…
   local hot = make({parent = goal.id})
-  -- The todo item outranks EVERYTHING in the comparison order…
-  hot.beats = {accepted.id, reviewable.id, reworking.id, building.id,
-    repair.id}
-  local items: {item.Item} = {lesser, goal, hot, repair, building,
+  goal.order = {hot.id, accepted.id, reviewable.id, reworking.id,
+    building.id, repair.id}
+  local items: {item.Item} = {goal, hot, repair, building,
     reworking, reviewable, accepted}
   assert(flow.stage_rank(accepted) == flow.STAGE_ACCEPTED)
   assert(flow.stage_rank(reviewable) == flow.STAGE_REVIEW)
@@ -216,12 +176,13 @@ local function test_unified_ranks_stage_before_priority()
   assert(flow.stage_rank(building) == flow.STAGE_BUILDING)
   assert(flow.stage_rank(repair) == flow.STAGE_REPAIR)
   assert(flow.stage_rank(hot) == flow.STAGE_TODO)
-  local queue = flow.unified(items, prio.positions(items))
+  local ranks = rank.positions(items, {goal.id})
+  local queue = flow.unified(items, ranks)
   local order: {string} = {}
   for _, i in ipairs(queue) do
     order[#order + 1] = i.id
   end
-  -- …and still ranks last: stage beats priority, priority only
+  -- …and still ranks last: stage beats rank path, rank path only
   -- breaks ties within a stage.
   assert(#queue == 6, "every open workable item, roots excluded")
   assert(order[1] == accepted.id and order[2] == reviewable.id
@@ -230,17 +191,16 @@ local function test_unified_ranks_stage_before_priority()
     "stage-lexicographic: " .. table.concat(order, " "))
 end
 
--- Within one stage the priority order decides: a compared-up todo
--- item comes before its uncompared sibling.
-local function test_unified_breaks_stage_ties_by_priority()
-  local lesser = make({})
+-- Within one stage the rank path decides: a higher-ranked todo item
+-- comes before its unranked sibling.
+local function test_unified_breaks_stage_ties_by_rank_path()
   local goal = make({})
-  goal.beats = {lesser.id}
   local plain = make({parent = goal.id})
   local hot = make({parent = goal.id})
-  hot.beats = {plain.id}
-  local items: {item.Item} = {lesser, goal, plain, hot}
-  local queue = flow.unified(items, prio.positions(items))
+  goal.order = {hot.id}
+  local items: {item.Item} = {goal, plain, hot}
+  local ranks = rank.positions(items, {goal.id})
+  local queue = flow.unified(items, ranks)
   assert(#queue == 2 and queue[1].id == hot.id and queue[2].id == plain.id,
-    "the comparison order holds within the stage")
+    "the rank path holds within the stage")
 end

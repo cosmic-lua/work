@@ -157,21 +157,9 @@ local function cmd_take(s: store.Store, id: string, session: string,
   end
   local was_todo = not flow.is_doing(it)
   if was_todo then
-    local blocked: {string} = {}
-    local index = flow.by_id(all)
-    for _, b in ipairs(it.blocked_by or {}) do
-      if flow.binds(index, b) then
-        blocked[#blocked + 1] = b:sub(1, 8)
-      end
-    end
-    if #blocked > 0 and not force then
-      return gate.verdict_line("take", false,
-        ("REFUSED: %s waits on %s — finish the blocker first, or drop "
-          .. "the edge if it no longer binds"):format(id:sub(1, 8),
-          table.concat(blocked, " ")))
-    end
     if not force then
-      local problems = gitready.ready_problems(s, it, all)
+      local root_order = store.root_order(s)
+      local problems = gitready.ready_problems(s, it, all, root_order)
       if #problems > 0 then
         for _, p in ipairs(problems) do
           print("  " .. p)
@@ -184,7 +172,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
       if bound then
         return gate.verdict_line("take", false, "REFUSED: " .. bound)
       end
-      local unreviewed = gate.review_debt_refusal(all, session, it)
+      local unreviewed = gate.review_debt_refusal(all, session, it, root_order)
       if unreviewed then
         return gate.verdict_line("take", false, "REFUSED: " .. unreviewed)
       end

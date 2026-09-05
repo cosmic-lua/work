@@ -41,7 +41,8 @@ local function test_the_spec_bar_is_the_items_own()
   assert(storewrite.save(s, stray, "hand-edited parent"))
   local all = check.must(store.list(s))
   assert(#flow.graph_problems(all) > 0, "the board does have a problem")
-  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf)), all) == 0,
+  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf)), all,
+      store.root_order(s)) == 0,
     "a sound item meets the bar while another item is broken")
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
     "and it may be taken")
@@ -121,23 +122,6 @@ local function test_spec_refuses_a_stale_base()
     "carrying the text it meant to write")
 end
 
--- A blocker id with no item behind it never blocks, so it reads as
--- "sequenced" and pulls anyway. The spec bar is where that is caught.
-local function test_spec_bar_names_a_blocker_that_is_not_an_item()
-  local s = init_state_repo("dangling")
-  local _, leaf = root_with_leaf(s)
-  give_spec(s, leaf)
-  local it = check.must(store.load(s, leaf))
-  it.blocked_by = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
-  assert(storewrite.save(s, it, "hand-edited blocker"))
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
-  assert(#problems == 1 and problems[1]:find("not an item", 1, true),
-    "the bar names it: " .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "and the take is refused")
-end
-
 -- The fixture the read-access bar exists for: a spec whose own
 -- commands clone a repository the item's `repo` field does not name
 -- and nothing declares. Modeled on the spec that bounced 3IKuRFN5 —
@@ -162,7 +146,7 @@ local function test_spec_bar_names_an_undeclared_repo()
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0)
   assert(gitspec.cmd_spec(s, leaf, spec_file("upstream", UPSTREAM_CLONE)) == 0)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   local found = false
   for _, p in ipairs(problems) do
     if p:find("jart/cosmopolitan", 1, true) then found = true end
@@ -183,7 +167,7 @@ local function test_declaring_the_repo_clears_the_bar()
   .. "\n## Access\n- jart/cosmopolitan (read-only, upstream history)\n"
   assert(gitspec.cmd_spec(s, leaf, spec_file("declared", declared)) == 0)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   assert(#problems == 0, "a declared repo clears the bar: "
     .. table.concat(problems, "; "))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
@@ -198,24 +182,9 @@ local function test_the_items_own_repo_needs_no_declaring()
   assert(graph.cmd_set(s, leaf, nil, "jart/cosmopolitan", nil) == 0)
   assert(gitspec.cmd_spec(s, leaf, spec_file("self", UPSTREAM_CLONE)) == 0)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   assert(#problems == 0, "the item's own repo is not a gap: "
     .. table.concat(problems, "; "))
-end
-
--- A real blocker refuses the take and names what to finish first;
--- recording the order is `block`'s, and the take frees when it ends.
-local function test_a_recorded_blocker_sequences_the_take()
-  local s = init_state_repo("mirror")
-  local goal, leaf = root_with_leaf(s)
-  local blocker = file_item(s, "the one that lands first", goal)
-  give_spec(s, leaf)
-  assert(graph.cmd_block(s, leaf, blocker, false, "sequenced behind it") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "the recorded order holds the take")
-  assert(verbs.cmd_done(s, blocker, "completed", false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "and frees it when the blocker ends")
 end
 
 -- The reproduced incident: a foreign session silently replacing the

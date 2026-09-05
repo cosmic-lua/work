@@ -34,14 +34,14 @@ local function make(over: {string: any}): Item
   return check.must(item.decode(t))
 end
 
---- A placed root: it outranks a spent peer, so everything beneath it
---- has a position.
-local function placed_root(items: {Item}): Item
-  local spent = make({resolution = "completed"})
-  local root = make({beats = spent.id})
-  items[#items + 1] = spent
+--- A ranked root: it stands in the board's own root list, so
+--- everything beneath it — and only it — is ranked.
+--- @return Item root
+--- @return {string} root_order naming just this root
+local function placed_root(items: {Item}): Item, {string}
+  local root = make({})
   items[#items + 1] = root
-  return root
+  return root, {root.id}
 end
 
 local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
@@ -69,7 +69,7 @@ local function test_auto_merge_armed_is_not_offered()
   local p: review.Pull = {number = 2, auto_merge = true,
     mergeable_state = "clean"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = act.next_action(items, specs, {}, "me", nil, "", nil, queue)
   assert(a.kind ~= "finish", "an armed auto-merge is not offered: " .. a.kind)
   assert(a.kind == "none", "and nothing else fires either: " .. a.kind)
   assert(a.reason:find("queued", 1, true) ~= nil,
@@ -86,7 +86,7 @@ local function test_mergeable_state_queued_is_not_offered()
   local specs = ready_specs(items)
   local p: review.Pull = {number = 3, mergeable_state = "queued"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = act.next_action(items, specs, {}, "me", nil, "", nil, queue)
   assert(a.kind ~= "finish", "a queued mergeable_state is not offered")
 end
 
@@ -94,14 +94,14 @@ end
 -- head is offered exactly as it always was.
 local function test_without_either_it_is_offered_as_the_ordinary_finish()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, root_order = placed_root(items)
   local accepted = make({parent = root.id, claim = "who", pr = 4,
       verdict = "accept"})
   items[#items + 1] = accepted
   local specs = ready_specs(items)
   local p: review.Pull = {number = 4, mergeable_state = "clean"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = act.next_action(items, specs, root_order, "me", nil, "", nil, queue)
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "an unqueued accept is still the head to finish: " .. a.kind)
 end
@@ -111,7 +111,7 @@ end
 -- instead of stalling on an unactionable head.
 local function test_a_queued_accept_never_holds_a_pull_back()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, root_order = placed_root(items)
   local accepted = make({parent = root.id, claim = "who", pr = 5,
       verdict = "accept"})
   local fresh = make({parent = root.id})
@@ -119,7 +119,7 @@ local function test_a_queued_accept_never_holds_a_pull_back()
   items[#items + 1] = fresh
   local specs = ready_specs(items)
   local queue: act.QueueStates = {[accepted.id] = true}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = act.next_action(items, specs, root_order, "me", nil, "", nil, queue)
   assert(a.kind == "pull" and a.item.id == fresh.id,
     "a pullable item is still offered: " .. a.kind)
 end
@@ -128,11 +128,11 @@ end
 -- passes — an accepted item is offered exactly as it always was.
 local function test_no_queue_map_offers_the_finish_as_before()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, root_order = placed_root(items)
   local accepted = make({parent = root.id, claim = "who", pr = 6,
       verdict = "accept"})
   items[#items + 1] = accepted
-  local a = act.next_action(items, ready_specs(items), "me")
+  local a = act.next_action(items, ready_specs(items), root_order, "me")
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "no queue map is not a refusal: " .. a.kind)
 end

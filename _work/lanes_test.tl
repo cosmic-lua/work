@@ -17,6 +17,7 @@ local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local gitready = require("_work.gitready")
 local gitobj = require("_work.gitobj")
+local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
 local refs = require("_work.refs")
@@ -201,6 +202,8 @@ local function test_a_minted_repair_is_offered_and_admitted()
   local peer_id = fixture.file_item(s, "a peer outcome", "")
   assert(cmp.cmd_compare(s, parent.id, peer_id) == 0,
     "compare should be accepted")
+  assert(gitrank.cmd_rank(s, parent.id, "", "", true) == 0,
+    "rank should be accepted")
 
   assert(lanes.mint(s, RED))
   local all = check.must(store.list(s))
@@ -211,12 +214,13 @@ local function test_a_minted_repair_is_offered_and_admitted()
   for _, it in ipairs(all) do
     specs[it.id] = store.read_spec(s, it.id)
   end
-  local a = action.next_action(all, specs)
+  local root_order = store.root_order(s)
+  local a = action.next_action(all, specs, root_order)
   assert(a.kind == "pull" and a.item.id == repair.id,
     "next offers the minted repair: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
 
-  local problems = gitready.ready_problems(s, repair, all)
+  local problems = gitready.ready_problems(s, repair, all, root_order)
   assert(#problems == 0,
     "take admits it too: " .. table.concat(problems, "; "))
   assert(flow.doing_refusal(all, repair) == nil,

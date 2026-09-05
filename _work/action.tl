@@ -25,9 +25,9 @@
 --- and no gate refuses them — and if that is empty too, the answer is
 --- `none` with the binding fact named.
 ---
---- Every queue this reads is PRIORITY order with age as the last
---- word (`_work.priority`), so "the next todo item" is really "the
---- most important one, oldest among equals".
+--- Every queue this reads orders by rank path with age as the last
+--- word (`gitboard help order`), so "the next todo item" is really
+--- "the highest-ranked one, oldest among equals".
 ---
 --- A claim is a LOCK, and this is where that means something twice
 --- over: a session that names itself is never handed work another
@@ -41,7 +41,7 @@ local gate = require("_work.gitgate")
 local health = require("_work.health")
 local intake = require("_work.intake")
 local item = require("_work.item")
-local prio = require("_work.priority")
+local rank = require("_work.rank")
 
 local type Item = item.Item
 local type Action = decision.Action
@@ -74,21 +74,9 @@ local record Phased
   reviewing: integer
   --- Accepted items already queued to merge, never a head to finish.
   queued: integer
-  --- Blocked, bar-passing todo items stepped over, and the
-  --- highest-placed of them: a queue nothing can enter must surface
-  --- its chain, not vanish into a generic stall.
-  parked: integer
-  stuck: Item
   --- Pullable items the saturated doing bound refused to offer: the
   --- bound must name itself, or the stall reads as an empty queue.
   suppressed: integer
-  --- Accepted DIFFS skipped because a blocker still binds: a
-  --- deliberate hold on the merge, not an empty queue either.
-  merge_held: integer
-  --- Accepted research HANDOVERS skipped for the same reason — no PR
-  --- to hold a merge back, so it is `done ID` that stays withheld
-  --- until the blocker resolves.
-  done_held: integer
   --- Reviewable diffs stepped over because CI on the head has not
   --- settled — offering one would hand a reader a verdict it cannot
   --- yet give.
@@ -138,18 +126,17 @@ local function held_names(doing: {Item}, session: string,
   return table.concat(out, ", ")
 end
 
---- Whether a todo item passes the pure half of the spec bar: placed
---- in the priority order, spec sections filled. The take gate asks
---- more (blocker ids exist, the chain traces); this is the half a
---- pure walk can answer, and a candidate the gate still refuses
---- surfaces as one refused take, not a loop.
+--- Whether a todo item passes the pure half of the spec bar: ranked,
+--- spec sections filled. The take gate asks more (the chain traces);
+--- this is the half a pure walk can answer, and a candidate the gate
+--- still refuses surfaces as one refused take, not a loop.
 --- @param i Item The item
 --- @param specs Specs Spec sidecar body, by item id
---- @param pos {string: prio.Position} Position by item id
+--- @param ranks {string: rank.Rank} Rank by item id
 --- @return boolean True when the item may be offered as a pull
 local function passes_bar(i: Item, specs: Specs,
-    pos: {string: prio.Position}): boolean
-  if not prio.is_placed(pos, i.id) then
+    ranks: {string: rank.Rank}): boolean
+  if not rank.is_ranked(ranks, i.id) then
     return false
   end
   return #flow.ready_gaps(specs[i.id] or "") == 0
@@ -164,20 +151,19 @@ end
 --- to go without another round trip.
 --- @param items {Item} All items
 --- @param specs Specs Spec sidecar body, by item id
---- @param index flow.Index Items by id
 --- @param session string This session's name, "" when unnamed
---- @param pos {string: prio.Position} Position by item id
+--- @param ranks {string: rank.Rank} Rank by item id
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param seed string Per-session tie-break seed, "" for age order
 --- @param ci CiStates CI state by item id, absent when unknown
 --- @param merge_queue QueueStates Accepted items already queued to merge
 --- @return Phased The decision and what it stepped over
-local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
-    session: string, pos: {string: prio.Position}, ages: health.Ages,
+local function phased_action(items: {Item}, specs: Specs,
+    session: string, ranks: {string: rank.Rank}, ages: health.Ages,
     seed: string, ci?: CiStates, merge_queue?: QueueStates): Phased
   local cim = ci or {}
   local qm = merge_queue or {}
-  local queue = flow.unified(items, pos, seed)
+  local queue = flow.unified(items, ranks, seed)
   local doing_n = 0
   for _, i in ipairs(queue) do
     if flow.stage_rank(i) < flow.STAGE_REPAIR then
@@ -189,10 +175,6 @@ local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
   local held = 0
   local reviewing = 0
   local queued = 0
-  local merge_held = 0
-  local done_held = 0
-  local parked = 0
-  local stuck: Item = nil
   local suppressed = 0
   local ci_running = 0
   local ci_red = 0
@@ -209,16 +191,6 @@ local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
         -- Already merging on its own: never a blocker hold, or the
         -- terminal answer would misname it "resolve the blockers".
         queued = queued + 1
-      elseif flow.is_blocked(i, index) then
-        -- A blocker records landing order: hold the finish back and
-        -- count it so the terminal answer can name the hold. A
-        -- handover has no PR to hold a merge back — count it apart,
-        -- so the terminal answer never claims a merge for it.
-        if (i.result or "") ~= "" then
-          done_held = done_held + 1
-        else
-          merge_held = merge_held + 1
-        end
       elseif #acts < CANDIDATES then
         -- A handover has no PR to merge — `done` skips that read when
         -- `pr` is 0 — so its accepted reason names the verb that
@@ -290,20 +262,9 @@ local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
             i.id:sub(1, 8), flow.substate(i), whose),
         }
       end
-    elseif not passes_bar(i, specs, pos) then
+    elseif not passes_bar(i, specs, ranks) then
       -- A todo item below the bar is refinement's to answer, and the
       -- intake half owns that; the queue steps past it silently.
-    elseif flow.is_blocked(i, index) then
-      -- Counted only while the bound has room: at saturation the
-      -- honest bottleneck is the bound, and the terminal answer
-      -- should name it rather than send a session at a chain no
-      -- freed blocker could admit.
-      if room > 0 then
-        parked = parked + 1
-        if stuck == nil then
-          stuck = i
-        end
-      end
     elseif stage == flow.STAGE_REPAIR then
       -- A red lane's repair is the pull that cannot wait: never
       -- capped by the doing bound — the same lane bypass the take
@@ -327,8 +288,7 @@ local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
         acts[#acts + 1] = {
           kind = "pull",
           item = i,
-          reason = "highest-priority todo item passing the spec bar "
-          .. "with no open blocker",
+          reason = "highest-ranked todo item passing the spec bar",
         }
         cap = cap - 1
       end
@@ -344,14 +304,12 @@ local function phased_action(items: {Item}, specs: Specs, index: flow.Index,
       primary.alternates = alts
     end
     return {action = primary, held = held, reviewing = reviewing,
-      queued = queued, parked = parked, stuck = stuck,
-      suppressed = suppressed, merge_held = merge_held,
-      done_held = done_held, ci_running = ci_running, ci_red = ci_red,
+      queued = queued, suppressed = suppressed,
+      ci_running = ci_running, ci_red = ci_red,
       ci_names = table.concat(ci_blocked, ", ")}
   end
   return {held = held, reviewing = reviewing, queued = queued,
-    parked = parked, stuck = stuck, suppressed = suppressed,
-    merge_held = merge_held, done_held = done_held,
+    suppressed = suppressed,
     ci_running = ci_running, ci_red = ci_red,
     ci_names = table.concat(ci_blocked, ", ")}
 end
@@ -362,35 +320,26 @@ end
 --- guessing.
 --- @param items {Item} All items
 --- @param specs Specs Spec sidecar body, by item id
+--- @param root_order {string} The board's root list
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Seconds since last board commit, by id
 --- @param seed string Per-session tie-break seed, "" for age order
 --- @param ci CiStates CI state by item id, absent when unknown
 --- @param merge_queue QueueStates Accepted items already queued to merge
 --- @return Action The decision
-local function next_action(items: {Item}, specs: Specs, session?: string,
-    ages?: health.Ages, seed?: string, ci?: CiStates, merge_queue?: QueueStates): Action
+local function next_action(items: {Item}, specs: Specs, root_order: {string},
+    session?: string, ages?: health.Ages, seed?: string, ci?: CiStates,
+    merge_queue?: QueueStates): Action
   local who = session or ""
   local aged = ages or {}
   local salt = seed or ""
   local cim = ci or {}
   local qm = merge_queue or {}
-  local index = flow.by_id(items)
-  local pos = prio.positions(items)
-  local ph = phased_action(items, specs, index, who, pos, aged, salt, cim, qm)
+  local ranks = rank.positions(items, root_order)
+  local ph = phased_action(items, specs, who, ranks, aged, salt, cim, qm)
   local phased = ph.action
   if phased then
     return phased
-  end
-  -- Bar-passing work held up by blockers outranks taking anything new
-  -- in: the queue is stuck, and decomposing more onto it would only
-  -- deepen what cannot move.
-  if ph.stuck ~= nil then
-    local bottom = health.chain_root(index, ph.stuck)
-    return {kind = "unblock", item = bottom,
-      reason = ("%d takeable item(s) wait on open blockers; the chain "
-        .. "bottoms at %s %s"):format(
-        ph.parked, bottom.id:sub(1, 8), bottom.title)}
   end
   -- Pullable work the saturated bound withheld outranks intake
   -- advice: the honest answer is the bound, named — a session sent
@@ -402,33 +351,11 @@ local function next_action(items: {Item}, specs: Specs, session?: string,
       reason = ("doing is at %d/%d and %d pullable item(s) wait — the "
         .. "bound throttles starting; nothing here is yours until "
         .. "something in flight finishes"):format(
-        #flow.in_state(items, "doing", pos), flow.DOING_LIMIT,
+        #flow.in_state(items, "doing", ranks), flow.DOING_LIMIT,
         ph.suppressed),
     }
   end
-  -- Accepted work a blocker is deliberately holding back outranks
-  -- intake advice too: the honest answer names the hold, not an
-  -- empty queue that would send a session past the recorded landing
-  -- order. A handover has no merge to hold — `done ID` is what stays
-  -- withheld — so the wording is chosen by what is actually waiting,
-  -- never a merge claimed on a handover's behalf.
-  if ph.merge_held > 0 or ph.done_held > 0 then
-    local total = ph.merge_held + ph.done_held
-    local reason: string
-    if ph.done_held == 0 then
-      reason = ("%d accepted item(s) wait on open blockers — resolve "
-        .. "the blockers; their merges are held"):format(total)
-    elseif ph.merge_held == 0 then
-      reason = ("%d accepted item(s) wait on open blockers — resolve "
-        .. "the blockers; `done ID` is withheld until they do"):format(total)
-    else
-      reason = ("%d accepted item(s) wait on open blockers — resolve the "
-        .. "blockers; %d merge(s) and %d `done ID`(s) are withheld"):format(
-        total, ph.merge_held, ph.done_held)
-    end
-    return {kind = "none", reason = reason}
-  end
-  local taking = intake.intake_action(items, specs, index, pos)
+  local taking = intake.intake_action(items, specs, ranks, root_order)
   if taking then
     return taking
   end
@@ -461,7 +388,7 @@ local function next_action(items: {Item}, specs: Specs, session?: string,
     }
   end
   if ph.held > 0 then
-    local doing = flow.in_state(items, "doing", pos)
+    local doing = flow.in_state(items, "doing", ranks)
     return {
       kind = "none",
       reason = ("%d item(s) are other sessions' live claims and nothing "
@@ -483,12 +410,13 @@ local record action
   type CiStates = CiStates
   type QueueStates = QueueStates
   passes_bar: function(i: Item, specs: Specs,
-  pos: {string: prio.Position}): boolean
-  phased_action: function(items: {Item}, specs: Specs, index: flow.Index,
-  session: string, pos: {string: prio.Position}, ages: health.Ages,
+  ranks: {string: rank.Rank}): boolean
+  phased_action: function(items: {Item}, specs: Specs,
+  session: string, ranks: {string: rank.Rank}, ages: health.Ages,
   seed: string, ci?: CiStates, merge_queue?: QueueStates): Phased
-  next_action: function(items: {Item}, specs: Specs, session?: string,
-  ages?: health.Ages, seed?: string, ci?: CiStates, merge_queue?: QueueStates): Action
+  next_action: function(items: {Item}, specs: Specs, root_order: {string},
+  session?: string, ages?: health.Ages, seed?: string, ci?: CiStates,
+  merge_queue?: QueueStates): Action
 end
 
 local M: action = {

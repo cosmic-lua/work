@@ -87,32 +87,6 @@ local function blocker_cycle_problems(items: {Item}): {string}
   return out
 end
 
---- The deepest open blocker an item's chain reaches: the first item
---- along it with no open blocker of its own. Bounded like the parent
---- walk in `_work.flow`, so a cycle in the data returns the last item
---- walked rather than spinning.
---- @param index flow.Index Items by id
---- @param i Item The waiting item
---- @return Item The chain's deepest open item; `i` itself when free
-local function chain_root(index: flow.Index, i: Item): Item
-  local cur = i
-  for _ = 1, 16 do
-    local deeper: Item = nil
-    for _, b in ipairs(cur.blocked_by or {}) do
-      local blocker = index[b]
-      if blocker ~= nil and item.is_open(blocker) then
-        deeper = blocker
-        break
-      end
-    end
-    if deeper == nil then
-      return cur
-    end
-    cur = deeper
-  end
-  return cur
-end
-
 local record health
   type Ages = Ages
   LEASE_S: integer
@@ -121,7 +95,6 @@ local record health
   is_review_stale: function(i: Item, ages: Ages): boolean
   stale_hours: function(i: Item, ages: Ages): integer
   blocker_cycle_problems: function(items: {Item}): {string}
-  chain_root: function(index: flow.Index, i: Item): Item
 end
 
 local M: health = {
@@ -131,7 +104,6 @@ local M: health = {
   is_review_stale = is_review_stale,
   stale_hours = stale_hours,
   blocker_cycle_problems = blocker_cycle_problems,
-  chain_root = chain_root,
 }
 
 return M

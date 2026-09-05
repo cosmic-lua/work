@@ -3,9 +3,9 @@
 --- There are no kinds and no goal tier — an item with open children
 --- is a container being decomposed, a childless root is awaiting
 --- triage, and a parented leaf is workable: the only thing that
---- crosses the kanban. Which items matter more is a recorded
---- comparison (`compare`), derived into an order by `_work.priority`,
---- never a number an item asserts about itself. Each item is a git ref,
+--- crosses the kanban. Order is a path from the root — `gitboard help
+--- order` — derived by `_work.rank`, never a number an item asserts
+--- about itself. Each item is a git ref,
 --- `refs/heads/items/<ksuid>` (`refs/heads/ended/<ksuid>` for one filed
 --- before resolving stopped moving the ref), whose tip commit's tree
 --- carries its fields and spec prose (`_work.store`);

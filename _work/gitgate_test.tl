@@ -133,14 +133,15 @@ local function test_review_debt_refusal_names_a_handover_not_a_diff()
   local handed = make_item({claim = "other", builders = "other",
       result = ("ab"):rep(32)})
   local taking = make_item()
-  local refusal = gate.review_debt_refusal({handed, taking}, "me", taking)
+  local refusal = gate.review_debt_refusal({handed, taking}, "me", taking, {})
   assert(refusal ~= nil, "the handover outranks the todo take")
   assert(refusal:find("1 handover(s) await a verdict", 1, true) ~= nil,
     "names it a handover: " .. tostring(refusal))
   assert(not refusal:find("diff", 1, true),
     "never calls a handover a diff: " .. refusal)
   local diffed = make_item({claim = "other", builders = "other", pr = 3})
-  local diff_refusal = gate.review_debt_refusal({diffed, taking}, "me", taking)
+  local diff_refusal = gate.review_debt_refusal({diffed, taking}, "me", taking,
+    {})
   assert(diff_refusal:find("1 diff(s) await a verdict", 1, true) ~= nil,
     "a diff's wording is unchanged: " .. tostring(diff_refusal))
 end
@@ -211,7 +212,7 @@ end
 local function test_a_foreign_owner_repo_misses_the_bar()
   local s, leaf = foreign_leaf("foreign", fixture.READY_SPEC)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   assert(#problems == 1, "one problem: " .. table.concat(problems, "; "))
   assert(problems[1]:find("repo: whilp/cosmopolitan", 1, true)
     and problems[1]:find(("gitboard set %s --repo cosmic-lua/cosmopolitan")
@@ -228,7 +229,7 @@ local function test_a_same_owner_repo_passes_the_bar()
   assert(graph.cmd_set(s, leaf, nil, "cosmic-lua/cosmopolitan", nil) == 0,
     "the repair the problem names is accepted")
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   assert(#problems == 0, "a same-owner repo is no problem: "
     .. table.concat(problems, "; "))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
@@ -240,7 +241,7 @@ end
 local function test_a_foreign_owner_declared_under_access_passes_the_bar()
   local s, leaf = foreign_leaf("declared", ACCESS_SPEC)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   assert(#problems == 0, "a declared cross-owner repo is no problem: "
     .. table.concat(problems, "; "))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
@@ -258,7 +259,7 @@ local function test_a_board_with_no_origin_skips_the_owner_rule()
   assert(storewrite.save(s, it, "fixture: a repo on a local-only board"))
   assert(owner.board_owner(s) == nil, "no origin, no owner")
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+    check.must(store.list(s)), store.root_order(s))
   assert(#problems == 0, "nothing to compare against: "
     .. table.concat(problems, "; "))
 end

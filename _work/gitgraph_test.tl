@@ -10,9 +10,11 @@ local cmp = require("_work.gitcompare")
 local decision = require("_work.decision")
 local flow = require("_work.flow")
 local gitboard = require("_work.gitboard")
+local gitrank = require("_work.gitrank")
 local intake = require("_work.intake")
 local prio = require("_work.priority")
 local publish = require("_work.publish")
+local rank = require("_work.rank")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
@@ -389,13 +391,18 @@ local function test_holding_a_root_keeps_the_order_total_and_reopens_on_evidence
   local c = file_item(s, "outcome C", "")
   assert(cmp.cmd_compare(s, a, b) == 0)
   assert(cmp.cmd_compare(s, b, c) == 0)
+  assert(gitrank.cmd_rank(s, a, "", "", true) == 0, "a ranks last")
+  assert(gitrank.cmd_rank(s, b, "", "", true) == 0, "b ranks last: a, b")
+  assert(gitrank.cmd_rank(s, c, "", "", true) == 0, "c ranks last: a, b, c")
   local function own_of(id: string): integer
     local _, own = prio.key_of(prio.positions(check.must(store.list(s))), id)
     return own
   end
   local function offered(): decision.Action
     local all = check.must(store.list(s))
-    return intake.intake_action(all, {}, flow.by_id(all), prio.positions(all))
+    local root_order = store.root_order(s)
+    local ranks = rank.positions(all, root_order)
+    return intake.intake_action(all, {}, ranks, root_order)
   end
   local a_own_before = own_of(a)
   assert(a_own_before == 2, "A dominates B and C transitively: " .. a_own_before)
@@ -405,7 +412,7 @@ local function test_holding_a_root_keeps_the_order_total_and_reopens_on_evidence
   assert(prio.is_placed(at, a) and prio.is_placed(at, c),
     "holding B severs no chain: A and C keep their positions")
   assert(own_of(a) == a_own_before, "and A's dominance count is unchanged")
-  local ordered, live, held = flow.roots(all)
+  local ordered, live, held = flow.roots(all, store.root_order(s))
   local listed: {string: boolean} = {}
   for _, r in ipairs(ordered) do
     listed[r.id] = true
@@ -437,7 +444,8 @@ local function test_holding_a_root_keeps_the_order_total_and_reopens_on_evidence
     :format(before, commits(s)))
   assert(not check.must(store.load(s, b)).is_held,
     "filing a child under a held root clears the hold")
-  local _, live2, held2 = flow.roots(check.must(store.list(s)))
+  local _, live2, held2 = flow.roots(check.must(store.list(s)),
+    store.root_order(s))
   assert(live2[b] and not held2[b], "B is live now, and no longer held")
   -- Ending that child leaves B open, idle and unheld: it is offered
   -- again with nothing further said — the skip was the hold's alone.

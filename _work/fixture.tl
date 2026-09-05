@@ -13,6 +13,7 @@ local fs = require("cosmic.fs")
 local cmp = require("_work.gitcompare")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
+local rank = require("_work.gitrank")
 local store = require("_work.store")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
@@ -193,15 +194,19 @@ local function give_spec(s: store.Store, id: string)
 end
 
 --- An organizing root with one workable leaf under it, both filed
---- through `new`. The root is COMPARED against a peer so that it —
---- and everything beneath it — has a position in the priority order:
---- an unplaced root would leave its leaf unpromotable, which is the
---- rule under test elsewhere, not a property of this fixture.
+--- through `new`. The root is RANKED last among roots so that it —
+--- and everything beneath it — is ranked: an unranked root would leave
+--- its leaf unpullable, which is the rule under test elsewhere, not a
+--- property of this fixture. Also COMPARED against a peer, so a
+--- fixture built before the rank path still reads placed under the
+--- older priority relation.
 local function root_with_leaf(s: store.Store): string, string
   local root = file_item(s, "an outcome", "")
   local peer = file_item(s, "a lesser outcome", "")
   assert(cmp.cmd_compare(s, root, peer) == 0,
     "compare should be accepted")
+  assert(rank.cmd_rank(s, root, "", "", true) == 0,
+    "rank should be accepted")
   return root, file_item(s, "a workable slice", root)
 end
 

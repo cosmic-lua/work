@@ -22,15 +22,14 @@
 --- are. Capacity otherwise spreads by worker — one claim per session
 --- — so there is no per-column table and nothing to tune per phase.
 ---
---- There is no goal tier: what makes one item outrank another is a
---- committed comparison (`_work.priority`), so a queue is priority
---- order with age as the last word.
+--- Every queue here orders by rank path; `gitboard help order` is the
+--- rule.
 ---
 --- What a session should DO with all this is `_work.action`: the
 --- rules and the policy that consults them are separate modules, so
 --- growing one never crowds the other against the file-length cap.
 local it = require("_work.item")
-local prio = require("_work.priority")
+local rank = require("_work.rank")
 local spec = require("_work.spec")
 
 local type Item = it.Item
@@ -168,15 +167,15 @@ local function role(i: Item, items: {Item}): string
   return "work"
 end
 
---- The open workable items in one derived state, in queue order:
---- priority first, age last.
+--- The open workable items in one derived state, in queue order: rank
+--- path first, age last.
 --- @param items {Item} All items
 --- @param state string "todo" or "doing"
---- @param pos {string: prio.Position} Position by item id
+--- @param ranks {string: rank.Rank} Rank by item id
 --- @param seed string Per-session tie-break seed, "" for age order
 --- @return {Item} Sorted items, possibly empty
 local function in_state(items: {Item}, state: string,
-    pos: {string: prio.Position}, seed?: string): {Item}
+    ranks: {string: rank.Rank}, seed?: string): {Item}
   local out: {Item} = {}
   for _, i in ipairs(items) do
     if it.is_open(i) and role(i, items) == "work"
@@ -184,35 +183,35 @@ local function in_state(items: {Item}, state: string,
       out[#out + 1] = i
     end
   end
-  return prio.sorted(out, pos, seed)
+  return rank.sorted(out, ranks, seed)
 end
 
 --- Every open workable item in ONE queue: stage first (`stage_rank`),
---- then the priority order within a stage — the comparison relation,
---- blocker lift, age last (`prio.sorted`). `next` offers this queue's
---- head and the take gate refuses what its prefix outranks, so the
---- right-to-left doctrine is this derivation, not restated advice.
+--- then rank path within a stage, age last (`rank.sorted`). `next`
+--- offers this queue's head and the take gate refuses what its
+--- prefix outranks, so the right-to-left doctrine is this derivation,
+--- not restated advice.
 --- @param items {Item} All items
---- @param pos {string: prio.Position} Position by item id
+--- @param ranks {string: rank.Rank} Rank by item id
 --- @param seed string Per-session tie-break seed, "" for age order
 --- @return {Item} The queue, closest-to-done first
 local function unified(items: {Item},
-    pos: {string: prio.Position}, seed?: string): {Item}
+    ranks: {string: rank.Rank}, seed?: string): {Item}
   local buckets: {integer: {Item}} = {}
   for _, i in ipairs(items) do
     if it.is_open(i) and role(i, items) == "work" then
-      local rank = stage_rank(i)
-      local bucket = buckets[rank]
+      local sr = stage_rank(i)
+      local bucket = buckets[sr]
       if bucket == nil then
         bucket = {}
-        buckets[rank] = bucket
+        buckets[sr] = bucket
       end
       bucket[#bucket + 1] = i
     end
   end
   local out: {Item} = {}
-  for rank = STAGE_ACCEPTED, STAGE_TODO do
-    for _, i in ipairs(prio.sorted(buckets[rank] or {}, pos, seed)) do
+  for sr = STAGE_ACCEPTED, STAGE_TODO do
+    for _, i in ipairs(rank.sorted(buckets[sr] or {}, ranks, seed)) do
       out[#out + 1] = i
     end
   end
@@ -345,8 +344,7 @@ local function item_problems(i: Item, index: Index): {string}
   return out
 end
 
---- Every item's graph problems, plus any cycle the priority edges
---- hold, for board-wide health.
+--- Every item's graph problems, for board-wide health.
 --- @param items {Item} All items
 --- @return {string} Problems, possibly empty
 local function graph_problems(items: {Item}): {string}
@@ -357,34 +355,32 @@ local function graph_problems(items: {Item}): {string}
       out[#out + 1] = p
     end
   end
-  for _, p in ipairs(prio.cycle_problems(items)) do
-    out[#out + 1] = p
-  end
   return out
 end
 
---- The open roots that have a POSITION, in priority order, each with
---- whether live work already drives it (an open item whose parent
---- chain reaches it). Nothing marks a root as important: having been
---- compared against something is the only claim to importance the
---- board recognises.
+--- The open roots that are RANKED, in rank order, each with whether
+--- live work already drives it (an open item whose parent chain
+--- reaches it). Nothing marks a root as important: standing in the
+--- board's own root list is the only claim to importance the board
+--- recognises.
 --- A held root (`is_held`) is still open and still listed; the third
 --- return names it so intake walks past it like one with live work.
 --- @param items {Item} All items
---- @return {Item} Open placed roots, priority order
+--- @param root_order {string} The board's root list
+--- @return {Item} Open ranked roots, rank order
 --- @return {string: boolean} root id -> has live work
 --- @return {string: boolean} root id -> is held
-local function roots(items: {Item}): {Item}, {string: boolean},
-  {string: boolean}
+local function roots(items: {Item}, root_order: {string}): {Item},
+  {string: boolean}, {string: boolean}
   local index = by_id(items)
-  local at = prio.positions(items)
+  local ranks = rank.positions(items, root_order)
   local out: {Item} = {}
   local live: {string: boolean} = {}
   local held: {string: boolean} = {}
   for _, i in ipairs(items) do
     if it.is_open(i) then
       if it.is_root(i) then
-        if prio.is_placed(at, i.id) then
+        if rank.is_ranked(ranks, i.id) then
           out[#out + 1] = i
         end
         if i.is_held then
@@ -398,31 +394,32 @@ local function roots(items: {Item}): {Item}, {string: boolean},
       end
     end
   end
-  return prio.sorted(out, at), live, held
+  return rank.sorted(out, ranks), live, held
 end
 
---- The triage queue: open, childless, parentless items that no
---- comparison has placed. Captured evidence, nothing decomposing it,
---- nothing having adopted it, and no claim yet about how much it
---- matters — which is exactly the state triage exists to resolve, by
---- attaching it under something placed, comparing it, or ending it.
+--- The triage queue: open roots absent from the board's root list.
+--- Captured evidence, nothing decomposing it, nothing having adopted
+--- it, and no claim yet about how much it matters — which is exactly
+--- the state triage exists to resolve, by ranking it among the roots,
+--- attaching it under something ranked, or ending it.
 ---
---- Placement is what separates this queue from intake: a root
---- somebody HAS compared is an outcome the planner decomposes
---- (`roots`), even with no children yet.
+--- Ranked is what separates this queue from intake: a root somebody
+--- HAS ranked is an outcome the planner decomposes (`roots`), even
+--- with no children yet.
 --- @param items {Item} All items
---- @return {Item} Unplaced roots, age order
-local function untriaged(items: {Item}): {Item}
-  local at = prio.positions(items)
+--- @param root_order {string} The board's root list
+--- @return {Item} Unranked roots, age order
+local function untriaged(items: {Item}, root_order: {string}): {Item}
+  local ranks = rank.positions(items, root_order)
   local out: {Item} = {}
   for _, i in ipairs(items) do
     if it.is_open(i) and it.is_root(i)
     and not has_open_children(items, i.id)
-    and not prio.is_placed(at, i.id) then
+    and not rank.is_ranked(ranks, i.id) then
       out[#out + 1] = i
     end
   end
-  return prio.sorted(out, at)
+  return rank.sorted(out, ranks)
 end
 
 local record flow
@@ -438,13 +435,13 @@ local record flow
   is_doing: function(i: Item): boolean
   substate: function(i: Item, queued?: boolean): string
   stage_rank: function(i: Item): integer
-  unified: function(items: {Item}, pos: {string: prio.Position},
+  unified: function(items: {Item}, ranks: {string: rank.Rank},
   seed?: string): {Item}
   by_id: function(items: {Item}): Index
   has_open_children: function(items: {Item}, id: string): boolean
   role: function(i: Item, items: {Item}): string
   in_state: function(items: {Item}, state: string,
-  pos: {string: prio.Position}, seed?: string): {Item}
+  ranks: {string: rank.Rank}, seed?: string): {Item}
   doing_refusal: function(items: {Item}, taking?: Item): string | nil
   is_blocked: function(i: Item, index: Index): boolean
   binds: function(index: Index, id: string): boolean
@@ -453,9 +450,9 @@ local record flow
   root_of: function(i: Item, index: Index): Item | nil
   item_problems: function(i: Item, index: Index): {string}
   graph_problems: function(items: {Item}): {string}
-  roots: function(items: {Item}): {Item}, {string: boolean},
-  {string: boolean}
-  untriaged: function(items: {Item}): {Item}
+  roots: function(items: {Item}, root_order: {string}): {Item},
+  {string: boolean}, {string: boolean}
+  untriaged: function(items: {Item}, root_order: {string}): {Item}
   ready_gaps: function(body: string): {string}
 end
 
