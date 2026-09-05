@@ -15,6 +15,7 @@ local gitview = require("_work.gitview")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -135,7 +136,9 @@ local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
   local winner = check.must(store.load(b, mine.id))
   assert(winner.claim == "session-a",
     "the winning take is visible after the sync")
-  assert(flow.doing_refusal(check.must(store.list(b))) ~= nil,
+  check.must(store.list(b))
+  local c = check.must(store.read(b))
+  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
     "doing holds exactly its bound — the re-run verb's own gate now "
     .. "refuses this take")
 end
@@ -275,14 +278,24 @@ local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
 end
 
 -- `list` runs a FIXED number of git processes regardless of board
--- size: one `for-each-ref`, one `cat-file --batch` for every item's
--- meta/held/edges, one more for every edge kind's own subtree
--- content, and one more for every content blob (a blocked_by or
--- other-kind reason) — never one process per item. Counted by racing
--- `git` itself: a
--- counting wrapper ahead of the real binary on PATH, so every
--- invocation `_work.refs`/`_work.gitobj` make is caught, not just the
--- ones this test happens to know the argv for.
+-- size, whatever path it takes: `store.list` itself pays one
+-- `for-each-ref` snapshot for its own freshness digest, then reads
+-- through the board cache (`_work.cache.open`) — on a board this test
+-- deliberately keeps stale (every `seed` below writes through
+-- `storewrite.save` directly, bypassing `_work.gitgate.commit_and_publish`'s
+-- incremental hooks), every measured call pays a full cache rebuild:
+-- one more `for-each-ref` (`_work.gitread.list`'s own snapshot), one
+-- `cat-file --batch` SESSION for every item's meta/held/order/edges,
+-- every edge kind's own subtree content, and every content blob (a
+-- blocked_by or other-kind reason) — one persistent process for that
+-- whole session, never one per item or per round — one more
+-- `cat-file --batch` for every item's spec sidecar, one `git log` for
+-- the events table, and a final `for-each-ref` for the digest the
+-- rebuild records. Six processes total, not growing with item count.
+-- Counted by racing `git` itself: a counting wrapper ahead of the real
+-- binary on PATH, so every invocation `_work.refs`/`_work.gitobj`/
+-- `_work.events` make is caught, not just the ones this test happens
+-- to know the argv for.
 local function test_list_process_count_is_constant_as_items_grow()
   local root = init_state_repo("process-count")
   local s = check.must(store.open(root))
@@ -311,6 +324,13 @@ local function test_list_process_count_is_constant_as_items_grow()
       it.other_edges = {blocked_by = {[ids[1]] = "seeding order"}}
       assert(storewrite.save(s, it, "block"))
     end
+    -- These writes go straight through `storewrite.save`, bypassing
+    -- `gate.commit_and_publish`'s own cache patch — so, unlike a real
+    -- mutation verb, nothing here keeps `s.index` in step with what
+    -- was just seeded. Closing it is this test's own stand-in for
+    -- that: the next `store.list` reopens fresh rather than reading
+    -- back whatever a still-open connection saw before this seeding.
+    local _cok, _cerr = store.close(s)
   end
 
   --- How many `git` invocations one `store.list` makes, with the
@@ -332,7 +352,7 @@ local function test_list_process_count_is_constant_as_items_grow()
   assert(small == big,
     ("list's process count must not grow with item count: %d (3 items) vs "
       .. "%d (15 items)"):format(small, big))
-  assert(small <= 4, ("at most 4 processes: got %d"):format(small))
+  assert(small <= 6, ("at most 6 processes: got %d"):format(small))
 end
 
 --- The whole-board render (`gitboard show`, bare) reads every open

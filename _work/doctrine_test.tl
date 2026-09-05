@@ -118,7 +118,7 @@ local function body_first_paragraph(body: string): string
   return (para:gsub("\n", " "))
 end
 
--- `help order` IS `_work/rank.tl`'s own definition of rank, restated
+-- `help order` IS `_work/readddl.tl`'s own definition of rank, restated
 -- nowhere else: the page's first paragraph must read exactly as the
 -- module header's does, so the two can never drift apart in meaning.
 local function test_order_page_opens_with_ranks_own_definition()
@@ -126,12 +126,12 @@ local function test_order_page_opens_with_ranks_own_definition()
   assert(page ~= nil, "the order topic renders")
   local body = page:match("\n\n(.*)$")
   assert(body ~= nil, "the page carries a body past its header")
-  local source, rerr = fs.read("_work/rank.tl")
-  assert(source ~= nil, "rank.tl reads from the tree: " .. tostring(rerr))
+  local source, rerr = fs.read("_work/readddl.tl")
+  assert(source ~= nil, "readddl.tl reads from the tree: " .. tostring(rerr))
   local want = header_first_paragraph(source)
   local got = body_first_paragraph(body)
   assert(got == want,
-    ("the order page's first paragraph must equal rank.tl's header:\n"
+    ("the order page's first paragraph must equal readddl.tl's header:\n"
       .. "want: %s\ngot:  %s"):format(want, got))
 end
 

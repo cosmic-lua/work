@@ -51,6 +51,13 @@ end
 --- resets every mirrored ref (`refs/heads/items`, `refs/heads/ended`,
 --- `refs/heads/board`) to what the remote holds. There is no working tree
 --- to merge into, so this is the whole of sync.
+--- The fetch moves refs behind `s.index`'s back exactly like a
+--- mutation's own write does — `cache.around_fetch` patches the cache
+--- FILE from a separate connection, but the connection `s` has held
+--- open since its first read never sees that patch (a `cosmic.sqlite`
+--- `query_one` never resets its statement between calls, which pins a
+--- long-lived connection's own snapshot to whatever it was at its last
+--- read) — so it is closed here too, the same as after a mutation.
 --- @param s store.Store The store
 --- @return boolean True on success
 --- @return string Error message
@@ -62,9 +69,11 @@ local function sync(s: store.Store): boolean, string
   if not specs_ok then
     return false, serr
   end
-  return cache.around_fetch(s.root, function(): boolean, string
+  local ok, err = cache.around_fetch(s.root, function(): boolean, string
       return refs.fetch_prune(s.root)
     end)
+  local _cok, _cerr = store.close(s)
+  return ok, err
 end
 
 --- Publish every ref the pending saves touched, in one atomic push
@@ -114,6 +123,10 @@ local function publish(s: store.Store): boolean, string
   local synced, serr = cache.around_fetch(s.root, function(): boolean, string
       return refs.fetch_prune(s.root)
     end)
+  -- The re-sync fetch moves refs the same way `sync` above does, so
+  -- `s.index` — if this store's caller happens to re-read through the
+  -- same `Store` rather than starting a fresh one — closes here too.
+  local _cok, _cerr = store.close(s)
   if not synced then
     return false, ("lost the push race — the mutation was dropped whole, "
       .. "and the re-sync then stopped: %s"):format(serr)

@@ -26,7 +26,6 @@
 --- identity, so the subject is the only place the log can record who
 --- judged. The one refusal on it is shape (`item.identity_refusal`):
 --- a dash-led name is a flag a mangled argv absorbed, not a session.
-local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
 local item = require("_work.item")
@@ -107,7 +106,7 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
   if all == nil then
     return gate.verdict_line("verdict", false, aerr)
   end
-  local it = flow.by_id(all)[id]
+  local it = item.by_id(all)[id]
   if it == nil then
     return gate.verdict_line("verdict", false, ("no item %s"):format(id))
   end

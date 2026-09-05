@@ -55,7 +55,6 @@ local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
 local gitread = require("_work.gitread")
 local graph = require("_work.gitgraph")
-local migrate = require("_work.gitmigrate")
 local gitspec = require("_work.gitspec")
 local gitsync = require("_work.gitsync")
 local publish = require("_work.publish")
@@ -219,9 +218,6 @@ local function main(...: string): integer
   end
   if d.command == "find" then
     return cachequery.cmd_find(s.root, table.concat(d.parsed.args, " "))
-  end
-  if d.command == "migrate" then
-    return migrate.cmd_migrate(s, d.parsed.switches["dry-run"] or false)
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
   -- with every other id-taking verb.

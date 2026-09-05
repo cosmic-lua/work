@@ -13,19 +13,26 @@
 -- `next` names an action, the gate rejects it, and the answer repeats.
 --
 -- The driver applies an action the way the verbs do and through the
--- same gates they call (`flow.doing_refusal`, the bar), so the
--- refusal asserted here is the real one. It carries no git plumbing:
--- a mutation is a table write, not a commit, which lets a walk run
--- hundreds of steps. `gitverbs_test.tl` proves the plumbing.
+-- same gates they call (the doing bound, the bar), so the refusal
+-- asserted here is the real one. It carries no git plumbing: a
+-- mutation is a table write, not a commit, which lets a walk run
+-- hundreds of steps — each rebuilding a fresh in-memory index over the
+-- mutated items, since the board database is every read's path here
+-- too. `gitverbs_test.tl` proves the plumbing.
 
 local check = require("cosmic.check")
 local act = require("_work.action")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local idxmod = require("_work.index")
+local index_rank = require("_work.index_rank")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
+local read = require("_work.read")
+local readddl = require("_work.readddl")
 
 local type Item = item.Item
+local type Index = idxmod.Index
 
 local counter = 0
 
@@ -43,6 +50,18 @@ local function make(over: {string: any}): Item
     t[k] = v
   end
   return check.must(item.decode(t))
+end
+
+--- A fresh in-memory index over `items`' CURRENT state — rebuilt on
+--- every call, since a walk mutates `items` in place between them and
+--- the database is every read's path.
+--- @param items {Item} The board, as it stands right now
+--- @return Index
+local function make_index(items: {Item}): Index
+  local idx = check.must(idxmod.open(items))
+  check.must(index_rank.ensure_views(idx))
+  check.must(readddl.ensure_views(idx))
+  return idx
 end
 
 local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
@@ -93,18 +112,22 @@ end
 
 --- Carry out one action the way the verbs do, mutating `items` and
 --- `specs`, and return what went wrong so a caller asserts on nil
---- rather than finding a silent no-op several steps later.
+--- rather than finding a silent no-op several steps later. `c` is the
+--- index built over `items` BEFORE this call's own mutations — the
+--- same snapshot `a` was decided against, still valid for the reads
+--- this makes on the way to applying it.
+--- @param c Index An index over `items`, as they stood when `a` was decided
 --- @param items {Item} All items, appended to by intake
 --- @param specs act.Specs Sidecar body by id
 --- @param a act.Action The action to carry out
 --- @param session string The acting session
 --- @param r Rng The generator, consulted for the review verdict
 --- @return string | nil What refused it, nil when it was carried out
-local function apply(items: {Item}, specs: act.Specs, a: act.Action,
+local function apply(c: Index, items: {Item}, specs: act.Specs, a: act.Action,
     session: string, r: Rng): string | nil
   local it = a.item
   if a.kind == "finish" then
-    local sub = flow.substate(it)
+    local sub = check.must(read.substate(c, it.id))
     if sub == "accepted" then
       it.resolution = "completed"
       it.claim = ""
@@ -139,9 +162,9 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     return nil
   end
   if a.kind == "pull" then
-    local no = flow.doing_refusal(items)
-    if no then
-      return no
+    local n = check.must(read.doing_count(c))
+    if (it.key or "") == "" and n >= flow.DOING_LIMIT then
+      return ("doing is at %d/%d"):format(n, flow.DOING_LIMIT)
     end
     it.claim = session
     return nil
@@ -158,13 +181,15 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     -- Adoption under a ranked outcome, which is the branch of triage
     -- that keeps an item alive; `attach` is ungated, so neither is
     -- this.
-    local ranked = flow.outcomes(items)
+    local ranked = check.must(read.outcomes(c))
     if #ranked == 0 then
       it.resolution = "not-planned"
       return nil
     end
-    it.parent = ranked[1].id
-    gate.containered(ranked[1], flow.by_id(items))
+    local by_id = item.by_id(items)
+    local target = by_id[ranked[1].id]
+    it.parent = target.id
+    check.must(gate.containered(c, target))
     return nil
   end
   if a.kind == "intake" then
@@ -173,7 +198,7 @@ local function apply(items: {Item}, specs: act.Specs, a: act.Action,
     end
     local born = make({parent = it.id})
     items[#items + 1] = born
-    gate.containered(it, flow.by_id(items))
+    check.must(gate.containered(c, it))
     return nil
   end
   return ("unhandled action kind: %s"):format(a.kind)
@@ -211,7 +236,7 @@ local function generate(r: Rng, leaves: integer,
     -- would hand the ordering a board the verbs could not have made.
     local doing = 0
     for _, i in ipairs(items) do
-      if item.is_open(i) and flow.is_doing(i) then
+      if item.is_open(i) and ((i.claim or "") ~= "" or (i.pr or 0) ~= 0) then
         doing = doing + 1
       end
     end
@@ -264,8 +289,11 @@ local function test_no_walk_ever_names_an_action_the_gates_refuse()
     local items, specs = generate(r, 18, "wake-0")
     for step = 1, 150 do
       local session = ("wake-%d"):format(step // 3)
-      local a = act.next_action(items, specs, session)
+      local c = make_index(items)
+      local a, aerr = act.next_action(c, items, specs, session)
+      assert(a ~= nil, aerr)
       if a.kind == "none" or a.item == nil then
+        check.must(idxmod.close(c))
         break
       end
       if a.kind == "pull" then
@@ -273,17 +301,18 @@ local function test_no_walk_ever_names_an_action_the_gates_refuse()
           ("seed %d: pulled in-flight work"):format(seed))
         assert(#flow.ready_gaps(specs[a.item.id] or "") == 0,
           ("seed %d: pulled past the spec bar"):format(seed))
-        assert(flow.doing_refusal(items) == nil,
+        assert((a.item.key or "") ~= "" or check.must(read.doing_count(c)) < flow.DOING_LIMIT,
           ("seed %d: pulled past the doing bound"):format(seed))
       end
-      if a.kind == "finish" and flow.substate(a.item) ~= "accepted" then
+      if a.kind == "finish" and check.must(read.substate(c, a.item.id)) ~= "accepted" then
         local mine = (a.item.claim or "") == ""
         or a.item.claim == session
         assert(mine, ("seed %d: finished another session's live claim")
           :format(seed))
       end
       local before = signature(items, specs)
-      local bad = apply(items, specs, a, session, r)
+      local bad = apply(c, items, specs, a, session, r)
+      check.must(idxmod.close(c))
       assert(bad == nil, ("seed %d step %d: %s was refused: %s"):format(
           seed, step, a.kind, bad or ""))
       assert(signature(items, specs) ~= before,
@@ -302,12 +331,16 @@ local function test_a_solo_session_never_names_an_answer_it_cannot_act_on()
     local r = rng(seed + 900)
     local items, specs = generate(r, 30, "solo")
     for step = 1, 200 do
-      local a = act.next_action(items, specs, "solo")
+      local c = make_index(items)
+      local a, aerr = act.next_action(c, items, specs, "solo")
+      assert(a ~= nil, aerr)
       if a.kind == "none" or a.item == nil then
+        check.must(idxmod.close(c))
         break
       end
       local before = signature(items, specs)
-      local bad = apply(items, specs, a, "solo", r)
+      local bad = apply(c, items, specs, a, "solo", r)
+      check.must(idxmod.close(c))
       assert(bad == nil, ("seed %d step %d: %s was refused: %s"):format(
           seed, step, a.kind, bad or ""))
       assert(signature(items, specs) ~= before,
@@ -353,12 +386,15 @@ local function test_a_finishable_board_drains_to_nothing()
     for step = 1, 400 do
       steps = step
       local session = actor(items, wake)
-      local a = act.next_action(items, specs, session)
+      local c = make_index(items)
+      local a, aerr = act.next_action(c, items, specs, session)
+      assert(a ~= nil, aerr)
       -- An `intake`, or nothing at all, ends a WAKE rather than the
       -- walk: the next one is a different session, and what this one
       -- left standing is the first thing it sees. Two idle wakes in a
       -- row is the board having nothing left.
       if a.kind == "none" or a.kind == "intake" or a.item == nil then
+        check.must(idxmod.close(c))
         if idle >= 1 then
           break
         end
@@ -366,7 +402,8 @@ local function test_a_finishable_board_drains_to_nothing()
         wake = wake + 1
       else
         idle = 0
-        local bad = apply(items, specs, a, session, r)
+        local bad = apply(c, items, specs, a, session, r)
+        check.must(idxmod.close(c))
         assert(bad == nil, ("seed %d step %d: %s was refused: %s"):format(
             seed, step, a.kind, bad or ""))
         if roll(r, 3) == 1 then
@@ -377,9 +414,8 @@ local function test_a_finishable_board_drains_to_nothing()
     assert(steps < 400, ("seed %d: the walk never settled"):format(seed))
     for _, c in ipairs(children) do
       assert(not item.is_open(c),
-        ("seed %d: %s never finished, left %s"):format(
-          seed, c.id:sub(1, 8),
-          flow.is_doing(c) and flow.substate(c) or "todo"))
+        ("seed %d: %s never finished, left claim=%s pr=%d"):format(
+          seed, c.id:sub(1, 8), c.claim or "", c.pr or 0))
     end
   end
 end
@@ -396,15 +432,26 @@ local function test_a_rework_is_its_builders_until_the_lease_expires()
       pr = 7, verdict = "request changes", verdict_head = "abc123"})
   local items: {Item} = {board, root, reworking}
   local specs: act.Specs = {[reworking.id] = READY}
-  local builder = act.next_action(items, specs, "session-A")
+
+  local c1 = make_index(items)
+  local builder, berr = act.next_action(c1, items, specs, "session-A")
+  assert(builder ~= nil, berr)
   assert(builder.kind == "finish" and builder.item.id == reworking.id,
     "the builder picks its own rework up: " .. builder.kind)
-  local other = act.next_action(items, specs, "session-B")
+  check.must(idxmod.close(c1))
+
+  local c2 = make_index(items)
+  local other, oerr = act.next_action(c2, items, specs, "session-B")
+  assert(other ~= nil, oerr)
   assert(other.kind ~= "finish",
     "a live rework claim holds like any other: " .. other.kind)
+  check.must(idxmod.close(c2))
+
+  local c3 = make_index(items)
   local stale: {string: integer} = {[reworking.id] = 5 * 60 * 60}
-  local takeover = act.next_action(items, specs, "session-B",
-    stale)
+  local takeover, terr = act.next_action(c3, items, specs, "session-B", stale)
+  assert(takeover ~= nil, terr)
   assert(takeover.kind == "finish" and takeover.item.id == reworking.id,
     "a stale rework claim is anyone's: " .. takeover.kind)
+  check.must(idxmod.close(c3))
 end

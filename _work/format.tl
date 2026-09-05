@@ -49,10 +49,6 @@ local function refusal(found: string, has_items: boolean): string | nil
       .. "%s (run `gitboard init` to write the marker, once every other "
       .. "clone of this board has moved past whatever changed it)"):format(CURRENT)
   end
-  if trimmed == "1" then
-    return ("refs/heads/board/format is 1, this tool expects %s — run "
-      .. "`gitboard migrate` to move this board onto the current layout"):format(CURRENT)
-  end
   return ("refs/heads/board/format is %s, this tool expects %s — it cannot safely "
     .. "read or write this board"):format(trimmed, CURRENT)
 end

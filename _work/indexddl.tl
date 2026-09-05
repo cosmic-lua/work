@@ -44,7 +44,16 @@ CREATE TABLE items (
   verdict TEXT NOT NULL DEFAULT '' CHECK(verdict IN ('', 'accept', 'request changes')),
   verdict_head TEXT NOT NULL DEFAULT '',
   verdict_spec TEXT NOT NULL DEFAULT '',
-  resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned'))
+  resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned')),
+  -- The write lease: the branch this item lives on
+  -- (`refs/heads/items/<id>` or `refs/heads/ended/<id>`), the commit sha
+  -- at that ref's tip — what a mutation's compare-and-swap push is made
+  -- against — and that tip's committer date, epoch seconds. A store read
+  -- through the cache hydrates its own lease bookkeeping from these
+  -- three columns instead of a fresh `for-each-ref`.
+  ref TEXT NOT NULL DEFAULT '',
+  tip TEXT NOT NULL DEFAULT '',
+  touched_at INTEGER NOT NULL DEFAULT 0
 ) STRICT, WITHOUT ROWID;
 
 -- One row per entry of every item's own `order` list (`parent` = that

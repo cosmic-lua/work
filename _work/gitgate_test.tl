@@ -20,6 +20,7 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
@@ -69,9 +70,9 @@ local function test_a_lost_race_drops_the_mutation_and_refuses()
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
   local merged = check.must(store.list(b))
-  assert(flow.by_id(merged)[touched.id] ~= nil,
+  assert(item.by_id(merged)[touched.id] ~= nil,
     "the checkout was re-synced onto the winner's state")
-  assert(flow.by_id(merged)[mine.id] == nil,
+  assert(item.by_id(merged)[mine.id] == nil,
     "and the dropped mutation is gone whole")
 end
 
@@ -107,8 +108,9 @@ local function test_the_merged_board_carries_the_doing_bound()
   end
   assert(publish.publish(a))
   assert(publish.sync(b))
-  local merged = check.must(store.list(b))
-  assert(flow.doing_refusal(merged) ~= nil,
+  check.must(store.list(b))
+  local c = check.must(store.read(b))
+  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
     "a take against the merged board is the verb's to refuse")
 end
 
@@ -118,10 +120,12 @@ end
 -- it is returned rather than saved.
 local function test_containered_clears_the_locks()
   local untouched = make_item()
-  assert(#gate.containered(untouched, {}) == 0,
+  local c1 = fixture.make_index({untouched})
+  assert(#check.must(gate.containered(c1, untouched)) == 0,
     "an unclaimed parent has nothing to clear")
   local held = make_item({claim = "session-A", reviewer = "review-1"})
-  local out = gate.containered(held, {})
+  local c2 = fixture.make_index({held})
+  local out = check.must(gate.containered(c2, held))
   assert(#out == 1 and out[1].claim == "" and out[1].reviewer == "",
     "the claim and the review clear together")
 end
@@ -133,14 +137,18 @@ local function test_review_debt_refusal_names_a_handover_not_a_diff()
   local handed = make_item({claim = "other", builders = "other",
       result = ("ab"):rep(32)})
   local taking = make_item()
-  local refusal = gate.review_debt_refusal({handed, taking}, "me", taking)
+  local c1 = fixture.make_index({handed, taking})
+  local refusal, rerr1 = gate.review_debt_refusal(c1, {handed, taking}, "me", taking)
+  assert(rerr1 == "", rerr1)
   assert(refusal ~= nil, "the handover outranks the todo take")
   assert(refusal:find("1 handover(s) await a verdict", 1, true) ~= nil,
     "names it a handover: " .. tostring(refusal))
   assert(not refusal:find("diff", 1, true),
     "never calls a handover a diff: " .. refusal)
   local diffed = make_item({claim = "other", builders = "other", pr = 3})
-  local diff_refusal = gate.review_debt_refusal({diffed, taking}, "me", taking)
+  local c2 = fixture.make_index({diffed, taking})
+  local diff_refusal, rerr2 = gate.review_debt_refusal(c2, {diffed, taking}, "me", taking)
+  assert(rerr2 == "", rerr2)
   assert(diff_refusal:find("1 diff(s) await a verdict", 1, true) ~= nil,
     "a diff's wording is unchanged: " .. tostring(diff_refusal))
 end
@@ -210,8 +218,7 @@ end
 -- naming the field, the value and the repair, and the take is refused.
 local function test_a_foreign_owner_repo_misses_the_bar()
   local s, leaf = foreign_leaf("foreign", fixture.READY_SPEC)
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 1, "one problem: " .. table.concat(problems, "; "))
   assert(problems[1]:find("repo: whilp/cosmopolitan", 1, true)
     and problems[1]:find(("gitboard set %s --repo cosmic-lua/cosmopolitan")
@@ -227,8 +234,7 @@ local function test_a_same_owner_repo_passes_the_bar()
   local s, leaf = foreign_leaf("same", fixture.READY_SPEC)
   assert(graph.cmd_set(s, leaf, nil, "cosmic-lua/cosmopolitan", nil) == 0,
     "the repair the problem names is accepted")
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a same-owner repo is no problem: "
     .. table.concat(problems, "; "))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
@@ -239,8 +245,7 @@ end
 -- `## Access`, and the field is accepted as stated.
 local function test_a_foreign_owner_declared_under_access_passes_the_bar()
   local s, leaf = foreign_leaf("declared", ACCESS_SPEC)
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared cross-owner repo is no problem: "
     .. table.concat(problems, "; "))
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
@@ -257,8 +262,7 @@ local function test_a_board_with_no_origin_skips_the_owner_rule()
   it.repo = "whilp/cosmopolitan"
   assert(storewrite.save(s, it, "fixture: a repo on a local-only board"))
   assert(owner.board_owner(s) == nil, "no origin, no owner")
-  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)),
-    check.must(store.list(s)))
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "nothing to compare against: "
     .. table.concat(problems, "; "))
 end

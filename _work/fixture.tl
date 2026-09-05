@@ -12,7 +12,11 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
+local idxmod = require("_work.index")
+local irank = require("_work.index_rank")
+local item = require("_work.item")
 local rank = require("_work.gitrank")
+local readddl = require("_work.readddl")
 local refs = require("_work.refs")
 local store = require("_work.store")
 
@@ -222,6 +226,21 @@ end
 -- reaching the board would never leave a parent off the board with
 -- nothing decomposing it.
 
+--- An in-memory index over `items`, with `_work.index_rank` AND
+--- `_work.readddl`'s views applied, in that order — `readddl`'s own
+--- views join against `rank_path`/`dense_rank`, so those must exist
+--- first. What a pure report or decision test builds instead of a
+--- real store: no git, no cache file, just the same derived rows a
+--- live board's cache would carry.
+--- @param items {item.Item} The board
+--- @return idxmod.Index
+local function make_index(items: {item.Item}): idxmod.Index
+  local idx = check.must(idxmod.open(items))
+  check.must(irank.ensure_views(idx))
+  check.must(readddl.ensure_views(idx))
+  return idx
+end
+
 local record fixture
   READY_SPEC: string
   tmpdir: string
@@ -235,6 +254,7 @@ local record fixture
   commit_author_email: function(s: store.Store): string
   give_spec: function(s: store.Store, id: string)
   root_with_leaf: function(s: store.Store): string, string
+  make_index: function(items: {item.Item}): idxmod.Index
 end
 
 local M: fixture = {
@@ -249,6 +269,7 @@ local M: fixture = {
   commit_author_email = commit_author_email,
   give_spec = give_spec,
   root_with_leaf = root_with_leaf,
+  make_index = make_index,
 }
 
 return M

@@ -51,12 +51,18 @@ local function take_review(s: store.Store, it: item.Item, session: string,
   -- a stale one is a session that stopped moving the board, and the
   -- diff is anyone's again — the takeover is noted, never gated.
   local taken = ""
-  if (it.reviewer or "") ~= "" then
-    if not health.is_review_stale(it, gate.age_of(s, it)) and not force then
+  if (it.reviewer or "") ~= "" and not force then
+    local ages, agerr = gate.stale_ages(s)
+    if ages == nil then
+      return gate.verdict_line("take", false, agerr)
+    end
+    if not health.is_review_stale(it, ages.review) then
       return gate.verdict_line("take", false,
         ("REFUSED: %s is under review by %s — take over a live review "
           .. "with --force --why"):format(id8, it.reviewer))
     end
+  end
+  if (it.reviewer or "") ~= "" then
     taken = (" (taken over from %s)"):format(it.reviewer)
   end
   it.reviewer = session

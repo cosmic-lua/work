@@ -10,11 +10,29 @@
 
 local check = require("cosmic.check")
 local act = require("_work.action")
+local fixture = require("_work.fixture")
+local idxmod = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local review = require("_work.review")
 
 local type Item = item.Item
+
+--- `act.next_action`, over a fresh in-memory index built from `items`.
+--- @param items {Item} All items
+--- @param specs act.Specs Sidecar body by id
+--- @param session string | nil This session's name, "" when unnamed
+--- @param merge_queue act.QueueStates | nil Accepted items already queued to merge
+--- @return act.Action
+local function next_action(items: {Item}, specs: act.Specs,
+    session?: string, merge_queue?: act.QueueStates): act.Action
+  local c = fixture.make_index(items)
+  local a, err = act.next_action(c, items, specs, session, nil, nil, "", nil,
+    merge_queue)
+  check.must(idxmod.close(c))
+  assert(a ~= nil, err)
+  return a
+end
 
 local counter = 0
 
@@ -73,7 +91,7 @@ local function test_auto_merge_armed_is_not_offered()
   local p: review.Pull = {number = 2, auto_merge = true,
     mergeable_state = "clean"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = next_action(items, specs, "me", queue)
   assert(a.kind ~= "finish", "an armed auto-merge is not offered: " .. a.kind)
   assert(a.kind == "none", "and nothing else fires either: " .. a.kind)
   assert(a.reason:find("queued", 1, true) ~= nil,
@@ -91,7 +109,7 @@ local function test_mergeable_state_queued_is_not_offered()
   local specs = ready_specs(items)
   local p: review.Pull = {number = 3, mergeable_state = "queued"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = next_action(items, specs, "me", queue)
   assert(a.kind ~= "finish", "a queued mergeable_state is not offered")
 end
 
@@ -106,7 +124,7 @@ local function test_without_either_it_is_offered_as_the_ordinary_finish()
   local specs = ready_specs(items)
   local p: review.Pull = {number = 4, mergeable_state = "clean"}
   local queue: act.QueueStates = {[accepted.id] = review.is_queued(p)}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = next_action(items, specs, "me", queue)
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "an unqueued accept is still the head to finish: " .. a.kind)
 end
@@ -124,7 +142,7 @@ local function test_a_queued_accept_never_holds_a_pull_back()
   items[#items + 1] = fresh
   local specs = ready_specs(items)
   local queue: act.QueueStates = {[accepted.id] = true}
-  local a = act.next_action(items, specs, "me", nil, "", nil, queue)
+  local a = next_action(items, specs, "me", queue)
   assert(a.kind == "pull" and a.item.id == fresh.id,
     "a pullable item is still offered: " .. a.kind)
 end
@@ -137,7 +155,7 @@ local function test_no_queue_map_offers_the_finish_as_before()
   local accepted = make({parent = root.id, claim = "who", pr = 6,
       verdict = "accept"})
   items[#items + 1] = accepted
-  local a = act.next_action(items, ready_specs(items), "me")
+  local a = next_action(items, ready_specs(items), "me")
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "no queue map is not a refusal: " .. a.kind)
 end

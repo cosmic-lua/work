@@ -1,14 +1,13 @@
 #!/usr/bin/env cosmic
 -- `_work.index` is derived and rebuildable, so what pins it is
--- agreement with the Lua it stands in for: `problems` reports a
--- SUPERSET of `_work.flow.graph_problems`'s findings on every fixture
--- board these tests build, and the `state`/`substate` views agree with
--- `_work.flow` on every item. The STRICT-schema house defaults (typed
--- columns, WITHOUT ROWID text keys, foreign keys on, closed
+-- agreement with literal expected rows: `problems` reports the
+-- dangling-parent and broken-chain findings a fixture board is built
+-- to carry, and the `state`/`substate` views agree with the state a
+-- fixture item's own fields dictate. The STRICT-schema house defaults
+-- (typed columns, WITHOUT ROWID text keys, foreign keys on, closed
 -- vocabularies) are pinned directly against the real connection.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
 local idxmod = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -34,25 +33,13 @@ local function make(over: {string: any}): item.Item
   return check.must(item.decode(t))
 end
 
---- Whether some index problem line names the same item as `flow_line`
---- (its leading `id:` token) and reports the same kind of finding —
---- "does not exist", "broken or cyclic", or an ambiguous cycle. The
---- wording map this test asserts: `_work.index`'s messages are written
---- to match `_work.flow`'s for exactly these three findings.
+--- Whether some index problem line names `id` and reports `keyword`.
 --- @param idx_problems {string} Index-reported problem lines
---- @param flow_line string One flow-reported problem line
+--- @param id string The item id the finding is on
+--- @param keyword string A substring the matching line carries
 --- @return boolean True when a matching index line exists
-local function has_counterpart(idx_problems: {string}, flow_line: string): boolean
-  local id = flow_line:match("^(%S+):")
-  if id == nil then
-    return false
-  end
-  local keyword = "does not exist"
-  if flow_line:find("broken or cyclic", 1, true) then
-    keyword = "broken or cyclic"
-  elseif flow_line:find("ambiguous", 1, true) then
-    keyword = "ambiguous"
-  end
+local function has_finding(idx_problems: {string}, id: string,
+    keyword: string): boolean
   for _, p in ipairs(idx_problems) do
     if p:find(id, 1, true) and p:find(keyword, 1, true) then
       return true
@@ -61,47 +48,44 @@ local function has_counterpart(idx_problems: {string}, flow_line: string): boole
   return false
 end
 
---- Assert `idxmod.problems` is a superset of `flow.graph_problems` for
---- one board, mapped by `has_counterpart`.
---- @param items {item.Item} The board
-local function assert_superset(items: {item.Item})
-  local flow_problems = flow.graph_problems(items)
-  local idx = check.must(idxmod.open(items))
-  local idx_problems = idxmod.problems(idx)
-  for _, fp in ipairs(flow_problems) do
-    assert(has_counterpart(idx_problems, fp),
-      ("no index counterpart for flow problem: %s\nindex reported:\n  %s")
-      :format(fp, table.concat(idx_problems, "\n  ")))
-  end
-  check.must(idxmod.close(idx))
-end
-
-local function test_superset_on_a_clean_board()
+local function test_a_clean_board_carries_no_problems()
   local goal = make({})
   local epic = make({parent = goal.id})
   local kid = make({parent = epic.id})
-  assert_superset({goal, epic, kid})
+  local idx = check.must(idxmod.open({goal, epic, kid}))
+  assert(#idxmod.problems(idx) == 0, table.concat(idxmod.problems(idx), "; "))
+  check.must(idxmod.close(idx))
 end
 
-local function test_superset_on_a_dangling_parent()
+local function test_a_dangling_parent_is_reported()
   local goal = make({})
   local finding = make({})
   local orphan = make({parent = fresh_id()})
   local epic = make({parent = goal.id})
   local kid = make({parent = epic.id})
-  assert_superset({goal, finding, orphan, epic, kid})
+  local idx = check.must(idxmod.open({goal, finding, orphan, epic, kid}))
+  local problems = idxmod.problems(idx)
+  assert(has_finding(problems, orphan.id, "does not exist"),
+    table.concat(problems, "; "))
+  check.must(idxmod.close(idx))
 end
 
-local function test_superset_on_a_broken_chain_past_the_direct_parent()
+local function test_a_broken_chain_past_the_direct_parent_is_reported()
   local a = make({parent = fresh_id()})
   local b = make({parent = a.id})
-  assert_superset({a, b})
+  local idx = check.must(idxmod.open({a, b}))
+  local problems = idxmod.problems(idx)
+  assert(has_finding(problems, b.id, "broken or cyclic"),
+    table.concat(problems, "; "))
+  check.must(idxmod.close(idx))
 end
 
 --- One board mixing every role and state this file's other tests
---- exercise, shared by the state/substate agreement test below.
---- @return {item.Item} The board
-local function mixed_board(): {item.Item}
+--- exercise, shared by the state/substate agreement test below: each
+--- item, its wanted `state`, and its wanted `substate` (meaningless,
+--- but still queried, off an ended or todo item).
+--- @return {item.Item}, {string: string}, {string: string}
+local function mixed_board(): {item.Item}, {string: string}, {string: string}
   local goal = make({})
   local todo = make({parent = goal.id})
   local building = make({parent = goal.id, claim = "s1"})
@@ -114,29 +98,36 @@ local function mixed_board(): {item.Item}
       result = ("ab"):rep(32)})
   local done = make({parent = goal.id, resolution = "completed"})
   local capture = make({})
+  local state: {string: string} = {
+    [goal.id] = "todo", [todo.id] = "todo", [building.id] = "doing",
+    [reviewing.id] = "doing", [reworking.id] = "doing",
+    [accepted.id] = "doing", [handed.id] = "doing", [done.id] = "ended",
+    [capture.id] = "todo",
+  }
+  local substate: {string: string} = {
+    [goal.id] = "building", [todo.id] = "building", [building.id] = "building",
+    [reviewing.id] = "review", [reworking.id] = "rework",
+    [accepted.id] = "accepted", [handed.id] = "review", [done.id] = "building",
+    [capture.id] = "building",
+  }
   return {goal, todo, building, reviewing, reworking, accepted, handed,
-    done, capture}
+    done, capture}, state, substate
 end
 
-local function test_state_and_substate_views_agree_with_flow()
-  local items = mixed_board()
+local function test_state_and_substate_views_agree_with_the_fixture()
+  local items, want_state, want_substate = mixed_board()
   local idx = check.must(idxmod.open(items))
   for _, it in ipairs(items) do
-    local want_state = "todo"
-    if not item.is_open(it) then
-      want_state = "ended"
-    elseif flow.is_doing(it) then
-      want_state = "doing"
-    end
     local row = check.must(idx.db:query_one(
         "SELECT state FROM state WHERE id = ?", {it.id}))
-    assert(row.state == want_state,
-      ("%s: state %s, wanted %s"):format(it.id, tostring(row.state), want_state))
+    assert(row.state == want_state[it.id],
+      ("%s: state %s, wanted %s"):format(it.id, tostring(row.state),
+        want_state[it.id]))
     local srow = check.must(idx.db:query_one(
         "SELECT substate FROM substate WHERE id = ?", {it.id}))
-    assert(srow.substate == flow.substate(it),
+    assert(srow.substate == want_substate[it.id],
       ("%s: substate %s, wanted %s"):format(it.id, tostring(srow.substate),
-        flow.substate(it)))
+        want_substate[it.id]))
   end
   check.must(idxmod.close(idx))
 end

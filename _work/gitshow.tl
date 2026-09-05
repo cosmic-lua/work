@@ -10,33 +10,21 @@
 --- the contract, and a report that returns its lines can be asserted
 --- on without capturing stdout.
 local cache = require("_work.cache")
-local cachequery = require("_work.cachequery")
-local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
+local index = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
-local rank = require("_work.rank")
+local read = require("_work.read")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
-local verdict_line = gate.verdict_line
+local type Index = index.Index
 
---- The item named `id` in `items`, or nil.
---- @param items {item.Item} All items
---- @param id string The id to find
---- @return item.Item | nil
-local function find_item(items: {item.Item}, id: string): item.Item | nil
-  for _, i in ipairs(items) do
-    if i.id == id then
-      return i
-    end
-  end
-  return nil
-end
+local verdict_line = gate.verdict_line
 
 --- Mirrors `_work.tail.handle`'s 8-character convention (guillemet-
 --- wrapped, underscore-divided tail) without requiring that module.
@@ -51,75 +39,95 @@ end
 --- under an ordinary parent (7 = how many of its siblings are
 --- positioned), "outcome 2 of 5" for a direct child of the board, "the
 --- board" for the board itself, or "unranked" when the item's own
---- parent has no position for it.
---- @param ranks {string: rank.Rank} Rank by item id
---- @param items {item.Item} All items
---- @param id string The item's id
+--- parent has no position for it. `_work.read.children`'s own
+--- `position` is already the 1-based dense rank this renders.
+--- @param c Index An index with `_work.readddl.ensure_views` applied
+--- @param it item.Item The item
 --- @return string
-local function describe(ranks: {string: rank.Rank}, items: {item.Item},
-    id: string): string
-  local r = ranks[id]
-  local i = find_item(items, id)
-  if r == nil or i == nil then
-    return "unranked"
+--- @return string Error message
+local function describe(c: Index, it: item.Item): string, string
+  if (it.parent or "") == "" then
+    return "the board", ""
   end
-  if #r.chain == 0 then
-    return "the board"
+  -- Ranked/unranked here is about THIS item's own position among its
+  -- OWN direct parent's children — `read.is_ranked` answers a
+  -- different question (whether the item's OUTCOME, several levels
+  -- up, is placed on the board at all), so it cannot stand in: an
+  -- item can sit under a placed outcome and still have no position of
+  -- its own where its immediate siblings are ordered.
+  local siblings, cherr = read.children(c, it.parent)
+  if siblings == nil then
+    return "", cherr
   end
-  local own = r.chain[#r.chain]
-  if own.position < 0 then
-    return "unranked"
-  end
-  local parent_id = i.parent or ""
   local total = 0
-  for _, other in ipairs(items) do
-    if (other.parent or "") == parent_id then
-      local orank = ranks[other.id]
-      if orank ~= nil and #orank.chain > 0
-      and orank.chain[#orank.chain].position >= 0 then
-        total = total + 1
+  local own_position: integer | nil = nil
+  for _, ch in ipairs(siblings) do
+    if ch.position ~= nil then
+      total = total + 1
+      if ch.child == it.id then
+        own_position = ch.position
       end
     end
   end
-  local parent_item = find_item(items, parent_id)
-  if parent_item ~= nil and item.is_parentless(parent_item) then
-    return ("outcome %d of %d"):format(own.position + 1, total)
+  if own_position == nil then
+    return "unranked", ""
   end
-  return ("%d of %d under %s"):format(own.position + 1, total,
-    handle_of(parent_id))
+  local parent_role, prerr = read.role(c, it.parent)
+  if parent_role == nil then
+    return "", prerr
+  end
+  if parent_role == "board" then
+    return ("outcome %d of %d"):format(own_position, total), ""
+  end
+  return ("%d of %d under %s"):format(own_position, total,
+    handle_of(it.parent)), ""
 end
 
 --- One word for where an item stands: how it ended, else its derived
 --- state while in flight, else todo.
+--- @param c Index An index with `_work.index`'s base DDL applied
 --- @param it item.Item The item
 --- @return string The state
-local function state_of(it: item.Item): string
+--- @return string Error message
+local function state_of(c: Index, it: item.Item): string, string
   if (it.resolution or "") ~= "" then
-    return it.resolution
+    return it.resolution, ""
   end
-  if flow.is_doing(it) then
-    return flow.substate(it)
+  local st, serr = read.state(c, it.id)
+  if st == nil then
+    return "", serr
   end
-  return "todo"
+  if st ~= "doing" then
+    return "todo", ""
+  end
+  local sub, suberr = read.substate(c, it.id)
+  if sub == nil then
+    return "", suberr
+  end
+  return sub, ""
 end
 
---- One item's fields, role, spec, spec-bar problems, and history.
+--- One item's fields, role, spec, spec-bar problems, children, and
+--- history — every value the `cmd_` half already read, so this stays
+--- pure over already-read state.
 --- @param it item.Item The item
---- @param all {item.Item} Every item
---- @param ranks {string: rank.Rank} Rank by item id (`rank.positions`)
+--- @param role string Its role (`_work.read.role`)
+--- @param rank_line string Its rank, rendered (`describe`)
+--- @param state string Its one-word state (`state_of`)
 --- @param body string Its spec sidecar, "" when it has none
 --- @param events {publish.Event} Its git history, newest first
 --- @param problems {string} The take gate's problem list, possibly empty
+--- @param children_lines {string} Its own open children, rank order,
+--- one rendered line each (`_work.read.children`)
 --- @param overlaps {string} `_work.overlap`'s pre-rendered lines, possibly empty
 --- @return {string} The lines to print
 --- @return string The verdict detail
-local function show_report(it: item.Item, all: {item.Item},
-    ranks: {string: rank.Rank}, body: string,
-    events: {publish.Event}, problems: {string},
-    overlaps?: {string}): {string}, string
+local function show_report(it: item.Item, role: string, rank_line: string,
+    state: string, body: string, events: {publish.Event}, problems: {string},
+    children_lines: {string}, overlaps?: {string}): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
       it.id)}
-  out[#out + 1] = ("role: %s"):format(flow.role(it, all))
+  out[#out + 1] = ("role: %s"):format(role)
   local seconds = ksuid.time_of(it.id)
   if seconds then
     out[#out + 1] = ("opened: %s"):format(
@@ -128,10 +136,16 @@ local function show_report(it: item.Item, all: {item.Item},
   if it.parent ~= "" then out[#out + 1] = ("parent: %s"):format(it.parent) end
   if it.repo ~= "" then out[#out + 1] = ("repo: %s"):format(it.repo) end
   if it.base ~= "" then out[#out + 1] = ("base: %s"):format(it.base) end
-  if item.is_open(it) and flow.role(it, all) == "work" then
-    out[#out + 1] = ("state: %s"):format(state_of(it))
+  if item.is_open(it) and role == "work" then
+    out[#out + 1] = ("state: %s"):format(state)
   end
-  out[#out + 1] = ("rank: %s"):format(describe(ranks, all, it.id))
+  out[#out + 1] = ("rank: %s"):format(rank_line)
+  if #children_lines > 0 then
+    out[#out + 1] = "children:"
+    for _, line in ipairs(children_lines) do
+      out[#out + 1] = line
+    end
+  end
   if it.claim ~= "" then out[#out + 1] = ("claim: %s"):format(it.claim) end
   if it.reviewer ~= "" then
     out[#out + 1] = ("reviewer: %s"):format(it.reviewer)
@@ -197,7 +211,7 @@ local function show_report(it: item.Item, all: {item.Item},
   for _, e in ipairs(events) do
     out[#out + 1] = ("  %s %s %s"):format(e.at, e.sha, e.subject)
   end
-  return out, ("%s is %s"):format(it.id:sub(1, 8), state_of(it))
+  return out, ("%s is %s"):format(it.id:sub(1, 8), state)
 end
 
 --- Print one item.
@@ -209,29 +223,42 @@ local function cmd_show(s: store.Store, id: string): integer
   -- cache: a resolved id's lease (`resolve_id`'s own glob or prefix
   -- match) is what lets `publish.history` below skip its own
   -- exact-ref `for-each-ref` — a lease the cache carries no ref/sha
-  -- column to preserve — and a cache silently missing exactly this
-  -- row (stale in a way its own digest guard cannot catch) must never
-  -- read as "no such item" for the one item a session named directly.
-  -- Only `all` — every OTHER item, for role/rank/overlap context —
-  -- comes from the cache; that whole-board read is `store.list`'s
-  -- expensive half, not this one.
+  -- column to preserve. Every other read here — role, rank, children,
+  -- overlap context — goes through `store.list`/`store.read`'s open
+  -- cache, the one path every verb reads through.
   local it, lerr = store.load(s, id)
   if it == nil then
     return verdict_line("show", false, lerr)
   end
-  local c, cerr = cache.open(s.root)
-  if c == nil then
-    return verdict_line("show", false, cerr)
-  end
-  local all, aerr = cachequery.items(c)
-  local close_ok, close_err = cache.close(c)
+  local all, aerr = store.list(s)
   if all == nil then
     return verdict_line("show", false, aerr)
   end
-  if not close_ok then
-    return verdict_line("show", false, close_err)
+  local c, cerr = store.read(s)
+  if c == nil then
+    return verdict_line("show", false, cerr)
   end
-  local ranks = rank.positions(all)
+  -- `store.load` above just proved `id` is a real git ref, so a
+  -- derived row missing for it is the cache stale in a way its own
+  -- digest guard cannot see (nothing moved a WATCHED ref) — a rebuild
+  -- forces it back in step, the same repair `cache.open`'s own
+  -- `heal()` applies for other kinds of corruption. A second miss
+  -- means the row is genuinely never coming, and the read below fails
+  -- for real.
+  local has_row, _hrerr = read.role(c, id)
+  if has_row == nil then
+    local _cok, _cerr = store.close(s)
+    local rebuilt, rberr = cache.rebuild(s.root)
+    if rebuilt == nil then
+      return verdict_line("show", false, rberr)
+    end
+    local _rcok, _rcerr = cache.close(rebuilt)
+    local fresh, ferr = store.read(s)
+    if fresh == nil then
+      return verdict_line("show", false, ferr)
+    end
+    c = fresh
+  end
   -- `git log` is the one read the load never carries — the item's
   -- history lives only in its commits, so this stays a deliberate
   -- process rather than folding into a batch.
@@ -256,13 +283,42 @@ local function cmd_show(s: store.Store, id: string): integer
     end
     local bodies = store.read_specs(s, ids)
     body = bodies[it.id] or ""
-    problems = gitready.ready_problems(s, it, all, body)
+    problems = gitready.ready_problems(s, it, body)
     overlaps = overlap.lines(it.id, bodies)
   else
     body = store.read_spec(s, id)
   end
-  local lines, verdict = show_report(it, all, ranks, body, events, problems,
-    overlaps)
+  local role, rerr = read.role(c, it.id)
+  if role == nil then
+    return verdict_line("show", false, rerr)
+  end
+  local rank_line, rkerr = describe(c, it)
+  if rkerr ~= "" then
+    return verdict_line("show", false, rkerr)
+  end
+  local state, sterr = state_of(c, it)
+  if sterr ~= "" then
+    return verdict_line("show", false, sterr)
+  end
+  local child_rows, cherr = read.children(c, it.id)
+  if child_rows == nil then
+    return verdict_line("show", false, cherr)
+  end
+  local by_id = item.by_id(all)
+  local children_lines: {string} = {}
+  for _, ch in ipairs(child_rows) do
+    if ch.open then
+      local title = ""
+      local child_it = by_id[ch.child]
+      if child_it ~= nil then
+        title = child_it.title
+      end
+      children_lines[#children_lines + 1] = ("  %s %s"):format(
+        tail.handle(ch.child), title)
+    end
+  end
+  local lines, verdict = show_report(it, role, rank_line, state, body, events,
+    problems, children_lines, overlaps)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -270,17 +326,18 @@ local function cmd_show(s: store.Store, id: string): integer
 end
 
 local record gitshow
-  describe: function(ranks: {string: rank.Rank}, items: {item.Item},
-  id: string): string
-  show_report: function(it: item.Item, all: {item.Item},
-  ranks: {string: rank.Rank}, body: string,
-  events: {publish.Event}, problems: {string},
+  describe: function(c: Index, it: item.Item): string, string
+  state_of: function(c: Index, it: item.Item): string, string
+  show_report: function(it: item.Item, role: string, rank_line: string,
+  state: string, body: string,
+  events: {publish.Event}, problems: {string}, children_lines: {string},
   overlaps?: {string}): {string}, string
   cmd_show: function(s: store.Store, id: string): integer
 end
 
 local M: gitshow = {
   describe = describe,
+  state_of = state_of,
   show_report = show_report,
   cmd_show = cmd_show,
 }

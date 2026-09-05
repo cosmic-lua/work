@@ -121,6 +121,7 @@ local function save(s: store.Store, it: item.Item, message: string,
       s.leased_item[id] = store.snapshot_item(written)
     end
   end
+  s.written_at = outcome.written_at
   if outcome.seq_changed then
     s.observed_seq = outcome.new_seq_sha
   end

@@ -1,22 +1,25 @@
 #!/usr/bin/env cosmic
--- `fsck`: `structural_problems` unit-tested directly over hand-built
--- items (no git at all, for the checks that never survive a real
--- write's own gates — a root with a repo, say), and `cmd_fsck` over
--- two real boards: one healthy, one carrying a beats edge written
--- straight through `storewrite.save` (`gitready`'s own checks are a take
--- gate, not a write gate, so this never touches them).
+-- `fsck` over real boards: a healthy one, one where the session's own
+-- `o/board.db` was hand-edited straight in the SQLite file (the audit
+-- `_work.gitfsck.audit_cache` exists to catch — a digest match alone
+-- cannot), one carrying a stale `order` entry (reported, never
+-- counted — `docs/design/read.md`'s "stale order entries" are skipped
+-- by every read), and one carrying a second parentless item
+-- (`_work.read.structure`'s `second_root` finding, surfacing through
+-- `cmd_fsck` the same way every other structural finding does now).
 
+local cache = require("_work.cache")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
-local flow = require("_work.flow")
 local fs = require("cosmic.fs")
 local fsck = require("_work.gitfsck")
 local gitboard = require("_work.gitboard")
 local index = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
+local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
@@ -25,6 +28,18 @@ local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
 local init_state_repo = fixture.init_state_repo
 local root_with_leaf = fixture.root_with_leaf
+
+--- The one parentless item, found by walking `items` in order.
+--- @param items {item.Item} All items
+--- @return item.Item | nil The board, nil when none is filed yet
+local function find_board(items: {item.Item}): item.Item | nil
+  for _, i in ipairs(items) do
+    if item.is_parentless(i) then
+      return i
+    end
+  end
+  return nil
+end
 
 --- Run `fsck.cmd_fsck` and capture what it printed, the way
 --- `gitboard_test.tl`'s own helper pins a CLI verb's console output.
@@ -54,8 +69,29 @@ local function test_a_healthy_board_has_no_problems()
   local _root, _leaf = root_with_leaf(s)
   local code, printed = fsck_and_capture(s)
   assert(code == 0, printed)
-  assert(printed == "gitboard-fsck: ok (4 items)",
-    "board, outcome, peer, leaf: 4 items, nothing else printed — got: " .. printed)
+  assert(printed == "gitboard-fsck: cache agrees with the refs\ngitboard-fsck: ok (4 items)",
+    "board, outcome, peer, leaf: 4 items, the cache audit confirms, nothing else "
+    .. "printed — got: " .. printed)
+end
+
+-- A row hand-edited straight in the SQLite file, at `o/board.db`: no
+-- ref moved, so the digest `cache.open` checks still matches and the
+-- corrupted file is handed back as-is — exactly the drift a digest
+-- check alone cannot see, and exactly what `audit_cache`'s own
+-- row-by-row diff against a fresh rebuild exists to catch.
+local function test_a_hand_edited_cache_row_is_caught()
+  local s = init_state_repo("fsck-cache-drift")
+  local root, _leaf = root_with_leaf(s)
+  -- Close whatever connection filing the fixture left open, so the
+  -- next open reads the file exactly as it stands on disk.
+  assert(store.close(s))
+  local raw = check.must(sqlite.open(cache.path_of(s.root)))
+  assert(raw:exec("UPDATE items SET title = 'tampered' WHERE id = ?", {root}))
+  check.must(raw:close())
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "a hand-edited cache row is a problem: " .. printed)
+  assert(printed:find("cache: " .. tail.handle(root) .. " title reads tampered, refs say",
+      1, true) ~= nil, printed)
 end
 
 -- A branch under the item namespace that is not a KSUID is a stray:
@@ -71,39 +107,21 @@ local function test_a_stray_branch_under_items_is_named_and_skipped()
   assert(out:find("stray ref refs/heads/items/not-an-id", 1, true), out)
 end
 
--- A `beats` edge — the shape an unmigrated board's item carries — is,
--- to this build, an ordinary unknown edge kind: it names the kind
--- itself unknown AND, when the id it names is not an item, that too,
--- exactly what `fsck` exists to catch.
-local function test_a_dangling_beats_edge_is_caught()
-  local s = init_state_repo("fsck-dangling-beats")
-  local root, _leaf = root_with_leaf(s)
-  local ghost = check.must(ksuid.encode(1690000001, ("\2"):rep(16)))
-  local it = check.must(store.load(s, root))
-  it.other_edges = {beats = {[ghost] = ""}}
-  assert(storewrite.save(s, it, "hand-edited beats"))
-  local code, printed = fsck_and_capture(s)
-  assert(code ~= 0, "a dangling beats edge is a problem: " .. printed)
-  assert(printed:find("unknown edge kind beats", 1, true) ~= nil, printed)
-  assert(printed:find("beats names " .. ghost, 1, true) ~= nil, printed)
-  assert(printed:find("which is not an item", 1, true) ~= nil, printed)
-  assert(printed:find("gitboard-fsck: 2 problem(s)", 1, true) ~= nil, printed)
-end
-
 -- An `order` entry naming an id that is not a child of the item
 -- carrying it — hand-written straight through `storewrite.save` — is
--- exactly what `fsck` exists to catch: one entry names an id that is
--- not an item at all, the other names a real item (`root`'s own peer,
--- itself an outcome) that is simply not ITS child.
-local function test_an_order_entry_naming_a_non_child_is_caught()
+-- a `read.structure` `stale_order` finding: reported under its own
+-- heading, ignored by every read, and NOT counted toward the problem
+-- total, so an otherwise-healthy board still passes.
+local function test_an_order_entry_naming_a_non_child_is_a_stale_order_not_a_problem()
   local s = init_state_repo("fsck-order-non-child")
   local root, _leaf = root_with_leaf(s)
   local ghost = check.must(ksuid.encode(1690000006, ("\7"):rep(16)))
   local all = check.must(store.list(s))
-  local index_by_id = flow.by_id(all)
+  local index_by_id = item.by_id(all)
   local peer: string = nil
   for _, it in ipairs(all) do
-    if it.id ~= root and flow.is_outcome(it, index_by_id) then
+    local parent = index_by_id[it.parent or ""]
+    if it.id ~= root and parent ~= nil and item.is_parentless(parent) then
       peer = it.id
     end
   end
@@ -111,11 +129,24 @@ local function test_an_order_entry_naming_a_non_child_is_caught()
   local it = check.must(store.load(s, root))
   it.order = {ghost, peer}
   assert(storewrite.save(s, it, "hand-edited order"))
+  -- `storewrite.save` bypasses `gate.commit_and_publish`'s own cache
+  -- patch, so the session's open cache would otherwise disagree with
+  -- the commit this write just made — a REAL finding `audit_cache`
+  -- would (rightly) also report. Closing here forces the next read to
+  -- rebuild fresh from git, isolating this test to the one finding it
+  -- is actually about.
+  local _cok, _cerr = store.close(s)
   local code, printed = fsck_and_capture(s)
-  assert(code ~= 0, "a non-child order entry is a problem: " .. printed)
+  assert(code == 0, "a stale order entry alone does not fail fsck: " .. printed)
+  assert(printed:find("stale order entries (ignored by reads):", 1, true) ~= nil, printed)
   assert(printed:find("order names " .. ghost, 1, true) ~= nil, printed)
   assert(printed:find("order names " .. peer, 1, true) ~= nil, printed)
   assert(printed:find("which is not a child of it", 1, true) ~= nil, printed)
+  assert(printed:find("problem(s)", 1, true) == nil,
+    "a stale order entry is not counted in the problem total: " .. printed)
+  assert(printed:find("stale order entries", 1, true) ~= nil
+    and printed:match("gitboard%-fsck: ok.*stale order entries") ~= nil,
+    "the verdict line names the stale-order count: " .. printed)
 end
 
 -- The board's own `order` naming an id that is not one of its
@@ -123,40 +154,22 @@ end
 -- the same way any parent's non-child entry is: the board's `order`
 -- is an ordinary item field, not a separate ref, so this is exactly
 -- the prior test's scenario with the board standing in as the parent.
-local function test_the_boards_own_order_naming_a_non_child_is_caught()
+local function test_the_boards_own_order_naming_a_non_child_is_a_stale_order()
   local s = init_state_repo("fsck-board-order-non-child")
   local _root, leaf = root_with_leaf(s)
   local all = check.must(store.list(s))
-  local board = check.must(flow.find_board(all), "the board exists")
+  local board = check.must(find_board(all), "the board exists")
   local it = check.must(store.load(s, board.id))
   it.order = {leaf}
   assert(storewrite.save(s, it, "hand-edited board order"))
+  -- See the prior test: force a fresh rebuild rather than let the
+  -- cache patch this bypassed also show up as a finding.
+  local _cok, _cerr = store.close(s)
   local code, printed = fsck_and_capture(s)
-  assert(code ~= 0, "a non-child board order entry is a problem: " .. printed)
+  assert(code == 0, "a stale board order entry alone does not fail fsck: " .. printed)
+  assert(printed:find("stale order entries (ignored by reads):", 1, true) ~= nil, printed)
   assert(printed:find("order names " .. leaf, 1, true) ~= nil, printed)
   assert(printed:find("which is not a child of it", 1, true) ~= nil, printed)
-end
-
--- An edge kind this build does not interpret — `edges/relates/<id>`,
--- say — round-trips through `_work.itemtree` opaquely
--- (`item.Item.other_edges`) and is exactly what `fsck` flags: the kind
--- itself as unknown, and any id under it that names no item.
-local function test_an_unknown_edge_kind_is_caught()
-  local s = init_state_repo("fsck-unknown-kind")
-  local root, _leaf = root_with_leaf(s)
-  local ghost = check.must(ksuid.encode(1690000004, ("\5"):rep(16)))
-  local it = check.must(store.load(s, root))
-  it.other_edges = {relates = {[ghost] = ""}}
-  assert(storewrite.save(s, it, "hand-edited other_edges"))
-  local reread = check.must(store.load(s, root))
-  local reread_edges = reread.other_edges
-  assert(reread_edges ~= nil and reread_edges.relates ~= nil
-    and reread_edges.relates[ghost] ~= nil, "the kind round-trips")
-  local code, printed = fsck_and_capture(s)
-  assert(code ~= 0, "an unknown edge kind is a problem: " .. printed)
-  assert(printed:find("unknown edge kind relates", 1, true) ~= nil, printed)
-  assert(printed:find("relates names " .. ghost, 1, true) ~= nil, printed)
-  assert(printed:find("which is not an item", 1, true) ~= nil, printed)
 end
 
 --- A minimal valid item.
@@ -173,7 +186,10 @@ local function make_item(over?: {string: any}): item.Item
 end
 
 -- A second parentless item — a board this build never expects to see
--- more than one of — is its own fsck finding.
+-- more than one of — is `_work.read.structure`'s `second_root`
+-- finding, surfacing through `cmd_fsck` exactly as any other
+-- structural finding does now (the same kind `_work.read_structure_test`
+-- checks directly against the view).
 local function test_a_second_parentless_item_is_caught()
   local s = init_state_repo("fsck-second-board")
   local _root, _leaf = root_with_leaf(s)
@@ -181,52 +197,7 @@ local function test_a_second_parentless_item_is_caught()
   assert(storewrite.save(s, orphan, "hand-filed a second parentless item"))
   local code, printed = fsck_and_capture(s)
   assert(code ~= 0, "a second parentless item is a problem: " .. printed)
-  assert(printed:find("parentless items", 1, true) ~= nil, printed)
-  assert(printed:find("exactly one is meant to exist", 1, true) ~= nil, printed)
-end
-
--- Two open items sharing a key: `_work.lanes.mint`'s own idempotency
--- key is only checked at mint time, so a hand-edited second claimant
--- is exactly the shape `fsck` exists to catch.
-local function test_two_open_items_in_one_key_is_a_problem()
-  local a = make_item({key = "release.yml"})
-  local b = make_item({id = check.must(ksuid.encode(1690000003, ("\4"):rep(16))),
-      key = "release.yml"})
-  local problems = fsck.structural_problems({a, b})
-  local found = false
-  for _, p in ipairs(problems) do
-    if p:find("release.yml", 1, true) ~= nil then
-      found = true
-    end
-  end
-  assert(found, table.concat(problems, "; "))
-end
-
--- A parentless item carrying a `repo` never survives `item.problems`'s
--- own gate at write time — `structural_problems` re-asks it anyway,
--- over a hand-built record no write path produced, the same defense
--- in depth every other check here is.
-local function test_a_parentless_item_with_a_repo_is_a_problem()
-  local rootless = make_item({repo = "cosmic-lua/cosmic"})
-  local problems = fsck.structural_problems({rootless})
-  local found = false
-  for _, p in ipairs(problems) do
-    if p:find("the board takes no repo", 1, true) ~= nil then
-      found = true
-    end
-  end
-  assert(found, table.concat(problems, "; "))
-end
-
--- `decode_problems` a tolerant decode already flagged rides straight
--- through as an `fsck` problem too — the read that shows everything
--- else about the board shows this.
-local function test_a_flagged_item_is_a_problem()
-  local flagged = make_item()
-  flagged.decode_problems = {"a made-up content problem"}
-  local problems = fsck.structural_problems({flagged})
-  assert(#problems == 1 and problems[1]:find("a made-up content problem", 1, true) ~= nil,
-    table.concat(problems, "; "))
+  assert(printed:find("a second parentless item; the board is", 1, true) ~= nil, printed)
 end
 
 -- The residue of a half-landed resolution from before this rule: the
@@ -257,6 +228,13 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
     :gsub("%s+$", ""))
   fixture.git(s.root, {"update-ref", "refs/heads/ended/" .. id, done_sha})
   fixture.git(s.root, {"update-ref", "refs/heads/items/" .. id, items_sha})
+  -- The save above went straight through `storewrite.save`, and the
+  -- ref surgery right after it straight through git — both bypass
+  -- `gate.commit_and_publish`'s own cache patch, so `s.index` (opened
+  -- again by `store.load`'s own lease read) is closed here: the next
+  -- `store.list` reopens fresh against what git now actually holds
+  -- rather than the board as it stood before either move.
+  local _cok, _cerr = store.close(s)
 
   local all = check.must(store.list(s))
   local matches = 0

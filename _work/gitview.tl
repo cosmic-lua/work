@@ -9,48 +9,42 @@
 --- that prints it: what a session reads is the contract, and a report
 --- that returns its lines can be asserted on without capturing
 --- stdout.
-local cache = require("_work.cache")
-local cachedb = require("_work.cachedb")
-local cachequery = require("_work.cachequery")
 local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local guide = require("_work.guidance")
 local health = require("_work.health")
+local index = require("_work.index")
 local item = require("_work.item")
 local act = require("_work.action")
 local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
-local rank = require("_work.rank")
-local refs = require("_work.refs")
+local read = require("_work.read")
 local sess = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
+local type Index = index.Index
+
 local verdict_line = gate.verdict_line
 
---- Seconds since each claimed item's last board commit. Costs no git
---- process of its own: `list_via_cache` already took one `for-each-ref`
---- snapshot over every watched ref for this render and left its
---- committer dates in `s.touched_at`, so `publish.touched_at` reads
---- that instead of spawning one `for-each-ref` per claimed item.
+--- The board's stale claim and review-claim ages, split by kind —
+--- `_work.read.stale`, over the store's own open cache; empty maps on
+--- a read failure, since a health report degrades to "unknown" rather
+--- than failing the whole render.
 --- @param s store.Store The store
---- @param all {item.Item} Every item
---- @return health.Ages Ages by item id
-local function claim_ages(s: store.Store, all: {item.Item}): health.Ages
-  local ages: health.Ages = {}
-  local now = os.time()
-  for _, i in ipairs(all) do
-    if item.is_open(i)
-    and ((i.claim or "") ~= "" or (i.reviewer or "") ~= "") then
-      local t = publish.touched_at(s, i.id)
-      if t ~= nil and t <= now then
-        ages[i.id] = now - t
-      end
-    end
+--- @return health.StaleAges
+local function stale_ages(s: store.Store): health.StaleAges
+  local c, _cerr = store.read(s)
+  if c == nil then
+    return {claim = {}, review = {}}
   end
-  return ages
+  local rows, _rerr = read.stale(c)
+  if rows == nil then
+    return {claim = {}, review = {}}
+  end
+  return health.from_rows(rows)
 end
 
 --- CI check-run state for each open review-stage item that carries a
@@ -67,12 +61,20 @@ end
 --- @return act.CiStates CI state by item id
 local function ci_states(s: store.Store, all: {item.Item}): act.CiStates
   local out: act.CiStates = {}
-  local c, _err = cache.open(s.root)
+  local c, _cerr = store.read(s)
   if c == nil then
     return out
   end
+  local rows, _qerr = read.queue(c)
+  if rows == nil then
+    return out
+  end
+  local stage_by_id: {string: integer} = {}
+  for _, row in ipairs(rows) do
+    stage_by_id[row.id] = row.stage
+  end
   for _, i in ipairs(all) do
-    if ciobs.is_candidate(i) then
+    if ciobs.is_candidate(i, stage_by_id) then
       local state, age = ciobs.read(c, i.repo, i.pr)
       if state == nil or not ciobs.fresh(age) then
         state = ciobs.observe(s, c, i.repo, i.pr)
@@ -82,7 +84,6 @@ local function ci_states(s: store.Store, all: {item.Item}): act.CiStates
       end
     end
   end
-  local _ok, _cerr = cache.close(c)
   return out
 end
 
@@ -141,26 +142,46 @@ end
 --- graph health. Health reports HERE rather than in the spec bar:
 --- one item's broken chain is everyone's to see and nobody's reason
 --- to be refused a take.
+--- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param all {item.Item} Every item
 --- @param specs act.Specs Sidecar body by id
---- @param ages health.Ages Seconds since last board commit, by id
+--- @param ages health.Ages Stale claim ages, by id
 --- @param lane_facts {string: string} | nil Lane state, nil when unsynced
---- @return {string} The lines to print
---- @return string The verdict detail
-local function status_report(all: {item.Item}, specs: act.Specs,
+--- @return {string} | nil The lines to print
+--- @return string The verdict detail, or the error on a nil first return
+local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     ages?: health.Ages, lane_facts?: {string: string}):
-  {string}, string
+  {string} | nil, string
   local aged = ages or {}
-  -- Selection and stage-bucketing stay `flow`'s (todo vs. doing, stage
-  -- order) — this is only the RENDER order laid over what it returns,
-  -- so every queue on this page reads in the one order `show ID`
-  -- describes for a single item.
-  local ranks = rank.positions(all)
+  local by_id = item.by_id(all)
+  -- Selection and stage-bucketing are the `queue` view's own — this
+  -- is only the RENDER order laid over what it returns, so every
+  -- queue on this page reads in the one order `show ID` describes for
+  -- a single item.
+  local rows, qerr = read.queue(c)
+  if rows == nil then
+    return nil, qerr
+  end
+  local doing: {item.Item} = {}
+  local todo: {item.Item} = {}
+  for _, row in ipairs(rows) do
+    local i = by_id[row.id]
+    if i ~= nil then
+      if row.stage < flow.STAGE_REPAIR then
+        doing[#doing + 1] = i
+      else
+        todo[#todo + 1] = i
+      end
+    end
+  end
   local out: {string} = {}
-  local doing = rank.sorted(flow.in_state(all, "doing", ranks), ranks)
   out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
   for _, i in ipairs(doing) do
-    local marks = (" [%s]"):format(flow.substate(i))
+    local sub, suberr = read.substate(c, i.id)
+    if sub == nil then
+      return nil, suberr
+    end
+    local marks = (" [%s]"):format(sub)
     if i.claim ~= "" then marks = marks .. " @" .. i.claim end
     if i.pr ~= 0 then marks = marks .. (" pr:%d"):format(i.pr) end
     if i.result ~= "" then
@@ -185,10 +206,15 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   if flagged ~= "" then
     out[#out + 1] = flagged
   end
-  local todo = rank.sorted(flow.in_state(all, "todo", ranks), ranks)
   local pullable = 0
+  local pullable_ids: {string: boolean} = {}
   for _, i in ipairs(todo) do
-    if act.passes_bar(i, specs, ranks) then
+    local pb, pberr = act.passes_bar(c, i, specs)
+    if pberr ~= "" then
+      return nil, pberr
+    end
+    pullable_ids[i.id] = pb
+    if pb then
       pullable = pullable + 1
     end
   end
@@ -196,7 +222,7 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   for k = 1, math.min(#todo, TODO_SHOWN) do
     local i = todo[k]
     local marks = ""
-    if act.passes_bar(i, specs, ranks) then
+    if pullable_ids[i.id] then
       marks = " [pullable]"
     end
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
@@ -207,22 +233,31 @@ local function status_report(all: {item.Item}, specs: act.Specs,
   end
   -- Untriaged outcomes render item by item: they are not workable
   -- yet, and this is the one list of them anyone gets.
-  local triage = rank.sorted(flow.untriaged(all), ranks)
-  out[#out + 1] = ("%-6s %d"):format("triage", #triage)
-  for _, f in ipairs(triage) do
-    out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
+  local triage, trerr = read.triage(c)
+  if triage == nil then
+    return nil, trerr
   end
-  local graph = flow.graph_problems(all)
-  for _, p in ipairs(graph) do
-    out[#out + 1] = "  graph: " .. p
+  out[#out + 1] = ("%-6s %d"):format("triage", #triage)
+  for _, tid in ipairs(triage) do
+    local f = by_id[tid]
+    if f ~= nil then
+      out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
+    end
+  end
+  local structure, sterr = read.structure(c)
+  if structure == nil then
+    return nil, sterr
+  end
+  for _, p in ipairs(structure) do
+    out[#out + 1] = ("  graph: %s: %s"):format(p.id, p.detail)
   end
   local verdict = ("doing %d/%d"):format(#doing, flow.DOING_LIMIT)
-  local bound = flow.doing_refusal(all)
-  if bound then
-    verdict = "bound: " .. bound
+  if #doing >= flow.DOING_LIMIT then
+    verdict = ("bound: doing is at %d/%d — finish something before taking "
+      .. "more"):format(#doing, flow.DOING_LIMIT)
   end
-  if #graph > 0 then
-    verdict = ("%s; %d graph problem(s)"):format(verdict, #graph)
+  if #structure > 0 then
+    verdict = ("%s; %d graph problem(s)"):format(verdict, #structure)
   end
   return out, verdict
 end
@@ -234,49 +269,18 @@ local record Board
   items: {item.Item}
 end
 
---- Every item via the board cache instead of a fresh git read —
---- `_work.cachequery.items` hydrated straight from `cache.open`'s SQL
---- rows, current for the live board by the same freshness guard
---- `find`/`new` already go through. Neither `cmd_status` nor
---- `cmd_next` writes through `s` afterward, so the lease `store.list`
---- would have set on it is never missed.
----
---- Takes, itself, the `for-each-ref` snapshot `cache.open`'s own guard
---- would otherwise take internally — over `cachedb.WATCH_PATTERNS` —
---- and passes the resulting digest into `cache.open` as `known_digest`
---- so the guard's freshness check reuses it rather than repeating the
---- same process. Keeps every ref's committer date from that one
---- snapshot in `s.touched_at`, so `claim_ages` never has to ask git
---- again for a claimed item's touch time. A snapshot that fails to
---- read is not fatal here: `known_digest` is left nil, and `cache.open`
---- falls back to taking its own.
+--- Every item via the store's own open cache — `store.list`, which
+--- keeps the connection open on `s` for `store.read` to reuse. Kept as
+--- its own function, over a bare `store.list`, only for `Board`'s
+--- shape and the name `_work/gitview_test.tl` already asserts a
+--- process count against.
 --- @param s store.Store The store
 --- @return Board | nil Every item
 --- @return string Error message
 local function list_via_cache(s: store.Store): Board | nil, string
-  local found, _ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
-  local known_digest: string | nil = nil
-  if found ~= nil then
-    known_digest = cachedb.digest_of(found)
-    for _, r in ipairs(found) do
-      local id = r.refname:match("^refs/heads/items/(.+)$")
-      or r.refname:match("^refs/heads/ended/(.+)$")
-      if id then
-        s.touched_at[id] = r.touched
-      end
-    end
-  end
-  local c, cerr = cache.open(s.root, known_digest)
-  if c == nil then
-    return nil, cerr
-  end
-  local all, ierr = cachequery.items(c)
-  local close_ok, close_err = cache.close(c)
+  local all, err = store.list(s)
   if all == nil then
-    return nil, ierr
-  end
-  if not close_ok then
-    return nil, close_err
+    return nil, err
   end
   return {items = all}, ""
 end
@@ -289,6 +293,10 @@ local function cmd_status(s: store.Store): integer
     return verdict_line("show", false, aerr)
   end
   local all = board.items
+  local c, cerr = store.read(s)
+  if c == nil then
+    return verdict_line("show", false, cerr)
+  end
   -- An unsynced board has no lanes_state.tl at all, and read_state
   -- reports that the same way it reports every lane already at its
   -- last-recorded value: an empty map. That is also, and only, what
@@ -300,8 +308,11 @@ local function cmd_status(s: store.Store): integer
   if next(facts) ~= nil then
     lane_facts = facts
   end
-  local lines, verdict = status_report(all, read_specs(s, all),
-    claim_ages(s, all), lane_facts)
+  local lines, verdict = status_report(c, all, read_specs(s, all),
+    stale_ages(s).claim, lane_facts)
+  if lines == nil then
+    return verdict_line("show", false, verdict)
+  end
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -352,18 +363,25 @@ end
 --- the board, so a session taking several asks again after each one
 --- rather than reading a list. A `none` names the fact that binds,
 --- which is the diagnosis a session reports.
+--- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param all {item.Item} Every item
 --- @param specs act.Specs Sidecar body by id
 --- @param session string This session's name, "" when unnamed
---- @param ages health.Ages Seconds since last board commit, by id
+--- @param ages health.Ages Stale claim ages, by id
+--- @param review_ages health.Ages Stale review ages, by id
 --- @return string The action, its target, the rule behind it, and its guidance
-local function next_report(all: {item.Item}, specs: act.Specs,
-    session?: string, ages?: health.Ages): string
+--- @return string Error message
+local function next_report(c: Index, all: {item.Item}, specs: act.Specs,
+    session?: string, ages?: health.Ages, review_ages?: health.Ages): string, string
   -- The session seeds the tie-break, so concurrent sessions asking
   -- the same board fan out across items no judgment separates
   -- instead of converging on one.
-  return render_action(
-    act.next_action(all, specs, session, ages, session), specs)
+  local action, err = act.next_action(c, all, specs, session, ages,
+    review_ages, session)
+  if action == nil then
+    return "", err
+  end
+  return render_action(action, specs), ""
 end
 
 --- The reason named by an item's most recent board commit, when that
@@ -388,24 +406,30 @@ end
 --- action rather than once per candidate: a session offered an item
 --- that bounced sees why it came back before claiming it.
 --- @param s store.Store The store
+--- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param all {item.Item} Every item
 --- @param specs act.Specs Sidecar body by id
 --- @param session string This session's name, "" when unnamed
---- @param ages health.Ages Seconds since last board commit, by id
+--- @param ages health.Ages Stale claim ages, by id
+--- @param review_ages health.Ages Stale review ages, by id
 --- @param ci act.CiStates CI state by item id, absent when unknown
 --- @return string The action, its target, the rule behind it, and its guidance
-local function next_report_live(s: store.Store, all: {item.Item},
+--- @return string Error message
+local function next_report_live(s: store.Store, c: Index, all: {item.Item},
     specs: act.Specs, session?: string, ages?: health.Ages,
-    ci?: act.CiStates): string
-  local action = act.next_action(all, specs, session, ages,
-    session, ci)
+    review_ages?: health.Ages, ci?: act.CiStates): string, string
+  local action, err = act.next_action(c, all, specs, session, ages,
+    review_ages, session, ci)
+  if action == nil then
+    return "", err
+  end
   if action.kind == "pull" and action.item then
     local events = publish.history(s, action.item.id)
     if events and events[1] then
       action.reason = action.reason .. bounce_note(events[1].subject)
     end
   end
-  return render_action(action, specs)
+  return render_action(action, specs), ""
 end
 
 local function cmd_next(s: store.Store, session?: string): integer
@@ -414,29 +438,37 @@ local function cmd_next(s: store.Store, session?: string): integer
     return verdict_line("next", false, aerr)
   end
   local all = board.items
-  return verdict_line("next", true,
-    next_report_live(s, all, read_specs(s, all), session, claim_ages(s, all),
-      ci_states(s, all)))
+  local c, cerr = store.read(s)
+  if c == nil then
+    return verdict_line("next", false, cerr)
+  end
+  local ages = stale_ages(s)
+  local report, rerr = next_report_live(s, c, all, read_specs(s, all), session,
+    ages.claim, ages.review, ci_states(s, all))
+  if rerr ~= "" then
+    return verdict_line("next", false, rerr)
+  end
+  return verdict_line("next", true, report)
 end
 
 local record gitview
   type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
-  status_report: function(all: {item.Item}, specs: act.Specs,
+  status_report: function(c: Index, all: {item.Item}, specs: act.Specs,
   ages?: health.Ages, lane_facts?: {string: string}):
-  {string}, string
-  next_report: function(all: {item.Item}, specs: act.Specs,
-  session?: string, ages?: health.Ages): string
-  next_report_live: function(s: store.Store, all: {item.Item},
+  {string} | nil, string
+  next_report: function(c: Index, all: {item.Item}, specs: act.Specs,
+  session?: string, ages?: health.Ages, review_ages?: health.Ages): string, string
+  next_report_live: function(s: store.Store, c: Index, all: {item.Item},
   specs: act.Specs, session?: string, ages?: health.Ages,
-  ci?: act.CiStates): string
+  review_ages?: health.Ages, ci?: act.CiStates): string, string
   bounce_note: function(subject: string): string
   read_specs: function(s: store.Store, all: {item.Item}): act.Specs
   -- Exported only so `_work/gitview_test.tl` can verify the process
   -- count directly: production code reaches both through `cmd_status`/
   -- `cmd_next`.
   list_via_cache: function(s: store.Store): Board | nil, string
-  claim_ages: function(s: store.Store, all: {item.Item}): health.Ages
+  stale_ages: function(s: store.Store): health.StaleAges
   cmd_status: function(s: store.Store): integer
   cmd_next: function(s: store.Store, session?: string): integer
 end
@@ -449,7 +481,7 @@ local M: gitview = {
   bounce_note = bounce_note,
   read_specs = read_specs,
   list_via_cache = list_via_cache,
-  claim_ages = claim_ages,
+  stale_ages = stale_ages,
   cmd_status = cmd_status,
   cmd_next = cmd_next,
 }

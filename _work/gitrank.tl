@@ -5,7 +5,6 @@
 --- same placement math `_work.gitgraph`'s `attach`/`new` reuse for
 --- their own `--before`/`--after`, so a child that already knows where
 --- it goes lands parented and positioned in one commit.
-local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
 local store = require("_work.store")
@@ -114,11 +113,11 @@ end
 --- @param before string X to place ID before; "" when unused
 --- @param after string X to place ID after; "" when unused, but not
 --- both "" — the caller's job to check
---- @param index flow.Index Every item by id, to check X's own parent
+--- @param index item.Index Every item by id, to check X's own parent
 --- @return boolean True on success; `parent_item.order` was mutated
 --- @return string Refusal reason; "" only on success
 local function place_under(parent_item: item.Item, id: string, before: string,
-    after: string, index: flow.Index): boolean, string
+    after: string, index: item.Index): boolean, string
   if before ~= "" and after ~= "" then
     return false, "REFUSED: at most one of --before/--after may be given"
   end
@@ -172,7 +171,7 @@ local function cmd_rank(s: store.Store, id: string, before: string, after: strin
   if all == nil then
     return gate.verdict_line("rank", false, aerr)
   end
-  local index = flow.by_id(all)
+  local index = item.by_id(all)
   local it = index[id]
   if it == nil then
     return gate.verdict_line("rank", false, ("no item %s"):format(id))
@@ -228,7 +227,7 @@ end
 
 local record gitrank
   place_under: function(parent_item: item.Item, id: string, before: string,
-  after: string, index: flow.Index): boolean, string
+  after: string, index: item.Index): boolean, string
   cmd_rank: function(s: store.Store, id: string, before: string, after: string,
   last: boolean): integer
 end

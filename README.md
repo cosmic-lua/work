@@ -27,10 +27,12 @@ _perf/       wall-clock verb scenarios over a generated fixture — see
 ```
 
 `_work/index.tl` and `_work/find.tl` define a DERIVED SQLite schema
-over the loaded items — never truth, never itself the source a verb
-trusts: `index.tl` mirrors the ref layout's fields into STRICT tables
-and the role/state views `_work.flow` derives by hand; `find.tl` layers
-full-text search over the same connection. What holds the connection
+over the loaded items — the read model every verb reads, rebuilt from
+git on a digest mismatch and patched by every save (`docs/design/read.md`),
+never itself the durable record: `index.tl` mirrors the ref layout's
+fields into STRICT tables and the role/state views `_work.flow` derives
+by hand; `find.tl` layers full-text search over the same connection.
+What holds the connection
 open is `_work/cache.tl` and the modules beside it
 (`_work/cachedb.tl`, `_work/cachequery.tl`): a persistent, per-clone
 file at `o/board.db`, incrementally patched by every save and fetch
@@ -42,21 +44,28 @@ still exists for tests that want one without a file on disk.
 SQLite file under a checkout's own `o/`, gitignored, carrying
 `index.tl`'s tables, `find.tl`'s search index, and the scheduled-lane
 observation `_work.lanes` now reads and writes there instead of
-committing `refs/heads/board/lanes`. It is never truth and never shared —
-each clone rebuilds its own from `store.list`/`store.read_specs`
-whenever the file is missing, its schema version or fingerprint does
-not match, or a fresh `for-each-ref` digest over
-`refs/heads/items`/`refs/heads/ended`/`refs/heads/board` disagrees with
-what the file last recorded (a hand-moved ref, or simply a clone that
-has never built one yet); every ordinary save patches straight from
-the items it just wrote, with no git read at all, and a fetch patches
-every id it moved in one batch, so a session's second `find` or `sync`
-costs a handful of small queries against an already-open file rather
-than a fresh whole-board read. The file opens WAL with
-`synchronous = OFF` — it is disposable, so a torn write from a crash
-is simply a rebuild — and any genuine SQLite error hit while using an
-already-open file (not merely a stale digest) wipes it and rebuilds
-once rather than surfacing the corruption.
+committing `refs/heads/board/lanes`. Each item's row also carries its
+write lease — `ref` (the branch it lives on), `tip` (the commit a
+mutation's compare-and-swap push is made against), and `touched_at`
+(that tip's committer date) — and `store.list` reads a live board
+through this cache rather than git directly, hydrating those three
+columns into its own lease bookkeeping. It is the read model every verb
+reads, never itself shared or the durable record: git holds that (see
+`docs/design/read.md`), and this file is read only to rebuild and by
+`fsck`, which audits the two against each other. Each clone rebuilds its
+own from `gitread.list`/`gitread.read_specs` whenever the file is
+missing, its schema version or fingerprint does not match, or a fresh
+`for-each-ref` digest over `refs/heads/items`/`refs/heads/ended`/`refs/heads/board`
+disagrees with what the file last recorded (a hand-moved ref, or simply
+a clone that has never built one yet); every ordinary save patches
+straight from the items it just wrote, with no git read at all, and a
+fetch patches every id it moved in one batch, so a session's second
+`list`, `find`, or `sync` costs a handful of small queries against an
+already-open file rather than a fresh whole-board read. The file opens
+WAL with `synchronous = OFF` — it is disposable, so a torn write from a
+crash is simply a rebuild — and any genuine SQLite error hit while
+using an already-open file (not merely a stale digest) wipes it and
+rebuilds once rather than surfacing the corruption.
 
 Every item is a git ref — `refs/heads/items/<ksuid>` — whose tip commit's
 tree carries its fields (a `meta` blob of `key: value` lines,
@@ -83,10 +92,9 @@ version every reader checks before trusting anything else it read
 alongside it (`_work/format.tl`) — a board on a version this tool does
 not know, or missing the marker while it already carries items, is
 refused rather than silently misread; `gitboard init` writes the
-marker on a board that has neither yet. `gitboard migrate` is the one
-verb an old layout-1 board is not refused for: it mints the board item,
-ranks every parent's children by their old `beats`/`blocked_by` edges,
-and bumps the marker to the current layout in one push. Nothing here is a file in the
+marker on a board that has neither yet. Layout 1 (the previous,
+`beats`/`blocked_by`/`held`-carrying shape) has no migration path from
+here — every live board has already moved to layout 2. Nothing here is a file in the
 working tree: a read is `git for-each-ref`/`cat-file --batch` against
 the ref layout, and a write is one `git fast-import` stream
 (`_work/fastimport.tl`) — `_work/store.tl` and the modules beside it

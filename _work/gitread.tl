@@ -47,18 +47,19 @@ local record Duplicate
 end
 
 --- The whole board as `list` found it: every item, its ref and tip
---- (`refs_by_id`/`shas_by_id` — the write lease for each),
---- `refs/heads/board/seq`'s own tip, every id `list` found filed under
---- both namespaces at once, and the digest of the `for-each-ref`
---- snapshot this pass took over exactly `_work.cachedb`'s watched
---- patterns — `_work.cache.open`'s check when a caller already has
---- this snapshot, never repeating the read. The board's own outcome
---- ranking is not a separate field here: it is one of `items`' own
---- `.order`, read the same way every item's is.
+--- (`refs_by_id`/`shas_by_id` — the write lease for each), each item's
+--- own tip's committer date (`touched_by_id`), `refs/heads/board/seq`'s
+--- own tip, every id `list` found filed under both namespaces at once,
+--- and the digest of the `for-each-ref` snapshot this pass took over
+--- exactly `_work.cachedb`'s watched patterns — `_work.cache.open`'s
+--- check when a caller already has this snapshot, never repeating the
+--- read. The board's own outcome ranking is not a separate field here:
+--- it is one of `items`' own `.order`, read the same way every item's is.
 local record Board
   items: {item.Item}
   refs_by_id: {string: string}
   shas_by_id: {string: string}
+  touched_by_id: {string: integer}
   seq_sha: string
   duplicates: {Duplicate}
   refs_digest: string
@@ -373,6 +374,7 @@ local function list(root: string, allow_old_format?: boolean): Board | nil, stri
   local items: {item.Item} = {}
   local refs_by_id: {string: string} = {}
   local shas_by_id: {string: string} = {}
+  local touched_by_id: {string: integer} = {}
   for _, r in ipairs(item_refs) do
     local id = r.refname:match("^refs/heads/items/(.+)$") or r.refname:match("^refs/heads/ended/(.+)$")
     local it, ierr = build_item(id, r.sha, batch, kind_batch, blob_batch)
@@ -382,13 +384,14 @@ local function list(root: string, allow_old_format?: boolean): Board | nil, stri
     items[#items + 1] = it
     refs_by_id[id] = r.refname
     shas_by_id[id] = r.sha
+    touched_by_id[id] = r.touched
   end
   table.sort(items, function(a: item.Item, b: item.Item): boolean
       return a.id < b.id
     end)
   return {items = items, refs_by_id = refs_by_id, shas_by_id = shas_by_id,
-    seq_sha = board_refs.seq_sha, duplicates = duplicates,
-    refs_digest = refs_digest}
+    touched_by_id = touched_by_id, seq_sha = board_refs.seq_sha,
+    duplicates = duplicates, refs_digest = refs_digest}
 end
 
 --- An item's spec sidecar, "" when absent, tried against every candidate

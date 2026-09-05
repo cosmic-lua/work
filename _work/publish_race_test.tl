@@ -9,10 +9,10 @@
 
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
-local flow = require("_work.flow")
 local gitboard = require("_work.gitboard")
 local item = require("_work.item")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local verbs = require("_work.gitverbs")
 
@@ -44,9 +44,10 @@ local function test_concurrent_done_of_the_last_two_children_both_land()
   assert(not item.is_open(check.must(store.load(b, c2))), "c2 is closed")
   assert(publish.sync(a))
   assert(not item.is_open(check.must(store.load(a, c2))), "and reaches a too")
-  local all = check.must(store.list(a))
+  check.must(store.list(a))
+  local c = check.must(store.read(a))
   local back = check.must(store.load(a, parent))
-  assert(flow.role(back, all) == "work",
+  assert(check.must(read.role(c, back.id)) == "work",
     "the parent is workable again — derived fresh, nothing to have lost")
 end
 

@@ -16,15 +16,16 @@
 --- the same reason; it requires this module for the `Store` type and the few pieces of
 --- state (`NOOP_PREFIX`, `snapshot_item`, `stage`, `read_spec`) its own `save` needs, so
 --- this module never requires it back.
+local cache = require("_work.cache")
+local cachedb = require("_work.cachedb")
+local cachequery = require("_work.cachequery")
 local child = require("cosmic.child")
-local format = require("_work.format")
 local fs = require("cosmic.fs")
-local gitobj = require("_work.gitobj")
+local gitdedupe = require("_work.gitdedupe")
 local gitread = require("_work.gitread")
 local item = require("_work.item")
-local itemtree = require("_work.itemtree")
-local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
+local storeinit = require("_work.storeinit")
 
 --- One open state repository. Every field but `root` is working state
 --- a single verb invocation accumulates: the session and `Op:` trailer the next `save`
@@ -60,6 +61,9 @@ local record Store
   leased_sha: {string: string}
   leased_item: {string: item.Item}
   touched_at: {string: integer}
+  --- The epoch second the most recent `save` stamped on its commits;
+  --- 0 before any save.
+  written_at: integer
   observed_seq: string
   pending: {refs.PushSpec}
   duplicates: {gitread.Duplicate}
@@ -70,6 +74,13 @@ local record Store
   remote_url_read: boolean
   remote_present: boolean
   remote_present_read: boolean
+  --- The board cache, opened once and held for the rest of this
+  --- invocation — `read`'s own handle, and what `list` hydrates
+  --- `leased_ref`/`leased_sha`/`touched_at`/`board_digest` from. nil
+  --- before the first `read`/`list` call, or once `close` has run.
+  --- Every `_work.read` call a verb makes goes through this same
+  --- connection, never a fresh `cache.open` of its own.
+  index: cache.Cache | nil
 end
 
 --- The refusal a lost push race earns, exported so a verb can tell it
@@ -137,110 +148,6 @@ local function git_ok(s: Store, argv: {string}): child.Result | nil, string
   return r
 end
 
---- Create the board item — the one parentless item, titled "board" —
---- on a repository that has none yet: a repository already carrying
---- one (a clone of an already-initialized board, or a second call over
---- the same tree) is untouched. Mirrors `format.ensure`'s own shape:
---- the tree, commit, and ref are written directly (`itemtree.build_tree`
---- with `write`, `gitobj.commit_tree`, `refs.update_ref`), then
---- best-effort pushed to `origin` when one exists, so the first clone
---- of a brand-new board is also the one that puts it on the remote for
---- every later clone to fetch — a plain (non-forced) push that loses to
---- a board another clone already pushed just means this checkout has
---- not fetched it yet, resolved the same way any other stale ref is.
---- @param dir string The directory to prepare
---- @return boolean True on success
---- @return string Error message
-local function ensure_board(dir: string): boolean, string
-  local board, berr = gitread.list(dir)
-  if board == nil then
-    return false, berr
-  end
-  for _, existing in ipairs(board.items) do
-    if (existing.parent or "") == "" then
-      return true, ""
-    end
-  end
-  local id = ksuid.new()
-  local it: item.Item = {
-    id = id, title = "board", parent = "", repo = "", base = "", key = "",
-    order = {}, claim = "", builders = {}, speccers = {}, reviewer = "",
-    pr = 0, result = "", verdict = "", verdict_head = "", verdict_spec = "",
-    resolution = "",
-  }
-  local tree_sha, terr = itemtree.build_tree(dir, it, nil, true)
-  if tree_sha == nil then
-    return false, terr
-  end
-  local commit_sha, cerr = gitobj.commit_tree(dir, {
-      tree = tree_sha, parents = {}, message = "board",
-      author_name = "Claude", author_email = "noreply@anthropic.com",
-      committer_name = "Claude", committer_email = "noreply@anthropic.com",
-    })
-  if commit_sha == nil then
-    return false, cerr
-  end
-  local moved, uerr =
-  refs.update_ref(dir, "refs/heads/items/" .. id, commit_sha, refs.ZERO_SHA)
-  if not moved then
-    return false, uerr
-  end
-  local has_origin = child.run({"git", "remote"}, {cwd = dir})
-  if has_origin ~= nil and has_origin.ok
-  and has_origin.stdout:find("origin", 1, true) ~= nil then
-    -- Best-effort, exactly as `format.ensure`'s own push is: a losing
-    -- push here just means another clone's push already landed the
-    -- board, which the next ordinary fetch picks up like any other
-    -- stale ref.
-    local _pushed, _perr = child.run({"git", "-c", "push.negotiate=false", "push",
-        "origin", "refs/heads/items/" .. id}, {cwd = dir})
-  end
-  return true, ""
-end
-
---- Create a state repository at `dir`: a git repository (initialized
---- when none is there yet), with the mirror refspecs ADDED to
---- `remote.origin.fetch` (`refs.ensure_refspecs`; `sync` adds them too,
---- so a plain clone needs no `init` to read the board), `refs/heads/board/format`
---- created (and best-effort pushed) when this repository has none yet
---- (`format.ensure`), and the board item itself created the same way
---- when this repository carries none (`ensure_board`) — the one
---- parentless item `new` files under when no `--parent` names
---- something else. `git clone` already gave `origin` its own
---- default refspec for the checked-out branch (how the machinery
---- itself stays pullable) — this only adds the three item-ref
---- patterns beside it, never replacing what was there, so a plain
---- `git pull` on the branch keeps working. There is no `items/`
---- directory to create — every item lives as a ref, not a file — so a
---- fresh repository with nothing filed yet needs nothing else here —
---- for a board with nothing filed. A clone of a populated origin still
---- needs `publish.sync` before its `refs/heads/items/*` exist locally;
---- the verbs' `--dir` path assumes it ran.
---- @param dir string The directory to prepare
---- @return boolean True on success
---- @return string Error message
-local function init_repo(dir: string): boolean, string
-  if not fs.is_dir(fs.join(dir, ".git")) then
-    local r, err = child.run({"git", "init", "-q", dir})
-    if r == nil or not r.ok then
-      return false, err or (r and r.stderr) or "git init failed"
-    end
-  end
-  local specs_ok, serr = refs.ensure_refspecs(dir)
-  if not specs_ok then
-    return false, serr
-  end
-  local ensured, eerr = format.ensure(dir)
-  if not ensured then
-    return false, eerr
-  end
-  local boarded, boerr = ensure_board(dir)
-  if not boarded then
-    return false, boerr
-  end
-  return true, ""
-end
-
 --- Open a state repository checkout. The root must be a git
 --- repository — `gitboard init` (`init_repo`) creates one.
 --- @param root string Checkout root
@@ -251,10 +158,10 @@ local function open(root: string): Store | nil, string
     return nil, ("not a git repository: %s"):format(root)
   end
   return {root = root, session = "", op = "", bounded = false, leased_ref = {},
-    leased_sha = {}, leased_item = {}, touched_at = {}, observed_seq = "",
+    leased_sha = {}, leased_item = {}, touched_at = {}, written_at = 0, observed_seq = "",
     pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
     remote_url = "", remote_url_ok = false, remote_url_read = false,
-    remote_present = false, remote_present_read = false}
+    remote_present = false, remote_present_read = false, index = nil}
 end
 
 --- The full id a unique prefix names, resolved against the refs
@@ -337,8 +244,8 @@ end
 --- `item.encode`/`decode` (the OLD literal-table codec `encode`/
 --- `decode` above still are), so the round trip would otherwise drop
 --- it silently — invisible for an ordinary item, which never has any,
---- but exactly the field `gitboard migrate`'s diff needs an honest
---- baseline for.
+--- but exactly the field a diff over an unmigrated board's edges needs
+--- an honest baseline for.
 --- @param it item.Item The item to copy
 --- @return item.Item | nil The copy, nil when re-decoding it failed
 local function snapshot_item(it: item.Item): item.Item | nil
@@ -381,31 +288,97 @@ local function load_item(s: Store, id: string): item.Item | nil, string
   return loaded.it
 end
 
---- Every item in the store, done ones included, sorted by id. Three
---- git processes for the whole board, whatever its size — never one
---- per item; see `_work.gitread.list`. `_work.storemigrate.list_for_migrate`
---- is this same body against `gitread.list`'s `allow_old_format` bypass,
---- split into its own file rather than added here, to stay under the
---- line cap.
+--- Open the board cache and hold it on `s.index` for the rest of this
+--- invocation — idempotent, so every caller (`list`, `read`) reaches
+--- the SAME connection rather than each opening its own:
+--- `_work.cache.open` takes the one `for-each-ref` snapshot below as
+--- its own freshness digest and rebuilds from git only on a mismatch,
+--- so `_work.gitread.list` runs only from the cache's own `rebuild`.
+--- Every `_work.read` call a verb makes goes through the handle this
+--- returns.
+--- @param s Store The store
+--- @return cache.Cache | nil The open cache
+--- @return string Error message
+local function ensure_index(s: Store): cache.Cache | nil, string
+  if s.index ~= nil then
+    return s.index, ""
+  end
+  local found, ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
+  if found == nil then
+    return nil, ferr
+  end
+  local known_digest = cachedb.digest_of(found)
+  local duplicates = gitdedupe.of(s.root, found)
+  local c, cerr = cache.open(s.root, known_digest)
+  if c == nil then
+    return nil, cerr
+  end
+  s.index = c
+  s.duplicates = duplicates
+  s.board_digest = known_digest
+  return c, ""
+end
+
+--- The open board cache `read.*` reads through — `ensure_index`,
+--- opening and hydrating it on first call, a bare field read on every
+--- one after.
+--- @param s Store The store
+--- @return cache.Cache | nil The open cache
+--- @return string Error message
+local function read(s: Store): cache.Cache | nil, string
+  return ensure_index(s)
+end
+
+--- Close the cache `read`/`list` opened, when one is open; a no-op
+--- otherwise. Every invocation that opened one closes it before
+--- exiting.
+--- @param s Store The store
+--- @return boolean True on success
+--- @return string Error message
+local function close(s: Store): boolean, string
+  local c = s.index
+  if c == nil then
+    return true, ""
+  end
+  s.index = nil
+  return cache.close(c)
+end
+
+--- Every item in the store, done ones included, sorted by id — read
+--- through `ensure_index`'s open cache rather than a fresh git read
+--- every time. `leased_ref`/`leased_sha`/`touched_at` — each id's
+--- write lease, the compare-and-swap a mutation's push is made
+--- against — and `observed_seq` come from the cache's own rows,
+--- current for the live board by the same digest guard `ensure_index`
+--- always applies; `duplicates` comes from the ref snapshot itself,
+--- since the cache carries no namespace information to derive it from.
 --- @param s Store The store
 --- @return {item.Item} | nil The items, some possibly flagged
 --- @return string Error message naming the first genuinely corrupt item
 local function list(s: Store): {item.Item} | nil, string
-  local board, err = gitread.list(s.root)
-  if board == nil then
-    return nil, err
+  local c, cerr = ensure_index(s)
+  if c == nil then
+    return nil, cerr
   end
-  for id, ref in pairs(board.refs_by_id) do
+  local all, ierr = cachequery.items(c)
+  if all == nil then
+    return nil, ierr
+  end
+  local ls, lerr = cachequery.leases(c)
+  if ls == nil then
+    return nil, lerr
+  end
+
+  for id, ref in pairs(ls.refs_by_id) do
     s.leased_ref[id] = ref
-    s.leased_sha[id] = board.shas_by_id[id]
+    s.leased_sha[id] = ls.shas_by_id[id]
+    s.touched_at[id] = ls.touched_at[id]
   end
-  for _, it in ipairs(board.items) do
+  for _, it in ipairs(all) do
     s.leased_item[it.id] = snapshot_item(it)
   end
-  s.observed_seq = board.seq_sha
-  s.duplicates = board.duplicates
-  s.board_digest = board.refs_digest
-  return board.items
+  s.observed_seq = ls.seq_sha
+  return all
 end
 
 --- Every id the most recent `list` found filed under both
@@ -469,6 +442,8 @@ local record store
   read_specs: function(s: Store, ids: {string}): {string: string}
   snapshot_item: function(it: item.Item): item.Item | nil
   list: function(s: Store): {item.Item} | nil, string
+  read: function(s: Store): cache.Cache | nil, string
+  close: function(s: Store): boolean, string
   duplicates: function(s: Store): {gitread.Duplicate}
   flagged_summary: function(items: {item.Item}): string
   stage: function(s: Store, it: item.Item, spec?: string): boolean, string
@@ -480,7 +455,7 @@ local M: store = {
   is_noop = is_noop,
   git = git,
   git_ok = git_ok,
-  init_repo = init_repo,
+  init_repo = storeinit.init_repo,
   open = open,
   load = load_item,
   resolve = resolve,
@@ -488,6 +463,8 @@ local M: store = {
   read_specs = read_specs,
   snapshot_item = snapshot_item,
   list = list,
+  read = read,
+  close = close,
   duplicates = duplicates,
   flagged_summary = flagged_summary,
   stage = stage,

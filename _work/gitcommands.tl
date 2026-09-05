@@ -173,16 +173,6 @@ local CSPEC: flags.CommandSpec = {
     {name = "find", summary = "full-text search over titles and specs, "
       .. "ranked, a snippet per hit",
       spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
-    {name = "migrate", summary = "move a layout-1 board onto layout 2: "
-      .. "the board item, ranked order, re-parented prerequisites",
-      spec = {summary = "move a layout-1 board onto the current layout: mints the "
-        .. "board item if\nnone exists, ranks every parent's children by their "
-        .. "`beats` edges, re-parents\nevery `blocked_by` prerequisite under its "
-        .. "waiter, and drops every `edges`/\n`held` remnant. The one verb a "
-        .. "layout-1 board is not refused for; refused\nin turn on a board "
-        .. "already at layout 2.",
-        flags = {dir_flag(),
-          {long = "dry-run", help = "print the plan and write nothing"}}}},
   },
 }
 

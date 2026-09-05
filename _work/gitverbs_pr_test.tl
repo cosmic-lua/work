@@ -4,8 +4,8 @@
 -- of `take`/`drop`/`done` lives there.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
 local publish = require("_work.publish")
+local read = require("_work.read")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
 local verbs = require("_work.gitverbs")
@@ -27,7 +27,10 @@ local function test_take_pr_records_the_handover()
   local got = check.must(store.load(s, leaf))
   assert(got.pr == 4242, "the PR rides the handover: " .. got.pr)
   assert(got.claim == "session-a", "the claim survives it")
-  assert(flow.substate(got) == "review", "and the item awaits a verdict")
+  check.must(store.list(s))
+  local c = check.must(store.read(s))
+  assert(check.must(read.substate(c, got.id)) == "review",
+    "and the item awaits a verdict")
 end
 
 -- One PR couples one item's verdict: recording a number another OPEN item already carries

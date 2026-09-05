@@ -6,10 +6,10 @@
 
 local check = require("cosmic.check")
 local decision = require("_work.decision")
+local fixture = require("_work.fixture")
 local intake = require("_work.intake")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
-local rank = require("_work.rank")
 
 local counter = 0
 
@@ -34,8 +34,9 @@ local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
 
 --- Ask intake directly, over its own inputs.
 local function ask(items: {item.Item}, specs: intake.Specs): decision.Action, string
-  local ranks = rank.positions(items)
-  local a = intake.intake_action(items, specs, ranks)
+  local c = fixture.make_index(items)
+  local a, err = intake.intake_action(c, items, specs)
+  assert(err == "", err)
   if a == nil then
     return nil, "intake offered nothing"
   end

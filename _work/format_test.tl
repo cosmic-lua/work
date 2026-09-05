@@ -31,15 +31,15 @@ local function test_a_different_version_refuses_and_names_both()
   assert(format.refusal("99", false) ~= nil, "wrong on an empty board refuses too")
 end
 
--- Layout `1` — the previous, beats/blocked_by/held-carrying layout —
--- is a refusal this tool knows the way past: it names `gitboard
--- migrate` rather than the generic "cannot safely read" wording.
-local function test_version_1_names_the_migrate_verb()
+-- Layout `1` — the previous, beats/blocked_by/held-carrying layout,
+-- from before the live board moved to layout 2 — refuses the same
+-- generic way any other unexpected version does: there is no
+-- migration path left to name.
+local function test_version_1_refuses_like_any_other_version()
   local refusal = format.refusal("1", true)
   assert(refusal ~= nil)
   assert(refusal:find("1", 1, true) ~= nil, refusal)
   assert(refusal:find(format.CURRENT, 1, true) ~= nil, refusal)
-  assert(refusal:find("gitboard migrate", 1, true) ~= nil, refusal)
 end
 
 -- A missing marker refuses only once the board carries items — an OLD

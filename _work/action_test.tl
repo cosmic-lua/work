@@ -7,12 +7,32 @@
 
 local check = require("cosmic.check")
 local act = require("_work.action")
+local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local health = require("_work.health")
+local idxmod = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
+local read = require("_work.read")
 
 local type Item = item.Item
+
+--- `act.next_action`, over a fresh in-memory index built from `items`
+--- — what every test here asks instead of a real store.
+--- @param items {Item} All items
+--- @param specs act.Specs Sidecar body by id
+--- @param session string | nil This session's name, "" when unnamed
+--- @param ages health.Ages | nil Stale CLAIM ages, by id
+--- @param review_ages health.Ages | nil Stale REVIEW ages, by id
+--- @return act.Action
+local function next_action(items: {Item}, specs: act.Specs,
+    session?: string, ages?: health.Ages, review_ages?: health.Ages): act.Action
+  local c = fixture.make_index(items)
+  local a, err = act.next_action(c, items, specs, session, ages, review_ages)
+  check.must(idxmod.close(c))
+  assert(a ~= nil, err)
+  return a
+end
 
 local counter = 0
 
@@ -71,26 +91,26 @@ local function test_the_ordering_runs_right_to_left()
   items[#items + 1] = building
   items[#items + 1] = fresh
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "the accepted item is the most finished work there is: " .. a.kind)
   accepted.resolution = "completed"
   accepted.claim = ""
-  local b = act.next_action(items, specs, "me")
+  local b = next_action(items, specs, "me")
   assert(b.kind == "review" and b.item.id == reviewable.id,
     "then the verdict: " .. b.kind)
   reviewable.verdict = "accept"
-  local c = act.next_action(items, specs, "me")
+  local c = next_action(items, specs, "me")
   assert(c.kind == "finish" and c.item.id == reviewable.id,
     "an accept re-enters as the next finish: " .. c.kind)
   reviewable.resolution = "completed"
   reviewable.claim = ""
-  local d = act.next_action(items, specs, "me")
+  local d = next_action(items, specs, "me")
   assert(d.kind == "finish" and d.item.id == building.id,
     "then my own build: " .. d.kind)
   building.resolution = "completed"
   building.claim = ""
-  local e = act.next_action(items, specs, "me")
+  local e = next_action(items, specs, "me")
   assert(e.kind == "pull" and e.item.id == fresh.id,
     "and only then a pull: " .. e.kind)
 end
@@ -104,14 +124,14 @@ local function test_a_live_foreign_review_claim_is_stepped_past()
   items[#items + 1] = first
   items[#items + 1] = second
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "review" and a.item.id == second.id,
     "a live foreign review claim excludes the diff: " .. a.item.id)
   local stale: health.Ages = {[first.id] = health.REVIEW_LEASE_S + 1}
-  local b = act.next_action(items, specs, "me", stale)
+  local b = next_action(items, specs, "me", nil, stale)
   assert(b.kind == "review" and b.item.id == first.id,
     "a stale one is anyone's again, and it is first in queue order")
-  local unnamed = act.next_action(items, specs)
+  local unnamed = next_action(items, specs)
   assert(unnamed.kind == "review" and unnamed.item.id == first.id,
     "an unnamed session is stepped past nothing")
 end
@@ -130,7 +150,7 @@ local function test_a_builder_or_speccer_review_is_stepped_past()
   items[#items + 1] = built
   items[#items + 1] = specced
   local specs = ready_specs(items)
-  local nothing = act.next_action(items, specs, "me")
+  local nothing = next_action(items, specs, "me")
   assert(nothing.kind ~= "review",
     "built and specced diffs are offered to nobody: " .. nothing.kind)
   assert(not nothing.reason:find("under another session's live review",
@@ -140,7 +160,7 @@ local function test_a_builder_or_speccer_review_is_stepped_past()
 
   local reviewable = make({parent = root.id, claim = "b3", pr = 3})
   items[#items + 1] = reviewable
-  local stepped = act.next_action(items, specs, "me")
+  local stepped = next_action(items, specs, "me")
   assert(stepped.kind == "review" and stepped.item.id == reviewable.id,
     "and stepped past to the one genuine candidate: " .. stepped.item.id)
 end
@@ -151,11 +171,11 @@ local function test_anothers_live_build_is_held_a_stale_one_offered()
   local theirs = make({parent = root.id, claim = "other"})
   items[#items + 1] = theirs
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind ~= "finish",
     "a live foreign claim is a builder mid loop: " .. a.kind)
   local stale: health.Ages = {[theirs.id] = health.LEASE_S + 1}
-  local b = act.next_action(items, specs, "me", stale)
+  local b = next_action(items, specs, "me", stale)
   assert(b.kind == "finish" and b.item.id == theirs.id,
     "a stale claim is anyone's: " .. b.kind)
   assert(b.reason:find("take it over", 1, true),
@@ -169,11 +189,11 @@ local function test_rework_returns_to_its_builder_first()
       verdict = "request changes"})
   items[#items + 1] = sent_back
   local specs = ready_specs(items)
-  local mine = act.next_action(items, specs, "builder")
+  local mine = next_action(items, specs, "builder")
   assert(mine.kind == "finish" and mine.item.id == sent_back.id,
     "the builder picks their own rework up: " .. mine.kind)
   assert(mine.reason:find("rework", 1, true), mine.reason)
-  local other = act.next_action(items, specs, "someone-else")
+  local other = next_action(items, specs, "someone-else")
   assert(other.kind ~= "finish",
     "a live rework claim holds like any other: " .. other.kind)
 end
@@ -187,7 +207,7 @@ local function test_pull_skips_what_misses_the_bar()
   items[#items + 1] = free
   local specs = ready_specs(items)
   specs[unrefined.id] = "## Non-goals\nno Change decided yet\n"
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "pull" and a.item.id == free.id,
     ("an unrefined item is skipped: %s %s"):format(a.kind,
       a.item and a.item.id or ""))
@@ -203,7 +223,7 @@ local function test_the_doing_bound_suppresses_the_pull()
   local fresh = make({parent = root.id})
   items[#items + 1] = fresh
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind ~= "pull",
     "at the bound nothing new is offered: " .. a.kind)
   -- The terminal answer names the bound, not a decompose errand: a
@@ -225,7 +245,7 @@ local function test_the_decision_carries_alternates_across_rungs()
   items[#items + 1] = fresh_a
   items[#items + 1] = fresh_b
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "review", "the primary is the rightmost rung")
   local alts = a.alternates or {}
   assert(#alts >= 2, "and the list crosses rungs to the pulls: " .. #alts)
@@ -247,7 +267,7 @@ local function test_a_blocked_building_item_is_still_offered()
   items[#items + 1] = peer
   items[#items + 1] = building
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "finish" and a.item.id == building.id,
     "a blocker edge never gates a build to finish: " .. a.kind)
 end
@@ -264,7 +284,7 @@ local function test_lane_repair_outranks_ordinary_pulls()
   items[#items + 1] = repair
   items[#items + 1] = ordinary
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "pull" and a.item.id == repair.id,
     "the repair is offered ahead of the ordinary pull: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
@@ -281,7 +301,7 @@ local function test_a_pending_merge_still_outranks_the_repair()
   items[#items + 1] = accepted
   items[#items + 1] = repair
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "landing what is already accepted still comes first: " .. a.kind)
 end
@@ -300,15 +320,16 @@ local function test_a_pending_review_still_outranks_the_repair()
   items[#items + 1] = reviewable
   items[#items + 1] = repair
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "review" and a.item.id == reviewable.id,
     "a verdict awaiting a PR still comes before a lane repair: " .. a.kind)
 end
 
--- The doing bound never holds a lane repair back: `flow.doing_refusal`
--- admits it at the same bound it refuses an ordinary take at, and
--- `next_action` still offers it as the pull rather than falling
--- through to the bound's own terminal "none".
+-- The doing bound never holds a lane repair back: the board sits
+-- exactly at the bound (`_work.gitverbs`'s own `doing_refusal` would
+-- refuse an ordinary take here), and `next_action` still offers the
+-- repair as the pull rather than falling through to the bound's own
+-- terminal "none".
 local function test_lane_repair_is_admitted_at_the_doing_bound()
   local items: {Item} = {}
   local root = placed_root(items)
@@ -318,12 +339,12 @@ local function test_lane_repair_is_admitted_at_the_doing_bound()
   end
   local repair = make({parent = root.id, key = "fuzz.yml"})
   items[#items + 1] = repair
-  assert(flow.doing_refusal(items) ~= nil,
-    "the bound still refuses an ordinary take")
-  assert(flow.doing_refusal(items, repair) == nil,
-    "but never a lane repair's own take")
+  local c = fixture.make_index(items)
+  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
+    "the bound sits exactly at its own limit")
+  check.must(idxmod.close(c))
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "pull" and a.item.id == repair.id,
     "the repair is still offered at the bound: " .. a.kind)
 end
@@ -338,7 +359,7 @@ local function test_none_names_the_binding_fact()
   local theirs = make({parent = root.id, claim = "other"})
   local items: {Item} = {board, root, theirs}
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "none", "nothing here is mine to move: " .. a.kind)
   assert(a.reason:find("@other", 1, true),
     "and the holder is named, not counted: " .. a.reason)
@@ -357,11 +378,11 @@ local function test_a_research_handover_is_offered_as_the_review()
   items[#items + 1] = handed
   items[#items + 1] = fresh
   local specs = ready_specs(items)
-  local a = act.next_action(items, specs, "me")
+  local a = next_action(items, specs, "me")
   assert(a.kind == "review" and a.item.id == handed.id,
     "the handover awaits a verdict, and verdicts come before new work: "
     .. a.kind)
-  local b = act.next_action(items, specs, "who")
+  local b = next_action(items, specs, "who")
   assert(b.kind ~= "review", "its own builder is never offered the review: "
     .. b.kind)
 end
@@ -375,7 +396,7 @@ local function test_the_review_reason_names_what_awaits_the_verdict()
   local handed = make({parent = root.id, claim = "who", builders = "who",
       result = ("ab"):rep(32)})
   items[#items + 1] = handed
-  local a = act.next_action(items, ready_specs(items), "me")
+  local a = next_action(items, ready_specs(items), "me")
   assert(a.kind == "review" and a.item.id == handed.id, a.kind)
   assert(a.reason:find("a research handover awaits a verdict", 1, true),
     "a handover is named as one: " .. a.reason)
@@ -385,7 +406,7 @@ local function test_the_review_reason_names_what_awaits_the_verdict()
   local other = placed_root(diffs)
   local diff = make({parent = other.id, claim = "who", pr = 2})
   diffs[#diffs + 1] = diff
-  local b = act.next_action(diffs, ready_specs(diffs), "me")
+  local b = next_action(diffs, ready_specs(diffs), "me")
   assert(b.kind == "review" and b.item.id == diff.id, b.kind)
   assert(b.reason == "a PR awaits a verdict — verdicts before new work",
     "a diff's reason is unchanged: " .. b.reason)
@@ -400,7 +421,7 @@ local function test_an_accepted_handovers_finish_reason_names_done()
   local accepted = make({parent = root.id, claim = "who", builders = "who",
       result = ("ab"):rep(32), verdict = "accept"})
   items[#items + 1] = accepted
-  local a = act.next_action(items, ready_specs(items), "me")
+  local a = next_action(items, ready_specs(items), "me")
   assert(a.kind == "finish" and a.item.id == accepted.id, a.kind)
   assert(a.reason:find("`done ID` ends it", 1, true),
     "names done directly: " .. a.reason)
@@ -411,7 +432,7 @@ local function test_an_accepted_handovers_finish_reason_names_done()
   local diff = make({parent = other.id, claim = "who", pr = 1,
       verdict = "accept"})
   diffs[#diffs + 1] = diff
-  local b = act.next_action(diffs, ready_specs(diffs), "me")
+  local b = next_action(diffs, ready_specs(diffs), "me")
   assert(b.kind == "finish" and b.item.id == diff.id, b.kind)
   assert(b.reason == ("%s is accepted, awaiting merge — finishing beats "
       .. "starting"):format(diff.id:sub(1, 8)),

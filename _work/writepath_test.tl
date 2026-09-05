@@ -132,6 +132,13 @@ local function test_rank_reads_the_board_once_not_twice()
   end
   assert(kid ~= nil, "the child should be on the board")
 
+  -- The two seeding reads above already opened `a`'s own board cache
+  -- (`store.list` holds it for the rest of this invocation) — closed
+  -- here so `cmd_rank` below pays its own fresh snapshot, exactly as a
+  -- real `rank` invocation would starting from nothing, rather than
+  -- reusing a connection this test's own setup happened to warm.
+  local _cok, _cerr = store.close(a)
+
   local warm = check.must(cache.rebuild(a.root))
   assert(cache.close(warm))
 

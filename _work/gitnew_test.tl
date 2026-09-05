@@ -6,7 +6,7 @@
 -- file cap.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
+local read = require("_work.read")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
@@ -66,7 +66,8 @@ local function test_new_with_no_parent_places_among_the_boards_outcomes()
   assert(commits(s) == before_commits + 2,
     "one push, two commits: the new outcome and the board's own order")
   local all = check.must(store.list(s))
-  local board = check.must(flow.find_board(all))
+  local c = check.must(store.read(s))
+  local board_id = check.must(read.board(c))
   local found: string = nil
   for _, i in ipairs(all) do
     if not before_ids[i.id] then
@@ -74,9 +75,9 @@ local function test_new_with_no_parent_places_among_the_boards_outcomes()
     end
   end
   assert(found ~= nil, "the new item is on the board")
-  assert(check.must(store.load(s, found)).parent == board.id,
+  assert(check.must(store.load(s, found)).parent == board_id,
     "under the board")
-  local reboard = check.must(store.load(s, board.id))
+  local reboard = check.must(store.load(s, board_id))
   local at: integer = nil
   local goal_at: integer = nil
   for k, v in ipairs(reboard.order) do

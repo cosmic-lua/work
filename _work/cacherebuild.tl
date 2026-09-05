@@ -19,11 +19,76 @@ local find = require("_work.find")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
 local index = require("_work.index")
+local index_rank = require("_work.index_rank")
 local proc = require("cosmic.proc")
+local readddl = require("_work.readddl")
 local sqlite = require("cosmic.sqlite")
 
 local type Cache = cachedb.Cache
 local SCHEMA_VERSION < const > = cachedb.SCHEMA_VERSION
+
+--- Load `board` into an already-open, schema-less connection: every
+--- item's row (with the write lease `board`'s own maps carry),
+--- `find`'s search table, `EXTRA_DDL`, `_work.index_rank`'s and
+--- `_work.readddl`'s views, and `events` from a fresh git-log walk.
+--- Shared by `rebuild`'s real, file-backed connection and
+--- `_work.gitfsck`'s throwaway `:memory:` one — both need exactly the
+--- same schema and data, built the same way from the same board read.
+--- @param db sqlite.Database An open connection with no schema yet
+--- @param root string The store's root, for `events.fill_rebuild`'s own walk
+--- @param board gitread.Board Already-read board data
+--- @param specs {string: string} Spec markdown by item id, for `find.build`
+--- @return boolean True on success
+--- @return string Error message
+local function fill(db: sqlite.Database, root: string, board: gitread.Board,
+    specs: {string: string}): boolean, string
+  local ddl_ok, ddl_err = db:exec_script(index.DDL)
+  if not ddl_ok then
+    return false, ddl_err
+  end
+  local tx_ok, tx_err = db:transaction(function(tx: sqlite.Database): boolean, string
+      for _, it in ipairs(board.items) do
+        local lease: index.Lease = {
+          ref = board.refs_by_id[it.id] or "",
+          tip = board.shas_by_id[it.id] or "",
+          touched_at = board.touched_by_id[it.id] or 0,
+        }
+        local iok, ierr = index.insert_item(tx, it, lease)
+        if not iok then
+          return false, ierr
+        end
+      end
+      return true, ""
+    end)
+  if not tx_ok then
+    return false, tx_err
+  end
+  local c: Cache = {db = db, specs = specs, load_problems = {}}
+  local fok, ferr = find.build(c)
+  if not fok then
+    return false, ferr
+  end
+  local eok, eerr = db:exec_script(cachedb.EXTRA_DDL)
+  if not eok then
+    return false, eerr
+  end
+  -- `_work.read`'s derived views, added here so every persisted cache
+  -- file carries them — `_work.index_rank`'s `dense_rank`/`rank_path`
+  -- first, since `_work.readddl`'s own views join against those.
+  local irok, irerr = index_rank.ensure_views(c)
+  if not irok then
+    return false, irerr
+  end
+  local rdok, rderr = readddl.ensure_views(c)
+  if not rdok then
+    return false, rderr
+  end
+  local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
+  if not evok then
+    return false, everr
+  end
+  return true, ""
+end
 
 --- Cold-build the cache file from scratch. Exported for the equality
 --- ratchet, which forces one to compare against the incrementally
@@ -59,39 +124,10 @@ local function rebuild(root: string): Cache | nil, string
   if db == nil then
     return nil, derr
   end
-  local ddl_ok, ddl_err = db:exec_script(index.DDL)
-  if not ddl_ok then
-    local _c, _cerr = db:close()
-    return nil, ddl_err
-  end
-  local tx_ok, tx_err = db:transaction(function(tx: sqlite.Database): boolean, string
-      for _, it in ipairs(board.items) do
-        local iok, ierr = index.insert_item(tx, it)
-        if not iok then
-          return false, ierr
-        end
-      end
-      return true, ""
-    end)
-  if not tx_ok then
-    local _c, _cerr = db:close()
-    return nil, tx_err
-  end
-  local c: Cache = {db = db, specs = specs, load_problems = {}}
-  local fok, ferr = find.build(c)
+  local fok, ferr = fill(db, root, board, specs)
   if not fok then
     local _c, _cerr = db:close()
     return nil, ferr
-  end
-  local eok, eerr = db:exec_script(cachedb.EXTRA_DDL)
-  if not eok then
-    local _c, _cerr = db:close()
-    return nil, eerr
-  end
-  local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
-  if not evok then
-    local _c, _cerr = db:close()
-    return nil, everr
   end
   local pvok, pverr = db:exec(("PRAGMA user_version = %d"):format(SCHEMA_VERSION))
   if not pvok then
@@ -115,6 +151,9 @@ local function rebuild(root: string): Cache | nil, string
   if sok then
     sok, serr = cachedb.meta_set(db, "schema_fingerprint", fp)
   end
+  if sok then
+    sok, serr = cachedb.meta_set(db, "seq_sha", board.seq_sha)
+  end
   if not sok then
     local _c, _cerr = db:close()
     return nil, serr
@@ -128,7 +167,16 @@ local function rebuild(root: string): Cache | nil, string
   if not cok then
     return nil, cerr
   end
-  for _, p in ipairs({tmp_path .. "-wal", tmp_path .. "-shm"}) do
+  for _, p in ipairs({tmp_path .. "-wal", tmp_path .. "-shm",
+      -- `final_path`'s OWN leftover sidecars, wiped here too: a rename
+      -- only moves the one path it names, so a `-wal`/`-shm` pair left
+      -- beside the file this is about to replace would sit there
+      -- associated with the NEW file by name alone once the rename
+      -- lands — sqlite would try to replay it on the next open, an
+      -- open connection's own not-yet-checkpointed leftover from
+      -- BEFORE this rebuild replacing an item's freshly written row
+      -- with whatever that stale log still held.
+      final_path .. "-wal", final_path .. "-shm"}) do
     if fs.is_present(p) then
       local _ok, _err = fs.remove(p)
     end
@@ -145,10 +193,13 @@ local function rebuild(root: string): Cache | nil, string
 end
 
 local record cacherebuild
+  fill: function(db: sqlite.Database, root: string, board: gitread.Board,
+  specs: {string: string}): boolean, string
   rebuild: function(root: string): Cache | nil, string
 end
 
 local M: cacherebuild = {
+  fill = fill,
   rebuild = rebuild,
 }
 

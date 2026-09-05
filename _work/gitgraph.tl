@@ -23,13 +23,13 @@
 --- position `attach` never needs to move an item TO, since only
 --- `init` creates it.
 local cachequery = require("_work.cachequery")
-local flow = require("_work.flow")
 local friction = require("_work.gitfriction")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local rank = require("_work.gitrank")
+local read = require("_work.read")
 local session = require("_work.session")
 local store = require("_work.store")
 
@@ -106,21 +106,32 @@ local function cmd_new(s: store.Store, title: string, parent: string,
       return gate.verdict_line("new", false, refusal)
     end
   end
-  local index = flow.by_id(all)
+  local index = item.by_id(all)
+  local c, cerr = store.read(s)
+  if c == nil then
+    return gate.verdict_line("new", false, cerr)
+  end
   -- No `--parent` means "under the board" — found as the one
   -- parentless item, never a second field to keep in step with it.
   local parent_id = parent
   if parent_id == "" then
-    local board = flow.find_board(all)
-    if board == nil then
+    local board_id, berr = read.board(c)
+    if board_id == nil then
+      if berr ~= "" then
+        return gate.verdict_line("new", false, berr)
+      end
       return gate.verdict_line("new", false,
         "REFUSED: this board has no board item yet — run `gitboard init`")
     end
-    parent_id = board.id
+    parent_id = board_id
   end
   local parent_item = index[parent_id]
   if parent_item == nil then
     return gate.verdict_line("new", false, ("no item %s"):format(parent_id))
+  end
+  local parent_role, prerr = read.role(c, parent_item.id)
+  if parent_role == nil then
+    return gate.verdict_line("new", false, prerr)
   end
   local it: item.Item = {
     id = ksuid.new(), title = title, parent = parent_id, repo = repo or "",
@@ -149,7 +160,10 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- by design — the queue intake writes into can always accept,
   -- which is what keeps the cheap decision cheap. The bound binds at
   -- take, where committing to work is the expensive decision.
-  local also = gate.containered(parent_item, index)
+  local also, coerr = gate.containered(c, parent_item)
+  if also == nil then
+    return gate.verdict_line("new", false, coerr)
+  end
   if bfr ~= "" or aft ~= "" then
     local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
     if not placed then
@@ -164,7 +178,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     return gate.verdict_line("new", false, err)
   end
   local entered = "todo"
-  if flow.is_board(parent_item) then
+  if parent_role == "board" then
     entered = "triage — rank it among the outcomes, or attach it under a "
     .. "ranked outcome"
   end
@@ -192,7 +206,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if all == nil then
     return gate.verdict_line("attach", false, aerr)
   end
-  local index = flow.by_id(all)
+  local index = item.by_id(all)
   local it = index[id]
   local parent_item = index[parent]
   if it == nil then
@@ -204,7 +218,15 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if id == parent then
     return gate.verdict_line("attach", false, "an item cannot parent itself")
   end
-  if not flow.reaches_board(parent_item, index) then
+  local c, cerr = store.read(s)
+  if c == nil then
+    return gate.verdict_line("attach", false, cerr)
+  end
+  local reaches, rberr = read.reaches_board(c, parent_item.id)
+  if reaches == nil then
+    return gate.verdict_line("attach", false, rberr)
+  end
+  if not reaches then
     return gate.verdict_line("attach", false,
       ("%s's own parent chain is broken"):format(parent:sub(1, 8)))
   end
@@ -226,7 +248,10 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if #bad > 0 then
     return gate.verdict_line("attach", false, table.concat(bad, "; "))
   end
-  local also = gate.containered(parent_item, index)
+  local also, coerr = gate.containered(c, parent_item)
+  if also == nil then
+    return gate.verdict_line("attach", false, coerr)
+  end
   if (before or "") ~= "" or (after or "") ~= "" then
     local placed, perr = rank.place_under(parent_item, id, before or "",
       after or "", index)
@@ -244,8 +269,18 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if store.is_noop(err) then
     return gate.verdict_line("attach", true, err)
   end
+  -- `commit_and_publish` closed the connection `c` came from — a fresh
+  -- one, opened here, is what the post-mutation role check reads.
   local workable = ""
-  if not flow.has_open_children(all, id) then
+  local after_c, cerr2 = store.read(s)
+  if after_c == nil then
+    return gate.verdict_line("attach", false, cerr2)
+  end
+  local role, roerr = read.role(after_c, id)
+  if role == nil then
+    return gate.verdict_line("attach", false, roerr)
+  end
+  if role ~= "container" then
     workable = " — workable, in todo"
   end
   return gate.verdict_line("attach", true,

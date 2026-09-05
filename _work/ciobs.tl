@@ -29,6 +29,10 @@ local flow = require("_work.flow")
 local freshness = require("_work.freshness")
 local gh = require("_work.gh")
 local item = require("_work.item")
+-- Aliased `rd`: this file's own `read` (below) is the `ci_checks` row
+-- reader, so `_work.read`'s typed views reach here under a different
+-- name.
+local rd = require("_work.read")
 local store = require("_work.store")
 
 --- Set (to anything) to force a read past the freshness window — the
@@ -97,7 +101,7 @@ local record ciobs
   observe: function(s: store.Store, c: cachedb.Cache, repo: string, pr: integer):
   string | nil, string
   live: function(s: store.Store, repo: string, pr: integer): gh.HeadChecks | nil, string
-  is_candidate: function(it: item.Item): boolean
+  is_candidate: function(it: item.Item, stage_by_id: {string: integer}): boolean
   at_sync: function(s: store.Store): {string}
 end
 
@@ -169,11 +173,14 @@ M.live = live
 --- Whether `it` is a candidate this module observes at all: an open
 --- review-stage item carrying a PR — the exact test `_work/gitview.tl`'s
 --- `ci_states` runs per item, restated here so `at_sync` walks the
---- same set without needing that module's help.
+--- same set without needing that module's help. `stage_by_id` is a
+--- `_work.read.queue` snapshot's own `stage` field, by id — read once
+--- per caller, never re-derived here.
 --- @param it item.Item The item
+--- @param stage_by_id {string: integer} Each open work item's stage, by id
 --- @return boolean True when `it` is a CI-observation candidate
-local function is_candidate(it: item.Item): boolean
-  return item.is_open(it) and flow.stage_rank(it) == flow.STAGE_REVIEW
+local function is_candidate(it: item.Item, stage_by_id: {string: integer}): boolean
+  return item.is_open(it) and stage_by_id[it.id] == flow.STAGE_REVIEW
   and (it.pr or 0) ~= 0
 end
 
@@ -193,13 +200,21 @@ local function at_sync(s: store.Store): {string}
   if all == nil then
     return {("gitboard-sync: ci: %s"):format(aerr)}
   end
-  local c, cerr = cache.open(s.root)
+  local c, cerr = store.read(s)
   if c == nil then
     return {("gitboard-sync: ci: %s"):format(cerr)}
   end
+  local rows, qerr = rd.queue(c)
+  if rows == nil then
+    return {("gitboard-sync: ci: %s"):format(qerr)}
+  end
+  local stage_by_id: {string: integer} = {}
+  for _, row in ipairs(rows) do
+    stage_by_id[row.id] = row.stage
+  end
   local lines: {string} = {}
   for _, it in ipairs(all) do
-    if is_candidate(it) then
+    if is_candidate(it, stage_by_id) then
       local cached, age = read(c, it.repo, it.pr)
       if cached == nil or not fresh(age) then
         local state, oerr = observe(s, c, it.repo, it.pr)
@@ -210,7 +225,6 @@ local function at_sync(s: store.Store): {string}
       end
     end
   end
-  local _ok, _cerr = cache.close(c)
   return lines
 end
 

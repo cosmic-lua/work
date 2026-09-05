@@ -6,7 +6,7 @@
 -- unpositioned X, and a done ID.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
+local read = require("_work.read")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
@@ -48,15 +48,16 @@ local function test_rank_among_outcomes_writes_and_reads_back()
   local s = init_state_repo("rank-outcomes")
   local r1 = file_item(s, "outcome one", "")
   local r2 = file_item(s, "outcome two", "")
-  local all = check.must(store.list(s))
-  local board = check.must(flow.find_board(all))
-  assert(#(check.must(store.load(s, board.id)).order) == 0,
+  check.must(store.list(s))
+  local c = check.must(store.read(s))
+  local board_id = check.must(read.board(c))
+  assert(#(check.must(store.load(s, board_id)).order) == 0,
     "no outcome ranking has been written yet")
   assert(rank.cmd_rank(s, r1, "", "", true) == 0, "r1 ranks last")
   assert(rank.cmd_rank(s, r2, r1, "", false) == 0, "r2 before r1")
   local reopened = check.must(store.open(s.root))
   check.must(store.list(reopened))
-  local got = check.must(store.load(reopened, board.id)).order
+  local got = check.must(store.load(reopened, board_id)).order
   assert(#got == 2 and got[1] == r2 and got[2] == r1, table.concat(got, ","))
 end
 
@@ -110,9 +111,10 @@ end
 -- The board itself has no siblings to rank among.
 local function test_rank_refuses_the_board()
   local s = init_state_repo("rank-board")
-  local all = check.must(store.list(s))
-  local board = check.must(flow.find_board(all))
-  assert(rank.cmd_rank(s, board.id, "", "", true) ~= 0,
+  check.must(store.list(s))
+  local c = check.must(store.read(s))
+  local board_id = check.must(read.board(c))
+  assert(rank.cmd_rank(s, board_id, "", "", true) ~= 0,
     "the board has no siblings to rank among")
 end
 
@@ -166,8 +168,9 @@ local function test_an_outcome_rank_survives_a_rebase()
     "the stale run is refused, not replayed")
   assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
     "the re-run lands against the merged board")
-  local all = check.must(store.list(a))
-  local board = check.must(flow.find_board(all))
-  local got = check.must(store.load(a, board.id)).order
+  check.must(store.list(a))
+  local c = check.must(store.read(a))
+  local board_id = check.must(read.board(c))
+  local got = check.must(store.load(a, board_id)).order
   assert(#got == 2 and got[1] == r2 and got[2] == r1, table.concat(got, ","))
 end

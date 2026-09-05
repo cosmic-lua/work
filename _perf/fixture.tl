@@ -38,7 +38,7 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
-local flow = require("_work.flow")
+local read = require("_work.read")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -298,11 +298,17 @@ local function build(n?: integer): Fixture, string
   if seeded == nil then
     return nil, "list after init_repo: " .. lerr
   end
-  local board = flow.find_board(seeded)
-  if board == nil then
+  local c, cerr = store.read(s)
+  if c == nil then
+    return nil, "read after init_repo: " .. cerr
+  end
+  local board_id, berr = read.board(c)
+  if board_id == nil then
+    if berr ~= "" then
+      return nil, "read.board after init_repo: " .. berr
+    end
     return nil, "init_repo minted no board"
   end
-  local board_id = board.id
 
   for k = 1, num_roots do
     local id = root_ids[k]
