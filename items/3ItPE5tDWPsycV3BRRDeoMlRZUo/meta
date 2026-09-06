@@ -1,9 +1,9 @@
 title: docs: every backtick cosmic.<mod>.<sym> span in the prose names a symbol the doc index carries — the symbol sibling of _build/doc_paths_test.tl
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
-claim: build-eoMl_RZUo-f6f470de
 pr: 1752
 verdict: accept
 verdict_head: acf8f3d1372308a278d1d87050de2193f4855655
 verdict_spec: f9b1c43767b61e398e1e54e9ec67fe2f3e5ee1ca
+resolution: completed
 builders: build-eoMl_RZUo-f6f470de
