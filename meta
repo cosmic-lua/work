@@ -1,0 +1,3 @@
+title: bin/gitboard: prefer a sibling ../work clone of cosmic-lua/work over o/board, so no brief carries the GITBOARD_DIR export
+parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
+target: cosmic-lua/cosmic
