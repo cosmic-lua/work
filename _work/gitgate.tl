@@ -188,11 +188,16 @@ end
 --- count: a head still running has given no verdict to claim yet, and
 --- one that has already concluded failure goes back to its builder,
 --- not a reviewer — neither outranks a todo pull. Read straight from
---- the cache's own `_work.ciobs.read`, never a live GitHub call: the
---- debt count is asked for on every attempted pull, where the review
---- claim's own live read (`_work.gitverbs`) stays the one that decides
---- the moment a session actually reaches for this item. No recorded
---- observation (nil — never yet observed, or the row aged out) never
+--- the cache's own `_work.ciobs.current_state`, never a live GitHub
+--- call: the debt count is asked for on every attempted pull, where
+--- the review claim's own live read (`_work.gitverbs`) stays the one
+--- that decides the moment a session actually reaches for this item.
+--- `current_state` is head-aware — a row recorded against a head this
+--- item has since moved past (a re-push) reads as absent, not as the
+--- old verdict it happened to leave behind, falling back to "running"
+--- for a head touched recently enough that a push's own CI simply
+--- has not been observed yet. No recorded observation (nil — never
+--- yet observed, aged past that fallback, or the row aged out) never
 --- excludes, the safe default the same way an empty reviewer field
 --- never excludes either; neither does an item with no PR at all (a
 --- research handover), which CI has nothing to say about.
@@ -203,7 +208,7 @@ local function ci_clears_debt(c: Index, i: item.Item): boolean
   if (i.pr or 0) == 0 then
     return false
   end
-  local state = ciobs.read(c, i.repo, i.pr)
+  local state = ciobs.current_state(c, i.repo, i.pr, i.id)
   return state == "running" or state == "red"
 end
 

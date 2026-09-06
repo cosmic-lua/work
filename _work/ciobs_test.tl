@@ -236,6 +236,48 @@ local function with_head_checks(stub: function(store.Store, integer, string | ni
       end)
   end
 
+  -- A re-push moves the item's own `touched_at` past the row's
+  -- `observed_at`, even while the row is still well inside the
+  -- freshness window — the shape `_work.gitgate.ci_clears_debt`'s own
+  -- head-aware check treats as absent. `at_sync` re-observes it rather
+  -- than trusting a state recorded against a head this item has since
+  -- moved past, so the cache converges on the very first sync after
+  -- the push instead of waiting out the window.
+  local function test_at_sync_reobserves_a_head_that_moved_past_the_row()
+    local s = init_state_repo("ciobs-sync-stale-head")
+    local it = pr_item(s, "re-pushed since its last observation", 10)
+    local calls = 0
+    with_head_checks(function(_s: store.Store, _pr: integer, _repo: string | nil):
+        gh.HeadChecks | nil, string
+        calls = calls + 1
+        return {state = "green", head_sha = "aaa", runs = {}}, ""
+      end, function(): boolean
+        assert(#ciobs.at_sync(s) == 0)
+        assert(calls == 1, "the first sync observes the candidate")
+
+        local c = assert(cache.open(s.root))
+        local row = assert(c.db:query_one(
+            "SELECT observed_at FROM ci_checks WHERE repo = ? AND pr = ?",
+            {it.repo, it.pr}))
+        local observed_at = math.tointeger(row.observed_at as number) or 0 -- cast: from any (sqlite row)
+        assert(c.db:exec("UPDATE items SET touched_at = ? WHERE id = ?",
+            {observed_at + 1, it.id}))
+        assert(cache.close(c))
+        -- `s.index` is the connection `at_sync`'s own `store.read`
+        -- just opened and held — closing it here is this test's
+        -- stand-in for the patch `_work.gitgate.commit_and_publish`
+        -- applies after an ordinary mutation, so the next `at_sync`
+        -- reopens fresh instead of missing the write just above.
+        local _cok, _cerr = store.close(s)
+
+        assert(#ciobs.at_sync(s) == 0)
+        assert(calls == 2,
+          "a head touched after the row was observed is re-observed "
+          .. "even though the row is still fresh: " .. tostring(calls))
+        return true
+      end)
+  end
+
   -- An `observe` failure during `at_sync` is reported, not swallowed —
   -- the same discipline `_work.lanes.report` holds for a record or mint
   -- failure.
