@@ -1,5 +1,4 @@
 title: _make/imports: the dependency closure comes from require nodes, so a commented or quoted require is no edge
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-qIC7_u6kr-f6f470de
 builders: build-qIC7_u6kr-f6f470de
