@@ -1,0 +1,3 @@
+title: lint: a cosmic/<name>/ directory with shards and no init.tl is a finding — a library nobody outside cosmic/ can require
+parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
+target: cosmic-lua/cosmic
