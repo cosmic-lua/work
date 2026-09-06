@@ -21,12 +21,21 @@ the same pass (needs a fresh build first).
 
 ## Change
 
-One sentence added to AGENTS.md's "Testing" section, immediately after the existing
-"Between edits, `bin/cosmic --check types <file>`" line: note that a cross-file
-check against a sibling module edited in the same session needs `bin/cosmic --make
-build` first, since `--check types` otherwise resolves `cosmic.*` requires against
-the last build's embedded snapshot rather than live disk.
+AGENTS.md, the "## Testing" section: immediately after the fenced block
+that ends with `o/bin/cosmic --make benchmark           # run every
+*_benchmark.tl`, add one paragraph (measured 2026-09-06: `grep -n
+'check types' AGENTS.md` → only line 111, the warnings-are-errors bullet
+under Language and Conventions; the Testing section never mentions it):
 
+**`--check types` on a file that requires a sibling you edited in the
+same session resolves that sibling against the LAST BUILD's embedded
+snapshot, not live disk** — run `bin/cosmic --make build` before
+checking the caller of a module whose signature just changed, or the
+checker reports the old arity (three builders hit this on 2026-09-06:
+«AjLP_BPK»'s own evidence plus cosmic#1755's `wrong number of arguments
+(given 2, expects 1)` against a two-parameter signature).
+
+No other file changes. Gate: `bin/cosmic --make ci`.
 ## Non-goals
 
 Changing `--check types`'s actual resolution behavior (out of scope; the snapshot
