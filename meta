@@ -1,5 +1,6 @@
 title: cosmopolitan: errno/signal constant lookup by name has no typed surface — expose unix.E/unix.SIG as real maps
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmopolitan
-builders: build-rhKJHSQd-2f92e512
+claim: build-rhKJ_HSQd-d5f3aa35
+builders: build-rhKJHSQd-2f92e512 build-rhKJ_HSQd-d5f3aa35
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b 2f92e512-19fc-5db1-af1f-01086dc185b4
