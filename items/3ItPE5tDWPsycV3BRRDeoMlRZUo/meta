@@ -2,8 +2,8 @@ title: docs: every backtick cosmic.<mod>.<sym> span in the prose names a symbol 
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
 claim: build-eoMl_RZUo-f6f470de
-reviewer: review-eoMl_RZUo-f6f470de
 pr: 1752
-verdict_head: 530626133903a232d3fc0a37852ab1417767f9ff
+verdict: accept
+verdict_head: acf8f3d1372308a278d1d87050de2193f4855655
 verdict_spec: f9b1c43767b61e398e1e54e9ec67fe2f3e5ee1ca
 builders: build-eoMl_RZUo-f6f470de
