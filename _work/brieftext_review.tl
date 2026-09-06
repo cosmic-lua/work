@@ -89,9 +89,11 @@ bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
 
 Then, by verdict:
 - accept: a main-repo PR lands by enabling auto-merge (squash),
-  never by merging directly. Do NOT call `gitboard done` — the item
-  ends only once the merge is confirmed, which is the orchestrator's
-  job.
+  never by merging directly. Enable it with whatever GitHub reach the
+  session has: the `gh` CLI when present, otherwise the GitHub MCP
+  tools (`mcp__github__enable_pr_auto_merge`, loaded with ToolSearch).
+  Do NOT call `gitboard done` — the item ends only once the merge is
+  confirmed, which is the orchestrator's job.
 - request-changes: post the concrete gaps, quoted with file:line, as
   a PR comment. Do not push a fix yourself — the builder reworks on
   the same PR.
