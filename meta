@@ -1,0 +1,2 @@
+title: orchestrate/build doctrine: polling slow external state (CI, workflow_dispatch, a release publish) belongs to the orchestrator, never delegated into a spawned agent's own wait loop
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
