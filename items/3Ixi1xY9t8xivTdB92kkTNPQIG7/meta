@@ -2,6 +2,7 @@ title: bin/gitboard.pin: bump to the cosmic-lua/work release carrying #44–#54,
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-kTNP_QIG7-f6f470de
+reviewer: review-kTNP_QIG7-f6f470de
 pr: 1756
 verdict_head: 511d68d7787e2d9173f77ae211f01e0169d72748
 verdict_spec: d8df641bcc80e580346f8036435ce4ba8e9d984a
