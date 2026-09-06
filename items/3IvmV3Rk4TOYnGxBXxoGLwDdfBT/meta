@@ -2,6 +2,8 @@ title: cosmopolitan: test_gcda_merge.lua's N=8 sample misses a real lock regress
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: build-GLwD_dfBT-8bf1d440
-reviewer: review-GLwD_dfBT-8bf1d440
 pr: 386
+verdict: accept
+verdict_head: a0ddd9926d565fe9793e2a007ba2e7e8a1bdf792
+verdict_spec: 7dea53d199cf1c905105195f3874b9aee312cf2e
 builders: 8bf1d440-a8db-5f89-87c3-a2bebb055913 build-GLwD_dfBT-8bf1d440
