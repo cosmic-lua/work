@@ -1,3 +1,5 @@
 title: reads-declaration lint: a reads: entry under o/ is refused at check time, not by CI's cold build
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
+claim: build-CBMu_etpH-f6f470de
+builders: build-CBMu_etpH-f6f470de
