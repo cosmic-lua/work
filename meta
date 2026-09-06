@@ -1,3 +1,4 @@
 title: cosmopolitan: quicksand/caps.tl's CAP_* constant lookup by name has the same gap as errno/signal (rhKJ_HSQd)
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmopolitan
+speccers: d5f3aa35-71ee-5a4a-a1d6-2f57d7e30101
