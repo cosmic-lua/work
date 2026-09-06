@@ -65,8 +65,11 @@ unavailable or the path is untracked, carry nothing for that file) and
 take each orphan's line from it, whitespace-trimmed. A newcomer whose
 current line, trimmed, is byte-identical to exactly ONE orphan's line
 inherits that orphan's class at the newcomer's line number; a newcomer
-matching zero or several orphan lines stays unclassified, and the
-unmatched orphans drop, exactly as today. Order and counts are never
+matching zero or several orphan lines stays unclassified, and so does
+every newcomer whose trimmed line matches an orphan that ALSO matches
+another newcomer (uniqueness holds on both sides: one orphan text, one
+newcomer text, or nothing is carried); the unmatched orphans drop,
+exactly as today. Order and counts are never
 consulted, so a reorder cannot swap classes, and an edit to the cast
 line itself (a real change) asks for a class again.
 
@@ -78,7 +81,9 @@ casts' order with distinct line text — each class follows its text,
 not its position; (3) two casts with IDENTICAL line text, one shifted —
 ambiguous, carried nothing, both unclassified; (4) edit a cast's line
 text and shift it — unclassified, the old row dropped; (5) a file not
-under git — nothing carried. The module doc comment (lines 7-9) states
+under git — nothing carried; (6) one committed cast whose exact line
+now appears on TWO lines of the working tree — neither carried, both
+unclassified. The module doc comment (lines 7-9) states
 the text rule in one sentence.
 
 `docs/design/casts.md`, at the `--reconcile` description: one sentence —
