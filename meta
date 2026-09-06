@@ -3,7 +3,6 @@ parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
 claim: build-hnlEA39n-2f92e512
 pr: 1742
-verdict: request changes
 verdict_head: 3189afb47a77e86baebe9f19cfb7eb847128a7ca
 verdict_spec: 8480693d99843162ad0363dbdb18c56991797f7b
 builders: build-hnlE_A39n-o9a1 build-hnlEA39n-2f92e512
