@@ -1,5 +1,4 @@
 title: cosmic/net/init.tl: socket_pair doesn't narrow unix.socketpair's integer|string fd2 slot
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: build-gVi7_9Ne8-39b93fa3
 builders: build-gVi7_9Ne8-39b93fa3
