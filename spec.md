@@ -71,18 +71,126 @@
   for triage: real bug, clear repro (`gitboard brief review 4mpH_hi6v`), but no
   measured file:line for the scanner's actual match logic yet.
 
-## agents spawned this pass (reports pending — bounded pass ended before completion)
-- review-qPiX_DdxS-a36d13ac (cosmic-lua/cosmic#1751)
-- review-4mpH_hi6v-a36d13ac (cosmic-lua/work#47)
-- review-eoMl_RZUo-a36d13ac (cosmic-lua/cosmic#1752)
-- review-iltX_EM90-a36d13ac (cosmic-lua/cosmic#1753)
-- review-duSw_TyDF-a36d13ac (cosmic-lua/work#48)
+## agents spawned this pass — all six have now reported; sections below
+(qPiX_DdxS, 4mpH_hi6v, eoMl_RZUo, duSw_TyDF, QYqs_nEsq, iltX_EM90)
 
-Per orchestrate's "never wait inside a pass", this pass ends before any of these
-report. Their `## <kind> <handle>` sections (transcript-derived, via
-`cosmic _tool/friction.tl <transcript>`) belong in the NEXT pass's reconciliation,
-when each verdict lands and its transcript is available. `review-QYqs_nEsq-a36d13ac`
-has since reported — its section follows below.
+## review qPiX_DdxS (general-purpose) — accepted, auto-merge enabled (not yet merged); 945s, 55 tool calls
+transcript: events=204 tool_calls=55 wall=945s; tokens in=100 out=1312 cache_read=4319987
+cache_create=179851; by tool: Bash=34 Edit=2 Glob=3 Read=4 ToolSearch=2
+mcp__github__enable_pr_auto_merge=1 mcp__github__get_file_contents=3 mcp__github__get_tag=1
+mcp__github__pull_request_read=5; first edit: call 26; 0 errors, 4 repeated commands.
+
+- goal: verify the PR's own "diff touches only 3 files" acceptance claim.
+  actually happened: the real diff touches 5 (two ratchet-baseline files and a
+  derived TSV also changed); cost ~10 minutes / 6 bash calls to determine this
+  was a mandatory gate consequence (reverting the 3 extra files reproduces real
+  ratchet failures) rather than scope creep, by cross-checking against the
+  in-tree precedent (`cosmic/coverage/init.tl`'s identical `find_ccov`).
+  contributed: the item's own `## Acceptance` section made a falsifiable claim
+  ("touches only 3 files") that was true at spec-writing time but wrong once a
+  from-scratch `find_ccov` was shown to trip the casts/nil-returns/cast-sites
+  ratchets — the builder's own PR description already flagged this same gap.
+  improvement: a spec template for any "copy `find_ccov`'s shape" slice should
+  name the ratchet files it will also touch up front, so `## Acceptance` doesn't
+  make a claim every reviewer has to re-litigate. Doc/template fix, not a gate.
+- goal: read `tool/net/definitions.lua` from the cosmopolitan release tag to
+  verify `cosmo.cov.budget`'s contract independently. actually happened:
+  `mcp__github__get_file_contents` failed outright (344KB response over the
+  tool's token cap) and initially returned only a truncated first line with no
+  clear signal why; recovered by saving the raw response to a file and using
+  python3/jq instead, costing 3 extra bash calls. contributed: no size-aware
+  guidance surfaced until after the first failure. improvement: none needed —
+  the tool's own error message named the exact recovery path once it fired.
+
+## review 4mpH_hi6v (general-purpose) — accepted, merged, done; 960s, 83 tool calls
+transcript: events=327 tool_calls=83 wall=960s; tokens in=164 out=1233 cache_read=7236310
+cache_create=109579; by tool: Bash=56 Edit=2 Read=7 TaskStop=1 ToolSearch=5
+mcp__github__actions_list=2 mcp__github__enable_pr_auto_merge=1 mcp__github__merge_pull_request=1
+mcp__github__pull_request_read=8; first edit: call 34; 8 errors, 3 repeated commands.
+
+- goal: run the pinned `bin/gitboard` the orchestrator's brief said the fresh
+  clone "carries." actually happened: a `cosmic-lua/work` clone has no
+  `bin/gitboard` at all — the trust-root wrapper lives in the `cosmic-lua/cosmic`
+  checkout, and `gitboard` itself is a build target (`cmd/gitboard` →
+  `o/bin/gitboard`); cost ~3 tool calls (`ls`, `find /`, reading the wrapper)
+  before landing on invoking cosmic's own `bin/gitboard` with `GITBOARD_DIR`
+  pointed at the fresh work clone. contributed: this orchestrator's brief text
+  (same root cause as the QYqs_nEsq section above — "bin/gitboard ... fetches
+  its own pinned release" is simply wrong for a `cosmic-lua/work`-only clone).
+  improvement: brief text should say to invoke `bin/gitboard` from a
+  `cosmic-lua/cosmic` checkout (or build `o/bin/gitboard` locally) with
+  `GITBOARD_DIR` pointed at the fresh clone under review — a brief-writing fix,
+  already applied to future briefs this session writes.
+- goal: confirm PR #47 actually merged after enabling auto-merge. actually
+  happened: `mergeable_state`/`merged` flickered `unknown`/`clean`/`false` for
+  ~90s while the required merge queue re-ran CI on the merge commit before the
+  real push to main; a single check right after enabling auto-merge would have
+  under-reported "still open". Cost ~5 polling round-trips over ~2 minutes.
+  contributed: real merge-queue latency on this repo, not a bug.
+  improvement: none needed — worth knowing for future reviewers that this
+  repo's merges take a full CI cycle after auto-merge fires, not an instant PUT.
+- also: a bare `sleep 30` was blocked by harness policy, and `Monitor`'s
+  shell-only scope can't call the `mcp__github__*` tools needed to poll merge
+  status, so the agent fell back to polling GitHub's REST API via `curl` in a
+  backgrounded bash loop — a real seam between Monitor and MCP-only checks, not
+  spec/brief friction.
+
+## review eoMl_RZUo (general-purpose) — request-changes; 867s, 36 tool calls
+transcript: events=145 tool_calls=36 wall=867s; tokens in=70 out=403 cache_read=2536032
+cache_create=123051; by tool: Bash=24 Grep=2 Read=3 ToolSearch=2 mcp__github__add_issue_comment=1
+mcp__github__pull_request_read=4; first edit: none; 0 errors, 2 repeated commands.
+
+Findings posted to cosmic-lua/cosmic#1752: `docs/contributing.md`'s new sentence
+overstates gate coverage (claims both doc gates scan `README.md`/`AGENTS.md`,
+but `doc_paths_test.tl`'s `ROOTS` only covers `docs`/`skills` — confirmed
+`AGENTS.md` already contains an unchecked path-shaped backtick span). Item now
+awaits rework on the same PR; no builder currently assigned to it.
+
+- goal: run `gitboard verdict` immediately after cloning. actually happened:
+  first call failed "no item matches <id>" for an id copied verbatim; running
+  `gitboard sync` then `show` first, then retrying the identical verdict
+  command, succeeded. cost ~2 extra calls. contributed: unclear (possibly the
+  board clone needed a sync pass before the item resolved) — nothing in the
+  task or `gitboard help` flagged that `sync` might be needed before `verdict`.
+  improvement: a note in the review brief ("run `gitboard sync` first if
+  verdict reports no matching item") would save the round trip — same class of
+  gap as the full-refs-fetch issue below, both about a fresh board clone not
+  being immediately query-ready.
+
+## review duSw_TyDF (general-purpose) — request-changes; 731s, 55 tool calls
+transcript: events=218 tool_calls=55 wall=731s; tokens in=108 out=894 cache_read=4034520
+cache_create=79430; by tool: Bash=45 Edit=2 Read=1 ToolSearch=1 Write=2
+mcp__github__add_issue_comment=1 mcp__github__pull_request_read=3; first edit: call 20;
+2 errors, 2 repeated commands.
+
+Findings posted to cosmic-lua/work#48: the `... N more` trailer's `shown ==
+#todo` boundary is untested (mutation-confirmed: flipping `>` to `>=` at
+`_work/gitview.tl:239` passed the full suite unchanged), and the new `--todo`
+CLI parsing/refusal path in `_work/gitboard.tl:224-233` has no test at all.
+Item now awaits rework on the same PR; no builder currently assigned to it.
+
+- goal: run `bin/gitboard verdict` per the brief. actually happened:
+  `bin/gitboard` doesn't exist in a `cosmic-lua/work` clone (only in
+  `cosmic-lua/cosmic`, as a build target); cost ~2 calls to discover and build
+  `o/bin/gitboard` from the right checkout. contributed: same brief inaccuracy
+  as qPiX_DdxS/4mpH_hi6v above — three independent reviewers hit this
+  identically, which is itself the strongest signal in this log that it's a
+  real, reproducible brief defect rather than an agent-side mistake.
+  improvement: fix the orchestrator's reviewer-brief template once, not
+  per-brief — "clone `cosmic-lua/cosmic` for the `gitboard`/`cosmic` binaries;
+  point `GITBOARD_DIR` at the fresh product-repo clone under review."
+- goal: run `gitboard verdict` against the item id right after cloning.
+  actually happened: `no item matches <id>`; fixed with a detached-HEAD
+  `git fetch origin '+refs/heads/*:refs/heads/*'` (~4 extra commands, since the
+  checked-out branch blocked a direct fetch onto it). contributed: a plain
+  `git clone --branch X` only populates `refs/remotes/origin/*`, not the local
+  `refs/heads/*` gitboard's store reads from — the SAME root cause eoMl_RZUo's
+  reviewer hit as an unexplained "sync fixed it," and QYqs_nEsq's reviewer hit
+  too (documented there as a full-refs-fetch need). Three of six reviewers this
+  pass hit some variant of this. improvement: this is now the single highest-
+  leverage fix in this log — put one exact command in the reviewer brief
+  template: `git fetch origin '+refs/heads/*:refs/heads/*'` (or equivalent)
+  right after clone, before any gitboard verb.
 
 ## review QYqs_nEsq (general-purpose) — accepted, merged, done; 569s, 64 tool calls
 transcript: events=251 tool_calls=64 wall=569s; tokens in=126 out=1507 cache_read=4777072
@@ -119,3 +227,44 @@ mcp__github__pull_request_read=7; first edit: call 20; 8 errors, 3 repeated comm
 - also: two tool-shape errors unrelated to the brief (Monitor called with an unsupported
   `untilPattern` param; a bare `sleep 90` blocked by the harness) — agent-side tool usage
   mistakes, self-corrected, not spec/brief/tool friction.
+
+## review iltX_EM90 (general-purpose) — accepted, auto-merge enabled (not yet merged); 838s, 45 tool calls
+transcript: events=178 tool_calls=45 wall=838s; tokens in=90 out=765 cache_read=3982471
+cache_create=88536; by tool: Bash=35 Grep=2 Read=1 ToolSearch=2 mcp__github__enable_pr_auto_merge=1
+mcp__github__pull_request_read=4; first edit: none; 0 errors, 2 repeated commands.
+
+- goal/actually happened: essentially none — the reviewer explicitly reported no
+  friction worth logging beyond a single self-corrected `sync`-before-verdict
+  ordering issue (same family as the other five reviewers' full-refs/sync gap
+  below), costing under a minute. contributed/improvement: n/a — the largest
+  item this pass (39 changed files, an 18-group tree-wide prose cleanup) went
+  through review with the fewest tool calls and zero errors of any of the six,
+  because the spec's measured evidence (exact file:line groups, exact
+  normalization rules, an exhaustive two-condition allowlist) left nothing to
+  infer. Strongest evidence in this log that the spec-bar's "measured, not
+  inferred" rule pays for itself on large diffs specifically.
+
+## this pass's outcome, all six reviews
+2 accepted-and-done (4mpH_hi6v/work#47, and QYqs_nEsq/work#46, both merged and
+closed by their own reviewer). 2 accepted-with-auto-merge-pending, not yet
+confirmed merged (qPiX_DdxS/cosmic#1751, iltX_EM90/cosmic#1753) — orchestrator
+to confirm and `gitboard done` once each lands. 2 request-changes, awaiting
+rework with no builder currently assigned (eoMl_RZUo/cosmic#1752,
+duSw_TyDF/work#48) — next pass's `next`/`take` should surface these as rework,
+not fresh pulls.
+
+## cross-cutting finding, promoted from candidates
+Three of six reviewers independently hit "no item matches <id>" on `gitboard
+verdict`/`show` immediately after a fresh clone, each diagnosing it slightly
+differently (a plain `sync` fixed it twice; a detached-HEAD
+`git fetch origin '+refs/heads/*:refs/heads/*'` fixed it once) — a plain
+`git clone`/`git clone --branch X` does not pull the local `refs/heads/*` (or
+equivalent) state gitboard's store reads from, only `refs/remotes/origin/*`.
+This is now measured across three independent transcripts (a66a5393,
+acf73f01, a163198c — see their sections above) rather than inferred, and
+clears the spec bar's "measured, not inferred" test: **file as its own item**
+next pass — either `gitboard help review`/the review-brief template names the
+exact fetch command up front, or (higher leverage, a gate over a doc per
+`bar`'s enablement order) `gitboard sync`/`init` against a bare `origin`-only
+clone auto-detects and fixes this itself instead of requiring `sync` to be run
+first by convention.
