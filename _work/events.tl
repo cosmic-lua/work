@@ -256,9 +256,14 @@ local function insert_row(db: sqlite.Database, row: Row): boolean, string
 end
 
 --- Fill `events` for a whole-board rebuild: one `walk` over every
---- item's tip, then one `INSERT` per row. Called after `EXTRA_DDL` has
---- created the table (`_work.cache.rebuild`'s own ordering), inside
---- the same connection `rebuild` is about to rename into place.
+--- item's tip, then one `INSERT` per row, all inside ONE transaction —
+--- without it, each `INSERT` is its own implicit autocommit, which on a
+--- board with thousands of rows costs one WAL commit per row instead of
+--- one for the whole fill (`insert_item`'s own item loop, right above
+--- this in `_work.cacherebuild.fill`, already wraps its inserts the same
+--- way). Called after `EXTRA_DDL` has created the table
+--- (`_work.cache.rebuild`'s own ordering), inside the same connection
+--- `rebuild` is about to rename into place.
 --- @param db sqlite.Database The (not yet renamed) rebuild connection
 --- @param root string The store's root
 --- @param tips {string: string} Item id -> its ref's current sha
@@ -270,13 +275,15 @@ local function fill_rebuild(db: sqlite.Database, root: string,
   if rows == nil then
     return false, err
   end
-  for _, row in ipairs(rows) do
-    local ok, ierr = insert_row(db, row)
-    if not ok then
-      return false, ierr
-    end
-  end
-  return true, ""
+  return db:transaction(function(tx: sqlite.Database): boolean, string
+      for _, row in ipairs(rows) do
+        local ok, ierr = insert_row(tx, row)
+        if not ok then
+          return false, ierr
+        end
+      end
+      return true, ""
+    end)
 end
 
 --- Append one row for a save that just wrote a new commit — no git

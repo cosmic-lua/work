@@ -19,22 +19,20 @@
 ---
 ---   for ref in $(git for-each-ref --format='%(refname)' \
 ---       refs/heads/items refs/heads/ended); do
----     git ls-tree -r --name-only "$ref^{tree}"    # parent/spec.md/edges/*
+---     git ls-tree -r --name-only "$ref^{tree}"    # parent/spec.md/order
 ---     git cat-file -p "$ref:meta"                 # resolution:
 ---   done
 ---
 --- gave: 873/920 (95%) carry a `parent` (workable leaves; the rest are
---- roots), 727/920 (79%) carry a `resolution` (done), 76/920 (8.3%) hold
---- at least one outgoing `beats` edge (a comparison's winner — most
---- comparisons are roots placed against a peer), 172/920 (19%) carry a
---- `blocked_by` edge, and every item (920/920) carries a `spec.md`. The
---- ratios below are those measurements; `build` reproduces them, not the
---- literal counts, so they hold at any `n`. `beats` and `blocked_by` are
---- edge kinds this build no longer interprets — modeled here on
---- `Item.other_edges`, exactly as an unmigrated board's real tree
---- entries land — since the fixture's job is the SHAPE of what `git
---- for-each-ref`/`cat-file --batch` walk, not the field a decode reads
---- it into.
+--- roots), 727/920 (79%) carry a `resolution` (done), and every item
+--- (920/920) carries a `spec.md`. The ratios below are those
+--- measurements; `build` reproduces them, not the literal counts, so
+--- they hold at any `n`. Layout 2 carries no `edges/<kind>/<id>` entries
+--- at all (`docs/design/read.md`'s layout-1-to-2 migration dropped
+--- `beats`/`blocked_by`), so the fixture writes only `meta`, `spec.md`,
+--- and `order` — the tree shape every live item on this layout has —
+--- and never sets `Item.other_edges`, which `fsck` would otherwise flag
+--- as an unmigrated board's unknown edge kind.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -51,8 +49,6 @@ local N_DEFAULT < const > = 1000
 local MIN_N < const > = 8
 local PARENT_RATIO < const > = 0.95
 local RESOLVED_RATIO < const > = 0.79
-local BEATS_WINNER_RATIO < const > = 0.083
-local BLOCKED_RATIO < const > = 0.19
 --- Open, unclaimed, PR-less leaves reserved for `_perf/bench/verbs_bench.tl`'s
 --- `done` scenario to consume one per timed call — sized comfortably above
 --- what the harness's default calibration ever spends on one scenario
@@ -226,25 +222,6 @@ local function build(n?: integer): Fixture, string
     leaf_ids[i] = ids[num_roots + i]
   end
 
-  -- `beats` is recorded on the WINNER only: chain the roots first (root
-  -- k beats root k+1, so every root but the last has a placement), then,
-  -- if the target needs more winners than roots supply, pair up leaves
-  -- the same way.
-  local winner_target = math.max(1, round(total * BEATS_WINNER_RATIO))
-  local beats_of: {string: string} = {}
-  local made = 0
-  local chain_len = math.min(num_roots - 1, winner_target)
-  for k = 1, chain_len do
-    beats_of[root_ids[k]] = root_ids[k + 1]
-    made = made + 1
-  end
-  local li = 1
-  while made < winner_target and li + 1 <= num_leaves do
-    beats_of[leaf_ids[li]] = leaf_ids[li + 1]
-    made = made + 1
-    li = li + 2
-  end
-
   local resolution_of: {string: string} = {}
   for i = 1, resolved_count do
     if i % 2 == 0 then
@@ -256,17 +233,6 @@ local function build(n?: integer): Fixture, string
   local done_pool: {string} = {}
   for i = num_leaves - reserve + 1, num_leaves do
     done_pool[#done_pool + 1] = leaf_ids[i]
-  end
-
-  -- `blocked_by`: a strictly-increasing chain over the OPEN leaves (never
-  -- the ones `resolution_of` just closed, or `next` would have nothing to
-  -- walk past) — leaf i waits on leaf i-1, which can never cycle, so
-  -- nothing here needs a deadlock check.
-  local blocked_target = round(total * BLOCKED_RATIO)
-  local blocker_of: {string: string} = {}
-  local open_start = resolved_count + 1
-  for i = open_start + 1, math.min(open_start + blocked_target, num_leaves) do
-    blocker_of[leaf_ids[i]] = leaf_ids[i - 1]
   end
 
   local tmp_base = os.getenv("TEST_TMPDIR") or os.getenv("TMPDIR") or "/tmp"
@@ -318,10 +284,6 @@ local function build(n?: integer): Fixture, string
     if it == nil then
       return nil, "decode root " .. id .. ": " .. derr
     end
-    local winner = beats_of[id]
-    if winner ~= nil then
-      it.other_edges = {beats = {[winner] = ""}}
-    end
     local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
       return nil, "save root " .. id .. ": " .. serr2
@@ -337,18 +299,6 @@ local function build(n?: integer): Fixture, string
     local it, derr = item.decode(raw)
     if it == nil then
       return nil, "decode leaf " .. id .. ": " .. derr
-    end
-    local edges: {string: {string: string}} = {}
-    local winner = beats_of[id]
-    if winner ~= nil then
-      edges.beats = {[winner] = ""}
-    end
-    local blocker = blocker_of[id]
-    if blocker ~= nil then
-      edges.blocked_by = {[blocker] = "waiting on a prerequisite"}
-    end
-    if next(edges) ~= nil then
-      it.other_edges = edges
     end
     local sok, serr2 = storewrite.save(s, it, "seed " .. id:sub(1, 8), FIXTURE_SPEC)
     if not sok then
