@@ -2,8 +2,8 @@ title: gitboard refuses board writes from a linked worktree — a builder's chec
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-Rbqw_0JpR-f6f470de
-reviewer: review-Rbqw_0JpR-f6f470de
 pr: 53
-verdict_head: 55204e1fef36639ab02059db8d9e4374fa882281
+verdict: accept
+verdict_head: 1cfafe21861661430bfaa1920069ce1110474110
 verdict_spec: abcfebeefad96d0887f9e422f2722849d6b0763d
 builders: build-Rbqw_0JpR-f6f470de
