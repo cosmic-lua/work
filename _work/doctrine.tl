@@ -162,7 +162,10 @@ Absence is behavioural too: a grep returning nothing establishes
 that the PATTERN matched nothing, never that the thing is absent —
 widen it, or name what the narrow one could miss. The same rule
 covers removals: a Change that relocates or deletes a mechanism
-names the sweep it ran for sites still asserting the old one.
+names the sweep it ran for sites still asserting the old one. A
+Change that adds a cast, a nil-admitting return, or a new source
+file names the ratchet rows it will add, so the builder's first
+gate is its last.
 
 Ready when: a Change whose earliest valid start depends on a fact
 outside the tree — a calendar day, a release having shipped, a lane

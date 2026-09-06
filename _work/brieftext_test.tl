@@ -76,3 +76,26 @@ local function test_mutation_step_says_what_a_real_break_is()
     .. "replaces a matched needle with unrelated text, not just "
     .. "extends it")
 end
+
+local function test_step_three_names_the_ratchet_recovery_path()
+  assert(BUILDER:find(
+      "the failure line names its "
+      .. "own fix — run that regen or make that edit, then re-run "
+      .. "only that test file", 1, true) ~= nil,
+    "step 3 must send a builder back to re-run only the tripped "
+    .. "ratchet's own test file, not the full gate")
+  assert(BUILDER:find(
+      "A ratchet row you add is part of the diff, not scope "
+      .. "creep: say so in the PR body.", 1, true) ~= nil,
+    "step 3 must say an added ratchet row belongs in the PR body, "
+    .. "not scope creep")
+end
+
+local function test_step_five_says_to_commit_before_mutating()
+  assert(BUILDER:find(
+      "Commit the real change before mutation-testing it, so a "
+      .. "checkout-restore used to undo the mutation cannot wipe it "
+      .. "too.", 1, true) ~= nil,
+    "step 5 must say to commit the real change before "
+    .. "mutation-testing it, so a checkout-restore cannot wipe it")
+end

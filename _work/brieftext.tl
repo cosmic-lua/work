@@ -56,16 +56,25 @@ and nothing less:
 2. Make exactly the `## Change`. Touch no file outside its stated
    scope; hold every `## Non-goals` wall.
 3. Between edits, `bin/cosmic --check types <file>` on the files you
-   touched; run the full gate once, before the push. Run the repo's
-   gate locally and confirm it is green (`bin/cosmic --make ci` for
-   cosmic; `make -j$(nproc) o//tool/lua/test` for cosmopolitan). This
-   run is for you, to catch a red head before it burns a review
-   round; it is never pasted into the PR.
+   touched; run the full gate once, before the push. When the gate
+   fails on a `_build/*_test.tl` ratchet (casts, nil-returns,
+   cast-sites, coverage rows, doc paths), the failure line names its
+   own fix — run that regen or make that edit, then re-run only that
+   test file (`bin/cosmic --make test _build/<name>_test.tl`), and go
+   back to the full gate only when every ratchet you tripped is green
+   on its own. A ratchet row you add is part of the diff, not scope
+   creep: say so in the PR body. Run the repo's gate locally and
+   confirm it is green (`bin/cosmic --make ci` for cosmic; `make
+   -j$(nproc) o//tool/lua/test` for cosmopolitan). This run is for
+   you, to catch a red head before it burns a review round; it is
+   never pasted into the PR.
 4. If the spec carries an `## Acceptance` section: it is the
    refiner's own worked proof, not a second gate you owe beyond the
    Change and a green gate. Never treat it as a checklist to
    reproduce, and never paste its command output into the PR body.
-5. Mutation-test at least one guard the change adds or preserves:
+5. Commit the real change before mutation-testing it, so a
+   checkout-restore used to undo the mutation cannot wipe it too.
+   Mutation-test at least one guard the change adds or preserves:
    break what it guards, confirm the diff's own test catches it,
    restore it exactly. A real break changes the outcome the test
    reads, never just the text around it: replace a matched needle
