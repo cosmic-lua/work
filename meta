@@ -3,7 +3,6 @@ parent: 3IPXQ1Zw1xfRYx4dV1zwASNhQ3N
 target: cosmic-lua/cosmic
 claim: build-bj12_PZHY-8bf1d440
 pr: 1740
-verdict: request changes
 verdict_head: ca5368a12b80e1267633e37d84a0cbeb04bd9763
 verdict_spec: 8b0bd46032b151570e561a3b92eae8a416018124
 builders: builder-bj12_PZHY-orch9 7019a67a-89f8-5ed7-bd1c-6d260093b01b build-bj12_PZHY-8bf1d440
