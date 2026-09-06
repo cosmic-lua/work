@@ -132,6 +132,30 @@ local function test_mutation_step_names_the_one_file_shape()
     .. "test file, not the suite")
 end
 
+local function test_step_three_names_the_new_module_ratchets()
+  assert(BUILDER:find(
+      "A new public `cosmic.<name>` module trips three more: "
+      .. "`_build/public_surface_baseline.tl` (`--make run "
+      .. "_build/public_surface.tl --baseline`), the example ratchet "
+      .. "(a runnable `<name>/init_example.tl` or `<name>_example.tl`), "
+      .. "and `_build/doc_returns_test` (one `@return` tag per declared "
+      .. "slot on every function it exports).", 1, true) ~= nil,
+    "step 3 must name the three ratchets a new public cosmic.<name> "
+    .. "module trips: public_surface_baseline, the example ratchet, "
+    .. "and doc_returns_test")
+end
+
+local function test_step_three_orders_coverage_after_the_last_test_edit()
+  assert(BUILDER:find(
+      "Run `--make coverage` after your last test edit, not before — "
+      .. "a new test moves a row's `total`; run `--make build` once "
+      .. "before `--check types` on a file whose sibling you moved.",
+      1, true) ~= nil,
+    "step 3 must say to run --make coverage after the last test edit, "
+    .. "not before, and --make build once before --check types on a "
+    .. "file whose sibling moved")
+end
+
 local function test_step_five_says_to_commit_before_mutating()
   assert(BUILDER:find(
       "Commit the real change before mutation-testing it, so a "
