@@ -1,9 +1,9 @@
 title: docs/design/casts.md: Method section describes the (path, fn, n) scheme #1770 landed, gated against the tsv header
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-EtAp_d8h6-f6f470de
 pr: 1771
 verdict: accept
 verdict_head: 43e4d3f18751901d125689c1a8110cf830c515db
 verdict_spec: 3b2cffb208fb18ad051a48894b5d080a0a803ad0
+resolution: completed
 builders: build-EtAp_d8h6-f6f470de
