@@ -1,10 +1,10 @@
 title: casts: map view of a declared value, library half — 2 sites close by declaring the type
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
-claim: build-hnlEA39n-2f92e512
 pr: 1742
 verdict: accept
 verdict_head: 5cd832d3df6b2fa7cd30b5623dfd34cdd4d919dd
 verdict_spec: 8480693d99843162ad0363dbdb18c56991797f7b
+resolution: completed
 builders: build-hnlE_A39n-o9a1 build-hnlEA39n-2f92e512
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b
