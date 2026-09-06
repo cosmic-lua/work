@@ -79,6 +79,27 @@ local function test_bar_states_the_ready_when_convention()
     "not ready drops the claim bare instead of bouncing through a question")
 end
 
+local function test_bar_forbids_a_change_with_two_mechanisms()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find("one mechanism, never two", 1, true) ~= nil,
+    "the bar topic bars a Change that offers two mechanisms")
+end
+
+local function test_bar_requires_a_grep_hit_for_a_named_location()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find("quotes the `grep -n` hit", 1, true) ~= nil,
+    "the bar topic requires a grep -n hit for a named function or string")
+end
+
+local function test_bar_requires_a_pattern_over_a_file_line_list()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find("states the PATTERN", 1, true) ~= nil,
+    "the bar topic requires the PATTERN over a list of file:line pairs")
+end
+
 local function test_build_mirrors_the_ready_when_convention()
   local page = doctrine.page("build")
   assert(page ~= nil, "the build topic renders")

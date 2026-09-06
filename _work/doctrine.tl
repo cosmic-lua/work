@@ -140,13 +140,25 @@ THE DIFF, not a bullet a builder re-derives by hand.
 
 `## Change` is what to build: files named, the shape of the change
 in each, every decision made. Imperative and concrete — never
-"improve", "investigate", or "support". When the change sits near a
-frozen contract (a C boundary, error strings and return shapes,
-verdict-line formats), name the wall — there, or in an optional
-`## Non-goals` section. Walls are stated where they exist, never
-filled in as ceremony. The test for every sentence: could a
-competent but literal-minded session, with nothing beyond this spec
-and the repo's AGENTS.md, get it wrong? If yes, it is not ready.
+"improve", "investigate", or "support". And one mechanism, never two
+— "either X or Y, the builder's call" hands a fresh window the
+refiner's own decision plus the reading it took to make it; pick,
+and put the alternative in `## Non-goals` or nowhere. A Change
+that names a function or a string quotes the `grep -n` hit that
+places it, and a state or enum literal quotes the vocabulary the
+schema or record declares — a location read from memory is the
+wrong turn that feels obviously right. Where the tree has a
+structural finder, a Change over N sites states the PATTERN that
+selects them and the count `cosmic --find` printed, never a list
+of file:line pairs a builder re-derives — the builder re-runs the
+pattern, and the reviewer diffs the PR against its hits. When the
+change sits near a frozen contract (a C boundary, error strings
+and return shapes, verdict-line formats), name the wall — there,
+or in an optional `## Non-goals` section. Walls are stated where
+they exist, never filled in as ceremony. The test for every
+sentence: could a competent but literal-minded session, with
+nothing beyond this spec and the repo's AGENTS.md, get it wrong?
+If yes, it is not ready.
 
 Measured, not inferred: every tree-fact the spec relies on (a
 file's headroom under a line cap, a pattern's match count, a
