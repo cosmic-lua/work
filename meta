@@ -2,6 +2,8 @@ title: AGENTS.md Testing: a test that reads a file at runtime declares it with -
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-eoxA_GRW9-f6f470de
-reviewer: review-eoxA_GRW9-f6f470de
 pr: 1772
+verdict: accept
+verdict_head: d771d0e114b902b4a89e9165a02f6e657b8e777f
+verdict_spec: a71760b014074f7a09a1447f100f361b52563319
 builders: build-eoxA_GRW9-f6f470de
