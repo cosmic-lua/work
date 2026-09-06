@@ -1,9 +1,9 @@
 title: bin/gitboard.pin: bump to 2026-09-06-edeebf5, the release carrying REVIEW_SCRIPT (#67)
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
-claim: build-pin4-f6f470de
 pr: 1773
 verdict: accept
 verdict_head: 568f28c8061a790c779351c7a470e0ffa1cd1707
 verdict_spec: f633e2996987b4ca9d1c721bc42358a07c622860
+resolution: completed
 builders: build-pin4-f6f470de
