@@ -24,12 +24,18 @@ local refs = require("_work.refs")
 --- `git rev-parse --git-common-dir` and `--git-dir`, run from `dir`,
 --- print the same path (`.git`) in a primary checkout and diverge
 --- exactly when `dir` is linked, the common dir naming the checkout
---- it is linked to. nil when the two agree, or when `dir` is not (yet)
---- a git repository at all — `init`'s ordinary case, which this must
---- not block.
+--- it is linked to. nil when the two agree, or when `dir` has no
+--- `.git` of its own yet — `init`'s ordinary case, which this must not
+--- block; checked first and separately from the `rev-parse` pair,
+--- since git itself does not stop at `dir` — with no `.git` there it
+--- walks up to whatever repository (this checkout included) happens
+--- to be its ancestor, which is never the question being asked.
 --- @param dir string The directory to check
 --- @return string | nil The refusal, or nil to proceed
 local function linked_worktree_refusal(dir: string): string | nil
+  if not fs.is_present(fs.join(dir, ".git")) then
+    return nil
+  end
   local common = child.run({"git", "rev-parse", "--git-common-dir"}, {cwd = dir})
   local git_dir = child.run({"git", "rev-parse", "--git-dir"}, {cwd = dir})
   if common == nil or not common.ok or git_dir == nil or not git_dir.ok then
@@ -42,7 +48,7 @@ local function linked_worktree_refusal(dir: string): string | nil
   end
   return ("REFUSED: %s is a linked worktree of %s — a builder's worktree is "
     .. "never a board; run board verbs from the orchestrator's checkout")
-    :format(dir, common_dir)
+  :format(dir, common_dir)
 end
 
 --- Create the board item — the one parentless item, titled "board" —
