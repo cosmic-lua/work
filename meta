@@ -1,0 +1,3 @@
+title: tl checker: the length operator # doesn't check its operand for nilability, unlike indexing/method-call
+parent: 3IPXQ1Zw1xfRYx4dV1zwASNhQ3N
+target: cosmic-lua/cosmic
