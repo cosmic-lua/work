@@ -9,10 +9,21 @@ to the parent's case. Both belong in the strict-mode item's Change
 1. Retypings are the dominant public-surface break, and the checker
    sees none of the nil-widening ones. Measured over the tree's own
    history with a surface extractor (every `record` field of every
-   public `cosmic/**.tl`, compared between snapshots):
+   public `cosmic/**.tl`, compared between snapshots), against these
+   exact commits — pinned by full sha, not a `--before=DATE` recipe,
+   which a fresh-context review found timezone-sensitive and
+   non-reproducible from the relative-date form originally pasted here:
 
    ```
-   $ python3 histdiff.py $(for d in 2026-08-14 2026-08-24 2026-09-01; do git rev-list -n1 --before=$d HEAD; done) HEAD
+   $ git log -1 --format=%H 5f227969  # 2026-08-24
+   5f227969ac4db2e3d60dc6f2d207f1c400b9dc64
+   $ git log -1 --format=%H 8495ab0a  # 2026-09-01
+   8495ab0aa8862bcb9c4c7110621d06ae6344b830
+   $ git log -1 --format=%H d3bce229  # 2026-09-05, the census's own HEAD
+   d3bce22910ff2ffbcec64e9396d85875b3ab3f31
+   ```
+
+   ```
    ..5f227969 2026-08-24: mod_added=1 fn_added=8 fn_retyped=3 field_removed=3 field_added=5 field_retyped=1
    ..8495ab0a 2026-09-01: mod_added=9 fn_added=13 fn_retyped=9 field_removed=1 field_added=23 field_retyped=3
    ..d3bce229 2026-09-05: mod_added=4 fn_removed=2 fn_added=16 fn_retyped=2 field_removed=4 field_added=12 field_retyped=2
@@ -27,6 +38,41 @@ to the parent's case. Both belong in the strict-mode item's Change
    `rules.parse_rule`, `SuffixEntry.port`, `ForwardSpec.inject_name`).
    Every one of those is silent for a caller that assigns, concatenates,
    passes, or ignores the result.
+
+   `histdiff.py` itself was a throwaway scratch script, never committed
+   anywhere in this tree or on any branch — it does not exist to re-run
+   today, a gap a fresh-context review correctly flagged as making the
+   aggregate table unauditable as originally written. That review
+   independently re-verified three of the seven named nil-widening
+   retypings directly against git history at the three commits above,
+   with no script involved; re-confirmed here against the same three
+   commits, with the real declaration sites named:
+
+   ```
+   $ git show 5f227969:cosmic/rand.tl | grep -n 'function choice'
+   96:local function choice(list: {any}): any
+   $ git show d3bce229:cosmic/rand.tl | grep -n 'function choice'
+   96:local function choice<T>(list: {T}): T | nil
+
+   $ git show e16531d7:cosmic/zip.tl | grep -n 'function a:close'
+   141:  function a:close()
+   $ git show 5f227969:cosmic/zip.tl | grep -n 'function a:close'
+   170:  function a:close(): boolean, string
+
+   $ git show e16531d7:cosmic/quicksand/proxy/serve.tl | grep -n 'local function serve_forever'
+   373:  local function serve_forever()
+   $ git show 8495ab0a:cosmic/quicksand/proxy/serve.tl | grep -n 'local function serve_forever'
+   376:  local function serve_forever(): boolean, string
+   ```
+
+   All three reproduce exactly, with `zip.Archive.close` retyped by
+   `5f227969` (2026-08-24) itself and `serve_forever` by `8495ab0a`
+   (2026-09-01) — both land within the windows the census counts them
+   in. The remaining four named retypings and the full 30/20 aggregate
+   are not independently re-derivable without rewriting the extractor —
+   a real, stated limit on this fact's audit trail, not a claim to lean
+   on beyond what these three commits and three spot-checks actually
+   support.
 
 2. The silence is total, not partial. Probe against the pinned
    release's checker:
