@@ -2,5 +2,6 @@ title: AGENTS.md: document the rm -rf o/3p/<name> incantation for verifying a tl
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
 target: cosmic-lua/cosmic
 claim: build-Sv9x_dXyj-8bf1d440
+reviewer: review-Sv9x_dXyj-8bf1d440
 pr: 1738
 builders: build-Sv9x_dXyj-8bf1d440
