@@ -1,13 +1,18 @@
 # friction: 2026-09-06 work5-routine
 
-Filed at pass-end with 5 of 6 spawned agents still in flight
-(`review-70P4_YBPd-748ecc95`, `build-0oBN_Fa6X-748ecc95`,
-`build-LVYj_DA0K-748ecc95`, `build-vmX5_zQH2-748ecc95`,
-`research-IOA7_CLf5-748ecc95`) — a bounded pass never waits on a wave
-agent. Their sections will be appended to this item's spec as each
-reports and its transcript is run through `_tool/friction.tl`, per the
-friction doctrine's "none skipped" rule; this is not a second pass, just
-this same wave's reconciliation completing asynchronously.
+Pass end state: `doing 0/10`. All 6 spawned agents from the initial
+wave reconciled (rework, 3 builds, 1 research, plus their reviews), and
+two follow-on chains this pass surfaced (a cold-build pin-staging gap,
+then a CI cache-key gap it exposed) were root-caused, fixed, reviewed,
+and merged in-pass rather than left for a future one, since each was a
+hard blocker on already-in-flight work. Final tally: 5 PRs merged
+(#1744 lint fix, #1747 zip bootstrap, #1748 pin bump, #1749 CI cache
+key, #1746 errno/SIG casts), 1 research item closed with no code
+change (`IOA7_CLf5`), 1 container closed not-planned on its finding
+(`rLV8_r8a5`), 1 item blocked on a file-length-cap wall and respec'd as
+a container (`vmX5_zQH2`), 4 countermeasures filed
+(`3IxHqrApflNsmHz3Uj0eUxZCzX8`, `1alS_QzlJ`, plus `qdDs_EN9Z` and
+`Qzbr_H1Xg` themselves as items, `Qzbr_H1Xg` now merged).
 
 ## build 70P4_YBPd
 
