@@ -1,3 +1,5 @@
 title: briefs name the GitHub reach: PR opened and auto-merge enabled via the MCP tools when there is no gh CLI, and no agent polls or subscribes
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
+claim: build-g0eF_1vae-f6f470de
+builders: build-g0eF_1vae-f6f470de
