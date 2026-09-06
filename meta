@@ -1,9 +1,9 @@
 title: builder brief: a new public cosmic.<name> module trips three more ratchets — name them, and say when coverage and build run
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-Kk0N_r6Dd-f6f470de
 pr: 64
 verdict: accept
 verdict_head: bf746f9c67ea8a96199ae232401435c6c17d2f4a
 verdict_spec: 04af61c4f10a49df9708ddecf82f6fc492f3dacc
+resolution: completed
 builders: build-Kk0N_r6Dd-f6f470de
