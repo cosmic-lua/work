@@ -96,6 +96,13 @@ local function test_bar_requires_a_grep_hit_for_a_named_location()
     "the bar topic requires a grep -n hit for a named function or string")
 end
 
+local function test_bar_requires_the_three_wiring_files_named()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find("lists its three wiring files", 1, true) ~= nil,
+    "the bar topic requires a verb or flag Change to name its wiring files")
+end
+
 local function test_bar_requires_a_pattern_over_a_file_line_list()
   local page = doctrine.page("bar")
   assert(page ~= nil, "the bar topic renders")
