@@ -38,6 +38,27 @@ hits (comment-loss) to stderr with file:position, per the mechanism
 `cosmic.ast.rewrite` already implements — this verb does not
 re-implement that decision, just surfaces it.
 
+Landed since this was written (measured 2026-09-06, cosmic#1763):
+`cosmic --find PATTERN [PATH...]` already IS the search mode above —
+`_cli/find.tl` (137 lines) parses, walks, matches, prints
+`<path>:<line>:<col>: <line>` sorted by path then line, ends with
+`find: N hit(s) in M file(s)`, exits 0/1/2, and selects files through
+`_make.check.select_files` over `project.scan(".")` — the traversal
+this Change asked you to find. One mechanism, never two: `--rewrite
+PATTERN PATH...` without `--fix` calls `_cli/find.tl`'s `run` and
+prints exactly what `--find` prints (the `file:y:x-yend:xend` shape
+above is superseded); `--rewrite PATTERN REPL --fix PATH...` is the
+only new behaviour, built on `cosmic.ast.rewrite`'s `rewrite`, using
+the same file selection. The flag's wiring mirrors `--find`'s three
+sites exactly — `grep -n 'find' _cli/args.tl _cli/parse.tl
+cmd/cosmic/main.tl` places them (the flag spec, the greedy-argument
+set plus `find_pattern`/`find_paths` on `Options`, the one dispatch
+line at `cmd/cosmic/main.tl:111-113`) — and `sys/help.md` gets one line.
+`_cli/rewrite_test.tl`: a fixture tree with two files; `--fix` rewrites
+both hits, one file's comment-bearing hit is refused and reported on
+stderr with `file:line:col`, the untouched file's bytes are unchanged,
+and the verdict line is `rewrite: N applied, R refused in M file(s)`.
+
 Two small fixes ride along because this item touches the same files
 (measured 2026-09-06, after cosmic#1765): `cosmic/ast/init_example.tl`
 indexes `captures["CMD"]` after matching `os.execute($CMD)`, but

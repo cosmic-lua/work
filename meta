@@ -3,4 +3,4 @@ parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-5ass_BX1Y-f6f470de
 builders: build-5ass_BX1Y-f6f470de
-speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
+speccers: f6f470de-dee2-5890-b8f1-db91217d1a73 build-5ass_BX1Y-f6f470de
