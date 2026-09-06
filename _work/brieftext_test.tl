@@ -66,3 +66,13 @@ local function test_pr_steps_name_the_mcp_fallback_for_no_gh_cli()
     "the review brief's accept bullet must name the GitHub MCP tool "
     .. "fallback for enabling auto-merge")
 end
+
+local function test_mutation_step_says_what_a_real_break_is()
+  assert(BUILDER:find("replace a matched needle", 1, true) ~= nil,
+    "the builder brief's mutation step must say a real break replaces "
+    .. "a matched needle with unrelated text, not just extends it")
+  assert(REVIEW:find("replace a matched needle", 1, true) ~= nil,
+    "the review brief's mutation sentence must say a real break "
+    .. "replaces a matched needle with unrelated text, not just "
+    .. "extends it")
+end

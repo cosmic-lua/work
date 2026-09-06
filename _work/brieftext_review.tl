@@ -69,8 +69,11 @@ fine.
 
 Mutation-test at least one guard the change adds or relies on: break
 what it guards, confirm the diff's own test catches it, restore it
-exactly. Do this from your own fresh checkout — never reuse another
-agent's worktree.
+exactly. A real break changes the outcome the test reads, never just
+the text around it: replace a matched needle with unrelated text
+rather than extending it, flip a boolean rather than renaming it, and
+if the test stays green the guard is decoration. Do this from your
+own fresh checkout — never reuse another agent's worktree.
 
 ## Recording your verdict
 
