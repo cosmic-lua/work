@@ -1,9 +1,9 @@
 title: gitboard show --todo N: list every pullable todo row, not the first eight
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-duSw_TyDF-f6f470de
 pr: 48
 verdict: accept
 verdict_head: b329585004f1c2900524e5c0d2043c081535ea05
 verdict_spec: eb5353972a767bdfca68412ab8d1eaf6cd793861
+resolution: completed
 builders: build-duSw_TyDF-f6f470de
