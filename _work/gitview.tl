@@ -104,15 +104,6 @@ local function read_specs(s: store.Store, all: {item.Item}): act.Specs
   return store.read_specs(s, ids)
 end
 
---- The id and title every rendered item line leads with: the id's
---- tail — the last 8 characters, pure entropy and a literal
---- substring of the id — chunked for legibility.
---- @param it item.Item The item
---- @return string "tail-chunked title"
-local function id_line(it: item.Item): string
-  return ("%s %s"):format(tail.handle(it.id), it.title)
-end
-
 --- The lanes row: one `lane=conclusion` pair per required lane, in
 --- `lanes.LANES` order, or nil to print no row at all. nil facts is a
 --- fresh board that has never synced — silence there, not a row of
@@ -193,6 +184,7 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     local marks = (" [%s]"):format(sub)
     if i.claim ~= "" then marks = marks .. " @" .. i.claim end
     if i.pr ~= 0 then marks = marks .. (" pr:%d"):format(i.pr) end
+    if i.reviewer ~= "" then marks = marks .. " reviewer:" .. i.reviewer end
     if i.result ~= "" then
       marks = marks .. (" result:%s"):format(i.result:sub(1, 7))
     end
@@ -201,7 +193,7 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
       marks = marks .. (" [claim stale %dh]"):format(
         health.stale_hours(i, aged))
     end
-    out[#out + 1] = ("  %s%s"):format(id_line(i), marks)
+    out[#out + 1] = ("  %s%s"):format(tail.id_line(i), marks)
   end
   local row = lanes_row(lane_facts)
   if row then
@@ -234,7 +226,7 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
       marks = " [pullable]"
     end
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
-    out[#out + 1] = ("  %s%s"):format(id_line(i), marks)
+    out[#out + 1] = ("  %s%s"):format(tail.id_line(i), marks)
   end
   if shown ~= 0 and #todo > shown then
     out[#out + 1] = ("  ... %d more"):format(#todo - shown)
@@ -347,7 +339,7 @@ end
 local function render_action(action: act.Action, specs: act.Specs): string
   local target = ""
   if action.item then
-    target = " " .. id_line(action.item)
+    target = " " .. tail.id_line(action.item)
   end
   local out: {string} = {
     ("%s%s — %s"):format(action.kind, target, action.reason),
@@ -357,7 +349,7 @@ local function render_action(action: act.Action, specs: act.Specs): string
   end
   for _, alt in ipairs(action.alternates or {}) do
     if alt.item then
-      local line = ("  or: %s %s"):format(alt.kind, id_line(alt.item))
+      local line = ("  or: %s %s"):format(alt.kind, tail.id_line(alt.item))
       local ov = overlap.inline(alt.item.id, specs)
       if ov ~= "" then
         line = line .. " — " .. ov

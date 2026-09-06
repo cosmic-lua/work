@@ -9,6 +9,7 @@
 --- live board (`git for-each-ref --format='%(refname)' refs/heads/items
 --- refs/heads/ended`), `id:sub(20)` is collision-free across every item,
 --- exact and case-folded.
+local item = require("_work.item")
 local refs = require("_work.refs")
 
 --- An item's tail as two underscore-divided 4-char chunks, undecorated
@@ -31,6 +32,15 @@ end
 --- @return string "«XXXX_XXXX»"
 local function handle(id: string): string
   return "«" .. bare(id) .. "»"
+end
+
+--- The id and title every rendered item line leads with: the id's
+--- tail — the last 8 characters, pure entropy and a literal
+--- substring of the id — chunked for legibility.
+--- @param it item.Item The item
+--- @return string "tail-chunked title"
+local function id_line(it: item.Item): string
+  return ("%s %s"):format(handle(it.id), it.title)
 end
 
 --- Whether input has a tail's shape: 8 base62 characters, with at
@@ -192,6 +202,7 @@ end
 local record tail
   bare: function(id: string): string
   handle: function(id: string): string
+  id_line: function(it: item.Item): string
   is_tail_shape: function(input: string): boolean
   normalize: function(input: string): string
   join_handles: function(ids: {string}): string
@@ -203,6 +214,7 @@ end
 local M: tail = {
   bare = bare,
   handle = handle,
+  id_line = id_line,
   is_tail_shape = is_tail_shape,
   normalize = normalize,
   join_handles = join_handles,
