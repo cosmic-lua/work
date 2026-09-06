@@ -1,0 +1,3 @@
+title: bin/gitboard.pin: bump to the work release carrying #48/#55–#59 (worktree verb, product_root fallback, deadlock fix)
+parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
+target: cosmic-lua/cosmic
