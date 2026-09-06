@@ -2,5 +2,6 @@ title: bin/gitboard.pin: bump to the work release carrying #48/#55–#59 (worktr
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: f6f470de-dee2-5890-b8f1-db91217d1a73
+pr: 1760
 builders: f6f470de-dee2-5890-b8f1-db91217d1a73
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
