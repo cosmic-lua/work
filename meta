@@ -2,6 +2,8 @@ title: gitboard brief: product_root() breaks under the sibling-reuse GITBOARD_DI
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: build-wwWD_cwM5-f6f470de
-reviewer: review-wwWD_cwM5-f6f470de
 pr: 55
+verdict: accept
+verdict_head: 038ae909d7cd4ba7ee92ee2a696e588619983e91
+verdict_spec: b592948aa8c96675f4488a7b5d3b642fc4cc9ad1
 builders: build-wwWD_cwM5-f6f470de
