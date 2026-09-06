@@ -1,0 +1,3 @@
+title: ci: PR #1746's cold build fails on GitHub Actions but passes an identical local cold build — cache/environment divergence around a pin bump
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
