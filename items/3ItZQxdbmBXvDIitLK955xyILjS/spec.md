@@ -70,3 +70,16 @@ No change to the narrowing patches or the doctrine here; this item
 records evidence and names the test. The upgrade tooling the
 experiment prototyped (surface diff, usage scan, tombstones) is a
 separate design, not this container's.
+
+## Handover
+
+Both facts and the named test are now in «M5U2_X7wl»'s (`3IPXRRd2`)
+own spec: the `## Goal` section carries the two measured facts
+verbatim (retyping dominance, total silence under the pinned
+checker), and `## Change`/`## Acceptance` name the new upgrade-shaped
+`cosmic/teal_narrowing_test.tl` case (a `T | nil, string` retyping
+refused with `STRICTNIL` at a concatenation and at a `local x: T`
+initializer) as a second, distinct addition alongside the existing
+index-shaped flip. Landed at `3IPXRRd2`'s commit `f724037` (`spec
+3IPXRRd2`, 2026-09-06). No diff against `cosmic-lua/cosmic` — this
+item's only output is that spec revision, which is the deliverable.
