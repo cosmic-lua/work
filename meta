@@ -1,0 +1,3 @@
+title: cosmopolitan: tool/net/lfetch.c's line coverage is flaky across serial runs, ~1-in-10 below any committed floor
+parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
+target: cosmic-lua/cosmopolitan
