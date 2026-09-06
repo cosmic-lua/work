@@ -1,9 +1,9 @@
 title: gitboard take ID --open: the board opens the PR from the pushed branch, so a builder never reaches GitHub
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-7zgt_hrqC-f6f470de
 pr: 61
 verdict: accept
 verdict_head: 639bcc68b899efcf712e77f6cfaadcb4728f878c
 verdict_spec: 8ffcd9cbf2bb14f00db86d92ade05d374c1a6b70
+resolution: completed
 builders: build-7zgt_hrqC-f6f470de
