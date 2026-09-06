@@ -2,7 +2,9 @@ title: bin/gitboard: the sibling probe also matches an SSH origin (git@github.co
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-YDqx_N2FC-f6f470de
-reviewer: review-YDqx_N2FC-f6f470de
 pr: 1768
+verdict: accept
+verdict_head: e5f54aa4386ebbb0c070f37bcd4e861605bcdac9
+verdict_spec: 08be2925e36838f98e3b74247c22016c33ac4609
 builders: build-YDqx_N2FC-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
