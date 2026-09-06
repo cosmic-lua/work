@@ -1,9 +1,9 @@
 title: _build/cast_sites: key a cast site by its AST node (function, ordinal, cast text), not its line — no reconcile on a line shift
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-G3Mu_4ITj-f6f470de
 pr: 1770
 verdict: accept
 verdict_head: d95fbd84220c6a697f54e817557a5b8aac1ab664
 verdict_spec: d62413a6f644d31bddaf76d97e3c1ceb345a0997
+resolution: completed
 builders: build-G3Mu_4ITj-f6f470de
