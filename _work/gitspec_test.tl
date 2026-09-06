@@ -62,21 +62,66 @@ local function test_the_spec_bar_still_refuses_a_hollow_spec()
   assert(check.must(store.load(s, leaf)).claim == "", "it stayed put")
 end
 
--- Re-running a mutation that records the same values is a no-op that
--- succeeds, not a refusal — the state asked for is already the board's.
-local function test_a_no_op_mutation_is_named()
+-- Re-running a write with the identical body is a no-op that succeeds
+-- without touching the sidecar — the text asked for is already there.
+local function test_an_identical_body_writes_nothing()
   local s = init_state_repo("noop")
   local _, leaf = root_with_leaf(s)
   local path = fs.join(tmpdir, "ready-spec.md")
   assert(fs.write(path, READY_SPEC))
   assert(gitspec.cmd_spec(s, leaf, path) == 0)
+  local before = commits(s)
   local old_print = _G.print
   local seen = ""
   _G.print = function(msg: any) seen = tostring(msg) end
   local code = gitspec.cmd_spec(s, leaf, path, path)
   _G.print = old_print
-  assert(code == 0 and seen:find("nothing to record", 1, true) ~= nil,
+  assert(code == 0 and seen:find("is unchanged", 1, true) ~= nil
+    and seen:find("nothing written", 1, true) ~= nil,
     "the same spec twice is a no-op the second time: " .. seen)
+  assert(commits(s) == before, "and nothing was committed")
+end
+
+-- The reproduced incident: an identical body committed anyway because
+-- the write would have added a NEW speccer, and the bookkeeping alone
+-- counted as a change. The speccers-only mutation must not land either.
+local function test_an_identical_body_with_a_new_speccer_writes_nothing()
+  local s = init_state_repo("noopspeccer")
+  local _, leaf = root_with_leaf(s)
+  local path = fs.join(tmpdir, "ready-spec.md")
+  assert(fs.write(path, READY_SPEC))
+  assert(gitspec.cmd_spec(s, leaf, path, nil, "refiner-a") == 0)
+  local before = commits(s)
+  local old_print = _G.print
+  local seen = ""
+  _G.print = function(msg: any) seen = tostring(msg) end
+  local code = gitspec.cmd_spec(s, leaf, path, path, "refiner-b")
+  _G.print = old_print
+  assert(code == 0 and seen:find("is unchanged", 1, true) ~= nil,
+    "an identical body is a no-op even for a would-be new speccer: " .. seen)
+  assert(commits(s) == before, "nothing was committed")
+  local it = check.must(store.load(s, leaf))
+  assert(#it.speccers == 1 and it.speccers[1] == "refiner-a",
+    "refiner-b never joined speccers: nothing was written")
+end
+
+-- A changed body reports the size of the change, as lines added and
+-- removed — the CHANGED counterpart to the unchanged case above.
+local function test_a_changed_body_reports_its_size()
+  local s = init_state_repo("diffsize")
+  local _, leaf = root_with_leaf(s)
+  local first = fs.join(tmpdir, "diffsize-first.md")
+  assert(fs.write(first, READY_SPEC))
+  assert(gitspec.cmd_spec(s, leaf, first) == 0)
+  local second = fs.join(tmpdir, "diffsize-second.md")
+  assert(fs.write(second, (READY_SPEC:gsub("Not that.", "Rewritten."))))
+  local old_print = _G.print
+  local seen = ""
+  _G.print = function(msg: any) seen = tostring(msg) end
+  local code = gitspec.cmd_spec(s, leaf, second, first)
+  _G.print = old_print
+  assert(code == 0 and seen:find("(+1/-1 lines)", 1, true) ~= nil,
+    "a one-line change reports its size: " .. seen)
 end
 
 -- One markdown file under tmpdir, for the spec tests below.
