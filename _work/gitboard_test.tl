@@ -212,3 +212,38 @@ local function test_a_handle_absent_from_the_cache_resolves_through_the_glob()
   assert(gitboard.main("show", tail.handle(id), "--dir", s.root) == 0,
     "a handle absent from the cache should still resolve through the glob")
 end
+
+-- Bare `show --todo N` for a valid N parses clean and succeeds; the
+-- rendering itself (row counts, the trailer) is `_work/gitview_test.tl`'s.
+local function test_show_accepts_a_valid_todo_count()
+  local s = init_state_repo("todo-flag-valid")
+  local code, printed = gitboard_and_capture("show", "--todo", "3", "--dir", s.root)
+  assert(code == 0, "a valid --todo should succeed: " .. printed)
+end
+
+-- Anything that is not a non-negative integer is a usage refusal on
+-- the verdict line, not a crash or a silent default.
+local function test_show_refuses_an_invalid_todo_count()
+  local s = init_state_repo("todo-flag-invalid")
+  for _, bad in ipairs({"abc", "-1", "2.5"}) do
+    local code, printed = gitboard_and_capture("show", "--todo", bad, "--dir", s.root)
+    assert(code ~= 0, ("--todo %s should be refused, got exit 0"):format(bad))
+    assert(printed:find("--todo wants a non-negative integer", 1, true) ~= nil,
+      ("the verdict line should name the refusal for --todo %s: %s")
+      :format(bad, printed))
+  end
+end
+
+-- `--todo` only shapes the board-wide render; `show ID` prints the
+-- same thing with or without it.
+local function test_show_id_ignores_the_todo_flag()
+  local s = init_state_repo("todo-flag-no-effect-on-id")
+  local id = file_item(s, "an item", "")
+  local plain_code, plain_printed = gitboard_and_capture("show", id, "--dir", s.root)
+  local flagged_code, flagged_printed = gitboard_and_capture("show", id, "--todo", "0",
+    "--dir", s.root)
+  assert(plain_code == 0 and flagged_code == 0, "show ID should succeed either way")
+  assert(plain_printed == flagged_printed,
+    "show ID's output should be unchanged by --todo:\n" .. plain_printed
+    .. "\n---\n" .. flagged_printed)
+end

@@ -91,11 +91,70 @@ end
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function status(items: {item.Item}, specs: {string: string},
-    ages?: {string: integer}, lane_facts?: {string: string}): {string}, string
+    ages?: {string: integer}, lane_facts?: {string: string},
+    todo_shown?: integer): {string}, string
   local c = fixture.make_index(items)
-  local lines, verdict = view.status_report(c, items, specs, ages, lane_facts)
+  local lines, verdict = view.status_report(c, items, specs, ages, lane_facts,
+    todo_shown)
   assert(lines ~= nil, verdict)
   return lines, verdict
+end
+
+--- The fixture board plus nine more unclaimed leaves under GOAL, so
+--- todo carries ten rows total (FRESH plus these) — enough to render
+--- past the default 8-row head.
+local function ten_todo_items(): {item.Item}
+  local items = board_items()
+  for k = 1, 9 do
+    items[#items + 1] = check.must(item.decode({id = fresh_id(),
+          title = ("todo item %d"):format(k), parent = GOAL}))
+  end
+  return items
+end
+
+--- How many of `lines` are one of `ten_todo_items`'s own todo rows —
+--- FRESH's or a numbered "todo item N" — rather than a header, a
+--- doing row, or the "... N more" trailer.
+local function shown_todo_rows(lines: {string}): integer
+  local n = 0
+  for _, line in ipairs(lines) do
+    if line:match("^  ") and (line:find("todo item %d") ~= nil
+      or line:find("a fresh leaf", 1, true) ~= nil) then
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- `show`'s default: the top 8 todo rows, then a trailer naming the rest.
+local function test_status_shows_eight_todo_rows_by_default()
+  local lines = status(ten_todo_items(), full_specs())
+  assert(shown_todo_rows(lines) == 8, table.concat(lines, "\n"))
+  assert(has(lines, "^  %.%.%. 2 more$"), table.concat(lines, "\n"))
+end
+
+-- `--todo 0` renders every pullable row with no trailer at all.
+local function test_status_shows_every_todo_row_with_todo_zero()
+  local lines = status(ten_todo_items(), full_specs(), nil, nil, 0)
+  assert(shown_todo_rows(lines) == 10, table.concat(lines, "\n"))
+  assert(not has(lines, "more$"), table.concat(lines, "\n"))
+end
+
+-- `--todo N` renders exactly N rows and names the rest.
+local function test_status_honors_an_explicit_todo_count()
+  local lines = status(ten_todo_items(), full_specs(), nil, nil, 3)
+  assert(shown_todo_rows(lines) == 3, table.concat(lines, "\n"))
+  assert(has(lines, "^  %.%.%. 7 more$"), table.concat(lines, "\n"))
+end
+
+-- `--todo` set to the exact todo count is the boundary between "some
+-- more" and "no more": every row renders and the trailer is silent,
+-- the same as `--todo 0`'s "all" case but reached by an explicit
+-- count rather than the sentinel.
+local function test_status_shows_no_trailer_when_todo_equals_the_total()
+  local lines = status(ten_todo_items(), full_specs(), nil, nil, 10)
+  assert(shown_todo_rows(lines) == 10, table.concat(lines, "\n"))
+  assert(not has(lines, "more$"), table.concat(lines, "\n"))
 end
 
 local function test_status_renders_doing_against_the_bound()
