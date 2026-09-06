@@ -50,35 +50,42 @@ text. `wc -l _build/cast_sites.tl` → 204, `_build/cast_sites_test.tl`
 
 ## Change
 
-`_build/cast_sites.tl`, `reconcile`: after the exact-key pass, a
-second pass per file carries classes across a pure line shift. For
-each path, collect the ORPHANS (committed rows whose `path\tline` no
-scanned site matched, in line order) and the NEWCOMERS (scanned sites
-with no class, in line order). When the two lists have the same
-length, pair them in order and give each newcomer the orphan's class;
-the row is written at the newcomer's line. When the lengths differ,
-carry nothing for that file — the newcomers stay in the `unclassified`
-list exactly as today, and the orphans drop, so a real addition or
-removal is still surfaced. No text matching: a pure shift preserves
-order and count, and that is the whole test.
+**Amended after PR #1755's review (2026-09-06):** pairing orphans to
+newcomers by count and line order can assign the WRONG class when two
+casts in one file change relative order (the reviewer's repro: classes
+silently swapped, `unclassified` empty) — a wrong class is worse than a
+blank one, which is the module's own rule (`_build/cast_sites.tl:14-16`).
+The mechanism is therefore text identity, not position:
 
-`_build/cast_sites_test.tl`: three fixture cases under `TEST_TMPDIR`
-with a two-cast source file and a committed tsv — (1) insert a line
-above both casts: both classes carried, tsv lines +1, `unclassified`
-empty; (2) add a third cast: the two originals carried by exact key,
-the new one unclassified, no carry (lengths 1 vs 0); (3) delete one
-cast and insert a line: lengths 2 orphans vs 1 newcomer — nothing
-carried, one unclassified, one dropped. The doc comment at line 7-9
-(`--reconcile` "carries the class forward for every site that still
-exists") states the shift rule in one sentence.
+`_build/cast_sites.tl`, `reconcile`: after the exact-key pass, for each
+file with both ORPHANS (committed rows no scanned site matched) and
+NEWCOMERS (scanned sites with no class), read the file's COMMITTED
+text with `git show HEAD:<path>` (through `cosmic.proc`; when git is
+unavailable or the path is untracked, carry nothing for that file) and
+take each orphan's line from it, whitespace-trimmed. A newcomer whose
+current line, trimmed, is byte-identical to exactly ONE orphan's line
+inherits that orphan's class at the newcomer's line number; a newcomer
+matching zero or several orphan lines stays unclassified, and the
+unmatched orphans drop, exactly as today. Order and counts are never
+consulted, so a reorder cannot swap classes, and an edit to the cast
+line itself (a real change) asks for a class again.
 
-`docs/design/casts.md`, wherever the reconcile command is documented
-(`grep -n reconcile docs/design/casts.md`): one sentence — a pure line
-shift keeps its classes; only a changed cast count in a file asks for
-a class.
+`_build/cast_sites_test.tl`: fixtures under `TEST_TMPDIR` are git
+repositories (`git init`, commit the source and the tsv, then edit the
+working tree): (1) insert a line above two casts — both classes
+carried at the new lines, `unclassified` empty; (2) swap the two
+casts' order with distinct line text — each class follows its text,
+not its position; (3) two casts with IDENTICAL line text, one shifted —
+ambiguous, carried nothing, both unclassified; (4) edit a cast's line
+text and shift it — unclassified, the old row dropped; (5) a file not
+under git — nothing carried. The module doc comment (lines 7-9) states
+the text rule in one sentence.
+
+`docs/design/casts.md`, at the `--reconcile` description: one sentence —
+a cast whose line text is unchanged keeps its class across a move; an
+edited cast line asks for its class again.
 
 Gate: `bin/cosmic --make ci`.
-
 ## Non-goals
 
 No new tsv column, no cast-text fingerprinting, no change to
