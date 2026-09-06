@@ -2,4 +2,5 @@ title: bin/gitboard.pin: bump to 2026-09-06-32ec450, the release carrying #68 an
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-rZDq_58nB-f6f470de
+pr: 1776
 builders: build-rZDq_58nB-f6f470de
