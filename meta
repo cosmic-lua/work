@@ -1,0 +1,3 @@
+title: show: the absent: probe checks a cited path against the item's repo checkout, not whichever checkout the command runs in
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/work
