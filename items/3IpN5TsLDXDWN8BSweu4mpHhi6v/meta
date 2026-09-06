@@ -1,4 +1,5 @@
 title: gitboard brief: --out FILE writes the brief so a prompt channel that decodes escapes cannot corrupt it
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work@main
-builders: build-4mpH_hi6v-62aa6405
+claim: build-4mpH_hi6v-f6f470de
+builders: build-4mpH_hi6v-62aa6405 build-4mpH_hi6v-f6f470de
