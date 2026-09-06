@@ -2,4 +2,5 @@ title: casts: land searcher_test.tl's cast removal once the declining-searcher p
 parent: 3IvLo8epYDMewqKisHtfnNclCyL
 target: cosmic-lua/cosmic
 claim: build-zs1K_cWnY-420d657f
+pr: 1741
 builders: build-zs1K_cWnY-420d657f
