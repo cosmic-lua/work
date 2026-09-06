@@ -1,9 +1,9 @@
 title: spec bar: flag a Change-named file already within ~20 lines of the 500-line cap
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work@main
-claim: build-AY6h_bM0B-f6f470de
 pr: 45
 verdict: accept
 verdict_head: 92285d2c845cae9a1dd184d02c1ff173540e2973
 verdict_spec: ca50ee42a4bbe89e2dbbc76b9f6fc394be58c95b
+resolution: completed
 builders: build-AY6h_bM0B-f6f470de
