@@ -1,9 +1,9 @@
 title: gitboard new's verdict line prints the handle beside the full id
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-QYqs_nEsq-f6f470de
 pr: 46
 verdict: accept
 verdict_head: 7f266cfd48d90d6b206b4843b0091eede1a163ca
 verdict_spec: b14f38a1a44175c3597c587a363dae97475f41bd
+resolution: completed
 builders: build-QYqs_nEsq-f6f470de
