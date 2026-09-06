@@ -233,12 +233,20 @@ end
 
 --- brief: print one role's prompt for an item, filled from the board.
 --- The body prints first and the verdict line closes it (the `show`
---- shape), naming the placeholders left for the caller.
+--- shape), naming the placeholders left for the caller. `out`, when
+--- given, writes the filled body to that file instead of printing
+--- it — a channel that decodes escapes (a pasted `\uXXXX`, `\t`, a
+--- line-continuation backslash) corrupts a pasted prompt but cannot
+--- touch a file — and the verdict line names the path in place of
+--- the printed body.
 --- @param s store.Store The store
 --- @param kind string builder | research | review | refine | decompose
 --- @param id string The item the brief is about
+--- @param out string | nil Write the body here instead of stdout
 --- @return integer Exit code
-local function cmd_brief(s: store.Store, kind: string, id: string): integer
+local function cmd_brief(s: store.Store, kind: string, id: string,
+    out?: string): integer
+  out = out or ""
   local template = KINDS[kind or ""]
   if template == nil then
     return gate.verdict_line("brief", false,
@@ -321,9 +329,24 @@ local function cmd_brief(s: store.Store, kind: string, id: string): integer
     values["HEAD_SHA"] = head_sha
   end
   local body = fill(template, values) .. "\n\n" .. brieftext_friction.ASK
-  print(body)
   local scan_body = fill(template, scan_values(values)) .. "\n\n" .. brieftext_friction.ASK
   local left = unfilled(scan_body)
+  if out ~= "" then
+    local wok, werr = fs.write(out, body)
+    if not wok then
+      return gate.verdict_line("brief", false,
+        ("could not write %s: %s"):format(out, werr))
+    end
+    local tail_note = "nothing left to fill — read it whole, it is your brief verbatim"
+    if #left > 0 then
+      tail_note = ("fill %s, then read it whole, it is your brief verbatim"):format(
+        table.concat(left, ", "))
+    end
+    return gate.verdict_line("brief",
+      true, ("%s brief for %s written to %s, claim it as %s — %s"):format(
+        kind, tail.handle(it.id), out, label, tail_note))
+  end
+  print(body)
   local tail_note = "nothing left to fill — paste the body verbatim"
   if #left > 0 then
     tail_note = ("fill %s, then paste the body verbatim"):format(
@@ -338,7 +361,7 @@ local record brief
   fill: function(text: string, values: {string: string}): string
   unfilled: function(text: string): {string}
   mint_label: function(kind: string, handle: string): string
-  cmd_brief: function(s: store.Store, kind: string, id: string): integer
+  cmd_brief: function(s: store.Store, kind: string, id: string, out?: string): integer
 end
 
 local M: brief = {

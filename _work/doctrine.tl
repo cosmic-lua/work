@@ -346,7 +346,10 @@ checkout or push rights to this board repository:
   them: a hand-written brief drifts, and the emitted one already
   carries the spec, the item's coordinates, and the standing rules
   (ready PR with the Board: line, no pasted gate output, do-not-merge,
-  the capture rule, the bounce rule).
+  the capture rule, the bounce rule). A brief may also be handed to an
+  agent as `--out FILE`'s path, with the instruction "read it whole,
+  it is your brief verbatim" — the file is exact where a pasted
+  prompt may not be.
 - A research slice (its spec says its deliverable is board state, not
   a diff — no product PR) still gets a claim and a spawned agent, via
   `brief research ID` in place of `brief builder ID`: the agent does
