@@ -1,3 +1,5 @@
 title: bin/gitboard.pin: bump to the work release carrying #60–#62 (take --open, verdict lands the PR)
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
+claim: build-Vm86_JZLA-f6f470de
+builders: build-Vm86_JZLA-f6f470de
