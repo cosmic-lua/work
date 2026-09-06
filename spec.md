@@ -47,6 +47,31 @@ sitting on an entirely unrelated PR just failed because of it. The
 `3IvOz0wC` fix narrowed the failure window but did not close it, and
 this item's job — stabilize `lfetch.c`'s line coverage — is not done.
 
+**Second data point, same day: a re-run of that same CI job landed on
+the EXACT same value.** `cosmic-lua/cosmopolitan#388`'s `build` check
+was re-run once (`rerun_failed_jobs`) and failed again, identically:
+
+    tool/net/lfetch.c: covered 582, floor 585
+
+(job attempt 2: https://github.com/cosmic-lua/cosmopolitan/actions/runs/34008013671/job/101419714221,
+same head sha, run 2026-09-06T03:20Z)
+
+Two independent job runs landing on the identical covered-line count
+(582, not just "below 585 again") is itself evidence worth weighing:
+pure random scheduling noise across two different GitHub-hosted
+runners hitting the exact same line count twice is a coincidence a
+real investigation should not assume away. A plausible alternative
+this item's Change should test explicitly: GitHub Actions' own runner
+class (shared vCPU, contended scheduling) may deterministically or
+near-deterministically select the LOW end of the range this file's
+tests can produce, while local dev-container runs (this item's first
+builder attempt: 9 runs, all in 586-592) sample a distributionally
+different, quieter environment that never reaches it. If so, "flaky"
+is the wrong frame — it may be closer to "reliably lower under CI's
+specific resource contention," which changes where the real fix
+belongs (CPU/IO contention in CI specifically, not just any timing
+race).
+
 ## Change
 
 Investigate why `tool/net/lfetch.c`'s line coverage specifically
@@ -55,6 +80,15 @@ measured (>= 582-592, 11 lines, not 586-592), and stabilize it for
 real this time. Likely paths (not prescribed — the build should
 measure and pick, per this repo's own measurement-first doctrine):
 
+- First, test the CI-contention hypothesis directly before assuming
+  pure randomness: reproduce under artificial CPU/IO contention
+  locally (e.g. running `MODE=cov` alongside a CPU-saturating
+  background load, or under `nice`/cgroup-limited CPU shares closer to
+  a shared GitHub Actions runner) and see whether covered count
+  reliably drops toward 582 under contention and stays near 590-592
+  when quiet. This is cheaper than chasing the CI environment directly
+  and would confirm or rule out the "reliably lower under contention"
+  reading before deciding where the real fix belongs.
 - Identify the specific non-deterministic branch(es) in
   `test_fetch_proxy.lua`/`test_fetchstream_edge.lua` (or elsewhere)
   that sometimes execute and sometimes don't, and either make the test
