@@ -6,40 +6,52 @@ out of scope for that item (which explicitly excludes a general audit
 of test determinism).
 
 `tool/lua/test_fetchstream_edge.lua`'s `test_stream_https` makes a
-REAL network call to `https://httpbin.org/stream/3` — one of four
-independent flaky branches that item's own investigation traced
+real network call to `https://httpbin.org/stream/3` — one of (at
+least) four independent branches `8TDI_yqOV`'s investigation traced
 `lfetch.c`'s line-coverage variance to (gcov per-line JSON diffed
-across ~50 `MODE=cov` runs; this branch's participation alone explains
-part of the observed 579-592 range). Independent of the coverage
-question, an external, live, third-party network dependency inside
-what runs as a unit test is a general test-hygiene concern: it is not
-`SKIP`-gated the way `test_proxy_env_var` and similar
-environment-conditional tests elsewhere in this suite are, it is
-timing- and availability-dependent on a third party this project does
-not control, and its participation is what makes some `MODE=cov` runs
-(including at least some real CI runs) exercise a different code path
-than others — non-hermetic by construction.
+across ~50 `MODE=cov` runs; PR #390 derives the true floor, 579, as
+the always-covered base, with this branch's real-vs-skipped execution
+contributing part of the 579-592 range).
+
+**This is NOT a new test-correctness question — it was already raised
+and settled by `mQ2B_8Pwr` (accepted, PR #296, completed 2026-08-30),
+which explicitly considered this exact test:**
+
+> One test (`test_stream_https`) reaches `httpbin.org/stream/3` over
+> the real network and already self-skips with a printed note when
+> the network is unavailable... carry that guard as-is; it needs no
+> policy decision the way the proxy slice's httpbin tests do, since it
+> degrades gracefully by construction.
+
+That verdict stands and this item does not re-litigate it: the test's
+own self-skip design is correct and settled. What `mQ2B_8Pwr` could
+not have weighed is `8TDI_yqOV`'s parent item `3IvOz0wC`'s
+line-coverage floor gate (`tool/lua/line_coverage_floor.lua`), which
+did not exist until 2026-09-06 — a gate that fails a build based on
+exactly how many lines got covered, which is sensitive to whether this
+test's network branch fires or skips in a given run. The self-skip
+design being correct for test HYGIENE doesn't make its variable
+participation free for line-COVERAGE ACCOUNTING, which is this item's
+actual, narrower scope.
 
 ## Change
 
-Not written — this item's Change needs a decision the discovering
-builder's evidence does not settle: mock the endpoint (a local
-fixture server, matching how `test_fetch_local.lua`'s other tests in
-the same file avoid real network calls), gate it behind a
-network-available check with a `SKIP` message (the existing pattern
-for `test_http_proxy_env_var`, `_tool/testrun.tl` or wherever this
-suite's `SKIP` convention lives), or accept it as a deliberate
-integration-style probe and exclude ITS specific lines from
-`tool/lua/line_coverage_floor.lua`'s accounting for `lfetch.c` rather
-than changing the test. Refining this item should read `8TDI_yqOV`'s
-merged PR (`#390`) first — it already narrows the exact lines this
-branch touches (`tool/lua/lcosmo.c`... no, `tool/net/lfetch.c:447,448,456`
-per that PR's own summary) and the gcov-diffing technique used to find
-them, rather than re-deriving either from scratch.
+Not written — needs `8TDI_yqOV`'s merged PR (`#390`) read first: it
+already narrows the exact lines this branch touches
+(`tool/net/lfetch.c:447,448,456` per that PR's own summary) and
+derives 579 as the always-covered floor precisely BECAUSE it treats
+this branch (and the other three flaky ones) as sometimes-absent —
+i.e. the floor-accounting side of this may already be as settled as
+the test-hygiene side was by `mQ2B_8Pwr`. Refining this item is mostly
+a verification pass: confirm `line_coverage_floor.lua`'s current
+579 comment (post-#390) already accounts for this branch's
+skip/no-skip variance correctly, rather than assuming there is
+remaining work. If it does, this item should close as already
+resolved by `#390`, not produce a second Change.
 
 ## Non-goals
 
-Not re-opening `8TDI_yqOV`'s own scope (the floor value, the other
-three flaky branches it also identified) — this item is specifically
-about `test_stream_https`'s live network dependency as a test-hygiene
-question independent of coverage accounting.
+- Not re-opening `mQ2B_8Pwr`'s settled test-hygiene verdict — the
+  self-skip design is correct and stays.
+- Not re-opening `8TDI_yqOV`'s own scope (the floor value, the other
+  three flaky branches it also identified).
