@@ -1,9 +1,9 @@
 title: builder/review briefs: say what a real mutation is (replace the needle, never extend it)
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-VGEI_R3nE-f6f470de
 pr: 49
 verdict: accept
 verdict_head: 72f471b2259775cd49841acd88b4935630471e7c
 verdict_spec: 6ce4edf94c23e75ab03031535a979c281de2a209
+resolution: completed
 builders: build-VGEI_R3nE-f6f470de
