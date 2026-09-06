@@ -10,6 +10,7 @@ local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local fixture = require("_work.fixture")
 local gh = require("_work.gh")
+local review = require("_work.review")
 local store = require("_work.store")
 local verbs = require("_work.gitverbs")
 local vrd = require("_work.gitverdict")
@@ -87,6 +88,37 @@ local function with_reviews_fixture(revs: {gh.Review} | nil, f: function(): bool
   end
   local ok, err = pcall(f)
   gh.reviews = real_reviews
+  if not ok then
+    error(err, 0)
+  end
+end
+
+--- Stand `gh.head_checks`, `gh.pull` and `gh.get_files` in for a green,
+--- non-mechanical PR at a fixed head — the same fixture shape
+--- `_work.brief_test`'s own `with_ci_fixture` uses for its "green"
+--- case, reused here so a review brief's `<ROUND_CONTEXT>` fill can be
+--- exercised without dragging that file's whole state table along.
+--- @param sha string The PR's current head
+--- @param f function(): boolean The test body; returns true when done
+local function with_review_pr_fixture(sha: string, f: function(): boolean)
+  local real_head_checks, real_pull, real_get_files
+  = gh.head_checks, gh.pull, gh.get_files
+  gh.head_checks = function(_s: store.Store, _pr: integer, _repo: string | nil):
+    gh.HeadChecks | nil, string
+    return {state = "green", head_sha = sha, runs = {}}, ""
+  end
+  gh.pull = function(_s: store.Store, number: integer, _repo: string | nil):
+    review.Pull | nil, string
+    return {number = number, draft = false, merged = false, body = "",
+      head_sha = sha, base = "", state = "open", merge_sha = "",
+      additions = 120, deletions = 30}, ""
+  end
+  gh.get_files = function(_s: store.Store, _n: integer, _r: string | nil):
+    {string} | nil, string
+    return {"cosmic/example.tl"}, ""
+  end
+  local ok, err = pcall(f)
+  gh.head_checks, gh.pull, gh.get_files = real_head_checks, real_pull, real_get_files
   if not ok then
     error(err, 0)
   end
@@ -317,6 +349,61 @@ local function test_review_brief_names_its_own_worktree_path_unconditionally()
         "the review brief names its own fresh-checkout path: " .. out)
       assert(out:find("<WORKTREE>", 1, true) == nil,
         "the placeholder is gone: " .. out)
+      return true
+    end)
+end
+
+-- A second review round fills `<ROUND_CONTEXT>` with round 1's own
+-- formal review, verbatim, plus the fixed "what round 1 accepted is
+-- settled" sentence — so a reviewer never relitigates ground round 1
+-- already covered. Filled only once the PR's head has actually moved
+-- past the one the standing verdict judged; `rework_item` records that
+-- judged head as `abc1234`, so a current head of anything else is a
+-- move.
+local function test_review_brief_fills_round_context_after_a_moved_head()
+  local s = init_state_repo("brief-round-context")
+  local _, leaf = root_with_leaf(s)
+  rework_item(s, leaf, 42)
+  with_reviews_fixture({
+      {state = "CHANGES_REQUESTED", body = "the fs.join call leaks a temp dir",
+        submitted_at = "2024-01-01T00:00:00Z"},
+    }, function(): boolean
+      with_review_pr_fixture("deadbee0feedfacebeef1234567890abcdef1234",
+        function(): boolean
+          local code, out = brief_and_capture(s, "review", leaf)
+          assert(code == 0, "a moved-head rework item still earns its review brief")
+          assert(out:find("the fs.join call leaks a temp dir", 1, true) ~= nil,
+            "round 1's review body rides verbatim: " .. out)
+          assert(out:find("Confirm each finding above is closed — repeat "
+              .. "its own reproduction —", 1, true) ~= nil
+            and out:find("what round 1 accepted is settled.", 1, true) ~= nil,
+            "the fixed sentence rides verbatim: " .. out)
+          assert(out:find("<ROUND_CONTEXT>", 1, true) == nil,
+            "the placeholder is gone: " .. out)
+          return true
+        end)
+      return true
+    end)
+end
+
+-- A first-round item — no standing `request changes` verdict at all —
+-- fills `<ROUND_CONTEXT>` as empty: neither round 1's review nor the
+-- fixed sentence has anything to say about a review that has not
+-- happened yet.
+local function test_review_brief_leaves_round_context_empty_on_a_first_round()
+  local s = init_state_repo("brief-round-context-first")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  with_review_pr_fixture("cafef00dfeedfacebeef1234567890abcdef1234",
+    function(): boolean
+      local code, out = brief_and_capture(s, "review", leaf)
+      assert(code == 0, "a first-round item still earns its review brief")
+      assert(out:find("accepted is settled", 1, true) == nil,
+        "no round context on a first round: " .. out)
+      assert(out:find("<ROUND_CONTEXT>", 1, true) == nil,
+        "empty, not the raw placeholder: " .. out)
       return true
     end)
 end

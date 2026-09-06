@@ -32,6 +32,29 @@
 --- fails TLS verification without it and succeeds with it on the
 --- network this was measured against; the measurement used a plain
 --- fetch rather than a live `verdict`, which would mutate the board.
+---
+--- `<ROUND_CONTEXT>` (`REVIEW` only, between the spec block and "How
+--- to review") is `_work.brief`'s fill for a SECOND (or later) review
+--- round: the prior request-changes verdict's judged head, the PR's
+--- current head, the round count, and that round's own formal review
+--- body, spliced from `ROUND` below — always the same "" a fresh, not
+--- yet reworked item's `<BOUNCE_CONTEXT>` fills, but rendered as an
+--- actual empty string rather than left as literal placeholder text,
+--- since nothing ever hand-fills this one the way an orchestrator
+--- might hand-fill a bounce paragraph.
+
+local ROUND < const > = [[
+## Round <ROUND_NUMBER> context — this is a rework, not a fresh review
+
+Round <ROUND_NUMBER> requested changes on head `<JUDGED_HEAD>`; the
+PR's head has since moved to `<CURRENT_HEAD>`. That round's review,
+verbatim:
+
+> <ROUND_FINDING>
+
+Confirm each finding above is closed — repeat its own reproduction —
+then judge the whole diff; what round 1 accepted is settled.
+]]
 
 local REVIEW < const > = [[
 You are a fresh-context code reviewer for `<REPO>`. You have never
@@ -57,6 +80,7 @@ review re-executes.
 <SPEC>
 ---
 
+<ROUND_CONTEXT>
 ## How to review — the posture is ADVERSARIAL
 
 Your job is to try to make this diff fail, not to confirm it looks
@@ -314,12 +338,14 @@ local record brieftext_review
   REVIEW: string
   REVIEW_SCRIPT: string
   RESEARCH_REVIEW: string
+  ROUND: string
 end
 
 local M: brieftext_review = {
   REVIEW = REVIEW,
   REVIEW_SCRIPT = REVIEW_SCRIPT,
   RESEARCH_REVIEW = RESEARCH_REVIEW,
+  ROUND = ROUND,
 }
 
 return M
