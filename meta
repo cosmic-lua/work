@@ -7,3 +7,4 @@ verdict: request changes
 verdict_head: 511d68d7787e2d9173f77ae211f01e0169d72748
 verdict_spec: d8df641bcc80e580346f8036435ce4ba8e9d984a
 builders: build-kTNP_QIG7-f6f470de
+speccers: build-kTNP_QIG7-f6f470de
