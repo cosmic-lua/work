@@ -1,0 +1,3 @@
+title: lint --max-lines: one end-to-end case through the built binary, so the dispatcher seam has a test
+parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
+target: cosmic-lua/cosmic
