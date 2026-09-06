@@ -117,14 +117,15 @@ local CSPEC: flags.CommandSpec = {
         .. "bootstrap, all in one\ncommand — run right after `take ID` "
         .. "succeeds.\n\nResolves ID's repo to a local checkout, branches "
         .. "and adds a worktree beside it\n(never reused: an existing "
-        .. "branch or path both refuse), fetches every --ref\ninto it, "
-        .. "and bootstraps it.",
+        .. "branch or path both refuse), bootstraps it, then fetches "
+        .. "each --ref into\nrefs/spike/<basename>.",
         flags = {dir_flag(),
           {long = "root", arg = "DIR",
             help = "the local checkout to branch from; default is "
             .. "resolved from ID's repo"},
           {long = "ref", arg = "REF", repeated = true,
-            help = "fetch REF into the worktree too (repeatable)"}}}},
+            help = "fetch REF into refs/spike/<basename> after "
+            .. "bootstrap (repeatable)"}}}},
     {name = "take", summary = "claim ID: the pull (spec bar and doing "
       .. "bound apply), its review when it awaits a verdict, or record "
       .. "its handover (--pr N for a diff, --result for a research spec)",

@@ -7,8 +7,11 @@
 --- fixture with no sibling layout to fake; neither answering refuses,
 --- naming the URL to clone) — branches and adds a worktree beside it
 --- (never reused: an existing branch or path both refuse, checked
---- before any network call), fetches every `--ref` into it, and
---- bootstraps it. The worktree lands at `<checkout>/../wt/<id8>`,
+--- before any network call), bootstraps it, then fetches each `--ref`
+--- into `refs/spike/<ref-basename>` — after the bootstrap, whose own
+--- `--make fetch` moves `FETCH_HEAD`, so a plain `git fetch` there
+--- would be clobbered before a caller could read it. The worktree
+--- lands at `<checkout>/../wt/<id8>`,
 --- `<id8>` the item id's first 8 characters, `take`'s own branch
 --- name — the sequence every builder brief used to spend its first
 --- 30-40 tool calls doing by hand.
@@ -125,11 +128,21 @@ local function bootstrap(path: string): string
   return "nothing (unrecognized tree)"
 end
 
+--- The local name a `--ref` value lands under: its last `/`-separated
+--- segment, itself when it has none — so `feature/x` and a bare `x`
+--- both land at `refs/spike/x`.
+--- @param ref string The `--ref` value as given
+--- @return string The basename to store it under
+local function ref_basename(ref: string): string
+  return ref:match("([^/]+)$") or ref
+end
+
 --- worktree: create ID's builder checkout in one command.
 --- @param s store.Store The store
 --- @param id string The item to make a checkout for
 --- @param root_override string `--root`, "" to auto-resolve
 --- @param refs {string} `--ref` occurrences, fetched into the worktree
+--- as `refs/spike/<ref-basename>` after bootstrap
 --- @return integer Exit code
 local function cmd_worktree(s: store.Store, id: string, root_override: string,
     refs: {string}): integer
@@ -173,8 +186,11 @@ local function cmd_worktree(s: store.Store, id: string, root_override: string,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
+  local bootstrapped = bootstrap(path)
   for _, ref in ipairs(refs) do
-    local r = child.run({"git", "fetch", "origin", ref}, {cwd = path})
+    local name = ref_basename(ref)
+    local r = child.run({"git", "fetch", "origin",
+        ref .. ":refs/spike/" .. name}, {cwd = path})
     if r == nil or not r.ok then
       return gate.verdict_line("worktree", false,
         ("git fetch origin %s (--ref) failed: %s"):format(ref,
@@ -182,7 +198,7 @@ local function cmd_worktree(s: store.Store, id: string, root_override: string,
     end
   end
   return gate.verdict_line("worktree", true,
-    ("%s at %s (bootstrapped %s)"):format(id8, path, bootstrap(path)))
+    ("%s at %s (bootstrapped %s)"):format(id8, path, bootstrapped))
 end
 
 local record gitworktree

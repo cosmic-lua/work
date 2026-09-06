@@ -139,25 +139,40 @@ local function test_worktree_refuses_a_repeat()
     "a second call over the same branch and path refuses")
 end
 
--- Each `--ref` lands in the worktree as `FETCH_HEAD`, readable without
--- a checkout of its own.
+-- Each `--ref` lands in the worktree as `refs/spike/<basename>` —
+-- fetched AFTER the (stubbed) bootstrap, so its own `--make fetch`
+-- cannot clobber it — named from the ref's last path segment even
+-- when the ref itself is nested (`notes/spike` lands at
+-- `refs/spike/spike`, not `refs/spike/notes/spike`).
 local function test_worktree_fetches_each_ref()
-  local checkout = make_checkout("ref", "none")
+  local checkout, base = make_checkout("ref", "cosmic")
   git(checkout, {"fetch", "origin", "main"})
-  git(checkout, {"checkout", "-q", "-b", "spike", "origin/main"})
+  git(checkout, {"checkout", "-q", "-b", "notes/spike", "origin/main"})
   assert(fs.write(fs.join(checkout, "SPIKE"), "spike content\n"))
   git(checkout, {"add", "SPIKE"})
   git(checkout, {"commit", "-q", "-m", "spike"})
-  git(checkout, {"push", "-q", "origin", "spike"})
+  git(checkout, {"push", "-q", "origin", "notes/spike"})
   git(checkout, {"checkout", "-q", "main"})
-  git(checkout, {"branch", "-q", "-D", "spike"})
+  git(checkout, {"branch", "-q", "-D", "notes/spike"})
   local s, leaf = item_with_repo("wt-ref")
   local id8 = leaf:sub(1, 8)
   local expect = fs.join(fs.dirname(checkout), "wt", id8)
-  assert(worktree.cmd_worktree(s, leaf, checkout, {"spike"}) == 0)
-  local r = assert(child.run({"git", "show", "FETCH_HEAD:SPIKE"}, {cwd = expect}))
+  local prior = env.get("GITBOARD_WORKTREE_BOOTSTRAP")
+  assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", "0"))
+  local ok, err = pcall(function(): boolean
+      assert(worktree.cmd_worktree(s, leaf, checkout, {"notes/spike"}) == 0)
+      return true
+    end)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_WORKTREE_BOOTSTRAP")
+  else assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", prior)) end
+  if not ok then
+    error(err, 0)
+  end
+  assert(not fs.is_file(fs.join(base, "bootstrap_ran")),
+    "the stub never actually ran bin/cosmic — the ref still landed after it")
+  local r = assert(child.run({"git", "show", "refs/spike/spike:SPIKE"}, {cwd = expect}))
   assert(r.ok and r.stdout == "spike content\n",
-    "the ref's content reads back from FETCH_HEAD: " .. r.stdout .. r.stderr)
+    "the ref's content reads back from refs/spike/spike: " .. r.stdout .. r.stderr)
 end
 
 -- Bootstrap detects a cosmic tree (its own verdict names it) but
