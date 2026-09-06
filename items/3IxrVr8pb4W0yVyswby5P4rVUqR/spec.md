@@ -41,6 +41,21 @@ first workflow consumer of the matcher.
   files; a pattern with one capture hits two of them in path order,
   a pattern with no hits exits 1 with `find: 0 hit(s)`, a broken
   pattern refuses with exit 2.
+- `cosmic/ast/init.tl` (new, ≤ 40 lines): the public parent `cosmic.ast`
+  — `_cli/visibility.tl` refuses `require("cosmic.ast.match")` from
+  outside `cosmic/` ("reaches a cosmic-internal shard … use the public
+  parent module"), and `ls cosmic/ast/` shows no `init.tl` while every
+  other multi-shard module has one (`cosmic/fs/init.tl`,
+  `cosmic/proc/init.tl`). It re-exports, by name and nothing more:
+  `Node`, `Parsed`, `parse` from `cosmic.ast.node`; `walk`, `span_start`,
+  `span_end` from `cosmic.ast.walk`; `desugar`, `compile_pattern`,
+  `match` from `cosmic.ast.match`, with a one-line module doc.
+  `_cli/find.tl` requires only `cosmic.ast`. Ratchet: a `.cosmic-coverage`
+  row for the new file.
+- Default file selection is `_make.check`'s exported `select_files(proj,
+  paths)` over `_make/project.tl`'s `scan(".")` — the rule `--check` uses,
+  called, never copied. `M` in the verdict line is files SEARCHED; the
+  spec's two-of-three fixture prints `find: 2 hit(s) in 3 file(s)`.
 - `sys/help.md` (the `--help` text): one line for the flag;
   `docs/guides/` gets nothing until `--rewrite` lands.
 
