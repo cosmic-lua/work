@@ -1,0 +1,3 @@
+title: gitboard new --parent: a child with no --after/--before ranks last, never unranked, and the verdict line says where
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/work
