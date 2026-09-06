@@ -1,10 +1,10 @@
 title: cosmopolitan: zip.open's literal-mode overload erases to a union for read mode — add zip.reader as a single-shape entry point
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmopolitan
-claim: build-VHkKaA5k-2f92e512
 pr: 389
 verdict: accept
 verdict_head: f54729d5c98ada662fb5ddff55568bfd16c2e5c1
 verdict_spec: 04ba686775d495fd853680e7afb699e8e6e3d1a1
+resolution: completed
 builders: build-VHkKaA5k-2f92e512
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b
