@@ -1,3 +1,5 @@
 title: gitboard brief: product_root() breaks under the sibling-reuse GITBOARD_DIR shape
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+claim: build-wwWD_cwM5-f6f470de
+builders: build-wwWD_cwM5-f6f470de
