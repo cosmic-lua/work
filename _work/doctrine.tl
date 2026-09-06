@@ -342,6 +342,9 @@ checkout or push rights to this board repository:
   it once the brief repeats the same convention. A fresh worktree
   bootstraps first; a copied tree drops its stale output directory,
   or its first gate result is fiction.
+- A builder's worktree of the board repo is linked to the live clone;
+  the tool refuses board writes there, so a builder never smoke-tests
+  a verb outside the test suite's fixtures.
 - The brief carries the spec verbatim — "read the board and do it"
   turns a specified item back into an interpretation. Emit briefs
   with `brief builder ID` / `brief research ID` / `brief review ID` /

@@ -7,10 +7,15 @@
 --- (`stage`'s validation, `read_spec` for its unmoved-sidecar default,
 --- `snapshot_item` for the post-write baseline, `NOOP_PREFIX` for its
 --- own no-op message) — `_work.store` never requires this module.
+--- `save` also refuses, before staging anything, when the store's root
+--- is a linked worktree of another checkout (`_work.storeinit`'s
+--- `linked_worktree_refusal` — the same guard `init_repo` runs, so
+--- there is one implementation of the check, not two).
 local item = require("_work.item")
 local gitwrite = require("_work.gitwrite")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local storeinit = require("_work.storeinit")
 
 --- Record the session `save` should credit as author for whatever it
 --- writes next — the identity a verb that knows its caller threads
@@ -78,6 +83,10 @@ end
 --- "nothing to record: ..." message; the failure detail otherwise
 local function save(s: store.Store, it: item.Item, message: string,
     spec?: string, also?: {item.Item}): boolean, string
+  local refusal = storeinit.linked_worktree_refusal(s.root)
+  if refusal ~= nil then
+    return false, refusal
+  end
   local batch: {item.Item} = {it}
   for _, other in ipairs(also or {}) do
     batch[#batch + 1] = other
