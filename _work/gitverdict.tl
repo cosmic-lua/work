@@ -26,8 +26,10 @@
 --- identity, so the subject is the only place the log can record who
 --- judged. The one refusal on it is shape (`item.identity_refusal`):
 --- a dash-led name is a flag a mangled argv absorbed, not a session.
+local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
+local ghwrite = require("_work.ghwrite")
 local item = require("_work.item")
 local publish = require("_work.publish")
 local review = require("_work.review")
@@ -78,10 +80,14 @@ end
 --- @param session string | nil The reviewing session; rides in the subject
 --- @param force boolean | nil Record over the distance guard — repair only
 --- @param why string | nil Why --force was needed
+--- @param body_file string | nil The formal review's body, a request
+--- changes or reject verdict against a real PR requires this
+--- @param no_land boolean | nil An accept skips the GitHub write and
+--- records only, for a repo the token cannot merge
 --- @return integer Exit code
 local function cmd_verdict(s: store.Store, id: string, kind: string,
     pr: integer, head: string, session?: string, force?: boolean,
-    why?: string): integer
+    why?: string, body_file?: string, no_land?: boolean): integer
   local frc = force or false
   local rsn = why or ""
   local forced = gate.force_refusal(frc, rsn)
@@ -213,23 +219,80 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
     return gate.verdict_line("verdict", false,
       "REFUSED: " .. already_judged_refusal(id, head))
   end
-  -- An accept asserts the work is fit to land, so it is the one
-  -- verdict whose truth depends on the request's own state. Checking
-  -- it here collapses two cases the landing step handles badly: a
-  -- merged request needs no land at all, and a closed unmerged one
-  -- has no land that could succeed. `p` is the same read the head
-  -- guard above already made — one snapshot for both decisions — so
-  -- there is nothing further to fetch or fail here; no origin (or no
-  -- PR) just means the ordinary path carries on and `land` stays the
-  -- backstop it already is.
+  -- A verdict against a real PR performs the GitHub side itself, so a
+  -- reviewer touches no GitHub tool of its own — the one write is
+  -- skipped exactly when there is nothing to write to: no origin (a
+  -- local-only board), or a research handover with no PR at all. `p`
+  -- is the same read the head guard above already made — one
+  -- snapshot for every decision below — so there is nothing further
+  -- to fetch here.
   local merged_sha = ""
-  if kind == "accept" and judged ~= 0 and p ~= nil then
-    local blocked = review.blocks_accept(p)
-    if blocked then
-      return gate.verdict_line("verdict", false, "REFUSED: " .. blocked)
-    end
-    if p.merged then
-      merged_sha = p.merge_sha
+  local pre_merged = false
+  if judged ~= 0 and p ~= nil then
+    if kind == "accept" then
+      -- An accept asserts the work is fit to land, so it is the one
+      -- verdict whose truth depends on the request's own state. This
+      -- collapses two cases the landing step below handles badly: a
+      -- merged request needs no land at all, and a closed unmerged
+      -- one has no land that could succeed.
+      local blocked = review.blocks_accept(p)
+      if blocked then
+        return gate.verdict_line("verdict", false, "REFUSED: " .. blocked)
+      end
+      if p.merged then
+        merged_sha, pre_merged = p.merge_sha, true
+      elseif not no_land then
+        -- The `sha` field makes a head that moved since the review a
+        -- refused merge, not a merge of unreviewed code. A 405/409
+        -- (branch protection, a merge queue, or "not mergeable") is
+        -- not a failure to report — it falls back to arming
+        -- auto-merge, which lands the same accept once the repo's
+        -- own requirements clear.
+        local slugged, slerr = gh.slug(s, it.repo)
+        if slugged == nil then
+          return gate.verdict_line("verdict", false, "REFUSED: " .. slerr)
+        end
+        local ok, msg = ghwrite.merge_pull(s, slugged, judged, p.head_sha)
+        if ok then
+          merged_sha = msg
+        elseif msg:find("HTTP 405", 1, true) ~= nil
+        or msg:find("HTTP 409", 1, true) ~= nil then
+          local amok, amerr = ghwrite.enable_auto_merge(s, p.node_id)
+          if not amok then
+            return gate.verdict_line("verdict", false, "REFUSED: " .. amerr)
+          end
+        else
+          return gate.verdict_line("verdict", false, "REFUSED: " .. msg)
+        end
+      end
+    elseif kind == "request changes" or kind == "reject" then
+      -- The formal review `bounce_context` looks for — a plain
+      -- comment never satisfies it — so `--body` is required here,
+      -- not optional prose left to the caller's judgment.
+      if (body_file or "") == "" then
+        return gate.verdict_line("verdict", false,
+          ("REFUSED: %s on a PR needs --body FILE — the formal review "
+            .. "GitHub records"):format(kind))
+      end
+      local text, rerr = fs.read(body_file)
+      if text == nil then
+        return gate.verdict_line("verdict", false,
+          ("REFUSED: cannot read --body %s: %s"):format(body_file, rerr))
+      end
+      local slugged, slerr = gh.slug(s, it.repo)
+      if slugged == nil then
+        return gate.verdict_line("verdict", false, "REFUSED: " .. slerr)
+      end
+      local pok, perr = ghwrite.post_review(s, slugged, judged, p.head_sha, text)
+      if not pok then
+        return gate.verdict_line("verdict", false, "REFUSED: " .. perr)
+      end
+      if kind == "reject" then
+        local cok, cerr = ghwrite.close_pull(s, slugged, judged)
+        if not cok then
+          return gate.verdict_line("verdict", false, "REFUSED: " .. cerr)
+        end
+      end
     end
   end
   -- The judgment consumes the review claim, whoever held it: the
@@ -297,7 +360,7 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
     return gate.verdict_line("verdict", true, err)
   end
   local note = ""
-  if merged_sha ~= "" then
+  if pre_merged then
     note = (" (PR #%d was already merged)"):format(it.pr)
   end
   return gate.verdict_line("verdict", true,
@@ -307,7 +370,7 @@ end
 local record gitverdict
   cmd_verdict: function(s: store.Store, id: string, kind: string,
   pr: integer, head: string, session?: string, force?: boolean,
-  why?: string): integer
+  why?: string, body_file?: string, no_land?: boolean): integer
   already_judged_refusal: function(id: string, head: string): string
 end
 

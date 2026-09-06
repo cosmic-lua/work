@@ -30,6 +30,11 @@ local record Pull
   --- GitHub's own merge-readiness summary ("clean", "blocked",
   --- "unstable", "queued", ...); "" when GitHub reported none.
   mergeable_state: string
+  --- The pull request's GraphQL node id — what
+  --- `enablePullRequestAutoMerge` addresses it by, since the REST
+  --- merge endpoint's own refusal (branch protection, a merge queue)
+  --- has no REST equivalent.
+  node_id: string
 end
 
 --- One CI check on a head commit, reduced to what a gate reads.

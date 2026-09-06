@@ -66,9 +66,27 @@ local function test_the_builder_never_opens_its_own_pr()
   assert(BUILDER:find("take ID --open", 1, true) ~= nil,
     "the builder's Open a PR step must hand the PR off to "
     .. "`gitboard take ID --open` instead of opening one itself")
-  assert(REVIEW:find("mcp__github__enable_pr_auto_merge", 1, true) ~= nil,
-    "the review brief's accept bullet must name the GitHub MCP tool "
-    .. "fallback for enabling auto-merge")
+end
+
+-- `verdict` performs the GitHub side of a review itself, so the
+-- review brief must send a reviewer to no GitHub tool of its own —
+-- neither the `gh` CLI nor an MCP tool, and no "enable auto-merge"
+-- instruction, since `bin/gitboard verdict` is now the one command.
+local function test_the_review_brief_touches_no_github_tool_itself()
+  assert(REVIEW:find("mcp__github", 1, true) == nil,
+    "the review brief must name no GitHub MCP tool — `verdict` performs "
+    .. "the write itself")
+  assert(REVIEW:find("enable_pr_auto_merge", 1, true) == nil
+    and REVIEW:find("enable auto-merge", 1, true) == nil,
+    "the review brief must not instruct a reviewer to enable auto-merge "
+    .. "itself")
+  assert(REVIEW:find("bin/gitboard verdict <ITEM_ID> accept", 1, true) ~= nil,
+    "the accept line runs `gitboard verdict` directly")
+  assert(REVIEW:find(
+      "bin/gitboard verdict <ITEM_ID> request-changes --body FILE", 1, true)
+    ~= nil, "the request-changes line requires --body FILE")
+  assert(REVIEW:find("bin/gitboard verdict <ITEM_ID> reject --body FILE",
+      1, true) ~= nil, "the reject line requires --body FILE")
 end
 
 local function test_mutation_step_says_what_a_real_break_is()

@@ -113,6 +113,7 @@ local function pull(s: store.Store, number: integer, repo: string | nil):
     merge_sha = tostring(v["merge_commit_sha"] or ""),
     auto_merge = auto_merge,
     mergeable_state = tostring(v["mergeable_state"] or ""),
+    node_id = tostring(v["node_id"] or ""),
   }
 end
 

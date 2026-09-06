@@ -350,7 +350,8 @@ local function main(...: string): integer
     local pr = math.tointeger(tonumber(d.parsed.values["pr"] or "0")) or 0
     local who = session.resolve(d.parsed.values["session"])
     return vrd.cmd_verdict(s, id, kind, pr, d.parsed.values["head"] or "", who,
-      d.parsed.switches["force"], d.parsed.values["why"] or "")
+      d.parsed.switches["force"], d.parsed.values["why"] or "",
+      d.parsed.values["body"] or "", d.parsed.switches["no-land"])
   end
   if d.command == "done" then
     local by = ""
