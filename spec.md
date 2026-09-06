@@ -23,6 +23,13 @@ changed site outside the hits, is a finding." `_work/doctrine_test.tl`
 and `_work/brieftext_test.tl`: each contains its sentence; the
 "structural finder" assertion is replaced.
 
+Measured after work#66 (2026-09-06): `wc -l _work/doctrine.tl` → 493.
+If the unconditional sentence does not fit under 500, move the `bar`
+topic's body string into a new `_work/doctrine_bar.tl` (the same
+split `brieftext_review.tl` made from `brieftext.tl`) and require it
+from `doctrine.tl`'s topic table — say so in the PR body; the doctrine
+tests read the rendered page, so they need no change for the move.
+
 ## Non-goals
 
 No change to `--find` itself; no requirement on specs over fewer than
