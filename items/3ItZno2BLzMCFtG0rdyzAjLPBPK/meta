@@ -1,10 +1,10 @@
 title: AGENTS.md: note that --check types on cosmic/** needs a fresh --make build first when checking a file against a just-edited sibling
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
-claim: build-zAjL_PBPK-f6f470de
 pr: 1757
 verdict: accept
 verdict_head: 9b6055b24c1f8be63abb21358633a2e926efac44
 verdict_spec: 07f06d8e2d663abe083e51aa03512104993a0acd
+resolution: completed
 builders: build-zAjL_PBPK-fe8c92c8 build-zAjL_PBPK-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73 build-zAjL_PBPK-f6f470de
