@@ -2,5 +2,6 @@ title: AGENTS.md: note that --check types on cosmic/** needs a fresh --make buil
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: build-zAjL_PBPK-f6f470de
+pr: 1757
 builders: build-zAjL_PBPK-fe8c92c8 build-zAjL_PBPK-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
