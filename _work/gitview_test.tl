@@ -147,6 +147,16 @@ local function test_status_honors_an_explicit_todo_count()
   assert(has(lines, "^  %.%.%. 7 more$"), table.concat(lines, "\n"))
 end
 
+-- `--todo` set to the exact todo count is the boundary between "some
+-- more" and "no more": every row renders and the trailer is silent,
+-- the same as `--todo 0`'s "all" case but reached by an explicit
+-- count rather than the sentinel.
+local function test_status_shows_no_trailer_when_todo_equals_the_total()
+  local lines = status(ten_todo_items(), full_specs(), nil, nil, 10)
+  assert(shown_todo_rows(lines) == 10, table.concat(lines, "\n"))
+  assert(not has(lines, "more$"), table.concat(lines, "\n"))
+end
+
 local function test_status_renders_doing_against_the_bound()
   local lines, verdict = status(board_items(), full_specs())
   assert(has(lines, "^doing  1/10$"), table.concat(lines, "\n"))
