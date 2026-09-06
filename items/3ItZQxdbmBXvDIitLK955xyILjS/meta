@@ -3,6 +3,7 @@ parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
 target: cosmic-lua/cosmic
 claim: 420d657f-02df-5fbc-a892-9a8a603df39b
 result: 64dfe444456557d1cb6a7a51d59979617e8c806b
-verdict_spec: ed2d2b8d856836faf50654d451b5c74c7a597349
+verdict: accept
+verdict_spec: 64dfe444456557d1cb6a7a51d59979617e8c806b
 builders: 420d657f-02df-5fbc-a892-9a8a603df39b
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b
