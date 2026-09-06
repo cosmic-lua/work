@@ -44,3 +44,10 @@ the exact paths it checks).
 No change to how `bin/gitboard` fetches or verifies the pinned
 release, no change to `gitboard init`, no board-side change in
 cosmic-lua/work.
+
+## Access
+
+None at build time: `cosmic-lua/work` appears only as the fixture
+origin URL string the test sets on a throwaway local repo (`git remote
+add origin https://github.com/cosmic-lua/work`), matched by
+`bin/gitboard`'s suffix check and never fetched.
