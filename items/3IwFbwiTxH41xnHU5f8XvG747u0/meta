@@ -1,3 +1,4 @@
 title: test_fetchstream_edge.lua: test_stream_https makes a live network call to httpbin.org
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
+speccers: 2f92e512-19fc-5db1-af1f-01086dc185b4
