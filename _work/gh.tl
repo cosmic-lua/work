@@ -102,6 +102,16 @@ local function pull(s: store.Store, number: integer, repo: string | nil):
   if am is {string: any} then
     auto_merge = true
   end
+  local additions = 0
+  local av = v["additions"]
+  if av is integer then
+    additions = av
+  end
+  local deletions = 0
+  local dv = v["deletions"]
+  if dv is integer then
+    deletions = dv
+  end
   return {
     number = number,
     draft = v["draft"] == true,
@@ -114,7 +124,48 @@ local function pull(s: store.Store, number: integer, repo: string | nil):
     auto_merge = auto_merge,
     mergeable_state = tostring(v["mergeable_state"] or ""),
     node_id = tostring(v["node_id"] or ""),
+    additions = additions,
+    deletions = deletions,
   }
+end
+
+--- The file paths a pull request changes — what `brief`'s review
+--- selection reads, alongside `pull`'s `additions`/`deletions`, to
+--- tell a mechanical diff (no `.tl` file outside `*_test.tl`, or
+--- under 20 changed lines) from one that needs the full adversarial
+--- review. GitHub paginates at 100 per page; a diff wide enough to
+--- need a second page is never the small, mechanical shape the
+--- selection looks for, so one page is all this reads.
+--- @param s store.Store The store
+--- @param number integer The PR number
+--- @param repo string | nil The item's repo field, when it carries one
+--- @return {string} | nil The changed file paths
+--- @return string Error message
+local function get_files(s: store.Store, number: integer, repo: string | nil):
+  {string} | nil, string
+  local slugged, serr = slug(s, repo)
+  if slugged == nil then
+    return nil, serr
+  end
+  local path = ("/repos/%s/pulls/%d/files?per_page=100"):format(slugged, number)
+  local res, err = api.call("GET", path, s.root)
+  if res == nil then
+    return nil, err
+  end
+  if not api.is_success(res.status) then
+    return nil, api.error_of("GET", path, res)
+  end
+  local out: {string} = {}
+  local v = res.value
+  if not (v is {any}) then
+    return out
+  end
+  for _, entry in ipairs(v) do
+    if entry is {string: any} then
+      out[#out + 1] = tostring(entry["filename"] or "")
+    end
+  end
+  return out
 end
 
 --- Whether a 422 response is GitHub refusing a second open PR for a
@@ -403,6 +454,8 @@ local record gh
   review.Pull | nil, string
   checks: function(s: store.Store, sha: string, repo: string | nil):
   {review.CheckRun} | nil, string
+  get_files: function(s: store.Store, number: integer, repo: string | nil):
+  {string} | nil, string
   open_pull: function(s: store.Store, repo: string, head: string, base: string,
   title: string, body: string): integer | nil, string
   reviews: function(s: store.Store, number: integer, repo: string | nil):
@@ -419,6 +472,7 @@ local M: gh = {
   slug = slug,
   pull = pull,
   checks = checks,
+  get_files = get_files,
   open_pull = open_pull,
   reviews = reviews,
   latest_request_changes = latest_request_changes,

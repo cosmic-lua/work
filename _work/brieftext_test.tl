@@ -20,6 +20,7 @@ end
 
 local BUILDER < const > = flat(brieftext.BUILDER)
 local REVIEW < const > = flat(brieftext_review.REVIEW)
+local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 
 local function test_step_one_measures_headroom_before_the_first_edit()
   assert(BUILDER:find(
@@ -154,6 +155,17 @@ local function test_step_three_orders_coverage_after_the_last_test_edit()
     "step 3 must say to run --make coverage after the last test edit, "
     .. "not before, and --make build once before --check types on a "
     .. "file whose sibling moved")
+end
+
+-- The numbered-script review's mutation move is checkout-free — a
+-- copy of the guarded file taken with `git show <head>:<path>`, never
+-- a fresh checkout `REVIEW`'s own mutation paragraph sends a reviewer
+-- to make.
+local function test_the_review_script_mutates_a_git_show_copy()
+  assert(REVIEW_SCRIPT:find("git show", 1, true) ~= nil,
+    "the script template must name git show as its mutation source")
+  assert(REVIEW_SCRIPT:find("fresh checkout", 1, true) == nil,
+    "the script template must never send a reviewer to a fresh checkout")
 end
 
 local function test_step_five_says_to_commit_before_mutating()

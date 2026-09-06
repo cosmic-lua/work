@@ -1,24 +1,32 @@
 --- The review-role prompts `_work.brief` emits: `REVIEW` judges a
---- builder's PR, `RESEARCH_REVIEW` judges a research slice's spec
---- update. Split out of `_work.brieftext` so that module has headroom
---- for its non-review templates to grow; the fill grammar, the
---- placeholder rules, and the filling itself are unchanged — `brief`
---- still does the filling, this module only holds the two templates'
---- text.
+--- builder's PR the adversarial way, `REVIEW_SCRIPT` judges a
+--- mechanical one (no `.tl` file outside `*_test.tl`, or under 20
+--- changed lines) with a fixed four-move script instead,
+--- `RESEARCH_REVIEW` judges a research slice's spec update. Split out
+--- of `_work.brieftext` so that module has headroom for its
+--- non-review templates to grow; the fill grammar, the placeholder
+--- rules, and the filling itself are unchanged — `brief` still does
+--- the filling and the PR-shape selection between `REVIEW` and
+--- `REVIEW_SCRIPT`, this module only holds the templates' text.
 ---
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
 ---
---- `<WORKTREE>` (`REVIEW` only) is `_work.brief`'s own
+--- `<WORKTREE>` (`REVIEW` and `REVIEW_SCRIPT`, never
+--- `RESEARCH_REVIEW`) is `_work.brief`'s own
 --- `<root>/../wt/review-<id8>`, always filled — a fresh checkout the
 --- reviewer creates, unlike a builder's, which is filled only once
---- `worktree ID` has actually made it.
+--- `worktree ID` has actually made it. `REVIEW_SCRIPT`'s own mutation
+--- step never needs it — `git show <head>:<path>` into the scratchpad
+--- replaces the checkout for that one step — but its "Recording your
+--- verdict" section still names it for reading the diff itself, kept
+--- verbatim from `REVIEW`.
 ---
 --- `<PRODUCT_ROOT>` is the product checkout holding `bin/gitboard`;
 --- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
 --- (its parent's parent), since `bin/gitboard` fetches and execs its
 --- own pinned release rather than something built in the board
---- checkout. `SSL_USE_SYSTEM_CERTS=1` stays in both verdict blocks: a
+--- checkout. `SSL_USE_SYSTEM_CERTS=1` stays in every verdict block: a
 --- direct `cosmic.fetch` against `api.github.com` — the same call the
 --- verdict's PR-head check makes through `_work.gh`/`_work.api` —
 --- fails TLS verification without it and succeeds with it on the
@@ -85,6 +93,93 @@ unrelated text rather than extending it, flip a boolean rather than
 renaming it, and if the test stays green the guard is decoration.
 Do this from your own fresh checkout at `<WORKTREE>` — never reuse
 another agent's worktree.
+
+## Recording your verdict
+
+`verdict` performs the GitHub side of your verdict itself — you touch
+no GitHub tool of your own. CI is read from `gitboard show <ITEM_ID>`
+(the board's own head-check observation); read the diff with `git
+fetch origin <branch>` in your own checkout at `<WORKTREE>`.
+`bin/gitboard` in the product checkout fetches its own pinned release;
+this review is claimed under session `<REVIEW_SESSION>` — you MUST use
+that exact string. Export SSL_USE_SYSTEM_CERTS=1 before `verdict`,
+which reaches GitHub on your behalf.
+
+```
+cd <PRODUCT_ROOT>
+export SSL_USE_SYSTEM_CERTS=1
+bin/gitboard verdict <ITEM_ID> accept \
+  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+bin/gitboard verdict <ITEM_ID> request-changes --body FILE \
+  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+bin/gitboard verdict <ITEM_ID> reject --body FILE \
+  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+```
+
+Run exactly the one line matching your judgment: accept lands the PR
+itself (or arms auto-merge when GitHub refuses a direct merge); the
+middle and reject kinds need `--body FILE` — the concrete gaps, or
+what was fundamentally wrong, quoted with file:line, which `verdict`
+posts as the formal review. Do NOT call `gitboard done` after an
+accept — the item ends only once its merge completes, which is the
+orchestrator's job. If a reject failed because a decision is open,
+tell the orchestrator in your report so the question is filed as a
+child of the item and the item dropped.
+
+## Final report
+
+The verdict you recorded (or why you could not), the mutation-test
+you ran and its result, and any concrete findings quoted with
+file:line. Keep it factual and concise.
+]]
+
+local REVIEW_SCRIPT < const > = [[
+You are a fresh-context code reviewer for `<REPO>`. You have never
+seen this change before — that is deliberate: the review must come
+from a distance from the builder. Everything you need is below.
+
+## What you're reviewing
+
+Board item id: `<ITEM_ID>` (handle <HANDLE>)
+Title: <TITLE>
+Pull request: <PR_URL> (head sha `<HEAD_SHA>`)
+
+Fetch the PR diff and description yourself. Read the current PR
+state fresh; do not trust anything here except the spec below, which
+is authoritative. The builder's PR description makes claims — read
+them, but verify independently. Its `## Acceptance` bullets, if any,
+were the refiner's worked proof at spec time, not a checklist this
+review re-executes.
+
+## The spec this PR is supposed to satisfy (verbatim)
+
+---
+<SPEC>
+---
+
+## How to review — a numbered script
+
+This diff is mechanical: no changed `.tl` file outside `*_test.tl`,
+or fewer than 20 changed lines in total. Four fixed moves, in order:
+
+1. Read the diff and the check runs, fresh, on the PR's CURRENT
+   head. Red or still running ends the review immediately — record
+   nothing, stop and report why. Green means the gate already ran on
+   this exact head — never re-run `--make ci` or the full test stage
+   yourself.
+2. Verify the one measured fact the spec names, against the diff's
+   real effect. A moved number is a finding to quote, not by itself
+   a reason to stop.
+3. Break the guard in a scratch copy: `git show <head>:<file>` the
+   file the diff's own test guards into the scratchpad, mutate the
+   copy (replace a matched needle with unrelated text, flip a
+   boolean — never just reword the text around it), run the diff's
+   own test file against the mutated copy, and watch it refuse.
+4. Record your verdict.
+
+Mutation-test at least one guard the change adds or preserves: break
+the guard in a copy of the file taken with `git show <head>:<path>`,
+never in a worktree, and confirm the refusal.
 
 ## Recording your verdict
 
@@ -213,11 +308,13 @@ Keep it factual and concise.
 
 local record brieftext_review
   REVIEW: string
+  REVIEW_SCRIPT: string
   RESEARCH_REVIEW: string
 end
 
 local M: brieftext_review = {
   REVIEW = REVIEW,
+  REVIEW_SCRIPT = REVIEW_SCRIPT,
   RESEARCH_REVIEW = RESEARCH_REVIEW,
 }
 
