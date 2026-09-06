@@ -1,9 +1,9 @@
 title: lint: a cosmic/<name>/ directory with shards and no init.tl is a finding — a library nobody outside cosmic/ can require
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-0Ked_J5tg-f6f470de
 pr: 1769
 verdict: accept
 verdict_head: 9539e7cc83a1c55d7aee817bab93b4eec0456548
 verdict_spec: ef98480fa0bf7014e35058fd9cccad4de97660c9
+resolution: completed
 builders: build-0Ked_J5tg-f6f470de
