@@ -2,8 +2,8 @@ title: cosmic/ast: rewrite/splice with comment-loss refusal and formatter integr
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-FsQs_WryR-f6f470de
-reviewer: review-FsQs_WryR-f6f470de
 pr: 1765
-verdict_head: 410a7bf051744622da068c8566cac13da79182d5
+verdict: accept
+verdict_head: 6eebd10fe5c60ae540b7d02302df322cc38b72f9
 verdict_spec: 64501dc594831c5cf5af6d2cc175337e3bd6a2f7
 builders: build-FsQs_WryR-f6f470de
