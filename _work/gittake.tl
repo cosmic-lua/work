@@ -21,6 +21,7 @@ local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
 local gitready = require("_work.gitready")
+local gitworktree = require("_work.gitworktree")
 local health = require("_work.health")
 local item = require("_work.item")
 local spec = require("_work.spec")
@@ -227,10 +228,7 @@ local function take_open(s: store.Store, it: item.Item, session: string,
       ("REFUSED: %s has no repo set — --open needs one to open a PR "
         .. "against"):format(id8))
   end
-  local base = it.base
-  if (base or "") == "" then
-    base = repo:find("cosmopolitan", 1, true) and "master" or "main"
-  end
+  local base = gitworktree.default_base(repo, it.base or "")
   local remote = ("https://github.com/%s.git"):format(repo)
   local r = child.run({"git", "ls-remote", "--heads", remote, id8})
   if r == nil or not r.ok or (r.stdout or ""):match("%S") == nil then

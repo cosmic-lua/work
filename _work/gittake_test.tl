@@ -237,15 +237,33 @@ local function test_a_stale_head_observation_falls_back_on_touched_at_recency()
 end
 
 -- `--open` and `--pr` are two ways to record one PR — never both at
--- once, and refused with no GitHub reach at all.
+-- once, and refused with no GitHub reach at all. The item carries a
+-- `repo` so the ONLY thing standing between this call and a live
+-- GitHub write is the `--pr` guard itself — a fixture with no repo
+-- would refuse for that reason too, unable to tell the two refusals
+-- apart.
 local function test_take_open_with_pr_refuses()
   local s = init_state_repo("gittake-open-with-pr")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
   local it = check.must(store.load(s, leaf))
-  assert(gittake.take_open(s, it, "session-a", 42, "") ~= 0,
-    "--open and --pr together are refused")
+  it.repo = "cosmic-lua/cosmic"
+  assert(storewrite.save(s, it, "fixture: give the item a repo"))
+  it = check.must(store.load(s, leaf))
+
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    lines[#lines + 1] = tostring((...))
+  end
+  local ok, code = pcall(gittake.take_open, s, it, "session-a", 42, "")
+  _G.print = old_print
+  assert(ok, tostring(code))
+  assert(code ~= 0, "--open and --pr together are refused")
+  local out = table.concat(lines, "\n")
+  assert(out:find("--pr", 1, true) ~= nil,
+    "the refusal names --pr: " .. out)
   assert(check.must(store.load(s, leaf)).pr == 0, "and nothing is recorded")
 end
 
