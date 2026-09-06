@@ -29,8 +29,9 @@ both fields in one commit, comment header unchanged. Then, from this
 checkout, `bin/gitboard sync` must end `gitboard-sync: state is
 current` and `bin/gitboard show --todo 0 | head -3` must print todo
 rows (the #48 flag; if #48 has not merged, `bin/gitboard help show`
-must at least run under the new pin) — paste both verdict lines in the
-PR body as the only evidence. `bin/cosmic --make ci` ends `ci: PASS`
+must at least run under the new pin) — the run is for the builder,
+never pasted into the PR body (`gitboard help build`: the body carries
+no evidence — CI is the proof). `bin/cosmic --make ci` ends `ci: PASS`
 (the pin file is data; the gate proves nothing else broke).
 
 ## Non-goals
