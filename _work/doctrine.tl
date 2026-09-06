@@ -152,11 +152,9 @@ a flag lists its three wiring files by name — `_work/gitcommands.tl`
 (the declaration), `_work/gitboard.tl` (the argv dispatch branch),
 `_work/gitverbs.tl` (the `cmd_<verb>` entry) — because a builder that
 finds them unnamed reads the whole dispatcher to decide whether it
-may touch them. Where the tree has a structural finder, a Change
-over N sites states the PATTERN that
-selects them and the count `cosmic --find` printed, never a list
-of file:line pairs a builder re-derives — the builder re-runs the
-pattern, and the reviewer diffs the PR against its hits. When the
+may touch them. A Change over N sites states the PATTERN that
+selects them and the count `cosmic --find PATTERN [PATH...]` printed
+— never a list of file:line pairs a builder re-derives. When the
 change sits near a frozen contract (a C boundary, error strings
 and return shapes, verdict-line formats), name the wall — there,
 or in an optional `## Non-goals` section. Walls are stated where

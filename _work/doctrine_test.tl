@@ -103,11 +103,15 @@ local function test_bar_requires_the_three_wiring_files_named()
     "the bar topic requires a verb or flag Change to name its wiring files")
 end
 
-local function test_bar_requires_a_pattern_over_a_file_line_list()
+local function test_bar_requires_the_pattern_and_its_find_count()
   local page = doctrine.page("bar")
   assert(page ~= nil, "the bar topic renders")
-  assert(page:find("states the PATTERN", 1, true) ~= nil,
-    "the bar topic requires the PATTERN over a list of file:line pairs")
+  assert(page:find(
+      "A Change over N sites states the PATTERN that\n"
+      .. "selects them and the count `cosmic --find PATTERN [PATH...]` printed\n"
+      .. "— never a list of file:line pairs a builder re-derives.",
+      1, true) ~= nil,
+    "the bar topic states the PATTERN and its --find count, unconditionally")
 end
 
 local function test_build_mirrors_the_ready_when_convention()

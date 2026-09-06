@@ -124,6 +124,17 @@ local function test_step_one_bars_a_reviewer_from_rerunning_ci()
     .. "full test stage on a green head")
 end
 
+local function test_step_two_reruns_find_against_the_pr_head()
+  assert(REVIEW:find(
+      "When the spec states a pattern and a count, re-run "
+      .. "`cosmic --find` on the PR head from your checkout: the hit "
+      .. "list IS the expected change set — a hit the diff leaves "
+      .. "unchanged, or a changed site outside the hits, is a "
+      .. "finding.", 1, true) ~= nil,
+    "step 2 must send a reviewer to re-run cosmic --find on the PR "
+    .. "head when the spec states a pattern and a count")
+end
+
 local function test_mutation_step_names_the_one_file_shape()
   assert(REVIEW:find(
       "run the ONE test file that guards it (`bin/cosmic --make test "

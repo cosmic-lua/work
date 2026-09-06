@@ -71,7 +71,11 @@ fine.
 2. The diff is the Change — everything present, nothing extra. List
    the changed files and confirm each is inside the spec's stated
    scope. Anything outside it is scope creep — quote it, even when
-   it looks good; good ideas become their own items.
+   it looks good; good ideas become their own items. When the spec
+   states a pattern and a count, re-run `cosmic --find` on the PR
+   head from your checkout: the hit list IS the expected change
+   set — a hit the diff leaves unchanged, or a changed site outside
+   the hits, is a finding.
 3. The walls held: every `## Non-goals` line honored, frozen
    contracts unmoved.
 4. Conventions hold: the repo's AGENTS.md binds. Anything a gate
