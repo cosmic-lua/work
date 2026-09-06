@@ -2,7 +2,9 @@ title: cosmic --find PATTERN: a read-only structural search over cosmic.ast.matc
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-5P4r_VUqR-f6f470de
-reviewer: review-5P4r_VUqR-f6f470de
 pr: 1763
+verdict: accept
+verdict_head: 93314cd58ed2b011d05696629bebb6d1821d9e40
+verdict_spec: aca2e9723f117614f92744d12d4ba5145408a34d
 builders: build-5P4r_VUqR-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73 build-5P4r_VUqR-f6f470de
