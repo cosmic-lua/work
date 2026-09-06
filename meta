@@ -3,7 +3,6 @@ parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-gDNw_5bFk-f6f470de
 pr: 1759
-verdict: request changes
 verdict_head: 150a3f5f5151ac445ab8611a615b25d9bdd29d24
 verdict_spec: 55f05009eb26ad7e16bb4f4962aea0deae44c221
 builders: build-gDNw_5bFk-f6f470de
