@@ -4,4 +4,4 @@ target: cosmic-lua/cosmic
 claim: build-zAjL_PBPK-f6f470de
 pr: 1757
 builders: build-zAjL_PBPK-fe8c92c8 build-zAjL_PBPK-f6f470de
-speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
+speccers: f6f470de-dee2-5890-b8f1-db91217d1a73 build-zAjL_PBPK-f6f470de
