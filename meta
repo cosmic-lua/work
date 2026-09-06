@@ -2,6 +2,8 @@ title: prose dupes: a zero-tolerance gate over identical doc-comment blocks and 
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 target: cosmic-lua/cosmic
 claim: build-iltX_EM90-f6f470de
-reviewer: review-iltX_EM90-a36d13ac
 pr: 1753
+verdict: accept
+verdict_head: 8811dc3482dc852c94154d3817a7b221ce2a3a73
+verdict_spec: a0a4679df146e520879432d6517a6610a2ddf3a3
 builders: build-iltX_EM90-f6f470de
