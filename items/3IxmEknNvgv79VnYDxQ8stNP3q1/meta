@@ -2,5 +2,6 @@ title: gitboard worktree ID: the orchestrator creates and bootstraps the builder
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-8stN_P3q1-f6f470de
+pr: 58
 builders: build-8stN_P3q1-f6f470de
 speccers: build-8stN_P3q1-f6f470de
