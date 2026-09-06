@@ -2,6 +2,8 @@ title: gitboard verdict lands, bounces or closes the PR itself, so a reviewer ne
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-fQ71_x8CF-f6f470de
-reviewer: review-fQ71_x8CF-f6f470de
 pr: 62
+verdict: accept
+verdict_head: c0f70a28e22020f239fe722af56e0ed386a2fe32
+verdict_spec: d8dd13997af311df7133466f499c92f959c9c1be
 builders: build-fQ71_x8CF-f6f470de
