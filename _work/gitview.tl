@@ -21,6 +21,7 @@ local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
 local read = require("_work.read")
+local readywhen = require("_work.gitreadywhen")
 local sess = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -424,13 +425,16 @@ local function next_report_live(s: store.Store, c: Index, all: {item.Item},
   if action == nil then
     return "", err
   end
+  local not_ready: string
+  not_ready, action = readywhen.skip_not_ready(action, specs)
   if action.kind == "pull" and action.item then
     local events = publish.history(s, action.item.id)
     if events and events[1] then
       action.reason = action.reason .. bounce_note(events[1].subject)
     end
   end
-  return render_action(action, specs), ""
+  local prefix = not_ready == "" and "" or (not_ready .. "\n")
+  return prefix .. render_action(action, specs), ""
 end
 
 local function cmd_next(s: store.Store, session?: string): integer
