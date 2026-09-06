@@ -7,3 +7,4 @@ verdict: request changes
 verdict_head: d9424864f61814b0630426aa5009122914da81f8
 verdict_spec: fdc13b99cac009fde95296fe9046050363d9ff06
 builders: build-215t_A5ZL-f6f470de
+speccers: build-215t_A5ZL-f6f470de

@@ -31,6 +31,13 @@ under "Measured, not inferred" — a Change that adds a cast, a
 nil-admitting return, or a new source file names the ratchet rows it
 will add, so the builder's first gate is its last.
 
+Step 5 of the same template, one more sentence from the same pass (builder
+«VGEI_R3nE» wiped its uncommitted edit with the `git checkout --` that undid
+its mutation): "Commit the real change before mutation-testing it, so a
+checkout-restore used to undo the mutation cannot wipe it too."
+`_work/brieftext_test.tl`: the template contains "Commit the real change
+before mutation-testing".
+
 ## Non-goals
 
 No change to any ratchet. No change to the review brief.
