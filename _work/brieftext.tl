@@ -63,12 +63,20 @@ and nothing less:
    own fix — run that regen or make that edit, then re-run only that
    test file (`bin/cosmic --make test _build/<name>_test.tl`), and go
    back to the full gate only when every ratchet you tripped is green
-   on its own. A ratchet row you add is part of the diff, not scope
-   creep: say so in the PR body. Run the repo's gate locally and
-   confirm it is green (`bin/cosmic --make ci` for cosmic; `make
-   -j$(nproc) o//tool/lua/test` for cosmopolitan). This run is for
-   you, to catch a red head before it burns a review round; it is
-   never pasted into the PR.
+   on its own. A new public `cosmic.<name>` module trips three more:
+   `_build/public_surface_baseline.tl` (`--make run
+   _build/public_surface.tl --baseline`), the example ratchet (a
+   runnable `<name>/init_example.tl` or `<name>_example.tl`), and
+   `_build/doc_returns_test` (one `@return` tag per declared slot on
+   every function it exports). A ratchet row you add is part of the
+   diff, not scope creep: say so in the PR body. Run the repo's gate
+   locally and confirm it is green (`bin/cosmic --make ci` for cosmic;
+   `make -j$(nproc) o//tool/lua/test` for cosmopolitan). This run is
+   for you, to catch a red head before it burns a review round; it is
+   never pasted into the PR. Run `--make coverage` after your last
+   test edit, not before — a new test moves a row's `total`; run
+   `--make build` once before `--check types` on a file whose sibling
+   you moved.
 4. If the spec carries an `## Acceptance` section: it is the
    refiner's own worked proof, not a second gate you owe beyond the
    Change and a green gate. Never treat it as a checklist to
