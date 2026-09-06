@@ -2,7 +2,9 @@ title: bin/gitboard: prefer a sibling ../work clone of cosmic-lua/work over o/bo
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-J0zb_occu-f6f470de
-reviewer: review-J0zb_occu-f6f470de
 pr: 1764
+verdict: request changes
+verdict_head: e283032f08cc93823d6cf265241787a9c48e9799
+verdict_spec: 324ca692a7f2856d8d74030cb580816e446f3aee
 builders: build-J0zb_occu-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
