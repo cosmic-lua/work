@@ -222,6 +222,47 @@ local function test_headroom_lines_names_absent_paths_including_under_o()
   end
 end
 
+-- A `Ready when:` sentence whose command's trimmed stdout matches the
+-- second span is ready: nil, nothing to refuse or skip on.
+local function test_ready_when_nil_on_a_match()
+  local body = table.concat({
+      "## Change", "Ready when: `printf ready` prints `ready`.",
+      "Then do the rest of the work.",
+    }, "\n")
+  assert(overlap.ready_when(body) == nil)
+end
+
+-- A mismatch names the command, what it actually printed, and what
+-- ready would have looked like — the line `_work.gitready` appends and
+-- `_work.gitview`'s live `next` prints ahead of its next candidate.
+local function test_ready_when_not_ready_on_a_mismatch()
+  local body = table.concat({
+      "## Change", "Ready when: `printf ready` prints `done`.",
+      "Then do the rest of the work.",
+    }, "\n")
+  local line = overlap.ready_when(body)
+  assert(line == "not ready: `printf ready` printed `ready`;"
+    .. " ready means `done`", tostring(line))
+end
+
+-- A sentence naming fewer than two backtick spans is prose ABOUT the
+-- convention, not a command to run: `false` never spawns, so it never
+-- gets the chance to mismatch the way it otherwise would.
+local function test_ready_when_prose_only_spawns_nothing()
+  local body = table.concat({
+      "## Change", "Ready when: this depends on `false` somehow.",
+      "Then do the rest of the work.",
+    }, "\n")
+  assert(overlap.ready_when(body) == nil)
+end
+
+-- No `Ready when:` sentence at all is the ordinary case: nothing to
+-- check, nil without touching the process table.
+local function test_ready_when_nil_with_no_such_sentence()
+  local body = table.concat({"## Change", "Just do the thing."}, "\n")
+  assert(overlap.ready_when(body) == nil)
+end
+
 -- `show` prints the same `tight:` line for a real item whose spec
 -- names a file already within the margin — the warning a refiner or
 -- builder sees before a pull, not after hitting the lint cap live.

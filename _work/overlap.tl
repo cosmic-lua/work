@@ -28,6 +28,7 @@
 --- refiner sees a file already tight against the cap, before either
 --- pays for it live, mid-implementation, the way `wc -l` and `--check
 --- lint` otherwise would.
+local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local tail = require("_work.tail")
 
@@ -42,6 +43,10 @@ local FILE_CAP < const > = 500
 --- catch ran 12-14 lines) still fits inside the margin most of the
 --- time, narrow enough that a file with real room left stays quiet.
 local WARN_MARGIN < const > = 20
+
+--- The Ready-when command's hard cap: a hung command must never park
+--- a `next` or `take` call indefinitely.
+local READY_TIMEOUT_MS < const > = 10000
 
 --- Whether `token` has a path's shape: only path-safe characters, at
 --- least one `/`, and an extension on its last segment. Rules out a
@@ -177,6 +182,82 @@ local function headroom_lines(body: string): {string}
   return out
 end
 
+--- Whether `body`'s `## Change` section names a fact this pull is not
+--- ready for yet: the first sentence beginning `Ready when:` that
+--- carries at least two backtick spans names a command (the first
+--- span) and the output that means ready (the second). The command
+--- runs from this process's own working directory with its stdout
+--- captured and trimmed and its stderr left unread; a run over
+--- `READY_TIMEOUT_MS` is killed and counts as a mismatch rather than
+--- parking the caller.
+---
+--- A sentence with fewer than two spans is prose ABOUT the
+--- convention, never a command to run — the doctrine page's own
+--- explanation of `Ready when:` carries none, and this never spawns
+--- for it. No such sentence at all reads the same way: nothing to
+--- check.
+--- @param body string An item's spec sidecar body
+--- @return string | nil "not ready: ..." on a mismatch; nil when the
+--- trimmed stdout matches, when there is no such sentence, or the
+--- sentence names fewer than two spans
+local function ready_when(body: string): string | nil
+  local change = change_section(body)
+  local from = change:find("Ready when:", 1, true)
+  if from == nil then
+    return nil
+  end
+  local rest = change:sub(from)
+  local stop = rest:find("%.%s") or rest:find("%.$")
+  local sentence = stop and rest:sub(1, stop) or rest
+  local cmd: string = nil
+  local want: string = nil
+  local n = 0
+  for token in sentence:gmatch("`([^`\n]+)`") do
+    n = n + 1
+    if n == 1 then
+      cmd = token
+    elseif n == 2 then
+      want = token
+      break
+    end
+  end
+  if n < 2 then
+    return nil
+  end
+  local argv: {string} = {}
+  for word in cmd:gmatch("%S+") do
+    argv[#argv + 1] = word
+  end
+  if #argv == 0 then
+    return nil
+  end
+  local h, herr = child.start(argv)
+  if h == nil then
+    return ("not ready: `%s` could not run: %s; ready means `%s`"):format(
+      cmd, herr, want)
+  end
+  local r, _werr = h:wait(READY_TIMEOUT_MS)
+  local got: string
+  local shown: string
+  if r == nil then
+    local _sok, _serr = h:stop()
+    local _r2, _werr2 = h:wait()
+    got = ""
+    shown = ("timed out after %dms"):format(READY_TIMEOUT_MS)
+  else
+    got = (r.stdout or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    shown = got:match("^[^\n]*")
+    if shown == "" then
+      shown = ("exit %d"):format(r.code or -1)
+    end
+  end
+  if got == want then
+    return nil
+  end
+  return ("not ready: `%s` printed `%s`; ready means `%s`"):format(
+    cmd, shown, want)
+end
+
 --- One colliding item: its id and the paths it shares with the item
 --- being checked.
 local record Collision
@@ -252,6 +333,7 @@ local record overlap
   lines: function(id: string, bodies: {string: string}): {string}
   inline: function(id: string, bodies: {string: string}): string
   headroom_lines: function(body: string): {string}
+  ready_when: function(body: string): string | nil
 end
 
 local M: overlap = {
@@ -260,6 +342,7 @@ local M: overlap = {
   lines = lines,
   inline = inline,
   headroom_lines = headroom_lines,
+  ready_when = ready_when,
 }
 
 return M

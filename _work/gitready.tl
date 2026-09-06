@@ -8,6 +8,7 @@
 local flow = require("_work.flow")
 local gh = require("_work.gh")
 local item = require("_work.item")
+local overlap = require("_work.overlap")
 local owner = require("_work.gitowner")
 local publish = require("_work.publish")
 local read = require("_work.read")
@@ -148,6 +149,10 @@ local function ready_problems(s: store.Store, it: item.Item,
   local spec_body = body or store.read_spec(s, it.id)
   for _, gap in ipairs(flow.ready_gaps(spec_body)) do
     out[#out + 1] = ("spec: %s"):format(gap)
+  end
+  local not_ready = overlap.ready_when(spec_body)
+  if not_ready then
+    out[#out + 1] = not_ready
   end
   for _, repo in ipairs(undeclared_repos(it, spec_body)) do
     out[#out + 1] = ("spec reaches %s with no declared read access — name "

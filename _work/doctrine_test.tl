@@ -73,10 +73,13 @@ local function test_bar_states_the_ready_when_convention()
   assert(page ~= nil, "the bar topic renders")
   assert(page:find("Ready when:", 1, true) ~= nil,
     "the bar topic names the Ready when convention")
+  assert(page:find("\"Ready\nwhen: `CMD` prints `OUT`.\"", 1, true) ~= nil,
+    "the bar topic states the evaluated shape")
   assert(page:find(
-      "the claim drops bare — the item is fine as written,\nre-offered as-is — rather than bouncing through a question",
+      "`next` skips a not-ready head and offers the\n"
+      .. "next candidate instead, and `take` refuses a not-ready item",
       1, true) ~= nil,
-    "not ready drops the claim bare instead of bouncing through a question")
+    "the tool checks it: next skips a not-ready head, take refuses one")
 end
 
 local function test_bar_forbids_a_change_with_two_mechanisms()
@@ -104,9 +107,10 @@ local function test_build_mirrors_the_ready_when_convention()
   local page = doctrine.page("build")
   assert(page ~= nil, "the build topic renders")
   assert(page:find(
-      "a `Ready when` command\n   runs first, and not ready is a bare drop, not a bounce",
+      "the tool already checked\n   `Ready when` at the take gate, so reaching this step means it\n"
+      .. "   passed",
       1, true) ~= nil,
-    "step 2 runs the Ready when command first and treats not-ready as a drop")
+    "step 2 defers Ready when to the take gate, not a bare drop here")
 end
 
 --- The first paragraph of a `---`-commented module header: lines up

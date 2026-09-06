@@ -7,11 +7,17 @@
 local cache = require("_work.cache")
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
+local fs = require("cosmic.fs")
 local gh = require("_work.gh")
+local gitspec = require("_work.gitspec")
+local rank = require("_work.gitrank")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local tail = require("_work.tail")
 local verbs = require("_work.gitverbs")
 local view = require("_work.gitview")
+
+local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
 --- Stand `gh.head_checks` in for a fixed state for the duration of
 --- `f`, restoring the real function even when `f` fails an assertion
@@ -118,6 +124,38 @@ local function test_live_next_skips_a_reviewable_item_with_ci_red()
         "a red head reads as the builder's move on a live next: " .. printed)
       return true
     end)
+end
+
+-- A recommended head whose `Ready when:` mismatches is never offered:
+-- a real `gitboard next` prints the not-ready line ahead of its next
+-- candidate rather than recommending a pull `take` would only refuse.
+local function test_live_next_skips_a_not_ready_head()
+  local s = fixture.init_state_repo("next-ready-when")
+  local root, first = fixture.root_with_leaf(s)
+  local second = fixture.file_item(s, "a second workable slice", root)
+  -- Both are otherwise unpositioned among the root's children, which
+  -- ties them for the seeded tie-break — explicit order removes the
+  -- tie, so `first` is deterministically the head this test is about.
+  assert(rank.cmd_rank(s, first, "", "", true) == 0, "first ranks last")
+  assert(rank.cmd_rank(s, second, "", first, false) == 0, "second after first")
+  local path = fs.join(tmpdir, "ready-when-live.md")
+  assert(fs.write(path, table.concat({
+          "## Change", "Ready when: `printf ready` prints `done`.",
+          "Do the thing.",
+        }, "\n")))
+  assert(gitspec.cmd_spec(s, first, path) == 0, "spec should be accepted")
+  fixture.give_spec(s, second)
+
+  local code, printed = cmd_next_and_capture(s, "")
+  assert(code == 0, printed)
+  assert(printed:find(
+      "not ready: `printf ready` printed `ready`; ready means `done`",
+      1, true) ~= nil,
+    "the not-ready head's line prints ahead of the offer: " .. printed)
+  assert(printed:find(tail.handle(second), 1, true) ~= nil,
+    "the second candidate is recommended instead: " .. printed)
+  assert(not printed:find("pull " .. tail.handle(first), 1, true),
+    "the not-ready head is never itself recommended: " .. printed)
 end
 
 --- Three separate roots, each with one workable leaf claimed under

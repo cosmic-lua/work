@@ -15,6 +15,7 @@ local check = require("cosmic.check")
 local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
+local gitspec = require("_work.gitspec")
 local gittake = require("_work.gittake")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -280,6 +281,38 @@ local function test_take_open_with_no_repo_refuses()
   assert(gittake.take_open(s, it, "session-a", 0, "") ~= 0,
     "no repo to open a PR against is refused")
   assert(check.must(store.load(s, leaf)).pr == 0, "and nothing is recorded")
+end
+
+-- A Ready-when mismatch is a refusal, not a bounce: `take` never
+-- claims an item whose spec names a command that has not yet printed
+-- the output that means ready.
+local function test_take_refuses_a_ready_when_mismatch()
+  local s = init_state_repo("gittake-ready-when")
+  local _root, leaf = root_with_leaf(s)
+  local body = table.concat({
+      "## Change", "Ready when: `printf ready` prints `done`.",
+      "Do the thing.",
+    }, "\n")
+  local path = fs.join(tmpdir, "ready-when-mismatch.md")
+  assert(fs.write(path, body))
+  assert(gitspec.cmd_spec(s, leaf, path) == 0, "spec should be accepted")
+
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    lines[#lines + 1] = tostring((...))
+  end
+  local ok, code = pcall(verbs.cmd_take, s, leaf, "session-a", 0, false, "")
+  _G.print = old_print
+  assert(ok, tostring(code))
+  assert(code ~= 0, "a Ready-when mismatch refuses the take")
+  local out = table.concat(lines, "\n")
+  assert(out:find(
+      "not ready: `printf ready` printed `ready`; ready means `done`",
+      1, true) ~= nil,
+    "the refusal names the command, what it printed, and what ready means: "
+    .. out)
+  assert(check.must(store.load(s, leaf)).claim == "", "and nothing was claimed")
 end
 
 -- The PR body always leads with the `Board:` line the board joins the
