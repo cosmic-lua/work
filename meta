@@ -2,6 +2,7 @@ title: cosmopolitan: zip.open's literal-mode overload erases to a union for read
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmopolitan
 claim: build-VHkKaA5k-2f92e512
+reviewer: review-VHkK_aA5k-2f92e512
 pr: 389
 builders: build-VHkKaA5k-2f92e512
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b
