@@ -384,9 +384,11 @@ checkout or push rights to this board repository:
   agent, so claim under the string its own verdict line names, all in
   the background. What the review needs is distance from the BUILDER —
   a window that never held the build — and a verdict that is one
-  agent's alone; N reviewers on N different PRs keep both. What
-  never fans out is refinement, because two parallel refiners
-  decompose the same outcome twice.
+  agent's alone; N reviewers on N different PRs keep both. `show`'s
+  doing rows print a claimed review's `reviewer:<session>` mark
+  alongside `pr:N` — a row already carrying one is already claimed:
+  skip it, never `--force`. What never fans out is refinement, because
+  two parallel refiners decompose the same outcome twice.
 
 The standing loop (a session invoked as an orchestrator with a
 width N, three to five in practice) runs ONE bounded pass and ends

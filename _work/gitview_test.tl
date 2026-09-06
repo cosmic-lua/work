@@ -173,6 +173,31 @@ local function test_status_renders_doing_against_the_bound()
   assert(verdict == "doing 1/10", verdict)
 end
 
+-- A doing row under review names its reviewer beside the PR, so a
+-- second orchestrator sees the claim already held without a refused
+-- `take`; a row with no reviewer prints no such mark.
+local function test_status_shows_reviewer_on_a_claimed_review_row()
+  local reviewed = fresh_id()
+  local items = board_items()
+  items[#items + 1] = check.must(item.decode({id = reviewed,
+        title = "under review", parent = CONTAINER,
+        claim = "build-QYqs_nEsq-f6f470de", pr = 46,
+        reviewer = "review-QYqs_nEsq-a36d13ac"}))
+  local lines = status(items, full_specs())
+  local reviewed_line, leaf_line = "", ""
+  for _, line in ipairs(lines) do
+    if line:find(tail.handle(reviewed), 1, true) then
+      reviewed_line = line
+    elseif line:find(tail.handle(LEAF), 1, true) then
+      leaf_line = line
+    end
+  end
+  assert(reviewed_line:find("reviewer:review%-QYqs_nEsq%-a36d13ac") ~= nil,
+    "a claimed review names its reviewer: " .. reviewed_line)
+  assert(leaf_line:find("reviewer:") == nil,
+    "an unclaimed review prints no reviewer mark: " .. leaf_line)
+end
+
 -- Untriaged outcomes render item by item under the triage count: with
 -- `tree` gone, this is the one list of them anyone gets.
 local function test_status_lists_the_triage_queue()
