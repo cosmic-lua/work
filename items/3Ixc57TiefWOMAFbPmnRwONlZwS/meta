@@ -1,10 +1,10 @@
 title: spec bar: a path the Change names that does not exist in the tree prints absent: on show
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-RwON_lZwS-f6f470de
 pr: 51
 verdict: accept
 verdict_head: e7ca1f454dfbf31cbb9184c5a409c63144aa815f
 verdict_spec: bdd6497c5f7a6cf383cbe9d1f9558e3a1be4ee27
+resolution: completed
 builders: build-RwON_lZwS-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
