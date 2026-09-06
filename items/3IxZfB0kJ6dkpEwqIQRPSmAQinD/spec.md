@@ -24,7 +24,7 @@ Move `parse_args` out of `cmd/cosmic/main.tl` into a new `_cli/parse.tl`
 lines 87–313 — 226 of the file's 499 lines — and it is the only
 block that size.
 
-- `_cli/parse.tl` (new): `parse_args(argv: {string}): Options` plus the
+- `_cli/parse.tl` (new): `parse_args(): Options` — its current signature, unchanged (it reads the process arguments itself) — plus the
   `Options` record and every local that only `parse_args` uses (move
   them; the checker names each one — after the cut, `bin/cosmic --check
   types cmd/cosmic/main.tl` lists the unresolved names, and
@@ -33,7 +33,7 @@ block that size.
   duplicated. The module returns `{parse_args = parse_args, Options =
   Options}`; main.tl requires it as `local parse = require("_cli.parse")`
   beside its other `_cli.*` requires.
-- `cmd/cosmic/main.tl`: the call site becomes `parse.parse_args(argv)`;
+- `cmd/cosmic/main.tl`: the call site becomes `parse.parse_args()`;
   nothing else moves. Result: `wc -l cmd/cosmic/main.tl` ≤ 300.
 - `_cli/parse_test.tl` (new): the argument cases `_cli/main_handlers_test.tl`
   or `cmd/cosmic/*_test.tl` already assert through `parse_args` move
