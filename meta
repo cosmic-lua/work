@@ -1,0 +1,3 @@
+title: bin/gitboard.pin: bump to 2026-09-06-32ec450, the release carrying #68 and #69 (round context, sweep pattern bar)
+parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
+target: cosmic-lua/cosmic
