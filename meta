@@ -1,2 +1,4 @@
 title: _types/gentype_parse.tl: @type field annotations truncate generic types (table<K,V> becomes bare table)
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
+claim: 39b93fa3-c791-535f-a689-dc84468f9c0d
+builders: 39b93fa3-c791-535f-a689-dc84468f9c0d
