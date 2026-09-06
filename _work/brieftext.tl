@@ -79,7 +79,13 @@ and nothing less:
    `Board: <ITEM_ID>`
    — it is how the board joins the PR back to the item. Follow it
    with a blank line and a description of what changed and why —
-   never a pasted gate transcript.
+   never a pasted gate transcript. Open it with whatever GitHub reach
+   the session has: the `gh` CLI when present, otherwise the GitHub
+   MCP tools (`mcp__github__create_pull_request`, loaded with
+   ToolSearch); the Board: line is the body's first line either way.
+   Never poll or subscribe to GitHub events (no `subscribe_pr_activity`,
+   no re-check loops) — CI and review are the orchestrator's to watch;
+   report and end.
 9. Do NOT merge the PR. Do NOT run any `gitboard` command — board
    state is the orchestrator's job.
 

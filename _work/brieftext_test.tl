@@ -7,6 +7,7 @@
 -- — a rewrap must not itself break these tests.
 
 local brieftext = require("_work.brieftext")
+local brieftext_review = require("_work.brieftext_review")
 
 --- `s` with every run of whitespace (including the template's own
 --- line wraps) collapsed to one space, so a sentence pinned here reads
@@ -18,6 +19,7 @@ local function flat(s: string): string
 end
 
 local BUILDER < const > = flat(brieftext.BUILDER)
+local REVIEW < const > = flat(brieftext_review.REVIEW)
 
 local function test_step_one_measures_headroom_before_the_first_edit()
   assert(BUILDER:find(
@@ -54,4 +56,13 @@ local function test_step_seven_reports_a_base_conflict_rather_than_rebasing()
       .. "builder's rebase.", 1, true) ~= nil,
     "step 7 must tell a builder to stop and report a base conflict, "
     .. "never rebase it themselves")
+end
+
+local function test_pr_steps_name_the_mcp_fallback_for_no_gh_cli()
+  assert(BUILDER:find("mcp__github__create_pull_request", 1, true) ~= nil,
+    "the builder's Open a PR step must name the GitHub MCP tool "
+    .. "fallback for a session with no gh CLI")
+  assert(REVIEW:find("mcp__github__enable_pr_auto_merge", 1, true) ~= nil,
+    "the review brief's accept bullet must name the GitHub MCP tool "
+    .. "fallback for enabling auto-merge")
 end
