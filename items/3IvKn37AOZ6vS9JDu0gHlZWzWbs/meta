@@ -2,8 +2,7 @@ title: Semantic rename for Teal: does tl's checker expose enough to build one, s
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: research-HlZW-0bdbc441
-result: a3e83f8e404cc873396350d7c79bb63b7e7de528
-verdict: request changes
+result: 9a367080178f9b817c539246d8f573a6fd1da4e2
 verdict_spec: a3e83f8e404cc873396350d7c79bb63b7e7de528
 builders: research-HlZW-0bdbc441
 speccers: research-HlZW-0bdbc441
