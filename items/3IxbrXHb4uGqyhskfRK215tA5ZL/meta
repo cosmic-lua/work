@@ -1,10 +1,10 @@
 title: builder brief: a tripped ratchet is fixed and re-run alone before the next full gate; the bar names the rows a Change adds
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-215t_A5ZL-f6f470de
 pr: 54
 verdict: accept
 verdict_head: d9424864f61814b0630426aa5009122914da81f8
 verdict_spec: a9d007d72ba47008e6a5afe45dd4341e9d037f35
+resolution: completed
 builders: build-215t_A5ZL-f6f470de
 speccers: build-215t_A5ZL-f6f470de
