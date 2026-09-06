@@ -1,2 +1,3 @@
 title: 3p/cosmos/cosmos_pin.tl: bump to a release carrying unix.socketpair's corrected integer|string fd2 annotation
 parent: 3Iwc54697JbYaJqXl6GgVi79Ne8
+resolution: completed
