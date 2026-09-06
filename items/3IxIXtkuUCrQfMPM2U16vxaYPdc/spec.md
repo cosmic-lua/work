@@ -45,9 +45,23 @@ be appended here once it reports.
 
 ## build vmX5_zQH2
 
-Still in flight at pass-end (`build-vmX5_zQH2-748ecc95`). Not yet
-reported — no transcript to run `_tool/friction.tl` against yet. Will
-be appended here once it reports.
+numbers: events=65 tool_calls=14 wall=231s tokens in=30/out=74/cache_read=939659/cache_create=72131;
+by tool Bash=7/Grep=2/Read=5; errors=0; repeated commands=0; no edit made
+(correctly stopped before touching code).
+
+Agent's own account: verified the spec's file-scope before editing (per
+this repo's own "wc -l every file the Change names" rule) and found all
+three named files (`_types/gentype_parse.tl` 496/500,
+`_types/gentype_render.tl` 489/500, `_types/gentype_test.tl` 499/500)
+already within 1-11 lines of the 500-line cap, needing an estimated
+25-45 new lines each. Stopped correctly rather than widen scope to a
+file split on its own judgment — filed by the orchestrator as child
+item `qdDs_EN9Z` for a structural respec (this item is now a container).
+The agent's own countermeasure — "the spec's own Evidence section could
+have included `wc -l` on the files it names ... which would have caught
+this before the item was ever pulled" — is already covered by existing
+board item `AY6h_bM0B` ("spec bar: flag a Change-named file already
+within ~20 lines of the 500-line cap"); no new item filed for it.
 
 ## Orchestrator
 
