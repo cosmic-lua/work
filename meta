@@ -1,0 +1,3 @@
+title: lint: justification markers read from the AST — throws:/exits: gated alongside assert:/cast:, no hits inside strings
+parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
+target: cosmic-lua/cosmic
