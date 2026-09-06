@@ -1,3 +1,5 @@
 title: doc extractor and doc-returns ratchet read function signatures from the AST, not from signature text
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
+claim: build-OsLB_LlsR-f6f470de
+builders: build-OsLB_LlsR-f6f470de
