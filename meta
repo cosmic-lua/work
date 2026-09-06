@@ -3,7 +3,6 @@ parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-duSw_TyDF-f6f470de
 pr: 48
-verdict: request changes
 verdict_head: 945b60c0e00927d4969a1299cb2cd932276ac647
 verdict_spec: eb5353972a767bdfca68412ab8d1eaf6cd793861
 builders: build-duSw_TyDF-f6f470de
