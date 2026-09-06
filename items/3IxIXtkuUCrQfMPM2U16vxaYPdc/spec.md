@@ -27,15 +27,68 @@ behavior needed to write accurate prose. `bin/cosmic --make fetch` and
 
 ## build 0oBN_Fa6X
 
-Still in flight at pass-end (`build-0oBN_Fa6X-748ecc95`). Not yet
-reported — no transcript to run `_tool/friction.tl` against yet. Will
-be appended here once it reports.
+numbers: events=252 tool_calls=63 wall=887s tokens in=128/out=1490/cache_read=5911281/cache_create=104723;
+by tool Bash=46/Edit=7/Grep=1/Read=6/ToolSearch=1/mcp__github__create_pull_request=1/mcp__github__get_file_contents=1;
+errors=3 (2× `--make ci` failing mid-iteration while landing the new
+cast's ratchet updates, self-corrected; 1× a `get_file_contents` lookup
+on a path that doesn't exist, self-corrected); repeated: iterated on
+`_types/gentype_defs.tl` (x6), `cosmic/zip.tl` (x3, the temporary
+repro edit + revert), `docs/design/cast-sites.tsv` (x2).
+
+Agent's own account: the fix itself (route `_types/gentype_defs.tl`'s
+zip read through `cosmo.zip` directly) worked on the first real
+attempt; verified per the orchestrator's substitute repro steps (no
+`Hkal_OAFy` branch available). Real friction: the one-line fix
+introduced a new justified cast (`handle as zip.Reader`), which
+cascaded into TWO separate committed ratchet floors
+(`_build/casts_baseline.tl`, then `docs/design/cast-sites.tsv`) not
+mentioned by the spec's gate step — cost ~10 calls tracing
+`_build/casts.tl`/`_build/cast_sites.tl` for the regen incantations
+and a classification taxonomy with no documented enum (resolved by
+finding `cosmic/zip.tl`'s own identical site and reusing its
+`userdata boundary` class). Its own suggested countermeasure (a
+one-line pointer in AGENTS.md/spec templates: "a new cast may require
+rebaselining `_build/casts_baseline.tl` and `docs/design/cast-sites.tsv`")
+is new and not yet filed as a board item — left for a follow-up triage
+pass rather than filed reactively mid-reconciliation, alongside its
+second suggestion (document the cast-site classification enum in
+`_build/cast_sites.tl`'s own doc comment).
 
 ## build LVYj_DA0K
 
-Still in flight at pass-end (`build-LVYj_DA0K-748ecc95`). Not yet
-reported — no transcript to run `_tool/friction.tl` against yet. Will
-be appended here once it reports.
+numbers: events=368 tool_calls=95 wall=829s tokens in=192/out=2237/cache_read=7533286/cache_create=86585;
+by tool Bash=65/Edit=10/Grep=9/Read=7/ToolSearch=1/mcp__github__create_pull_request=1/mcp__github__get_tag=1/mcp__github__list_releases=1;
+errors=5 (2× `find -iname` on `o/_types` returning no matches, benign;
+2× Edit refused before the target file was Read first, self-corrected;
+1× a `--make ci` truncated-output read, re-run); repeated: iterated on
+`cosmic/errno.tl` (x6), `cosmic/net/init.tl` (x3),
+`cosmic/quicksand/proc.tl` (x3), `docs/design/casts.md` (x3),
+`3p/cosmos/cosmos_pin.tl` (x2).
+
+Agent's own account: redid the pin bump, the `net/init.tl` fix, and
+the four cast removals cleanly per the IMPORTANT section's
+instructions (no wasted search for the vanished branch). One
+unplanned-but-required fix: removing the casts left
+`docs/design/casts.md`'s "binding constant by name" section quoting a
+now-deleted source line, failing the `doc-citation` lint check;
+repointed the citation at `quicksand/caps.tl`'s still-open,
+same-shape `unix.CAP` site (tracked by a separate item) rather than
+leaving the doc stale — required for `ci` to pass, not scope creep.
+Minor friction locating the exact upstream commit for the
+`unix.socketpair` annotation fix (subject didn't mention "socketpair",
+~2 extra calls) and confirming `unix.CAP`'s shape independently since
+the spec's Non-goals didn't explain WHY `caps.tl` was out of scope
+(~1 extra call) — both appropriately cautious verification, not
+wasted work.
+
+**What this build did NOT anticipate, and could not have from its own
+brief: `bin/cosmic.pin` was never bumped to a release carrying
+`RNb7_b0tV`'s fix (see Orchestrator section below) — its own local,
+warm `--make ci` run was green, but the PR's cold `build` CI lane is
+red.** This is the same cold-build/pin-staging hazard `rLV8_r8a5`'s
+own spec explicitly named and planned around for its OWN Non-goals —
+this item's spec did not carry the same warning even though it is the
+identical shape (a checker fix consumed before its pin bump lands).
 
 ## research IOA7_CLf5
 
@@ -88,6 +141,60 @@ have included `wc -l` on the files it names ... which would have caught
 this before the item was ever pulled" — is already covered by existing
 board item `AY6h_bM0B` ("spec bar: flag a Change-named file already
 within ~20 lines of the 500-line cap"); no new item filed for it.
+
+## review 0oBN_Fa6X (PR #1747)
+
+numbers: events=119 tool_calls=29 wall=356s tokens in=52/out=249/cache_read=1738688/cache_create=61927;
+by tool Bash=18/Edit=1/Read=4/ToolSearch=1/mcp__github__actions_list=1/mcp__github__enable_pr_auto_merge=2/mcp__github__pull_request_read=2;
+errors=2 (1× read a generated file before fetching had produced it,
+self-corrected; 1× `enable_pr_auto_merge` rejected a lowercase
+`mergeMethod: "squash"` — the GraphQL enum wants `"SQUASH"`, fixed on
+retry); repeated: re-read `cosmic/zip.tl` (x2, before/after its
+mutation-test edit).
+
+Agent's own account: accepted, cast justified and correctly
+classified, mutation test reproduced the exact original failure and
+confirmed the fix. One near-miss: its checkout's local `main` was
+stale relative to the PR's real base, producing a spurious 90-file
+diff on the first `git diff main...HEAD` before a `git fetch`
+corrected it — flagged as a brief-improvement candidate (note that a
+fresh worktree's local `main` may need fetching before diffing against
+it), not yet filed as its own item.
+
+## build q1bW_VFz2 (bin/cosmic.pin bump, PR #1748) — orchestrator took over mid-task
+
+The spawned builder agent (`build-q1bW_VFz2-748ecc95`) correctly
+triggered the `release.yml` workflow_dispatch on its first attempt,
+then reported "still building" or equivalent across **five separate
+resumes** (`SendMessage`-driven re-invocations, ~69k-94k cached input
+tokens each — roughly 350k+ tokens total) without ever completing the
+sha256 download/verify, the `bin/cosmic.pin` edit, the cold gate, or
+the PR. Each resume re-loaded its full context just to re-check the
+same external state and stop again. The orchestrator eventually
+checked the release run directly (`mcp__github__actions_get`
+/`list_workflow_jobs`, 2-3 calls, near-zero cost by comparison), found
+the release had already published, and did the entire remaining
+Change itself (download, sha256 verify, edit, cold `--make fetch &&
+--make ci`, commit, push, PR #1748) directly rather than resuming the
+agent a sixth time.
+
+**This is the single largest cost in this pass** — roughly 5-6x more
+tokens spent on repeated "still waiting" resumes than the entire
+actual task (download + verify + edit + cold gate + PR) cost when done
+directly. **Made the difference**: a spawned subagent has no durable
+way to wait on external state across its own turns — unlike the
+orchestrator, which has `ScheduleWakeup`/`Monitor` for exactly this,
+a builder agent that hits "the next step depends on an external,
+slow-to-complete process" can only end its turn and hope to be resumed
+with the same full context reloaded, which is what happened five
+times running. **Countermeasure**: `help orchestrate`/`help build`
+should say explicitly that a builder step depending on slow external
+CI/workflow completion (not just the PR's own gate) is the
+ORCHESTRATOR's job to poll (cheap, targeted GitHub API calls) and hand
+back to the builder only once the state changes — never delegate an
+open-ended "wait for external state" step into a spawned agent's own
+brief. Filed as board item `1alS_QzlJ` for the `work`/`orchestrate` skill
+to make this division of labor explicit.
 
 ## Orchestrator
 
@@ -175,6 +282,41 @@ within ~20 lines of the 500-line cap"); no new item filed for it.
   WIP branch (no PR needed) rather than leave it local-only, since this
   project's actual environment cannot guarantee a local commit survives to
   the next session.
+
+- **Goal**: get `LVYj_DA0K`'s PR #1746 to a reviewable (green) state.
+  **What happened**: its `build` CI lane was red —
+  `cosmic/errno.tl:52`/`:97`: `got <any type>, expected integer | nil`
+  — even though the builder's own local `--make ci` was green. Traced
+  to `bin/cosmic.pin` on `main` still naming a release
+  (`2026-09-06-d45e498`, published 01:59:19Z) that predates
+  `RNb7_b0tV`'s merge (PR #1745, 11:11:43Z): CI's `build` lane is a
+  genuinely cold build, so generation 1 runs the PINNED RELEASE's own
+  compiled-in (old, buggy) `gentype_parse.tl`, not the tree's fixed
+  one — exactly the staging hazard `AGENTS.md`'s cold-build rule names
+  ("land the checker first, bump `bin/cosmic.pin`... then land the
+  code that needs it"). `RNb7_b0tV`/#1745 landed the checker but the
+  pin-bump step never happened, and no release built after the merge
+  exists yet (`release.yml` is a daily cron). Cost: ~15 minutes reading
+  the CI job log, cross-referencing `AGENTS.md`, and confirming no
+  newer release exists via `list_releases`/`get_latest_release`.
+  **Made the difference**: `RNb7_b0tV`'s own PR body and the item's
+  own respec (mine, written earlier this pass) never flagged this
+  staging requirement, even though a SIBLING item (`rLV8_r8a5`)
+  explicitly documents the identical hazard in its own Non-goals
+  ("deleting the 2 casts is separate follow-on work that must wait for
+  a `bin/cosmic.pin` bump... must carry a `blocked_by` edge on that
+  pin-bump item") — the convention is well-established in this
+  project, just not consistently applied when a NEW checker fix lands.
+  **Countermeasure**: any item whose spec says "once checker fix X
+  lands" or is itself a checker/generator fix (`_types/gentype_*.tl`,
+  `3p/tl/tl_patch/*`) should carry a template line noting the
+  cold-build pin-bump prerequisite for any consumer, mirroring what
+  `rLV8_r8a5` already does by hand — ideally the spec bar itself
+  flags a checker-surface change with no accompanying pin-bump-tracking
+  note. Filed the missing pin bump as board item `q1bW_VFz2` (child of
+  `LVYj_DA0K`, which is now a container blocked on it) and posted the
+  root-cause + blocker on PR #1746 rather than modifying its (correct)
+  diff.
 
 - No other friction: `sync`, `show`, `next`, and the review-comment lookup
   for the bounce context (`pull_request_read get_comments` on #1744, since
