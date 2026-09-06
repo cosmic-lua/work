@@ -2,5 +2,6 @@ title: lint: a cosmic/<name>/ directory with shards and no init.tl is a finding 
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-0Ked_J5tg-f6f470de
+reviewer: review-0Ked_J5tg-f6f470de
 pr: 1769
 builders: build-0Ked_J5tg-f6f470de
