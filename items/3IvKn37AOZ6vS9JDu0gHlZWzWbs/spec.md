@@ -115,8 +115,24 @@ delimiting node kinds named in the prior session's writeup
 needs to treat `forin` (`tl.lua:5277`) and `fornum` (`tl.lua:5284`)
 loop-variable introduction as binding sites too; the prior session's
 three-node-kind list was incomplete. A value reference itself is node
-kind `"variable"` (`tl.lua:5121`, `:4407`), not `"identifier"`
-(`"identifier"` is a distinct, rarer node kind used e.g. for labels).
+kind `"variable"` (`tl.lua:5121`, `:4407`), not `"identifier"`.
+
+**Correction (fresh-context review, 2026-09-06):** the claim that
+`"identifier"` is "used e.g. for labels" does not hold — tested
+directly (parsed a fixture with a `::label::`/`goto` pair and a
+`fornum` loop, walked the resulting AST, printed each node's `kind`).
+A label produces a `"label"`-kind node whose name lives in a plain
+`.label` string field, never an `"identifier"`-kind child at all
+(`parse_label`, `tl.lua:3853-3859`, calls `verify_kind(ps, i,
+"identifier")` with no fourth argument, so no node is emitted for the
+name). The only `"identifier"`-kind node the fixture produced was the
+`fornum` loop variable itself — a declaration/binding site, not a
+value reference and not a label. So: `"identifier"` names a
+declaration-site token (e.g. a `fornum` loop variable), distinct from
+both `"variable"` (a value reference) and `"label"` (a goto target);
+the walker's binding-site list from Findings above (adds `forin`/
+`fornum`) already covers this correctly — this correction only fixes
+the wrong illustrative example, not the recommendation.
 
 No build items are filed as this research item's children yet: the
 walker's shape is genuinely not clear until `cosmic.ast` lands (its own
