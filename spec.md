@@ -39,9 +39,35 @@ be appended here once it reports.
 
 ## research IOA7_CLf5
 
-Still in flight at pass-end (`research-IOA7_CLf5-748ecc95`). Not yet
-reported — no transcript to run `_tool/friction.tl` against yet. Will
-be appended here once it reports.
+numbers: events=120 tool_calls=31 wall=285s tokens in=56/out=219/cache_read=1984266/cache_create=67052;
+by tool Bash=21/Edit=1/Grep=1/Read=7/Write=1; errors=3 (2× a malformed
+`Read` call — offset passed as a bare second positional int instead of
+the named `limit` field, self-corrected); repeated: re-read the
+recreated patch file and re-ran `rm -rf o/3p/tl && --make fetch` twice
+each (rebuilding after a patch-syntax retry, not a mistake).
+
+Agent's own account: pre-empted the dead branch cleanly (brief's
+IMPORTANT section already said it was gone, 0 wasted search calls) and
+recreated the missing patch entry from the sibling
+`narrow-pcall-zero-return` entry in ~4 calls; confirmed the
+independently-derived premise (all 6+3 sites reproduce identically).
+Hit one real gotcha: a first attempt at the patch entry's `note` field
+used `..` string concatenation for readability, and `fetch` refused it
+("a patch holds literals only; found '.' after a value") — patch files
+are Teal literal data, not executable Teal, so no operators of any
+kind. Cost ~2 tool calls. The agent's own recommended fix (a one-line
+"no string concatenation" gotcha in `_make/patch.tl`'s doc comment) is
+new and not yet filed as a board item — left for the orchestrator to
+triage in a follow-up pass rather than filed reactively mid-reconciliation.
+
+The agent's own key finding — closing the item outright, since the 2
+sites it targeted already carry a working, lint-compliant fix — also
+surfaced that this item, like `LVYj_DA0K`, had no `repo:` field and its
+`brief review` defaulted to `cosmic-lua/work` until the orchestrator
+fixed it (same class of gap as the countermeasure already filed in
+`3IxHqrApflNsmHz3Uj0eUxZCzX8` — see Orchestrator section below); a
+second occurrence in the same pass reinforces rather than duplicates
+that finding.
 
 ## build vmX5_zQH2
 
