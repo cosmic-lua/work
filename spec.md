@@ -72,13 +72,38 @@ specific resource contention," which changes where the real fix
 belongs (CPU/IO contention in CI specifically, not just any timing
 race).
 
+**Third data point, same day, a DIFFERENT PR's first CI attempt: the
+same exact value again.** `cosmic-lua/cosmopolitan#389` (zip.reader
+binding addition, also nothing touching `lfetch.c`) failed its own
+first `build` run with:
+
+    tool/net/lfetch.c: covered 582, floor 585
+
+(https://github.com/cosmic-lua/cosmopolitan/actions/runs/34008433083/job/101419804271,
+head `9dd50442b8ac4ce5998d2d7fb1ede06960a42008`, run 2026-09-06T03:21Z)
+
+Three for three on the identical `582` value, across TWO different PR
+branches (both based on recent `master`) and at least two different
+runners, materially strengthens the CI-contention-determinism reading
+over pure randomness — a real investigation should treat "582 under
+GitHub Actions specifically, reliably" as the leading hypothesis, not
+one alternative among several. A `#389` re-run was also triggered;
+if it independently also lands on 582, that is a fourth confirmation
+and should be treated as close to conclusive that this is
+environment-determined, not random — check the board/PR history for
+that result before re-deriving it.
+
 ## Change
 
 Investigate why `tool/net/lfetch.c`'s line coverage specifically
 varies run-to-run under `MODE=cov`, by a WIDER margin than previously
 measured (>= 582-592, 11 lines, not 586-592), and stabilize it for
-real this time. Likely paths (not prescribed — the build should
-measure and pick, per this repo's own measurement-first doctrine):
+real this time. No external precondition blocks starting immediately.
+Likely paths (not prescribed — the build should measure and pick, per
+this repo's own measurement-first doctrine), weighted by the CI-side
+evidence above (three runs across two unrelated PRs, all landing on
+exactly 582 — treat the first bullet below as the leading hypothesis,
+not one alternative among several):
 
 - First, test the CI-contention hypothesis directly before assuming
   pure randomness: reproduce under artificial CPU/IO contention
