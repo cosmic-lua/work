@@ -9,13 +9,15 @@
 --- can never drift apart in meaning.
 ---
 --- The derived-view DDL this file adds on top of `_work.indexddl`'s
---- base schema and `_work.index_rank`'s rank views: role, stage, the
---- single unified queue, the board's outcomes with their live flag,
---- triage, the doing count, a per-item children listing, the claims
---- and review claims standing past their lease, and the whole-board
---- structural-problem findings. Every view here is read-only SQL — the
---- one implementation of a fact every verb reads through
---- `_work.read`'s typed functions over it, never re-derived in Teal.
+--- base schema and `_work.index_rank`'s rank views: role (`role_view`,
+--- mirrored into the maintained `role` TABLE by `refill_role` — see
+--- `_work.index_rank`'s own header for why), stage, the single unified
+--- queue, the board's outcomes with their live flag, triage, the doing
+--- count, a per-item children listing, the claims and review claims
+--- standing past their lease, and the whole-board structural-problem
+--- findings. Every view here is read-only SQL — the one implementation
+--- of a fact every verb reads through `_work.read`'s typed functions
+--- over it, never re-derived in Teal.
 ---
 --- Apply after `_work.index.open`'s own DDL AND
 --- `_work.index_rank.ensure_views` — `queue`, `outcomes`, and
@@ -39,14 +41,20 @@ local EXTRA_DDL < const > = [[
 CREATE VIEW board AS
   SELECT * FROM items WHERE parent = '' ORDER BY id LIMIT 1;
 
--- role: id -> 'board' | 'outcome' | 'container' | 'work', for EVERY
--- item, done ones included (`show` prints a done item's role too) —
--- matches `_work.flow.role` exactly: the board first (parentless),
--- then any item with an open child (`containers`, decomposition beats
--- everything below it), then a direct child of a parentless item
--- (`_work.flow.is_outcome` asks the same question — any parentless
--- item counts, not only the canonical `board` row above), else work.
-CREATE VIEW role AS
+-- role_view: id -> 'board' | 'outcome' | 'container' | 'work', for
+-- EVERY item, done ones included (`show` prints a done item's role
+-- too) — matches `_work.flow.role` exactly: the board first
+-- (parentless), then any item with an open child (`containers`,
+-- decomposition beats everything below it), then a direct child of a
+-- parentless item (`_work.flow.is_outcome` asks the same question —
+-- any parentless item counts, not only the canonical `board` row
+-- above), else work.
+--
+-- `role` below is a TABLE `refill_role` keeps equal to this view's
+-- rows — `_work.read.role`, queried on every `show`/`show ID`/`take`/
+-- `done`, reads the table so it never recomputes `containers` from
+-- scratch.
+CREATE VIEW role_view AS
   SELECT i.id AS id,
     CASE
       WHEN i.parent = '' THEN 'board'
@@ -56,6 +64,11 @@ CREATE VIEW role AS
       ELSE 'work'
     END AS role
   FROM items i;
+
+CREATE TABLE role (
+  id TEXT PRIMARY KEY,
+  role TEXT NOT NULL CHECK(role IN ('board', 'outcome', 'container', 'work'))
+) STRICT, WITHOUT ROWID;
 
 -- stage: id -> the integer `_work.flow.stage_rank` gives, for open
 -- work items only (`workable`): accepted 1, review 2, rework 3,
@@ -86,10 +99,14 @@ CREATE VIEW stage AS
 -- `rank_path` (broken or deeper than 16 levels) still queues, with the
 -- same one-field fallback key `_work.rank.key` gives it: "1" plus its
 -- own id, which is already `_work.rank.FIELD_WIDTH` characters for a
--- real KSUID.
+-- real KSUID. `ranked` is `rank_path.placed` read back inline (0 for a
+-- row `rank_path` carries no entry for, matching `_work.read.is_ranked`'s
+-- own fallback) — the one column that lets a spec-bar walk over every
+-- row this view returns skip a second, per-row `rank_path` query.
 CREATE VIEW queue AS
   SELECT w.id AS id, s.stage AS stage,
-    COALESCE(rp.key, '1' || w.id) AS key
+    COALESCE(rp.key, '1' || w.id) AS key,
+    COALESCE(rp.placed, 0) AS ranked
   FROM workable w
   JOIN stage s ON s.id = w.id
   LEFT JOIN rank_path rp ON rp.id = w.id;
@@ -168,14 +185,15 @@ CREATE VIEW stale AS
   WHERE reviewer <> ''
   AND (CAST(strftime('%s', 'now') AS INTEGER) - touched_at) > 3600;
 
--- children: (parent, child, position, open) for every item that has
--- one — `position` is the child's dense rank in the parent's own
+-- children: (parent, child, position, open, title) for every item that
+-- has one — `position` is the child's dense rank in the parent's own
 -- `order` when it has one, NULL when it is unranked among its
--- siblings; `open` is the CHILD's own state. What a `show ID` children
--- listing reads.
+-- siblings; `open` is the CHILD's own state; `title` rides along so a
+-- `show ID` children listing never looks a child up by id afterward.
 CREATE VIEW children AS
   SELECT i.parent AS parent, i.id AS child, dr.pos AS position,
-    CASE WHEN i.resolution = '' THEN 1 ELSE 0 END AS open
+    CASE WHEN i.resolution = '' THEN 1 ELSE 0 END AS open,
+    i.title AS title
   FROM items i
   LEFT JOIN dense_rank dr ON dr.parent = i.parent AND dr.child = i.id
   WHERE i.parent <> '';
@@ -229,23 +247,46 @@ CREATE VIEW structure AS
   WHERE rp.id IS NULL;
 ]]
 
---- Add slice R2's read views to an index that already carries
---- `_work.index`'s base DDL and `_work.index_rank.ensure_views`. Call
---- once per connection — a second call fails, the views already
---- existing.
+--- Recompute `role` from `role_view` — one `DELETE` plus one
+--- `INSERT ... SELECT`. Run inside the same transaction as a save or
+--- fetch patch, right beside `_work.index_rank.refill`.
+--- @param idx Index An index with `ensure_views` already applied
+--- @return boolean True on success
+--- @return string Error message
+local function refill_role(idx: Index): boolean, string
+  local dok, derr = idx.db:exec("DELETE FROM role")
+  if not dok then
+    return false, derr
+  end
+  return idx.db:exec("INSERT INTO role (id, role) SELECT id, role FROM role_view")
+end
+
+--- Add slice R2's read views (and the `role` table `role_view` feeds)
+--- to an index that already carries `_work.index`'s base DDL and
+--- `_work.index_rank.ensure_views`, then populate `role` from today's
+--- data (`refill_role`). Call once per connection — a second call
+--- fails, the views already existing.
 --- @param idx Index An index with `_work.index_rank.ensure_views` already applied
 --- @return boolean True on success
 --- @return string Error message
 local function ensure_views(idx: Index): boolean, string
-  return idx.db:exec_script(EXTRA_DDL)
+  local ok, err = idx.db:exec_script(EXTRA_DDL)
+  if not ok then
+    return false, err
+  end
+  return refill_role(idx)
 end
 
 local record readddl
+  EXTRA_DDL: string
   ensure_views: function(idx: Index): boolean, string
+  refill_role: function(idx: Index): boolean, string
 end
 
 local M: readddl = {
+  EXTRA_DDL = EXTRA_DDL,
   ensure_views = ensure_views,
+  refill_role = refill_role,
 }
 
 return M

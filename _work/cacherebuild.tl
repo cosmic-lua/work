@@ -139,7 +139,7 @@ local function rebuild(root: string): Cache | nil, string
     local _c, _cerr = db:close()
     return nil, digerr
   end
-  local fp, fperr = cachedb.schema_fingerprint(db)
+  local fp, fperr = cachedb.expected_schema_fingerprint()
   if fp == nil then
     local _c, _cerr = db:close()
     return nil, fperr

@@ -14,10 +14,11 @@
 ---
 --- Reads the board database directly (`_work.read`): `triage` for the
 --- captured queue, `_work.read.queue` (filtered to the todo/repair
---- stages) plus `is_ranked` for the refinement candidate, and
---- `outcomes` — whose own `live` flag already answers "has live work"
---- — for decomposition. Age order throughout; the seeded tie-break is
---- `_work.action`'s alone, applied only to the in-flight half.
+--- stages, its own `ranked` column read back inline) for the
+--- refinement candidate, and `outcomes` — whose own `live` flag
+--- already answers "has live work" — for decomposition. Age order
+--- throughout; the seeded tie-break is `_work.action`'s alone, applied
+--- only to the in-flight half.
 local decision = require("_work.decision")
 local flow = require("_work.flow")
 local index = require("_work.index")
@@ -45,11 +46,7 @@ local function refinable(c: Index, by_id: {string: Item},
   end
   for _, row in ipairs(rows) do
     if row.stage >= flow.STAGE_REPAIR then
-      local ranked, rerr = read.is_ranked(c, row.id)
-      if ranked == nil then
-        return nil, rerr
-      end
-      if ranked and #flow.ready_gaps(specs[row.id] or "") > 0 then
+      if row.ranked and #flow.ready_gaps(specs[row.id] or "") > 0 then
         return by_id[row.id], ""
       end
     end

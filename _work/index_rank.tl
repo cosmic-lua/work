@@ -66,6 +66,19 @@
 --- changes whether a descendant counts as placed. The board's own row
 --- carries `placed = 1` trivially — it is never queued as workable, so
 --- the value is never consulted.
+---
+--- `rank_path` is a TABLE, not the view — `rank_path_view` is the one
+--- definition of the recursive walk above, and `rank_path` mirrors its
+--- rows exactly (same columns, same content), refreshed by `refill`
+--- rather than recomputed by SQLite on every query that joins against
+--- it. A read (`queue`, `outcomes`, `triage`, `_work.read.key`/
+--- `is_ranked`/`reaches_board`) used to pay for this recursion once per
+--- QUERY, several times over per verb; `refill` pays for it once per
+--- WRITE, inside the same transaction a save or fetch patch already
+--- opens (`_work.cache.after_save`/`patch_fetched`), and the cold
+--- rebuild (`_work.cacherebuild.fill`, via `ensure_views` below) fills
+--- it the same way. The table carries the exact name and columns every
+--- existing reader already queries, so nothing downstream changes.
 local index = require("_work.index")
 
 local type Index = index.Index
@@ -87,7 +100,12 @@ CREATE VIEW dense_rank AS
 -- empty key and contributes no field of its own; the outcome level
 -- (depth 0 -> 1) is the first to add one, and `placed` is fixed there
 -- and simply carried forward unchanged at every deeper level.
-CREATE VIEW rank_path AS
+--
+-- `rank_path_view` is the one definition of this walk; `rank_path`
+-- below is a table `refill` keeps equal to it, so a reader joins
+-- against rows already sitting in a b-tree rather than re-running the
+-- recursion.
+CREATE VIEW rank_path_view AS
   WITH RECURSIVE rp(id, key, placed, depth) AS (
     SELECT i.id, '', 1, 0
     FROM items i
@@ -114,16 +132,55 @@ CREATE VIEW rank_path AS
     WHERE rp.depth < 16
   )
   SELECT id, key, placed FROM rp;
+
+-- The maintained mirror of `rank_path_view`, above — same columns,
+-- kept equal to it by `refill` rather than recomputed per query.
+CREATE TABLE rank_path (
+  id TEXT PRIMARY KEY,
+  key TEXT NOT NULL,
+  placed INTEGER NOT NULL CHECK(placed IN (0, 1))
+) STRICT, WITHOUT ROWID;
+
+-- `queue`/`order_ids` both sort by `key`; `outcomes`/`triage` filter on
+-- `placed`. `EXPLAIN QUERY PLAN` over each confirms these are what the
+-- planner reaches for.
+CREATE INDEX rank_path_key ON rank_path(key);
+CREATE INDEX rank_path_placed ON rank_path(placed);
 ]]
 
---- Add the rank views to an index `_work.index.open` already loaded.
---- Call once per connection — a second call fails, the views already
---- existing.
+--- Recompute `rank_path` from `rank_path_view` — one `DELETE` plus one
+--- `INSERT ... SELECT`, the whole recursive walk paid for once. Run
+--- inside the SAME transaction as a save or fetch patch
+--- (`_work.cache.after_save`/`patch_fetched`), immediately after the
+--- touched items' own rows land: a rename anywhere in the tree can
+--- shift the fixed-width key of an unrelated descendant, so this
+--- always recomputes every row rather than trying to patch only the
+--- ones a given write touched.
+--- @param idx Index An index with `ensure_views` already applied
+--- @return boolean True on success
+--- @return string Error message
+local function refill(idx: Index): boolean, string
+  local dok, derr = idx.db:exec("DELETE FROM rank_path")
+  if not dok then
+    return false, derr
+  end
+  return idx.db:exec(
+    "INSERT INTO rank_path (id, key, placed) SELECT id, key, placed FROM rank_path_view")
+end
+
+--- Add the rank views (and the `rank_path` table they fill) to an
+--- index `_work.index.open` already loaded, then populate `rank_path`
+--- from today's data (`refill`). Call once per connection — a second
+--- call fails, the views already existing.
 --- @param idx Index An index from `_work.index.open`
 --- @return boolean True on success
 --- @return string Error message
 local function ensure_views(idx: Index): boolean, string
-  return idx.db:exec_script(EXTRA_DDL)
+  local ok, err = idx.db:exec_script(EXTRA_DDL)
+  if not ok then
+    return false, err
+  end
+  return refill(idx)
 end
 
 --- One item's rank: whether its outcome is in the board's own `order`,
@@ -160,13 +217,17 @@ local function order_ids(idx: Index): {string}
 end
 
 local record index_rank
+  EXTRA_DDL: string
   ensure_views: function(idx: Index): boolean, string
+  refill: function(idx: Index): boolean, string
   rank_of: function(idx: Index, id: string): boolean, string
   order_ids: function(idx: Index): {string}
 end
 
 local M: index_rank = {
+  EXTRA_DDL = EXTRA_DDL,
   ensure_views = ensure_views,
+  refill = refill,
   rank_of = rank_of,
   order_ids = order_ids,
 }

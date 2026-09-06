@@ -138,21 +138,20 @@ end
 --- Whether a todo item passes the pure half of the spec bar: ranked,
 --- spec sections filled. The take gate asks more (the chain traces);
 --- this is the half a pure walk can answer, and a candidate the gate
---- still refuses surfaces as one refused take, not a loop.
---- @param c Index An index with `_work.readddl.ensure_views` applied
---- @param i Item The item
+--- still refuses surfaces as one refused take, not a loop. `ranked`
+--- comes from the caller's own `_work.read.queue` row — `queue`
+--- carries the same fact `_work.read.is_ranked` answers, so a walk
+--- over every queue row never spends a second, per-row query on it.
+--- Infallible: every input already came from an open row.
+--- @param ranked boolean The item's own `queue` row's `ranked` column
+--- @param id string The item's id
 --- @param specs Specs Spec sidecar body, by item id
 --- @return boolean True when the item may be offered as a pull
---- @return string Error message
-local function passes_bar(c: Index, i: Item, specs: Specs): boolean, string
-  local ranked, err = read.is_ranked(c, i.id)
-  if ranked == nil then
-    return false, err
-  end
+local function passes_bar(ranked: boolean, id: string, specs: Specs): boolean
   if not ranked then
-    return false, ""
+    return false
   end
-  return #flow.ready_gaps(specs[i.id] or "") == 0, ""
+  return #flow.ready_gaps(specs[id] or "") == 0
 end
 
 --- The decision over the ONE queue (`_work.read.queue`, tie-broken):
@@ -289,10 +288,7 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
         end
       else
         -- STAGE_REPAIR or STAGE_TODO: the spec bar gates both.
-        local pb, pberr = passes_bar(c, i, specs)
-        if pberr ~= "" then
-          return nil, pberr
-        end
+        local pb = passes_bar(row.ranked, row.id, specs)
         if not pb then
           -- A todo item below the bar is refinement's to answer, and the
           -- intake half owns that; the queue steps past it silently.
@@ -459,7 +455,7 @@ local record action
   type Specs = Specs
   type CiStates = CiStates
   type QueueStates = QueueStates
-  passes_bar: function(c: Index, i: Item, specs: Specs): boolean, string
+  passes_bar: function(ranked: boolean, id: string, specs: Specs): boolean
   phased_action: function(c: Index, items: {Item}, specs: Specs,
   session: string, ages: health.Ages, review_ages: health.Ages,
   seed: string, ci?: CiStates, merge_queue?: QueueStates): Phased | nil, string

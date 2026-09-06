@@ -224,15 +224,12 @@ local function cmd_show(s: store.Store, id: string): integer
   -- match) is what lets `publish.history` below skip its own
   -- exact-ref `for-each-ref` — a lease the cache carries no ref/sha
   -- column to preserve. Every other read here — role, rank, children,
-  -- overlap context — goes through `store.list`/`store.read`'s open
-  -- cache, the one path every verb reads through.
+  -- overlap context — goes through `store.read`'s open cache, three
+  -- queries total (this item's role/rank/state, its children, its
+  -- open siblings for overlap), never a whole-board `store.list`.
   local it, lerr = store.load(s, id)
   if it == nil then
     return verdict_line("show", false, lerr)
-  end
-  local all, aerr = store.list(s)
-  if all == nil then
-    return verdict_line("show", false, aerr)
   end
   local c, cerr = store.read(s)
   if c == nil then
@@ -270,16 +267,20 @@ local function cmd_show(s: store.Store, id: string): integer
   local overlaps: {string} = {}
   local body = ""
   if item.is_open(it) then
-    -- This item's spec and every OTHER open item's, read in ONE batch
-    -- (`store.read_specs`) rather than a single `cat-file -p` for this
-    -- one plus a separate batch for the rest, so `_work.overlap` (and
-    -- `ready_problems` below, handed the same body) never re-reads a
-    -- spec this call already has.
+    -- Every OTHER open item's id, one query against the database
+    -- rather than a whole-board `store.list` hydration — this item's
+    -- spec and every other's, read in ONE batch (`store.read_specs`)
+    -- rather than a single `cat-file -p` for this one plus a separate
+    -- batch for the rest, so `_work.overlap` (and `ready_problems`
+    -- below, handed the same body) never re-reads a spec this call
+    -- already has.
+    local others, oerr = read.open_ids(c, it.id)
+    if others == nil then
+      return verdict_line("show", false, oerr)
+    end
     local ids: {string} = {id}
-    for _, other in ipairs(all) do
-      if other.id ~= it.id and item.is_open(other) then
-        ids[#ids + 1] = other.id
-      end
+    for _, oid in ipairs(others) do
+      ids[#ids + 1] = oid
     end
     local bodies = store.read_specs(s, ids)
     body = bodies[it.id] or ""
@@ -304,17 +305,11 @@ local function cmd_show(s: store.Store, id: string): integer
   if child_rows == nil then
     return verdict_line("show", false, cherr)
   end
-  local by_id = item.by_id(all)
   local children_lines: {string} = {}
   for _, ch in ipairs(child_rows) do
     if ch.open then
-      local title = ""
-      local child_it = by_id[ch.child]
-      if child_it ~= nil then
-        title = child_it.title
-      end
       children_lines[#children_lines + 1] = ("  %s %s"):format(
-        tail.handle(ch.child), title)
+        tail.handle(ch.child), ch.title)
     end
   end
   local lines, verdict = show_report(it, role, rank_line, state, body, events,

@@ -137,6 +137,19 @@ local function lanes_row(facts: {string: string} | nil): string | nil
   return ("%-6s %s"):format("lanes", table.concat(parts, " "))
 end
 
+--- One doing row: its item, and the stage saying which substate to
+--- render (`flow.substate_of_stage`).
+local record DoingRow
+  it: item.Item
+  stage: integer
+end
+
+--- One todo row: its item, and whether `queue` already found it ranked.
+local record TodoRow
+  it: item.Item
+  ranked: boolean
+end
+
 --- The board: doing item by item against the one bound, the top of
 --- todo with its pullable marks, the triage queue, and board-wide
 --- graph health. Health reports HERE rather than in the spec bar:
@@ -162,25 +175,23 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
   if rows == nil then
     return nil, qerr
   end
-  local doing: {item.Item} = {}
-  local todo: {item.Item} = {}
+  local doing: {DoingRow} = {}
+  local todo: {TodoRow} = {}
   for _, row in ipairs(rows) do
     local i = by_id[row.id]
     if i ~= nil then
       if row.stage < flow.STAGE_REPAIR then
-        doing[#doing + 1] = i
+        doing[#doing + 1] = {it = i, stage = row.stage}
       else
-        todo[#todo + 1] = i
+        todo[#todo + 1] = {it = i, ranked = row.ranked}
       end
     end
   end
   local out: {string} = {}
   out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
-  for _, i in ipairs(doing) do
-    local sub, suberr = read.substate(c, i.id)
-    if sub == nil then
-      return nil, suberr
-    end
+  for _, d in ipairs(doing) do
+    local i = d.it
+    local sub = flow.substate_of_stage(d.stage)
     local marks = (" [%s]"):format(sub)
     if i.claim ~= "" then marks = marks .. " @" .. i.claim end
     if i.pr ~= 0 then marks = marks .. (" pr:%d"):format(i.pr) end
@@ -208,19 +219,16 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
   end
   local pullable = 0
   local pullable_ids: {string: boolean} = {}
-  for _, i in ipairs(todo) do
-    local pb, pberr = act.passes_bar(c, i, specs)
-    if pberr ~= "" then
-      return nil, pberr
-    end
-    pullable_ids[i.id] = pb
+  for _, t in ipairs(todo) do
+    local pb = act.passes_bar(t.ranked, t.it.id, specs)
+    pullable_ids[t.it.id] = pb
     if pb then
       pullable = pullable + 1
     end
   end
   out[#out + 1] = ("%-6s %d (%d pullable)"):format("todo", #todo, pullable)
   for k = 1, math.min(#todo, TODO_SHOWN) do
-    local i = todo[k]
+    local i = todo[k].it
     local marks = ""
     if pullable_ids[i.id] then
       marks = " [pullable]"
