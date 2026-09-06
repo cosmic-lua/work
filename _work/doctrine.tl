@@ -328,8 +328,11 @@ checkout or push rights to this board repository:
 - Disjoint or not at all. `next` names one item and cannot see what
   else you are taking; file-disjointness across the wave is your
   check, judged on the MERGE — a shared file with thin headroom
-  under a line cap counts as shared. Say what you skipped and why.
-  Never split one item across agents to make it faster.
+  under a line cap counts as shared. `show --todo 0` lists every
+  pullable todo row with its repo, the whole set that judgment weighs
+  — `show`'s own default trims the list to the top 8. Say what you
+  skipped and why. Never split one item across agents to make it
+  faster.
 - One fresh worktree per agent, on the branch `take` names, never
   detached, and never nested inside another checkout — nesting breaks
   build gates in both directions, and neither failure names the

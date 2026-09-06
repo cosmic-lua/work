@@ -165,7 +165,16 @@ local CSPEC: flags.CommandSpec = {
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "show", summary = "the board (no ID), or one item: fields, "
       .. "spec-bar problems, spec, git history",
-      spec = {usage = "[ID] [options]", flags = {dir_flag()}}},
+      spec = {usage = "[ID] [options]",
+        summary = "the board (no ID), or one item: fields, spec-bar "
+        .. "problems, spec, git history.\n\n"
+        .. "Bare `show` renders the top of todo, 8 rows by default; "
+        .. "`--todo 0` renders every pullable row at once — the way to "
+        .. "see the whole pullable set. No effect with an ID.",
+        flags = {dir_flag(),
+          {long = "todo", arg = "N",
+            help = "how many todo rows to show (0 = all; default 8); "
+            .. "no effect with an ID"}}}},
     {name = "sync", summary = "rebase onto the remote's state",
       spec = {flags = {dir_flag()}}},
     {name = "fsck", summary = "read-only board audit: edges, trees, keys, flags",

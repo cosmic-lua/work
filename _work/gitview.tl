@@ -104,10 +104,6 @@ local function read_specs(s: store.Store, all: {item.Item}): act.Specs
   return store.read_specs(s, ids)
 end
 
---- How many todo lines the board render shows item-by-item. The top
---- of the queue is what a session acts on; the rest is the count.
-local TODO_SHOWN < const >: integer = 8
-
 --- The id and title every rendered item line leads with: the id's
 --- tail — the last 8 characters, pure entropy and a literal
 --- substring of the id — chunked for legibility.
@@ -160,10 +156,12 @@ end
 --- @param specs act.Specs Sidecar body by id
 --- @param ages health.Ages Stale claim ages, by id
 --- @param lane_facts {string: string} | nil Lane state, nil when unsynced
+--- @param todo_shown integer | nil How many todo rows to render; 0 for
+--- every row; nil for the default (8)
 --- @return {string} | nil The lines to print
 --- @return string The verdict detail, or the error on a nil first return
 local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
-    ages?: health.Ages, lane_facts?: {string: string}):
+    ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer):
   {string} | nil, string
   local aged = ages or {}
   local by_id = item.by_id(all)
@@ -227,7 +225,9 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     end
   end
   out[#out + 1] = ("%-6s %d (%d pullable)"):format("todo", #todo, pullable)
-  for k = 1, math.min(#todo, TODO_SHOWN) do
+  local shown = todo_shown or 8
+  local limit = shown == 0 and #todo or shown
+  for k = 1, math.min(#todo, limit) do
     local i = todo[k].it
     local marks = ""
     if pullable_ids[i.id] then
@@ -236,8 +236,8 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
     out[#out + 1] = ("  %s%s"):format(id_line(i), marks)
   end
-  if #todo > TODO_SHOWN then
-    out[#out + 1] = ("  ... %d more"):format(#todo - TODO_SHOWN)
+  if shown ~= 0 and #todo > shown then
+    out[#out + 1] = ("  ... %d more"):format(#todo - shown)
   end
   -- Untriaged outcomes render item by item: they are not workable
   -- yet, and this is the one list of them anyone gets.
@@ -295,7 +295,8 @@ end
 
 --- Bare `show`: the whole board. Named `cmd_status` for the report it
 --- prints; the verdict line says `show`, the verb that reaches it.
-local function cmd_status(s: store.Store): integer
+--- @param todo_shown integer | nil `--todo N`, nil for the default (8)
+local function cmd_status(s: store.Store, todo_shown?: integer): integer
   local board, aerr = list_via_cache(s)
   if board == nil then
     return verdict_line("show", false, aerr)
@@ -317,7 +318,7 @@ local function cmd_status(s: store.Store): integer
     lane_facts = facts
   end
   local lines, verdict = status_report(c, all, read_specs(s, all),
-    stale_ages(s).claim, lane_facts)
+    stale_ages(s).claim, lane_facts, todo_shown)
   if lines == nil then
     return verdict_line("show", false, verdict)
   end
@@ -463,7 +464,7 @@ local record gitview
   type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
   status_report: function(c: Index, all: {item.Item}, specs: act.Specs,
-  ages?: health.Ages, lane_facts?: {string: string}):
+  ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer):
   {string} | nil, string
   next_report: function(c: Index, all: {item.Item}, specs: act.Specs,
   session?: string, ages?: health.Ages, review_ages?: health.Ages): string, string
@@ -477,7 +478,7 @@ local record gitview
   -- `cmd_next`.
   list_via_cache: function(s: store.Store): Board | nil, string
   stale_ages: function(s: store.Store): health.StaleAges
-  cmd_status: function(s: store.Store): integer
+  cmd_status: function(s: store.Store, todo_shown?: integer): integer
   cmd_next: function(s: store.Store, session?: string): integer
 end
 

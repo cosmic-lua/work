@@ -220,9 +220,18 @@ local function main(...: string): integer
     return cachequery.cmd_find(s.root, table.concat(d.parsed.args, " "))
   end
   -- Bare `show` is the board; `show ID` is one item, resolved below
-  -- with every other id-taking verb.
+  -- with every other id-taking verb — `--todo` has no effect there.
   if d.command == "show" and (d.parsed.args[1] or "") == "" then
-    return view.cmd_status(s)
+    local raw = d.parsed.values["todo"]
+    if raw == nil then
+      return view.cmd_status(s)
+    end
+    local todo_shown = math.tointeger(tonumber(raw))
+    if todo_shown == nil or todo_shown < 0 then
+      return gate.verdict_line("show", false,
+        ("--todo wants a non-negative integer, got %q"):format(raw))
+    end
+    return view.cmd_status(s, todo_shown)
   end
   -- `brief`'s first argument is the KIND, not an id, so it cannot
   -- ride the shared id resolution below. A missing id passes through
