@@ -3,4 +3,4 @@ parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: build-XvG7_47u0-d5f3aa35
 builders: build-XvG7_47u0-d5f3aa35
-speccers: 2f92e512-19fc-5db1-af1f-01086dc185b4
+speccers: 2f92e512-19fc-5db1-af1f-01086dc185b4 build-XvG7_47u0-d5f3aa35

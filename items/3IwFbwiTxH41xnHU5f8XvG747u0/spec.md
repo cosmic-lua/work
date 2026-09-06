@@ -34,20 +34,43 @@ design being correct for test HYGIENE doesn't make its variable
 participation free for line-COVERAGE ACCOUNTING, which is this item's
 actual, narrower scope.
 
+**A builder attempt (2026-09-06, `build-XvG7_47u0-d5f3aa35`) stopped
+before writing code: `#390` was still open/unmerged at pull time**
+(`state: open`, `merged: false`, head `2e320a3` on base `b9246f8d`,
+verified directly via the GitHub API), so `line_coverage_floor.lua` at
+`origin/master` still carried the pre-`#390` state (585, the old
+generic comment) — there was no `579` comment yet to verify. The
+builder correctly declined to guess at `#390`'s outcome or duplicate
+its uncommitted work. This item was pullable before its actual
+precondition (`#390` merged) held; the fix is to state that
+precondition explicitly (below) so a future pull checks it first
+instead of discovering it mid-build.
+
 ## Change
 
-Not written — needs `8TDI_yqOV`'s merged PR (`#390`) read first: it
-already narrows the exact lines this branch touches
-(`tool/net/lfetch.c:447,448,456` per that PR's own summary) and
-derives 579 as the always-covered floor precisely BECAUSE it treats
-this branch (and the other three flaky ones) as sometimes-absent —
-i.e. the floor-accounting side of this may already be as settled as
-the test-hygiene side was by `mQ2B_8Pwr`. Refining this item is mostly
-a verification pass: confirm `line_coverage_floor.lua`'s current
-579 comment (post-#390) already accounts for this branch's
-skip/no-skip variance correctly, rather than assuming there is
-remaining work. If it does, this item should close as already
-resolved by `#390`, not produce a second Change.
+Ready when: `cosmic-lua/cosmopolitan#390` is merged — verify with
+`gh pr view 390 --json state,mergedAt` (or the equivalent
+`pull_request_read` call) showing `"state": "MERGED"`, or that its
+merge commit is an ancestor of `origin/master`. Until then this item
+is not resolvable; a puller that reaches it before then drops the
+claim bare (item is fine as written).
+
+Once ready, this is mostly a verification pass, not a new fix: read
+`#390`'s merged diff and `tool/lua/line_coverage_floor.lua`'s resulting
+comment for `tool/net/lfetch.c`. `#390`'s comment already narrows the
+exact lines this branch touches (`tool/net/lfetch.c:447,448,456` per
+that PR's summary) and derives 579 as the always-covered floor
+precisely BECAUSE it treats this branch (and the other three flaky
+ones) as sometimes-absent. Confirm the merged comment explicitly
+accounts for `test_stream_https`'s skip/no-skip variance (it names the
+branch as `FetchStreamRead`'s TLS body-read path, "reached only when
+the streaming test's fetch of a real external HTTPS endpoint
+succeeds"). If it does — expected, based on the pre-merge diff read
+during this item's own refinement — `done` this item as already
+resolved by `#390`, with that confirmation as the record; do not
+produce a second Change to `line_coverage_floor.lua`. If the merged
+comment does NOT name this branch, that is a real gap: STOP and report
+what it says instead, since the Non-goals below still hold.
 
 ## Non-goals
 
