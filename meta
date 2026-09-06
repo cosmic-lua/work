@@ -2,8 +2,8 @@ title: cosmic/ast: generic cycle-guarded walk + span computation (node_start/nod
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-gDNw_5bFk-f6f470de
-reviewer: f6f470de-dee2-5890-b8f1-db91217d1a73
 pr: 1759
-verdict_head: 150a3f5f5151ac445ab8611a615b25d9bdd29d24
+verdict: accept
+verdict_head: 4c386aeae431499171ccf473d92a27083c1ea49c
 verdict_spec: 55f05009eb26ad7e16bb4f4962aea0deae44c221
 builders: build-gDNw_5bFk-f6f470de
