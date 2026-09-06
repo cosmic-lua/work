@@ -41,22 +41,46 @@ context at full cost, whether or not anything changed.
 
 `skills/work/SKILL.md` (or `gitboard help orchestrate`/`help build`,
 whichever already documents the builder/orchestrator division of
-labor) should state explicitly: a step that depends on slow-to-settle
-EXTERNAL state beyond the item's own PR/CI gate (triggering and
+labor) should state as a hard rule, not a preference: **a spawned
+agent (builder, research, review) never polls and never subscribes to
+external events — including GitHub's own** (no repeated "check again"
+turns, no `subscribe_pr_activity`, no watching a workflow run or a
+release publish itself). A step that depends on slow-to-settle
+external state beyond the item's own PR/CI gate (triggering and
 awaiting a separate workflow run, a release publish, another team's
-webhook, etc.) is the ORCHESTRATOR's job to poll — cheap, targeted API
-or CLI checks — and only handed to a spawned agent once that external
-state has actually changed and there is real work for it to do next.
-A builder brief for such an item should say so directly: "the
-orchestrator will trigger/monitor the external process and resume you
-only once it completes" rather than leaving the agent to discover, by
-trial, that waiting itself is expensive and fruitless.
+webhook, GitHub Actions completion, etc.) is the ORCHESTRATOR's job,
+full stop — cheap, targeted API or CLI checks, or (for genuinely
+long waits) `ScheduleWakeup`/a scheduled check-in — and the spawned
+agent is only invoked (fresh, or resumed) once that external state has
+already changed and there is real work for it to do next.
+
+The subscribe case is not just wasteful the way polling is — it is
+actively broken: a webhook fires into whichever session holds the
+subscription, and a spawned builder/research/review agent's session
+ends when it returns its final report. A GitHub event delivered after
+that point has nothing live to wake, so a subagent that subscribes to
+"be notified when this PR's CI finishes" is subscribing on behalf of a
+session that will already be gone. Only the orchestrator's own
+(persistent, resumable) session may hold a PR/event subscription.
+
+A builder or research brief for an item shaped like this should say so
+directly: "the orchestrator will trigger/monitor the external process
+and resume you only once it completes — do not poll, and do not
+subscribe to any event yourself." Whoever refines this into the actual
+doc/skill edit should also check whether `gitboard brief`'s own
+templates should carry this line structurally, so it reaches every
+brief this shape applies to rather than depending on each hand-written
+prompt to remember it.
 
 ## Non-goals
 
 Not proposing a new tool or capability for subagents to self-schedule
-wakeups — that infrastructure question is out of this item's scope.
-This is a documentation/process fix: state the existing division of
-labor (orchestrator polls, agent acts) explicitly for this specific
-failure mode, so a future orchestrator session doesn't repeat the same
-five-times-expensive pattern this pass did.
+wakeups — that infrastructure question is out of this item's scope,
+and the ban above makes it moot for GitHub events specifically: a
+subagent is never the right place for that subscription regardless of
+what wakeup mechanism it might someday have. This is a documentation/
+process fix: state the existing division of labor (orchestrator polls
+or subscribes, agent acts) explicitly and as a hard rule for this
+specific failure mode, so a future orchestrator session doesn't repeat
+the same five-times-expensive pattern this pass did, and no session
+ever spawns an agent that subscribes to a PR on its own.
