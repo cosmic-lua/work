@@ -25,7 +25,7 @@
 ---   cosmic --make run _work/gitboard.tl spec 2akQ SPEC.md
 ---   cosmic --make run _work/gitboard.tl show [2akQ]
 ---   cosmic --make run _work/gitboard.tl next [--session S]
----   cosmic --make run _work/gitboard.tl take 2akQ [--pr 42 | --result]
+---   cosmic --make run _work/gitboard.tl take 2akQ [--pr 42 | --result | --open]
 ---   cosmic --make run _work/gitboard.tl drop 2akQ --why "wave agent died"
 ---   cosmic --make run _work/gitboard.tl verdict 2akQ accept [--pr N]
 ---   cosmic --make run _work/gitboard.tl done 2akQ [--reason not-planned]
@@ -333,7 +333,8 @@ local function main(...: string): integer
     local who = session.resolve(d.parsed.values["session"])
     return verbs.cmd_take(s, id, who, pr,
       d.parsed.switches["force"], d.parsed.values["why"] or "",
-      d.parsed.switches["result"])
+      d.parsed.switches["result"], d.parsed.switches["open"],
+      d.parsed.values["body"] or "")
   end
   if d.command == "drop" then
     local who = session.resolve(d.parsed.values["session"])

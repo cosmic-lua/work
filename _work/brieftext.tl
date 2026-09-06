@@ -88,18 +88,12 @@ and nothing less:
    a conflict with the base branch, stop and report it with the
    conflicting files; merging the base into the item branch is the
    orchestrator's, never a builder's rebase.
-8. Open a PR from `<BRANCH>` to `<BASE_BRANCH>` in `<REPO>`. READY
-   for review, NOT draft. The PR body's FIRST LINE must be exactly:
-   `Board: <ITEM_ID>`
-   — it is how the board joins the PR back to the item. Follow it
-   with a blank line and a description of what changed and why —
-   never a pasted gate transcript. Open it with whatever GitHub reach
-   the session has: the `gh` CLI when present, otherwise the GitHub
-   MCP tools (`mcp__github__create_pull_request`, loaded with
-   ToolSearch); the Board: line is the body's first line either way.
-   Never poll or subscribe to GitHub events (no `subscribe_pr_activity`,
-   no re-check loops) — CI and review are the orchestrator's to watch;
-   report and end.
+8. Do not open a PR. Your final report carries the branch name and
+   one paragraph describing what changed and why, written for the PR
+   body — the orchestrator opens the PR with `gitboard take ID
+   --open`. Never poll or subscribe to GitHub events (no
+   `subscribe_pr_activity`, no re-check loops) — CI and review are the
+   orchestrator's to watch; report and end.
 9. Do NOT merge the PR. Do NOT run any `gitboard` command — board
    state is the orchestrator's job.
 

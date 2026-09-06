@@ -70,6 +70,9 @@ end
 --- push is a new head to judge. `--result` is the same handover for
 --- a research slice, whose deliverable is the spec rather than a diff
 --- (`gittake.take_result`); an item carries one kind or the other.
+--- `--open` is the same handover again, for a diff whose PR does not
+--- exist yet: gitboard opens it itself (`gittake.take_open`) and then
+--- records the number it got exactly as `--pr N` would.
 --- @param s store.Store The store
 --- @param id string The item to take
 --- @param session string The claiming session
@@ -77,9 +80,12 @@ end
 --- @param force boolean Take over a LIVE foreign claim
 --- @param why string Why --force was needed
 --- @param result boolean Record the research handover instead of a PR
+--- @param open boolean Open a PR for the handover instead of recording one
+--- @param body_file string The `--open` PR body's extra file, "" for none
 --- @return integer Exit code
 local function cmd_take(s: store.Store, id: string, session: string,
-    pr: integer, force: boolean, why: string, result?: boolean): integer
+    pr: integer, force: boolean, why: string, result?: boolean,
+    open?: boolean, body_file?: string): integer
   local forced = gate.force_refusal(force, why)
   if forced then
     return gate.verdict_line("take", false, "REFUSED: " .. forced)
@@ -121,8 +127,11 @@ local function cmd_take(s: store.Store, id: string, session: string,
     return gate.verdict_line("take", false,
       ("%s is done (%s)"):format(id:sub(1, 8), it.resolution))
   end
-  -- The research handover is the claim holder's own motion: it asks
-  -- none of the gates below and never takes over.
+  -- Both handovers are the claim holder's own motion: they ask none
+  -- of the gates below and never take over.
+  if open then
+    return gittake.take_open(s, it, session, pr, body_file or "")
+  end
   if result then
     return gittake.take_result(s, it, session, pr)
   end
@@ -395,7 +404,8 @@ end
 
 local record gitverbs
   cmd_take: function(s: store.Store, id: string, session: string,
-  pr: integer, force: boolean, why: string, result?: boolean): integer
+  pr: integer, force: boolean, why: string, result?: boolean,
+  open?: boolean, body_file?: string): integer
   cmd_drop: function(s: store.Store, id: string, session: string,
   why: string, force: boolean): integer
   cmd_done: function(s: store.Store, id: string, reason: string,

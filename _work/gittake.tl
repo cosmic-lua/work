@@ -1,6 +1,6 @@
---- The two takes `take` reaches by derivation rather than by a verb
---- of their own — an item's facts, never a declaration, say which one
---- a take is (`_work.gitverbs.cmd_take` is the dispatch):
+--- The takes `take` reaches by derivation rather than by a verb of
+--- their own — an item's facts, never a declaration, say which one a
+--- take is (`_work.gitverbs.cmd_take` is the dispatch):
 ---
 ---   take_review  an item awaiting a verdict, taken by a session that
 ---                is not its builder: the review claim, the lock
@@ -9,11 +9,18 @@
 ---                research slice over for that verdict — the mirror
 ---                of `take ID --pr N` for work whose deliverable is
 ---                board state, not a diff
+---   take_open    `take ID --open`, the claim holder handing a diff
+---                over by having gitboard open its PR, then recording
+---                the number exactly as `take ID --pr N` would
 ---
---- Both are motion on work already in flight and ask neither of the
---- pull's gates. Split from `_work.gitverbs`, which sits against the
---- file cap.
+--- All three are motion on work already in flight and ask neither of
+--- the pull's gates. Split from `_work.gitverbs`, which sits against
+--- the file cap.
+local child = require("cosmic.child")
+local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
+local gh = require("_work.gh")
+local gitready = require("_work.gitready")
 local health = require("_work.health")
 local item = require("_work.item")
 local spec = require("_work.spec")
@@ -156,15 +163,131 @@ local function take_result(s: store.Store, it: item.Item, session: string,
     ("%s is yours result:%s — %s"):format(id8, digest:sub(1, 7), standing))
 end
 
+--- The PR body `take --open` sends: `Board: <full id>`, so the board
+--- can join the opened PR back to the item, then a blank line and the
+--- contents of `--body FILE` when one was given. Pure — no git, no
+--- GitHub — so the shape is proven directly rather than only through
+--- the network calls `take_open` wraps around it.
+--- @param id string The item's full id
+--- @param body_file string The `--body` file, "" for none
+--- @return string | nil The body
+--- @return string Error message
+local function open_body(id: string, body_file: string): string | nil, string
+  local board_line = ("Board: %s"):format(id)
+  if body_file == "" then
+    return board_line, ""
+  end
+  local extra, ferr = fs.read(body_file)
+  if extra == nil then
+    return nil, ("cannot read --body %s: %s"):format(body_file, ferr)
+  end
+  return board_line .. "\n\n" .. extra, ""
+end
+
+--- The GitHub handover: what `take --pr N` is for a diff whose PR
+--- already exists, for one whose PR does not exist yet. `take` names
+--- the branch a build pushes to (the item id's first 8 characters),
+--- so gitboard already knows what to open: from that branch, into the
+--- item's own `base`, titled and bodied from the item itself
+--- (`Board: <full id>`, plus the contents of `--body FILE` when one
+--- was given). Everything checkable without spending GitHub's write
+--- quota is checked first; only then does the one call happen, and
+--- its number is recorded exactly as `--pr N` would record a number
+--- the caller already had.
+---
+--- Only the live claim holder hands over — same rule as any other
+--- handover here — and never alongside a `--pr` of its own: an item's
+--- deliverable is one diff, opened once.
+--- @param s store.Store The store
+--- @param it item.Item The item handed over
+--- @param session string The handing-over session
+--- @param pr integer The `--pr` given alongside, 0 for none
+--- @param body_file string A file whose contents extend the PR body, "" for none
+--- @return integer Exit code
+local function take_open(s: store.Store, it: item.Item, session: string,
+    pr: integer, body_file: string): integer
+  local id8 = it.id:sub(1, 8)
+  if (pr or 0) ~= 0 then
+    return gate.verdict_line("take", false,
+      "REFUSED: --open and --pr together — a diff's PR is opened or "
+      .. "recorded, never both at once")
+  end
+  if (it.claim or "") ~= session then
+    local holder = "unclaimed"
+    if (it.claim or "") ~= "" then
+      holder = ("claimed by %s"):format(it.claim)
+    end
+    return gate.verdict_line("take", false,
+      ("REFUSED: %s is %s — the handover is the claim holder's; take it "
+        .. "first"):format(id8, holder))
+  end
+  local repo = it.repo or ""
+  if repo == "" then
+    return gate.verdict_line("take", false,
+      ("REFUSED: %s has no repo set — --open needs one to open a PR "
+        .. "against"):format(id8))
+  end
+  local base = it.base
+  if (base or "") == "" then
+    base = repo:find("cosmopolitan", 1, true) and "master" or "main"
+  end
+  local remote = ("https://github.com/%s.git"):format(repo)
+  local r = child.run({"git", "ls-remote", "--heads", remote, id8})
+  if r == nil or not r.ok or (r.stdout or ""):match("%S") == nil then
+    return gate.verdict_line("take", false,
+      ("REFUSED: %s has no branch %s on %s — push it first"):format(
+        id8, id8, repo))
+  end
+  local body, berr = open_body(it.id, body_file)
+  if body == nil then
+    return gate.verdict_line("take", false, "REFUSED: " .. berr)
+  end
+  local number, oerr = gh.open_pull(s, repo, id8, base, it.title, body)
+  if number == nil then
+    return gate.verdict_line("take", false,
+      ("REFUSED: opening the PR failed: %s"):format(oerr))
+  end
+  local all, aerr = store.list(s)
+  if all == nil then
+    return gate.verdict_line("take", false, aerr)
+  end
+  local collision = gitready.pr_collision_refusal(all, it.id, number)
+  if collision then
+    return gate.verdict_line("take", false, collision)
+  end
+  it.pr = number
+  if it.verdict == "request changes" then
+    it.verdict = ""
+  end
+  local ok, err = gate.commit_and_publish(s, it, nil,
+    ("take %s by %s pr:%d"):format(id8, session, number), "take", nil, session)
+  if not ok then
+    return gate.verdict_line("take", false, err)
+  end
+  if store.is_noop(err) then
+    return gate.verdict_line("take", true, err)
+  end
+  return gate.verdict_line("take", true,
+    ("%s is yours pr:%d — awaiting review"):format(id8, number))
+end
+
 local record gittake
   take_review: function(s: store.Store, it: item.Item, session: string,
   force: boolean, why: string): integer
   take_result: function(s: store.Store, it: item.Item, session: string,
   pr: integer): integer
+  take_open: function(s: store.Store, it: item.Item, session: string,
+  pr: integer, body_file: string): integer
+  --- Exported for tests only: the pure body construction `take_open`
+  --- wraps around, proven directly rather than only through a stub
+  --- standing in for the whole write.
+  open_body: function(id: string, body_file: string): string | nil, string
 end
 
 local M: gittake = {
   take_review = take_review,
+  take_open = take_open,
+  open_body = open_body,
   take_result = take_result,
 }
 

@@ -58,10 +58,14 @@ local function test_step_seven_reports_a_base_conflict_rather_than_rebasing()
     .. "never rebase it themselves")
 end
 
-local function test_pr_steps_name_the_mcp_fallback_for_no_gh_cli()
-  assert(BUILDER:find("mcp__github__create_pull_request", 1, true) ~= nil,
-    "the builder's Open a PR step must name the GitHub MCP tool "
-    .. "fallback for a session with no gh CLI")
+local function test_the_builder_never_opens_its_own_pr()
+  assert(BUILDER:find("create_pull_request", 1, true) == nil,
+    "the builder brief must not send a builder to open its own PR — "
+    .. "that reach is the orchestrator's, through `gitboard take ID "
+    .. "--open`")
+  assert(BUILDER:find("take ID --open", 1, true) ~= nil,
+    "the builder's Open a PR step must hand the PR off to "
+    .. "`gitboard take ID --open` instead of opening one itself")
   assert(REVIEW:find("mcp__github__enable_pr_auto_merge", 1, true) ~= nil,
     "the review brief's accept bullet must name the GitHub MCP tool "
     .. "fallback for enabling auto-merge")

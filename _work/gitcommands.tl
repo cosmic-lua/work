@@ -128,13 +128,21 @@ local CSPEC: flags.CommandSpec = {
             .. "bootstrap (repeatable)"}}}},
     {name = "take", summary = "claim ID: the pull (spec bar and doing "
       .. "bound apply), its review when it awaits a verdict, or record "
-      .. "its handover (--pr N for a diff, --result for a research spec)",
+      .. "its handover (--pr N for a diff, --open to open one, --result "
+      .. "for a research spec)",
       spec = {usage = "ID [options]", flags = {dir_flag(),
           {long = "session", arg = "SESSION",
             help = "the claiming session. Omit to derive it from the "
             .. "environment"},
           {long = "pr", arg = "N",
             help = "record the PR that hands the build over for review"},
+          {long = "open", help = "open the PR yourself, from the branch "
+            .. "`take` names, and record the number it gets — the "
+            .. "handover for a diff whose PR does not exist yet. The "
+            .. "claim holder's own motion; never with --pr"},
+          {long = "body", arg = "FILE",
+            help = "with --open, a paragraph appended to the PR body "
+            .. "after its `Board:` line"},
           {long = "result", help = "record the research handover: the "
             .. "spec as it stands is the deliverable, awaiting a verdict. "
             .. "The claim holder's own motion; never with --pr"},

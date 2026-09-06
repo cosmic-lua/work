@@ -48,7 +48,7 @@ return {
   ["_work/gitshow.tl"] = {["covered"] = 156, ["total"] = 177},
   ["_work/gitspec.tl"] = {["covered"] = 41, ["total"] = 46},
   ["_work/gitsync.tl"] = {["covered"] = 17, ["total"] = 19},
-  ["_work/gittake.tl"] = {["covered"] = 61, ["total"] = 64},
+  ["_work/gittake.tl"] = {["covered"] = 96, ["total"] = 133},
   ["_work/gitverbs.tl"] = {["covered"] = 215, ["total"] = 242},
   ["_work/gitverdict.tl"] = {["covered"] = 121, ["total"] = 142},
   ["_work/gitview.tl"] = {["covered"] = 137, ["total"] = 165},
