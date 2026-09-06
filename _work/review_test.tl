@@ -150,10 +150,12 @@ local function test_blocks_land_refuses_an_unmerged_request()
   assert(refusal ~= nil and refusal:find("is not merged", 1, true),
     "got: " .. tostring(refusal))
   assert(refusal:find("#7", 1, true), "it names the PR: " .. refusal)
-  assert(refusal:find("Squash-merge", 1, true),
+  assert(refusal:find("squash-merged", 1, true),
     "it names the act the caller performs: " .. refusal)
-  assert(refusal:find("`gitboard land " .. ID:sub(1, 8) .. "`", 1, true),
+  assert(refusal:find("`gitboard done " .. ID:sub(1, 8) .. "`", 1, true),
     "and the verb to re-run, on this item: " .. refusal)
+  assert(not refusal:find("gitboard land", 1, true),
+    "land is not a verb: " .. refusal)
 end
 
 -- A merged request is the whole precondition: `land` reads the merge
