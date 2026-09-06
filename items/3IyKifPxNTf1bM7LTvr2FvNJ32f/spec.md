@@ -32,3 +32,13 @@ change to request-changes.
 
 cosmic-lua/cosmic and cosmic-lua/work, read (the reviews list) and
 write (the dismissal), through `_work.api`.
+
+## Constraint measured 2026-09-06
+
+The same PUT from this remote session's proxy →
+`HTTP 403 {"message":"Dismissing pull request reviews is not permitted
+for this session type."}` — a policy of the session's GitHub proxy,
+not of the token. So this dismissal works from a local session only;
+the durable fix is «Qa2H_5whT» (a `COMMENT` review never blocks a
+merge), which should land first and makes this item the fallback for
+reviews posted before it.
