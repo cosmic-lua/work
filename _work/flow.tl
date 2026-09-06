@@ -61,6 +61,24 @@ local STAGE_BUILDING < const >: integer = 4
 local STAGE_REPAIR < const >: integer = 5
 local STAGE_TODO < const >: integer = 6
 
+--- A doing row's stage (1..4), as the word `_work.read.substate` would
+--- answer for it — the exact inverse of `_work.readddl`'s `stage`
+--- view's own `CASE`, which derives the integer from this same word.
+--- Kept in sync by hand with that view. Lets a render walking every row
+--- `_work.read.queue` returns skip a second, per-row `substate` query.
+--- @param stage integer A doing row's stage, STAGE_ACCEPTED..STAGE_BUILDING
+--- @return string "accepted" | "review" | "rework" | "building"
+local function substate_of_stage(stage: integer): string
+  if stage == STAGE_ACCEPTED then
+    return "accepted"
+  elseif stage == STAGE_REVIEW then
+    return "review"
+  elseif stage == STAGE_REWORK then
+    return "rework"
+  end
+  return "building"
+end
+
 local record flow
   DOING_LIMIT: integer
   STAGE_ACCEPTED: integer
@@ -70,6 +88,7 @@ local record flow
   STAGE_REPAIR: integer
   STAGE_TODO: integer
   ready_gaps: function(body: string): {string}
+  substate_of_stage: function(stage: integer): string
 end
 
 local M: flow = {
@@ -81,6 +100,7 @@ local M: flow = {
   STAGE_REPAIR = STAGE_REPAIR,
   STAGE_TODO = STAGE_TODO,
   ready_gaps = spec.ready_gaps,
+  substate_of_stage = substate_of_stage,
 }
 
 return M

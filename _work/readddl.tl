@@ -86,10 +86,14 @@ CREATE VIEW stage AS
 -- `rank_path` (broken or deeper than 16 levels) still queues, with the
 -- same one-field fallback key `_work.rank.key` gives it: "1" plus its
 -- own id, which is already `_work.rank.FIELD_WIDTH` characters for a
--- real KSUID.
+-- real KSUID. `ranked` is `rank_path.placed` read back inline (0 for a
+-- row `rank_path` carries no entry for, matching `_work.read.is_ranked`'s
+-- own fallback) — the one column that lets a spec-bar walk over every
+-- row this view returns skip a second, per-row `rank_path` query.
 CREATE VIEW queue AS
   SELECT w.id AS id, s.stage AS stage,
-    COALESCE(rp.key, '1' || w.id) AS key
+    COALESCE(rp.key, '1' || w.id) AS key,
+    COALESCE(rp.placed, 0) AS ranked
   FROM workable w
   JOIN stage s ON s.id = w.id
   LEFT JOIN rank_path rp ON rp.id = w.id;
@@ -168,14 +172,15 @@ CREATE VIEW stale AS
   WHERE reviewer <> ''
   AND (CAST(strftime('%s', 'now') AS INTEGER) - touched_at) > 3600;
 
--- children: (parent, child, position, open) for every item that has
--- one — `position` is the child's dense rank in the parent's own
+-- children: (parent, child, position, open, title) for every item that
+-- has one — `position` is the child's dense rank in the parent's own
 -- `order` when it has one, NULL when it is unranked among its
--- siblings; `open` is the CHILD's own state. What a `show ID` children
--- listing reads.
+-- siblings; `open` is the CHILD's own state; `title` rides along so a
+-- `show ID` children listing never looks a child up by id afterward.
 CREATE VIEW children AS
   SELECT i.parent AS parent, i.id AS child, dr.pos AS position,
-    CASE WHEN i.resolution = '' THEN 1 ELSE 0 END AS open
+    CASE WHEN i.resolution = '' THEN 1 ELSE 0 END AS open,
+    i.title AS title
   FROM items i
   LEFT JOIN dense_rank dr ON dr.parent = i.parent AND dr.child = i.id
   WHERE i.parent <> '';

@@ -20,10 +20,14 @@ local type Index = index.Index
 --- One `queue` row: a work item's place in the one queue every verb
 --- walks — stage first, then rank-path key, then id — before the
 --- seeded per-session tie-break `next` applies over tied rows.
+--- `ranked` is the same fact `is_ranked` answers for this id, read
+--- back inline so a walk over every queue row never issues a second,
+--- per-row query for it.
 local record QueueRow
   id: string
   stage: integer
   key: string
+  ranked: boolean
 end
 
 --- One `outcomes` row: a positioned outcome plus whether an open
@@ -36,11 +40,13 @@ local record OutcomeRow
 end
 
 --- One `children` row: a listed child, its dense position (nil when
---- unranked among its siblings), and whether the child itself is open.
+--- unranked among its siblings), whether the child itself is open,
+--- and its title.
 local record ChildRow
   child: string
   position: integer | nil
   open: boolean
+  title: string
 end
 
 --- One `structure` row: a whole-board audit finding, one of the five
@@ -220,7 +226,8 @@ end
 --- @return {QueueRow} | nil
 --- @return string Error message
 local function queue(c: Index): {QueueRow} | nil, string
-  local rows, err = c.db:query("SELECT id, stage, key FROM queue ORDER BY stage, key, id")
+  local rows, err = c.db:query(
+    "SELECT id, stage, key, ranked FROM queue ORDER BY stage, key, id")
   if rows == nil then
     return nil, err
   end
@@ -230,6 +237,7 @@ local function queue(c: Index): {QueueRow} | nil, string
       id = row.id as string, -- cast: from any (sqlite row)
       stage = math.tointeger(row.stage as number) or 0, -- cast: from any (sqlite row)
       key = row.key as string, -- cast: from any (sqlite row)
+      ranked = (math.tointeger(row.ranked as number) or 0) == 1, -- cast: from any (sqlite row)
     }
   end
   local rerr = rows:err()
@@ -305,7 +313,7 @@ end
 --- @return string Error message
 local function children(c: Index, id: string): {ChildRow} | nil, string
   local rows, err = c.db:query([[
-    SELECT child, position, open FROM children WHERE parent = ?
+    SELECT child, position, open, title FROM children WHERE parent = ?
     ORDER BY (position IS NULL), position, child
   ]], {id})
   if rows == nil then
@@ -321,7 +329,33 @@ local function children(c: Index, id: string): {ChildRow} | nil, string
       child = row.child as string, -- cast: from any (sqlite row)
       position = pos,
       open = (math.tointeger(row.open as number) or 0) == 1, -- cast: from any (sqlite row)
+      title = row.title as string, -- cast: from any (sqlite row)
     }
+  end
+  local rerr = rows:err()
+  if rerr then
+    return nil, rerr
+  end
+  return out, ""
+end
+
+--- Every OTHER open item's id, id order — the candidate set `show ID`
+--- checks for a file-overlap collision and batches a spec read for,
+--- without hydrating any of them into a full item record the way a
+--- whole-board `store.list` would.
+--- @param c Index An index with `_work.index`'s base DDL applied
+--- @param id string The item to exclude
+--- @return {string} | nil Other open item ids
+--- @return string Error message
+local function open_ids(c: Index, id: string): {string} | nil, string
+  local rows, err = c.db:query(
+    "SELECT id FROM open_items WHERE id <> ? ORDER BY id", {id})
+  if rows == nil then
+    return nil, err
+  end
+  local out: {string} = {}
+  for row in rows do
+    out[#out + 1] = row.id as string -- cast: from any (sqlite row)
   end
   local rerr = rows:err()
   if rerr then
@@ -416,6 +450,7 @@ local record read
   is_ranked: function(c: Index, id: string): boolean | nil, string
   key: function(c: Index, id: string): string | nil, string
   children: function(c: Index, id: string): {ChildRow} | nil, string
+  open_ids: function(c: Index, id: string): {string} | nil, string
   structure: function(c: Index): {StructureRow} | nil, string
   board: function(c: Index): string | nil, string
   stale: function(c: Index): {StaleRow} | nil, string
@@ -433,6 +468,7 @@ local M: read = {
   is_ranked = is_ranked,
   key = key,
   children = children,
+  open_ids = open_ids,
   structure = structure,
   board = board,
   stale = stale,
