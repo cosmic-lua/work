@@ -2,5 +2,6 @@ title: cmd/cosmic/main.tl is at 499/500: extract a block before jqgp_Bzmp and Wg
 parent: 3IvkpjGyB2Xmlj8HTy3jqgpBzmp
 target: cosmic-lua/cosmic
 claim: build-PSmAQinD-f6f470de
+pr: 1762
 builders: build-PSmAQinD-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
