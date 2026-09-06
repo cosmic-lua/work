@@ -1,0 +1,3 @@
+title: lint: the 500-line file cap becomes --max-lines N, stated by the ci recipe, default 500
+parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
+target: cosmic-lua/cosmic
