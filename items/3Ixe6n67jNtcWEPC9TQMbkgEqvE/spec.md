@@ -262,9 +262,46 @@ differently (a plain `sync` fixed it twice; a detached-HEAD
 equivalent) state gitboard's store reads from, only `refs/remotes/origin/*`.
 This is now measured across three independent transcripts (a66a5393,
 acf73f01, a163198c — see their sections above) rather than inferred, and
-clears the spec bar's "measured, not inferred" test: **file as its own item**
-next pass — either `gitboard help review`/the review-brief template names the
-exact fetch command up front, or (higher leverage, a gate over a doc per
-`bar`'s enablement order) `gitboard sync`/`init` against a bare `origin`-only
-clone auto-detects and fixes this itself instead of requiring `sync` to be run
-first by convention.
+clears the spec bar's "measured, not inferred" test — **but run `gitboard
+find` for prior art before drafting a spec for it** (see the entry below:
+the very next candidate this session tried to file this pass turned out to
+already exist). If `find` comes back clean: either `gitboard help
+review`/the review-brief template names the exact fetch command up front, or
+(higher leverage, a gate over a doc per `bar`'s enablement order) `gitboard
+sync`/`init` against a bare `origin`-only clone auto-detects and fixes this
+itself instead of requiring `sync` to be run first by convention.
+
+## orchestrator, post-close: PRODUCT_ROOT bug, filed then found duplicate
+- goal: this pass's own `bin/gitboard brief review <id>` calls (this
+  orchestrator ran `GITBOARD_DIR=/home/user/work bin/gitboard brief review
+  qPiX_DdxS`, sibling-checkout bootstrap) printed a verdict-recording block
+  starting `cd /home` instead of `cd /home/user/cosmic`. Traced to
+  `_work/brief.tl:227`'s `product_root()`, which computes
+  `dirname(dirname($GITBOARD_DIR))` — correct only when `$GITBOARD_DIR` is
+  `<root>/o/board` (the cold-start bootstrap), silently wrong under the
+  sibling-checkout bootstrap this session actually used, where `$GITBOARD_DIR`
+  IS the sibling root with no `o/board` nesting at all.
+  actually happened: filed it as a new item without running `gitboard find`
+  first — `gitboard new` immediately flagged 3 "similar" matches, one of them
+  (`wwWD_cwM5`, opened 2026-09-06T03:19:21Z, hours before this pass) an exact
+  prior duplicate: same file, same function, same repro command, same output.
+  Closed the new item (`gitboard done <id> --reason not-planned`) rather than
+  leave two open items for one bug. Cost: 1 wasted `new` call plus the
+  drafting time for a full spec that duplicated existing work; caught
+  immediately by the tool's own similarity check rather than persisting.
+  contributed: this orchestrator wrote and filed the spec before searching for
+  prior art — `gitboard help bar`/`orchestrate` don't say to `find` before
+  `new`, and `new`'s own similarity warning is advisory (prints, doesn't
+  block), so a session that doesn't read the warning carefully could leave the
+  duplicate standing.
+  improvement: for THIS session — `gitboard find <keywords>` before drafting
+  any new item's spec, not after. Doesn't rank as its own tool fix: `new`
+  already surfaces similarity at exactly the right moment, this orchestrator
+  just filed first and searched never. No board-fixable countermeasure here,
+  a self-correction.
+- The pre-existing `wwWD_cwM5` already carries a more complete fix proposal
+  than this session's draft would have (existence-checking the candidate
+  `bin/gitboard` path rather than a new `GITBOARD_PRODUCT_ROOT` env var) —
+  worth noting only because it means this session's own drafted spec
+  (discarded) should NOT be resurrected verbatim if `wwWD_cwM5` is ever
+  refined further; its own approach is the one to build on.
