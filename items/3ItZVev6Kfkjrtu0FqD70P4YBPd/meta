@@ -2,7 +2,7 @@ title: lint: file-length judges a binary the project walk swept in — a file wi
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
 claim: build-70P4_YBPd-fe8c92c8
-reviewer: 39b93fa3-c791-535f-a689-dc84468f9c0d
+reviewer: review-70P4_YBPd-39b93fa3
 pr: 1744
 builders: build-70P4_YBPd-fe8c92c8
 speccers: 7445480f-4130-5874-b241-a2b5b2de6980
