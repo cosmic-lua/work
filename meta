@@ -2,6 +2,8 @@ title: gitboard spec: an identical body writes nothing and says so — 'replaced
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-AyZ4_N8ZP-f6f470de
-reviewer: review-AyZ4_N8ZP-f6f470de
 pr: 56
+verdict: request changes
+verdict_head: 6fac3c1f1e8001642262b8357b0532fb25be0707
+verdict_spec: bfaee4170d58940cdbec4b95a7397426358daaf3
 builders: build-AyZ4_N8ZP-f6f470de
