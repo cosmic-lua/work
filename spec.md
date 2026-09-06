@@ -23,5 +23,6 @@ No other origin shapes; no change to the fallback.
 
 ## Access
 
-None: the origin strings are fixture values on throwaway local
-repos, never fetched.
+cosmic-lua/work, read only and only in name: the origin URL strings
+are fixture values set on throwaway local repos, matched by
+`bin/gitboard`'s suffix check and never fetched.
