@@ -37,6 +37,18 @@ repro from someone with gitboard source access to confirm before
 filing as a firm item." This pass has that access (this checkout IS
 `cosmic-lua/work`'s own source) and that repro.
 
+A third independent repro landed since: «saSF_vgis» (friction:
+2026-09-05 work9c) refined an item's spec to add the missing `## Change`
+section, confirmed via three separate re-implementations of
+`ready_gaps`/`is_ranked` against the item's raw `spec.md` (git
+cat-file) that the item genuinely had zero gaps and its outcome was
+ranked, yet `next` kept re-recommending the identical refine action —
+resolved only by trying `gitboard take` on the item directly, which
+succeeded immediately. ~25 tool calls lost to the same wall this item
+already names. The takeaway from that pass's own friction entry:
+`bin/gitboard find "pullable"` (which surfaces this exact item) should
+be tried FIRST when `next`'s recommendation looks wrong, not last.
+
 Candidate root cause, from reading the source, not yet proven by a
 failing test: `_work/gitview.tl:250`'s `list_via_cache` feeds `show`'s
 board-overview render from a digest-gated sqlite cache
