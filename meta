@@ -1,4 +1,5 @@
 title: pr.yml: ci job's o/ cache key hashes only bin/cosmic.pin, so a 3p/*_pin.tl bump reuses a stale cosmos runtime
 parent: 3IwpNLVHc54gpGsCuNILVYjDA0K
+target: cosmic-lua/cosmic
 claim: build-Qzbr_H1Xg-748ecc95
 builders: build-Qzbr_H1Xg-748ecc95
