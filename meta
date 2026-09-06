@@ -2,6 +2,8 @@ title: pr.yml: ci job's o/ cache key hashes only bin/cosmic.pin, so a 3p/*_pin.t
 parent: 3IwpNLVHc54gpGsCuNILVYjDA0K
 target: cosmic-lua/cosmic
 claim: build-Qzbr_H1Xg-748ecc95
-reviewer: review-Qzbr_H1Xg-748ecc95
 pr: 1749
+verdict: accept
+verdict_head: 15f1f724cd60fac67a9bb19c5f23d1b7ff267487
+verdict_spec: 75964c490048ec564a996f5b487d972eb4dfbe63
 builders: build-Qzbr_H1Xg-748ecc95
