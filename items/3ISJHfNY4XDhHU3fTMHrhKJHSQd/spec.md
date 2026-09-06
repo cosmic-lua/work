@@ -114,16 +114,22 @@ prefix — `unix.E`/`unix.SIG` must key by full name (`"ENOENT"`,
    struct NameValue { const char *name; int value; };
    ```
 
-   `kErrnoNames[]`: one `{"<NAME>", E<NAME>}` row per genuine errno
-   entry (drop the leading `E` from the string; re-derive the exact 96
+   `kErrnoNames[]`: one `{"E<NAME>", E<NAME>}` row per genuine errno
+   entry — the STRING key keeps the full name including its leading
+   `E` (corrected 2026-09-06: an earlier draft of this row said "drop
+   the leading `E` from the string", directly contradicting this
+   spec's own Evidence, which requires full-name keys — `unix.E` must
+   answer `unix.E["ENOENT"]`, matching `DEFAULT_SIGNALS` and
+   `code_of("ENOENT")`'s existing call shape); re-derive the exact 96
    from the `// errno` block, not from the naive 100-count grep —
-   confirm the block's current start/end line numbers first). Because
+   confirm the block's current start/end line numbers first. Because
    `E<NAME>` is a compile-time literal (not an extern symbol), this
    initializer is ordinary, portable C — no assembly, no relocation
    trick needed, unlike `MagnumStr`.
 
-   `kSignalNames[]`: one `{"<NAME>", SIG<NAME>}` row per genuine (non-
-   `SIG_*`) signal entry, same shape, the 28 entries.
+   `kSignalNames[]`: one `{"SIG<NAME>", SIG<NAME>}` row per genuine
+   (non-`SIG_*`) signal entry — full name including `SIG`, same
+   correction as above — same shape, the 28 entries.
 
 2. **Leave every existing individual `LuaSetIntField(L, "E<NAME>", ...)`
    / `LuaSetIntField(L, "SIG<NAME>", ...)` call exactly as it is
