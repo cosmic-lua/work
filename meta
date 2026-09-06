@@ -1,0 +1,3 @@
+title: cosmic.fd: unix.fcntl's cast needs a cosmic.fd API decision (typed accessors vs. the generic escape hatch) before it can close
+parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
+target: cosmic-lua/cosmic
