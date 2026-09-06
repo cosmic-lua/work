@@ -1,9 +1,9 @@
 title: casts: land searcher_test.tl's cast removal once the declining-searcher patch is pinned
 parent: 3IvLo8epYDMewqKisHtfnNclCyL
 target: cosmic-lua/cosmic
-claim: build-zs1K_cWnY-420d657f
 pr: 1741
 verdict: accept
 verdict_head: 84aa94b505be9e1a1e48107c30b1e953a37c5edb
 verdict_spec: 737480e4050f05f1c245629de37ac4bd7f4bbd28
+resolution: completed
 builders: build-zs1K_cWnY-420d657f
