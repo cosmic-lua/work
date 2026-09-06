@@ -2,6 +2,8 @@ title: cosmopolitan: cross-reference lfuncs.o vs lfuncs3.o's MODE=cov split in b
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: build-A5NTilwk-2f92e512
-reviewer: review-A5NT_ilwk-2f92e512
 pr: 388
+verdict: accept
+verdict_head: 50e83ba69c4465d3033e8af6fe45a0e67efb1d51
+verdict_spec: aca1049cfc2b1fa14482267f22ea781c764b7370
 builders: build-A5NTilwk-2f92e512
