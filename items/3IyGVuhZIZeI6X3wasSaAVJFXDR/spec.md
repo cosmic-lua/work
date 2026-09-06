@@ -1,6 +1,6 @@
 ## Evidence
 
-`cosmic --rewrite PATTERN REPL --fix PATH...` (cosmic#1766) applies a
+`cosmic --rewrite PATTERN REPL --apply PATH...` (cosmic#1766) applies a
 pattern over many files in one process, but two shapes the tree's own
 sweeps need cannot be written as a pattern yet, measured 2026-09-06:
 - `grep -lE '^test_[a-z_0-9]+\(\)\s*$' $(git ls-files '*_test.tl') |
@@ -29,7 +29,7 @@ span_end's line) rather than splicing an empty string into it.
 `cosmic/ast/match_test.tl` and `rewrite_test.tl`: `$F:^test_()` over a
 file with `test_a()` and `run()` binds only `test_a`; rewriting it to
 `""` leaves no blank line where the call was and the file still
-parses. Then run it: `--rewrite '$F:^test_()' '' --fix` over the 12
+parses. Then run it: `--rewrite '$F:^test_()' '' --apply` over the 12
 files above IS the acceptance — the diff of that run, formatter-clean,
 lands in the same PR, and `grep -lE '^test_[a-z_0-9]+\(\)\s*$'` → 0.
 
