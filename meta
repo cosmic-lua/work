@@ -1,9 +1,9 @@
 title: gcov: extract per-file line coverage from MODE=cov and gate the test target on a committed floor
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
-claim: build-W3uo_Bvcn-8bf1d440
 pr: 387
 verdict: accept
 verdict_head: 19976e9dacf88aaa4d001243927c27501a0b6c72
 verdict_spec: 83c19506197294c2c9a9681691c61be303ad8043
+resolution: completed
 builders: build-W3uo_Bvcn-8bf1d440
