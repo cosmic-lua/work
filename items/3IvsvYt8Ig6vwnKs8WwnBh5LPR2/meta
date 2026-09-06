@@ -1,0 +1,3 @@
+title: perf gate re-measures with the environment's binary and overwrites its input files
+parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
+target: cosmic-lua/cosmic
