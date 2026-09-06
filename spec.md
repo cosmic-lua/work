@@ -196,6 +196,27 @@ open-ended "wait for external state" step into a spawned agent's own
 brief. Filed as board item `1alS_QzlJ` for the `work`/`orchestrate` skill
 to make this division of labor explicit.
 
+## review q1bW_VFz2 (PR #1748, bin/cosmic.pin bump)
+
+numbers: not machine-extracted (subagent transcript exceeded a size
+that made `_tool/friction.tl` impractical to run this late in the
+pass); reported tool_uses=29, duration_ms=328099 per the task
+notification's own usage line.
+
+Agent's own account: accepted, after independently re-downloading the
+release asset and `SHA256SUMS` (not trusting the PR body's claimed
+hash), recomputing sha256 locally, and separately confirming the
+release tag's commit ancestry against #1745's merge commit via
+`git merge-base --is-ancestor`. Also independently confirmed the root
+cause by pulling PR #1746's actual `build` job log rather than trusting
+the spec's paraphrase, and ran its own genuinely cold
+`--make ci` on the new pin (289/3342, green). Minor friction: resolving
+the short-form merge-commit/tag references in the spec into full SHAs
+`git merge-base` would accept cost ~4 extra tool calls (three
+GitHub API round-trips) — worth a future spec convention of citing
+full SHAs alongside short ones for exactly this kind of independent
+verification.
+
 ## Orchestrator
 
 - **Goal**: reconcile the previous pass's two `doing` items before filling
@@ -317,6 +338,73 @@ to make this division of labor explicit.
   `LVYj_DA0K`, which is now a container blocked on it) and posted the
   root-cause + blocker on PR #1746 rather than modifying its (correct)
   diff.
+
+- After `q1bW_VFz2`/PR #1748 merged, `LVYj_DA0K` reverted from container
+  back to `state: review` with its original `pr:1746` still recorded —
+  but #1746's head (`8647a7e9`) predates the pin bump, so its `build`
+  lane was still running against the stale head. Merged `origin/main`
+  into the PR branch directly (a plain merge commit, no conflicts —
+  both ratchet files auto-merged cleanly), ran a genuinely cold
+  `--make ci` locally to confirm green before pushing (289/3342,
+  clean), then pushed the merge commit to the PR branch per the
+  drive-to-green posture ("push a fix" is the deliverable). No
+  countermeasure needed here — this is exactly what `help
+  orchestrate`'s reconciliation step expects for a PR that outlived a
+  blocking dependency; noted only because it's easy to forget the
+  merge-in step after a blocker child resolves.
+
+- **Goal**: get `LVYj_DA0K`'s PR #1746 green after merging in `main`
+  (which now carried both #1747 and the pin-bump #1748). **What
+  happened**: `ci` failed identically on TWO separate attempts of the
+  same run, 40 minutes apart (`invalid key 'E' in record 'unix' of
+  type unix` — a DIFFERENT symptom than the earlier `<any type>`
+  failure). Root-caused via the job's full log: `.github/workflows/pr.yml`'s
+  `ci` job caches `o/` keyed by `hashFiles('bin/cosmic.pin')` alone; this
+  PR bumps `3p/cosmos/cosmos_pin.tl` instead, which the key doesn't
+  cover, so `restore-keys`' prefix match silently reused a STALE `o/`
+  (built under an older cosmos pin, predating `unix.E`/`unix.SIG`
+  existing upstream at all) saved from an unrelated commit on `main`.
+  This is a real, deterministic, repo-wide CI infrastructure bug — not
+  a flake, not this PR's diff — that will hit ANY future PR bumping a
+  3p pin without also touching `bin/cosmic.pin`. Cost: ~20 minutes and
+  ~4 `get_job_logs`/`actions_get` calls to fully trace (the first tail
+  view showed only the symptom; the full log's cache-restore lines
+  were the actual smoking gun). **Made the difference**: the exact bug
+  class (a cache/artifact surviving a pin bump without invalidating) is
+  already a known, named hazard in this project — the surrounding YAML
+  comment explicitly states the intent ("a pin bump... starts cold
+  instead") for `bin/cosmic.pin` specifically, but the same reasoning
+  was never extended to the OTHER pins (`3p/cosmos`, `3p/tl`), and a
+  sibling board item (`HNez_qkM2`) had already flagged the analogous
+  LOCAL-dev-tree hazard but explicitly asserted "CI is sound" without
+  checking that the cache key covers every pin, not just one.
+  **Action taken**: filed board item `Qzbr_H1Xg` (initially unparented,
+  then re-parented as a child of `LVYj_DA0K` per the same
+  stuck-build-files-a-child pattern used earlier for the pin-bump
+  blocker — this correctly turned `LVYj_DA0K` back into a container and
+  let `take` accept new work despite its still-open, still-unreviewable
+  PR), built the one-line `hashFiles()` widening
+  myself (`3p/**/*_pin.tl` alongside `bin/cosmic.pin`), verified no
+  other workflow uses the same cache pattern, ran the local gate green,
+  and opened PR #1749. Posted one standing-down comment on PR #1746
+  naming the root cause and the fix PR, per the drive-to-green
+  posture's "this is not this PR's failure" branch.
+  **Countermeasure**: none filed separately — the fix IS the
+  countermeasure; noting here only that `HNez_qkM2`'s own spec should
+  be corrected next time it's touched (its "CI is sound" claim doesn't
+  hold once a non-`bin/cosmic.pin` pin is what changed).
+
+- Third occurrence this pass of the missing-`repo:`-field gap (after
+  `LVYj_DA0K` and `IOA7_CLf5`): a NEW item filed via `gitboard new`
+  with no `--repo` (this tool has no way to pass one at creation time —
+  confirmed via `gitboard help new`) defaults to `cosmic-lua/work` in
+  `take --pr`'s validation ("cannot read PR #1749: GET
+  /repos/cosmic-lua/work/pulls/1749: HTTP 404") until `gitboard set
+  --repo` is run. This reinforces (does not duplicate) the
+  countermeasure already filed in `3IxHqrApflNsmHz3Uj0eUxZCzX8` — three
+  for three items I filed and immediately worked myself this pass, so
+  the fix (either `new --repo`, or inheriting the parent's `repo:` at
+  attach time) would have saved 3 extra `gitboard set` round-trips.
 
 - No other friction: `sync`, `show`, `next`, and the review-comment lookup
   for the bounce context (`pull_request_read get_comments` on #1744, since
