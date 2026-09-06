@@ -199,7 +199,38 @@ union check:
     elsewhere, that is new work for a future census pass, not a gap
     in this one.
 
-  No other binding among the 187 went unclaimed.
+  **Correction (fresh-context review, 2026-09-06): a second binding
+  was also missed by the first pass of this cross-reference and is NOT
+  in any child's table either — `lsqlite3.Database:register_extension`.**
+  Same disposition as `zip.reader`, for the same reason: it is new,
+  added by `cosmic-lua/cosmopolitan#364` (commit `405d8840`, merged
+  2026-09-02T18:40:24Z), one day AFTER the lsqlite3 child
+  (`3IR2TE1O`) did its own measurement (`## Result (worked 2026-09-01,
+  cosmic-lua/cosmopolitan fd0884d9)`), and six days after the
+  2026-08-26 walk that seeded this census's 192. Verified directly:
+
+  ```text
+  $ git log -S "register_extension" --oneline -- tool/net/definitions.lua
+  405d8840 lsqlite3: register a sqlite extension by name, per connection (#364)
+  $ git show 405d8840 --format='%ad' --date=iso -s
+  2026-09-02 18:40:24 +0000
+  ```
+
+  It postdates both the lsqlite3 child's own measurement and the
+  container's walk commit, so it is out-of-universe the same way
+  `zip.reader` is — not a row the family partition dropped, but API
+  that did not exist yet when the partition was drawn or when the
+  lsqlite3 slice was worked. No new child is warranted for it under
+  this container, for the same reason as `zip.reader`.
+
+  The first pass of this reconciliation stopped after finding one
+  exception and closing it out, rather than finishing the full
+  cross-reference of all 187 bindings — an adversarial re-review
+  caught the second miss by actually completing that check. Doing so
+  here: re-ran the full cross-reference to completion rather than
+  stopping at the first hit. No other binding among the 187 went
+  unclaimed; `zip.reader` and `lsqlite3.Database:register_extension`
+  are the only two, and both are accounted for above.
 
 - **Captures.** Each child's own `## Summary`/`### Summary table`
   records its class-1 (raise-candidate) and class-2-deviation
@@ -207,13 +238,31 @@ union check:
   across the children read this session (3IR2Pzsv, 3IR2RYCJ,
   3IR2TE1O); no further action needed here since filing was each
   child's own `## Change`, already exercised at their own `done`.
+  Cross-checked more thoroughly by the fresh-context review: 23
+  distinct capture ids across all twelve children's tables, every one
+  existing, parented to this container, and terminally resolved
+  (`completed` ×22, `not-planned` ×1).
+
+- **Acceptance's third bullet** ("`gitboard tree` under this item
+  lists the twelve children and the captures they seeded") names a
+  command this environment's pinned `gitboard` release does not carry
+  (`gitboard tree` → `unknown command 'tree'`; the verb set is `init,
+  new, attach, rank, set, spec, next, brief, take, drop, verdict, done,
+  show, sync, fsck, find`). The underlying property — every child and
+  capture correctly parented to this container — is verified instead
+  via `gitboard show` on each of the twelve children and all 23
+  capture ids (see above), which is what this reconciliation actually
+  ran. `gitboard tree` may be a stale reference from whenever this
+  spec's `## Acceptance` was drafted, or a verb this pinned release
+  simply doesn't have; either way, the property it names holds, by
+  the substitute method above.
 
 **Conclusion: the union check holds.** The container's Acceptance is
 met — every child ended with its own recorded table and captures, the
-row counts sum to 192 as evidenced, and the one binding not found in
-any child's table (`zip.reader`) is explained as added to
-`definitions.lua` after this census's own walk commit, not a gap the
-partition missed. Ending this item.
+row counts sum to 192 as evidenced, and the two bindings not found in
+any child's table (`zip.reader`, `lsqlite3.Database:register_extension`)
+are both explained as added to `definitions.lua` after the relevant
+walk/measurement, not a gap the partition missed. Ending this item.
 
 ## Bounce record, 2026-08-26
 
