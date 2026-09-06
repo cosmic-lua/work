@@ -67,7 +67,11 @@ and nothing less:
    reproduce, and never paste its command output into the PR body.
 5. Mutation-test at least one guard the change adds or preserves:
    break what it guards, confirm the diff's own test catches it,
-   restore it exactly.
+   restore it exactly. A real break changes the outcome the test
+   reads, never just the text around it: replace a matched needle
+   with unrelated text rather than extending it, flip a boolean
+   rather than renaming it, and if the test stays green the guard is
+   decoration.
 6. Commit with a clear, descriptive message. No model name or
    identifier in it.
 7. Push: `git push -u origin <BRANCH>`. If the push or the PR shows
