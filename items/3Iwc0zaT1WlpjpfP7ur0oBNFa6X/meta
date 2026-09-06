@@ -1,4 +1,5 @@
 title: gentype_defs.tl: break cosmic/zip.tl's circular dependency in the zip type-generation bootstrap
 parent: 3Iw35aAOcqioyBzEXxfHkalOAFy
 target: cosmic-lua/cosmic
-builders: build-0oBN_Fa6X-fe8c92c8
+claim: 748ecc95-0ca9-5962-a2f3-2fff9cd8d874
+builders: build-0oBN_Fa6X-fe8c92c8 748ecc95-0ca9-5962-a2f3-2fff9cd8d874
