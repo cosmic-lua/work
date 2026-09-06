@@ -1,5 +1,6 @@
 title: casts: pcall return typing — the tl patch closing 5 pcall-return-shape sites
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
+resolution: not-planned
 builders: build-rLV8_r8a5-o9a1 build-rLV8r8a5-2f92e512 build-rLV8_r8a5-fe8c92c8
 speccers: 2f92e512-19fc-5db1-af1f-01086dc185b4
