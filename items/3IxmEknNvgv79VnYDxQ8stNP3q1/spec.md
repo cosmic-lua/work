@@ -31,9 +31,11 @@ orchestrator's one command that makes the builder's checkout.
   `--root`: the sibling `wt/` directory beside the checkout) with
   `git worktree add -b <id8> <path> origin/<base>` after
   `git fetch origin <base>`; refuses if the branch or path exists
-  (never reuses a worktree). Each `--ref` is fetched into the worktree
-  (`git fetch origin <ref>`) so a spec's reference branch is readable
-  as `FETCH_HEAD` without a checkout. Then bootstraps: for a cosmic
+  (never reuses a worktree). Each `--ref` is fetched into the worktree AFTER the bootstrap (the
+bootstrap's own `--make fetch` moves `FETCH_HEAD`) and stored as a
+local ref `refs/spike/<ref-basename>` (`git fetch origin <ref>:refs/spike/<name>`),
+so a spec's reference branch is readable as `git show spike/<name>:<path>`
+without a checkout and survives later fetches. Then bootstraps: for a cosmic
   tree, `bin/cosmic --make fetch && bin/cosmic --make build`; for a
   cosmopolitan tree, nothing (its make is the builder's first gate
   anyway); the bootstrap's own verdict lines are the verb's output.
