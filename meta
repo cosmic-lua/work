@@ -2,6 +2,8 @@ title: lint: the 500-line file cap becomes --max-lines N, stated by the ci recip
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
 target: cosmic-lua/cosmic
 claim: build-cVq7_eIpt-f6f470de
-reviewer: review-cVq7_eIpt-f6f470de
 pr: 1775
+verdict: accept
+verdict_head: a4626de9e55567d6106bdc1ab9d7bfeb54d6ca17
+verdict_spec: 69841b39edacf4430aba23cf6c7841dfe1372a8d
 builders: build-cVq7_eIpt-f6f470de
