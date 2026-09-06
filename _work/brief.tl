@@ -101,21 +101,24 @@ local function fill(text: string, values: {string: string}): string
 end
 
 --- The `values` `unfilled`'s scan should run against: identical to the
---- real fill values except `BOUNCE_CONTEXT`, when set, is blanked.
---- `BOUNCE_CONTEXT` is the one value carrying externally-authored text
---- (a reviewer's quoted finding, `bounce_context`) rather than a board
---- fact this tool controls, so a `<UPPER_SNAKE>`-shaped substring
---- inside it — ordinary review prose like "rename to `<CONST_NAME>`"
---- — must never be mistaken by `unfilled` for a placeholder the caller
---- still owes a fill. The printed body always fills with the real
---- `values`; only the scan uses this. Blanking the whole splice loses
---- no real signal: the one placeholder `REWORK` deliberately leaves
---- open, `<WORKTREE>`, already appears verbatim in `BUILDER`'s own
---- body outside the splice, so the scan still reports it once.
+--- real fill values except `BOUNCE_CONTEXT` and `ROUND_CONTEXT`, when
+--- either is set, are both blanked. Each carries externally-authored
+--- text (a reviewer's quoted finding) rather than a board fact this
+--- tool controls, so a `<UPPER_SNAKE>`-shaped substring inside one —
+--- ordinary review prose like "rename to `<CONST_NAME>`" — must never
+--- be mistaken by `unfilled` for a placeholder the caller still owes a
+--- fill. The printed body always fills with the real `values`; only
+--- the scan uses this. Blanking a splice that was never set is a
+--- no-op (the key simply appears in the scan copy at ""), so blanking
+--- both unconditionally costs nothing when only one is actually in
+--- play. Blanking the whole splice loses no real signal: the one
+--- placeholder `REWORK` deliberately leaves open, `<WORKTREE>`,
+--- already appears verbatim in `BUILDER`'s own body outside the
+--- splice, so the scan still reports it once.
 --- @param values {string: string} The real fill values
 --- @return {string: string} The values to scan a filled body with
 local function scan_values(values: {string: string}): {string: string}
-  if values["BOUNCE_CONTEXT"] == nil then
+  if values["BOUNCE_CONTEXT"] == nil and values["ROUND_CONTEXT"] == nil then
     return values
   end
   local out: {string: string} = {}
@@ -123,6 +126,7 @@ local function scan_values(values: {string: string}): {string: string}
     out[k] = v
   end
   out["BOUNCE_CONTEXT"] = ""
+  out["ROUND_CONTEXT"] = ""
   return out
 end
 
@@ -238,6 +242,51 @@ local function bounce_context(s: store.Store, it: item.Item): string
     {REVIEWER_FINDING = finding.body, BRANCH = it.id:sub(1, 8)})
 end
 
+--- The `<ROUND_CONTEXT>` a second (or later) review round fills into a
+--- review brief: the review-side twin of `bounce_context` above, same
+--- shape — `gh.reviews` then `gh.latest_request_changes` — but read
+--- for the REVIEWER instead of the builder, and gated on the PR's head
+--- having actually moved past the one the standing verdict judged
+--- (`review.head_moved`), never merely on a `request changes` verdict
+--- standing: a re-review of the SAME head is not a new round. "" —
+--- rendered as an actual empty string, never left as literal
+--- placeholder text, because nothing hand-fills this one the way an
+--- orchestrator might a bounce paragraph — whenever the item is not in
+--- rework, the head has not moved, the read fails, or no
+--- CHANGES_REQUESTED review is found.
+--- @param s store.Store The store
+--- @param it item.Item The item under review
+--- @param p review.Pull The PR's current state
+--- @return string The filled section, "" when there is nothing to fill it with
+local function round_context(s: store.Store, it: item.Item, p: review.Pull): string
+  if (it.verdict or "") ~= "request changes" then
+    return ""
+  end
+  if not review.head_moved(p, it.verdict_head or "") then
+    return ""
+  end
+  local revs, _err = gh.reviews(s, it.pr, it.repo)
+  if revs == nil then
+    return ""
+  end
+  local finding = gh.latest_request_changes(revs)
+  if finding == nil then
+    return ""
+  end
+  local rounds = 0
+  for _, r in ipairs(revs) do
+    if r.state == "CHANGES_REQUESTED" then
+      rounds = rounds + 1
+    end
+  end
+  return fill(brieftext_review.ROUND, {
+      ROUND_NUMBER = tostring(rounds),
+      JUDGED_HEAD = (it.verdict_head or ""):sub(1, 7),
+      CURRENT_HEAD = (p.head_sha or ""):sub(1, 7),
+      ROUND_FINDING = finding.body,
+    })
+end
+
 --- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`. The first
 --- attempt is `GITBOARD_DIR`'s parent's parent — `bin/gitboard` exports
 --- `GITBOARD_DIR` as `<root>/o/board` in the cold-start bootstrap, so
@@ -313,6 +362,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   -- again, between the full adversarial `REVIEW` and the numbered
   -- `REVIEW_SCRIPT`, by the diff's own shape.
   local head_sha = ""
+  local round_ctx = ""
   if kind == "review" then
     if (it.result or "") ~= "" then
       template = brieftext_review.RESEARCH_REVIEW
@@ -329,6 +379,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       head_sha = sha
       local p, _perr = gh.pull(s, it.pr, it.repo)
       local files, _ferr = gh.get_files(s, it.pr, it.repo)
+      if p ~= nil then
+        round_ctx = round_context(s, it, p)
+      end
       if p ~= nil and files ~= nil
       and is_mechanical_diff(files, p.additions, p.deletions) then
         template = brieftext_review.REVIEW_SCRIPT
@@ -345,6 +398,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     CURRENT_SPEC = spec ~= "" and spec or "(the item has no spec sidecar)",
     BOARD_DIR = fs.absolute_path(s.root),
     REVIEW_SESSION = label,
+    ROUND_CONTEXT = round_ctx,
   }
   local root = product_root()
   if root ~= "" then
