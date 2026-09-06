@@ -73,6 +73,75 @@ local function fresh(age_s: integer): boolean
   return age_s < freshness.WINDOW_S
 end
 
+--- How many seconds a freshly touched head is still treated as
+--- running CI with no observation of its own: a push always starts
+--- CI immediately, so a gap this size is the cache lagging behind a
+--- re-push, not CI having nothing to report. Its own window, wider
+--- than `freshness.WINDOW_S` — that one bounds how long a SETTLED
+--- state stays trusted; this one bounds how long a MISSING one is
+--- still assumed to be running.
+local RECENT_PUSH_S < const > = 20 * 60
+
+--- Whether an observation `age_s` seconds old predates `touched_at` —
+--- the item's own `items.touched_at`, which moves exactly when
+--- `take --pr` records a new head. An observation from before that
+--- moment answers for the PREVIOUS push, not the one now under
+--- review, and tells a caller nothing about the current head.
+--- @param age_s integer Seconds since the observation, `read`'s own return
+--- @param touched_at integer The item's own `items.touched_at`
+--- @param now integer The current epoch seconds
+--- @return boolean True when the observation predates the item's current head
+local function stale_for_head(age_s: integer, touched_at: integer, now: integer): boolean
+  return (now - age_s) < touched_at
+end
+
+--- `items.touched_at` for one id, straight off the cache's own table —
+--- 0 for an id the cache carries no row for, which reads as "long
+--- ago" everywhere this is compared against a recency window.
+--- @param c cachedb.Cache An open cache connection
+--- @param id string The item's id
+--- @return integer The item's own `items.touched_at`
+local function touched_at_of(c: cachedb.Cache, id: string): integer
+  local row = c.db:query_one("SELECT touched_at FROM items WHERE id = ?", {id})
+  if row == nil then
+    return 0
+  end
+  return math.tointeger(row.touched_at as number) or 0 -- cast: from any (sqlite row)
+end
+
+--- The state to judge `(repo, pr)`'s CURRENT head by — never a live
+--- call, purely `read`'s own cached row plus `touched_at_of`. A row
+--- that exists but was recorded against a since-moved head
+--- (`stale_for_head`) is discarded as if it were never made: a push
+--- touched within `RECENT_PUSH_S` of it reads as "running" (a push
+--- always starts CI; the cache just has not caught up with THIS one),
+--- older than that it reads as unobserved (nil). A `(repo, pr)` this
+--- module has never once observed stays nil regardless of how
+--- recently the item was touched — there is no stale row to discard
+--- here, only the ordinary gap before the first `sync`/`live` call
+--- reaches it, which counts as debt exactly as it always has.
+--- @param c cachedb.Cache An open cache connection
+--- @param repo string The item's repo field, "" when unset
+--- @param pr integer The PR number
+--- @param id string The item's id, to read its own `touched_at`
+--- @return string | nil The state to judge the current head by
+local function current_state(c: cachedb.Cache, repo: string, pr: integer,
+    id: string): string | nil
+  local state, age = read(c, repo, pr)
+  if state == nil then
+    return nil
+  end
+  local touched_at = touched_at_of(c, id)
+  local now = os.time()
+  if stale_for_head(age, touched_at, now) then
+    if now - touched_at < RECENT_PUSH_S then
+      return "running"
+    end
+    return nil
+  end
+  return state
+end
+
 --- Upsert an already-fetched `HeadChecks` into the row — the write
 --- half of `observe`, exposed on its own so `live` (and any other
 --- caller that already paid for a `head_checks` call for its own
@@ -94,8 +163,11 @@ end
 
 local record ciobs
   FRESH_ENV: string
+  RECENT_PUSH_S: integer
   read: function(c: cachedb.Cache, repo: string, pr: integer): string | nil, integer
   fresh: function(age_s: integer): boolean
+  current_state: function(c: cachedb.Cache, repo: string, pr: integer, id: string):
+  string | nil
   record: function(c: cachedb.Cache, repo: string, pr: integer, hc: gh.HeadChecks):
   boolean, string
   observe: function(s: store.Store, c: cachedb.Cache, repo: string, pr: integer):
@@ -111,7 +183,9 @@ end
 -- `_work/lanes.tl`'s `report` uses for its own `M.record`.
 local M: ciobs = {
   FRESH_ENV = FRESH_ENV,
+  RECENT_PUSH_S = RECENT_PUSH_S,
   read = read,
+  current_state = current_state,
   fresh = fresh,
   record = record_row,
 }
@@ -187,12 +261,16 @@ end
 M.is_candidate = is_candidate
 
 --- Refresh every open review-stage item's observation that has aged
---- past the window, the way `_work.lanes.at_sync` refreshes lane
---- health — so a loop that syncs first never blocks `next` on GitHub
---- at all. Silent when nothing needed refreshing or every refresh
---- succeeded; an `observe` failure is reported the same way `_work.lanes`
---- reports one, rather than left to vanish. A cache or board read that
---- cannot even open is reported too, never silently skipped.
+--- past the window, or whose own head has moved past what was last
+--- observed (`stale_for_head`) even from inside the window — the way
+--- `_work.lanes.at_sync` refreshes lane health — so a loop that syncs
+--- first never blocks `next` on GitHub at all, and a re-push converges
+--- on its first sync rather than waiting out the freshness window on a
+--- head nobody is measuring anymore. Silent when nothing needed
+--- refreshing or every refresh succeeded; an `observe` failure is
+--- reported the same way `_work.lanes` reports one, rather than left
+--- to vanish. A cache or board read that cannot even open is reported
+--- too, never silently skipped.
 --- @param s store.Store The store
 --- @return {string} Lines for the caller to print, one per failure
 local function at_sync(s: store.Store): {string}
@@ -216,7 +294,9 @@ local function at_sync(s: store.Store): {string}
   for _, it in ipairs(all) do
     if is_candidate(it, stage_by_id) then
       local cached, age = read(c, it.repo, it.pr)
-      if cached == nil or not fresh(age) then
+      local moved = cached ~= nil
+      and stale_for_head(age, touched_at_of(c, it.id), os.time())
+      if cached == nil or not fresh(age) or moved then
         local state, oerr = observe(s, c, it.repo, it.pr)
         if state == nil then
           lines[#lines + 1] = ("gitboard-sync: ci %s pr %d: %s")

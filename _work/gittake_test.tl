@@ -116,6 +116,42 @@ local function seed_ci_state(s: store.Store, repo: string, pr: integer,
   local _cok, _cerr = store.close(s)
 end
 
+--- Seeds `built`'s own `items.touched_at` directly, the same direct
+--- cache write `seed_ci_state` uses for `ci_checks` — a re-push
+--- (which `take --pr` records by moving this) with no real wait for
+--- the time this test asks it to have happened. `store.close(s)`
+--- afterward is the same stand-in as `seed_ci_state`'s own.
+--- @param s store.Store The store
+--- @param id string The item's id
+--- @param touched_at integer The `items.touched_at` to set
+local function seed_touched_at(s: store.Store, id: string, touched_at: integer)
+  local c = check.must(cache.open(s.root))
+  assert(c.db:exec("UPDATE items SET touched_at = ? WHERE id = ?", {touched_at, id}))
+  assert(cache.close(c))
+  local _cok, _cerr = store.close(s)
+end
+
+--- Seeds `ci_checks` with an explicit `observed_at`, unlike
+--- `seed_ci_state`'s own always-now write — so a test can place the
+--- recorded observation BEFORE the head it is being compared against,
+--- the shape a genuinely stale row actually has.
+--- @param s store.Store The store
+--- @param repo string The item's repo field
+--- @param pr integer The PR number
+--- @param state string The recorded state
+--- @param observed_at integer The `ci_checks.observed_at` to set
+local function seed_ci_state_observed_at(s: store.Store, repo: string, pr: integer,
+    state: string, observed_at: integer)
+  local c = check.must(cache.open(s.root))
+  assert(c.db:exec([[
+    INSERT INTO ci_checks(repo, pr, head, state, observed_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(repo, pr) DO UPDATE SET head = excluded.head,
+      state = excluded.state, observed_at = excluded.observed_at
+  ]], {repo, pr, "", state, observed_at}))
+  assert(cache.close(c))
+  local _cok, _cerr = store.close(s)
+end
+
 -- A todo pull's debt count reads the same recorded CI state the review
 -- claim's own live check would find: a diff still `running` has given
 -- no verdict to claim yet, so it does not outrank a todo pull, but a
@@ -156,4 +192,43 @@ local function test_running_ci_does_not_block_a_pull_but_a_settled_state_does()
     .. "verdict to give, so it does not outrank the pull")
   assert(check.must(store.load(s, second)).claim == "session-d",
     "the pull went through")
+end
+
+-- A re-push leaves the OLD head's settled verdict sitting in the
+-- cache; `ci_clears_debt` must not credit it to the head now under
+-- review. Whether the gap counts as debt turns only on how long ago
+-- the push (`items.touched_at`) happened: recent enough and it reads
+-- as CI still running (a push always starts one, and the cache has
+-- not caught up); old enough and it reads as unobserved debt, exactly
+-- as if nothing had ever been recorded.
+local function test_a_stale_head_observation_falls_back_on_touched_at_recency()
+  local s = init_state_repo("gittake-ci-stale-head")
+  local goal, built = root_with_leaf(s)
+  local second = fixture.file_item(s, "the next slice", goal)
+  give_spec(s, built)
+  give_spec(s, second)
+  assert(verbs.cmd_take(s, built, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, built, "session-a", 77, false, "") == 0)
+  local handed = check.must(store.load(s, built))
+
+  local now = os.time()
+  -- The recorded `green` predates BOTH re-pushes below, so it always
+  -- answers for a head this item has since moved past.
+  seed_ci_state_observed_at(s, handed.repo, handed.pr, "green", now - 4 * 3600)
+
+  seed_touched_at(s, built, now - 5 * 60)
+  assert(verbs.cmd_take(s, second, "session-b", 0, false, "") == 0,
+    "a re-push 5 minutes old reads as CI still running, not the stale "
+    .. "green left over from the head it replaced")
+  assert(check.must(store.load(s, second)).claim == "session-b",
+    "the pull went through")
+  assert(verbs.cmd_drop(s, second, "session-b",
+      "reset for the older re-push case", false) == 0)
+
+  seed_touched_at(s, built, now - 3600)
+  assert(verbs.cmd_take(s, second, "session-c", 0, false, "") ~= 0,
+    "a re-push an hour old is past the cache-lag window — the stale "
+    .. "green counts as unobserved debt, outranking the pull")
+  assert(check.must(store.load(s, second)).claim == "",
+    "and the refused pull claimed nothing")
 end
