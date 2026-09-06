@@ -3,7 +3,6 @@ parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-5ass_BX1Y-f6f470de
 pr: 1766
-verdict: request changes
 verdict_head: 4de044149ce0af47c70e24a8d1ae2d0e08964ef7
 verdict_spec: b662239519a6bbf8aa49af314f6923676114b421
 builders: build-5ass_BX1Y-f6f470de
