@@ -71,19 +71,27 @@ this to start from, once the circularity is broken.
 
 ## Change
 
-**Blocked** on breaking `_types/gentype_defs.tl`'s circular dependency
-on `cosmic/zip.tl` first (its own item, not filed as part of this
-bounce — file it separately, scoped to making the type-generation
-bootstrap for `zip` read `definitions.lua` via `cosmo.zip` directly
-rather than through `cosmic.zip`'s own wrapper, so `cosmic/zip.tl` can
-consume a brand-new `cosmo.zip.*` binding in the same pin bump that
-introduces it without a cold-build chicken-and-egg). Once that lands:
+**Unblocked, 2026-09-06 (orchestrator re-measure).** Both preconditions
+the bounce named now hold on `main`, verified against the tree, not
+inferred:
 
-Ready when: that circularity-breaking item is `done`, AND (unchanged
-from before) `VHkK_aA5k` is `done`, a `cosmos` release descends from
-it, and `3p/cosmos/cosmos_pin.tl` names that release (already true as
-of this bounce — re-verify the pin is still current when this is
-picked back up, since more releases may have shipped since).
+- The `_types/gentype_defs.tl` circularity is gone: it reads
+  `definitions.lua` through the raw binding, not the wrapper.
+  `git log -1 --format='%h %s' -- _types/gentype_defs.tl` →
+  `bce2348 gentype_defs: break cosmic/zip.tl out of the zip
+  type-generation bootstrap (#1747)`; `grep -n 'require' _types/gentype_defs.tl`
+  → `8:local fs = require("cosmic.fs")` / `14:local zip = require("cosmo.zip")`
+  and no `cosmic.zip` line. No separate circularity item is needed.
+- The pin already names a release carrying `zip.reader`:
+  `grep version 3p/cosmos/cosmos_pin.tl` → `version = "2026.09.06-e748d6a1e"`,
+  and in a cosmic-lua/cosmopolitan checkout `git merge-base --is-ancestor
+  77a16357c44e4ee5332ebbd409e08980b91affc7 2026.09.06-e748d6a1e` exits 0
+  (`e748d6a1e` is master's head; `77a16357c` is #389, `zip.reader`).
+
+Ready when: `grep -c 'reader' o/_types/types_gen/cosmo/zip.d.tl` prints a
+number ≥ 1 after `bin/cosmic --make fetch && bin/cosmic --make build`
+(the generated declaration carries `zip.reader`). If it prints 0, the
+pin regressed — drop bare.
 
 Once ready:
 
@@ -113,5 +121,5 @@ Not `unix.fcntl`'s cast (`cosmic/fd.tl:187`) — tracked separately,
 pending a `cosmic.fd` API decision `VHkK_aA5k`'s sibling item raises.
 Not re-litigating `zip.reader`'s own shape — that is `VHkK_aA5k`'s
 scope, already landed by the time this item is ready.
-Not breaking the `_types/gentype_defs.tl` circularity here — that is
-its own item (see `## Change` above), a prerequisite, not folded in.
+Not re-breaking the `_types/gentype_defs.tl` circularity — already landed as
+#1747, a prerequisite this item now stands on.
