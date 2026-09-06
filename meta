@@ -1,10 +1,10 @@
 title: library iterators declare their terminating nil in the first return, so for-in bodies see string | nil: FileIter, LineIter, Body.lines (7 census rows)
 parent: 3IPXQ1Zw1xfRYx4dV1zwASNhQ3N
 target: cosmic-lua/cosmic
-claim: build-bj12_PZHY-8bf1d440
 pr: 1740
 verdict: accept
 verdict_head: e15fad4b7e267f7c6aa7627c28363eac286bb7ab
 verdict_spec: 8b0bd46032b151570e561a3b92eae8a416018124
+resolution: completed
 builders: builder-bj12_PZHY-orch9 7019a67a-89f8-5ed7-bd1c-6d260093b01b build-bj12_PZHY-8bf1d440
 speccers: 7019a67a-89f8-5ed7-bd1c-6d260093b01b
