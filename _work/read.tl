@@ -97,12 +97,23 @@ local function item_exists(c: Index, id: string): boolean | nil, string
 end
 
 --- The role `_work.flow.role` derives for `id` — every item gets one,
---- open or done.
+--- open or done. Checks `items` FIRST (`item_exists`, the same guard
+--- `is_ranked`/`key`/`reaches_board` already use): `role` is a
+--- maintained TABLE now (`_work.readddl.refill_role`), not a view
+--- computed live from `items`, so a row surviving there for an id
+--- `items` no longer carries (exactly the shape `_work.gitshow.cmd_show`'s
+--- self-heal probe deliberately provokes to test) would otherwise read
+--- back as a stale success instead of the "no such item" this function
+--- must still answer for that probe to trigger its rebuild.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param id string The item's id
 --- @return string | nil "board" | "outcome" | "container" | "work"
 --- @return string Error message
 local function role(c: Index, id: string): string | nil, string
+  local exists, eerr = item_exists(c, id)
+  if not exists then
+    return nil, absent(eerr, ("read: no such item: %s"):format(id))
+  end
   local row, err = c.db:query_one("SELECT role FROM role WHERE id = ?", {id})
   if row == nil then
     return nil, absent(err, ("read: no such item: %s"):format(id))

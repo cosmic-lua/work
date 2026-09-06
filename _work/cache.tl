@@ -22,7 +22,10 @@
 --- and rebuilt exactly once, the same way. `guard`/`after_save` and
 --- `around_fetch` are the incremental half: a mutation or a fetch that
 --- moves refs patches exactly the items whose refs moved, rather than
---- paying for `rebuild`'s whole-board read on every write. The save
+--- paying for `rebuild`'s whole-board read on every write. Both also
+--- refill `rank_path` and `role` (`_work.index_rank`/`_work.readddl`'s
+--- maintained tables) inside the same transaction — a whole-tree
+--- recursion paid for once per write instead of once per read. The save
 --- path patches straight from what the caller already holds in
 --- memory — the just-written items, and the one spec body that may
 --- have changed — never re-reading git; only the fetch path re-reads,
@@ -44,7 +47,9 @@ local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
 local gitreadmany = require("_work.gitreadmany")
 local index = require("_work.index")
+local index_rank = require("_work.index_rank")
 local item = require("_work.item")
+local readddl = require("_work.readddl")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 
@@ -275,6 +280,19 @@ local function after_save(root: string, before_digest: string | nil,
           end
         end
       end
+      -- `rank_path`/`role` are maintained tables (`_work.index_rank`/
+      -- `_work.readddl`), not views recomputed per read: a save already
+      -- pays for this transaction, so the whole-tree recursion runs
+      -- here once rather than once per query some later `show`/`next`
+      -- makes.
+      local rrok, rrerr = index_rank.refill(txc)
+      if not rrok then
+        return false, rrerr
+      end
+      local rlok, rlerr = readddl.refill_role(txc)
+      if not rlok then
+        return false, rlerr
+      end
       return true, ""
     end)
 end
@@ -340,6 +358,16 @@ local function patch_fetched(root: string, before_digest: string | nil,
             return false, eerr
           end
         end
+      end
+      -- Same as `after_save`: the whole-tree recursion runs once here,
+      -- inside the fetch's own transaction, rather than once per read.
+      local rrok, rrerr = index_rank.refill(txc)
+      if not rrok then
+        return false, rrerr
+      end
+      local rlok, rlerr = readddl.refill_role(txc)
+      if not rlok then
+        return false, rlerr
       end
       return true, ""
     end)

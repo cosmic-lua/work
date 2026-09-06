@@ -212,10 +212,12 @@ local function dump(db: sqlite.Database, table_name: string): {string}
   return out
 end
 
---- Every table the cache's schema carries — `_work.index`'s own plus
---- `_work.find`'s search table and `_work.cache`'s own two.
+--- Every table the cache's schema carries — `_work.index`'s own,
+--- `_work.index_rank`'s and `_work.readddl`'s maintained `rank_path`
+--- and `role`, `_work.find`'s search table, and `_work.cache`'s own two.
 local CACHE_TABLES < const >: {string} = {
-  "items", "ranks", "builders", "speccers", "search", "cache_meta", "lanes",
+  "items", "ranks", "builders", "speccers", "rank_path", "role", "search",
+  "cache_meta", "lanes",
 }
 
 --- Compare `s`'s LIVE, incrementally maintained cache file against a

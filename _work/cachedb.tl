@@ -36,9 +36,10 @@ local sqlite = require("cosmic.sqlite")
 --- after the table it seeds (`_work.find`'s `search`) is filled.
 local type Cache = index.Index
 
---- The schema version this build writes and expects. `schema_fingerprint`
---- (below) now catches every shape change on its own — any edit to
---- the DDL this module, `_work.index`, or `_work.find` actually run —
+--- The schema version this build writes and expects.
+--- `expected_schema_fingerprint` (below) now catches every shape
+--- change on its own — any edit to the DDL this module, `_work.index`,
+--- `_work.index_rank`, `_work.readddl`, or `_work.find` actually run —
 --- so a mismatch on either one is treated exactly like a missing
 --- file: `_work.cache.open` rebuilds rather than reading rows a
 --- different shape wrote. A further hand bump of this constant is
@@ -48,8 +49,12 @@ local type Cache = index.Index
 --- Bumped to 5 for `items` gaining `ref`/`tip`/`touched_at`
 --- (`_work.indexddl`'s DDL): the fingerprint alone already forces the
 --- rebuild that change needs, and the bump is belt-and-suspenders,
---- matching this constant's own stated role.
-local SCHEMA_VERSION < const > = 5
+--- matching this constant's own stated role. Bumped to 6 for
+--- `rank_path`/`role` becoming maintained tables
+--- (`_work.index_rank`/`_work.readddl`) instead of views — belt-and-
+--- suspenders again, since the fingerprint's own hash already changed
+--- the moment their DDL did.
+local SCHEMA_VERSION < const > = 6
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -57,9 +62,10 @@ local DB_FILENAME < const > = "board.db"
 --- `cache_meta`, holding `refs_digest` (the ref state the file
 --- reflects), `schema_version` (restated here as ordinary data too,
 --- for a reader that would rather query it than read the connection's
---- own `PRAGMA user_version`), `schema_fingerprint` (`schema_fingerprint`
---- below — the actual DDL shape, catching a change `SCHEMA_VERSION`
---- was not bumped for), `lanes`, the scheduled-lane observation
+--- own `PRAGMA user_version`), `schema_fingerprint`
+--- (`expected_schema_fingerprint` below — the actual DDL shape,
+--- catching a change `SCHEMA_VERSION` was not bumped for), `lanes`,
+--- the scheduled-lane observation
 --- `_work.lanes` reads and writes here instead of committing
 --- `refs/heads/board/lanes`, and `ci_checks`, the same shape of
 --- observation for a pull request's CI state: `_work.ciobs` reads and
@@ -73,8 +79,10 @@ local DB_FILENAME < const > = "board.db"
 --- `pr_rounds` view, split into its own file so this constant's own
 --- doc comment stays under the line cap — is appended below, so every
 --- caller of this constant sees one script with both halves; the
---- schema fingerprint (built from `sqlite_master`, never source text)
---- covers it exactly as if it were written inline here.
+--- schema fingerprint (`expected_schema_fingerprint`, below — this
+--- constant's own source text, concatenated with the DDL split across
+--- the other modules) covers it exactly as if it were written inline
+--- here.
 local EXTRA_DDL < const > = [[
 CREATE TABLE cache_meta (
   k TEXT PRIMARY KEY,
@@ -291,86 +299,27 @@ local function db_user_version(db: sqlite.Database): integer
   return math.tointeger(row.user_version as number) or -1 -- cast: from any (sqlite row)
 end
 
---- A connection's actual schema, fingerprinted: every object
---- `sqlite_master` carries a definition for (table, view, index —
---- STRICT tables, the FTS5 virtual table and its shadow tables alike),
---- sorted for a deterministic order, sha256'd. Reads the schema as
---- SQLite itself materialized it rather than concatenating DDL source
---- text, so it never drifts from a connection actually built with a
---- given DDL — including a detail like an FTS5 tokenizer argument that
---- lives inside the virtual table's own definition rather than in any
---- constant a caller could import directly.
---- @param db sqlite.Database The connection
+--- The schema `index.DDL`, this module's own `EXTRA_DDL`,
+--- `_work.index_rank`'s and `_work.readddl`'s `EXTRA_DDL` (the
+--- `rank_path`/`role` tables and every view included — a change to
+--- either shows up here exactly as it would in `sqlite_master`), and
+--- `_work.find`'s `FTS_DDL`, concatenated (NUL-separated, so no
+--- concatenation could coincidentally collide across a boundary) and
+--- sha256'd. Needs no database at all: `cache.open` used to pay for a
+--- throwaway `:memory:` connection — build the whole schema, populate
+--- `rank_path`/`role`, then read `sqlite_master` back — on EVERY open,
+--- just to answer "does today's code still produce this shape"; this
+--- is the same question asked of the DDL source text directly, one
+--- sha256 over static strings. The guarantee is unchanged: any edit to
+--- any of those DDL blocks changes this hash, forcing a rebuild exactly
+--- as before. What `cache.open` compares `cache_meta.schema_fingerprint`
+--- against.
 --- @return string | nil The fingerprint, hex-encoded
 --- @return string Error message
-local function schema_fingerprint(db: sqlite.Database): string | nil, string
-  local rows, err = db:query(
-    "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name")
-  if rows == nil then
-    return nil, err
-  end
-  local parts: {string} = {}
-  for row in rows do
-    parts[#parts + 1] = row.sql as string -- cast: from any (sqlite row)
-  end
-  local ierr = rows:err()
-  if ierr then
-    return nil, ierr
-  end
-  return hash.sha256_hex(table.concat(parts, "\n"))
-end
-
---- The schema `index.DDL`, `_work.find`'s search table, `EXTRA_DDL`,
---- and `_work.index_rank`/`_work.readddl`'s views produce TODAY,
---- fingerprinted the same way `_work.cache.rebuild` fingerprints the
---- real file — a throwaway `:memory:` connection, since the whole
---- point is a value independent of any file's actual content. Every
---- DDL step `rebuild` applies for real has to run here too, in the
---- same order, or this permanently disagrees with a freshly rebuilt
---- file and `cache.open` rebuilds on every call. What `cache.open`
---- compares `cache_meta.schema_fingerprint` against.
---- @return string | nil The fingerprint
---- @return string Error message
 local function expected_schema_fingerprint(): string | nil, string
-  local db, err = sqlite.open(":memory:")
-  if db == nil then
-    return nil, err
-  end
-  local iok, ierr = db:exec_script(index.DDL)
-  if not iok then
-    local _c, _cerr = db:close()
-    return nil, ierr
-  end
-  local scratch: index.Index = {db = db, specs = {}, load_problems = {}}
-  local fok, ferr = find.build(scratch)
-  if not fok then
-    local _c, _cerr = db:close()
-    return nil, ferr
-  end
-  local eok, eerr = db:exec_script(EXTRA_DDL)
-  if not eok then
-    local _c, _cerr = db:close()
-    return nil, eerr
-  end
-  local irok, irerr = index_rank.ensure_views(scratch)
-  if not irok then
-    local _c, _cerr = db:close()
-    return nil, irerr
-  end
-  local rdok, rderr = readddl.ensure_views(scratch)
-  if not rdok then
-    local _c, _cerr = db:close()
-    return nil, rderr
-  end
-  local fp, fperr = schema_fingerprint(db)
-  local _c, cerr = db:close()
-  if fp == nil then
-    return nil, fperr
-  end
-  if not _c then
-    return nil, cerr
-  end
-  return fp
+  return hash.sha256_hex(table.concat(
+      {index.DDL, EXTRA_DDL, index_rank.EXTRA_DDL, readddl.EXTRA_DDL, find.FTS_DDL},
+      "\0")), ""
 end
 
 --- Refresh or drop one item's rows — `items`/`ranks`/`builders`/
@@ -469,7 +418,6 @@ local record cachedb
   meta_get: function(db: sqlite.Database, k: string): string | nil
   meta_set: function(db: sqlite.Database, k: string, v: string): boolean, string
   db_user_version: function(db: sqlite.Database): integer
-  schema_fingerprint: function(db: sqlite.Database): string | nil, string
   expected_schema_fingerprint: function(): string | nil, string
   patch_item: function(c: Cache, it: item.Item, spec_body: string | nil,
   lease?: index.Lease): boolean, string
@@ -491,7 +439,6 @@ local M: cachedb = {
   meta_get = meta_get,
   meta_set = meta_set,
   db_user_version = db_user_version,
-  schema_fingerprint = schema_fingerprint,
   expected_schema_fingerprint = expected_schema_fingerprint,
   patch_item = patch_item,
   close = close,

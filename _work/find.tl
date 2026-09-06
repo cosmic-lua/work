@@ -282,6 +282,7 @@ end
 local record find
   type Hit = Hit
   type Rows = Rows
+  FTS_DDL: string
   build: function(idx: Index): boolean, string
   query: function(idx: Index, text: string, limit: integer): Rows | nil, string
   similar: function(idx: Index, title: string): Rows | nil, string
@@ -290,6 +291,7 @@ local record find
 end
 
 local M: find = {
+  FTS_DDL = FTS_DDL,
   build = build,
   query = query,
   similar = similar,
