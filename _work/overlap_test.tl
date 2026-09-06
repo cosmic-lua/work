@@ -30,6 +30,18 @@ local function write_spec(s: store.Store, id: string, body: string)
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
 end
 
+--- Write a file of exactly `n` lines, the way `wc -l` counts them: `n`
+--- newline characters, matching `overlap.line_count`'s own measure.
+--- @param path string Where to write it
+--- @param n integer How many lines
+local function write_n_lines(path: string, n: integer)
+  local rows: {string} = {}
+  for i = 1, n do
+    rows[i] = "x"
+  end
+  assert(fs.write(path, table.concat(rows, "\n") .. "\n"))
+end
+
 --- Run show.cmd_show and capture exactly what it prints via print() —
 --- the swap-and-restore pattern the other verb tests use.
 --- @param s store.Store The store
@@ -134,4 +146,64 @@ local function test_show_surfaces_a_change_section_path_overlap()
   local _, out_unrelated = show_and_capture(s, unrelated)
   assert(not out_unrelated:find("overlaps:", 1, true),
     "an unrelated path collides with nothing: " .. out_unrelated)
+end
+
+-- `headroom_lines` warns right at the margin: a file with exactly
+-- `WARN_MARGIN` lines of headroom left (480/500) is already tight
+-- enough to flag.
+local function test_headroom_lines_warns_at_the_margin()
+  local path = fs.join(fixture.tmpdir, "overlap-headroom-480.tl")
+  write_n_lines(path, 480)
+  local body = ("## Change\nTouch `%s`.\n"):format(path)
+  local lines = overlap.headroom_lines(body)
+  assert(#lines == 1, table.concat(lines, "; "))
+  assert(lines[1]:find("`" .. path .. "` is 480/500 lines, 20 left", 1, true),
+    lines[1])
+end
+
+-- One line of MORE headroom (479/500, 21 lines left) is outside the
+-- margin and stays quiet — the boundary the margin actually draws.
+local function test_headroom_lines_silent_with_room_to_spare()
+  local path = fs.join(fixture.tmpdir, "overlap-headroom-479.tl")
+  write_n_lines(path, 479)
+  local body = ("## Change\nTouch `%s`.\n"):format(path)
+  local lines = overlap.headroom_lines(body)
+  assert(#lines == 0, table.concat(lines, "; "))
+end
+
+-- A Change section naming a path this process's own tree does not
+-- have (a product repo's file, read from the board's own checkout)
+-- warns about nothing: the tree it can honestly measure is the only
+-- one it claims to.
+local function test_headroom_lines_silent_for_an_unreachable_path()
+  local body = "## Change\nTouch `some/other/repo/big_file.tl`.\n"
+  local lines = overlap.headroom_lines(body)
+  assert(#lines == 0, table.concat(lines, "; "))
+end
+
+-- `fs.is_present` passes a directory (`paths_named` keeps it), but
+-- `fs.read` cannot read one as text — the gap `line_count`'s own nil
+-- check exists for, distinct from a path missing outright.
+local function test_headroom_lines_silent_for_an_unreadable_present_path()
+  local path = fs.join(fixture.tmpdir, "overlap-headroom.tl")
+  assert(fs.make_dirs(path))
+  local body = ("## Change\nTouch `%s`.\n"):format(path)
+  local lines = overlap.headroom_lines(body)
+  assert(#lines == 0, table.concat(lines, "; "))
+end
+
+-- `show` prints the same `tight:` line for a real item whose spec
+-- names a file already within the margin — the warning a refiner or
+-- builder sees before a pull, not after hitting the lint cap live.
+local function test_show_surfaces_a_tight_change_section_path()
+  local s = init_state_repo("headroom")
+  local _root, first = root_with_leaf(s)
+  local path = fs.join(fixture.tmpdir, "overlap-headroom-show.tl")
+  write_n_lines(path, 480)
+  local body = ("## Change\nTouch `%s`.\n"):format(path)
+  write_spec(s, first, body)
+
+  local _, out = show_and_capture(s, first)
+  assert(out:find("tight: `" .. path .. "` is 480/500", 1, true),
+    "the tight file is named: " .. out)
 end
