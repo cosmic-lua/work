@@ -7,6 +7,7 @@
 
 local check = require("cosmic.check")
 local read = require("_work.read")
+local gitboard = require("_work.gitboard")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
@@ -95,4 +96,28 @@ local function test_new_refuses_placing_against_an_unpositioned_sibling()
   local goal, leaf = root_with_leaf(s)
   assert(graph.cmd_new(s, "a later slice", goal, nil, "", nil, "", "", leaf) ~= 0,
     "leaf carries no position among goal's children yet")
+end
+
+-- The handle the verdict line prints is exactly what `show` accepts —
+-- a round trip so the two renderings (this one, and `gitview.id_line`'s)
+-- can never drift apart.
+local function test_new_verdict_handle_round_trips_through_show()
+  local s = init_state_repo("new-handle-roundtrip")
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local code = graph.cmd_new(s, "a title", "", nil, "", nil, "", "", "")
+  _G.print = old_print
+  assert(code == 0, "new should succeed")
+  local out = table.concat(lines, "\n")
+  local handle = out:match("«%w%w%w%w_%w%w%w%w»")
+  assert(handle ~= nil, "verdict line carries a handle: " .. out)
+  assert(gitboard.main("show", handle, "--dir", s.root) == 0,
+    "the printed handle round-trips through show: " .. out)
 end

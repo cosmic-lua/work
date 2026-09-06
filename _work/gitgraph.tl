@@ -32,6 +32,7 @@ local rank = require("_work.gitrank")
 local read = require("_work.read")
 local session = require("_work.session")
 local store = require("_work.store")
+local tail = require("_work.tail")
 
 --- Add `x` to `list` unless some entry already shares its id — the
 --- merge `cmd_new`/`cmd_attach` use to fold a parent placement
@@ -182,7 +183,8 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     entered = "triage — rank it among the outcomes, or attach it under a "
     .. "ranked outcome"
   end
-  return gate.verdict_line("new", true, ("%s enters %s"):format(it.id, entered))
+  return gate.verdict_line("new", true,
+    ("%s [%s] enters %s"):format(tail.handle(it.id), it.id, entered))
 end
 
 --- Give an item a parent, moving it from triage into todo. Refuses a
