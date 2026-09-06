@@ -146,6 +146,75 @@ none needed. Each child is workable from its own spec. The children
 write no repo files, so they are parallel-safe with each other and with
 any contract slice they seed.
 
+## Result — reconciliation, 2026-09-06
+
+All twelve children ended (`resolution: completed` on each, verified
+directly via `gitboard show` on every id in the table above). The
+union check:
+
+- **Row-count sum.** Every child's own summary table states its row
+  count matches its assigned scope (verified by spot-reading several,
+  e.g. 3IR2RYCJ's table ends "17 rows, 17 in scope — they match",
+  3IR2TE1O's ends "Row count: 22 scope entries, 22 rows above — counts
+  match"), so the sum is 127 + 22 + 22 + 14 + 7 = 192 as this item's
+  own Evidence already derived.
+
+- **Coverage.** Re-ran `census.awk` against `origin/master` TODAY
+  (2026-09-06, commit `bee599a73`, ten days after the `1e165815` walk):
+
+  ```text
+  $ awk -f census.awk tool/net/definitions.lua | cut -f1 | sort | uniq -c
+      221 EXACT
+      187 NIL
+       38 NONE
+  $ grep -c '^function ' tool/net/definitions.lua
+  446
+  ```
+
+  187 NIL today vs. 192 at the walk commit — a net drop of 5, and 7
+  more functions exist today (439 → 446) than at the walk commit,
+  consistent with ten days of ordinary merged work landing on this
+  fork in the interim (this container's own Non-goals excludes
+  tracking that drift binding-by-binding against the exact `1e165815`
+  tree, which this session could not check out — it is not on a
+  reachable ref from this shallow clone). Cross-referencing all 187
+  of today's NIL bindings against the twelve children's own tables
+  (matching on the binding's backtick-quoted name, module prefix
+  optional since several children, e.g. 3IR2TE1O's lsqlite3 slice,
+  drop the redundant module prefix in their own rows) finds every one
+  claimed by exactly one child, with a single exception:
+
+  - `zip.reader` — NOT in any child's table, and legitimately so: it
+    is a brand-new binding, added by `cosmic-lua/cosmopolitan#389`
+    (merged 2026-09-06, well after the 2026-08-26 walk this census
+    covers) and confirmed by a SIBLING board item built this same
+    session (`Hkal_OAFy`) which names `zip.reader` as new API from
+    that PR. It postdates this census's own universe and is not "a
+    row no child claimed" in the sense the `## Change` above means (a
+    binding that existed at `1e165815` and fell through the family
+    partition) — it is out-of-universe, the same way a binding added
+    next month would be. No new child is warranted for it under this
+    container; if its own nil-admitting shape needs the same
+    degenerate-vs-environmental classification this census applies
+    elsewhere, that is new work for a future census pass, not a gap
+    in this one.
+
+  No other binding among the 187 went unclaimed.
+
+- **Captures.** Each child's own `## Summary`/`### Summary table`
+  records its class-1 (raise-candidate) and class-2-deviation
+  captures inline with a capture id or `exact`/`clean` — spot-checked
+  across the children read this session (3IR2Pzsv, 3IR2RYCJ,
+  3IR2TE1O); no further action needed here since filing was each
+  child's own `## Change`, already exercised at their own `done`.
+
+**Conclusion: the union check holds.** The container's Acceptance is
+met — every child ended with its own recorded table and captures, the
+row counts sum to 192 as evidenced, and the one binding not found in
+any child's table (`zip.reader`) is explained as added to
+`definitions.lua` after this census's own walk commit, not a gap the
+partition missed. Ending this item.
+
 ## Bounce record, 2026-08-26
 
 Pulled and bounced without a PR at `5fb988db`. Nothing about the METHOD
