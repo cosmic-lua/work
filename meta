@@ -2,5 +2,6 @@ title: take: a re-pushed diff with a stale or missing CI observation still deadl
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-4QFJ_HSRc-f6f470de
+pr: 59
 builders: build-4QFJ_HSRc-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
