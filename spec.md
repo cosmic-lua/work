@@ -65,10 +65,19 @@ to the parent's case. Both belong in the strict-mode item's Change
    376:  local function serve_forever(): boolean, string
    ```
 
-   All three reproduce exactly, with `zip.Archive.close` retyped by
-   `5f227969` (2026-08-24) itself and `serve_forever` by `8495ab0a`
-   (2026-09-01) — both land within the windows the census counts them
-   in. The remaining four named retypings and the full 30/20 aggregate
+   All three reproduce exactly. `5f227969` and `8495ab0a` are the
+   census's own snapshot-boundary commits, not the commits that did the
+   retyping — a fresh-context review caught this spec overclaiming
+   direct agency ("retyped by X itself") where the commands only show
+   the state at a boundary. The actual mutating commits, found and
+   confirmed against `git show --stat`: `50665e0d` (2026-08-14, "zip:
+   close is fallible, because close is where the archive lands") for
+   `zip.Archive.close`, and `3053b87d` (2026-08-26, "quicksand/proxy:
+   serve_forever returns a fallible effect") for `serve_forever`. Both
+   land inside the windows the census counts them in — `50665e0d`
+   before the `5f227969` (08-24) snapshot, `3053b87d` before `8495ab0a`
+   (09-01) — which is the only claim these three spot-checks actually
+   need to support. The remaining four named retypings and the full 30/20 aggregate
    are not independently re-derivable without rewriting the extractor —
    a real, stated limit on this fact's audit trail, not a claim to lean
    on beyond what these three commits and three spot-checks actually
