@@ -13,11 +13,14 @@
 local cache = require("_work.cache")
 local check = require("cosmic.check")
 local ciobs = require("_work.ciobs")
+local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local gittake = require("_work.gittake")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
+
+local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -231,4 +234,69 @@ local function test_a_stale_head_observation_falls_back_on_touched_at_recency()
     .. "green counts as unobserved debt, outranking the pull")
   assert(check.must(store.load(s, second)).claim == "",
     "and the refused pull claimed nothing")
+end
+
+-- `--open` and `--pr` are two ways to record one PR — never both at
+-- once, and refused with no GitHub reach at all. The item carries a
+-- `repo` so the ONLY thing standing between this call and a live
+-- GitHub write is the `--pr` guard itself — a fixture with no repo
+-- would refuse for that reason too, unable to tell the two refusals
+-- apart.
+local function test_take_open_with_pr_refuses()
+  local s = init_state_repo("gittake-open-with-pr")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.repo = "cosmic-lua/cosmic"
+  assert(storewrite.save(s, it, "fixture: give the item a repo"))
+  it = check.must(store.load(s, leaf))
+
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    lines[#lines + 1] = tostring((...))
+  end
+  local ok, code = pcall(gittake.take_open, s, it, "session-a", 42, "")
+  _G.print = old_print
+  assert(ok, tostring(code))
+  assert(code ~= 0, "--open and --pr together are refused")
+  local out = table.concat(lines, "\n")
+  assert(out:find("--pr", 1, true) ~= nil,
+    "the refusal names --pr: " .. out)
+  assert(check.must(store.load(s, leaf)).pr == 0, "and nothing is recorded")
+end
+
+-- `--open` needs a repo to open a PR against; a fixture item carries
+-- none by default, and the refusal names that gap with no network at
+-- all — nothing here calls GitHub.
+local function test_take_open_with_no_repo_refuses()
+  local s = init_state_repo("gittake-open-no-repo")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  assert((it.repo or "") == "", "the fixture item carries no repo")
+  assert(gittake.take_open(s, it, "session-a", 0, "") ~= 0,
+    "no repo to open a PR against is refused")
+  assert(check.must(store.load(s, leaf)).pr == 0, "and nothing is recorded")
+end
+
+-- The PR body always leads with the `Board:` line the board joins the
+-- opened PR back to the item by; a `--body FILE` is appended after a
+-- blank line, never ahead of it.
+local function test_take_open_body_leads_with_the_board_line()
+  local body, err = gittake.open_body("3Ixb9PupZFNmdqcTV9w7zgthrqC", "")
+  assert(body ~= nil, tostring(err))
+  assert(body == "Board: 3Ixb9PupZFNmdqcTV9w7zgthrqC", "got: " .. body)
+
+  local path = fs.join(tmpdir, "open-body-extra.md")
+  assert(fs.write(path, "a paragraph describing what changed and why"))
+  local with_extra, extra_err = gittake.open_body("3Ixb9PupZFNmdqcTV9w7zgthrqC", path)
+  assert(with_extra ~= nil, tostring(extra_err))
+  local first_line = with_extra:match("^([^\n]*)")
+  assert(first_line == "Board: 3Ixb9PupZFNmdqcTV9w7zgthrqC",
+    "got: " .. tostring(first_line))
+  assert(with_extra:find("a paragraph describing what changed and why", 1, true)
+    ~= nil, with_extra)
 end

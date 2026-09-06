@@ -385,7 +385,10 @@ checkout or push rights to this board repository:
   applied — only then does the claimed, PR-less item await a
   `verdict`.
 - Reconcile the wave. Finished with a PR: record it on the item
-  (`take ID --pr N`). Finished with a research recommendation: apply
+  (`take ID --pr N`). Finished with a pushed branch: `take ID --open
+  --body FILE` — the branch names itself, and the board opens the PR
+  and records the number it gets, so the reconcile never touches
+  GitHub directly. Finished with a research recommendation: apply
   it (above), then `take ID --result` — the research handover, which
   puts the claimed, PR-less item in line for a verdict the same way
   the PR does (`help review`). Dead (no PR, no recommendation, no branch):

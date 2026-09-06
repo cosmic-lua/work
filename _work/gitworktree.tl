@@ -204,10 +204,12 @@ end
 local record gitworktree
   cmd_worktree: function(s: store.Store, id: string, root_override: string,
   refs: {string}): integer
+  default_base: function(repo: string, base: string): string
 end
 
 local M: gitworktree = {
   cmd_worktree = cmd_worktree,
+  default_base = default_base,
 }
 
 return M

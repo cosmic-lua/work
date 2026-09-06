@@ -2,14 +2,15 @@
 --- and the check runs on its head. The transport is `_work.api`; what
 --- the fetched values MEAN is `_work.review`, which is pure.
 ---
---- Reads and nothing else. The board's state lives in committed
---- files, so nothing here touches work state; and nothing here writes
---- to GitHub either — a merge is performed by whoever runs the board,
---- and the board only asks whether it happened. GitHub is consulted
---- about the pull request carrying a diff, which is the one fact the
---- board cannot hold itself.
+--- Almost entirely reads. The board's state lives in committed files,
+--- so nothing here touches work state, and a merge is performed by
+--- whoever runs the board — the board only asks whether it happened.
+--- The one write is `open_pull`: the builder's handover for a diff
+--- whose PR does not exist yet (`take ID --open`), so a builder never
+--- needs GitHub reach of its own.
 local api = require("_work.api")
 local child = require("cosmic.child")
+local json = require("cosmic.json")
 local review = require("_work.review")
 local store = require("_work.store")
 
@@ -113,6 +114,107 @@ local function pull(s: store.Store, number: integer, repo: string | nil):
     auto_merge = auto_merge,
     mergeable_state = tostring(v["mergeable_state"] or ""),
   }
+end
+
+--- Whether a 422 response is GitHub refusing a second open PR for a
+--- head that already has one — the one 422 `open_pull` treats as
+--- success rather than failure. GitHub's own wording ("A pull request
+--- already exists for ...") lives in the validation error's message,
+--- lowercased before matching so a wording tweak in capitalization
+--- alone never breaks this.
+--- @param res api.ApiResult The 422 exchange
+--- @return boolean True when the 422 names an existing PR
+local function already_open_head(res: api.ApiResult): boolean
+  local v = res.value
+  if not (v is {string: any}) then
+    return false
+  end
+  local msg = tostring(v["message"] or ""):lower()
+  local errs = v["errors"]
+  if errs is {any} then
+    for _, e in ipairs(errs) do
+      if e is {string: any} then
+        msg = msg .. " " .. tostring(e["message"] or ""):lower()
+      end
+    end
+  end
+  return msg:find("already exists", 1, true) ~= nil
+end
+
+--- The number of the open PR already carrying `head`, for the
+--- idempotent fallback below.
+--- @param s store.Store The store
+--- @param repo string owner/name
+--- @param head string The branch carrying the diff
+--- @return integer | nil The PR number
+--- @return string Error message
+local function find_open_pull(s: store.Store, repo: string, head: string):
+  integer | nil, string
+  local owner = repo:match("^([^/]+)/") or repo
+  local path = ("/repos/%s/pulls?head=%s:%s&state=open"):format(repo, owner, head)
+  local res, err = api.call("GET", path, s.root)
+  if res == nil then
+    return nil, err
+  end
+  if not api.is_success(res.status) then
+    return nil, api.error_of("GET", path, res)
+  end
+  local v = res.value
+  if v is {any} and #v > 0 then
+    local first = v[1]
+    if first is {string: any} then
+      local number = first["number"]
+      if number is integer then
+        return number, ""
+      end
+    end
+  end
+  return nil, ("%s already has an open PR GitHub will not name again"):format(head)
+end
+
+--- Open a new pull request from `head` into `base`, or reuse the one
+--- already open for that head. `take ID --open` is the only caller: a
+--- builder's deliverable is a pushed branch, and this is how the
+--- board turns that into the PR its handover records — the builder
+--- never needs GitHub reach of its own. Idempotent against a retry:
+--- GitHub refuses a second open PR for one head with a 422, and that
+--- refusal names the number the retried call should have returned in
+--- the first place, so it is looked up and handed back rather than
+--- surfaced as a failure.
+--- @param s store.Store The store
+--- @param repo string owner/name the PR lands in
+--- @param head string The branch carrying the diff
+--- @param base string The branch it targets
+--- @param title string The PR title
+--- @param body string The PR body
+--- @return integer | nil The PR number
+--- @return string Error message
+local function open_pull(s: store.Store, repo: string, head: string, base: string,
+    title: string, body: string): integer | nil, string
+  local path = ("/repos/%s/pulls"):format(repo)
+  local payload, jerr = json.encode({title = title, head = head, base = base,
+      body = body, draft = false})
+  if payload == nil then
+    return nil, "encoding the PR request: " .. tostring(jerr)
+  end
+  local res, err = api.call("POST", path, s.root, payload)
+  if res == nil then
+    return nil, err
+  end
+  if api.is_success(res.status) then
+    local v = res.value
+    if v is {string: any} then
+      local number = v["number"]
+      if number is integer then
+        return number, ""
+      end
+    end
+    return nil, ("POST %s: response carries no PR number"):format(path)
+  end
+  if res.status == 422 and already_open_head(res) then
+    return find_open_pull(s, repo, head)
+  end
+  return nil, api.error_of("POST", path, res)
 end
 
 --- The check runs on a commit. An empty list means GitHub reported
@@ -300,6 +402,8 @@ local record gh
   review.Pull | nil, string
   checks: function(s: store.Store, sha: string, repo: string | nil):
   {review.CheckRun} | nil, string
+  open_pull: function(s: store.Store, repo: string, head: string, base: string,
+  title: string, body: string): integer | nil, string
   reviews: function(s: store.Store, number: integer, repo: string | nil):
   {Review} | nil, string
   latest_request_changes: function(revs: {Review}): Review | nil
@@ -314,6 +418,7 @@ local M: gh = {
   slug = slug,
   pull = pull,
   checks = checks,
+  open_pull = open_pull,
   reviews = reviews,
   latest_request_changes = latest_request_changes,
   head_state = head_state,

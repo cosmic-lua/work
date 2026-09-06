@@ -1,9 +1,10 @@
 --- The authenticated GitHub REST core the board's calls are built on:
 --- one request function, its error rendering, and the success test.
 --- `_work.gh` holds the board-shaped calls; this holds the transport
---- they share. Every call the board makes is a GET — the board reads
---- GitHub and never writes to it — so a request carries no body at
---- all. Auth is a GITHUB_TOKEN (or GH_TOKEN) env var; HTTPS_PROXY is
+--- they share. Almost every call the board makes is a GET — the board
+--- mostly reads GitHub — but a caller that passes a body writes: that
+--- request carries no ETag and is neither read from nor written to
+--- the cache below. Auth is a GITHUB_TOKEN (or GH_TOKEN) env var; HTTPS_PROXY is
 --- honored, and behind a TLS-intercepting proxy set
 --- SSL_USE_SYSTEM_CERTS=1 SSL_CERT_FILE=<bundle> (read by the cosmos
 --- TLS root loader).
@@ -228,6 +229,33 @@ local function read_rate(root: string): integer | nil, integer | nil
   return remaining, nil
 end
 
+local record api_module
+  type ApiResult = ApiResult
+  type CacheEntry = CacheEntry
+  --- The live transport, swappable for tests — see the note above
+  --- `local function api`.
+  transport: function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+  call: function(method: string, path: string, root: string,
+  body?: string): ApiResult, string
+  error_of: function(method: string, path: string, res: ApiResult): string
+  is_success: function(status: integer): boolean
+  --- Exported for tests only: the pure fold behind the 304 path,
+  --- proven with a fabricated response rather than a live call.
+  reconcile: function(cached: CacheEntry | nil, status: integer,
+  headers: {string: string}, body: string): integer, string, CacheEntry | nil
+  rate_of: function(headers: {string: string}): integer | nil, integer | nil
+  read_rate: function(root: string): integer | nil, integer | nil
+  write_rate: function(root: string, remaining: integer | nil, reset: integer | nil)
+  read_cache: function(root: string, method: string, path: string): CacheEntry | nil
+  write_cache: function(root: string, method: string, path: string, entry: CacheEntry)
+end
+
+--- The board's transport, swappable for tests: same shape as
+--- `cosmic.fetch.fetch`. Bound to the real thing below; a test that
+--- needs a deterministic exchange (no live network, no token spent)
+--- replaces `M.transport` with a fake and restores it afterward.
+local M: api_module
+
 --- One authenticated REST call. nil only when no response arrived
 --- (missing token, transport failure); an HTTP error status is a
 --- result — callers branch on res.status.
@@ -235,25 +263,33 @@ end
 --- @param path string Path under api.github.com, leading slash
 --- @param root string The store checkout root, for the ETag cache
 --- and the rate-limit fact ("" disables both — no cache, no history)
+--- @param body string | nil JSON request body to send; when non-nil
+--- the call writes, and the ETag cache is neither read nor written
 --- @return ApiResult | nil The exchange
 --- @return string Error message when no response arrived
-local function api(method: string, path: string, root: string): ApiResult, string
+local function api(method: string, path: string, root: string,
+    body?: string): ApiResult, string
   local token = env.get("GITHUB_TOKEN") or env.get("GH_TOKEN")
   if token == nil or token == "" then
     return nil, "no GitHub token: set GITHUB_TOKEN (or GH_TOKEN)"
   end
-  local cached = method == "GET" and read_cache(root, method, path) or nil
+  local cached = (method == "GET" and body == nil)
+  and read_cache(root, method, path) or nil
   local headers: {string: string} = {
     ["authorization"] = "Bearer " .. token,
     ["accept"] = "application/vnd.github+json",
     ["x-github-api-version"] = "2022-11-28",
     ["user-agent"] = "cosmic-work-board",
   }
+  if body ~= nil then
+    headers["content-type"] = "application/json"
+  end
   if cached ~= nil and cached.etag ~= "" then
     headers["if-none-match"] = cached.etag
   end
-  local resp, err = fetch.fetch(API .. path, {
+  local resp, err = M.transport(API .. path, {
       method = method,
+      body = body,
       proxy = env.get("HTTPS_PROXY") or env.get("https_proxy"),
       headers = headers,
     })
@@ -262,14 +298,14 @@ local function api(method: string, path: string, root: string): ApiResult, strin
   end
   local remaining, reset = rate_of(resp.headers)
   write_rate(root, remaining, reset)
-  local status, body, fresh = reconcile(cached, resp.status, resp.headers,
+  local status, respbody, fresh = reconcile(cached, resp.status, resp.headers,
     resp.body or "")
-  if fresh ~= nil then
+  if fresh ~= nil and body == nil then
     write_cache(root, method, path, fresh)
   end
   local value: any = nil
-  if #body > 0 then
-    value = json.decode(body)
+  if #respbody > 0 then
+    value = json.decode(respbody)
   end
   return {status = status, value = value, headers = resp.headers,
     remaining = remaining, reset = reset}, nil
@@ -303,24 +339,8 @@ local function is_success(status: integer): boolean
   return status >= 200 and status < 300
 end
 
-local record api_module
-  type ApiResult = ApiResult
-  type CacheEntry = CacheEntry
-  call: function(method: string, path: string, root: string): ApiResult, string
-  error_of: function(method: string, path: string, res: ApiResult): string
-  is_success: function(status: integer): boolean
-  --- Exported for tests only: the pure fold behind the 304 path,
-  --- proven with a fabricated response rather than a live call.
-  reconcile: function(cached: CacheEntry | nil, status: integer,
-  headers: {string: string}, body: string): integer, string, CacheEntry | nil
-  rate_of: function(headers: {string: string}): integer | nil, integer | nil
-  read_rate: function(root: string): integer | nil, integer | nil
-  write_rate: function(root: string, remaining: integer | nil, reset: integer | nil)
-  read_cache: function(root: string, method: string, path: string): CacheEntry | nil
-  write_cache: function(root: string, method: string, path: string, entry: CacheEntry)
-end
-
-local M: api_module = {
+M = {
+  transport = fetch.fetch,
   call = api,
   error_of = api_error,
   is_success = is_success,

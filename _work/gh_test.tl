@@ -3,10 +3,112 @@
 -- goes to, decided from the item's field or the checkout's origin.
 -- That decision runs with no network and no token; the reads
 -- themselves (`pull`, `checks`) need both, and are exercised only
--- through the board's own flow against a real repository.
+-- through the board's own flow against a real repository. `open_pull`
+-- is the one write: `_work.api`'s `M.transport` seam stands in for
+-- the live network here, so its request shape and idempotent 422
+-- fallback are proven without spending a real GitHub write.
 
+local env = require("cosmic.env")
+local fetch = require("cosmic.fetch")
+local json = require("cosmic.json")
+
+local api = require("_work.api")
 local gh = require("_work.gh")
 local fixture = require("_work.fixture")
+
+--- Point `GITHUB_TOKEN` at a fake value for the duration of an
+--- `open_pull` test — `api.call` refuses to run with none set, and
+--- these tests never spend a real one. Returns what to restore.
+--- @return string | nil The prior value, nil when unset
+local function stub_token(): string | nil
+  local prior = env.get("GITHUB_TOKEN")
+  assert(env.set("GITHUB_TOKEN", "test-token"))
+  return prior
+end
+
+--- Restore `GITHUB_TOKEN` to what `stub_token` found.
+--- @param prior string | nil What `stub_token` returned
+local function restore_token(prior: string | nil)
+  if prior == nil then
+    local _ok, _err = env.unset("GITHUB_TOKEN")
+  else
+    assert(env.set("GITHUB_TOKEN", prior))
+  end
+end
+
+-- `open_pull` POSTs the request GitHub's "create a pull request"
+-- endpoint expects, with the item's own fields as the JSON body, and
+-- decodes the number a successful response carries.
+local function test_open_pull_posts_the_expected_request()
+  local seen: fetch.Options = nil
+  local seen_url = ""
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    seen_url, seen = url, opts
+    return {status = 201, headers = {}, raw_headers = {}, body = '{"number":42}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local number, err = gh.open_pull({root = ""}, "acme/widgets", "abcd1234",
+    "main", "a title", "a body")
+  api.transport = original
+  restore_token(prior)
+  assert(number == 42, "got: " .. tostring(number) .. " " .. tostring(err))
+  assert(seen.method == "POST", tostring(seen.method))
+  assert(seen_url:find("/repos/acme/widgets/pulls", 1, true) ~= nil, seen_url)
+  assert(seen.headers["content-type"] == "application/json",
+    "a body request carries content-type")
+  local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(decoded["head"] == "abcd1234" and decoded["base"] == "main"
+    and decoded["title"] == "a title" and decoded["body"] == "a body"
+    and decoded["draft"] == false, "the payload carries the item's own fields")
+end
+
+-- A 422 saying the head already carries an open PR is not a failure:
+-- a retried --open looks the existing number up and hands it back
+-- rather than surfacing GitHub's refusal, so it never opens a second
+-- PR for the same head.
+local function test_open_pull_422_already_exists_finds_the_number()
+  local posts = 0
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    if opts.method == "POST" then
+      posts = posts + 1
+      return {status = 422, headers = {}, raw_headers = {},
+        body = '{"message":"Validation Failed","errors":'
+        .. '[{"message":"A pull request already exists for acme:abcd1234."}]}',
+        url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end
+    return {status = 200, headers = {}, raw_headers = {}, body = '[{"number":99}]',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local number, err = gh.open_pull({root = ""}, "acme/widgets", "abcd1234",
+    "main", "a title", "a body")
+  api.transport = original
+  restore_token(prior)
+  assert(number == 99, "got: " .. tostring(number) .. " " .. tostring(err))
+  assert(posts == 1, "one POST, never retried into a second PR")
+end
+
+-- A 422 for an unrelated validation failure is a real failure: nothing
+-- here guesses that a random rejection means "already open."
+local function test_open_pull_422_for_another_reason_is_a_failure()
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
+    return {status = 422, headers = {}, raw_headers = {},
+      body = '{"message":"Validation Failed","errors":'
+      .. '[{"message":"head is not a valid ref"}]}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local number, err = gh.open_pull({root = ""}, "acme/widgets", "abcd1234",
+    "main", "a title", "a body")
+  api.transport = original
+  restore_token(prior)
+  assert(number == nil, "an unrelated 422 is not idempotency")
+  assert(err:find("422", 1, true) ~= nil, err)
+end
 
 -- A non-empty repo short-circuits before touching git — no store root
 -- is ever read, so a bogus one proves the short-circuit rather than
