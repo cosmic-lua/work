@@ -1,0 +1,2 @@
+title: cosmic/net/init.tl: socket_pair doesn't narrow unix.socketpair's integer|string fd2 slot
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
