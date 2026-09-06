@@ -39,34 +39,32 @@ local function lines_of(text: string): {string}
   return out
 end
 
---- The size of replacing `old` with `new`, as a minimal line-level
---- edit: lines added and lines removed, by longest common subsequence
---- so a line kept in place counts as neither.
+--- The size of replacing `old` with `new`, as a per-line multiset
+--- (bag) count: a line present in `new` one more time than in `old`
+--- is one line added, and the reverse one line removed — line MOVES
+--- and edits within a line are not tracked, only counts by content.
 --- @param old string The stored text
 --- @param new string The replacement text
 --- @return integer Lines added
 --- @return integer Lines removed
 local function diffstat(old: string, new: string): integer, integer
-  local a = lines_of(old)
-  local b = lines_of(new)
-  local prev: {integer} = {}
-  for j = 0, #b do
-    prev[j] = 0
+  local delta: {string: integer} = {}
+  for _, line in ipairs(lines_of(old)) do
+    delta[line] = (delta[line] or 0) - 1
   end
-  for i = 1, #a do
-    local curr: {integer} = {}
-    curr[0] = 0
-    for j = 1, #b do
-      if a[i] == b[j] then
-        curr[j] = prev[j - 1] + 1
-      else
-        curr[j] = math.max(prev[j], curr[j - 1])
-      end
+  for _, line in ipairs(lines_of(new)) do
+    delta[line] = (delta[line] or 0) + 1
+  end
+  local added = 0
+  local removed = 0
+  for _, d in pairs(delta) do
+    if d > 0 then
+      added = added + d
+    else
+      removed = removed - d
     end
-    prev = curr
   end
-  local common = prev[#b] or 0
-  return #b - common, #a - common
+  return added, removed
 end
 
 --- @param s store.Store The store
