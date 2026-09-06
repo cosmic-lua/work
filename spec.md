@@ -10,9 +10,10 @@ cosmic#1755 was re-pushed (head 5df650c, CI running, recorded with
     outrank this take — verdicts before new work: `take 3IcGmqWF` …
 
 twice, once right after a fresh `sync` ("state is current"). The
-`ci_checks` row is keyed by PR, not head: `<paste the schema and the
-1755 row's state/head from o/board.db at refine time — measured by the
-orchestrator with a query over the board database>`. A row observed on
+`ci_checks` row is keyed by PR, not head: `ci_checks(pr, repo, head, state, observed_at) PRIMARY KEY (repo, pr)`, and
+the row for 1755 at 17:26Z read `head=63429b8… state=green` — the
+PREVIOUS head, already judged, while the current head 5df650c had CI
+running. A row observed on
 the previously judged head (green) or no row at all for the new head
 counts the diff as debt, so every re-push re-creates the deadlock #52
 closed for first pushes.
