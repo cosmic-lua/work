@@ -1,10 +1,10 @@
 title: cosmopolitan: tool/net/lfetch.c's line coverage is flaky across serial runs, ~1-in-10 below any committed floor
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
-claim: build-8TDI_yqOV-2f92e512
 pr: 390
 verdict: accept
 verdict_head: 2e320a302893364ea536bd51586a3b01fdfd7928
 verdict_spec: 3e09f7233332a599fc3bf795e087178624f0f3a1
+resolution: completed
 builders: build-8TDIyqOV-2f92e512 build-8TDI_yqOV-2f92e512
 speccers: 2f92e512-19fc-5db1-af1f-01086dc185b4
