@@ -110,6 +110,21 @@ local CSPEC: flags.CommandSpec = {
           {long = "out", arg = "FILE",
             help = "write the filled body to FILE instead of stdout, "
             .. "immune to a channel that decodes escapes"}}}},
+    {name = "worktree", summary = "create ID's builder checkout: branch, "
+      .. "worktree, bootstrap, all in one command",
+      spec = {usage = "ID [options]",
+        summary = "create ID's builder checkout: branch, worktree, "
+        .. "bootstrap, all in one\ncommand — run right after `take ID` "
+        .. "succeeds.\n\nResolves ID's repo to a local checkout, branches "
+        .. "and adds a worktree beside it\n(never reused: an existing "
+        .. "branch or path both refuse), fetches every --ref\ninto it, "
+        .. "and bootstraps it.",
+        flags = {dir_flag(),
+          {long = "root", arg = "DIR",
+            help = "the local checkout to branch from; default is "
+            .. "resolved from ID's repo"},
+          {long = "ref", arg = "REF", repeated = true,
+            help = "fetch REF into the worktree too (repeatable)"}}}},
     {name = "take", summary = "claim ID: the pull (spec bar and doing "
       .. "bound apply), its review when it awaits a verdict, or record "
       .. "its handover (--pr N for a diff, --result for a research spec)",

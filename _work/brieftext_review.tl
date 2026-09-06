@@ -9,6 +9,11 @@
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
 ---
+--- `<WORKTREE>` (`REVIEW` only) is `_work.brief`'s own
+--- `<root>/../wt/review-<id8>`, always filled — a fresh checkout the
+--- reviewer creates, unlike a builder's, which is filled only once
+--- `worktree ID` has actually made it.
+---
 --- `<PRODUCT_ROOT>` is the product checkout holding `bin/gitboard`;
 --- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
 --- (its parent's parent), since `bin/gitboard` fetches and execs its
@@ -73,7 +78,8 @@ exactly. A real break changes the outcome the test reads, never just
 the text around it: replace a matched needle with unrelated text
 rather than extending it, flip a boolean rather than renaming it, and
 if the test stays green the guard is decoration. Do this from your
-own fresh checkout — never reuse another agent's worktree.
+own fresh checkout at `<WORKTREE>` — never reuse another agent's
+worktree.
 
 ## Recording your verdict
 

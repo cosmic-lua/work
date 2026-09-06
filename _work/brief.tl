@@ -319,6 +319,20 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   local root = product_root()
   if root ~= "" then
     values["PRODUCT_ROOT"] = root
+    -- `<WORKTREE>`: `worktree ID` (run after `take ID`) already made
+    -- the builder's checkout at exactly this path, so a builder brief
+    -- fills it only once that worktree exists on disk — the same
+    -- "unfilled until the board can answer it" rule every other
+    -- placeholder follows. A review names its OWN fresh checkout
+    -- instead, always — the reviewer creates it, so there is nothing
+    -- to check for.
+    local id8 = it.id:sub(1, 8)
+    local wt = fs.join(fs.dirname(root), "wt", id8)
+    if kind == "builder" and fs.is_dir(wt) then
+      values["WORKTREE"] = wt
+    elseif kind == "review" then
+      values["WORKTREE"] = fs.join(fs.dirname(root), "wt", "review-" .. id8)
+    end
   end
   if kind == "builder" then
     local bc = bounce_context(s, it)
