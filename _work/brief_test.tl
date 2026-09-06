@@ -6,6 +6,7 @@
 
 local check = require("cosmic.check")
 local env = require("cosmic.env")
+local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
 local cache = require("_work.cache")
@@ -20,6 +21,10 @@ local verbs = require("_work.gitverbs")
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
 local root_with_leaf = fixture.root_with_leaf
+
+-- A real `<root>/bin/gitboard` product_root()'s dirname-dirname guess can verify.
+local PRODUCT_ROOT < const > = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "brief-product-root")
+assert(fs.make_dirs(fs.join(PRODUCT_ROOT, "bin")) and fs.write(fs.join(PRODUCT_ROOT, "bin/gitboard"), ""))
 
 --- The check runs `with_ci_fixture` reports for a state, shared between
 --- its `gh.head_checks` and `gh.checks` stubs so the two ride the same
@@ -213,16 +218,13 @@ local function test_product_root_fills_from_gitboard_dir()
   assert(verbs.cmd_take(s, leaf, "session-a", 7, false, "") == 0)
   pin_session("f005cafe00001234dead")
   local prior = env.get("GITBOARD_DIR")
-  check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
+  check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
   local code, out = brief_and_capture(s, "review", leaf)
-  if prior == nil then
-    local _ok, _err = env.unset("GITBOARD_DIR")
-  else
-    check.must(env.set("GITBOARD_DIR", prior))
-  end
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
   unpin_session()
   assert(code == 0, "the recorded PR unlocks the review brief")
-  assert(out:find("cd /home/user/product\n", 1, true) ~= nil,
+  assert(out:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "PRODUCT_ROOT is GITBOARD_DIR's parent's parent: " .. out)
   assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
     "the placeholder is gone once GITBOARD_DIR answers it")
@@ -337,11 +339,11 @@ local function test_brief_refusals_and_the_spec_less_decompose()
     "decompose brief names bin/gitboard, drops o/bin/gitboard and the "
     .. "stale 'already built' sentence: " .. out)
   local prior = env.get("GITBOARD_DIR")
-  check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
+  check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
   local _, dout = brief_and_capture(s, "decompose", root)
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
-  assert(dout:find("cd /home/user/product\n", 1, true) ~= nil,
+  assert(dout:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "decompose: PRODUCT_ROOT fills from GITBOARD_DIR: " .. dout)
 end
 
@@ -362,11 +364,11 @@ local function test_refine_brief_carries_the_current_spec_as_base()
     "refine brief names bin/gitboard, drops o/bin/gitboard and the "
     .. "stale 'already built' sentence: " .. out)
   local prior = env.get("GITBOARD_DIR")
-  check.must(env.set("GITBOARD_DIR", "/home/user/product/o/board"))
+  check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
   local _, rout = brief_and_capture(s, "refine", leaf)
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
-  assert(rout:find("cd /home/user/product\n", 1, true) ~= nil,
+  assert(rout:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "refine: PRODUCT_ROOT fills from GITBOARD_DIR: " .. rout)
 end
 
