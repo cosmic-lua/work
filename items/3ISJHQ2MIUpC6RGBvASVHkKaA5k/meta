@@ -1,4 +1,4 @@
-title: cosmopolitan: literal-argument overloads erase to unions — split single-shape entry points for zip.open and the wrapped fcntl cmds
+title: cosmopolitan: zip.open's literal-mode overload erases to a union for read mode — add zip.reader as a single-shape entry point
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmopolitan
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b
