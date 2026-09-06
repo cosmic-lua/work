@@ -2,4 +2,5 @@ title: fuzz driver: use cosmo.cov's budget so the hang protection holds under --
 parent: 3I9mIYjYmuf4Tg314guEhvh5iA3
 target: cosmic-lua/cosmic
 claim: build-qPiX_DdxS-f6f470de
+pr: 1751
 builders: build-qPiX_DdxS-f6f470de
