@@ -1,10 +1,10 @@
 title: gitboard worktree ID: the orchestrator creates and bootstraps the builder's checkout in one verb, and brief fills <WORKTREE>
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-8stN_P3q1-f6f470de
 pr: 58
 verdict: accept
 verdict_head: b9d356548ff76fbee29209655d0f4316a58a0cf2
 verdict_spec: 04b01f4f4fd8cff766b31e1d21c25b9f49b66506
+resolution: completed
 builders: build-8stN_P3q1-f6f470de
 speccers: build-8stN_P3q1-f6f470de
