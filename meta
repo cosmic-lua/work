@@ -2,7 +2,9 @@ title: cosmic/ast: a real Node record and parse(), replacing tl.d.tl's erased an
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-0E11_GJmv-f6f470de
-reviewer: review-0E11_GJmv-f6f470de
 pr: 1758
+verdict: accept
+verdict_head: b14527da8f581db206b232019a49352cd9b9080a
+verdict_spec: 8ad21591fc5ebf08d69b54eb1ed9c957ec49af6a
 builders: build-0E11_GJmv-f6f470de
 speccers: bc8221f0-556c-51e5-b600-7464598d6f0b
