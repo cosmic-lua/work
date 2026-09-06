@@ -1,9 +1,9 @@
 title: Semantic rename for Teal: does tl's checker expose enough to build one, spiked in cosmic-lua/cosmic#1732
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
-claim: research-HlZW-0bdbc441
 result: 9a367080178f9b817c539246d8f573a6fd1da4e2
 verdict: accept
 verdict_spec: 9a367080178f9b817c539246d8f573a6fd1da4e2
+resolution: completed
 builders: research-HlZW-0bdbc441
 speccers: research-HlZW-0bdbc441
