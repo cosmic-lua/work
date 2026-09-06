@@ -1,0 +1,2 @@
+title: AGENTS.md: require('tl') under a built cosmic binary resolves to the embedded /zip/tl.lua, not o/3p/tl/tl.lua
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
