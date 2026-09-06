@@ -2,7 +2,9 @@ title: casts: record-field narrowing — the tl patch closing 5 record-union-aft
 parent: 3IYMQiYmO9gR7yu4Zsu36edTi0T
 target: cosmic-lua/cosmic
 claim: build-FePr-0bdbc441
-reviewer: review-FePr_L4FB-0bdbc441
 pr: 1743
+verdict: accept
+verdict_head: 93017d9010c28fbbea7b095f2e985ecbbcd39c80
+verdict_spec: 7b1bc2d9f4e88067bb7caa749c1e62666dfe4d02
 builders: build-FePr_L4FB-e5f6 build-FePr-0bdbc441
 speccers: 6c1cdc09-b5cf-5890-910d-4a3944ba5600
