@@ -1,9 +1,9 @@
 title: CI: build and run MODE=cov o/cov/tool/lua/test on every PR
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
-claim: build-jsyr_D5ML-a159f2f2
 pr: 384
 verdict: accept
 verdict_head: 5babf165b6d89c94eb51c0ae6ec00187372aa51f
 verdict_spec: 0dc2932822c6c3d58e530222617d449735375e66
+resolution: completed
 builders: build-jsyr_D5ML-a159f2f2
