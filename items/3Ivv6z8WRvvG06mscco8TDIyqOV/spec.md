@@ -85,13 +85,22 @@ head `9dd50442b8ac4ce5998d2d7fb1ede06960a42008`, run 2026-09-06T03:21Z)
 Three for three on the identical `582` value, across TWO different PR
 branches (both based on recent `master`) and at least two different
 runners, materially strengthens the CI-contention-determinism reading
-over pure randomness — a real investigation should treat "582 under
-GitHub Actions specifically, reliably" as the leading hypothesis, not
-one alternative among several. A `#389` re-run was also triggered;
-if it independently also lands on 582, that is a fourth confirmation
-and should be treated as close to conclusive that this is
-environment-determined, not random — check the board/PR history for
-that result before re-deriving it.
+over pure randomness.
+
+**Fourth data point: `#389`'s own re-run also landed on 582.** Same
+exact value, fourth time:
+
+    tool/net/lfetch.c: covered 582, floor 585
+
+(https://github.com/cosmic-lua/cosmopolitan/actions/runs/34008433083/job/101420996274,
+same head, run 2026-09-06T03:32Z)
+
+4 for 4, across 2 PRs and (at minimum) 2 distinct GitHub-hosted
+runners, all landing on the SAME covered-line count — this is close to
+conclusive that the result is environment-determined under GitHub
+Actions' specific runner conditions, not random flakiness. Treat "582
+under GitHub Actions, reliably" as the leading hypothesis to confirm,
+not one alternative among several.
 
 ## Change
 
@@ -101,9 +110,9 @@ measured (>= 582-592, 11 lines, not 586-592), and stabilize it for
 real this time. No external precondition blocks starting immediately.
 Likely paths (not prescribed — the build should measure and pick, per
 this repo's own measurement-first doctrine), weighted by the CI-side
-evidence above (three runs across two unrelated PRs, all landing on
-exactly 582 — treat the first bullet below as the leading hypothesis,
-not one alternative among several):
+evidence above (four runs across two unrelated PRs, ALL landing on
+exactly 582 — treat the first bullet below as the leading hypothesis
+to confirm, not one alternative among several):
 
 - First, test the CI-contention hypothesis directly before assuming
   pure randomness: reproduce under artificial CPU/IO contention
