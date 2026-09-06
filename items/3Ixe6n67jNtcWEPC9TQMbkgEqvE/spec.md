@@ -74,7 +74,6 @@
 ## agents spawned this pass (reports pending — bounded pass ended before completion)
 - review-qPiX_DdxS-a36d13ac (cosmic-lua/cosmic#1751)
 - review-4mpH_hi6v-a36d13ac (cosmic-lua/work#47)
-- review-QYqs_nEsq-a36d13ac (cosmic-lua/work#46)
 - review-eoMl_RZUo-a36d13ac (cosmic-lua/cosmic#1752)
 - review-iltX_EM90-a36d13ac (cosmic-lua/cosmic#1753)
 - review-duSw_TyDF-a36d13ac (cosmic-lua/work#48)
@@ -82,4 +81,41 @@
 Per orchestrate's "never wait inside a pass", this pass ends before any of these
 report. Their `## <kind> <handle>` sections (transcript-derived, via
 `cosmic _tool/friction.tl <transcript>`) belong in the NEXT pass's reconciliation,
-when each verdict lands and its transcript is available.
+when each verdict lands and its transcript is available. `review-QYqs_nEsq-a36d13ac`
+has since reported — its section follows below.
+
+## review QYqs_nEsq (general-purpose) — accepted, merged, done; 569s, 64 tool calls
+transcript: events=251 tool_calls=64 wall=569s; tokens in=126 out=1507 cache_read=4777072
+cache_create=84588; by tool: Bash=39 Edit=2 Monitor=1 Read=4 TaskStop=2 ToolSearch=3
+mcp__github__actions_list=3 mcp__github__enable_pr_auto_merge=1 mcp__github__merge_pull_request=2
+mcp__github__pull_request_read=7; first edit: call 20; 8 errors, 3 repeated commands.
+
+- goal: run `bin/gitboard` per the brief's literal command. actually happened: `bin/gitboard`
+  does not exist in a fresh clone (only `bin/cosmic`); one failed exec (call 13) plus an `ls
+  bin/` to discover the repo builds `gitboard` via `cmd/gitboard` + `bin/cosmic --make build`.
+  contributed: the review brief (this orchestrator's own hand-written text, since `gitboard
+  brief` doesn't emit reviewer briefs with a build step) says "bin/gitboard ... fetches its
+  own pinned release" as if it ships pre-built. improvement: fix the ORCHESTRATOR's brief
+  template (this session's prompt text) to say `bin/cosmic --make build` then `o/bin/gitboard`,
+  not `bin/gitboard`. A brief-writing fix, not a tool fix — already applied to future briefs
+  this session writes; worth a similar correction in whatever wrote the `review` doctrine text
+  the orchestrator paraphrased from, if it says the same.
+- goal: run `gitboard verdict` against the fresh clone. actually happened: `no item matches
+  <id>` (call 37) because a plain `git clone` only carries `refs/heads/main`/PR refs, not the
+  board's `refs/heads/items/*`/`ended/*`; fixed with `git fetch origin 'refs/*:refs/*'`. cost:
+  1 failed call + 1 fetch. contributed: gitboard's own board-repo data model needs a full-refs
+  fetch that a plain clone doesn't do, and the brief didn't say so. improvement: `gitboard help
+  review` (or the brief text) could name the exact fetch a reviewer's board-repo clone needs.
+- goal: merge PR #46 "directly" per this orchestrator's brief instruction. actually happened:
+  `merge_pull_request` refused twice (calls 40-41: "merge commits not allowed", "must go
+  through merge queue"); fell back to `enable_pr_auto_merge` + polled Actions for the
+  `merge_group` run, ~4 extra calls and real wall-clock waiting. contributed: this
+  orchestrator's brief said "merge it DIRECTLY" for a board-repo PR without knowing the repo
+  now enforces a merge queue (landed by an earlier item, work#44). improvement: the
+  orchestrator's own brief text for board-repo accepts should say "enable auto-merge and
+  confirm the merge queue lands it", matching what `review` doctrine already says for
+  main-repo PRs — this is this session's own paraphrase drifting from repo reality, not a
+  gitboard bug.
+- also: two tool-shape errors unrelated to the brief (Monitor called with an unsupported
+  `untilPattern` param; a bare `sleep 90` blocked by the harness) — agent-side tool usage
+  mistakes, self-corrected, not spec/brief/tool friction.
