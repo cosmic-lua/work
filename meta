@@ -2,7 +2,9 @@ title: bin/gitboard.pin: bump to the work release carrying #48/#55–#59 (worktr
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: f6f470de-dee2-5890-b8f1-db91217d1a73
-reviewer: review-40VG_JWAD-f6f470de
 pr: 1760
+verdict: accept
+verdict_head: e0cc62df9cc995de6c4ce9dc0f89748dfaa25fda
+verdict_spec: 49f730c1d8ec002543176cf92ec1a35dcbf43e54
 builders: f6f470de-dee2-5890-b8f1-db91217d1a73
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
