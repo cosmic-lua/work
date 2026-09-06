@@ -1,0 +1,3 @@
+title: cosmic/format: needs_space collapses '- -1' into '--1', the same bug as tl.generate but in its own token reassembly
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
