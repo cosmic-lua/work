@@ -25,10 +25,11 @@ Your git worktree is already checked out at:
 
 It is on a fresh branch `<BRANCH>`, branched off the latest
 `origin/<BASE_BRANCH>`. Work exclusively inside that directory.
-Bootstrap it first (for cosmic: `bin/cosmic --make fetch`, and
-`export SSL_USE_SYSTEM_CERTS=1` if any TLS call fails with a
-cert-trust error; for cosmopolitan: `make -j$(nproc) o//tool/lua/test`
-to confirm the baseline is green before touching anything).
+It is already bootstrapped: `o/` is warm, the pins are fetched. Do not
+fetch or build before your first edit; `--check types` the files you
+touch, run one test file after each edit, `--make build` only after
+changing a signature other files call, and the full gate once before
+the push.
 
 ## The item
 

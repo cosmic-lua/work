@@ -2,7 +2,8 @@
 -- A builder brief's `<BOUNCE_CONTEXT>` fill for a rework hand-back —
 -- an item that already carries a `request changes` verdict on an open
 -- PR. Split from `_work/brief_test.tl`, which sits against the file
--- cap; every other brief kind and the fresh-pull path stay there.
+-- cap; every other brief kind and the fresh-pull path stay there. The
+-- `<WORKTREE>` fill tests live here for the same reason: room.
 
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -12,6 +13,29 @@ local gh = require("_work.gh")
 local store = require("_work.store")
 local verbs = require("_work.gitverbs")
 local vrd = require("_work.gitverdict")
+
+-- A real `<root>/bin/gitboard` product_root()'s dirname-dirname guess
+-- can verify — a second one, distinct from `_work.brief_test`'s own,
+-- so the two files never race on the same path.
+local WT_ROOT < const > = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "brief-wt-product-root")
+assert(fs.make_dirs(fs.join(WT_ROOT, "bin"))
+  and fs.write(fs.join(WT_ROOT, "bin/gitboard"), ""))
+
+--- Point `GITBOARD_DIR` at `WT_ROOT/o/board` (so `product_root()`
+--- resolves to `WT_ROOT`) for the duration of `f`, restoring whatever
+--- it was before — the same borrow-and-restore `_work.brief_test`'s
+--- own PRODUCT_ROOT tests use.
+--- @param f function(): boolean The test body; returns true when done
+local function with_product_root(f: function(): boolean)
+  local prior = env.get("GITBOARD_DIR")
+  assert(env.set("GITBOARD_DIR", fs.join(WT_ROOT, "o/board")))
+  local ok, err = pcall(f)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else assert(env.set("GITBOARD_DIR", prior)) end
+  if not ok then
+    error(err, 0)
+  end
+end
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -231,4 +255,68 @@ local function test_product_root_falls_back_to_cwd_when_the_guess_is_wrong()
   assert(out:find("cd " .. root .. "\n", 1, true) ~= nil,
     "PRODUCT_ROOT falls back to the cwd ancestor holding bin/gitboard, "
     .. "not the wrong dirname-dirname guess: " .. out)
+end
+
+-- A builder brief's `<WORKTREE>` fills only once `worktree ID` has
+-- actually made the checkout on disk — the same "unfilled until the
+-- board can answer it" rule every other placeholder follows, so a
+-- claim with no worktree yet still emits a usable (if incomplete)
+-- brief rather than a wrong path.
+local function test_builder_brief_fills_worktree_once_it_exists()
+  local s = init_state_repo("brief-wt-builder")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  local id8 = leaf:sub(1, 8)
+  local wt = fs.join(fs.dirname(WT_ROOT), "wt", id8)
+  assert(fs.make_dirs(wt))
+  with_product_root(function(): boolean
+      local code, out = brief_and_capture(s, "builder", leaf)
+      assert(code == 0, "a spec-bearing item still earns its builder brief")
+      assert(out:find(wt, 1, true) ~= nil,
+        "WORKTREE fills once worktree ID made the checkout: " .. out)
+      assert(out:find("<WORKTREE>", 1, true) == nil,
+        "the placeholder is gone: " .. out)
+      return true
+    end)
+end
+
+-- Before `worktree ID` runs, the path does not exist yet, so the
+-- placeholder survives — the verdict line's job is to say so, never
+-- to guess a path nobody made.
+local function test_builder_brief_leaves_worktree_unfilled_before_worktree_id_runs()
+  local s = init_state_repo("brief-wt-builder-missing")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  with_product_root(function(): boolean
+      local code, out = brief_and_capture(s, "builder", leaf)
+      assert(code == 0)
+      assert(out:find("<WORKTREE>", 1, true) ~= nil,
+        "no worktree on disk yet, so the placeholder survives: " .. out)
+      local verdict_line = out:match("[^\n]*$")
+      assert(verdict_line:find("WORKTREE", 1, true) ~= nil,
+        "the verdict line names it as still owed: " .. verdict_line)
+      return true
+    end)
+end
+
+-- A review brief names its OWN worktree path unconditionally: the
+-- reviewer creates it fresh, so there is nothing on disk to check
+-- for, unlike a builder's already-made checkout.
+local function test_review_brief_names_its_own_worktree_path_unconditionally()
+  local s = init_state_repo("brief-wt-review")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  local id8 = leaf:sub(1, 8)
+  local expect = fs.join(fs.dirname(WT_ROOT), "wt", "review-" .. id8)
+  with_product_root(function(): boolean
+      local code, out = brief_and_capture(s, "review", leaf)
+      assert(code == 0, "a PR-bearing item still earns its review brief")
+      assert(out:find(expect, 1, true) ~= nil,
+        "the review brief names its own fresh-checkout path: " .. out)
+      assert(out:find("<WORKTREE>", 1, true) == nil,
+        "the placeholder is gone: " .. out)
+      return true
+    end)
 end

@@ -336,15 +336,17 @@ checkout or push rights to this board repository:
   — `show`'s own default trims the list to the top 8. Say what you
   skipped and why. Never split one item across agents to make it
   faster.
-- One fresh worktree per agent, on the branch `take` names, never
-  detached, and never nested inside another checkout — nesting breaks
-  build gates in both directions, and neither failure names the
-  layout. `take`'s own success line names the branch (the id's first
-  8 characters) and the base to check it out from, so read that line
-  before you create the worktree rather than detaching and re-doing
-  it once the brief repeats the same convention. A fresh worktree
-  bootstraps first; a copied tree drops its stale output directory,
-  or its first gate result is fiction.
+- One fresh worktree per agent: `take ID`, then `worktree ID`, then
+  `brief builder ID`, then spawn. `worktree` resolves ID's repo to a
+  local checkout, branches and adds the worktree beside it — never
+  detached, never nested inside another checkout — and bootstraps it,
+  so nothing between the claim and the brief is done by hand: never
+  `git worktree add` yourself, and never the Agent tool's own
+  `isolation: worktree` option — either one skips the tool's own
+  branch/path-reuse refusal and its bootstrap, handing an agent a
+  checkout nobody warmed. `worktree`'s own verdict line names the
+  path; `brief builder ID` reads the same path back into its
+  "Where to work" section without it being retyped.
 - A builder's worktree of the board repo is linked to the live clone;
   the tool refuses board writes there, so a builder never smoke-tests
   a verb outside the test suite's fixtures.

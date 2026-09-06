@@ -52,6 +52,7 @@ return {
   ["_work/gitverbs.tl"] = {["covered"] = 215, ["total"] = 242},
   ["_work/gitverdict.tl"] = {["covered"] = 121, ["total"] = 142},
   ["_work/gitview.tl"] = {["covered"] = 137, ["total"] = 165},
+  ["_work/gitworktree.tl"] = {["covered"] = 79, ["total"] = 95},
   ["_work/gitwrite.tl"] = {["covered"] = 93, ["total"] = 110},
   ["_work/guidance.tl"] = {["covered"] = 95, ["total"] = 96},
   ["_work/health.tl"] = {["covered"] = 24, ["total"] = 30},

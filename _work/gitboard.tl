@@ -57,6 +57,7 @@ local gitread = require("_work.gitread")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local gitsync = require("_work.gitsync")
+local gitworktree = require("_work.gitworktree")
 local publish = require("_work.publish")
 local rank = require("_work.gitrank")
 local session = require("_work.session")
@@ -322,6 +323,10 @@ local function main(...: string): integer
     local who = session.resolve(d.parsed.values["session"])
     return gitspec.cmd_spec(s, id, file, d.parsed.values["base"] or "", who,
       d.parsed.switches["force"], d.parsed.values["why"] or "")
+  end
+  if d.command == "worktree" then
+    return gitworktree.cmd_worktree(s, id, d.parsed.values["root"] or "",
+      d.parsed.lists["ref"] or {})
   end
   if d.command == "take" then
     local pr = math.tointeger(tonumber(d.parsed.values["pr"] or "0")) or 0
