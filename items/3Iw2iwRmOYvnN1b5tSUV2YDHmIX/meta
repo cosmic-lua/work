@@ -1,0 +1,3 @@
+title: gitboard brief builder: the PR-target line hardcodes cosmic-lua/work instead of substituting the item's own repo field
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/work
