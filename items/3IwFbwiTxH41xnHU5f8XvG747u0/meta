@@ -2,5 +2,6 @@ title: test_fetchstream_edge.lua: test_stream_https makes a live network call to
 parent: 3Il1Qt77tDOEaeo9uuv0isrqZds
 target: cosmic-lua/cosmopolitan
 claim: build-XvG7-0bdbc441
+result: 15f2584adcd13202a994e885174b738b8c296a18
 builders: build-XvG7_47u0-d5f3aa35 build-XvG7-0bdbc441
 speccers: 2f92e512-19fc-5db1-af1f-01086dc185b4 build-XvG7_47u0-d5f3aa35
