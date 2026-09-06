@@ -31,3 +31,9 @@ first line in the PR body.
 
 No change to `bin/gitboard` (the trust-root script), no other pin, no
 docs.
+
+## Access
+
+cosmic-lua/work, read only: the release asset download
+(`releases/download/2026-09-06-76b510b/{gitboard,SHA256SUMS}`) the
+pin names, and nothing else.
