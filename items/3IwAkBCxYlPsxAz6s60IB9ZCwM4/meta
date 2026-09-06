@@ -1,3 +1,4 @@
 title: review brief: request-changes posts a plain PR comment, so bounce_context() never fires
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
+resolution: not-planned
