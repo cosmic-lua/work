@@ -19,6 +19,17 @@ correct where it lives; it just is not restated where the loop's step
 order is enumerated, which is the one place a session under time
 pressure actually looks.
 
+Two further independent recurrences since this item was filed, both
+under `/work 9 --routine`: «saSF_vgis» (friction: 2026-09-05 work9c)
+caught it only while writing the entry ("opened this log late — after
+`sync`, `next`, and one `spec` write, not before"), and «wDH9_Z8Zx»
+(friction: 2026-09-06 work9) the very next day, same slip, same
+self-diagnosis ("caught only while filing it at the end of the
+pass"). That's four independent occurrences of the identical failure
+mode now on record (`FcWz_FClp`, the 2026-09-04 repeat, `saSF_vgis`,
+`wDH9_Z8Zx`) with zero fix landings — the countermeasure below has
+been proposed at least twice and not yet applied.
+
 ## Change
 
 `skills/work/SKILL.md`, in the `--routine` section's friction-log
