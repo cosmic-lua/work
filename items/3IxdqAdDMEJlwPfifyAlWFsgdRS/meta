@@ -2,6 +2,8 @@ title: take: a pending diff whose CI is still running cannot outrank a todo pull
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-lWFs_gdRS-f6f470de
-reviewer: review-lWFs_gdRS-f6f470de
 pr: 52
+verdict: accept
+verdict_head: 66bc46d3b67a9864996e0f0fe08efa0f05c1bc18
+verdict_spec: e1f056208350628610ea515662dd5d8ae675f926
 builders: build-lWFs_gdRS-f6f470de
