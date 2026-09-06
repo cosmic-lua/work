@@ -1,3 +1,4 @@
 title: _cli/rewrite.tl: a --rewrite verb over cosmic.ast, multi-file in one process
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
+speccers: f6f470de-dee2-5890-b8f1-db91217d1a73

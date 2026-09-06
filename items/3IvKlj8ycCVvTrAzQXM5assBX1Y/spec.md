@@ -38,6 +38,17 @@ hits (comment-loss) to stderr with file:position, per the mechanism
 `cosmic.ast.rewrite` already implements — this verb does not
 re-implement that decision, just surfaces it.
 
+Two small fixes ride along because this item touches the same files
+(measured 2026-09-06, after cosmic#1765): `cosmic/ast/init_example.tl`
+indexes `captures["CMD"]` after matching `os.execute($CMD)`, but
+`cosmic/ast/match.tl`'s `caps[name] = pv["tk"]` keys captures by the
+DESUGARED token (`"_CMD"`), so the example's print never runs and the
+example ratchet does not notice (it checks that an example runs, not
+what it prints). Fix the index to `"_CMD"`, add an `Example_rewrite`
+exercising `cosmic.ast.rewrite` on one hit, and add one sentence to
+`match.tl`'s `match` doc comment: "capture keys carry the desugared
+`_` prefix (`$CMD` binds as `_CMD`)".
+
 ## Non-goals
 
 No multi-pass/fixpoint application in this item (depends on a fixpoint
