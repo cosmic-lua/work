@@ -172,24 +172,54 @@ local function test_headroom_lines_silent_with_room_to_spare()
 end
 
 -- A Change section naming a path this process's own tree does not
--- have (a product repo's file, read from the board's own checkout)
--- warns about nothing: the tree it can honestly measure is the only
--- one it claims to.
-local function test_headroom_lines_silent_for_an_unreachable_path()
+-- have (a product repo's file, read from the board's own checkout, or
+-- a plain typo) is exactly the gap a spec bar cannot mechanically
+-- refuse — `headroom_lines` now names it rather than staying silent.
+local function test_headroom_lines_flags_an_absent_path()
   local body = "## Change\nTouch `some/other/repo/big_file.tl`.\n"
   local lines = overlap.headroom_lines(body)
-  assert(#lines == 0, table.concat(lines, "; "))
+  assert(#lines == 1, table.concat(lines, "; "))
+  assert(lines[1] == "absent: `some/other/repo/big_file.tl`"
+    .. " does not exist in the tree", lines[1])
 end
 
 -- `fs.is_present` passes a directory (`paths_named` keeps it), but
--- `fs.read` cannot read one as text — the gap `line_count`'s own nil
--- check exists for, distinct from a path missing outright.
-local function test_headroom_lines_silent_for_an_unreadable_present_path()
+-- `fs.read` cannot read one as text — `line_count`'s error slot now
+-- rides along as an `unreadable:` line, distinct from a path missing
+-- outright.
+local function test_headroom_lines_flags_an_unreadable_present_path()
   local path = fs.join(fixture.tmpdir, "overlap-headroom.tl")
   assert(fs.make_dirs(path))
   local body = ("## Change\nTouch `%s`.\n"):format(path)
   local lines = overlap.headroom_lines(body)
-  assert(#lines == 0, table.concat(lines, "; "))
+  assert(#lines == 1, table.concat(lines, "; "))
+  assert(lines[1]:find("unreadable: `" .. path .. "`: ", 1, true), lines[1])
+end
+
+-- Every path-shaped Change-section token that names no real file is
+-- named `absent: ...` — including one under `o/`, the build output
+-- directory a builder loses time to when a spec names a path the
+-- build does not actually make (cosmic#1752's `o/embed/cosmic/.docs/`
+-- vs. the path the build made instead). A present path is named by
+-- neither.
+local function test_headroom_lines_names_absent_paths_including_under_o()
+  local present = fs.join(fixture.tmpdir, "overlap-present.tl")
+  write_n_lines(present, 5)
+  local absent = fs.join(fixture.tmpdir, "overlap-absent-nowhere.tl")
+  local absent_o = "o/overlap-absent-nowhere-under-o.tl"
+  local body = ("## Change\nTouch `%s`, `%s`, and `%s`.\n"):format(
+    present, absent, absent_o)
+
+  local lines = overlap.headroom_lines(body)
+  assert(#lines == 2, table.concat(lines, "; "))
+  assert(lines[1] == ("absent: `%s` does not exist in the tree"):format(absent),
+    lines[1])
+  assert(lines[2] == ("absent: `%s` does not exist in the tree"):format(absent_o),
+    lines[2])
+  for _, line in ipairs(lines) do
+    assert(not line:find(present, 1, true),
+      "the present path is not named: " .. line)
+  end
 end
 
 -- `show` prints the same `tight:` line for a real item whose spec

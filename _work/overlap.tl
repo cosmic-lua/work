@@ -14,16 +14,20 @@
 --- this module does no store I/O of its own; the `cmd_*` callers own
 --- that, per the read-verb convention the rest of `_work` follows.
 ---
---- `headroom_lines` reuses the same `paths_named` extraction for a
---- second, unrelated question about the same Change section: not
---- whether another item also names a path, but whether the path
---- itself has room left under the 500-line cap `--check lint`
---- enforces. A file already within `WARN_MARGIN` lines of `FILE_CAP`
---- is a warning, never a refusal — the same `--force`-free bar every
---- other line in `overlap.lines` already is — surfaced on `show` so a
---- refiner or builder plans a repacking or split before pulling
---- rather than discovering the tightness live, mid-implementation, the
---- way `wc -l` and `--check lint` otherwise would.
+--- `headroom_lines` reuses `raw_paths_named` — the unfiltered sibling
+--- of `paths_named` — for second and third, unrelated questions about
+--- the same Change section: not whether another item also names a
+--- path, but whether the token names a real file at all, and if so
+--- whether that file has room left under the 500-line cap `--check
+--- lint` enforces. A `## Change` naming a path this tree does not
+--- have is a spec bug a spec bar cannot mechanically refuse (the bar's
+--- "measured, not inferred" rule covers counts and behaviour, not path
+--- existence), so it is a warning, never a refusal — the same
+--- `--force`-free bar every other line in `overlap.lines` already is —
+--- surfaced on `show` so a refiner sees a wrong path, or a builder or
+--- refiner sees a file already tight against the cap, before either
+--- pays for it live, mid-implementation, the way `wc -l` and `--check
+--- lint` otherwise would.
 local fs = require("cosmic.fs")
 local tail = require("_work.tail")
 
@@ -82,6 +86,25 @@ local function change_section(spec_text: string): string
 end
 
 --- Every backtick-quoted, path-looking token in `spec_text`'s `##
+--- Change` section, present in the tree or not — the raw extraction
+--- `paths_named` and `headroom_lines` each filter differently.
+--- Deduplicated, first-seen order.
+--- @param spec_text string An item's spec sidecar body
+--- @return {string} The path-shaped tokens its Change section names
+local function raw_paths_named(spec_text: string): {string}
+  local change = change_section(spec_text)
+  local seen: {string: boolean} = {}
+  local out: {string} = {}
+  for token in change:gmatch("`([^`\n]+)`") do
+    if looks_like_path(token) and not seen[token] then
+      seen[token] = true
+      out[#out + 1] = token
+    end
+  end
+  return out
+end
+
+--- Every backtick-quoted, path-looking token in `spec_text`'s `##
 --- Change` section that names a file actually present in the tree —
 --- the filter that keeps a plausible-looking token (a stale path from
 --- a rewritten plan, a path in prose about a FUTURE file) from
@@ -89,12 +112,9 @@ end
 --- @param spec_text string An item's spec sidecar body
 --- @return {string} The paths its Change section names
 local function paths_named(spec_text: string): {string}
-  local change = change_section(spec_text)
-  local seen: {string: boolean} = {}
   local out: {string} = {}
-  for token in change:gmatch("`([^`\n]+)`") do
-    if looks_like_path(token) and not seen[token] and fs.is_present(token) then
-      seen[token] = true
+  for _, token in ipairs(raw_paths_named(spec_text)) do
+    if fs.is_present(token) then
       out[#out + 1] = token
     end
   end
@@ -104,39 +124,54 @@ end
 --- `path`'s line count the way `wc -l` counts it — newlines, not
 --- logical lines — the same measure the file-length lint reads, so a
 --- count here never disagrees with what `--check lint` would say.
---- nil when `path` cannot be read: an item's Change section can name a
---- file in another repo entirely (`cosmic-lua/cosmic`, say), and this
---- process's own tree is the only one it can honestly measure.
+--- nil when `path` cannot be read, with the `fs.read` error alongside
+--- (a present path can still be unreadable — a directory, say).
 --- @param path string A path already known to be present (`fs.is_present`)
 --- @return integer | nil The newline count, nil when unreadable
-local function line_count(path: string): integer | nil
-  local text = fs.read(path)
+--- @return string The `fs.read` error, "" on success
+local function line_count(path: string): integer | nil, string
+  local text, rerr = fs.read(path)
   if text == nil then
-    return nil
+    return nil, rerr
   end
   local n = 0
   for _ in text:gmatch("\n") do
     n = n + 1
   end
-  return n
+  return n, ""
 end
 
---- One `tight: ...` line per Change-section path already within
---- `WARN_MARGIN` lines of `FILE_CAP`, in `paths_named` order. A path
---- not present in the tree this process runs from is silently skipped
---- (`paths_named` already filters to real paths, and `line_count`
---- would return nil for it either way) — the product tree is checked
---- when it is reachable, and nothing is claimed when it is not.
+--- One line per path-shaped token in `body`'s Change section that
+--- needs a refiner's or builder's attention before a pull, in
+--- `raw_paths_named` order: `absent: ...` for a token that names no
+--- real file anywhere under this process's own tree (`o/` included —
+--- a spec naming a build output must name the one the build actually
+--- makes), `unreadable: ...` for a present path `fs.read` still cannot
+--- open (a directory, say), and `tight: ...` for a present, readable
+--- path already within `WARN_MARGIN` lines of `FILE_CAP`. A path this
+--- process's own tree cannot reach at all — an item naming a file in
+--- another repo entirely (`cosmic-lua/cosmic`, say) while this process
+--- runs from `cosmic-lua/work` — reads as absent the same way a
+--- genuine typo would: this process has no other tree to tell the two
+--- apart with, and a refiner seeing the line either confirms the path
+--- or points the builder at the right repo before either pays for the
+--- gap live.
 --- @param body string An item's spec sidecar body
 --- @return {string} The lines, possibly empty
 local function headroom_lines(body: string): {string}
   local out: {string} = {}
-  for _, path in ipairs(paths_named(body)) do
-    local n = line_count(path)
-    if n ~= nil and FILE_CAP - n <= WARN_MARGIN then
-      out[#out + 1] = ("tight: `%s` is %d/%d lines, %d left before the cap —"
-        .. " plan a repacking or split before pulling"):format(
-        path, n, FILE_CAP, FILE_CAP - n)
+  for _, path in ipairs(raw_paths_named(body)) do
+    if not fs.is_present(path) then
+      out[#out + 1] = ("absent: `%s` does not exist in the tree"):format(path)
+    else
+      local n, rerr = line_count(path)
+      if n == nil then
+        out[#out + 1] = ("unreadable: `%s`: %s"):format(path, rerr)
+      elseif FILE_CAP - n <= WARN_MARGIN then
+        out[#out + 1] = ("tight: `%s` is %d/%d lines, %d left before the cap —"
+          .. " plan a repacking or split before pulling"):format(
+          path, n, FILE_CAP, FILE_CAP - n)
+      end
     end
   end
   return out
