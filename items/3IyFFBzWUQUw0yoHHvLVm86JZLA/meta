@@ -2,6 +2,8 @@ title: bin/gitboard.pin: bump to the work release carrying #60–#62 (take --ope
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-Vm86_JZLA-f6f470de
-reviewer: review-Vm86_JZLA-f6f470de
 pr: 1767
+verdict: accept
+verdict_head: fcfaf15b6f165f957de26b52e50057cf706016c0
+verdict_spec: 81a8cfc5a8351c08ae44e7a6f216ca5b27edaec8
 builders: build-Vm86_JZLA-f6f470de
