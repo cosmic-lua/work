@@ -188,6 +188,28 @@ local function ci_refusal(s: store.Store, it: item.Item, id8: string):
     or "CI has already concluded failure on this head"), ""
 end
 
+--- Whether a diff is small and mechanical enough to earn
+--- `brieftext_review.REVIEW_SCRIPT`'s numbered script instead of
+--- `REVIEW`'s full adversarial prompt: every changed `.tl` file is a
+--- `*_test.tl` file (there may be none at all), or the diff totals
+--- fewer than 20 changed lines — either alone is enough.
+--- @param files {string} The PR's changed file paths
+--- @param additions integer The PR's added line count
+--- @param deletions integer The PR's removed line count
+--- @return boolean True when the numbered script applies
+local function is_mechanical_diff(files: {string}, additions: integer,
+    deletions: integer): boolean
+  if additions + deletions < 20 then
+    return true
+  end
+  for _, f in ipairs(files) do
+    if f:match("%.tl$") ~= nil and f:match("_test%.tl$") == nil then
+      return false
+    end
+  end
+  return true
+end
+
 --- The `<BOUNCE_CONTEXT>` a rework hand-back fills into a builder
 --- brief: the item's own most recent `request changes` verdict on an
 --- open PR, quoting the latest CHANGES_REQUESTED review's finding
@@ -287,7 +309,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   -- A review judges a handover, and there are two: a PR for a diff,
   -- a research result for a spec. Which template the brief is comes
-  -- from the item, never from the caller.
+  -- from the item, never from the caller — and a PR handover picks
+  -- again, between the full adversarial `REVIEW` and the numbered
+  -- `REVIEW_SCRIPT`, by the diff's own shape.
   local head_sha = ""
   if kind == "review" then
     if (it.result or "") ~= "" then
@@ -303,6 +327,12 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
         return gate.verdict_line("brief", false, refusal)
       end
       head_sha = sha
+      local p, _perr = gh.pull(s, it.pr, it.repo)
+      local files, _ferr = gh.get_files(s, it.pr, it.repo)
+      if p ~= nil and files ~= nil
+      and is_mechanical_diff(files, p.additions, p.deletions) then
+        template = brieftext_review.REVIEW_SCRIPT
+      end
     end
   end
   local label = mint_label(kind, tail.bare(it.id))

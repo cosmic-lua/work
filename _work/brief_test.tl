@@ -42,23 +42,21 @@ local function fixture_runs(state: string): {review.CheckRun}
   return {}
 end
 
---- Stand `gh.head_checks`, `gh.pull` and `gh.checks` in for a fixed
---- PR fixture for the duration of `f`, restoring all three even when
---- `f` fails an assertion — a fixture PR in each of the four states,
---- the way `_work.gitreview_test`'s own `with_ci_state` covers `take`.
---- `gh.pull`/`gh.checks` cover the handover-recording path (`take
---- --pr`, which reads through `gitready.handover_refusal`); `_work.gh`'s
---- own `head_checks` is a closure over its OWN `pull`/`checks` upvalues
---- rather than the `gh` table's fields, so faking those two does not
---- reach it — it needs its own stub, given the same fixture data.
+--- Stand `gh.head_checks`, `gh.pull`, `gh.checks` and `gh.get_files`
+--- in for a fixed PR fixture for the duration of `f`, restoring all
+--- four even when `f` fails an assertion — a fixture PR in each of
+--- the four states, the way `_work.gitreview_test`'s own
+--- `with_ci_state` covers `take`. `_work.gh`'s own `head_checks` is a
+--- closure over its OWN `pull`/`checks` upvalues rather than the `gh`
+--- table's fields, so faking those two does not reach it — it needs
+--- its own stub, given the same fixture data.
 --- @param state string The state `head_checks` reports
 --- @param sha string The fixture PR's head sha
 --- @param f function(): boolean The test body; returns true when done
 local function with_ci_fixture(state: string, sha: string,
     f: function(): boolean)
-  local real_head_checks = gh.head_checks
-  local real_pull = gh.pull
-  local real_checks = gh.checks
+  local real_head_checks, real_pull, real_checks, real_get_files
+  = gh.head_checks, gh.pull, gh.checks, gh.get_files
   gh.head_checks = function(_s: store.Store, _pr: integer, _repo: string | nil):
     gh.HeadChecks | nil, string
     return {state = state, head_sha = sha, runs = fixture_runs(state)}, ""
@@ -66,19 +64,20 @@ local function with_ci_fixture(state: string, sha: string,
   gh.pull = function(_s: store.Store, number: integer, _repo: string | nil):
     review.Pull | nil, string
     return {number = number, draft = false, merged = false, body = "",
-      head_sha = sha, base = "", state = "open", merge_sha = ""}, ""
+      head_sha = sha, base = "", state = "open", merge_sha = "",
+      additions = 120, deletions = 30}, ""
   end
   gh.checks = function(_s: store.Store, _sha: string, _repo: string | nil):
     {review.CheckRun} | nil, string
     return fixture_runs(state), ""
   end
-  local ok, err = pcall(f)
-  gh.head_checks = real_head_checks
-  gh.pull = real_pull
-  gh.checks = real_checks
-  if not ok then
-    error(err, 0)
+  gh.get_files = function(_s: store.Store, _n: integer, _r: string | nil): {string} | nil, string
+    return {"cosmic/example.tl"}, ""
   end
+  local ok, err = pcall(f)
+  gh.head_checks, gh.pull, gh.checks, gh.get_files
+  = real_head_checks, real_pull, real_checks, real_get_files
+  if not ok then error(err, 0) end
 end
 
 --- Pin the session identity `_work.session` derives for the duration

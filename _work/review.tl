@@ -35,6 +35,13 @@ local record Pull
   --- merge endpoint's own refusal (branch protection, a merge queue)
   --- has no REST equivalent.
   node_id: string
+  --- Lines added, GitHub's own count.
+  additions: integer
+  --- Lines removed, GitHub's own count. `additions + deletions` is
+  --- the diff's total size — what `brief`'s review selection reads to
+  --- tell a mechanical diff from one that needs the full adversarial
+  --- review.
+  deletions: integer
 end
 
 --- One CI check on a head commit, reduced to what a gate reads.
