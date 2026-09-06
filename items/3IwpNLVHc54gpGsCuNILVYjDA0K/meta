@@ -5,4 +5,5 @@ pr: 1746
 verdict: accept
 verdict_head: db19302d57a0fbb426800ed851087beafa001254
 verdict_spec: 8638c4850c6aed6c6176a95b287944c8f520509b
+resolution: completed
 builders: build-LVYj_DA0K-748ecc95
