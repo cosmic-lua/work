@@ -285,3 +285,36 @@ local function test_new_refuses_but_show_still_works_in_a_linked_worktree()
   local show_code, show_out = gitboard_and_capture("show", "--dir", linked)
   assert(show_code == 0, "show still works in a linked worktree: " .. show_out)
 end
+
+-- A plain `.git`-less directory NESTED under a linked worktree is not
+-- itself linked to anything: `git rev-parse`, run from a directory
+-- with no `.git` of its own, walks UP to whatever repository happens
+-- to be an ancestor — here, the linked worktree's own — which is not
+-- `dir`'s own shape and must never drive the refusal. This is exactly
+-- what a coverage-instrumented TEST_TMPDIR nested inside this very
+-- checkout hits (`_work/fixture.tl`'s own `init_state_repo`, which
+-- every other verb's tests build on) — a plain, unlinked CI checkout
+-- would never exercise it. `linked` is an absolute path: `worktree
+-- add` resolves a relative one against `git`'s own cwd (`primary`
+-- here), not against `tmpdir`.
+local function test_init_and_new_proceed_in_a_git_less_dir_under_a_linked_worktree()
+  local primary = fs.join(tmpdir, "worktree-nested-primary")
+  local linked = fs.join(tmpdir, "worktree-nested-linked")
+  local nested = fs.join(linked, "not-a-repo-yet")
+  assert(fs.remove_all(primary))
+  assert(fs.remove_all(linked))
+  assert(store.init_repo(primary))
+  git(primary, {"worktree", "add", "-q", "--detach", linked, "board/format"})
+  assert(fs.make_dirs(nested))
+  assert(not fs.is_present(fs.join(nested, ".git")),
+    "the nested directory starts with no .git of its own")
+
+  local ok, err = store.init_repo(nested)
+  assert(ok, "init_repo proceeds under a linked worktree when dir itself has "
+    .. "no .git of its own: " .. tostring(err))
+
+  local new_code, new_out = gitboard_and_capture(
+    "new", "an ordinary title", "--dir", nested)
+  assert(new_code == 0,
+    "new proceeds too, once nested has become a real repo of its own: " .. new_out)
+end
