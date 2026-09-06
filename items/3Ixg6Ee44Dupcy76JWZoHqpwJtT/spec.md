@@ -28,6 +28,16 @@ make it; pick, and put the alternative in `## Non-goals` or nowhere."
 `_work/doctrine_test.tl`: the bar topic contains "one mechanism, never
 two".
 
+Second sentence, same paragraph, from three wrong-location specs this pass
+(«eoMl_RZUo»: an index path that does not exist; «duSw_TyDF»: argv parsing
+placed in `gitshow.tl` when it lives in `gitboard.tl`; «lWFs_gdRS»: a predicate
+named in `gittake.tl` that lives in `gitgate.tl` — ~10 minutes each): "A
+Change that names a function or a string quotes the `grep -n` hit that
+places it, and a state or enum literal quotes the vocabulary the schema
+or record declares — a location read from memory is the wrong turn that
+feels obviously right." `_work/doctrine_test.tl`: the bar topic also
+contains "quotes the `grep -n` hit".
+
 ## Non-goals
 
 No tool check — a fork is prose the bar cannot parse; this is the
