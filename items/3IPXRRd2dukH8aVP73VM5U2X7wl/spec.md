@@ -17,6 +17,34 @@ two shared helpers). So this slice's remaining cost is whatever the
 sibling sweeps leave behind, which is why it is blocked on all four of
 them and runs LAST.
 
+A break-and-recover upgrade experiment (2026-09-05, ten agents
+upgrading a five-file consumer across five deliberate `cosmic.*`
+breaks) sizes what this slice buys, in two measured facts. First,
+retypings dominate real public-surface breaks, and the checker sees
+none of the nil-widening ones: over the tree's own history (a surface
+extractor comparing every `record` field of every public `cosmic/**.tl`
+across three two-week snapshots), 30 breaking changes to public names
+in three weeks — 0 modules removed, 2 functions removed, 8 record
+fields removed, 20 retyped. Seven of those 20 widen a slot to admit nil
+or add a fallible return where there was none (`rand.choice: any → T |
+nil`, `plan.validate_net: string → string | nil`,
+`zip.Archive.close: () → boolean, string`, `serve_forever: () →
+boolean, string`, `rules.parse_rule`, `SuffixEntry.port`,
+`ForwardSpec.inject_name`) — every one silent today for a caller that
+assigns, concatenates, passes, or ignores the result. Second, the
+silence is total, not partial: a probe against the pinned release's
+checker — a function retyped from `string` to `string | nil, string`,
+used in a concatenation and as a `local x: string` initializer —
+reports `Type check passed` at both sites. In the experiment,
+`string.shell_quote` underwent exactly this retyping; `--make check`
+on the consumer reported its four other deliberate breaks and nothing
+for this one, and under the variant whose only remedy was a hint
+attached to checker errors, 0 of 2 agents narrowed the call — the two
+that found it did so by scanning source for the name, not through the
+checker. `D10`'s "honest types make breakage loud" holds today only
+for renames, removals, and record-field changes; this slice is what
+extends it to retypings (full data and probe transcript: `55xy_ILjS`).
+
 ## Change
 
 Carry the strict mode as a NEW patch group in `3p/tl/tl_patch.tl`,
@@ -51,7 +79,18 @@ Then: flip `cosmic/teal_narrowing_test.tl`'s
 `test_nil_union_is_admitted_outside_an_index` to its opposite — the
 boundary moves, so the test that pins it moves with it, in this slice
 and no other — and collect the doctrine dividend the census priced.
-Both passages are re-measured 2026-08-26:
+
+Also add a new, upgrade-shaped case to the same file, distinct from the
+index-shaped flip above: a function retyped from `T` to `T | nil,
+string` (mirroring `string.shell_quote`'s real retyping in the
+experiment that sized this slice), used both in a concatenation and as
+the initializer of a `local x: T` — both refused with `STRICTNIL` at
+the two sites. This is new coverage, not a moved boundary: it is the
+consumer-side case the binary-operator hinge above exists to close,
+and the one the upgrade experiment found totally silent under today's
+checker (`55xy_ILjS`).
+
+Both of the doc passages below are re-measured 2026-08-26:
 
 - `AGENTS.md:187-190`, the "And what the checker never DEMANDS: an
   unnarrowed `T | nil` passes into a non-nil parameter, a declared
@@ -98,7 +137,10 @@ Run from the repo root:
 - `bin/cosmic --make ci` ends `ci: PASS` — which is the whole point:
   the tree compiles under the strict checker.
 - `bin/cosmic --make test cosmic/teal_narrowing_test.tl` ends
-  `test: PASS`, with the admitting test replaced by its refusing twin.
+  `test: PASS`, with the admitting test replaced by its refusing twin
+  AND the new upgrade-shaped retyping case (a `T | nil, string`
+  retyping refused at a concatenation and at a `local x: T`
+  initializer, both `STRICTNIL`) passing.
 - `bin/cosmic --make clean && bin/cosmic --make fetch && bin/cosmic
   --make build` succeeds from a clean `o/`, proving every anchor matches
   the pin exactly once — and note that a strict `o/bin/cosmic` cannot
