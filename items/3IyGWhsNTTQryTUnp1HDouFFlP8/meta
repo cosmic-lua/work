@@ -1,0 +1,3 @@
+title: coverage: --make coverage --min PCT [--min-file PCT] replaces the .cosmic-coverage ratchet and its --baseline
+parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
+target: cosmic-lua/cosmic
