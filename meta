@@ -2,4 +2,5 @@ title: 4zwL_sOKR: blocked on gentype's @type generic-truncation bug — resume f
 parent: 3Iw4Klc904kc0U3nSke4zwLsOKR
 target: cosmic-lua/cosmic
 claim: build-LVYj_DA0K-748ecc95
+pr: 1746
 builders: build-LVYj_DA0K-748ecc95
