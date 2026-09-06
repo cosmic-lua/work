@@ -83,33 +83,35 @@ worktree.
 
 ## Recording your verdict
 
-Three verdicts: `accept`, `request-changes`, `reject`. `bin/gitboard`
-in the product checkout fetches its own pinned release; this review
-is claimed under session `<REVIEW_SESSION>` — you MUST use that exact
-string. Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches
-GitHub.
+`verdict` performs the GitHub side of your verdict itself — you touch
+no GitHub tool of your own. CI is read from `gitboard show <ITEM_ID>`
+(the board's own head-check observation); read the diff with `git
+fetch origin <branch>` in your own checkout at `<WORKTREE>`.
+`bin/gitboard` in the product checkout fetches its own pinned release;
+this review is claimed under session `<REVIEW_SESSION>` — you MUST use
+that exact string. Export SSL_USE_SYSTEM_CERTS=1 before `verdict`,
+which reaches GitHub on your behalf.
 
 ```
 cd <PRODUCT_ROOT>
 export SSL_USE_SYSTEM_CERTS=1
-bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
+bin/gitboard verdict <ITEM_ID> accept \
+  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+bin/gitboard verdict <ITEM_ID> request-changes --body FILE \
+  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+bin/gitboard verdict <ITEM_ID> reject --body FILE \
   --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
 ```
 
-Then, by verdict:
-- accept: a main-repo PR lands by enabling auto-merge (squash),
-  never by merging directly. Enable it with whatever GitHub reach the
-  session has: the `gh` CLI when present, otherwise the GitHub MCP
-  tools (`mcp__github__enable_pr_auto_merge`, loaded with ToolSearch).
-  Do NOT call `gitboard done` — the item ends only once the merge is
-  confirmed, which is the orchestrator's job.
-- request-changes: post the concrete gaps, quoted with file:line, as
-  a PR comment. Do not push a fix yourself — the builder reworks on
-  the same PR.
-- reject: close the PR with a comment explaining what was
-  fundamentally wrong. If the approach failed because a decision is
-  open, tell the orchestrator in your report so the question is
-  filed as a child of the item and the item dropped.
+Run exactly the one line matching your judgment: accept lands the PR
+itself (or arms auto-merge when GitHub refuses a direct merge); the
+middle and reject kinds need `--body FILE` — the concrete gaps, or
+what was fundamentally wrong, quoted with file:line, which `verdict`
+posts as the formal review. Do NOT call `gitboard done` after an
+accept — the item ends only once its merge completes, which is the
+orchestrator's job. If a reject failed because a decision is open,
+tell the orchestrator in your report so the question is filed as a
+child of the item and the item dropped.
 
 ## Final report
 

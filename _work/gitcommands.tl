@@ -169,11 +169,25 @@ local CSPEC: flags.CommandSpec = {
           {long = "force", help = "drop another session's live claim"}}}},
     {name = "verdict", summary = "record a review verdict on a PR or a "
       .. "research handover (`take --result`); its effect follows",
-      spec = {usage = "ID KIND [options]", flags = {dir_flag(),
+      spec = {usage = "ID KIND [options]",
+        summary = "record a review verdict on a PR or a research handover "
+        .. "(`take --result`).\n\n"
+        .. "Against a real PR, `verdict` performs the GitHub side itself: "
+        .. "an accept lands the PR\n(a squash merge, falling back to "
+        .. "auto-merge when GitHub refuses one directly);\na `request-"
+        .. "changes` or `reject` posts the formal review `--body FILE` "
+        .. "carries,\nand a reject then closes the PR. A reviewer runs "
+        .. "this command and touches no\nGitHub tool of its own.",
+        flags = {dir_flag(),
           {long = "pr", arg = "N", help = "the PR the verdict judges; a "
             .. "research handover has none — omit --pr and --head, the "
             .. "verdict judges the spec revision the handover recorded"},
           {long = "head", arg = "SHA", help = "head commit it judges"},
+          {long = "body", arg = "FILE", help = "the formal review's body; "
+            .. "required for request-changes and reject against a PR"},
+          {long = "no-land", help = "accept only: skip the GitHub merge/"
+            .. "auto-merge write and record only, for a repo the token "
+            .. "cannot merge"},
           {long = "session", arg = "SESSION",
             help = "the reviewing session; it rides in the commit "
             .. "subject. Omit to derive it from the environment"},
