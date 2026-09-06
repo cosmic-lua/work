@@ -120,11 +120,13 @@ end
 --- @param children_lines {string} Its own open children, rank order,
 --- one rendered line each (`_work.read.children`)
 --- @param overlaps {string} `_work.overlap`'s pre-rendered lines, possibly empty
+--- @param headroom {string} `_work.overlap.headroom_lines`'s pre-rendered
+--- lines, possibly empty — a warning, never a `take` refusal
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function show_report(it: item.Item, role: string, rank_line: string,
     state: string, body: string, events: {publish.Event}, problems: {string},
-    children_lines: {string}, overlaps?: {string}): {string}, string
+    children_lines: {string}, overlaps?: {string}, headroom?: {string}): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
       it.id)}
   out[#out + 1] = ("role: %s"):format(role)
@@ -204,6 +206,13 @@ local function show_report(it: item.Item, role: string, rank_line: string,
   for _, line in ipairs(overlaps or {}) do
     out[#out + 1] = line
   end
+  -- A Change-section path already tight against the 500-line cap is a
+  -- warning, not a `bar:` refusal — a refiner or builder plans a
+  -- repacking or split before pulling instead of hitting the cap live,
+  -- mid-implementation (see `_work.overlap.headroom_lines`).
+  for _, line in ipairs(headroom or {}) do
+    out[#out + 1] = line
+  end
   if body ~= "" then
     out[#out + 1] = "--- spec ---"
     out[#out + 1] = (body:gsub("\n$", ""))
@@ -265,6 +274,7 @@ local function cmd_show(s: store.Store, id: string): integer
   end
   local problems: {string} = {}
   local overlaps: {string} = {}
+  local headroom: {string} = {}
   local body = ""
   if item.is_open(it) then
     -- Every OTHER open item's id, one query against the database
@@ -286,6 +296,7 @@ local function cmd_show(s: store.Store, id: string): integer
     body = bodies[it.id] or ""
     problems = gitready.ready_problems(s, it, body)
     overlaps = overlap.lines(it.id, bodies)
+    headroom = overlap.headroom_lines(body)
   else
     body = store.read_spec(s, id)
   end
@@ -313,7 +324,7 @@ local function cmd_show(s: store.Store, id: string): integer
     end
   end
   local lines, verdict = show_report(it, role, rank_line, state, body, events,
-    problems, children_lines, overlaps)
+    problems, children_lines, overlaps, headroom)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -326,7 +337,7 @@ local record gitshow
   show_report: function(it: item.Item, role: string, rank_line: string,
   state: string, body: string,
   events: {publish.Event}, problems: {string}, children_lines: {string},
-  overlaps?: {string}): {string}, string
+  overlaps?: {string}, headroom?: {string}): {string}, string
   cmd_show: function(s: store.Store, id: string): integer
 end
 
