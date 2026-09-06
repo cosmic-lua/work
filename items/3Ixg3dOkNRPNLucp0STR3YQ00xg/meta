@@ -1,0 +1,2 @@
+title: gitboard brief's PRODUCT_ROOT assumes GITBOARD_DIR = <root>/o/board, wrong under the sibling-checkout bootstrap
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
