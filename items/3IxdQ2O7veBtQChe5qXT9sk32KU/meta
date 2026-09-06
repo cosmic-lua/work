@@ -1,9 +1,9 @@
 title: gitboard show: a doing row under review prints its reviewer, so a second orchestrator skips it without a refused take
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-T9sk_32KU-f6f470de
 pr: 57
 verdict: accept
 verdict_head: b4e2ce7b21311f4b5eb92a706b19ee1805347c59
 verdict_spec: 6123b52796dae69a6f55b44ef4528aa65a71501d
+resolution: completed
 builders: build-T9sk_32KU-f6f470de
