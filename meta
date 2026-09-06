@@ -2,5 +2,6 @@ title: gentype_defs.tl: break cosmic/zip.tl's circular dependency in the zip typ
 parent: 3Iw35aAOcqioyBzEXxfHkalOAFy
 target: cosmic-lua/cosmic
 claim: build-0oBN_Fa6X-748ecc95
+reviewer: review-0oBN_Fa6X-748ecc95
 pr: 1747
 builders: build-0oBN_Fa6X-fe8c92c8 748ecc95-0ca9-5962-a2f3-2fff9cd8d874 build-0oBN_Fa6X-748ecc95
