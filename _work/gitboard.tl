@@ -237,7 +237,7 @@ local function main(...: string): integer
       end
       target = resolved
     end
-    return brief.cmd_brief(s, d.parsed.args[1] or "", target)
+    return brief.cmd_brief(s, d.parsed.args[1] or "", target, d.parsed.values["out"])
   end
   if d.command == "new" then
     local title = d.parsed.args[1]

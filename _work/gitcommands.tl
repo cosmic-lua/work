@@ -106,7 +106,10 @@ local CSPEC: flags.CommandSpec = {
         .. "as the agent's prompt — never\nparaphrase or summarize it, "
         .. "and never hand-write a brief instead: a\nhand-written brief "
         .. "drifts.",
-        flags = {dir_flag()}}},
+        flags = {dir_flag(),
+          {long = "out", arg = "FILE",
+            help = "write the filled body to FILE instead of stdout, "
+            .. "immune to a channel that decodes escapes"}}}},
     {name = "take", summary = "claim ID: the pull (spec bar and doing "
       .. "bound apply), its review when it awaits a verdict, or record "
       .. "its handover (--pr N for a diff, --result for a research spec)",
