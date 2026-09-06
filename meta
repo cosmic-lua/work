@@ -1,2 +1,4 @@
 title: bump bin/cosmic.pin to a release carrying RNb7_b0tV's gentype_parse.tl fix — prerequisite for PR #1746's cold build
 parent: 3IwpNLVHc54gpGsCuNILVYjDA0K
+claim: build-q1bW_VFz2-748ecc95
+builders: build-q1bW_VFz2-748ecc95
