@@ -14,6 +14,61 @@ local gate = require("_work.gitgate")
 local item = require("_work.item")
 local store = require("_work.store")
 
+--- Split text into its lines, with no trailing empty entry for a final
+--- newline — "" splits to no lines at all.
+--- @param text string The text
+--- @return {string} Its lines, in order
+local function lines_of(text: string): {string}
+  local out: {string} = {}
+  if text == "" then
+    return out
+  end
+  local pos = 1
+  while true do
+    local nl = text:find("\n", pos, true)
+    if nl == nil then
+      out[#out + 1] = text:sub(pos)
+      break
+    end
+    out[#out + 1] = text:sub(pos, nl - 1)
+    pos = nl + 1
+    if pos > #text then
+      break
+    end
+  end
+  return out
+end
+
+--- The size of replacing `old` with `new`, as a minimal line-level
+--- edit: lines added and lines removed, by longest common subsequence
+--- so a line kept in place counts as neither.
+--- @param old string The stored text
+--- @param new string The replacement text
+--- @return integer Lines added
+--- @return integer Lines removed
+local function diffstat(old: string, new: string): integer, integer
+  local a = lines_of(old)
+  local b = lines_of(new)
+  local prev: {integer} = {}
+  for j = 0, #b do
+    prev[j] = 0
+  end
+  for i = 1, #a do
+    local curr: {integer} = {}
+    curr[0] = 0
+    for j = 1, #b do
+      if a[i] == b[j] then
+        curr[j] = prev[j - 1] + 1
+      else
+        curr[j] = math.max(prev[j], curr[j - 1])
+      end
+    end
+    prev = curr
+  end
+  local common = prev[#b] or 0
+  return #b - common, #a - common
+end
+
 --- @param s store.Store The store
 --- @param id string The item whose spec is replaced
 --- @param file string Path to the replacement markdown
@@ -51,9 +106,14 @@ local function cmd_spec(s: store.Store, id: string, file: string,
   if body == nil then
     return gate.verdict_line("spec", false, rerr)
   end
-  local stale = gate.base_refusal(store.read_spec(s, id), base or "", id)
+  local current = store.read_spec(s, id)
+  local stale = gate.base_refusal(current, base or "", id)
   if stale then
     return gate.verdict_line("spec", false, stale)
+  end
+  if body == current then
+    return gate.verdict_line("spec", true,
+      ("%s's spec is unchanged — nothing written"):format(id:sub(1, 8)))
   end
   local who = session or ""
   if who ~= "" then
@@ -71,7 +131,9 @@ local function cmd_spec(s: store.Store, id: string, file: string,
   if store.is_noop(err) then
     return gate.verdict_line("spec", true, err)
   end
-  return gate.verdict_line("spec", true, ("%s's spec replaced"):format(id:sub(1, 8)))
+  local added, removed = diffstat(current, body)
+  return gate.verdict_line("spec", true,
+    ("%s's spec replaced (+%d/-%d lines)"):format(id:sub(1, 8), added, removed))
 end
 
 local record gitspec
