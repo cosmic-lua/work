@@ -216,19 +216,42 @@ local function bounce_context(s: store.Store, it: item.Item): string
     {REVIEWER_FINDING = finding.body, BRANCH = it.id:sub(1, 8)})
 end
 
---- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`, derived from
---- the `GITBOARD_DIR` this process was run under — `bin/gitboard`
---- exports it as `<root>/o/board`, so its parent's parent is the
---- checkout root. "" when `GITBOARD_DIR` is unset, leaving the
---- placeholder for the caller to fill, the same way `<WORKTREE>`
---- survives when the board cannot answer it.
+--- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`. The first
+--- attempt is `GITBOARD_DIR`'s parent's parent — `bin/gitboard` exports
+--- `GITBOARD_DIR` as `<root>/o/board` in the cold-start bootstrap, so
+--- that guess is right and cheap for the common case. It is wrong in
+--- the documented sibling-reuse bootstrap, where `GITBOARD_DIR` is
+--- instead set to a sibling clone's own root (never `<root>/o/board`):
+--- there the guess lands somewhere with no `bin/gitboard` at all —
+--- verified by checking for that file rather than trusting the
+--- arithmetic. When the guess fails that check, fall back to searching
+--- upward from this process's OWN working directory (always a real
+--- product checkout — that's what `bin/gitboard` was invoked from) for
+--- the nearest ancestor holding `bin/gitboard`. "" when neither the
+--- guess nor the search finds one — `GITBOARD_DIR` unset included —
+--- leaving the placeholder for the caller to fill, the same way
+--- `<WORKTREE>` survives when the board cannot answer it.
 --- @return string The product checkout's absolute path, "" if unknown
 local function product_root(): string
   local dir = env.get("GITBOARD_DIR")
-  if dir == nil or dir == "" then
-    return ""
+  if dir ~= nil and dir ~= "" then
+    local guess = fs.absolute_path(fs.dirname(fs.dirname(dir)))
+    if fs.is_file(fs.join(guess, "bin/gitboard")) then
+      return guess
+    end
   end
-  return fs.absolute_path(fs.dirname(fs.dirname(dir)))
+  local cur, _err = fs.cwd()
+  while cur ~= nil do
+    if fs.is_file(fs.join(cur, "bin/gitboard")) then
+      return cur
+    end
+    local parent = fs.dirname(cur)
+    if parent == cur then
+      break
+    end
+    cur = parent
+  end
+  return ""
 end
 
 --- brief: print one role's prompt for an item, filled from the board.

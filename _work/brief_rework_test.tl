@@ -4,6 +4,8 @@
 -- PR. Split from `_work/brief_test.tl`, which sits against the file
 -- cap; every other brief kind and the fresh-pull path stay there.
 
+local env = require("cosmic.env")
+local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local fixture = require("_work.fixture")
 local gh = require("_work.gh")
@@ -192,4 +194,41 @@ local function test_builder_rework_brief_with_no_matching_review()
         "no CHANGES_REQUESTED review, so nothing to fill it with: " .. out)
       return true
     end)
+end
+
+-- Unrelated to rework — kept here rather than in `_work/brief_test.tl`
+-- for the same reason this file split off it: room under the file
+-- cap. The sibling-reuse bootstrap sets GITBOARD_DIR to a sibling
+-- clone's own root, never `<root>/o/board`, so the dirname-dirname
+-- guess lands on a directory with no `bin/gitboard` at all;
+-- PRODUCT_ROOT must then fall back to searching upward from this
+-- process's own working directory — always inside the real product
+-- checkout that invoked `bin/gitboard` — for the nearest ancestor
+-- that has one.
+local function test_product_root_falls_back_to_cwd_when_the_guess_is_wrong()
+  local s = init_state_repo("brief-product-root-cwd")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
+  local root = fs.join(tmpdir, "brief-product-root-cwd")
+  assert(fs.remove_all(root))
+  assert(fs.make_dirs(fs.join(root, "bin")))
+  assert(fs.write(fs.join(root, "bin/gitboard"), ""))
+  local nested = fs.join(root, "nested/deep")
+  assert(fs.make_dirs(nested))
+  local prior_cwd, cerr = fs.cwd()
+  assert(prior_cwd, cerr)
+  local prior_dir = env.get("GITBOARD_DIR")
+  -- Sibling-shaped: the sibling clone's OWN root, not <root>/o/board —
+  -- its dirname-dirname has no bin/gitboard, so the guess must fail.
+  assert(env.set("GITBOARD_DIR", fs.join(tmpdir, "brief-product-root-cwd-sibling")))
+  assert(fs.set_cwd(nested))
+  local code, out = brief_and_capture(s, "refine", leaf)
+  assert(fs.set_cwd(prior_cwd))
+  if prior_dir == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else assert(env.set("GITBOARD_DIR", prior_dir)) end
+  assert(code == 0, "a spec-bearing item still earns its refine brief")
+  assert(out:find("cd " .. root .. "\n", 1, true) ~= nil,
+    "PRODUCT_ROOT falls back to the cwd ancestor holding bin/gitboard, "
+    .. "not the wrong dirname-dirname guess: " .. out)
 end
