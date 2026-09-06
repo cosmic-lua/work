@@ -117,6 +117,36 @@
   command. Neither recurred after the first hit, so no countermeasure
   filed.
 
+## review rhKJ_HSQd (general-purpose) — accept, PR #391, wall=508s, 44 tool calls
+
+- **Goal**: get an accurate diff/scope picture for the PR under review.
+  **Actually happened**: `git diff <PR base.sha> <head>` showed a
+  spurious 5th changed file (`tool/lua/line_coverage_floor.lua`) that
+  isn't actually part of this PR's commit — cost ~3 extra tool calls
+  (`git diff --stat`, `git diff -- <file>`, `git show --stat`/`git log`)
+  before realizing the GitHub API's reported `base.sha` is current
+  master tip, which had moved forward (via `#390`, merged earlier this
+  same pass) past the PR's true merge-base. **Contributed**: nothing in
+  the review brief warns that `pull_request_read get`'s `base.sha` can
+  drift from the true merge-base on an actively-moving default branch —
+  a `git diff base...head` naturally picks up every intervening commit,
+  not just the PR's own. **Improvement**: note for future review briefs
+  — scope a PR's diff with `git show --stat <head_sha>` (the PR's own
+  commit(s)) or `git merge-base` explicitly, never a raw `base_sha..head`
+  diff against a branch that keeps moving.
+- **Goal**: confirm the mutation-tested guard actually fired during a
+  parallel (`-j4`) rebuild. **Actually happened**: the first mutated
+  rebuild appeared to pass clean by `tail -60`'s reading — parallel-job
+  output interleaving had scrolled the real failure line off the visible
+  tail — nearly concluding the guard didn't fire before an extra
+  full-log `grep -i -E 'definitions_conformance|error|assert'` (~2 tool
+  calls) surfaced it. **Contributed**: `-j` build output interleaves
+  multiple targets' lines, so a fixed-size `tail` of a long build log is
+  not a reliable pass/fail signal. **Improvement**: for parallel builds,
+  grep the full log for `Error`/assertion text (or check the exit code
+  directly) rather than trusting a `tail` window — a one-line habit fix,
+  not a tool/doc gap.
+
 ## candidates
 
 - `help orchestrate`/`help take`: state explicitly that the worktree
