@@ -14,10 +14,12 @@ library API only (`match(pattern, node)`, `desugar`) — no CLI.
 `wc -l cmd/cosmic/main.tl` → 499 (a dispatch line does not fit until
 «SmAQinD», its extraction item, lands); `_cli/args.tl` → 164.
 
-Ready when: «omzs_ww5P» is `done` (cosmic/ast/match.tl on main) AND
-«SmAQinD» is `done` (`wc -l cmd/cosmic/main.tl` ≤ 470).
-
 ## Change
+
+Ready when: `bin/gitboard show omzs_ww5P | grep '^resolution:'` prints
+`resolution: completed` AND `bin/gitboard show SmAQinD | grep '^resolution:'` prints
+`resolution: completed` (then `wc -l cmd/cosmic/main.tl` on main is ≤ 470).
+Not ready: drop bare — the item is fine as written.
 
 `cosmic --find PATTERN [PATH...]`: a read-only structural search, the
 first workflow consumer of the matcher.
