@@ -72,12 +72,50 @@
   the `help bar` mechanism working as designed once applied; the gap was
   that refinement hadn't applied it originally.
 
-## build rhKJ_HSQd (general-purpose) — still running at pass close
+## build rhKJ_HSQd (general-purpose) — PR #391 opened, wall=1248s, 105 tool calls
 
-- Not yet reported when this pass closed; per `orchestrate` doctrine
-  ("never wait inside a pass ... not for a wave agent") the pass ends
-  without it. No observation to record yet — its friction, if any, is
-  recorded when it reports, in whichever pass reconciles this wave.
+- **Goal** (agent's own words): key `kErrnoNames[]`/`kSignalNames[]` by
+  the name format the spec's `## Change` row template showed.
+  **Actually happened**: the spec self-contradicted — Evidence stated
+  "must key by full name (`"ENOENT"`, `"SIGTERM"`), not the bare
+  suffix," while the Change section's own row template said "drop the
+  leading `E` from the string." Cost ~15 min of pure reading/reasoning
+  (no tool calls) before resolving in favor of full names (the only
+  reading consistent with `DEFAULT_SIGNALS`/`code_of("ENOENT")`'s
+  existing call sites) — correct in the end, but the agent had to
+  re-derive which half of its own spec was right. **Contributed**: my
+  spec fix earlier this pass (correcting the item's `LoadMagnums`
+  premise) touched the surrounding Evidence text but missed that the
+  pre-existing Change template still said the opposite thing —
+  introduced by an earlier respec, not this pass's edit, but not caught
+  before handing the brief off either. **Improvement**: respec'd this
+  pass (see board action below) to fix the row template to match the
+  full-name keying the Evidence already required and the built PR
+  already implements — cheap, done.
+- **Goal**: confirm the spec's coverage-scan claim ("check whether the
+  existing coverage scan discovers these fields automatically") against
+  the actual gate. **Actually happened**: the named file
+  (`test_definitions_coverage.lua`) needed a real extension (as the spec
+  anticipated), but a SECOND, unnamed file in the same gate
+  (`test_definitions_conformance.lua`) had its own independent runtime
+  probe that also broke, discovered only by running the full
+  `make o//tool/lua/test` gate rather than reading the two files the
+  spec named — ~20 min, ~6 tool calls (build, grep the failure, read,
+  fix, re-verify). **Contributed**: the spec's own checklist named one
+  file's assumption to verify but not the second file in the same gate
+  that carried a parallel one; nothing wrong with the fix once found.
+  **Improvement**: none filed this pass — a single occurrence, and the
+  gate itself (which the spec already told the builder to run before
+  pushing) caught it before it reached a PR; not yet a repeated pattern
+  worth a doc change.
+- Transcript-level (from `_tool/friction.tl`): 3 tool errors, all
+  low-cost — 2 `Read` calls whose `offset` argument was cut off
+  mid-JSON by an apparent output truncation (`{"file_path": ...,
+  "offset"` with nothing after), immediately retried successfully; 1
+  `Bash` call chaining `sleep 30; tail ...` blocked by the harness's own
+  anti-polling guard, immediately replaced with a direct (non-blocked)
+  command. Neither recurred after the first hit, so no countermeasure
+  filed.
 
 ## candidates
 
