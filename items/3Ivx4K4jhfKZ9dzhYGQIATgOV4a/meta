@@ -1,0 +1,3 @@
+title: gitboard show/find: no batch form for multiple ids/queries, and show silently drops extra ids instead of refusing
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/work
