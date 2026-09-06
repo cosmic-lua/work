@@ -2,4 +2,5 @@ title: cosmic/ast: structural pattern matcher with $NAME/$$$NAME captures
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-omzs_ww5P-f6f470de
+pr: 1761
 builders: build-omzs_ww5P-f6f470de
