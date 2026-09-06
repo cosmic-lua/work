@@ -36,40 +36,51 @@ unguarded after the idiom's usual early-return-on-`!ok` — today this
 works only because slot 2 keeps `f`'s EXACT success type; widening it
 tree-wide breaks every one of them.
 
-The item's own Evidence section already carried a hint this was
-under-verified: it says a PRIOR builder attempt "drafted the actual
-... entry" and "came to 54 lines" over headroom, but never records
-that draft having been run against the full tree (`--make check`) —
-this item inherited that untested isolation assumption as settled
-fact.
-
-The draft patch (with a note documenting this exact finding and its
-reproduction commands) is committed, unpushed, at `d3d8ffd` on branch
-`3IpBKtB8`.
+Research session `research-IOA7_CLf5-748ecc95` (2026-09-06)
+independently re-verified this premise from scratch (the prior
+session's draft branch `3IpBKtB8` was gone — recreated the patch entry
+by hand, mirroring `narrow-pcall-zero-return`'s own shape) and
+reproduced the identical 6 + 3 failures. It also found that the 2
+sites this item was scoped to help — `cosmic/sqlite/extras.tl`'s
+`db:transaction` and `db:savepoint` (lines 63, 106) — already carry a
+working, lint-compliant fix today: a per-call-site `(verdict as
+string) -- cast: pcall slot 2 is the raised error, typed boolean from
+TxFn`, matching the `cast-justify` rule and the checker's own "cast
+after a guard" hint verbatim. Neither site is actually broken or
+blocked.
 
 ## Change
 
-Respec this item once a real fix design exists for scoping the
-widening to only the 2 `sqlite/extras.tl` sites (or otherwise making
-the change tree-safe) — options to evaluate, not yet chosen:
+Closed, no code change. The tree-wide-breakage premise was re-verified
+independently (patch re-derived from scratch since branch `3IpBKtB8`
+was gone; `o/bin/cosmic --check types cosmic/shm.tl` reproduces the
+same 6 errors — read/load/atomic/cmpxchg/wait/mapshared — and
+`o/bin/cosmic --make check` reproduces the same 3 additional failures
+— `_make/policy_test.tl:376`, `_eval/score_test.tl:143`,
+`_fuzz/shrink.tl:41` — the original spec named).
 
-- a call-site-scoped mechanism rather than a shared find/replace patch
-  on `special_pcall_xpcall` itself (not achievable via
-  `3p/tl_patch/`'s exact-match mechanism alone);
-- genuine `ok`-keyed flow narrowing in the checker (materially larger
-  than a single patch entry — likely its own decision record given
-  the checker-design scope);
-- or accept the 2 sqlite sites keep their casts and close this item as
-  not viable at the patch-entry granularity, filing the real narrowing
-  feature separately if it's still wanted.
+Of the three options weighed: a call-site-scoped mechanism outside
+`3p/tl_patch`'s shared-function-body patch already exists and is
+already in use — `cosmic/sqlite/extras.tl`'s 2 sites already carry a
+working `-- cast: ... / (verdict as string)` fix, lint-compliant under
+`cast-justify` and matching the checker's own "cast after a guard"
+hint. Genuine ok-keyed flow narrowing in the checker (discriminated
+narrowing of a pcall tuple keyed to its own boolean) would be a real
+fix but is a materially larger checker-design change needing its own
+decision record first, with no concrete forcing need beyond these 2
+already-solved sites.
 
-Whichever direction is chosen, resume from branch `3IpBKtB8`'s
-existing commit (the draft patch, its full tree-wide regression
-evidence, and the `narrow-pcall-return`-vs-`narrow-pcall-zero-return`
-naming/sort-order gotcha already resolved there) rather than
-re-deriving the same probes.
+Closing as not viable at the patch-entry granularity: the 2 sites this
+item targeted already work correctly with their existing casts — no
+further change is needed here.
 
 ## Non-goals
 
-Not attempting the widening again unscoped — verified above to break
-6+ existing sites tree-wide, not just this item's 2 named sites.
+Not widening pcall's declared return type again, scoped or unscoped —
+confirmed twice now (this pass and the prior session) to break sites
+tree-wide with no scoping mechanism available in `3p/tl_patch`. Not
+filing the ok-keyed narrowing checker feature as a live item: no
+concrete site needs it today (both named call sites already have a
+working, idiomatic cast); revisit only if a future site's cast becomes
+genuinely unwieldy, at which point it needs its own decision record
+before implementation.
