@@ -1,3 +1,4 @@
 title: cosmo.cov and the fuzz budget contend for the one debug-hook slot: a C-side budget would let both hold under instrumentation
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
 target: cosmic-lua/cosmic
+resolution: completed
