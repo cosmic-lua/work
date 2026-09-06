@@ -1,9 +1,9 @@
 title: brief review: a second round carries round 1's findings and 'what round 1 accepted is settled'
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-CM0F_Tk4k-f6f470de
 pr: 69
 verdict: accept
 verdict_head: 0a22607566924975e65bbf3fa18685f117d9b770
 verdict_spec: f40eddad5f87bd1c962c12f232f60292292b3b54
+resolution: completed
 builders: build-CM0F_Tk4k-f6f470de
