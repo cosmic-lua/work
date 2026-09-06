@@ -1,9 +1,9 @@
 title: brief review: a mechanical diff (no .tl outside tests, or under 20 lines) gets the numbered-script template with a checkout-free mutation
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-QaZ8_CyOn-f6f470de
 pr: 67
 verdict: accept
 verdict_head: 29304e5b18b33695fdb609a834da71af68308914
 verdict_spec: 7fb43e09def1b5ba2f692e7d6ea5276d283d2b82
+resolution: completed
 builders: build-QaZ8_CyOn-f6f470de
