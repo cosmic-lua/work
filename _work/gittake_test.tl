@@ -10,11 +10,14 @@
 -- measured. Pinned here directly against `gittake`, one level under
 -- the `cmd_take` derivation `_work/gitreview_test.tl` already covers.
 
+local cache = require("_work.cache")
 local check = require("cosmic.check")
+local ciobs = require("_work.ciobs")
 local fixture = require("_work.fixture")
 local gittake = require("_work.gittake")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -90,4 +93,67 @@ local function test_the_refusal_names_the_live_labels_orch8()
   local out = table.concat(lines, "\n")
   assert(out:find("under review by " .. holder, 1, true) ~= nil,
     "the refusal names the exact live label, orch8 included: " .. out)
+end
+
+--- Seeds the cache's own `ci_checks` row for `(repo, pr)` directly, the
+--- same table `_work.ciobs.record` upserts — bypassing GitHub entirely,
+--- exactly what `_work.gitgate.review_debt`'s own CI check reads. The
+--- write goes through a connection of its own, outside the patch
+--- `_work.gitgate.commit_and_publish` applies to `s`'s already-open
+--- index on every ordinary mutation, so `store.close(s)` afterward is
+--- this test's stand-in for that patch — the same one `_work/ciobs_test.tl`'s
+--- `pr_item` uses — leaving the caller's next `store.list`/`store.read`
+--- to reopen fresh instead of missing what this write just made.
+--- @param s store.Store The store
+--- @param repo string The item's repo field
+--- @param pr integer The PR number
+--- @param state string The recorded state ("running", "red", ...)
+local function seed_ci_state(s: store.Store, repo: string, pr: integer,
+    state: string)
+  local c = check.must(cache.open(s.root))
+  assert(ciobs.record(c, repo, pr, {state = state, head_sha = "", runs = {}}))
+  assert(cache.close(c))
+  local _cok, _cerr = store.close(s)
+end
+
+-- A todo pull's debt count reads the same recorded CI state the review
+-- claim's own live check would find: a diff still `running` has given
+-- no verdict to claim yet, so it does not outrank a todo pull, but a
+-- diff whose head has settled does — unchanged from before this gate
+-- read CI at all.
+local function test_running_ci_does_not_block_a_pull_but_a_settled_state_does()
+  local s = init_state_repo("gittake-ci-debt")
+  local goal, built = root_with_leaf(s)
+  local second = fixture.file_item(s, "the next slice", goal)
+  give_spec(s, built)
+  give_spec(s, second)
+  assert(verbs.cmd_take(s, built, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, built, "session-a", 77, false, "") == 0,
+    "the handover records the PR")
+  local handed = check.must(store.load(s, built))
+
+  seed_ci_state(s, handed.repo, handed.pr, "running")
+  assert(verbs.cmd_take(s, second, "session-b", 0, false, "") == 0,
+    "CI still running gives no verdict to claim yet, so it does not "
+    .. "outrank the todo pull")
+  assert(check.must(store.load(s, second)).claim == "session-b",
+    "the pull went through")
+  assert(verbs.cmd_drop(s, second, "session-b",
+      "reset for the settled-state case", false) == 0)
+
+  seed_ci_state(s, handed.repo, handed.pr, "green")
+  assert(verbs.cmd_take(s, second, "session-c", 0, false, "") ~= 0,
+    "a settled, non-failing recorded state still outranks the pull")
+  assert(check.must(store.load(s, second)).claim == "",
+    "and the refused pull claimed nothing")
+
+  -- Concluded failure goes back to the builder, not a reviewer, so it
+  -- does not outrank a todo pull either — the same exclusion as a run
+  -- still going, for a different reason.
+  seed_ci_state(s, handed.repo, handed.pr, "red")
+  assert(verbs.cmd_take(s, second, "session-d", 0, false, "") == 0,
+    "a concluded failure is the builder's to fix, not a reviewer's "
+    .. "verdict to give, so it does not outrank the pull")
+  assert(check.must(store.load(s, second)).claim == "session-d",
+    "the pull went through")
 end

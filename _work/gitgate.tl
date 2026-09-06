@@ -11,6 +11,7 @@
 --- touches beyond its subject travels with it rather than being
 --- committed alongside.
 local cache = require("_work.cache")
+local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
@@ -183,20 +184,46 @@ local function distance_refusal(it: item.Item, session: string): string | nil
   return nil
 end
 
+--- Whether `i`'s own recorded CI observation keeps it out of the debt
+--- count: a head still running has given no verdict to claim yet, and
+--- one that has already concluded failure goes back to its builder,
+--- not a reviewer — neither outranks a todo pull. Read straight from
+--- the cache's own `_work.ciobs.read`, never a live GitHub call: the
+--- debt count is asked for on every attempted pull, where the review
+--- claim's own live read (`_work.gitverbs`) stays the one that decides
+--- the moment a session actually reaches for this item. No recorded
+--- observation (nil — never yet observed, or the row aged out) never
+--- excludes, the safe default the same way an empty reviewer field
+--- never excludes either; neither does an item with no PR at all (a
+--- research handover), which CI has nothing to say about.
+--- @param c Index An index with `_work.readddl.ensure_views` applied
+--- @param i item.Item The item under review
+--- @return boolean True when a recorded CI state excludes it from debt
+local function ci_clears_debt(c: Index, i: item.Item): boolean
+  if (i.pr or 0) == 0 then
+    return false
+  end
+  local state = ciobs.read(c, i.repo, i.pr)
+  return state == "running" or state == "red"
+end
+
 --- The visibly unactioned finishing work standing between a session
 --- and anything the unified order ranks below it: items at
 --- `flow.STAGE_REVIEW` with no reviewer recorded, at a distance from
---- the session (the same `distance_refusal` the review claim asks).
---- Review is the one stage whose neglect the board can SEE — an
---- empty reviewer field is proof nobody is on it — where an accepted
---- item's merge and a claimed build leave no such trace, so only
---- review debt turns the ranking into a refusal. Deliberately LAXER
---- than `next`'s review rung on one point: any recorded reviewer
---- clears an item here, stale or live, because staleness needs
---- per-item git ages this gate does not read — a stale review still
---- drains through `next`, which offers taking it over ahead of any
---- pull. Laxer is the safe direction: every pull `next` offers as a
---- primary must pass this gate.
+--- the session (the same `distance_refusal` the review claim asks),
+--- and whose CI a reviewer could actually give a verdict against right
+--- now (`ci_clears_debt`) — a diff still running or already red is not
+--- yet, or no longer, a review's to claim, so it does not outrank a
+--- todo pull either. Review is the one stage whose neglect the board
+--- can SEE — an empty reviewer field is proof nobody is on it — where
+--- an accepted item's merge and a claimed build leave no such trace,
+--- so only review debt turns the ranking into a refusal. Deliberately
+--- LAXER than `next`'s review rung on one point: any recorded
+--- reviewer clears an item here, stale or live, because staleness
+--- needs per-item git ages this gate does not read — a stale review
+--- still drains through `next`, which offers taking it over ahead of
+--- any pull. Laxer is the safe direction: every pull `next` offers as
+--- a primary must pass this gate.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param items {item.Item} All items
 --- @param session string The session asking to pull
@@ -214,7 +241,8 @@ local function review_debt(c: Index, items: {item.Item},
     if row.stage == flow.STAGE_REVIEW then
       local i = by_id[row.id]
       if i ~= nil and (i.reviewer or "") == ""
-      and distance_refusal(i, session) == nil then
+      and distance_refusal(i, session) == nil
+      and not ci_clears_debt(c, i) then
         out[#out + 1] = i
       end
     end
