@@ -8,6 +8,7 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local format = require("_work.format")
 local fs = require("cosmic.fs")
+local gitboard = require("_work.gitboard")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
@@ -217,4 +218,70 @@ local function test_list_accepts_a_missing_marker_on_an_empty_board()
   local s = check.must(store.open(root))
   local all = check.must(store.list(s))
   assert(#all == 0, "an empty board with no marker still reads: " .. #all)
+end
+
+--- Run gitboard.main(...) and capture exactly what it prints via
+--- print() — the swap-and-restore pattern `gitboard_test.tl` uses.
+--- @param ... string Arguments to pass to gitboard.main, as on argv
+--- @return integer gitboard.main's exit code
+--- @return string Every print()'d line, newline-joined
+local function gitboard_and_capture(...: string): integer, string
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local ok, result = pcall(gitboard.main, ...)
+  _G.print = old_print
+  if not ok then
+    error(result, 0)
+  end
+  return result, table.concat(lines, "\n")
+end
+
+-- A LINKED worktree of a board repository shares its refs and, through
+-- it, a push-capable `origin` — it is never a board of its own. `init`
+-- refuses there before writing anything, the same way a fresh `init`
+-- on a genuinely unrelated directory would still be allowed to run.
+local function test_init_repo_refuses_in_a_linked_worktree()
+  local primary = fs.join(tmpdir, "worktree-init-primary")
+  local linked = fs.join(tmpdir, "worktree-init-linked")
+  assert(fs.remove_all(primary))
+  assert(fs.remove_all(linked))
+  assert(store.init_repo(primary))
+  git(primary, {"worktree", "add", "-q", "--detach", linked, "board/format"})
+  local ok, err = store.init_repo(linked)
+  assert(ok == false, "init_repo refuses a linked worktree")
+  assert(err:find("linked worktree", 1, true) ~= nil, "got: " .. err)
+  assert(err:find(primary, 1, true) ~= nil,
+    "the refusal names the checkout it is linked to: " .. err)
+end
+
+-- Every write verb but `init` funnels through `storewrite.save`
+-- (`_work.gitgate.commit_and_publish`); it refuses the same way,
+-- before staging or committing anything, so a linked worktree's board
+-- is left exactly as it was observed.
+local function test_new_refuses_but_show_still_works_in_a_linked_worktree()
+  local primary = fs.join(tmpdir, "worktree-new-primary")
+  local linked = fs.join(tmpdir, "worktree-new-linked")
+  assert(fs.remove_all(primary))
+  assert(fs.remove_all(linked))
+  assert(store.init_repo(primary))
+  git(primary, {"worktree", "add", "-q", "--detach", linked, "board/format"})
+
+  local new_code, new_out = gitboard_and_capture(
+    "new", "a sneaky title", "--dir", linked)
+  assert(new_code ~= 0, "new refuses in a linked worktree")
+  assert(new_out:find("linked worktree", 1, true) ~= nil, "got: " .. new_out)
+
+  local s = check.must(store.open(linked))
+  local after = check.must(store.list(s))
+  assert(#after == 1, "the refused new filed nothing: " .. #after)
+
+  local show_code, show_out = gitboard_and_capture("show", "--dir", linked)
+  assert(show_code == 0, "show still works in a linked worktree: " .. show_out)
 end
