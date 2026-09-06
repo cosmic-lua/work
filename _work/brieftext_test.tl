@@ -113,6 +113,25 @@ local function test_step_three_names_the_ratchet_recovery_path()
     .. "not scope creep")
 end
 
+local function test_step_one_bars_a_reviewer_from_rerunning_ci()
+  assert(REVIEW:find(
+      "Green means the gate ran on this exact head — never re-run "
+      .. "`--make ci` or the full test stage yourself; the checks you "
+      .. "run are the ones the diff's own test file and your mutation "
+      .. "need.", 1, true) ~= nil,
+    "step 1 must tell a reviewer never to re-run --make ci or the "
+    .. "full test stage on a green head")
+end
+
+local function test_mutation_step_names_the_one_file_shape()
+  assert(REVIEW:find(
+      "run the ONE test file that guards it (`bin/cosmic --make test "
+      .. "<file>` in cosmic, `bin/cosmic --make test _work/<file>` in "
+      .. "work), not the suite", 1, true) ~= nil,
+    "the mutation paragraph must send a reviewer to the diff's own "
+    .. "test file, not the suite")
+end
+
 local function test_step_three_names_the_new_module_ratchets()
   assert(BUILDER:find(
       "A new public `cosmic.<name>` module trips three more: "

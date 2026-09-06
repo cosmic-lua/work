@@ -56,7 +56,10 @@ fine.
 
 1. CI is mechanical, but read it fresh on the PR's CURRENT head. Red
    or still running ends the review immediately — record nothing,
-   stop and report why.
+   stop and report why. Green means the gate ran on this exact head —
+   never re-run `--make ci` or the full test stage yourself; the
+   checks you run are the ones the diff's own test file and your
+   mutation need.
 2. The diff is the Change — everything present, nothing extra. List
    the changed files and confirm each is inside the spec's stated
    scope. Anything outside it is scope creep — quote it, even when
@@ -73,13 +76,15 @@ fine.
    as a gap to quote.
 
 Mutation-test at least one guard the change adds or relies on: break
-what it guards, confirm the diff's own test catches it, restore it
-exactly. A real break changes the outcome the test reads, never just
-the text around it: replace a matched needle with unrelated text
-rather than extending it, flip a boolean rather than renaming it, and
-if the test stays green the guard is decoration. Do this from your
-own fresh checkout at `<WORKTREE>` — never reuse another agent's
-worktree.
+what it guards, confirm the diff's own test catches it — run the ONE
+test file that guards it (`bin/cosmic --make test <file>` in cosmic,
+`bin/cosmic --make test _work/<file>` in work), not the suite —
+restore it exactly. A real break changes the outcome the test reads,
+never just the text around it: replace a matched needle with
+unrelated text rather than extending it, flip a boolean rather than
+renaming it, and if the test stays green the guard is decoration.
+Do this from your own fresh checkout at `<WORKTREE>` — never reuse
+another agent's worktree.
 
 ## Recording your verdict
 
