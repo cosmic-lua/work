@@ -406,6 +406,30 @@ verification.
   the fix (either `new --repo`, or inheriting the parent's `repo:` at
   attach time) would have saved 3 extra `gitboard set` round-trips.
 
+- After `Qzbr_H1Xg`/PR #1749 merged, assumed (wrongly) that
+  `rerun_failed_jobs` on PR #1746's existing run would pick up the new
+  `.github/workflows/pr.yml` from current `main` via the recomputed
+  `refs/pull/1746/merge` ref. It did not: the re-run used the IDENTICAL
+  old cache key (`hashFiles('bin/cosmic.pin')` only, same hash prefix,
+  same stale restore-key hit) and failed identically a third time —
+  costing one wasted re-run + a full job-log re-fetch to notice the key
+  hadn't changed. For a `pull_request`-triggered workflow, GitHub uses
+  the WORKFLOW DEFINITION as it exists on the PR's OWN branch at the
+  time the run is (re-)triggered, not a live recomputation against the
+  current base — merging `main` into a stalled PR branch is REQUIRED to
+  pick up a base-branch workflow-file fix, exactly like picking up any
+  other base-branch fix, and a plain re-run of an existing job can
+  never do this since it reuses that run's already-resolved workflow
+  file. Fixed by merging `main` into `3IwpNLVH` a second time (clean,
+  no conflict — `main`'s only new content since the first merge was
+  `.github/workflows/pr.yml` itself), running the gate cold and green
+  locally, then pushing — a genuinely new head that resolves its own
+  workflow fresh. **Countermeasure**: this is a GitHub Actions platform
+  behavior, not a gitboard/project gap — worth remembering rather than
+  filing: a workflow-file fix on the base branch needs the SAME
+  re-merge treatment as any other base-branch fix on a stalled PR,
+  never just a job re-run.
+
 - No other friction: `sync`, `show`, `next`, and the review-comment lookup
   for the bounce context (`pull_request_read get_comments` on #1744, since
   `get_reviews` returned empty — the verdict was posted as a PR issue
