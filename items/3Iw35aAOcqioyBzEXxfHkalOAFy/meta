@@ -2,6 +2,7 @@ title: casts: land zip.tl's reader-cast removal once zip.reader is pinned
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 target: cosmic-lua/cosmic
 claim: build-Hkal_OAFy-f6f470de
+reviewer: review-Hkal_OAFy-f6f470de
 pr: 1750
 builders: build-Hkal-0bdbc441 build-Hkal_OAFy-f6f470de
 speccers: build-Hkal-0bdbc441 f6f470de-dee2-5890-b8f1-db91217d1a73
