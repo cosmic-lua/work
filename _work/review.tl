@@ -189,9 +189,10 @@ local function blocks_land(p: Pull, verdict_head: string, id: string): string
   if p.merged then
     return nil
   end
-  local msg = ("PR #%d is not merged — `land` ends an item whose merge is "
-    .. "done, it does not merge. Squash-merge PR #%d, then re-run "
-    .. "`gitboard land %s`, which reads the merge and ends the item.")
+  local msg = ("PR #%d is not merged — `done` ends an item whose merge is "
+    .. "done, it does not merge. Once PR #%d is squash-merged (auto-merge "
+    .. "or the queue), re-run `gitboard done %s`, which reads the merge "
+    .. "and ends the item.")
   :format(p.number, p.number, id:sub(1, 8))
   if head_moved(p, verdict_head) then
     msg = msg .. (" The accept judged %s and the head is now %s — re-review "
