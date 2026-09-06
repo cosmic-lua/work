@@ -38,6 +38,14 @@ or record declares — a location read from memory is the wrong turn that
 feels obviously right." `_work/doctrine_test.tl`: the bar topic also
 contains "quotes the `grep -n` hit".
 
+Third sentence, same paragraph, once `cosmic --find` exists (Ready when: the
+«--find» item under «HpoM_Gzj7» is done; until then the sentence is written
+conditionally, "where the tree has a structural finder"): "A Change over N
+sites states the PATTERN that selects them and the count `cosmic --find`
+printed, never a list of file:line pairs a builder re-derives — the
+builder re-runs the pattern, and the reviewer diffs the PR against its
+hits." `_work/doctrine_test.tl`: the bar topic contains "states the PATTERN".
+
 ## Non-goals
 
 No tool check — a fork is prose the bar cannot parse; this is the
