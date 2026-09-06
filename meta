@@ -2,6 +2,7 @@ title: reads-declaration lint: a reads: entry under o/ is refused at check time,
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim: build-CBMu_etpH-f6f470de
+reviewer: review-CBMu_etpH-f6f470de
 pr: 1754
 builders: build-CBMu_etpH-f6f470de
 speccers: build-CBMu_etpH-f6f470de
