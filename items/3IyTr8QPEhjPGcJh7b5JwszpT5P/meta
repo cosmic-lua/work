@@ -1,0 +1,3 @@
+title: bin/gitboard: from a linked worktree, find the board beside the MAIN checkout (git-common-dir), not beside the worktree
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/cosmic
