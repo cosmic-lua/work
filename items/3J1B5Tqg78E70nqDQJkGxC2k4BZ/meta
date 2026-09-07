@@ -1,0 +1,3 @@
+title: coldbuild_test: verify it fires on the first --make ci after a field/arity widening, not a second run
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
