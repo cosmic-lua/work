@@ -2,5 +2,6 @@ title: gitboard new --parent: a child with no --after/--before ranks last, never
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim: build-7Vds_BXrP-f6f470de
+pr: 73
 builders: build-7Vds_BXrP-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
