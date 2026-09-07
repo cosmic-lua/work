@@ -1,9 +1,9 @@
 title: sys/help.md: document the $NAME:PATTERN name-predicate suffix the pattern grammar already accepts
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
 target: cosmic-lua/cosmic
-claim: build-QwgY_FUPJ-6141b568
 pr: 1795
 verdict: accept
 verdict_head: 0d99457e26c5ddaf3783dd6e0a7403b718b2b457
 verdict_spec: dfb6b237fcc0d14b18ad45a41817080b4fdf791d
+resolution: completed
 builders: build-QwgY_FUPJ-6141b568
