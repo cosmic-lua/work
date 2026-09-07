@@ -248,6 +248,7 @@ local record api_module
   write_rate: function(root: string, remaining: integer | nil, reset: integer | nil)
   read_cache: function(root: string, method: string, path: string): CacheEntry | nil
   write_cache: function(root: string, method: string, path: string, entry: CacheEntry)
+  own_login: function(root: string): string | nil, string
 end
 
 --- The board's transport, swappable for tests: same shape as
@@ -339,6 +340,44 @@ local function is_success(status: integer): boolean
   return status >= 200 and status < 300
 end
 
+-- The token's own login, read once and held for the life of the
+-- process below — a verdict run asks at most once no matter how many
+-- writes it composes. Swappable like `M.transport`: a test stands in
+-- a fixed login (or a failure) without spending a call of its own.
+local own_login_read = false
+local own_login_value: string | nil = nil
+local own_login_err = ""
+
+--- The authenticated token's own GitHub login (`GET /user`), cached
+--- for this process after the first call — `_work.ghwrite.post_review`
+--- reads this to tell whether a review lands on the token's own pull
+--- request, where GitHub refuses a formal `REQUEST_CHANGES`.
+--- @param root string The store checkout root, for the ETag cache
+--- @return string | nil The login; nil on failure or an empty one
+--- @return string Error message on failure
+local function own_login(root: string): string | nil, string
+  if own_login_read then
+    return own_login_value, own_login_err
+  end
+  own_login_read = true
+  local res, err = M.call("GET", "/user", root)
+  if res == nil then
+    own_login_value, own_login_err = nil, err
+    return nil, err
+  end
+  if not is_success(res.status) then
+    own_login_err = api_error("GET", "/user", res)
+    return nil, own_login_err
+  end
+  local v = res.value
+  local login = ""
+  if v is {string: any} then
+    login = tostring(v["login"] or "")
+  end
+  own_login_value = login ~= "" and login or nil
+  return own_login_value, ""
+end
+
 M = {
   transport = fetch.fetch,
   call = api,
@@ -350,6 +389,7 @@ M = {
   write_rate = write_rate,
   read_cache = read_cache,
   write_cache = write_cache,
+  own_login = own_login,
 }
 
 return M

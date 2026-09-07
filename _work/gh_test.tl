@@ -184,3 +184,27 @@ local function test_latest_request_changes_is_nil_with_no_matching_review()
     })
   assert(finding == nil, "no CHANGES_REQUESTED review at all is nil, not a guess")
 end
+
+local function test_latest_request_changes_matches_a_marked_own_pr_comment()
+  local finding = gh.latest_request_changes({
+      {state = "COMMENTED", body = "request-changes:\nthe finding, on line two",
+        submitted_at = "2024-01-01T00:00:00Z"},
+      {state = "COMMENTED", body = "reject:", submitted_at = "2024-01-02T00:00:00Z"},
+    })
+  assert(finding ~= nil and finding.body == "reject:",
+    "a COMMENTED review whose FIRST line is the own-PR marker is a bounce, "
+    .. "and the most recent one wins")
+end
+
+local function test_latest_request_changes_ignores_a_marker_below_the_first_line()
+  local finding = gh.latest_request_changes({
+      {state = "COMMENTED", body = "nit: the message mentions reject: in prose",
+        submitted_at = "2024-01-01T00:00:00Z"},
+      {state = "COMMENTED", body = "lgtm\nrequest-changes:",
+        submitted_at = "2024-01-02T00:00:00Z"},
+      {state = "COMMENTED", body = " request-changes:",
+        submitted_at = "2024-01-03T00:00:00Z"},
+    })
+  assert(finding == nil, "the marker counts only as the exact, whole first line — "
+    .. "a mention later in the body, or on a later line, is a plain comment")
+end

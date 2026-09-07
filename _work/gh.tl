@@ -112,6 +112,11 @@ local function pull(s: store.Store, number: integer, repo: string | nil):
   if dv is integer then
     deletions = dv
   end
+  local author_login = ""
+  local user = v["user"]
+  if user is {string: any} then
+    author_login = tostring(user["login"] or "")
+  end
   return {
     number = number,
     draft = v["draft"] == true,
@@ -126,6 +131,7 @@ local function pull(s: store.Store, number: integer, repo: string | nil):
     node_id = tostring(v["node_id"] or ""),
     additions = additions,
     deletions = deletions,
+    author_login = author_login,
   }
 end
 
@@ -407,17 +413,23 @@ local function reviews(s: store.Store, number: integer, repo: string | nil):
 end
 
 --- The pure selection behind a rework hand-back: the most recent
---- CHANGES_REQUESTED review, or nil when none stands — every other
---- state (an approval, a plain comment, a dismissed round) is not what
---- a builder reworks against. "Most recent" is decided by
---- `submitted_at`, never by list order, so a later round's finding
---- always wins over an earlier one GitHub happens to list after it.
+--- CHANGES_REQUESTED review, or a COMMENTED one whose body's first
+--- line is the own-PR bounce marker `_work.ghwrite.post_review`
+--- writes when GitHub refuses REQUEST_CHANGES on the token's own PR —
+--- or nil when neither stands; an approval, a plain comment, or a
+--- dismissed round is never what a builder reworks against. "Most
+--- recent" is decided by `submitted_at`, never list order, so a later
+--- round always wins over an earlier one GitHub happens to list after it.
 --- @param revs {Review} The PR's reviews
---- @return Review | nil The most recent CHANGES_REQUESTED review
+--- @return Review | nil The most recent matching review
 local function latest_request_changes(revs: {Review}): Review | nil
   local latest: Review | nil = nil
   for _, r in ipairs(revs) do
-    if r.state == "CHANGES_REQUESTED"
+    local first = r.body:match("^([^\n]*)") or r.body
+    local matches = r.state == "CHANGES_REQUESTED"
+    or (r.state == "COMMENTED"
+      and (first == "request-changes:" or first == "reject:"))
+    if matches
     and (latest == nil or r.submitted_at > latest.submitted_at) then
       latest = r
     end

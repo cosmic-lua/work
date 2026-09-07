@@ -14,6 +14,11 @@ local record Pull
   draft: boolean
   body: string
   head_sha: string
+  --- The pull request's author, GitHub's `user.login` — what
+  --- `_work.ghwrite.post_review` checks against the token's own login
+  --- before choosing a plain `COMMENT` over a formal `REQUEST_CHANGES`
+  --- GitHub refuses on one's own PR. "" when GitHub reported none.
+  author_login: string
   --- The branch the request targets, "" when GitHub reported none.
   base: string
   --- "open" | "closed"
