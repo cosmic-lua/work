@@ -1,0 +1,3 @@
+title: brieftext.tl/brieftext_review.tl: fill build/gate/type-check/test commands from the item's own repo manifest instead of naming them inline by repo
+parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
+target: cosmic-lua/work
