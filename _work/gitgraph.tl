@@ -51,6 +51,30 @@ local function add_once(list: {item.Item}, x: item.Item): {item.Item}
   return list
 end
 
+--- `order` with `id` removed, or nil when `id` was not in it — the
+--- prune `cmd_attach` applies to the OLD parent's list when a move
+--- would otherwise leave a stale entry behind, mirroring `_work
+--- .gitrank`'s own `place`, which strips `id` the same way before
+--- reinserting it under a new parent.
+--- @param order {string} An `order` list to prune
+--- @param id string The id to remove
+--- @return {string} | nil The pruned list; nil when `id` was absent
+local function prune_from_order(order: {string}, id: string): {string} | nil
+  local found = false
+  local without: {string} = {}
+  for _, v in ipairs(order) do
+    if v == id then
+      found = true
+    else
+      without[#without + 1] = v
+    end
+  end
+  if not found then
+    return nil
+  end
+  return without
+end
+
 --- Where `id` sits in `order`, 1-based, and how many entries `order`
 --- holds — the pair the verdict line renders as "N of N" once a child
 --- lands positioned. Counted the way `show`'s rank line counts (the
@@ -239,9 +263,10 @@ end
 --- chain would cycle back to the item being attached. `before`/`after`
 --- place it among its new siblings in the same commit — X must
 --- already be a positioned child of `parent`, the same rule `rank`
---- itself enforces; the item's position under whatever parent it is
---- LEAVING is never rewritten, and stays meaningless there once it
---- has left.
+--- itself enforces. When the OLD parent's `order` still names `id`,
+--- that entry is pruned and the old parent saved in the same publish
+--- as the move — a lost race refuses the whole move rather than
+--- leaving the entry behind for `fsck` to report.
 --- @param s store.Store The store
 --- @param id string The item gaining a parent
 --- @param parent string The new parent id
@@ -287,6 +312,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
     end
     cur = index[cur.parent or ""]
   end
+  local old_parent_id = it.parent or ""
   it.parent = parent
   -- Adoption makes a leaf workable: it is todo by derivation, with
   -- nothing to write. Triage answers one cheap question — is this
@@ -300,6 +326,23 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   local also, coerr = gate.containered(c, parent_item)
   if also == nil then
     return gate.verdict_line("attach", false, coerr)
+  end
+  -- A move under the same parent leaves nothing to prune — `it.parent`
+  -- did not change, so whatever `order` entry it already holds there is
+  -- still its own, not a stale leftover. Otherwise, when the OLD
+  -- parent is still resolvable and still names `id`, the entry is
+  -- exactly what `fsck` would report as stale the moment this publish
+  -- lands — pruned here and carried in `also`, so the one push either
+  -- lands the whole move or none of it.
+  if old_parent_id ~= "" and old_parent_id ~= parent then
+    local old_parent_item = index[old_parent_id]
+    if old_parent_item ~= nil then
+      local pruned = prune_from_order(old_parent_item.order or {}, id)
+      if pruned ~= nil then
+        old_parent_item.order = pruned
+        also = add_once(also, old_parent_item)
+      end
+    end
   end
   if (before or "") ~= "" or (after or "") ~= "" then
     local placed, perr = rank.place_under(parent_item, id, before or "",

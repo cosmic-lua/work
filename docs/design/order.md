@@ -59,17 +59,25 @@ unpositioned outcomes. `fsck` reports a second parentless item.
 ## Moves and stale entries
 
 `attach ID PARENT` re-parents one item. Its position under the old
-parent is meaningless once it has left, so the old parent's list entry
-is ignored on read and reported by `fsck`; `attach` never rewrites the
-old parent. The moved item arrives unranked among its new siblings:
-the mover judged where it belongs, not how it compares to neighbours
-it has never been weighed against. Moving between outcomes is already
-the large rank change (a new prefix). `attach --before X` or
-`--after X` moves and places in one commit on two refs, for a move
-that knows its place; `rank` alone is the same-parent case.
+parent is meaningless once it has left, so when the old parent's list
+still names ID, `attach` prunes that entry and saves the old parent in
+the same publish that moves ID — one push landing both refs, so a lost
+race refuses the whole move rather than leaving the entry behind. The
+moved item arrives unranked among its new siblings: the mover judged
+where it belongs, not how it compares to neighbours it has never been
+weighed against. Moving between outcomes is already the large rank
+change (a new prefix). `attach --before X` or `--after X` moves,
+prunes, and places in one commit apiece across two or three refs, for
+a move that knows its place; `rank` alone is the same-parent case,
+which touches no entry but the one it is asked to move.
 
 A whole subtree moves with its container and keeps its internal order:
-the container's own entry goes stale, its children's list is untouched.
+the container's own entry in its old parent's list is pruned exactly
+as any moved item's is; the container's own `order` blob — its
+children's list — is untouched, since the children did not move.
+
+A stale `order` entry `fsck` reports today is a repair case — the
+product of a hand edit — not the ordinary outcome of a move.
 
 ## Verified outcomes are done
 

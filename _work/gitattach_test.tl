@@ -52,15 +52,59 @@ end
 
 -- Attaching a pair already attached asks for the state the board already
 -- has — a no-op that succeeds, printing store's own line, not a misleading
--- "now under" as though a fresh edge had landed.
+-- "now under" as though a fresh edge had landed. Re-attaching under the
+-- SAME parent moves nothing, so the entry the child already holds there
+-- is not a stale leftover to prune: the guard that tells the two cases
+-- apart is the old parent's id differing from the new one.
 local function test_attach_of_an_already_attached_pair_is_a_noop_success()
   local s = init_state_repo("attach-noop")
   local goal, leaf = root_with_leaf(s)
+  local before_order = table.concat(check.must(store.load(s, goal)).order, ",")
   local before, seen, old_print = commits(s), "", _G.print
   _G.print = function(msg: any) seen = tostring(msg) end
   local code = graph.cmd_attach(s, leaf, goal)
   _G.print = old_print
   assert(code == 0 and commits(s) == before and seen:find("nothing to record", 1, true) ~= nil, seen)
+  local after_order = table.concat(check.must(store.load(s, goal)).order, ",")
+  assert(after_order == before_order,
+    "a same-parent attach leaves order untouched: " .. after_order)
+end
+
+-- The old parent's stale `order` entry is pruned in the SAME publish
+-- that moves the child: `attach` writes both refs, one push, so a
+-- lost race refuses the whole move rather than leaving the entry
+-- behind for `fsck` to report.
+local function test_attach_prunes_a_positioned_child_from_its_old_parents_order()
+  local s = init_state_repo("attach-prune")
+  local goal, leaf = root_with_leaf(s)
+  local other = file_item(s, "another outcome", "")
+  local before = commits(s)
+  assert(graph.cmd_attach(s, leaf, other) == 0, "attach should be accepted")
+  assert(commits(s) == before + 2,
+    "one push, two commits: the leaf and the old parent it left")
+  local moved = check.must(store.load(s, leaf))
+  assert(moved.parent == other, "leaf is now other's child")
+  local old_parent = check.must(store.load(s, goal))
+  local still_there = false
+  for _, v in ipairs(old_parent.order) do
+    if v == leaf then still_there = true end
+  end
+  assert(not still_there,
+    "no stale entry left behind: " .. table.concat(old_parent.order, ","))
+end
+
+-- An UNPOSITIONED child's old parent never named it, so pruning finds
+-- nothing to remove: the move writes only the child's own ref.
+local function test_attach_of_an_unpositioned_child_writes_only_the_child()
+  local s = init_state_repo("attach-prune-unpositioned")
+  local stray = file_item(s, "a stray outcome", "")
+  local other = file_item(s, "another outcome", "")
+  local before = commits(s)
+  assert(graph.cmd_attach(s, stray, other) == 0, "attach should be accepted")
+  assert(commits(s) == before + 1,
+    "one commit: the child alone, nothing to prune on an unpositioned move")
+  local moved = check.must(store.load(s, stray))
+  assert(moved.parent == other, "stray is now other's child")
 end
 
 -- `attach ID PARENT --before X` places the child among PARENT's other
