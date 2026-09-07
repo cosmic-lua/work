@@ -1,0 +1,3 @@
+title: repo-mechanics manifest: a per-repo data file declaring bootstrap/gate/type-check/test commands, and a gitboard-side reader for it
+parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
+target: cosmic-lua/work
