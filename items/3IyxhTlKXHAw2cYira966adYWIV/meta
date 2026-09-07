@@ -1,0 +1,3 @@
+title: spec bar: resolve a spec's paths against the item's repo, not the running checkout
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/work
