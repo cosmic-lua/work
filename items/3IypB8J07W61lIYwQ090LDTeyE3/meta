@@ -1,4 +1,6 @@
 title: nil-flow: one test file allowlists the 7 flow positions as AST patterns; the tsv, the floor, _tool/floor.tl go, D27 superseded
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
 target: cosmic-lua/cosmic
+claim: 6141b568-f7a6-5a55-b674-7af59f6e37ac
+builders: 6141b568-f7a6-5a55-b674-7af59f6e37ac
 speccers: dda1840b-c349-51e6-b0ca-ba810058a66a
