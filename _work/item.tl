@@ -10,7 +10,10 @@
 ---
 ---   the board  the one parentless item — never workable, never taken
 ---   an outcome a direct child of the board — decomposed, never taken
----   a container any item with open children, being decomposed
+---   a container any item with open children, being decomposed —
+---              except a parent already carrying an open PR or
+---              research result with no verdict clearing it yet,
+---              which stays "work" through a routine child
 ---   work       a childless item below the outcome level
 ---
 --- The depth tests that tell these apart (`_work.flow.is_board`,
@@ -211,6 +214,35 @@ local RESOLUTIONS: {string: boolean} = {
 --- @return boolean True while resolution is empty
 local function is_open(it: Item): boolean
   return (it.resolution or "") == ""
+end
+
+--- Whether `it` already stands in the substate `_work.indexddl`'s
+--- `substate` view names "review" (an open PR or research result, no
+--- verdict yet) or "rework" (a standing "request changes") — matching
+--- that view's own CASE exactly, branch for branch: "rework" is the
+--- verdict alone, unconditional, so a claimed item mid-rework with no
+--- PR and no result (the send-back answered in place, not yet handed
+--- back over) still counts; "review" still needs a PR or a result,
+--- since an empty verdict with neither is merely claimed and building.
+--- `_work.gitgate.containered` reads this to leave such a parent's
+--- role and its live claim/PR untouched when a routine child lands on
+--- it, rather than treating the child as a decomposition. This is a
+--- broader test than `_work.gitverbs.cmd_take`'s own review-claim
+--- eligibility, which additionally needs a PR or result to exist
+--- (there being nothing to claim a review of otherwise) — that check
+--- stays inline in `cmd_take`, not routed through here.
+--- @param it Item The item
+--- @return boolean True while it carries a standing "request changes",
+--- or an empty verdict with a PR/result awaiting one
+local function is_review_or_rework(it: Item): boolean
+  local verdict = it.verdict or ""
+  if verdict == "request changes" then
+    return true
+  end
+  if verdict ~= "" then
+    return false
+  end
+  return (it.pr or 0) ~= 0 or (it.result or "") ~= ""
 end
 
 --- Whether an item is parentless — the board, in a well-formed tree,
@@ -421,6 +453,7 @@ local record item
   VERDICTS: {string: boolean}
   RESOLUTIONS: {string: boolean}
   is_open: function(it: Item): boolean
+  is_review_or_rework: function(it: Item): boolean
   is_parentless: function(it: Item): boolean
   is_flagged: function(it: Item): boolean
   by_id: function(items: {Item}): Index
@@ -436,6 +469,7 @@ local M: item = {
   VERDICTS = VERDICTS,
   RESOLUTIONS = RESOLUTIONS,
   is_open = is_open,
+  is_review_or_rework = is_review_or_rework,
   is_parentless = is_parentless,
   is_flagged = is_flagged,
   by_id = by_id,

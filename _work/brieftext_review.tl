@@ -20,7 +20,10 @@
 --- step never needs it — `git show <head>:<path>` into the scratchpad
 --- replaces the checkout for that one step — but its "Recording your
 --- verdict" section still names it for reading the diff itself, kept
---- verbatim from `REVIEW`.
+--- verbatim from `REVIEW`. That shared "Recording your verdict" text
+--- also says the checkout has no `o/3p` cache yet, unlike a builder's
+--- already-bootstrapped one — one line pointing at `bin/cosmic --make
+--- fetch`, not a repeat of AGENTS.md's own fetch/pin section.
 ---
 --- `<PRODUCT_ROOT>` is the product checkout holding `bin/gitboard`;
 --- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
@@ -127,7 +130,9 @@ another agent's worktree.
 `verdict` performs the GitHub side of your verdict itself — you touch
 no GitHub tool of your own. CI is read from `gitboard show <ITEM_ID>`
 (the board's own head-check observation); read the diff with `git
-fetch origin <branch>` in your own checkout at `<WORKTREE>`.
+fetch origin <branch>` in your own checkout at `<WORKTREE>`. That
+checkout has no `o/3p` cache yet — run `bin/cosmic --make fetch`
+before its first test, and `--make build` once if you run any test.
 `bin/gitboard` in the product checkout fetches its own pinned release;
 this review is claimed under session `<REVIEW_SESSION>` — you MUST use
 that exact string. Export SSL_USE_SYSTEM_CERTS=1 before `verdict`,
@@ -214,7 +219,9 @@ never in a worktree, and confirm the refusal.
 `verdict` performs the GitHub side of your verdict itself — you touch
 no GitHub tool of your own. CI is read from `gitboard show <ITEM_ID>`
 (the board's own head-check observation); read the diff with `git
-fetch origin <branch>` in your own checkout at `<WORKTREE>`.
+fetch origin <branch>` in your own checkout at `<WORKTREE>`. That
+checkout has no `o/3p` cache yet — run `bin/cosmic --make fetch`
+before its first test, and `--make build` once if you run any test.
 `bin/gitboard` in the product checkout fetches its own pinned release;
 this review is claimed under session `<REVIEW_SESSION>` — you MUST use
 that exact string. Export SSL_USE_SYSTEM_CERTS=1 before `verdict`,

@@ -51,9 +51,20 @@ and nothing less:
    tree — a moved number is fine (refresh your understanding, don't
    stop over it alone); a fact that breaks the Change's shape is a
    real blocker: STOP and report it (see below). Before the first
-   edit, `wc -l` every file the Change names; if the Change's
-   additions cannot fit under the 500-line cap, STOP now (report the
-   count) rather than after implementing.
+   edit, `wc -l` every file the Change names. A file at or within a
+   few lines of the 500-line cap is not an automatic STOP: if it has
+   an obvious, low-risk split seam (a self-contained group of test
+   cases, a section already separated by a comment header) and the
+   spec's Non-goals don't forbid touching the file's shape, split it
+   and land the new coverage in the new sibling file — name the split
+   explicitly in the PR body as a deviation from the literal file
+   list. If no safe seam is obvious, or the split itself would be a
+   judgment call bigger than the item's own scope, STOP now (report
+   the count) rather than after implementing — this remains the right
+   answer for a genuinely ambiguous split. Either way, report which
+   path you took and why, so a reviewer judges the split like any
+   other diff (least surprise, no gratuitous restructuring) instead of
+   the item losing a build cycle to a binary fit check.
 2. Make exactly the `## Change`. Touch no file outside its stated
    scope; hold every `## Non-goals` wall.
 3. Between edits, `bin/cosmic --check types <file>` on the files you

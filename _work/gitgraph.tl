@@ -16,12 +16,14 @@
 --- parent is the whole operation, because roles derive from the
 --- graph — an outcome becomes work by gaining a parent other than the
 --- board, and a workable item becomes a container the moment a child
---- attaches under it. Rank is the other half of triage and has its
---- own verb, `rank`, because an item can be placed without being
---- moved and moved without being ranked. `new` with no `--parent`
---- files under the board — the one parentless item — the same
---- position `attach` never needs to move an item TO, since only
---- `init` creates it.
+--- attaches under it, unless it already carries a live PR or
+--- research result awaiting a verdict (`item.is_review_or_rework`),
+--- which stays work through a routine child instead. Rank is the
+--- other half of triage and has its own verb, `rank`, because an item
+--- can be placed without being moved and moved without being ranked.
+--- `new` with no `--parent` files under the board — the one
+--- parentless item — the same position `attach` never needs to move
+--- an item TO, since only `init` creates it.
 local cachequery = require("_work.cachequery")
 local friction = require("_work.gitfriction")
 local gate = require("_work.gitgate")
