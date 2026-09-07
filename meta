@@ -1,9 +1,9 @@
 title: doc signatures: one naming rule for a nested owner chain (M.Sub.bar / M.Sub:baz), tested at two levels
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-cBpk_Os62-6141b568
 pr: 1789
 verdict: accept
 verdict_head: 98420b7a3c6d8a375844d5b3ea2cbb964ed59cd7
 verdict_spec: 2380c0a329fa36faf295278dc26a91cccc2bf48b
+resolution: completed
 builders: build-cBpk_Os62-6141b568
