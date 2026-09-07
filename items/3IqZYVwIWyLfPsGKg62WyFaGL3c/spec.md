@@ -12,6 +12,19 @@ the verdict line lie, and an orchestrator following it looks for a
 placeholder that is not there (the 2026-09-04 routine log records the
 detour on two of six briefs).
 
+**Reconfirmed 2026-09-07, a second session.** Board item `Bfzm_Iqlc`'s
+own spec (Evidence section) quotes `new --parent <ID>` as literal
+command syntax. Both `brief builder Bfzm_Iqlc` and `brief review
+Bfzm_Iqlc`'s verdict lines flagged `<ID>` as needing to be filled —
+`gitboard-brief: ... fill <ID>, then read it whole` — even though the
+rendered brief body was already complete; the `<ID>` sits entirely
+inside the quoted spec prose, never in the template's own unfilled
+slots. Caught only because this orchestrator had already hit the exact
+same false-positive shape once before in this same session and knew
+to check the body for a literal, unfilled `<ID>` token before
+believing the verdict line. An orchestrator without that prior
+context would detour exactly as the 2026-09-04 log describes.
+
 ## Change
 
 `_work/brief.tl`: the survivor list is the template's own placeholder
