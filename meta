@@ -1,10 +1,10 @@
 title: cosmic.ast: require-alias resolution — a narrow, shared primitive for --upgrade apply and --upgrade report
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-X4Uy_DCTW-6141b568
 pr: 1796
 verdict: accept
 verdict_head: 8e3ee830e8bf7a242f3ff0206fe8d05d7f207e4b
 verdict_spec: 60852d48d27d0ac3c33400194578bd9144f3824f
+resolution: completed
 builders: build-X4Uy_DCTW-6141b568
 speccers: dda1840b-c349-51e6-b0ca-ba810058a66a
