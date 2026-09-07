@@ -2,5 +2,6 @@ title: rewrite_test: the no-blank-line case asserts the pre-format splice, so a 
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-OiQb_ry43-6141b568
+reviewer: review-OiQb_ry43-6141b568
 pr: 1790
 builders: build-OiQb_ry43-6141b568
