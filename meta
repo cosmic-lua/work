@@ -1,3 +1,4 @@
 title: ast: sweep _work/*.tl for the guard-then-reassign field-narrowing shape that broke HD1o_sZ5c's pin bump
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 target: cosmic-lua/work
+speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
