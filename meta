@@ -2,7 +2,9 @@ title: cosmic-lua/work's own bin/cosmic.pin is 3 days stale — missing the cosm
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: debug-HD1o_sZ5c-6141b568
-reviewer: review-HD1o_sZ5c-6141b568
 pr: 89
+verdict: accept
+verdict_head: 6ad5685b260063be45e55cbb3aa07d45d8e953b1
+verdict_spec: 8df3794e6add49f8ce6f7d5e30f118f18c1a3894
 builders: build-HD1o_sZ5c-6141b568 debug-HD1o_sZ5c-6141b568
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
