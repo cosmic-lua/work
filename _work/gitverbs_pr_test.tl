@@ -7,6 +7,7 @@ local check = require("cosmic.check")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
 local verbs = require("_work.gitverbs")
 
@@ -63,6 +64,30 @@ local function test_take_pr_rerecord_of_its_own_number_stays_a_noop()
   assert(again == 0 and commits(s) == before and seen:find("nothing to record", 1, true) ~= nil, seen)
 end
 
+-- The no-op path is not a new head: re-recording the item's own number
+-- while a genuinely live reviewer claim stands must not clear it — only
+-- an actually new head does that (see
+-- `test_take_pr_handover_clears_a_stale_reviewer_claim`, above).
+local function test_take_pr_rerecord_of_its_own_number_keeps_a_live_reviewer()
+  local s = init_state_repo("pr-self-noop-live-reviewer")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") == 0,
+    "session-b claims the live review")
+  assert(check.must(store.load(s, leaf)).reviewer == "session-b",
+    "the claim is recorded")
+  local before = commits(s)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0,
+    "re-recording the identical number, no --force")
+  assert(commits(s) == before,
+    "same number, same claim holder: still a no-op, nothing committed")
+  local got = check.must(store.load(s, leaf))
+  assert(got.reviewer == "session-b",
+    "the live reviewer claim survives the idempotent retake")
+end
+
 -- A DONE item's PR is spent: it does not block another item from recording the same number.
 local function test_take_pr_ignores_a_done_items_number()
   local s = init_state_repo("pr-done-spent")
@@ -77,6 +102,59 @@ local function test_take_pr_ignores_a_done_items_number()
   assert(verbs.cmd_take(s, b, "session-b", 7, false, "") == 0,
     "A's PR is spent once A is done")
   assert(check.must(store.load(s, b)).pr == 7, "and B's records it")
+end
+
+-- A reviewer's claim is a lease on the head it read, not a standing fact:
+-- once the claim holder hands back a new one, the old claim is not a live
+-- read of THIS head, so it clears with the handover — the same way a
+-- standing `request changes` does — and a genuinely fresh review then
+-- claims cleanly, with no `--force` for a state nobody actually holds.
+local function test_take_pr_handover_clears_a_stale_reviewer_claim()
+  local s = init_state_repo("pr-clears-reviewer")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 5, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") == 0,
+    "session-b claims the review")
+  assert(check.must(store.load(s, leaf)).reviewer == "session-b",
+    "the claim is recorded")
+  assert(verbs.cmd_take(s, leaf, "session-a", 6, false, "") == 0,
+    "the claim holder hands back a new head")
+  local got = check.must(store.load(s, leaf))
+  assert(got.pr == 6, "the new head rides the handover")
+  assert(got.reviewer == "",
+    "and the stale review claim clears with it, not surviving to block "
+    .. "the next one")
+  assert(verbs.cmd_take(s, leaf, "session-c", 0, false, "") == 0,
+    "a fresh review then claims cleanly, no --force needed")
+  assert(check.must(store.load(s, leaf)).reviewer == "session-c",
+    "the fresh claim is theirs")
+end
+
+-- The already-recorded (same-number) path is a second, independent
+-- trigger for the same clear: a live `request changes` verdict means
+-- the reviewer field is not a genuine claim but the last handover's
+-- own bookkeeping, even when the number handed back is the SAME one
+-- already on the item — the literal rework hand-back this item was
+-- filed over. Direct-field fixture, since no verb writes a
+-- `request changes` verdict on a local-only board.
+local function test_take_pr_same_number_handover_clears_a_live_request_changes_reviewer()
+  local s = init_state_repo("pr-same-number-clears-reviewer")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.verdict = "request changes"
+  it.reviewer = "stale-reviewer"
+  assert(storewrite.save(s, it, "fixture: live request-changes verdict, stale reviewer"))
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0,
+    "the claim holder hands back the SAME pr number")
+  local got = check.must(store.load(s, leaf))
+  assert(got.verdict == "", "the stale verdict clears")
+  assert(got.reviewer == "",
+    "and so does the stale reviewer, on the literal same-number path")
 end
 
 -- --force --why overrides the collision, same as every other refusal
