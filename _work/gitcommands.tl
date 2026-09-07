@@ -77,7 +77,8 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "ID [options]", flags = {dir_flag(),
           {long = "title", arg = "TITLE", help = "the item's title"},
           {long = "repo", arg = "OWNER/NAME",
-            help = "the repo its PR lands in"},
+            help = "the repo its PR lands in; refused on the board — it "
+            .. "carries no repo"},
           {long = "base", arg = "BRANCH",
             help = "the branch its PR targets"}}}},
     {name = "spec", summary = "replace ID's spec sidecar with FILE",
