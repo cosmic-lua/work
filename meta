@@ -1,3 +1,4 @@
 title: casts floor merge=union resurrects deleted rows and duplicates changed ones on a clean merge
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
+resolution: not-planned
