@@ -79,6 +79,34 @@ local function test_take_pr_ignores_a_done_items_number()
   assert(check.must(store.load(s, b)).pr == 7, "and B's records it")
 end
 
+-- A reviewer's claim is a lease on the head it read, not a standing fact:
+-- once the claim holder hands back a new one, the old claim is not a live
+-- read of THIS head, so it clears with the handover — the same way a
+-- standing `request changes` does — and a genuinely fresh review then
+-- claims cleanly, with no `--force` for a state nobody actually holds.
+local function test_take_pr_handover_clears_a_stale_reviewer_claim()
+  local s = init_state_repo("pr-clears-reviewer")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 5, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") == 0,
+    "session-b claims the review")
+  assert(check.must(store.load(s, leaf)).reviewer == "session-b",
+    "the claim is recorded")
+  assert(verbs.cmd_take(s, leaf, "session-a", 6, false, "") == 0,
+    "the claim holder hands back a new head")
+  local got = check.must(store.load(s, leaf))
+  assert(got.pr == 6, "the new head rides the handover")
+  assert(got.reviewer == "",
+    "and the stale review claim clears with it, not surviving to block "
+    .. "the next one")
+  assert(verbs.cmd_take(s, leaf, "session-c", 0, false, "") == 0,
+    "a fresh review then claims cleanly, no --force needed")
+  assert(check.must(store.load(s, leaf)).reviewer == "session-c",
+    "the fresh claim is theirs")
+end
+
 -- --force --why overrides the collision, same as every other refusal
 -- here, and the reason rides the commit subject.
 local function test_take_pr_collision_forced_lands_with_the_suffix()
