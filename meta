@@ -1,3 +1,4 @@
 title: gitboard's shared templates hardcode per-repo build mechanics (bootstrap, gate, type-check commands) instead of reading them from the target repo
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 target: cosmic-lua/work
+speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85
