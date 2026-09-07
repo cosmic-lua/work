@@ -2,5 +2,6 @@ title: bin/gitboard.pin: bump to 2026-09-07-ee58808 (ranks-last new, show ci lin
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmic
 claim: build-9RCWgE70-f6f470de
+reviewer: review-9RCW_gE70-f6f470de
 pr: 1786
 builders: build-9RCWgE70-f6f470de
