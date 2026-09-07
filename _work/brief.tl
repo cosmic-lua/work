@@ -101,39 +101,11 @@ local function fill(text: string, values: {string: string}): string
   return out
 end
 
---- The `values` `unfilled`'s scan should run against: identical to the
---- real fill values except `BOUNCE_CONTEXT` and `ROUND_CONTEXT`, when
---- either is set, are both blanked. Each carries externally-authored
---- text (a reviewer's quoted finding) rather than a board fact this
---- tool controls, so a `<UPPER_SNAKE>`-shaped substring inside one —
---- ordinary review prose like "rename to `<CONST_NAME>`" — must never
---- be mistaken by `unfilled` for a placeholder the caller still owes a
---- fill. The printed body always fills with the real `values`; only
---- the scan uses this. Blanking a splice that was never set is a
---- no-op (the key simply appears in the scan copy at ""), so blanking
---- both unconditionally costs nothing when only one is actually in
---- play. Blanking the whole splice loses no real signal: the one
---- placeholder `REWORK` deliberately leaves open, `<WORKTREE>`,
---- already appears verbatim in `BUILDER`'s own body outside the
---- splice, so the scan still reports it once.
---- @param values {string: string} The real fill values
---- @return {string: string} The values to scan a filled body with
-local function scan_values(values: {string: string}): {string: string}
-  if values["BOUNCE_CONTEXT"] == nil and values["ROUND_CONTEXT"] == nil then
-    return values
-  end
-  local out: {string: string} = {}
-  for k, v in pairs(values) do
-    out[k] = v
-  end
-  out["BOUNCE_CONTEXT"] = ""
-  out["ROUND_CONTEXT"] = ""
-  return out
-end
-
---- The placeholders still unanswered in a filled body, first-seen
---- order, each once.
---- @param text string The filled template
+--- The `<UPPER_SNAKE>` placeholder-shaped tokens present in `text`,
+--- first-seen order, each once. Used both on a raw template (to find
+--- the placeholders it declares) and, in the test below, on an
+--- already-filled string.
+--- @param text string The text to scan
 --- @return {string} Placeholder names, possibly empty
 local function unfilled(text: string): {string}
   local seen: {string: boolean} = {}
@@ -142,6 +114,29 @@ local function unfilled(text: string): {string}
     if not seen[key] then
       seen[key] = true
       out[#out + 1] = ("<%s>"):format(key)
+    end
+  end
+  return out
+end
+
+--- The `template`'s OWN declared placeholders that `values` leaves
+--- unanswered — checked by looking `values` up directly, never by
+--- scanning the filled body. A spec quoting a placeholder-shaped token
+--- verbatim (`<N>`, `<ID>`, `<REVIEW_SESSION>` as example command
+--- syntax or old-name prose) rides inside `values["SPEC"]`'s own text;
+--- since only names the template itself declares are ever candidates,
+--- and a candidate survives only when `values` truly holds no answer
+--- for it, such a token can never be mistaken for one the caller still
+--- owes a fill, no matter where in the body it ends up appearing.
+--- @param template string The raw, unfilled template
+--- @param values {string: string} The fill values actually used
+--- @return {string} Placeholder names still unanswered, first-seen order
+local function survivors(template: string, values: {string: string}): {string}
+  local out: {string} = {}
+  for _, ph in ipairs(unfilled(template)) do
+    local key = ph:sub(2, #ph - 1)
+    if values[key] == nil then
+      out[#out + 1] = ph
     end
   end
   return out
@@ -452,8 +447,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     values["HEAD_SHA"] = head_sha
   end
   local body = fill(template, values) .. "\n\n" .. brieftext_friction.ASK
-  local scan_body = fill(template, scan_values(values)) .. "\n\n" .. brieftext_friction.ASK
-  local left = unfilled(scan_body)
+  local left = survivors(template, values)
   if out ~= "" then
     local wok, werr = fs.write(out, body)
     if not wok then
