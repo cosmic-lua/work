@@ -1,9 +1,9 @@
 title: cast-justify: fold cast-kind classification into --check lint per-file, delete casts_test.tl
 parent: 3J0Xxh9FSKV5SNVEo0dS4IBDGf3
 target: cosmic-lua/cosmic
-claim: build-MsXN_oznh-6141b568
 pr: 1797
 verdict: accept
 verdict_head: f49a64f890f1154ec05512ad9e3705db5a13af32
 verdict_spec: 99bf4bc2a4f40240b20ce43d56c1a4ecb3f1b84c
+resolution: completed
 builders: build-MsXN_oznh-6141b568
