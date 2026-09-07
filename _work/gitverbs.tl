@@ -10,6 +10,7 @@
 --- line and returns its exit code. Mutations commit locally and publish through
 --- `publish.publish`, whose rejected-push path drops the mutation whole, re-syncs, and
 --- refuses — re-running the verb re-applies every gate against the merged board.
+local cache = require("_work.cache")
 local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
@@ -271,6 +272,22 @@ local function cmd_take(s: store.Store, id: string, session: string,
       end
     end
     it.pr = pr
+    -- The window between this handover and the next `sync` has no
+    -- observation of its own yet: `ci_clears_debt` reads a missing row
+    -- as "never excludes", so a diff whose CI has not even started
+    -- would outrank a todo pull. Seed the row exactly as `sync` would
+    -- once it observes a running head; `sync`'s own observation
+    -- overwrites it as soon as one lands. Best-effort, same as
+    -- `ciobs.live`: a cache that will not even open leaves the
+    -- handover itself unaffected.
+    if not already_recorded then
+      local rc, _rcerr = cache.open(s.root)
+      if rc ~= nil then
+        local _ok, _werr = ciobs.record(rc, it.repo, pr,
+          {state = "running", head_sha = "", runs = {}})
+        local _cok, _ccerr = cache.close(rc)
+      end
+    end
     -- A new head to judge: the rework's send-back is spent, so the
     -- item is awaiting a verdict again. The judged head stays in
     -- verdict_head, which is how a reviewer sees what moved.

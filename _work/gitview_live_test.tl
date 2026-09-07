@@ -6,6 +6,8 @@
 
 local cache = require("_work.cache")
 local check = require("cosmic.check")
+local ciobs = require("_work.ciobs")
+local env = require("cosmic.env")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gh = require("_work.gh")
@@ -116,7 +118,13 @@ end
 local function test_live_next_skips_a_reviewable_item_with_ci_red()
   local s = fixture.init_state_repo("next-ci-red")
   local leaf = unplaced_root_with_leaf(s)
+  -- `handed_over`'s own `take --pr` seeds a fresh `running` row (the
+  -- gap this item's own change closes) — `GITBOARD_CI_FRESH` forces
+  -- `next`'s read past that freshly-seeded row so the live mock below
+  -- is what actually answers, exactly as it would once the row ages
+  -- out of the freshness window on its own.
   handed_over(s, leaf, "builder-a", 9)
+  assert(env.set(ciobs.FRESH_ENV, "1"))
   with_ci_state("red", function(): boolean
       local code, printed = cmd_next_and_capture(s, "")
       assert(code == 0, printed)
@@ -124,6 +132,7 @@ local function test_live_next_skips_a_reviewable_item_with_ci_red()
         "a red head reads as the builder's move on a live next: " .. printed)
       return true
     end)
+  assert(env.unset(ciobs.FRESH_ENV))
 end
 
 -- A recommended head whose `Ready when:` mismatches is never offered:
