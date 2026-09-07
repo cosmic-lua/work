@@ -179,6 +179,21 @@ local function test_the_review_script_mutates_a_git_show_copy()
     "the script template must never send a reviewer to a fresh checkout")
 end
 
+-- A freshly made review checkout has no `o/3p` cache — the same gap
+-- `worktree ID` already closes for a builder — so both review
+-- templates must send a reviewer to `--make fetch` (and, for any
+-- test, `--make build`) before that checkout's first test runs.
+local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
+  for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
+    assert(tmpl:find(
+        "That checkout has no `o/3p` cache yet — run `bin/cosmic "
+        .. "--make fetch` before its first test, and `--make build` "
+        .. "once if you run any test.", 1, true) ~= nil,
+      "the checkout note must send a reviewer to --make fetch (and "
+      .. "--make build) before running any test: " .. tmpl)
+  end
+end
+
 local function test_step_five_says_to_commit_before_mutating()
   assert(BUILDER:find(
       "Commit the real change before mutation-testing it, so a "
