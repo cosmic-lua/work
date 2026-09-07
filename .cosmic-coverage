@@ -6,6 +6,7 @@ return {
   ["_perf/fixture.tl"] = {["covered"] = 0, ["total"] = 135},
   ["_work/action.tl"] = {["covered"] = 202, ["total"] = 212},
   ["_work/api.tl"] = {["covered"] = 84, ["total"] = 112},
+  ["_work/bounce.tl"] = {["covered"] = 14, ["total"] = 14},
   ["_work/brief.tl"] = {["covered"] = 73, ["total"] = 84},
   ["_work/brieftext.tl"] = {["covered"] = 6, ["total"] = 10},
   ["_work/brieftext_friction.tl"] = {["covered"] = 3, ["total"] = 4},
