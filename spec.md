@@ -16,6 +16,8 @@ sweeps need cannot be written as a pattern yet, measured 2026-09-06:
 `cosmic/ast/match.tl` binds a capture to any node of kind
 `variable`/`identifier` (`grep -n 'kind.*identifier' cosmic/ast/match.tl`).
 
+Amended at build (2026-09-07): the 12-file grep counted fixture CONTENT, not legacy tests — 10 of the 12 are under `testdata/` trees the project model excludes (so `--apply` refuses them by design) and the other 2 match inside long-string literals that ARE the fixtures `_tool/seam_test.tl` and `_make/resolution_test.tl` exist to check; the AST matcher rightly finds nothing to rewrite. There is no legacy self-calling test left in the tree to sweep. The name predicate and statement deletion stand on their own tests.
+
 ## Change
 
 `cosmic/ast/match.tl`: a capture may carry a Lua pattern predicate on
@@ -29,10 +31,7 @@ span_end's line) rather than splicing an empty string into it.
 `cosmic/ast/match_test.tl` and `rewrite_test.tl`: `$F:^test_()` over a
 file with `test_a()` and `run()` binds only `test_a`; rewriting it to
 `""` leaves no blank line where the call was and the file still
-parses. Then run it: `--rewrite '$F:^test_()' '' --apply` over the 12
-files above IS the acceptance — the diff of that run, formatter-clean,
-lands in the same PR, and `grep -lE '^test_[a-z_0-9]+\(\)\s*$'` → 0.
-
+parses. The acceptance is the two test files: the sweep the Evidence proposed is not runnable (see the Evidence amendment).
 ## Non-goals
 
 No type-aware predicates; no multi-pass application.
