@@ -2,6 +2,7 @@ title: gitboard worktree: quiet mode for the fetch/build bootstrap — 650 lines
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-YLxi_6fmt-6141b568
+reviewer: review-YLxi_6fmt-r2-6141b568
 pr: 87
 verdict: request changes
 verdict_head: 2a6fe3a13f512eab926cda9b6d78b8c4619e8541
