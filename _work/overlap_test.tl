@@ -5,9 +5,11 @@
 -- orchestrator would otherwise only find by reading every candidate's
 -- spec by hand and comparing them.
 
+local find = require("_work.find")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local gitspec = require("_work.gitspec")
+local index = require("_work.index")
 local overlap = require("_work.overlap")
 local show = require("_work.gitshow")
 local store = require("_work.store")
@@ -124,28 +126,49 @@ local OVERLAP_UNRELATED < const > = table.concat({
     "## Change", "Touch `_work/gitshow.tl` only.",
   }, "\n")
 
+-- `find.similar` never returns "nothing close" on a fixture this
+-- small — a handful of items share enough common words (bm25's IDF
+-- over so few documents makes even a stopword look distinctive) that
+-- `show ID` would correlate this test's OWN path-collision fixture
+-- into `likely duplicate:`, testing `_work.gitshow`'s correlation
+-- instead of `_work.overlap`'s standalone path signal this file means
+-- to pin. Stubbed to report nothing close, the swap-and-restore
+-- pattern `gitshow_test.tl` already uses to isolate one signal from a
+-- confound it does not mean to exercise.
 local function test_show_surfaces_a_change_section_path_overlap()
-  local s = init_state_repo("overlap")
-  local root, first = root_with_leaf(s)
-  local second = file_item(s, "another slice touching the same field", root)
-  local unrelated = file_item(s, "an unrelated slice", root)
-  write_spec(s, first, OVERLAP_A)
-  write_spec(s, second, OVERLAP_B)
-  write_spec(s, unrelated, OVERLAP_UNRELATED)
+  local real_similar = find.similar
+  find.similar = function(_idx: index.Index, _title: string,
+      _exclude_id?: string): find.Rows | nil, string
+    return {}, ""
+  end
+  local ok, err = pcall(function(): boolean
+      local s = init_state_repo("overlap")
+      local root, first = root_with_leaf(s)
+      local second = file_item(s, "another slice touching the same field", root)
+      local unrelated = file_item(s, "an unrelated slice", root)
+      write_spec(s, first, OVERLAP_A)
+      write_spec(s, second, OVERLAP_B)
+      write_spec(s, unrelated, OVERLAP_UNRELATED)
 
-  local _, out_first = show_and_capture(s, first)
-  assert(out_first:find("overlaps: " .. tail.handle(second)
-      .. " on _work/brief.tl", 1, true),
-    "the sibling naming the same file is named: " .. out_first)
+      local _, out_first = show_and_capture(s, first)
+      assert(out_first:find("overlaps: " .. tail.handle(second)
+          .. " on _work/brief.tl", 1, true),
+        "the sibling naming the same file is named: " .. out_first)
 
-  local _, out_second = show_and_capture(s, second)
-  assert(out_second:find("overlaps: " .. tail.handle(first)
-      .. " on _work/brief.tl", 1, true),
-    "the collision is symmetric: " .. out_second)
+      local _, out_second = show_and_capture(s, second)
+      assert(out_second:find("overlaps: " .. tail.handle(first)
+          .. " on _work/brief.tl", 1, true),
+        "the collision is symmetric: " .. out_second)
 
-  local _, out_unrelated = show_and_capture(s, unrelated)
-  assert(not out_unrelated:find("overlaps:", 1, true),
-    "an unrelated path collides with nothing: " .. out_unrelated)
+      local _, out_unrelated = show_and_capture(s, unrelated)
+      assert(not out_unrelated:find("overlaps:", 1, true),
+        "an unrelated path collides with nothing: " .. out_unrelated)
+      return true
+    end)
+  find.similar = real_similar
+  if not ok then
+    error(err, 0)
+  end
 end
 
 -- `headroom_lines` warns right at the margin: a file with exactly

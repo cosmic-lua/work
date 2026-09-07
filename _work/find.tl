@@ -78,12 +78,16 @@ local SIMILAR_LIMIT < const > = 3
 --- could not move it to a better-supported value.
 local SIMILAR_RATIO < const > = 0.5
 
---- One search hit.
+--- One search hit. `ratio` is `similar`'s own closeness measure — the
+--- magnitude of this hit's bm25 rank divided by the best hit's, in
+--- `[SIMILAR_RATIO, 1.0]` — set only by `similar`; `query`'s hits never
+--- carry it, a query having no "best" to measure closeness against.
 local record Hit
   id: string
   title: string
   state: string
   snippet: string
+  ratio: number | nil
 end
 
 local type Rows = {Hit}
@@ -226,15 +230,38 @@ end
 --- The closest existing titles to `title`, at most `SIMILAR_LIMIT`,
 --- kept only when their match is meaningfully close to the best one
 --- (`SIMILAR_RATIO`) — a title with nothing close returns no hits
---- rather than three weak, unrelated ones.
+--- rather than three weak, unrelated ones. Each hit's `.ratio` is that
+--- closeness measure itself, so a caller can render it.
+---
+--- `exclude_id`, when given, drops that id from the ranking before the
+--- best hit is chosen — an item's OWN row, already indexed under its
+--- own title, would otherwise score as a perfect self-match and both
+--- inflate the "best" every other hit is measured against and crowd a
+--- real candidate out of the query's own limit; `show ID`'s title
+--- lookup against an existing item needs this, `new`'s pre-mint check
+--- against a title that has no row yet does not.
 --- @param idx Index An index `build` has already filled
 --- @param title string The candidate title
+--- @param exclude_id string | nil An id to drop from the ranking, its own
 --- @return Rows | nil The close hits, possibly empty; nil on a query failure
 --- @return string Error message
-local function similar(idx: Index, title: string): Rows | nil, string
-  local rows, err = ranked_rows(idx, match_any(title), SIMILAR_LIMIT)
+local function similar(idx: Index, title: string, exclude_id?: string): Rows | nil, string
+  local limit = SIMILAR_LIMIT
+  if exclude_id ~= nil then
+    limit = limit + 1
+  end
+  local rows, err = ranked_rows(idx, match_any(title), limit)
   if rows == nil then
     return nil, err
+  end
+  if exclude_id ~= nil then
+    local kept: {Row} = {}
+    for _, r in ipairs(rows) do
+      if r.id ~= exclude_id then
+        kept[#kept + 1] = r
+      end
+    end
+    rows = kept
   end
   if #rows == 0 then
     return {}
@@ -243,9 +270,13 @@ local function similar(idx: Index, title: string): Rows | nil, string
   local out: Rows = {}
   if best > 0 then
     for _, r in ipairs(rows) do
-      if math.abs(r.rank) >= best * SIMILAR_RATIO then
+      if #out >= SIMILAR_LIMIT then
+        break
+      end
+      local ratio = math.abs(r.rank) / best
+      if ratio >= SIMILAR_RATIO then
         out[#out + 1] = {id = r.id, title = r.title, state = r.state,
-          snippet = r.snippet}
+          snippet = r.snippet, ratio = ratio}
       end
     end
   end
@@ -285,7 +316,7 @@ local record find
   FTS_DDL: string
   build: function(idx: Index): boolean, string
   query: function(idx: Index, text: string, limit: integer): Rows | nil, string
-  similar: function(idx: Index, title: string): Rows | nil, string
+  similar: function(idx: Index, title: string, exclude_id?: string): Rows | nil, string
   reindex_item: function(idx: Index, it: item.Item, spec_body: string): boolean, string
   remove_item: function(idx: Index, id: string): boolean, string
 end
