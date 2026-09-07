@@ -2,4 +2,5 @@ title: coverage: --make coverage --min PCT [--min-file PCT] replaces the .cosmic
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
 target: cosmic-lua/cosmic
 claim: build-DouF_FlP8-f6f470de
+pr: 1778
 builders: build-DouF_FlP8-f6f470de
