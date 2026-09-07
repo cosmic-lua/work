@@ -388,7 +388,7 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
     note = (" (PR #%d was already merged)"):format(it.pr)
   elseif bounced_as_comment then
     note = " (bounce posted as a marked comment: the token cannot " ..
-      "request changes on its own PR)"
+    "request changes on its own PR)"
   end
   return gate.verdict_line("verdict", true,
     ("%s on %s: %s%s"):format(kind, id:sub(1, 8), outcome, note))
