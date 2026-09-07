@@ -1,10 +1,10 @@
 title: bin/gitboard.pin: bump to 2026-09-07-81e0660 (own-PR COMMENT bounce, worktree refuses unclaimed)
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmic
-claim: build-VQJe_6hgY-f6f470de
 pr: 1784
 verdict: accept
 verdict_head: da26cb305eb398fd002ce3af1ba36051918dadd1
 verdict_spec: 6d8b7265baf7b2159d2ca1473c3e7030afb470fd
+resolution: completed
 builders: build-VQJe_6hgY-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
