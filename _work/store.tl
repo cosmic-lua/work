@@ -300,8 +300,9 @@ end
 --- @return cache.Cache | nil The open cache
 --- @return string Error message
 local function ensure_index(s: Store): cache.Cache | nil, string
-  if s.index ~= nil then
-    return s.index, ""
+  local existing = s.index
+  if existing ~= nil then
+    return existing, ""
   end
   local found, ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
   if found == nil then
