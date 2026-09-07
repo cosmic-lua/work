@@ -2,5 +2,6 @@ title: sys/help.md: document the $NAME:PATTERN name-predicate suffix the pattern
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
 target: cosmic-lua/cosmic
 claim: build-QwgY_FUPJ-6141b568
+reviewer: review-QwgY_FUPJ-6141b568
 pr: 1795
 builders: build-QwgY_FUPJ-6141b568
