@@ -3,7 +3,7 @@
 `cosmic.ast` gains a narrow, structural require-alias resolver:
 `cosmic.ast.requires(parsed: Parsed): {string: string}` (new function
 in `cosmic/ast/init.tl`, implementation in a new `cosmic/ast/requires.tl`
-— `cosmic/ast/init.tl` is 39 lines today, `grep -c '' cosmic/ast/init.tl`,
+— `cosmic/ast/init.tl` is 49 lines today (`wc -l cosmic/ast/init.tl`),
 so the new file follows the existing one-concern-per-file convention
 `walk.tl`/`match.tl`/`rewrite.tl` already set rather than growing
 `init.tl` itself).
