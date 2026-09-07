@@ -1,9 +1,9 @@
 title: bin/gitboard.pin: bump to 2026-09-07-ee58808 (ranks-last new, show ci line, 422 bounce fallback)
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmic
-claim: build-9RCWgE70-f6f470de
 pr: 1786
 verdict: accept
 verdict_head: 29c71deebc69e64722e190f9fbf1fd98e2cde69a
 verdict_spec: 671dfbbf5660f85fa715b6a0225a3d5867545674
+resolution: completed
 builders: build-9RCWgE70-f6f470de
