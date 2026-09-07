@@ -2,9 +2,9 @@ title: gitboard help new: --repo option text should note it is refused on a root
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 target: cosmic-lua/work
 claim: build-9R8e_zA8Q-rework1-6141b568
-reviewer: review-9R8e_zA8Q-r2-6141b568
 pr: 78
-verdict_head: 861f490ca814d2a3afbb4730d7992458ef8af2fe
+verdict: accept
+verdict_head: 4ed8f2868c70b53bfe41c0c64c3f60caa22b5441
 verdict_spec: 6e93a0459deb36d4640b54b0e4721bbe1dae3d9d
 builders: build-9R8e_zA8Q-6141b568 build-9R8e_zA8Q-rework1-6141b568
 speccers: 89a9a257-a7ad-5df1-a804-c382ae5f0144
