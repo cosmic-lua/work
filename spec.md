@@ -19,25 +19,19 @@ principle.
 
 ## Change
 
-Two live options; pick one as part of this item's own design work
-(both are reasonable, and the choice affects whether this item depends
-on the manifest reader in «oJ31_ppvR» or not):
+Reword `_work/brieftext.tl:54-56` (`BUILDER` step 1) to defer instead of
+assert: a builder checks the repo's own `AGENTS.md` (or equivalent) for
+a file-length convention and applies whatever it finds — consistent
+with how gitboard already treats every other repo convention. This item
+has no dependency on «oJ31_ppvR»'s resolver or its sibling wiring items,
+and none on the manifest-field alternative this item originally
+weighed — the parent outcome no longer carries a manifest format, so
+deferring to `AGENTS.md` is the one approach here, not a choice between
+two.
 
-1. **Defer, not assert**: reword step 1 to say a builder checks the
-   repo's own `AGENTS.md` (or equivalent) for a file-length convention
-   and applies whatever it finds — consistent with how gitboard already
-   treats every other repo convention. No dependency on the manifest
-   work; ships independently of the rest of this outcome.
-2. **Manifest field**: add a file-length-cap field (present or absent)
-   to the manifest format from «oJ31_ppvR», and have step 1 read it the
-   same way the sibling brief-template item reads command fields —
-   consistent with THIS outcome's general shape, at the cost of
-   depending on that item landing first.
-
-Whichever is chosen, `_work/brieftext_test.tl`'s existing cap-related
-assertions get updated to match, and the new behavior is proven against
-a fixture repo with a stated cap different from 500 (option 1) or a
-fixture manifest with a different cap value (option 2).
+`_work/brieftext_test.tl`'s existing cap-related assertions get updated
+to match, proven against a fixture repo with a stated cap different from
+500.
 
 ## Non-goals
 
