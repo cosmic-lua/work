@@ -45,8 +45,7 @@ local CSPEC: flags.CommandSpec = {
             .. "(at most one of --before/--after)"},
           {long = "spec-file", arg = "FILE", help = "spec markdown sidecar"},
           {long = "repo", arg = "OWNER/NAME",
-            help = "the repo its PR lands in; default is the board's origin "
-            .. "(needs --parent)"},
+            help = "the repo its PR lands in; default is the board's origin"},
           {long = "force", help = "file a `friction:` item over an "
             .. "incomplete roll call"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
@@ -78,7 +77,8 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "ID [options]", flags = {dir_flag(),
           {long = "title", arg = "TITLE", help = "the item's title"},
           {long = "repo", arg = "OWNER/NAME",
-            help = "the repo its PR lands in"},
+            help = "the repo its PR lands in; refused on the board — it "
+            .. "carries no repo"},
           {long = "base", arg = "BRANCH",
             help = "the branch its PR targets"}}}},
     {name = "spec", summary = "replace ID's spec sidecar with FILE",
