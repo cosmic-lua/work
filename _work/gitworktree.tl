@@ -16,7 +16,12 @@
 --- lands at `<checkout>/../wt/<id8>`,
 --- `<id8>` the item id's first 8 characters, `take`'s own branch
 --- name — the sequence every builder brief used to spend its first
---- 30-40 tool calls doing by hand.
+--- 30-40 tool calls doing by hand. The bootstrap's `--make fetch`/
+--- `--make build` is quiet by default: each step reduces to its own
+--- `PASS`/`FAIL` summary line, `--verbose` streams the hundreds of
+--- per-file `compile`/`compile-batch` lines verbatim instead — a
+--- failed step always prints everything captured, unfiltered,
+--- whichever mode is in play.
 ---
 --- `--review` swaps the whole shape for the review checkout instead,
 --- run right after `take ID` claims the REVIEW, before `brief review
@@ -28,7 +33,8 @@
 --- (`pr-<id8>`), never a fresh branch off base: a review reads a diff,
 --- it does not extend one. Refuses the same way over an unclaimed (or
 --- foreign-claimed) review, and again when ID carries no PR yet to
---- fetch.
+--- fetch. `--verbose` applies the same way to a review checkout's
+--- bootstrap as to a builder's.
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -167,23 +173,67 @@ local function branch_taken_refusal(checkout: string, branch: string): string | 
   return nil
 end
 
---- Bootstraps a fresh worktree: `bin/cosmic --make fetch` then
---- `--make build` for a cosmic tree (their own verdict lines are this
---- verb's output — streamed, not captured), nothing for a
+--- The summary line(s) `--make` itself prints inside a step's captured
+--- output: `verb: PASS (...)`/`verb: FAIL (...)`, the exact shape
+--- `_tool.records.format_verdict` writes (`fetch: PASS (N pins)`,
+--- `build: PASS (N files, 1 binary)`) — everything else, a `compile`/
+--- `compile-batch` line per source file or `unpack`/`fetch`/`patch`
+--- per pin, is dropped.
+--- @param text string A step's captured stdout
+--- @return {string} The summary lines, in the order they appeared
+local function summary_of(text: string): {string}
+  local out: {string} = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    if line:match("^%a+: PASS") ~= nil or line:match("^%a+: FAIL") ~= nil then
+      out[#out + 1] = line
+    end
+  end
+  return out
+end
+
+--- Runs one bootstrap step (a `bin/cosmic --make fetch`/`--make build`
+--- invocation). `verbose` streams it verbatim — `stdout`/`stderr`
+--- inherited, as every step ran before this flag existed. Quiet (the
+--- default) instead captures it and prints only `summary_of` its
+--- output on success, or everything captured, unfiltered, the moment
+--- it fails — a failed bootstrap is never harder to read than a green
+--- one used to be.
+--- @param path string The worktree to run it in
+--- @param argv {string} The full `bin/cosmic ...` argv
+--- @param verbose boolean Stream the step verbatim instead of summarizing
+local function run_step(path: string, argv: {string}, verbose: boolean)
+  if verbose then
+    local _r, _e = child.run(argv, {cwd = path, stdout = "inherit", stderr = "inherit"})
+    return
+  end
+  local r, _e = child.run(argv, {cwd = path})
+  if r == nil then return end
+  if not r.ok then
+    print(r.stdout .. r.stderr)
+    return
+  end
+  for _, line in ipairs(summary_of(r.stdout)) do
+    print(line)
+  end
+end
+
+--- Bootstraps a fresh worktree, builder or review: `bin/cosmic --make
+--- fetch` then `--make build` for a cosmic tree (`run_step` decides
+--- how much of their own output reaches the caller), nothing for a
 --- cosmopolitan tree (its own gate is the builder's first) or a repo
---- this tool does not recognize. `GITBOARD_WORKTREE_BOOTSTRAP=0`
---- skips actually running the cosmic commands — a test's fixture may
---- carry a fake `bin/cosmic` it must never execute — while still
---- detecting and reporting which kind this is.
+--- this tool does not recognize. `GITBOARD_WORKTREE_BOOTSTRAP=0` skips
+--- actually running the cosmic commands — a test's fixture may carry
+--- a fake `bin/cosmic` it must never execute — while still detecting
+--- and reporting which kind this is.
 --- @param path string The fresh worktree
+--- @param verbose boolean Stream fetch/build verbatim instead of
+--- summarizing them (`--verbose`)
 --- @return string What was bootstrapped, for the verdict line
-local function bootstrap(path: string): string
+local function bootstrap(path: string, verbose: boolean): string
   if fs.is_file(fs.join(path, "bin/cosmic")) then
     if env.get("GITBOARD_WORKTREE_BOOTSTRAP") ~= "0" then
-      local _r1, _e1 = child.run({"bin/cosmic", "--make", "fetch"},
-        {cwd = path, stdout = "inherit", stderr = "inherit"})
-      local _r2, _e2 = child.run({"bin/cosmic", "--make", "build"},
-        {cwd = path, stdout = "inherit", stderr = "inherit"})
+      run_step(path, {"bin/cosmic", "--make", "fetch"}, verbose)
+      run_step(path, {"bin/cosmic", "--make", "build"}, verbose)
     end
     return "cosmic (fetch + build)"
   end
@@ -208,10 +258,12 @@ end
 --- `--make fetch` cannot clobber a ref landed before it.
 --- @param path string The fresh worktree
 --- @param refs {string} `--ref` occurrences to fetch after bootstrap
+--- @param verbose boolean Stream the bootstrap verbatim (`--verbose`)
 --- @return string The bootstrap label, "" on a ref-fetch failure
 --- @return string The failure, "" on success
-local function bootstrap_and_refs(path: string, refs: {string}): string, string
-  local bootstrapped = bootstrap(path)
+local function bootstrap_and_refs(path: string, refs: {string},
+    verbose: boolean): string, string
+  local bootstrapped = bootstrap(path, verbose)
   for _, ref in ipairs(refs) do
     local name = ref_basename(ref)
     local r = child.run({"git", "fetch", "origin",
@@ -235,9 +287,12 @@ end
 --- @param root_override string `--root`, "" to auto-resolve
 --- @param refs {string} `--ref` occurrences, fetched into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
+--- @param verbose boolean `--verbose`: stream the bootstrap's fetch/build
+--- output verbatim instead of just its summary line(s)
 --- @return integer Exit code
 local function cmd_worktree_review(it: item.Item, id8: string,
-    session: string, root_override: string, refs: {string}): integer
+    session: string, root_override: string, refs: {string},
+    verbose: boolean): integer
   local crefusal = claim_refusal(id8, it.reviewer or "", session)
   if crefusal ~= nil then return gate.verdict_line("worktree", false, crefusal) end
   local repo = it.repo or ""
@@ -275,7 +330,7 @@ local function cmd_worktree_review(it: item.Item, id8: string,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped, rerr = bootstrap_and_refs(path, refs)
+  local bootstrapped, rerr = bootstrap_and_refs(path, refs, verbose)
   if rerr ~= "" then return gate.verdict_line("worktree", false, rerr) end
   return gate.verdict_line("worktree", true,
     ("%s review at %s (PR #%d, bootstrapped %s)"):format(id8, path, it.pr,
@@ -286,7 +341,8 @@ end
 --- before any git or network call unless `session` already holds ID's
 --- claim. `--review` (`worktree_review`) is the review-checkout twin
 --- of this, dispatched separately since the two share almost no
---- refusal or shape once past resolving the repo.
+--- refusal or shape once past resolving the repo; `--verbose` applies
+--- uniformly to either.
 --- @param s store.Store The store
 --- @param id string The item to make a checkout for
 --- @param session string The caller's session; must hold ID's claim
@@ -294,14 +350,17 @@ end
 --- @param refs {string} `--ref` occurrences, fetched into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
 --- @param review boolean `--review`: provision the review checkout instead
+--- @param verbose boolean `--verbose`: stream the bootstrap's fetch/build
+--- output verbatim instead of just its summary line(s)
 --- @return integer Exit code
 local function cmd_worktree(s: store.Store, id: string, session: string,
-    root_override: string, refs: {string}, review: boolean): integer
+    root_override: string, refs: {string}, review: boolean,
+    verbose: boolean): integer
   local it, lerr = store.load(s, id)
   if it == nil then return gate.verdict_line("worktree", false, lerr) end
   local id8 = id:sub(1, 8)
   if review then
-    return cmd_worktree_review(it, id8, session, root_override, refs)
+    return cmd_worktree_review(it, id8, session, root_override, refs, verbose)
   end
   local crefusal = claim_refusal(id8, it.claim or "", session)
   if crefusal ~= nil then return gate.verdict_line("worktree", false, crefusal) end
@@ -338,7 +397,7 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped, rerr = bootstrap_and_refs(path, refs)
+  local bootstrapped, rerr = bootstrap_and_refs(path, refs, verbose)
   if rerr ~= "" then return gate.verdict_line("worktree", false, rerr) end
   return gate.verdict_line("worktree", true,
     ("%s at %s (bootstrapped %s)"):format(id8, path, bootstrapped))
@@ -346,7 +405,8 @@ end
 
 local record gitworktree
   cmd_worktree: function(s: store.Store, id: string, session: string,
-  root_override: string, refs: {string}, review: boolean): integer
+  root_override: string, refs: {string}, review: boolean,
+  verbose: boolean): integer
   default_base: function(repo: string, base: string): string
 end
 
