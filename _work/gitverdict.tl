@@ -228,6 +228,13 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
   -- to fetch here.
   local merged_sha = ""
   local pre_merged = false
+  -- A landing failure is never the verdict's own failure: the
+  -- judgment is true whether or not GitHub can act on it yet, so a
+  -- failed merge PUT or auto-merge mutation is carried here and
+  -- reported on the verdict line below, after the record — not
+  -- returned early, which would refuse the whole verb and lose the
+  -- verdict along with the merge.
+  local landing_err = ""
   if judged ~= 0 and p ~= nil then
     if kind == "accept" then
       -- An accept asserts the work is fit to land, so it is the one
@@ -250,19 +257,20 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
         -- own requirements clear.
         local slugged, slerr = gh.slug(s, it.repo)
         if slugged == nil then
-          return gate.verdict_line("verdict", false, "REFUSED: " .. slerr)
-        end
-        local ok, msg = ghwrite.merge_pull(s, slugged, judged, p.head_sha)
-        if ok then
-          merged_sha = msg
-        elseif msg:find("HTTP 405", 1, true) ~= nil
-        or msg:find("HTTP 409", 1, true) ~= nil then
-          local amok, amerr = ghwrite.enable_auto_merge(s, p.node_id)
-          if not amok then
-            return gate.verdict_line("verdict", false, "REFUSED: " .. amerr)
-          end
+          landing_err = slerr
         else
-          return gate.verdict_line("verdict", false, "REFUSED: " .. msg)
+          local ok, msg = ghwrite.merge_pull(s, slugged, judged, p.head_sha)
+          if ok then
+            merged_sha = msg
+          elseif msg:find("HTTP 405", 1, true) ~= nil
+          or msg:find("HTTP 409", 1, true) ~= nil then
+            local amok, amerr = ghwrite.enable_auto_merge(s, p.node_id)
+            if not amok then
+              landing_err = amerr
+            end
+          else
+            landing_err = msg
+          end
         end
       end
     elseif kind == "request changes" or kind == "reject" then
@@ -312,6 +320,13 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
     -- ends it rather than a merge it will never await.
     if (it.result or "") ~= "" then
       outcome = "accepted — `done ID` ends it"
+    elseif landing_err ~= "" then
+      -- The verdict is recorded exactly as `--no-land` would leave it
+      -- — nothing here reads `landing_err` — this only changes what
+      -- the line says about it: a failed landing names itself instead
+      -- of the ordinary reminder to land it.
+      outcome = ("awaiting merge — landing failed (%s), land it by hand")
+      :format(landing_err)
     end
   elseif kind == "request changes" then
     outcome = "rework — the claimant fixes on the same PR"

@@ -204,6 +204,73 @@ local function test_accept_falls_back_to_auto_merge_on_409()
   assert(it.verdict == "accept", "the accept stands, awaiting the merge")
 end
 
+-- A 409 falls back to the GraphQL mutation, and the environment's own
+-- proxy can refuse THAT too (only a pinned set of GraphQL operations
+-- served) — the verdict is still recorded, exactly as `--no-land`
+-- would leave it, and the refusal rides the line instead of the whole
+-- verb: nothing is lost, and a human lands it by hand.
+local function test_accept_records_when_auto_merge_is_refused()
+  local s, leaf = claimed_leaf("land-graphql-403")
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = fake_transport(leaf, {}, function(url: string,
+        opts: fetch.Options): fetch.Response | nil, fetch.Error
+      if opts.method == "PUT" then
+        return {status = 409, headers = {}, raw_headers = {},
+          body = '{"message":"Head branch was modified"}', url = url}
+        as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+      end
+      assert(url:find("/graphql", 1, true) ~= nil, url)
+      return {status = 403, headers = {}, raw_headers = {},
+        body = '{"message":"This GraphQL query is not enabled for this '
+        .. 'session — only the pinned set of PR-review operations is '
+        .. 'served"}', url = url}
+      as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end)
+  assert(verbs.cmd_take(s, leaf, "session-a", 67, false, "") == 0)
+  local code, printed = verdict_and_capture(s, leaf, "accept", 67, "cafe1234",
+    "reviewer-a")
+  api.transport = original
+  restore_token(prior)
+  assert(code == 0, "a refused landing still exits 0: " .. printed)
+  assert(printed:find("landing failed", 1, true) ~= nil, "got: " .. printed)
+  assert(printed:find("HTTP 403", 1, true) ~= nil, "got: " .. printed)
+  assert(printed:find("/graphql", 1, true) ~= nil, "got: " .. printed)
+  local it = check.must(store.load(s, leaf))
+  assert(it.verdict == "accept", "the verdict is recorded, not lost: " .. printed)
+  assert(it.resolution == "", "no completion — nothing landed")
+end
+
+-- A merge PUT can fail outright with neither 405 nor 409 (a validation
+-- error GitHub answers 422 with, say) — no auto-merge fallback applies,
+-- but the same rule holds: record first, report the landing failure on
+-- the line, never refuse the verb over it.
+local function test_accept_records_when_merge_put_fails_outright()
+  local s, leaf = claimed_leaf("land-merge-422")
+  local writes = 0
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = fake_transport(leaf, {}, function(_url: string,
+        _opts: fetch.Options): fetch.Response | nil, fetch.Error
+      writes = writes + 1
+      return {status = 422, headers = {}, raw_headers = {},
+        body = '{"message":"Pull Request is not mergeable"}', url = _url}
+      as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end)
+  assert(verbs.cmd_take(s, leaf, "session-a", 68, false, "") == 0)
+  local code, printed = verdict_and_capture(s, leaf, "accept", 68, "cafe1234",
+    "reviewer-a")
+  api.transport = original
+  restore_token(prior)
+  assert(code == 0, "a refused landing still exits 0: " .. printed)
+  assert(writes == 1, "one merge PUT, no auto-merge fallback for a 422")
+  assert(printed:find("landing failed", 1, true) ~= nil, "got: " .. printed)
+  assert(printed:find("HTTP 422", 1, true) ~= nil, "got: " .. printed)
+  local it = check.must(store.load(s, leaf))
+  assert(it.verdict == "accept", "the verdict is recorded, not lost: " .. printed)
+  assert(it.resolution == "", "no completion — nothing landed")
+end
+
 -- `--no-land` skips the GitHub write entirely: no merge is attempted,
 -- and the accept records exactly as it did before this item, for a
 -- repo the token cannot merge.
