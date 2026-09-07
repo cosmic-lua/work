@@ -219,16 +219,27 @@ end
 --- Whether `it` already stands in the substate `_work.indexddl`'s
 --- `substate` view names "review" (an open PR or research result, no
 --- verdict yet) or "rework" (a standing "request changes") — matching
---- `_work.gitverbs.cmd_take`'s own review-claim derivation exactly.
+--- that view's own CASE exactly, branch for branch: "rework" is the
+--- verdict alone, unconditional, so a claimed item mid-rework with no
+--- PR and no result (the send-back answered in place, not yet handed
+--- back over) still counts; "review" still needs a PR or a result,
+--- since an empty verdict with neither is merely claimed and building.
 --- `_work.gitgate.containered` reads this to leave such a parent's
 --- role and its live claim/PR untouched when a routine child lands on
---- it, rather than treating the child as a decomposition.
+--- it, rather than treating the child as a decomposition. This is a
+--- broader test than `_work.gitverbs.cmd_take`'s own review-claim
+--- eligibility, which additionally needs a PR or result to exist
+--- (there being nothing to claim a review of otherwise) — that check
+--- stays inline in `cmd_take`, not routed through here.
 --- @param it Item The item
---- @return boolean True while it carries a PR/result the verdict has
---- not yet settled with accept or reject
+--- @return boolean True while it carries a standing "request changes",
+--- or an empty verdict with a PR/result awaiting one
 local function is_review_or_rework(it: Item): boolean
   local verdict = it.verdict or ""
-  if verdict ~= "" and verdict ~= "request changes" then
+  if verdict == "request changes" then
+    return true
+  end
+  if verdict ~= "" then
     return false
   end
   return (it.pr or 0) ~= 0 or (it.result or "") ~= ""

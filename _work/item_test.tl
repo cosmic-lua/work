@@ -384,6 +384,10 @@ local function test_is_review_or_rework_matches_the_substate_view()
     "a research handover with no verdict yet is review too")
   assert(item.is_review_or_rework(with({claim = "session-a", pr = 9,
           verdict = "request changes"})), "request changes is rework")
+  assert(item.is_review_or_rework(with({claim = "session-a",
+          verdict = "request changes"})),
+    "request changes is rework even with no PR and no result — the "
+    .. "verdict alone settles it, matching the substate view")
   assert(not item.is_review_or_rework(with({claim = "session-a", pr = 9,
           verdict = "accept"})), "an accept is neither — it awaits land")
 end
