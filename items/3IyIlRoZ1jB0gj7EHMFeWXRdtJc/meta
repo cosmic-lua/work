@@ -2,6 +2,8 @@ title: verdict accept: record the verdict first, then land — a refused landing
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim: build-eWXR_dtJc-f6f470de
-reviewer: review-eWXR_dtJc-f6f470de
 pr: 70
+verdict: accept
+verdict_head: 459972767b9a410a22d881186e44fefbc0d89f1d
+verdict_spec: 8551e6f94d79c76ce3984d93c14d97612202bbfe
 builders: build-eWXR_dtJc-f6f470de
