@@ -1,9 +1,9 @@
 title: gitboard show ID: correlate overlap.tl's file-path collisions with find.similar's text ranking
 parent: 3IvL2wUvcjnmW8CFTHMrV1061nP
 target: cosmic-lua/work
-claim: build-z28g_jVQw-6141b568
 pr: 80
 verdict: accept
 verdict_head: f57c4d0db026b9d5eb6ae704c4c0a058a8653e6a
 verdict_spec: cad5d28a6b6e4fc9e608f035bbe322ce01f967d4
+resolution: completed
 builders: build-z28g_jVQw-6141b568
