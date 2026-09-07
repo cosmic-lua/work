@@ -1,3 +1,4 @@
 title: gitworktree.tl: bootstrap() and default_base() read the repo's own manifest first, falling back to today's file-presence/repo-name heuristics
 parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
 target: cosmic-lua/work
+speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85
