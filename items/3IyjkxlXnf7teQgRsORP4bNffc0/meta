@@ -1,0 +1,3 @@
+title: bin/cosmic.pin: bump to 2026-09-07-2b2002d, the release carrying --min, --max-lines, and the cosmic.ast chain
+parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
+target: cosmic-lua/cosmic
