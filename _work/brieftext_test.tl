@@ -24,12 +24,32 @@ local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 
 local function test_step_one_measures_headroom_before_the_first_edit()
   assert(BUILDER:find(
-      "Before the first edit, `wc -l` every file the Change names; if "
-      .. "the Change's additions cannot fit under the 500-line cap, "
-      .. "STOP now (report the count) rather than after implementing.",
+      "Before the first edit, `wc -l` every file the Change names.",
       1, true) ~= nil,
-    "step 1 must tell a builder to measure headroom before editing "
-    .. "and stop before implementing, not after")
+    "step 1 must tell a builder to measure headroom before editing")
+end
+
+local function test_step_one_offers_a_split_seam_before_an_unconditional_stop()
+  assert(BUILDER:find(
+      "A file at or within a few lines of the 500-line cap is not an "
+      .. "automatic STOP: if it has an obvious, low-risk split seam "
+      .. "(a self-contained group of test cases, a section already "
+      .. "separated by a comment header) and the spec's Non-goals "
+      .. "don't forbid touching the file's shape, split it and land "
+      .. "the new coverage in the new sibling file — name the split "
+      .. "explicitly in the PR body as a deviation from the literal "
+      .. "file list.", 1, true) ~= nil,
+    "step 1 must offer a low-risk split-seam path — new coverage in a "
+    .. "sibling file, named as a deviation in the PR body — before an "
+    .. "unconditional STOP")
+  assert(BUILDER:find(
+      "If no safe seam is obvious, or the split itself would be a "
+      .. "judgment call bigger than the item's own scope, STOP now "
+      .. "(report the count) rather than after implementing — this "
+      .. "remains the right answer for a genuinely ambiguous split.",
+      1, true) ~= nil,
+    "step 1 must still STOP, reporting the count, when no safe split "
+    .. "seam is obvious or the split is itself too big a judgment call")
 end
 
 local function test_step_three_prefers_a_per_file_check_between_edits()
