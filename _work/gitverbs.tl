@@ -287,21 +287,24 @@ local function cmd_take(s: store.Store, id: string, session: string,
           {state = "running", head_sha = "", runs = {}})
         local _cok, _ccerr = cache.close(rc)
       end
+      -- A new head to judge: the rework's send-back is spent, so the
+      -- item is awaiting a verdict again. The judged head stays in
+      -- verdict_head, which is how a reviewer sees what moved.
+      if it.verdict == "request changes" then
+        it.verdict = ""
+      end
+      -- Nobody holds the review claim until a reviewer actually takes
+      -- it: whatever `reviewer` carried before this head — a genuinely
+      -- live claim, or the review-claim derivation's own bookkeeping
+      -- from an earlier take on this item — is not a claim on THIS
+      -- head. Leaving it standing would read as a live reviewer and
+      -- force the next genuine claim through `--force --why` for a
+      -- state this handover produced, not one anybody is holding. An
+      -- idempotent retake of the SAME number is not a new head at
+      -- all, so it never reaches here — a live reviewer claim from
+      -- that path survives untouched, exactly as `it.claim` does.
+      it.reviewer = ""
     end
-    -- A new head to judge: the rework's send-back is spent, so the
-    -- item is awaiting a verdict again. The judged head stays in
-    -- verdict_head, which is how a reviewer sees what moved.
-    if it.verdict == "request changes" then
-      it.verdict = ""
-    end
-    -- Nobody holds the review claim until a reviewer actually takes
-    -- it: whatever `reviewer` carried before this head — a genuinely
-    -- live claim, or the review-claim derivation's own bookkeeping
-    -- from an earlier take on this item — is not a claim on THIS
-    -- head. Leaving it standing would read as a live reviewer and
-    -- force the next genuine claim through `--force --why` for a
-    -- state this handover produced, not one anybody is holding.
-    it.reviewer = ""
     handed = (" pr:%d — awaiting review"):format(pr)
   end
   local bad = item.problems(it)

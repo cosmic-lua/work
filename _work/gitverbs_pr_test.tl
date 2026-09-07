@@ -63,6 +63,30 @@ local function test_take_pr_rerecord_of_its_own_number_stays_a_noop()
   assert(again == 0 and commits(s) == before and seen:find("nothing to record", 1, true) ~= nil, seen)
 end
 
+-- The no-op path is not a new head: re-recording the item's own number
+-- while a genuinely live reviewer claim stands must not clear it — only
+-- an actually new head does that (see
+-- `test_take_pr_handover_clears_a_stale_reviewer_claim`, above).
+local function test_take_pr_rerecord_of_its_own_number_keeps_a_live_reviewer()
+  local s = init_state_repo("pr-self-noop-live-reviewer")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") == 0,
+    "session-b claims the live review")
+  assert(check.must(store.load(s, leaf)).reviewer == "session-b",
+    "the claim is recorded")
+  local before = commits(s)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0,
+    "re-recording the identical number, no --force")
+  assert(commits(s) == before,
+    "same number, same claim holder: still a no-op, nothing committed")
+  local got = check.must(store.load(s, leaf))
+  assert(got.reviewer == "session-b",
+    "the live reviewer claim survives the idempotent retake")
+end
+
 -- A DONE item's PR is spent: it does not block another item from recording the same number.
 local function test_take_pr_ignores_a_done_items_number()
   local s = init_state_repo("pr-done-spent")
