@@ -2,6 +2,8 @@ title: cosmic.ast patterns: $X as $T — a cast is matchable by type text, by ca
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
 target: cosmic-lua/cosmic
 claim: build-jVEN_hgxX-f6f470de
-reviewer: review-jVEN_hgxX-f6f470de
 pr: 1785
+verdict: accept
+verdict_head: 1fe386bbf0a38103d65499b465415f5ba37040bc
+verdict_spec: 9fe7d69b49ec753fc073f11a4f77600ba4c34d3f
 builders: build-jVEN_hgxX-f6f470de
