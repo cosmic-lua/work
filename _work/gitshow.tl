@@ -11,6 +11,7 @@
 --- on without capturing stdout.
 local cache = require("_work.cache")
 local ciobs = require("_work.ciobs")
+local find = require("_work.find")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
 local index = require("_work.index")
@@ -106,6 +107,47 @@ local function state_of(c: Index, it: item.Item): string, string
     return "", suberr
   end
   return sub, ""
+end
+
+--- One combined or standalone line per colliding or similar item, for
+--- `show ID`'s report: when the SAME other item fires BOTH signals —
+--- an exact shared Change-section path (`overlap.collisions`) and a
+--- close title/spec match (`find.similar`) — a single `likely
+--- duplicate: ...` line replaces the two a reader would otherwise have
+--- to notice separately and connect by eye; a signal that fires alone
+--- renders exactly as it always did (`overlaps: ...` for a path-only
+--- collision, `similar: ...` for a text-only hit) — this adds a
+--- correlation, it does not remove either standalone signal.
+--- @param collisions {overlap.Collision} `_work.overlap.collisions`'s own result
+--- @param hits {find.Hit} `_work.find.similar`'s own result, this item's
+--- own id already excluded from the ranking
+--- @return {string} The lines, possibly empty
+local function overlap_and_similar_lines(collisions: {overlap.Collision},
+    hits: {find.Hit}): {string}
+  local hit_by_id: {string: find.Hit} = {}
+  for _, h in ipairs(hits) do
+    hit_by_id[h.id] = h
+  end
+  local correlated: {string: boolean} = {}
+  local out: {string} = {}
+  for _, col in ipairs(collisions) do
+    local h = hit_by_id[col.id]
+    if h ~= nil then
+      correlated[col.id] = true
+      out[#out + 1] = ("likely duplicate: %s — shares %s AND similar text "
+        .. "(ratio %.2f)"):format(tail.handle(col.id),
+        table.concat(col.paths, ", "), h.ratio or 0)
+    else
+      out[#out + 1] = ("overlaps: %s on %s"):format(tail.handle(col.id),
+        table.concat(col.paths, ", "))
+    end
+  end
+  for _, h in ipairs(hits) do
+    if not correlated[h.id] then
+      out[#out + 1] = ("similar: %s %s"):format(tail.handle(h.id), h.title)
+    end
+  end
+  return out
 end
 
 --- One item's fields, role, spec, spec-bar problems, children, and
@@ -317,7 +359,15 @@ local function cmd_show(s: store.Store, id: string): integer
     local bodies = store.read_specs(s, ids)
     body = bodies[it.id] or ""
     problems = gitready.ready_problems(s, it, body)
-    overlaps = overlap.lines(it.id, bodies)
+    -- `_work.find`'s fuzzy title/spec ranking, over the SAME cache
+    -- connection already open for `role`/`rank`/`children` below — one
+    -- more FTS query, not a fresh whole-board read. `it.id` is excluded
+    -- from the ranking: left in, the item's own indexed row is a
+    -- perfect self-match that both inflates the "best" every other hit
+    -- is measured against and crowds a real candidate out of the
+    -- query's own limit (see `find.similar`'s own doc comment).
+    local hits, _simerr = find.similar(c, it.title, it.id)
+    overlaps = overlap_and_similar_lines(overlap.collisions(it.id, bodies), hits or {})
     headroom = overlap.headroom_lines(body)
   else
     body = store.read_spec(s, id)
@@ -368,6 +418,8 @@ end
 local record gitshow
   describe: function(c: Index, it: item.Item): string, string
   state_of: function(c: Index, it: item.Item): string, string
+  overlap_and_similar_lines: function(collisions: {overlap.Collision},
+  hits: {find.Hit}): {string}
   show_report: function(it: item.Item, role: string, rank_line: string,
   state: string, body: string,
   events: {publish.Event}, problems: {string}, children_lines: {string},
@@ -379,6 +431,7 @@ end
 local M: gitshow = {
   describe = describe,
   state_of = state_of,
+  overlap_and_similar_lines = overlap_and_similar_lines,
   show_report = show_report,
   cmd_show = cmd_show,
 }
