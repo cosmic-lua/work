@@ -1,9 +1,9 @@
 title: take ID --pr N (rework hand-back) leaves the reviewer field holding the rework session's own label, so the next genuine review claim needs --force
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-OwQe_MaWq-6141b568
 pr: 82
 verdict: accept
 verdict_head: 370b392670a749e56e24590b73cdbe4a3da8ee22
 verdict_spec: 06adca85f4e412ab4d7499fd3e8c13e5a5d0921e
+resolution: completed
 builders: build-OwQe_MaWq-6141b568
