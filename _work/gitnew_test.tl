@@ -90,12 +90,52 @@ local function test_new_with_no_parent_places_among_the_boards_outcomes()
     .. table.concat(reboard.order, ","))
 end
 
--- X has to already be a positioned child of the NEW parent.
+-- X has to already be a positioned child of the NEW parent. `new`
+-- itself can no longer produce an unranked child under an ordinary
+-- parent, so the unpositioned sibling here is built through `attach`,
+-- which still leaves an item unranked when no --before/--after names
+-- it.
 local function test_new_refuses_placing_against_an_unpositioned_sibling()
   local s = init_state_repo("new-unpositioned")
-  local goal, leaf = root_with_leaf(s)
-  assert(graph.cmd_new(s, "a later slice", goal, nil, "", nil, "", "", leaf) ~= 0,
-    "leaf carries no position among goal's children yet")
+  local goal, _leaf = root_with_leaf(s)
+  local stray = fixture.file_item(s, "a stray outcome", "")
+  assert(graph.cmd_attach(s, stray, goal) == 0,
+    "attach with no position should be accepted")
+  assert(graph.cmd_new(s, "a later slice", goal, nil, "", nil, "", "", stray) ~= 0,
+    "stray carries no position among goal's children yet")
+end
+
+-- `new --parent P` with neither --before nor --after ranks the child
+-- LAST among P's already-ranked children — the same motion as `rank
+-- ID --last` — and the verdict line reports where it landed. An
+-- unranked child under an ordinary parent can no longer result.
+local function test_new_with_no_position_flag_ranks_last_and_reports_it()
+  local s = init_state_repo("new-default-last")
+  local goal, _leaf = root_with_leaf(s)
+  -- `_leaf` is itself ranked now (the same default under test), so
+  -- filing one more sibling this way gives goal two ranked children
+  -- before the case under test files its third.
+  fixture.file_item(s, "a second slice", goal)
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local code = graph.cmd_new(s, "a third slice", goal, nil, "")
+  _G.print = old_print
+  assert(code == 0, "new --parent with neither flag should be accepted")
+  local out = table.concat(lines, "\n")
+  assert(out:match("rank 3 of 3 under") ~= nil,
+    "verdict line reports the position: " .. out)
+  local reparent = check.must(store.load(s, goal))
+  assert(#reparent.order == 3,
+    "all three children are now ranked: " .. table.concat(reparent.order, ","))
+  local last_item = check.must(store.load(s, reparent.order[3]))
+  assert(last_item.title == "a third slice", "the new child lands last")
 end
 
 -- The handle the verdict line prints is exactly what `show` accepts —

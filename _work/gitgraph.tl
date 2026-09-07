@@ -51,6 +51,23 @@ local function add_once(list: {item.Item}, x: item.Item): {item.Item}
   return list
 end
 
+--- Where `id` sits in `order`, 1-based, and how many entries `order`
+--- holds — the pair the verdict line renders as "N of N" once a child
+--- lands positioned. `id` is always found: called right after the
+--- placement that put it there.
+--- @param order {string} An item's `order`, post-placement
+--- @param id string The id just placed into it
+--- @return integer The 1-based position; 0 if `id` is absent
+--- @return integer The total entries in `order`
+local function position_in(order: {string}, id: string): integer, integer
+  for i, v in ipairs(order) do
+    if v == id then
+      return i, #order
+    end
+  end
+  return 0, #order
+end
+
 --- File a new item into the graph, todo if it lands below the outcome
 --- level, triage if it lands directly under the board. `spec` is nil
 --- to leave the tree with no `spec.md` at all — an empty string would
@@ -165,12 +182,33 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if also == nil then
     return gate.verdict_line("new", false, coerr)
   end
-  if bfr ~= "" or aft ~= "" then
-    local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, index)
+  -- A child of an ordinary parent always lands positioned: --before/
+  -- --after place it against a named sibling, and neither given
+  -- places it last among the parent's ranked children — the same
+  -- motion as `rank ID --last`. A bare `--parent` can no longer
+  -- produce an unranked child. Outcomes (children of the board) are
+  -- the one exception left untouched: the board's own ranking is
+  -- unaffected here, so an outcome stays unranked unless --before/
+  -- --after names one explicitly.
+  local rank_note = ""
+  if parent_role == "board" then
+    if bfr ~= "" or aft ~= "" then
+      local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, false, index)
+      if not placed then
+        return gate.verdict_line("new", false, perr)
+      end
+      also = add_once(also, parent_item)
+    end
+  else
+    local last = bfr == "" and aft == ""
+    local placed, perr = rank.place_under(parent_item, it.id, bfr, aft, last, index)
     if not placed then
       return gate.verdict_line("new", false, perr)
     end
     also = add_once(also, parent_item)
+    local position, total = position_in(parent_item.order or {}, it.id)
+    rank_note = (", rank %d of %d under %s"):format(position, total,
+      tail.handle(parent_item.id))
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
@@ -178,7 +216,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if not ok then
     return gate.verdict_line("new", false, err)
   end
-  local entered = "todo"
+  local entered = "todo" .. rank_note
   if parent_role == "board" then
     entered = "triage — rank it among the outcomes, or attach it under a "
     .. "ranked outcome"
@@ -256,7 +294,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   end
   if (before or "") ~= "" or (after or "") ~= "" then
     local placed, perr = rank.place_under(parent_item, id, before or "",
-      after or "", index)
+      after or "", false, index)
     if not placed then
       return gate.verdict_line("attach", false, perr)
     end

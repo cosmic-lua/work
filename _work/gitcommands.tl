@@ -25,6 +25,11 @@ local CSPEC: flags.CommandSpec = {
     {name = "new", summary = "open an item titled TITLE; role comes from the graph",
       spec = {usage = "TITLE [options]",
         summary = "open an item titled TITLE; role comes from the graph.\n\n"
+        .. "Under --parent, a child with neither --before nor --after "
+        .. "ranks last among its new\nsiblings (`rank ID --last`'s own "
+        .. "motion) — an unranked child can no longer result; the\n"
+        .. "verdict line reports where it landed. Outcomes (no --parent) "
+        .. "are the one exception\nand stay unranked until positioned.\n\n"
         .. "A `friction:` title is refused unless its spec (--spec-file) "
         .. "names every agent this\nsession claimed work under since the "
         .. "pass began, one `## <kind> <handle>` heading\neach; "

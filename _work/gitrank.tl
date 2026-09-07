@@ -102,24 +102,34 @@ local function place(order: {string}, id: string, before: string, after: string,
 end
 
 --- Place ID into PARENT's `order` relative to X (`--before`/`--after`),
---- for `attach`/`new`'s own placement option: a child that already
---- knows where it goes among its new siblings lands positioned in the
---- same commit that parents it. Call only when at least one of
---- `before`/`after` is given — a caller with neither has nothing to
---- place, and skips this entirely; the item stays unranked among its
---- new siblings exactly as it always was.
+--- or last regardless of X, for `attach`/`new`'s own placement option:
+--- a child that already knows where it goes among its new siblings
+--- lands positioned in the same commit that parents it. Call only
+--- when at least one of `before`/`after`/`last` is given — a caller
+--- with none of the three has nothing to place, and skips this
+--- entirely; the item stays unranked among its new siblings exactly
+--- as it always was.
 --- @param parent_item item.Item The new parent, already resolved
 --- @param id string The item being placed under it
 --- @param before string X to place ID before; "" when unused
---- @param after string X to place ID after; "" when unused, but not
---- both "" — the caller's job to check
+--- @param after string X to place ID after; "" when unused
+--- @param last boolean True to place ID last regardless of X; when
+--- true, before and after must both be ""
 --- @param index item.Index Every item by id, to check X's own parent
 --- @return boolean True on success; `parent_item.order` was mutated
 --- @return string Refusal reason; "" only on success
 local function place_under(parent_item: item.Item, id: string, before: string,
-    after: string, index: item.Index): boolean, string
+    after: string, last: boolean, index: item.Index): boolean, string
   if before ~= "" and after ~= "" then
     return false, "REFUSED: at most one of --before/--after may be given"
+  end
+  if last then
+    local new_order, perr = place(parent_item.order or {}, id, "", "", true)
+    if new_order == nil then
+      return false, "REFUSED: " .. perr
+    end
+    parent_item.order = new_order
+    return true, ""
   end
   local x = before
   if x == "" then
@@ -227,7 +237,7 @@ end
 
 local record gitrank
   place_under: function(parent_item: item.Item, id: string, before: string,
-  after: string, index: item.Index): boolean, string
+  after: string, last: boolean, index: item.Index): boolean, string
   cmd_rank: function(s: store.Store, id: string, before: string, after: string,
   last: boolean): integer
 end
