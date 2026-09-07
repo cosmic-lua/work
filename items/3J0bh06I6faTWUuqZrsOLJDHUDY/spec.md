@@ -50,3 +50,40 @@ The pin bump itself (`bin/cosmic.pin`'s two fields) is committed,
 unpushed, on branch `3J0U2KOp` in the worktree at
 `/home/user/wt/3J0U2KOp`, ready for whoever resumes this item once the
 `_work/store.tl` compatibility gap is closed.
+
+## Resolution (2026-09-07, second session)
+
+Decided: split. Both sides own a fix, for different reasons.
+
+**Work-side (applied, unblocks the pin bump now):** cache `s.index`
+into a local (`local existing = s.index`) before narrowing on it, so
+the checker never records a narrow fact against the FIELD, only
+against the local — the guard's `if s.index ~= nil` becomes
+`if existing ~= nil`, and the later `s.index = c` is then checked
+against the field's declared type as normal. This mirrors `close()`'s
+existing style two functions below (`local c = s.index; if c == nil
+then ...`), so it's not a new pattern in this file, just applied
+consistently. Committed as `4e19634e` on the item's own branch
+(`3J0U2KOp`); `bin/cosmic --make ci` passes clean (4 stages, 85.0%
+coverage) with the pin bump and this fix together, merged onto current
+`origin/main`.
+
+**Cosmic-side (filed separately, not blocking):** this is a genuine
+checker bug, not intended stricter behavior — confirmed by an
+independent investigation, isolated to a minimal repro, and traced to
+`3p/tl/tl_patch/narrow_record_field.tl` (landed in `cosmic-lua/cosmic`
+PR #1743 / board item «FePr_L4FB»): the patch's own
+`narrow-record-field-assignment` hunk invalidates a field's narrow
+fact on write via `drop_field_narrows`, but does so AFTER the
+assignment's expected type has already been derived from the (still
+live) narrow fact rather than the field's declared type — a bug
+against the patch's own stated goal
+(`docs/design/casts.md`'s "record union after guard" section: "invalidated
+by ANY assignment to it"). No other site in `cosmic-lua/cosmic`'s own
+tree hits this (every existing guarded field there is a non-union
+type, which the patch correctly skips), so it wasn't caught until
+`work`'s `Store.index: cache.Cache | nil` — the first `T | nil` field
+in either repo that is both guarded and reassigned — exercised it via
+this pin bump. Filed as «m1fA_LUmS» (`repo: cosmic-lua/cosmic`), with
+the full repro, root-cause trace, and two candidate fix mechanisms.
+The work-side fix above does not depend on it landing.
