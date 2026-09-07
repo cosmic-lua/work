@@ -7,6 +7,7 @@ local check = require("cosmic.check")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
 local verbs = require("_work.gitverbs")
 
@@ -129,6 +130,31 @@ local function test_take_pr_handover_clears_a_stale_reviewer_claim()
     "a fresh review then claims cleanly, no --force needed")
   assert(check.must(store.load(s, leaf)).reviewer == "session-c",
     "the fresh claim is theirs")
+end
+
+-- The already-recorded (same-number) path is a second, independent
+-- trigger for the same clear: a live `request changes` verdict means
+-- the reviewer field is not a genuine claim but the last handover's
+-- own bookkeeping, even when the number handed back is the SAME one
+-- already on the item — the literal rework hand-back this item was
+-- filed over. Direct-field fixture, since no verb writes a
+-- `request changes` verdict on a local-only board.
+local function test_take_pr_same_number_handover_clears_a_live_request_changes_reviewer()
+  local s = init_state_repo("pr-same-number-clears-reviewer")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.verdict = "request changes"
+  it.reviewer = "stale-reviewer"
+  assert(storewrite.save(s, it, "fixture: live request-changes verdict, stale reviewer"))
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0,
+    "the claim holder hands back the SAME pr number")
+  local got = check.must(store.load(s, leaf))
+  assert(got.verdict == "", "the stale verdict clears")
+  assert(got.reviewer == "",
+    "and so does the stale reviewer, on the literal same-number path")
 end
 
 -- --force --why overrides the collision, same as every other refusal
