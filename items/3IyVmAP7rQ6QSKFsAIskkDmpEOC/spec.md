@@ -17,3 +17,7 @@ cosmic-lua/cosmic, read and write on a branch; no other repository.
 ## Ready when
 
 `_build/coldbuild_test.tl` fails on a fixture (or on the tree with `lint_file` widened by one optional parameter and one caller passing it) with the message above, passes on main, and the AGENTS.md sentence is present.
+
+## Evidence, amended 2026-09-07
+
+A third face, from cosmic#1778: the `ci` lane's first `--make ci` runs under the PINNED release's own make engine, which parses the verb's flags before anything builds, so `bin/cosmic --make ci --min 76 --min-file 0` failed with `make: unknown flag '--min' for ci` in 20 ms (run 34069880430) even though the tree's `_make/flags.tl` accepted it — the flag landed on pr.yml only after the pin bump (#1780, #1781). The AGENTS.md sentence this item adds names all three faces: a checker rule, a widened signature between two shipped modules, and a `--make` flag each stage behind a release and pin bump; the escape for the middle one is a new module, for the last one a comment naming the numbers until the bump. The cold reproduction recipe belongs in the same paragraph: keep only `o/3p` and `o/bootstrap` (`for d in $(ls o | grep -vx -e 3p -e bootstrap); do rm -rf o/$d; done`), then `bin/cosmic --make build` — a populated `o/` does NOT reproduce, because the pin loads compiled `o/_cli/*.lua` without type-checking.
