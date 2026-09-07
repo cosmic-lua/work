@@ -2,6 +2,8 @@ title: casts: one test file allowlists the 16 kinds as AST patterns with shrink-
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
 target: cosmic-lua/cosmic
 claim: build-B6bC_kqMZ-f6f470de
-reviewer: review-B6bC_kqMZ-f6f470de
 pr: 1787
+verdict: accept
+verdict_head: b70ccb7dee8f59aa14d6ad1b11792fff259e52bd
+verdict_spec: a02c19c8b7e01eee747927518cc1dab795cf8b2b
 builders: build-B6bC_kqMZ-f6f470de
