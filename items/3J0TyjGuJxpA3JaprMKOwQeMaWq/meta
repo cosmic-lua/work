@@ -4,7 +4,6 @@ target: cosmic-lua/work
 claim: build-OwQe_MaWq-6141b568
 reviewer: build-OwQe_MaWq-rework2-6141b568
 pr: 82
-verdict: request changes
 verdict_head: a48884e0e349d0e32b42097511f0f7c8a6be9776
 verdict_spec: 06adca85f4e412ab4d7499fd3e8c13e5a5d0921e
 builders: build-OwQe_MaWq-6141b568
