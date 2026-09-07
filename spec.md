@@ -28,20 +28,32 @@ as line numbers and counts (`wc -l`, `grep -c`), not a behavioral claim
 like "X is refused." Nothing in the brief tells a builder to actually
 exercise the described behavior before building against it.
 
+**File location correction, 2026-09-07:** the builder-brief step 1 text
+this item targets does NOT live in `_work/brief.tl`/`_work/brief_test.tl`
+(that module only fills placeholders and requires its templates from
+`_work/brieftext.tl`, per its own docstring). It lives in
+`_work/brieftext.tl`'s `BUILDER` constant, with the matching pinned-text
+test in `_work/brieftext_test.tl` — confirmed while building the sibling
+item `«RXhD_TRHL»` (file-cap latitude), whose spec named the same wrong
+files and whose builder had to grep the tree to find the real location
+before editing. That item's PR (once merged) already touches
+`_work/brieftext.tl`'s step 1 text for a different reason (file-cap
+latitude) — read its diff first, since this item's own edit lands in the
+same numbered step and should compose with it, not revert it.
+
 ## Change
 
-`_work/brief.tl`'s builder-brief step 1 (or wherever the "what to do"
-list is generated): when a spec's Evidence asserts a BEHAVIOR
-("X refuses Y", "Z is unreachable", "the check fires when...") rather
-than a static fact (a line count, a file's existence), the step
-explicitly requires reproducing that behavior against the current tree
-before writing any code — not just re-running `wc -l`/`grep -c` on
-cited lines. A premise that doesn't reproduce is the same class of
-blocker as a Change that can't fit under the file cap: STOP, report
-exactly what was tried and what happened instead, and do not build
-against the unverified claim.
+`_work/brieftext.tl`'s `BUILDER` template, builder-brief step 1: when a
+spec's Evidence asserts a BEHAVIOR ("X refuses Y", "Z is unreachable",
+"the check fires when...") rather than a static fact (a line count, a
+file's existence), the step explicitly requires reproducing that
+behavior against the current tree before writing any code — not just
+re-running `wc -l`/`grep -c` on cited lines. A premise that doesn't
+reproduce is the same class of blocker as a Change that can't fit under
+the file cap: STOP, report exactly what was tried and what happened
+instead, and do not build against the unverified claim.
 
-`_work/brief_test.tl`: a case asserting the rendered brief's step 1
+`_work/brieftext_test.tl`: a case asserting the rendered brief's step 1
 names both re-running measured commands and reproducing described
 behavior, not just the former.
 
