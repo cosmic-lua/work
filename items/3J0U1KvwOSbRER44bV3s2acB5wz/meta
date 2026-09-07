@@ -1,9 +1,9 @@
 title: review brief: document that a fresh review worktree needs --make fetch before its first test run
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-s2ac_B5wz-6141b568
 pr: 84
 verdict: accept
 verdict_head: 309647f6e3812f2ba0fe933ed5d2740206b872e3
 verdict_spec: fe00a1372296d0f0f1b838e6387a9805a6854a9c
+resolution: completed
 builders: build-s2ac_B5wz-6141b568
