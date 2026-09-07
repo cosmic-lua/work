@@ -1,113 +1,70 @@
 ## Evidence
 
-gitboard has no read-only verb that lists items in a state with their
-derived priority, and the two read verbs that come closest are each
-narrowly capped:
+The original 2026-09-05 observation was broader than the current surface. Since
+then, `show --todo 0` has landed and lists every pullable todo item, so the old
+claim that there is no way to remove bare `show`'s eight-row cap is no longer
+true. Re-measured 2026-09-07 against `810ad912`:
 
-- `_work/gitview.tl:108` (`TODO_SHOWN < const >: integer = 8`): bare
-  `show` renders at most the front 8 of `todo` (and the front of
-  `doing`), then a bare count (`... 196 more`) with no ids. No flag
-  changes this — measured directly: `COLUMNS=999 gitboard show`,
-  `GITBOARD_LIMIT=1000 gitboard show`, and `gitboard show < /dev/null
-  | cat` (removing any tty-detection path) all still show exactly 8.
-  `gitboard help show` lists only `--dir`.
-- `_work/cachequery.tl:298-312` (`cmd_find`): `find TEXT...` calls
-  `find.query(c, text, 20)` — a hardcoded 20-hit cap, bm25-ranked over
-  titles+specs, with no state/parent/band filter at all. Measured:
-  `gitboard find "the"` returns exactly 20 `«...»` lines (`| grep -c
-  "^«"`) out of 997 items on the live board, and the hits mix `todo`,
-  `doing`, and `ended` freely (e.g. the actual result includes `[ended]`
-  rows) — there is no way to ask it for "todo items only."
-- `show <root-id>` does not enumerate its own subtree either — verified
-  against `i2De_o66q` (G8): the output carries `priority`, `outranks`,
-  `bar`, and the spec body, nothing that lists its children.
-- No verb takes a `--parent`/`--band`/`--state` filter at all; `help
-  <verb>` for every read verb (`show`, `find`, `fsck`) confirms none
-  accept one.
+- `gitboard show --todo 0` removes the eight-row display cap, but only for the
+  board-wide pullable-todo rendering. It does not list all todo items, select
+  `doing`/`triage`/`ended`, filter by parent or band, or change `show ID`.
+- `gitboard find TEXT...` remains capped at 20 BM25-ranked matches and mixes
+  states. It has no `--state`, `--parent`, `--band`, `--limit`, or `--all`.
+- `show ID` remains one combined prose report: fields, bar findings, spec, and
+  history. It has no `--field`, `--section`, `--raw`, or `--json` output.
+- Multiple IDs cannot be queried together. `show` accepts one optional ID, and
+  a caller comparing six candidate items must issue six commands and parse six
+  prose reports.
 
-Cost observed this session: producing an accurate priority-ordered view
-of the ~204-item `todo` queue for a human's prioritization pass was not
-possible through any single call — the only path was `show <id>` once
-per item, and even that requires already knowing every id, which
-nothing enumerates.
+This was encountered directly while checking whether six workflow findings
+already had board coverage. The efficient question was a small projection over
+several records: ID, title, state/resolution, and relevant snippets. The actual
+path was repeated FTS queries followed by individual `show ID` calls whose full
+specification and history dominated the output. One candidate, `RSTv_DYmH`
+itself, returned more than a page when only its role and state were needed.
 
-**A second, related gap: `show`/`find` are prose-only, so every
-narrower need this session had was met by piping their output through
-an external text tool instead of gitboard itself** — every instance,
-this session, verbatim:
+The absence of structured output also made a false inference easier: search
+hits were mistaken for current gaps until each item was opened and its
+`resolution` checked. A compact query should make ended/current distinctions
+explicit without requiring prose parsing.
 
-    gitboard show 2>&1 | grep "^todo"
-    gitboard show $id 2>&1 | grep -E "^(parent|priority|state|bar):"     # run ~15 times,
-                                                                          # once per item inspected
-    gitboard show $id 2>&1 | sed -n '/--- spec ---/,/^  20/p' | head -25 # extracting just a spec body
-    awk '/^--- spec ---$/{flag=1; next} /^  [0-9]{4}-[0-9]{2}-[0-9]{2}T/{flag=0} flag'  # same, precise
-    gitboard find "the" 2>&1 | grep -c "^«"                              # counting hits
+There is a sibling, `IATg_OV4a`, for the narrower batch-ID/refusal behavior and
+a child, `L9DY_o3wE`, for byte-exact spec output. Refinement should avoid
+duplicating those scopes while giving them a coherent query/output contract.
 
-Every one of these is a workaround for the same missing capability:
-`show`/`find` emit one fixed, human-formatted report with no way to
-select a section or a field. `gitboard spec ID FILE --base FILE`
-concretely depends on this gap: `--base` needs the CURRENT spec body
-byte-for-byte, and the only way to get it today is the `awk` line
-above, scraping `show`'s combined header/bar/spec/history output by
-hand — fragile, and easy to get subtly wrong (the history section's
-own lines can collide with a naive delimiter pattern).
+## Question
 
-## The question
+What is the smallest stable read surface that supports both human browsing and
+low-token orchestration without turning every consumer into a parser for
+`show`'s prose?
 
-Two designs close the listing gap, and they trade off differently:
+The leading design is a `list`/`query` verb with composable filters
+(`--state`, `--parent`, `--band`, `--limit`/`--all`) and a compact default row,
+plus a shared structured form such as `--json`. `show ID` could use the same
+schema for a single record. A field projection (`--field state --field title`)
+would be useful for shell callers, but should not invent a second incompatible
+schema.
 
-1. **Extend `find`** to act as the general query verb: `TEXT...`
-   becomes optional, and `--state`, `--parent`, `--band` filters
-   combine with it — omitting `TEXT` switches ranking from bm25 to the
-   board's own derived priority order (the same one `show`/`next`
-   already compute), so `gitboard find --state todo --parent
-   <G3-id>` lists a filtered, priority-ordered dump, and `gitboard find
-   "narrowing" --state todo` does a filtered search. One verb, one
-   mental model, but it stretches "find" (a search verb) to also mean
-   "list" (a browse verb), and the ranking metric silently changes
-   depending on whether `TEXT` was given.
-2. **Add a separate `list`/`ls` verb** carrying the filters
-   (`--state`, `--parent`, `--band`, `--limit`) and leave `find` as
-   pure bm25 text search, unfiltered by default but perhaps gaining the
-   same `--state`/`--parent` flags for symmetry. Keeps each verb's
-   contract simple, at the cost of a second read verb to document and
-   keep the priority-ordering logic in `_work/priority.tl` shared
-   between three call sites (`show`, `next`, `list`) instead of two.
+Any design should answer these measured cases in one call:
 
-Either design should share `show`'s existing derived-order computation
-rather than re-deriving it, and should default to a sane limit
-(unbounded output onto 997 items is its own usability problem) with an
-explicit `--limit`/`--all` to override.
+1. All pullable todo items in priority order.
+2. All items under a parent, including completed children.
+3. Six known IDs projected to ID/title/state/resolution.
+4. One item's raw spec for `spec --base`.
+5. Text search restricted to open work.
 
-For the section/field-scraping gap, two shapes, not mutually
-exclusive:
+## Constraints
 
-- **`show ID --section <fields|bar|spec|history>`**: prints exactly
-  that section as raw text, nothing else — directly usable as
-  `--base`/`FILE` for `spec`, or piped through `grep` for one field
-  without the surrounding report contaminating matches. Additive, no
-  schema change, and it would have replaced every `grep -E
-  "^(parent|priority|state|bar):"` and the `sed`-extracted spec body
-  above outright.
-- **`--json` (or a per-call `--field NAME`) on `show`**: structured,
-  machine-parseable output — the deeper fix for scripts (this session
-  included) that want a specific field (`priority`, `state`, `parent`)
-  without parsing prose at all, at the cost of a stable schema to
-  define and keep across the CLI (`show`, `find`, a future `list`
-  would all want to agree on one shape).
-
-`spec`'s compare-and-swap has a third, independent option worth naming:
-key `--base` off a hash/version stamp of the spec (recorded at write
-time) rather than exact prior text, removing the byte-exactness
-fragility entirely — a larger schema change to weigh separately from
-the display-format questions above, since it changes what every
-existing `--base` caller passes.
+- Preserve the concise human-oriented default `show` output.
+- Reuse the board's existing derived priority and FTS index.
+- Bound output by default; require an explicit `--all` or limit override.
+- Define one stable structured schema shared by list/find/show rather than
+  separate ad-hoc JSON shapes.
+- Keep `IATg_OV4a` and `L9DY_o3wE` as children or absorbed implementation
+  slices, not parallel duplicate fixes.
 
 ## Non-goals
 
-Not deciding which listing design, which section/output-format shape,
-or the hash-based `--base` is correct — each carries real tradeoffs a
-refiner should weigh, not something to decide unilaterally while filing
-the gap. Not a performance question: `_work/find.tl`'s FTS5 index
-already answers these queries fast; the gap is purely in what the CLI
-surface exposes.
+This container does not choose the final verb name or commit to JSON over
+another structured encoding. It is not a performance item: the observed cost
+is oversized and repeated output, not slow SQLite queries.
