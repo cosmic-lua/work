@@ -1,0 +1,3 @@
+title: casts_test.tl: near_matches should respect each kind's where scope, not just its pattern
+parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
+target: cosmic-lua/cosmic
