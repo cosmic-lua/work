@@ -186,7 +186,18 @@ local CSPEC: flags.CommandSpec = {
         .. "auto-merge when GitHub refuses one directly);\na `request-"
         .. "changes` or `reject` posts the formal review `--body FILE` "
         .. "carries,\nand a reject then closes the PR. A reviewer runs "
-        .. "this command and touches no\nGitHub tool of its own.",
+        .. "this command and touches no\nGitHub tool of its own.\n\n"
+        .. "The auto-merge fallback can itself be refused — not only the "
+        .. "repo-level \"Allow\nauto-merge\" gap (a one-time repo setting), "
+        .. "but a session-scope refusal some sandboxed\nenvironments place "
+        .. "on gitboard's own pinned token specifically, distinct from "
+        .. "that\nrepo setting and from anything `verdict` can route "
+        .. "around by switching REST calls.\nEither way the verdict "
+        .. "still records and the line names the landing failure — "
+        .. "nothing is\nlost. Recovery: an orchestrating session with "
+        .. "its own broader GitHub access arms\nauto-merge (or merges "
+        .. "directly) with its own tool; once GitHub accepts that, "
+        .. "nothing\nfurther is needed here.",
         flags = {dir_flag(),
           {long = "pr", arg = "N", help = "the PR the verdict judges; a "
             .. "research handover has none — omit --pr and --head, the "
