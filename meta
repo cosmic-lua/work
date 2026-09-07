@@ -1,3 +1,4 @@
 title: cosmic --upgrade apply: inline the wrappers at the call sites by token span, format, report again
 parent: 3ItbajbrSQgL9uxhN7sfAIiQ5k1
 target: cosmic-lua/cosmic
+speccers: dda1840b-c349-51e6-b0ca-ba810058a66a
