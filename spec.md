@@ -24,7 +24,7 @@ The security constraint matters: a solution must not scrape, reveal, or copy
 connector credentials into the shell. It must use a supported delegation or
 brokered interaction if direct token inheritance is intentionally unavailable.
 
-## Result
+## Change
 
 Produce a short decision record that:
 
