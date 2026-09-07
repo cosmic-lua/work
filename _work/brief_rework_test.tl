@@ -252,6 +252,31 @@ local function test_builder_rework_brief_with_no_matching_review()
     end)
 end
 
+-- On the token's OWN pull request GitHub refuses REQUEST_CHANGES, so
+-- `_work.ghwrite.post_review` posts a COMMENT marked with a
+-- `request-changes:` first line instead — the bounce still fills,
+-- `gh.latest_request_changes` reading the marked COMMENT the same way
+-- it would a formal CHANGES_REQUESTED review.
+local function test_builder_rework_brief_fills_from_an_own_pr_comment()
+  local s = init_state_repo("brief-rework-own-pr")
+  local _, leaf = root_with_leaf(s)
+  rework_item(s, leaf, 42)
+  with_reviews_fixture({
+      {state = "COMMENTED",
+        body = "request-changes:\nthe retry never backs off",
+        submitted_at = "2024-01-01T00:00:00Z"},
+    }, function(): boolean
+      local code, out = brief_and_capture(s, "builder", leaf)
+      assert(code == 0, "an own-PR bounce still earns its builder brief")
+      assert(out:find("<BOUNCE_CONTEXT>", 1, true) == nil,
+        "the placeholder is gone: " .. out)
+      assert(out:find("the retry never backs off", 1, true) ~= nil,
+        "the marked COMMENT's finding rides, marker included, verbatim: "
+        .. out)
+      return true
+    end)
+end
+
 -- Unrelated to rework — kept here rather than in `_work/brief_test.tl`
 -- for the same reason this file split off it: room under the file
 -- cap. The sibling-reuse bootstrap sets GITBOARD_DIR to a sibling

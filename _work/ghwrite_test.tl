@@ -30,6 +30,29 @@ local function restore_token(prior: string | nil)
   end
 end
 
+--- Stand `api.own_login` in for a fixed answer (or a read failure) for
+--- the duration of `f`, restoring the real function afterward — the
+--- same swap-and-restore pattern `stub_token`/`restore_token` use, but
+--- on the whole function rather than an env var, since `own_login`
+--- caches its own read for the process and a test must not depend on
+--- what an earlier one left cached.
+--- @param login string | nil The login to hand back; nil for a read failure
+--- @param f function(): boolean The test body; returns true when done
+local function with_own_login(login: string | nil, f: function(): boolean)
+  local original = api.own_login
+  api.own_login = function(_root: string): string | nil, string
+    if login == nil then
+      return nil, "stub own_login read failure"
+    end
+    return login, ""
+  end
+  local ok, err = pcall(f)
+  api.own_login = original
+  if not ok then
+    error(err, 0)
+  end
+end
+
 -- `merge_pull` PUTs the squash-merge request with the judged head's
 -- sha, so a head that moved since the review is a refused merge, not
 -- a merge of unreviewed code, and reports the merge commit sha back.
@@ -123,7 +146,8 @@ local function test_enable_auto_merge_reports_a_graphql_error()
 end
 
 -- `post_review` POSTs a formal REQUEST_CHANGES review pinned to the
--- judged head, carrying the caller's body verbatim.
+-- judged head, carrying the caller's body verbatim — the ordinary
+-- case, the PR's author a different login than the token's own.
 local function test_post_review_posts_the_expected_request()
   local seen: fetch.Options = nil
   local seen_url = ""
@@ -134,8 +158,13 @@ local function test_post_review_posts_the_expected_request()
     return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
       url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
   end
-  local ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
-    "abcd1234", "the concrete gaps")
+  local ok: boolean = false
+  local err = ""
+  with_own_login("reviewer-bot", function(): boolean
+      ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the concrete gaps", "request changes", "someone-else")
+      return true
+    end)
   api.transport = original
   restore_token(prior)
   assert(ok, "got: " .. tostring(err))
@@ -147,6 +176,93 @@ local function test_post_review_posts_the_expected_request()
     and decoded["commit_id"] == "abcd1234"
     and decoded["body"] == "the concrete gaps",
     "the payload carries the formal review's own fields")
+end
+
+-- On the token's OWN pull request (`--open` opens every PR under this
+-- same token) GitHub refuses REQUEST_CHANGES, so `post_review` posts a
+-- COMMENT instead, its body prefixed with the kind's own marker line —
+-- the shape `gh.latest_request_changes` also matches, so a rework
+-- brief still fills. Login comparison is case-insensitive, since
+-- GitHub's own casing need not match exactly between endpoints.
+local function test_post_review_comments_on_the_tokens_own_pr()
+  local seen: fetch.Options = nil
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    seen = opts
+    return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok: boolean = false
+  local err = ""
+  with_own_login("Reviewer-Bot", function(): boolean
+      ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the concrete gaps", "request changes", "reviewer-bot")
+      return true
+    end)
+  api.transport = original
+  restore_token(prior)
+  assert(ok, "got: " .. tostring(err))
+  local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(decoded["event"] == "COMMENT", "got: " .. tostring(decoded["event"]))
+  assert(decoded["body"] == "request-changes:\nthe concrete gaps",
+    "the body carries the marker line the bounce reader keys on: "
+    .. tostring(decoded["body"]))
+end
+
+-- A reject against the token's own PR marks its COMMENT the same way,
+-- with the reject marker rather than request-changes.
+local function test_post_review_reject_marks_its_own_pr_comment()
+  local seen: fetch.Options = nil
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    seen = opts
+    return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok: boolean = false
+  local err = ""
+  with_own_login("reviewer-bot", function(): boolean
+      ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the approach was wrong", "reject", "reviewer-bot")
+      return true
+    end)
+  api.transport = original
+  restore_token(prior)
+  assert(ok, "got: " .. tostring(err))
+  local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(decoded["event"] == "COMMENT", "got: " .. tostring(decoded["event"]))
+  assert(decoded["body"] == "reject:\nthe approach was wrong",
+    "got: " .. tostring(decoded["body"]))
+end
+
+-- A failed own-login read (no token, network) never silently
+-- downgrades a real reviewer's verdict — it falls back to the formal
+-- REQUEST_CHANGES exactly as before this change.
+local function test_post_review_falls_back_when_own_login_read_fails()
+  local seen: fetch.Options = nil
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    seen = opts
+    return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok: boolean = false
+  local err = ""
+  with_own_login(nil, function(): boolean
+      ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the concrete gaps", "request changes", "reviewer-bot")
+      return true
+    end)
+  api.transport = original
+  restore_token(prior)
+  assert(ok, "got: " .. tostring(err))
+  local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(decoded["event"] == "REQUEST_CHANGES",
+    "an unknown own login never downgrades the verdict: "
+    .. tostring(decoded["event"]))
 end
 
 -- `close_pull` PATCHes the request closed.

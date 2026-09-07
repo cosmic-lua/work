@@ -93,19 +93,40 @@ end
 
 --- Post a formal review on a pull request — the `REQUEST_CHANGES`
 --- event a rework hand-back looks for (`_work.gh.latest_request_changes`);
---- a plain comment never satisfies it.
+--- a plain comment never satisfies it. Except on the token's OWN pull
+--- request (`--open` opens every PR under this same token): GitHub
+--- refuses `REQUEST_CHANGES`/`APPROVE` there but allows `COMMENT`, so
+--- this posts a `COMMENT` instead, its body prefixed with `kind`'s own
+--- marker line (`request-changes:` / `reject:`) — the shape
+--- `latest_request_changes` also matches, so a rework brief still
+--- fills. The own-PR check reads `_work.api.own_login`; when that read
+--- fails (no token, network), this falls back to `REQUEST_CHANGES` as
+--- today rather than silently downgrading a real reviewer's verdict.
 --- @param s store.Store The store
 --- @param repo string owner/name
 --- @param number integer The PR number
 --- @param sha string The judged head the review is pinned to
 --- @param body string The review's body text
+--- @param kind string "request changes" | "reject" — which marker a
+--- own-PR `COMMENT` carries
+--- @param author_login string The PR's own author login (`.author_login`)
 --- @return boolean True once GitHub records the review
 --- @return string Error message on failure
 local function post_review(s: store.Store, repo: string, number: integer,
-    sha: string, body: string): boolean, string
+    sha: string, body: string, kind: string, author_login: string):
+  boolean, string
   local path = ("/repos/%s/pulls/%d/reviews"):format(repo, number)
-  local payload, jerr = json.encode({event = "REQUEST_CHANGES",
-      commit_id = sha, body = body})
+  local event = "REQUEST_CHANGES"
+  local own_body = body
+  local login, _lerr = api.own_login(s.root)
+  if login ~= nil and login ~= "" and author_login ~= nil and author_login ~= ""
+  and login:lower() == author_login:lower() then
+    event = "COMMENT"
+    local marker = kind == "reject" and "reject:" or "request-changes:"
+    own_body = marker .. "\n" .. body
+  end
+  local payload, jerr = json.encode({event = event,
+      commit_id = sha, body = own_body})
   if payload == nil then
     return false, "encoding the review: " .. tostring(jerr)
   end
@@ -148,7 +169,7 @@ local record ghwrite
   sha: string): boolean, string
   enable_auto_merge: function(s: store.Store, node_id: string): boolean, string
   post_review: function(s: store.Store, repo: string, number: integer,
-  sha: string, body: string): boolean, string
+  sha: string, body: string, kind: string, author_login: string): boolean, string
   close_pull: function(s: store.Store, repo: string, number: integer):
   boolean, string
 end

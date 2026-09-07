@@ -291,7 +291,8 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
       if slugged == nil then
         return gate.verdict_line("verdict", false, "REFUSED: " .. slerr)
       end
-      local pok, perr = ghwrite.post_review(s, slugged, judged, p.head_sha, text)
+      local pok, perr = ghwrite.post_review(s, slugged, judged, p.head_sha, text,
+        kind, p.author_login)
       if not pok then
         return gate.verdict_line("verdict", false, "REFUSED: " .. perr)
       end
