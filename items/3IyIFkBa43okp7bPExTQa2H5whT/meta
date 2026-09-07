@@ -2,6 +2,8 @@ title: verdict: a request-changes or reject on a PR the token itself opened post
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim: build-Qa2H_5whT-f6f470de
-reviewer: review-Qa2H_5whT-f6f470de
 pr: 71
+verdict: accept
+verdict_head: 8c4124df305e22af1627024ad99a1767da6bfa44
+verdict_spec: c8152f04fec0b7e796edee21e2745c23fcb1a109
 builders: build-Qa2H_5whT-f6f470de
