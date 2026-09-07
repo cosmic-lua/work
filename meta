@@ -1,9 +1,9 @@
 title: bin/gitboard.pin: bump to 2026-09-07-ce28c12, the release carrying #70 (verdict records before landing)
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
-claim: build-W82p_yu86-f6f470de
 pr: 1779
 verdict: accept
 verdict_head: 25860a99811a1c43de74c7100792779626ced9cc
 verdict_spec: fcd521aba9cab9e1d1d595ca894da212d44354f5
+resolution: completed
 builders: build-W82p_yu86-f6f470de
