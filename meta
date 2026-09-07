@@ -1,6 +1,8 @@
 title: casts_kinds.tl: shrink the generic T and binding-constant-by-name explicit residuals to scoped patterns
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
 target: cosmic-lua/cosmic
-reviewer: review-wAe5_evHa-6141b568
 pr: 1791
+verdict: accept
+verdict_head: 861465e9a96b8e21ae6497d11f9a857ff45c4823
+verdict_spec: 333562e4090a1517956f2ff58f68b4f7e0cc313f
 builders: build-wAe5_evHa-6141b568
