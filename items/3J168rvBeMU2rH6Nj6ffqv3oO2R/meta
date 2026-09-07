@@ -1,4 +1,5 @@
 title: AGENTS.md's cold-build rule doesn't cover record-field widening on an already-shipped module
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
+resolution: not-planned
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
