@@ -130,6 +130,48 @@ local function test_containered_clears_the_locks()
     "the claim and the review clear together")
 end
 
+-- The one exception: a parent already awaiting a verdict (an open PR,
+-- or mid-`request changes`) keeps its claim and PR untouched — a
+-- routine child is not the decomposition that clears them the way a
+-- bare todo/plan item's first child does.
+local function test_containered_leaves_a_review_or_rework_parent_alone()
+  local reviewing = make_item({claim = "session-A", pr = 9})
+  local c1 = fixture.make_index({reviewing})
+  assert(#check.must(gate.containered(c1, reviewing)) == 0,
+    "an item awaiting a verdict has nothing cleared")
+  assert(reviewing.claim == "session-A" and reviewing.pr == 9,
+    "its claim and PR stand exactly as they were")
+
+  local reworking = make_item({claim = "session-B", pr = 4,
+      verdict = "request changes"})
+  local c2 = fixture.make_index({reworking})
+  assert(#check.must(gate.containered(c2, reworking)) == 0,
+    "mid-rework is the same exception")
+  assert(reworking.claim == "session-B" and reworking.pr == 4,
+    "its claim and PR stand too")
+end
+
+-- A claimed item mid-rework with NO pr and NO result — the send-back
+-- answered in place, not yet handed back over — is the same exception:
+-- `_work.readddl`'s `role_view` maps a standing "request changes" to
+-- "rework" on the verdict alone, no pr/result gate, so a PR-less
+-- rework parent that gains a routine child must keep both its role
+-- "work" (`_work.read.role`, what `take`'s container refusal reads)
+-- and its live claim — never the old unconditional clear a bare
+-- todo/plan item's first child still gets.
+local function test_containered_leaves_a_pr_less_rework_parent_alone()
+  local reworking = make_item({claim = "session-C",
+      verdict = "request changes"})
+  local child = make_item({parent = reworking.id})
+  local c = fixture.make_index({reworking, child})
+  assert(check.must(read.role(c, reworking.id)) == "work",
+    "role_view keeps it work with no pr/result gate")
+  assert(#check.must(gate.containered(c, reworking)) == 0,
+    "so containered has nothing to clear")
+  assert(reworking.claim == "session-C",
+    "the claim survives — the old code wiped it here")
+end
+
 -- The take refusal counts what awaits a verdict by KIND: a research
 -- handover outranking a take must be named "handover", never "diff"
 -- — the noun `next`'s review reason already gets right (#1625).

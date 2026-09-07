@@ -420,6 +420,13 @@ end
 --- outright), so `index` is only ever consulted to tell an outcome
 --- from anything else.
 ---
+--- A parent already carrying a live PR or research result awaiting a
+--- verdict (`_work.item.is_review_or_rework`) is the one exception:
+--- `_work.readddl`'s `role_view` leaves it "work" rather than
+--- "container" when it gains a routine child, so there is nothing
+--- here to clear — its claim and PR stand exactly as they were, and
+--- it stays independently pullable for its own review.
+---
 --- Returned rather than saved, so the caller commits it TOGETHER with
 --- the child; committed on its own it would survive a refused child.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
@@ -427,6 +434,9 @@ end
 --- @return {item.Item} | nil The parent when it changed, empty otherwise
 --- @return string Error message
 local function containered(c: Index, parent: item.Item): {item.Item} | nil, string
+  if item.is_review_or_rework(parent) then
+    return {}, ""
+  end
   local role, rerr = read.role(c, parent.id)
   if role == nil then
     return nil, rerr

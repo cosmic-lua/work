@@ -45,10 +45,15 @@ CREATE VIEW board AS
 -- EVERY item, done ones included (`show` prints a done item's role
 -- too) — matches `_work.flow.role` exactly: the board first
 -- (parentless), then any item with an open child (`containers`,
--- decomposition beats everything below it), then a direct child of a
--- parentless item (`_work.flow.is_outcome` asks the same question —
--- any parentless item counts, not only the canonical `board` row
--- above), else work.
+-- decomposition beats everything below it) UNLESS the item's own
+-- `substate` is 'review' or 'rework' — an item already carrying a
+-- live PR or research result awaiting a verdict is not blocked by a
+-- routine, non-blocking child the way an untouched todo/plan item
+-- is, so it stays 'work' and its own claim/PR keep standing
+-- (`_work.item.is_review_or_rework`, `_work.gitgate.containered`) —
+-- then a direct child of a parentless item (`_work.flow.is_outcome`
+-- asks the same question — any parentless item counts, not only the
+-- canonical `board` row above), else work.
 --
 -- `role` below is a TABLE `refill_role` keeps equal to this view's
 -- rows — `_work.read.role`, queried on every `show`/`show ID`/`take`/
@@ -58,7 +63,9 @@ CREATE VIEW role_view AS
   SELECT i.id AS id,
     CASE
       WHEN i.parent = '' THEN 'board'
-      WHEN i.id IN (SELECT id FROM containers) THEN 'container'
+      WHEN i.id IN (SELECT id FROM containers)
+        AND i.id NOT IN (SELECT id FROM substate WHERE substate IN ('review', 'rework'))
+        THEN 'container'
       WHEN EXISTS (SELECT 1 FROM items p WHERE p.id = i.parent AND p.parent = '')
         THEN 'outcome'
       ELSE 'work'
