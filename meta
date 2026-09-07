@@ -2,6 +2,8 @@ title: show: print the CI observation line for a doing item's PR, the field the 
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim: build-ZD1x_zeG6-f6f470de
-reviewer: review-ZD1x_zeG6-f6f470de
 pr: 74
+verdict: accept
+verdict_head: d2de4f9a39c6ec25e696c6d15e023ee64fa23ca0
+verdict_spec: 1bdddecbb6039ba2e63c453098abdd25c839f18b
 builders: build-ZD1x_zeG6-f6f470de
