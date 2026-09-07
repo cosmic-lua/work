@@ -1,0 +1,3 @@
+title: pr.yml: state --min 76 --min-file 0 on the ci line once the pin carries the flag (staged behind the next release + pin bump)
+parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
+target: cosmic-lua/cosmic
