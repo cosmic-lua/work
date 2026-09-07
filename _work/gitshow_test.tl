@@ -4,7 +4,9 @@
 -- report the `cmd_show` wrapper prints: fields, derived state, the
 -- take gate's problem list, the sidecar, the git history.
 
+local cache = require("_work.cache")
 local check = require("cosmic.check")
+local ciobs = require("_work.ciobs")
 local eventsmod = require("_work.events")
 local fixture = require("_work.fixture")
 local gitread = require("_work.gitread")
@@ -16,6 +18,7 @@ local show = require("_work.gitshow")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
+local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
@@ -79,10 +82,14 @@ end
 --- @param events {publish.Event} Its git history, newest first
 --- @param problems {string} The take gate's problem list, possibly empty
 --- @param overlaps {string} | nil `_work.overlap`'s pre-rendered lines
+--- @param ci_state string | nil `show.show_report`'s own CI state input
+--- @param ci_head string | nil `show.show_report`'s own CI head input
+--- @param ci_age_s integer | nil `show.show_report`'s own CI age input
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function report_for(it: item.Item, all: {item.Item}, body: string,
-    events: {publish.Event}, problems: {string}, overlaps?: {string}): {string}, string
+    events: {publish.Event}, problems: {string}, overlaps?: {string},
+    ci_state?: string, ci_head?: string, ci_age_s?: integer): {string}, string
   -- `it` rides along in the index too: `read.role`/`describe`/`state_of`
   -- below query rows keyed by ITS OWN id, not only its ancestors', so a
   -- caller testing a standalone item never part of `all` (a handover
@@ -122,7 +129,7 @@ local function report_for(it: item.Item, all: {item.Item}, body: string,
     end
   end
   return show.show_report(it, role, rank_line, state, body, events, problems,
-    children_lines, overlaps)
+    children_lines, overlaps, nil, ci_state, ci_head, ci_age_s)
 end
 
 local function test_show_prints_fields_role_and_history()
@@ -155,6 +162,43 @@ local function test_show_prints_repo_and_base()
   local plain = report_for(all[3], all, "", {}, {})
   assert(not matched(plain, "^repo:"), "no repo, no line")
   assert(not matched(plain, "^base:"), "no base, no line")
+end
+
+-- `show` prints the CI observation line the review brief already
+-- tells a reader to check `show ID` for — cached state, head, and age,
+-- never `done`/`total` (`_work.ciobs` stores no check count).
+local function test_show_prints_the_ci_line_for_a_doing_items_pr()
+  local all = a_board()
+  local lines = report_for(all[3], all, "", {}, {}, nil, "green",
+    "cafef00dabc", 125)
+  assert(matched(lines, "^ci: green %(head cafef00, observed 2m ago%)$"),
+    table.concat(lines, "\n"))
+end
+
+-- No cached row (`ci_state` nil) reads "not observed", distinct from
+-- no line at all for an item CI has nothing to say about.
+local function test_show_prints_ci_not_observed_with_no_cached_row()
+  local all = a_board()
+  local lines = report_for(all[3], all, "", {}, {})
+  assert(matched(lines, "^ci: not observed$"), table.concat(lines, "\n"))
+end
+
+-- A todo item carries no PR by definition (`_work.indexddl`'s `state`
+-- view: `pr <> 0` alone already reads as doing), and a resolved item's
+-- leftover PR field is CI's business no longer — neither prints a
+-- `ci:` line, whatever `ci_state` a caller happens to pass in.
+local function test_show_prints_no_ci_line_without_an_open_doing_pr()
+  local all = a_board()
+  local todo_lines = report_for(all[4], all, "", {}, {}, nil, "green")
+  assert(not matched(todo_lines, "^ci:"),
+    "no PR, no ci line: " .. table.concat(todo_lines, "\n"))
+
+  local closed = check.must(item.decode({id = next_id(), title = "a merged slice",
+        parent = UNDER, pr = 7, resolution = "completed"}))
+  all[#all + 1] = closed
+  local closed_lines = report_for(closed, all, "", {}, {}, nil, "green")
+  assert(not matched(closed_lines, "^ci:"),
+    "a resolved item's stale PR: " .. table.concat(closed_lines, "\n"))
 end
 
 -- The take gate's problem list renders on the read that precedes the
@@ -391,4 +435,40 @@ local function test_show_id_history_matches_between_cache_and_git_log()
   assert(out == from_cache_out,
     "the two histories must render byte-identically:\ncache:\n" .. from_cache_out
     .. "\nfallback:\n" .. out)
+end
+
+-- `show ID`'s CI line comes from `_work.ciobs`'s own cache, wired
+-- through `cmd_show` exactly as `cmd_show` reads role, rank, and
+-- state — a real cache row, not a hand-built one.
+local function test_show_id_prints_the_cached_ci_state()
+  local s = init_state_repo("show-ci-observed")
+  local _root, leaf = fixture.root_with_leaf(s)
+  fixture.give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "builder-a", 11, false, "") == 0)
+  local it = assert(store.load(s, leaf))
+  local c = assert(cache.open(s.root))
+  assert(ciobs.record(c, it.repo, it.pr,
+      {state = "green", head_sha = "cafef00dabc", runs = {}}))
+  assert(cache.close(c))
+
+  local code, out = show_and_capture(s, leaf)
+  assert(code == 0, out)
+  assert(out:find("\nci: green %(head cafef00, observed %d+m ago%)\n") ~= nil,
+    "the cached state and head render: " .. out)
+end
+
+-- No cached row at all — `sync` never having reached this PR — reads
+-- "not observed", not a refusal or a silent gap.
+local function test_show_id_prints_ci_not_observed_with_no_row()
+  local s = init_state_repo("show-ci-unobserved")
+  local _root, leaf = fixture.root_with_leaf(s)
+  fixture.give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "builder-a", 12, false, "") == 0)
+
+  local code, out = show_and_capture(s, leaf)
+  assert(code == 0, out)
+  assert(out:find("\nci: not observed\n") ~= nil,
+    "an unobserved PR: " .. out)
 end

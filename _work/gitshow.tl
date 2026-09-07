@@ -10,6 +10,7 @@
 --- the contract, and a report that returns its lines can be asserted
 --- on without capturing stdout.
 local cache = require("_work.cache")
+local ciobs = require("_work.ciobs")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
 local index = require("_work.index")
@@ -122,11 +123,17 @@ end
 --- @param overlaps {string} `_work.overlap`'s pre-rendered lines, possibly empty
 --- @param headroom {string} `_work.overlap.headroom_lines`'s pre-rendered
 --- lines, possibly empty — a warning, never a `take` refusal
+--- @param ci_state string | nil `_work.ciobs.current_state`'s own return for
+--- this item's PR, nil for a doing item's PR the cache has never observed;
+--- meaningless (never read) for a todo item or one with no PR
+--- @param ci_head string | nil `_work.ciobs.head_of`'s head sha, alongside `ci_state`
+--- @param ci_age_s integer | nil `_work.ciobs.head_of`'s observed age, alongside `ci_state`
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function show_report(it: item.Item, role: string, rank_line: string,
     state: string, body: string, events: {publish.Event}, problems: {string},
-    children_lines: {string}, overlaps?: {string}, headroom?: {string}): {string}, string
+    children_lines: {string}, overlaps?: {string}, headroom?: {string},
+    ci_state?: string, ci_head?: string, ci_age_s?: integer): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
       it.id)}
   out[#out + 1] = ("role: %s"):format(role)
@@ -153,6 +160,21 @@ local function show_report(it: item.Item, role: string, rank_line: string,
     out[#out + 1] = ("reviewer: %s"):format(it.reviewer)
   end
   if it.pr ~= 0 then out[#out + 1] = ("pr: #%d"):format(it.pr) end
+  -- The review brief reads CI here (`gitboard show ID`): a doing
+  -- item's PR always has a state to report, cached or not — `pr ~= 0`
+  -- already implies doing (`_work.indexddl`'s `state` view), so a
+  -- resolved item's stale PR field is the one case `is_open` still
+  -- has to rule out. `done`/`total` checks live only in the live
+  -- `gh.HeadChecks` `_work.ciobs` never stores, so the line cites the
+  -- head and its age instead — what the cache actually has.
+  if it.pr ~= 0 and item.is_open(it) then
+    if ci_state == nil or ci_state == "" then
+      out[#out + 1] = "ci: not observed"
+    else
+      out[#out + 1] = ("ci: %s (head %s, observed %dm ago)"):format(
+        ci_state, (ci_head or ""):sub(1, 7), (ci_age_s or 0) // 60)
+    end
+  end
   -- A research handover's deliverable is the spec at a revision, so
   -- the digest prints where a diff's PR number would: the seven hex
   -- the log line and a verdict's `--head` carry.
@@ -323,8 +345,20 @@ local function cmd_show(s: store.Store, id: string): integer
         tail.handle(ch.child), ch.title)
     end
   end
+  -- `current_state` is the same cached, head-aware read `take`'s own
+  -- debt count and CI refusal already use (`_work.gitgate.ci_clears_debt`,
+  -- `_work.gitverbs.cmd_take`) — never a live GitHub call from `show`.
+  local ci_state: string | nil = nil
+  local ci_head: string | nil = nil
+  local ci_age_s = 0
+  if it.pr ~= 0 and item.is_open(it) then
+    ci_state = ciobs.current_state(c, it.repo, it.pr, it.id)
+    if ci_state ~= nil then
+      ci_head, ci_age_s = ciobs.head_of(c, it.repo, it.pr)
+    end
+  end
   local lines, verdict = show_report(it, role, rank_line, state, body, events,
-    problems, children_lines, overlaps, headroom)
+    problems, children_lines, overlaps, headroom, ci_state, ci_head, ci_age_s)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -337,7 +371,8 @@ local record gitshow
   show_report: function(it: item.Item, role: string, rank_line: string,
   state: string, body: string,
   events: {publish.Event}, problems: {string}, children_lines: {string},
-  overlaps?: {string}, headroom?: {string}): {string}, string
+  overlaps?: {string}, headroom?: {string}, ci_state?: string, ci_head?: string,
+  ci_age_s?: integer): {string}, string
   cmd_show: function(s: store.Store, id: string): integer
 end
 

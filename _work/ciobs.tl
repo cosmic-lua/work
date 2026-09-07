@@ -60,6 +60,27 @@ local function read(c: cachedb.Cache, repo: string, pr: integer): string | nil, 
   return row.state as string, os.time() - observed_at -- cast: from any (sqlite row)
 end
 
+--- The last-observed head sha and its age for one pull request — the
+--- companion to `read`, which already covers state: a caller that
+--- wants both (`show ID`'s CI line renders state from `current_state`
+--- and head/age from here) reads the row twice rather than `read`
+--- growing a third return value only some callers need.
+--- @param c cachedb.Cache An open cache connection
+--- @param repo string The item's repo field, "" when unset
+--- @param pr integer The PR number
+--- @return string | nil The last-observed head sha; nil when never observed
+--- @return integer Seconds since it was observed; 0 when never observed
+local function head_of(c: cachedb.Cache, repo: string, pr: integer): string | nil, integer
+  local row = c.db:query_one(
+    "SELECT head, observed_at FROM ci_checks WHERE repo = ? AND pr = ?",
+    {repo, pr})
+  if row == nil then
+    return nil, 0
+  end
+  local observed_at = math.tointeger(row.observed_at as number) or 0 -- cast: from any (sqlite row)
+  return row.head as string, os.time() - observed_at -- cast: from any (sqlite row)
+end
+
 --- Whether an observation this many seconds old is still trusted:
 --- purely the shared window, unless `GITBOARD_CI_FRESH` forces past
 --- it — the same override shape `_work.lanes.FRESH_ENV` gives lane
@@ -165,6 +186,7 @@ local record ciobs
   FRESH_ENV: string
   RECENT_PUSH_S: integer
   read: function(c: cachedb.Cache, repo: string, pr: integer): string | nil, integer
+  head_of: function(c: cachedb.Cache, repo: string, pr: integer): string | nil, integer
   fresh: function(age_s: integer): boolean
   current_state: function(c: cachedb.Cache, repo: string, pr: integer, id: string):
   string | nil
@@ -185,6 +207,7 @@ local M: ciobs = {
   FRESH_ENV = FRESH_ENV,
   RECENT_PUSH_S = RECENT_PUSH_S,
   read = read,
+  head_of = head_of,
   current_state = current_state,
   fresh = fresh,
   record = record_row,
