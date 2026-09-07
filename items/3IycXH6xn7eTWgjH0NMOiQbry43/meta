@@ -1,9 +1,9 @@
 title: rewrite_test: the no-blank-line case asserts the pre-format splice, so a byte-span deletion fails it on its own
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-OiQb_ry43-6141b568
 pr: 1790
 verdict: accept
 verdict_head: d986c8b94afd7befaebaafc881f016d0b80ec1f3
 verdict_spec: 1d730c4cc04255f1a2fa99e7ac4043c441212aa5
+resolution: completed
 builders: build-OiQb_ry43-6141b568
