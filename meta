@@ -1,10 +1,10 @@
 title: verdict accept: the documented auto-merge fallback never fires — GraphQL 403s first, and REST also needs the merge-queue path, not a direct merge
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-3nAe_st3T-6141b568
 pr: 81
 verdict: accept
 verdict_head: 69a43bb110a2be3b6ec38513607af3ba32e19a51
 verdict_spec: 4b6356c61cbbd361379a1b7cfe578b70cbceccc5
+resolution: completed
 builders: build-3nAe_st3T-6141b568
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
