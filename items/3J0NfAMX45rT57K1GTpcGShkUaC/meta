@@ -1,0 +1,3 @@
+title: gitgraph.tl: port cmd_new's friendlier root-item --repo refusal from cosmic-lua/cosmic's stale board branch (PR #1711) onto cosmic-lua/work's main
+parent: 3ItMeRJbGzDkQZKVgXr9R8ezA8Q
+target: cosmic-lua/work
