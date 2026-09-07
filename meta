@@ -2,6 +2,7 @@ title: cosmic.ast: require-alias resolution — a narrow, shared primitive for -
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-X4Uy_DCTW-6141b568
+reviewer: review-X4Uy_DCTW-r2-6141b568
 pr: 1796
 verdict: request changes
 verdict_head: 57f4d45cc0d88b5b3f4e9c58c64a647c3d25a441
