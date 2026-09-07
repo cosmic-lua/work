@@ -1,9 +1,9 @@
 title: review brief: pre-provision the review checkout the same way gitboard worktree already does for builders
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim: build-1QjU_Fdth-6141b568
 pr: 85
 verdict: accept
 verdict_head: cea2e0064cd26a80e2ce906fb80d56f24cd42c6e
 verdict_spec: 22bd347f186435acbbfc24ea61722e8305733871
+resolution: completed
 builders: build-1QjU_Fdth-6141b568
