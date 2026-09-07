@@ -1,4 +1,5 @@
 title: HD1o_sZ5c: _work/store.tl fails --check types under cosmic-lua/cosmic's current pinned checker (nil-narrow-then-reassign, blocks the pin bump)
 parent: 3J0U2KOpqqhrfYGR72WHD1osZ5c
 target: cosmic-lua/work
+resolution: completed
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
