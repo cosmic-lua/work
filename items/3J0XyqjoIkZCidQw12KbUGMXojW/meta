@@ -1,9 +1,9 @@
 title: casts ratchet: drop the shrink-only ceiling and zero-site check from casts_kinds/casts_test
 parent: 3J0Xxh9FSKV5SNVEo0dS4IBDGf3
 target: cosmic-lua/cosmic
-claim: build-bUGM_XojW-rework1-6141b568
 pr: 1793
 verdict: accept
 verdict_head: 562b40bac934a4e1b501195a61c4ef377709d6c2
 verdict_spec: a59780760175e27e36b89ab1b6de9f2dad0945da
+resolution: completed
 builders: build-bUGM_XojW-6141b568 build-bUGM_XojW-rework1-6141b568
