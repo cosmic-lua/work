@@ -1,3 +1,4 @@
 title: bin/gitboard.pin: bump to 2026-09-07-81e0660 (own-PR COMMENT bounce, worktree refuses unclaimed)
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmic
+speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
