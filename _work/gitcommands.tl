@@ -127,7 +127,14 @@ local CSPEC: flags.CommandSpec = {
         .. "each --ref into\nrefs/spike/<basename>. The bootstrap's own "
         .. "fetch/build is quiet by\ndefault, printing only its "
         .. "PASS/FAIL summary line(s) on success and\neverything on a "
-        .. "failure; --verbose streams it verbatim instead.",
+        .. "failure; --verbose streams it verbatim instead.\n\n--review "
+        .. "provisions the REVIEW checkout instead — run right after "
+        .. "`take ID`\nclaims the review, before `brief review ID`: "
+        .. "fetches the PR's current head onto\nits own branch and "
+        .. "checks it out at wt/review-<id8>, the same path\n`brief "
+        .. "review ID` already names. Claim comes from ID's reviewer, "
+        .. "not its build\nclaim; refused when ID carries no PR yet. "
+        .. "--verbose applies to either\ncheckout's bootstrap.",
         flags = {dir_flag(),
           {long = "root", arg = "DIR",
             help = "the local checkout to branch from; default is "
@@ -135,6 +142,9 @@ local CSPEC: flags.CommandSpec = {
           {long = "ref", arg = "REF", repeated = true,
             help = "fetch REF into refs/spike/<basename> after "
             .. "bootstrap (repeatable)"},
+          {long = "review", help = "provision ID's review checkout "
+            .. "instead of a builder's — the PR's current head, "
+            .. "claimed under ID's reviewer"},
           {long = "verbose", help = "stream the bootstrap's fetch/build "
             .. "output verbatim (a compile/compile-batch line per file) "
             .. "instead of just its PASS/FAIL summary line(s)"},
