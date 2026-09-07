@@ -4,16 +4,22 @@
 -- fixture checkout directly, bypassing the sibling-checkout search —
 -- exactly how a test with no real sibling layout to fake uses it.
 
+local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
 
 local git = fixture.git
 local tmpdir = fixture.tmpdir
+
+-- The session every fixture item is claimed under, except the two
+-- cases exercising the claim refusal itself.
+local SESSION < const > = "build-fixture-9doI"
 
 --- A bare "origin" with one clone that seeds `main` — a README, plus
 --- (by `kind`) a `bin/cosmic` stub (executable, leaves a sentinel
@@ -102,14 +108,29 @@ local function with_invoking_checkout(invoking: string, f: function(): boolean)
   end
 end
 
---- A workable item carrying a `repo`/`base` — `worktree` refuses one
---- with no repo, and needs a base to branch off of.
+--- Claims `id` under `session` and saves it — `worktree` reads the
+--- claim from the store, not from an in-memory item, so a fixture
+--- exercising anything past the claim refusal needs one on record.
+--- @param s store.Store The board
+--- @param id string The item to claim
+--- @param session string The claiming session
+local function claim_as(s: store.Store, id: string, session: string)
+  local it = check.must(store.load(s, id))
+  it.claim = session
+  assert(storewrite.save(s, it, "fixture: claim for worktree"))
+end
+
+--- A workable item carrying a `repo`/`base`, claimed under `SESSION` —
+--- `worktree` refuses one with no repo, and needs a base to branch off
+--- of, but refuses even sooner over an unclaimed item, so every
+--- fixture past that gate needs a claim too.
 --- @param name string A unique fixture name
 --- @return store.Store, string The board and the item's id
 local function item_with_repo(name: string): store.Store, string
   local s = fixture.init_state_repo(name)
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
+  claim_as(s, leaf, SESSION)
   return s, leaf
 end
 
@@ -120,7 +141,7 @@ local function test_worktree_creates_branch_and_path()
   local s, leaf = item_with_repo("wt-happy")
   local id8 = leaf:sub(1, 8)
   local expect = fs.join(fs.dirname(checkout), "wt", id8)
-  assert(worktree.cmd_worktree(s, leaf, checkout, {}) == 0)
+  assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}) == 0)
   assert(fs.is_dir(expect), "the worktree exists at the sibling path")
   assert(fs.is_file(fs.join(expect, "README")), "checked out from main")
   local r = assert(child.run({"git", "rev-parse", "--abbrev-ref", "HEAD"},
@@ -134,8 +155,8 @@ end
 local function test_worktree_refuses_a_repeat()
   local checkout = make_checkout("repeat", "none")
   local s, leaf = item_with_repo("wt-repeat")
-  assert(worktree.cmd_worktree(s, leaf, checkout, {}) == 0)
-  assert(worktree.cmd_worktree(s, leaf, checkout, {}) ~= 0,
+  assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}) == 0)
+  assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}) ~= 0,
     "a second call over the same branch and path refuses")
 end
 
@@ -160,7 +181,7 @@ local function test_worktree_fetches_each_ref()
   local prior = env.get("GITBOARD_WORKTREE_BOOTSTRAP")
   assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", "0"))
   local ok, err = pcall(function(): boolean
-      assert(worktree.cmd_worktree(s, leaf, checkout, {"notes/spike"}) == 0)
+      assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {"notes/spike"}) == 0)
       return true
     end)
   if prior == nil then local _ok, _err = env.unset("GITBOARD_WORKTREE_BOOTSTRAP")
@@ -194,7 +215,7 @@ local function test_worktree_bootstrap_stub_skips_execution()
     lines[#lines + 1] = table.concat(parts, "\t")
   end
   local ok, err = pcall(function(): boolean
-      assert(worktree.cmd_worktree(s, leaf, checkout, {}) == 0)
+      assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}) == 0)
       return true
     end)
   _G.print = old_print
@@ -217,7 +238,8 @@ end
 local function test_worktree_refuses_with_no_repo()
   local s = fixture.init_state_repo("wt-norepo")
   local _root, leaf = fixture.root_with_leaf(s)
-  assert(worktree.cmd_worktree(s, leaf, "", {}) ~= 0,
+  claim_as(s, leaf, SESSION)
+  assert(worktree.cmd_worktree(s, leaf, SESSION, "", {}) ~= 0,
     "an item with no repo set is refused")
 end
 
@@ -226,7 +248,7 @@ end
 local function test_worktree_bootstrap_detects_cosmopolitan_tree()
   local checkout = make_checkout("cosmopolitan", "cosmopolitan")
   local s, leaf = item_with_repo("wt-cosmopolitan")
-  assert(worktree.cmd_worktree(s, leaf, checkout, {}) == 0)
+  assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}) == 0)
 end
 
 -- With no `--root`, `worktree` resolves the item's repo on its own:
@@ -238,7 +260,7 @@ local function test_worktree_resolves_checkout_via_sibling_search()
   local id8 = leaf:sub(1, 8)
   local expect = fs.join(fs.dirname(sibling), "wt", id8)
   with_invoking_checkout(invoking, function(): boolean
-      assert(worktree.cmd_worktree(s, leaf, "", {}) == 0)
+      assert(worktree.cmd_worktree(s, leaf, SESSION, "", {}) == 0)
       assert(fs.is_dir(expect),
         "auto-resolved via the sibling whose origin matches the repo")
       return true
@@ -252,8 +274,9 @@ local function test_worktree_refuses_when_no_sibling_matches()
   local s = fixture.init_state_repo("wt-norefuse")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "someone/else", "main") == 0)
+  claim_as(s, leaf, SESSION)
   with_invoking_checkout(invoking, function(): boolean
-      local code = worktree.cmd_worktree(s, leaf, "", {})
+      local code = worktree.cmd_worktree(s, leaf, SESSION, "", {})
       assert(code ~= 0, "no local checkout answers someone/else")
       return true
     end)
@@ -280,8 +303,71 @@ local function test_worktree_defaults_cosmopolitan_repo_to_master()
   local s = fixture.init_state_repo("wt-cosmobase")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/cosmopolitan-lua-fork", nil) == 0)
+  claim_as(s, leaf, SESSION)
   local id8 = leaf:sub(1, 8)
-  assert(worktree.cmd_worktree(s, leaf, checkout, {}) == 0)
+  assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}) == 0)
   local expect = fs.join(fs.dirname(checkout), "wt", id8)
   assert(fs.is_dir(expect), "branched off master, the cosmopolitan default")
+end
+
+-- An unclaimed item refuses outright, before any git or network call:
+-- no branch, no worktree directory. `take ID` was never run (or was
+-- refused) — the evidence this item exists to fix.
+local function test_worktree_refuses_when_unclaimed()
+  local checkout = make_checkout("unclaimed", "none")
+  local s = fixture.init_state_repo("wt-unclaimed")
+  local _root, leaf = fixture.root_with_leaf(s)
+  assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
+  local id8 = leaf:sub(1, 8)
+  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local code = worktree.cmd_worktree(s, leaf, SESSION, checkout, {})
+  _G.print = old_print
+  local out = table.concat(lines, "\n")
+  assert(code ~= 0, "an unclaimed item is refused")
+  assert(out:find("is not claimed by " .. SESSION, 1, true) ~= nil,
+    "the refusal names the caller session: " .. out)
+  assert(not fs.is_dir(expect), "no worktree directory was created")
+  local has_branch = child.run({"git", "rev-parse", "--verify", "--quiet",
+      "refs/heads/" .. id8}, {cwd = checkout})
+  assert(has_branch == nil or not has_branch.ok,
+    "no branch was created in the checkout")
+end
+
+-- A claim held by a DIFFERENT session refuses too, naming whose claim
+-- it actually is rather than only who was refused.
+local function test_worktree_refuses_a_different_sessions_claim()
+  local checkout = make_checkout("foreign", "none")
+  local s, leaf = item_with_repo("wt-foreign")
+  local id8 = leaf:sub(1, 8)
+  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local code = worktree.cmd_worktree(s, leaf, "build-a-different-session",
+    checkout, {})
+  _G.print = old_print
+  local out = table.concat(lines, "\n")
+  assert(code ~= 0, "a different session's claim is refused")
+  assert(out:find(SESSION, 1, true) ~= nil,
+    "the refusal names whose claim it is: " .. out)
+  assert(not fs.is_dir(expect), "no worktree directory was created")
+  local has_branch = child.run({"git", "rev-parse", "--verify", "--quiet",
+      "refs/heads/" .. id8}, {cwd = checkout})
+  assert(has_branch == nil or not has_branch.ok,
+    "no branch was created in the checkout")
 end

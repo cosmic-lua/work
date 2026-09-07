@@ -1,5 +1,7 @@
 --- `worktree`: the orchestrator's one command for a builder's
---- checkout, run right after `take ID` succeeds. Resolves ID's repo
+--- checkout, run right after `take ID` succeeds — refused outright,
+--- before any git or network call, when the caller does not hold ID's
+--- claim (the same session identity `take` resolves). Resolves ID's repo
 --- to a LOCAL checkout — the checkout `bin/gitboard` itself runs in
 --- when ITS origin already is the item's repo, else the first sibling
 --- directory beside it whose origin matches (`--root DIR` skips this
@@ -90,6 +92,26 @@ local function resolve_checkout(repo: string): string, string
   :format(repo, parent, repo)
 end
 
+--- The refusal `worktree` earns when `id`'s claim is not the caller's,
+--- nil when it is — the same owner-rule shape `gitowner` uses for
+--- `take --pr`: name the value in play and, once there is a caller to
+--- contrast it with, name that too. Unclaimed ("") never counts as the
+--- caller's, even for an unnamed caller — "" is the absence of a
+--- claim, not an identity a comparison can match.
+--- @param id8 string The item id's first 8 characters, for the message
+--- @param claim string The item's `claim` field, "" when unclaimed
+--- @param session string The caller's resolved session
+--- @return string | nil The refusal
+local function claim_refusal(id8: string, claim: string, session: string): string | nil
+  if claim ~= "" and claim == session then return nil end
+  if claim == "" then
+    return ("REFUSED: %s is not claimed by %s — take it first")
+    :format(id8, session)
+  end
+  return ("REFUSED: %s is claimed by %s, not %s — take it first")
+  :format(id8, claim, session)
+end
+
 --- ID's PR base: the item's own `base` when set, else `master` for a
 --- `cosmopolitan` repo, `main` otherwise — `_work.brief`'s own
 --- `<BASE_BRANCH>` rule.
@@ -137,22 +159,28 @@ local function ref_basename(ref: string): string
   return ref:match("([^/]+)$") or ref
 end
 
---- worktree: create ID's builder checkout in one command.
+--- worktree: create ID's builder checkout in one command. Refuses
+--- before any git or network call unless `session` already holds ID's
+--- claim.
 --- @param s store.Store The store
 --- @param id string The item to make a checkout for
+--- @param session string The caller's session; must hold ID's claim
 --- @param root_override string `--root`, "" to auto-resolve
 --- @param refs {string} `--ref` occurrences, fetched into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
 --- @return integer Exit code
-local function cmd_worktree(s: store.Store, id: string, root_override: string,
-    refs: {string}): integer
+local function cmd_worktree(s: store.Store, id: string, session: string,
+    root_override: string, refs: {string}): integer
   local it, lerr = store.load(s, id)
   if it == nil then return gate.verdict_line("worktree", false, lerr) end
+  local id8 = id:sub(1, 8)
+  local crefusal = claim_refusal(id8, it.claim or "", session)
+  if crefusal ~= nil then return gate.verdict_line("worktree", false, crefusal) end
   local repo = it.repo or ""
   if repo == "" then
     return gate.verdict_line("worktree", false,
       ("%s has no repo set — worktree needs one to resolve a checkout")
-      :format(id:sub(1, 8)))
+      :format(id8))
   end
   local checkout = root_override or ""
   if checkout == "" then
@@ -160,7 +188,6 @@ local function cmd_worktree(s: store.Store, id: string, root_override: string,
     if found == "" then return gate.verdict_line("worktree", false, ferr) end
     checkout = found
   end
-  local id8 = id:sub(1, 8)
   local base = default_base(repo, it.base or "")
   local path = fs.join(fs.dirname(checkout), "wt", id8)
   if fs.is_dir(path) or fs.is_file(path) then
@@ -202,8 +229,8 @@ local function cmd_worktree(s: store.Store, id: string, root_override: string,
 end
 
 local record gitworktree
-  cmd_worktree: function(s: store.Store, id: string, root_override: string,
-  refs: {string}): integer
+  cmd_worktree: function(s: store.Store, id: string, session: string,
+  root_override: string, refs: {string}): integer
   default_base: function(repo: string, base: string): string
 end
 
