@@ -228,6 +228,13 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
   -- to fetch here.
   local merged_sha = ""
   local pre_merged = false
+  -- Set when `ghwrite.post_review`'s 422 retry is what actually
+  -- posted — an app installation token has no `GET /user` to match
+  -- against the PR's own author, so the cheap own-login check cannot
+  -- catch its own PR and the write falls back at GitHub's refusal
+  -- instead. The verdict still records; this only changes what the
+  -- line says about how the review landed.
+  local bounced_as_comment = false
   -- A landing failure is never the verdict's own failure: the
   -- judgment is true whether or not GitHub can act on it yet, so a
   -- failed merge PUT or auto-merge mutation is carried here and
@@ -296,6 +303,7 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
       if not pok then
         return gate.verdict_line("verdict", false, "REFUSED: " .. perr)
       end
+      bounced_as_comment = perr == "comment-fallback"
       if kind == "reject" then
         local cok, cerr = ghwrite.close_pull(s, slugged, judged)
         if not cok then
@@ -378,6 +386,9 @@ local function cmd_verdict(s: store.Store, id: string, kind: string,
   local note = ""
   if pre_merged then
     note = (" (PR #%d was already merged)"):format(it.pr)
+  elseif bounced_as_comment then
+    note = " (bounce posted as a marked comment: the token cannot " ..
+      "request changes on its own PR)"
   end
   return gate.verdict_line("verdict", true,
     ("%s on %s: %s%s"):format(kind, id:sub(1, 8), outcome, note))

@@ -265,6 +265,102 @@ local function test_post_review_falls_back_when_own_login_read_fails()
     .. tostring(decoded["event"]))
 end
 
+-- An installation token has no `GET /user` to match its own PR
+-- against (it answers for the app, not a user), so `own_login` fails
+-- and the cheap check above never fires for it. GitHub's 422 on the
+-- REQUEST_CHANGES attempt is that same own-PR refusal surfacing at
+-- the write instead — `post_review` retries once as a marked COMMENT
+-- and reports which form actually posted.
+local function test_post_review_retries_as_comment_on_a_422()
+  local post_count = 0
+  local seen: fetch.Options = nil
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    post_count = post_count + 1
+    local decoded = json.decode(opts.body) as {string: any} -- cast: a decoded JSON object, known by construction
+    if decoded["event"] == "REQUEST_CHANGES" then
+      return {status = 422, headers = {}, raw_headers = {},
+        body = '{"message":"Review cannot be requested from pull request author"}',
+        url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end
+    seen = opts
+    return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok: boolean = false
+  local info = ""
+  with_own_login(nil, function(): boolean
+      ok, info = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the concrete gaps", "request changes", "claude[bot]")
+      return true
+    end)
+  api.transport = original
+  restore_token(prior)
+  assert(ok, "got: " .. tostring(info))
+  assert(post_count == 2, "exactly one retry: got " .. post_count)
+  assert(info == "comment-fallback", "reports which form posted: got " .. info)
+  local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(decoded["event"] == "COMMENT", "got: " .. tostring(decoded["event"]))
+  assert(decoded["body"] == "request-changes:\nthe concrete gaps",
+    "the retry carries the same marked body: " .. tostring(decoded["body"]))
+end
+
+-- A 422 on the retried COMMENT too is a real failure, not a second
+-- fallback — the error names the status, and the retry still
+-- happened exactly once.
+local function test_post_review_422_on_both_is_a_failure()
+  local post_count = 0
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
+    post_count = post_count + 1
+    return {status = 422, headers = {}, raw_headers = {},
+      body = '{"message":"Validation Failed"}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok: boolean = false
+  local err = ""
+  with_own_login(nil, function(): boolean
+      ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the concrete gaps", "request changes", "claude[bot]")
+      return true
+    end)
+  api.transport = original
+  restore_token(prior)
+  assert(not ok, "a 422 on both attempts is a failure")
+  assert(post_count == 2, "the retry still happens once: got " .. post_count)
+  assert(err:find("HTTP 422", 1, true) ~= nil, "got: " .. err)
+end
+
+-- A 422 when the FIRST attempt was already a COMMENT (the cheap
+-- own-login check already matched) is not retried again — the retry
+-- applies only when the first attempt was REQUEST_CHANGES.
+local function test_post_review_422_on_an_already_comment_attempt_is_not_retried()
+  local post_count = 0
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
+    post_count = post_count + 1
+    return {status = 422, headers = {}, raw_headers = {},
+      body = '{"message":"Validation Failed"}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok: boolean = false
+  local err = ""
+  with_own_login("reviewer-bot", function(): boolean
+      ok, err = ghwrite.post_review({root = ""}, "acme/widgets", 7,
+        "abcd1234", "the concrete gaps", "request changes", "reviewer-bot")
+      return true
+    end)
+  api.transport = original
+  restore_token(prior)
+  assert(not ok, "a 422 on an already-COMMENT attempt is a failure")
+  assert(post_count == 1,
+    "no retry when the first attempt was already COMMENT: got " .. post_count)
+  assert(err:find("HTTP 422", 1, true) ~= nil, "got: " .. err)
+end
+
 -- `close_pull` PATCHes the request closed.
 local function test_close_pull_patches_the_expected_request()
   local seen: fetch.Options = nil

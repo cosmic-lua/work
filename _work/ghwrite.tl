@@ -91,17 +91,34 @@ local function enable_auto_merge(s: store.Store, node_id: string):
   return true, ""
 end
 
+--- `kind`'s own marker line, prefixed to `body` — the shape
+--- `_work.gh.latest_request_changes` matches regardless of whether the
+--- marked body rides a `REQUEST_CHANGES` review or a `COMMENT` one, so
+--- a rework brief still fills either way.
+--- @param kind string "request changes" | "reject"
+--- @param body string The review's body text
+--- @return string The marked body
+local function marked(kind: string, body: string): string
+  local marker = kind == "reject" and "reject:" or "request-changes:"
+  return marker .. "\n" .. body
+end
+
 --- Post a formal review on a pull request — the `REQUEST_CHANGES`
 --- event a rework hand-back looks for (`_work.gh.latest_request_changes`);
 --- a plain comment never satisfies it. Except on the token's OWN pull
 --- request (`--open` opens every PR under this same token): GitHub
 --- refuses `REQUEST_CHANGES`/`APPROVE` there but allows `COMMENT`, so
---- this posts a `COMMENT` instead, its body prefixed with `kind`'s own
---- marker line (`request-changes:` / `reject:`) — the shape
---- `latest_request_changes` also matches, so a rework brief still
---- fills. The own-PR check reads `_work.api.own_login`; when that read
---- fails (no token, network), this falls back to `REQUEST_CHANGES` as
---- today rather than silently downgrading a real reviewer's verdict.
+--- this posts a marked `COMMENT` instead. Two ways land on that same
+--- own-PR case: the cheap one first — `_work.api.own_login`'s `GET
+--- /user` compared against `author_login` — and, only when a
+--- REQUEST_CHANGES attempt still comes back 422, one retry as a marked
+--- COMMENT. The second path exists because an app installation token
+--- has no `GET /user` to answer for (it answers for the app, not a
+--- user), so `own_login` fails and the cheap check can never fire for
+--- it; GitHub's 422 is that same own-PR refusal surfacing at the
+--- write instead. When the own-login read merely errors (no token,
+--- network) and the write is NOT on its own PR, this still attempts
+--- REQUEST_CHANGES first, exactly as before.
 --- @param s store.Store The store
 --- @param repo string owner/name
 --- @param number integer The PR number
@@ -111,7 +128,8 @@ end
 --- own-PR `COMMENT` carries
 --- @param author_login string The PR's own author login (`.author_login`)
 --- @return boolean True once GitHub records the review
---- @return string Error message on failure
+--- @return string Error message on failure; on success, "comment-fallback"
+--- when the 422 retry is what actually posted, else ""
 local function post_review(s: store.Store, repo: string, number: integer,
     sha: string, body: string, kind: string, author_login: string):
   boolean, string
@@ -122,8 +140,7 @@ local function post_review(s: store.Store, repo: string, number: integer,
   if login ~= nil and login ~= "" and author_login ~= nil and author_login ~= ""
   and login:lower() == author_login:lower() then
     event = "COMMENT"
-    local marker = kind == "reject" and "reject:" or "request-changes:"
-    own_body = marker .. "\n" .. body
+    own_body = marked(kind, body)
   end
   local payload, jerr = json.encode({event = event,
       commit_id = sha, body = own_body})
@@ -134,10 +151,25 @@ local function post_review(s: store.Store, repo: string, number: integer,
   if res == nil then
     return false, err
   end
-  if not api.is_success(res.status) then
+  if api.is_success(res.status) then
+    return true, ""
+  end
+  if event ~= "REQUEST_CHANGES" or res.status ~= 422 then
     return false, api.error_of("POST", path, res)
   end
-  return true, ""
+  local retry_payload, rjerr = json.encode({event = "COMMENT",
+      commit_id = sha, body = marked(kind, body)})
+  if retry_payload == nil then
+    return false, "encoding the review: " .. tostring(rjerr)
+  end
+  local rres, rerr = api.call("POST", path, s.root, retry_payload)
+  if rres == nil then
+    return false, rerr
+  end
+  if not api.is_success(rres.status) then
+    return false, api.error_of("POST", path, rres)
+  end
+  return true, "comment-fallback"
 end
 
 --- Close a pull request — the second half of a reject, run after its
