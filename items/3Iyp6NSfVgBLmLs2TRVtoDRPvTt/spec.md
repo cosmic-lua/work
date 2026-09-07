@@ -1,0 +1,15 @@
+## Evidence
+
+After «ineK_wWK6» (coverage and the file cap assert their expectation from the command line), four committed tracking files remain, all `merge=union` in `.gitattributes`: `_build/casts_baseline.tl` (66 lines, per-file cast COUNTS, shrink-only) beside `docs/design/cast-sites.tsv` (141 rows, one per cast, a `class` column of 16 human-judged kinds — `cut -f5 | sort | uniq -c`: tl compiler surface 34, userdata boundary 14, type-defeating test probe 14, enum relation 11, module surface record 10, container variance 9, generic T 8, map view 7, binding contract shape 7, runtime capability probe 6, pcall return shape 6, record union after guard 5, function shape 4, incremental record construction 3, metatable access 1, binding constant by name 1); `_build/nil_returns_baseline.tl` (61 lines) beside `docs/design/nil-flow-sites.tsv` (357 rows, 7 classes that are SYNTACTIC positions: argument 175, operand 90, return 44, assignment 31, table-field 11, index-key 3, tail 4); and `_build/public_surface_baseline.tl` (57 lines), a copy of what position-is-the-manifest and the doc index already derive. The count floors say how MANY; the tsv says WHICH KIND; keeping both means a line shift, an ordinal shift (#1770, «Infz_bnpL»), or a merge (`union`) can put a class on the wrong row. What the project wants to hold is the KIND: a cast is allowed because it is one of a closed list of shapes, and that list shrinks. `cosmic.ast` now has patterns with captures and name predicates (#1761, #1777) but cannot express a cast: `o/bin/cosmic --find '$X as $T' cosmic` → `find: refused: <pattern>:1:9: syntax error`; the parser gives an `op` node with `op.op == "as"` whose `e2` is a `cast` node carrying `casttype.typename` (`integer`, `map`, …), probed 2026-09-07.
+
+## Change
+
+Casts and nil-flow each become ONE test file whose body is an allowlist of KINDS, each kind an AST pattern (plus a file-scope qualifier where the kind is "only in tests") and the count of sites it may match today; a site matching no kind fails the test naming the site; a kind's count can only be lowered and a kind can only be deleted. The count floors, the two tsvs, their reconcile tools, `_tool/floor.tl`'s callers and the `merge=union` lines go. The public surface floor is deleted outright: the position rule and the doc index are the surface. `docs/design/casts.md` and `nil-flow.md` keep the prose per kind, with the pattern quoted. D27 ("every committed floor is a cosmic.literal file") is superseded, not amended: no committed floor remains (`ls _build/*baseline* docs/design/*.tsv` → nothing).
+
+## Non-goals
+
+No new cast is licensed; no change to what `--check lint`'s cast-justify demands (`-- cast: <reason>` stays per site); no change to `cosmic.ast`'s public shape beyond the pattern grammar.
+
+## Ready when
+
+`ls _build/*baseline* docs/design/*.tsv` prints nothing, `.gitattributes` has no `merge=union` line, and `bin/cosmic --make test _build/casts_test.tl _build/nil_returns_test.tl` passes with every current site matched by exactly one kind.
