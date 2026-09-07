@@ -12,7 +12,7 @@ No change to `bin/gitboard`; no cosmic pin change.
 
 ## Access
 
-cosmic-lua/cosmic, read and write on a branch; no other repository.
+cosmic-lua/cosmic, read and write on a branch; cosmic-lua/work, read only (the release asset the pin names, downloaded once to measure its sha256).
 
 ## Ready when
 
