@@ -45,6 +45,30 @@ Forcing a syntactic proxy through anyway (e.g. flagging only sites with an expli
 site" means, produce a materially smaller and different set than the tsv being
 retired, and violate the spec's own Non-goals ("no site is reclassified").
 
+## Findings — is point 2 permanent?
+
+Point 2 asked whether `cosmic.ast` could ever gain the type-resolution this census
+needs. `«8b2w_hfv3»` (a separate, pre-existing research item asking the same
+reachability question from `cosmic.ast.match`'s own type-filtered-matching angle —
+found by this item's own similarity check, not filed fresh here) has now settled it
+directly, empirically, against the pinned tl checker: **yes, `tl`'s checker already
+computes and can expose a position→type report** (`Env.report_types` +
+`env.reporter:get_report()` → `by_pos[file][y][x]` → a `TypeInfo` whose `str`/`.types`
+make a union's nil-membership a structural check, no reimplementation of
+`subtype_relations`/`unite()` needed), reachable today through the same untyped
+reach-around `cosmic/_teal_discard.tl` already uses in production. See `«8b2w_hfv3»`'s
+Findings for the measurement — not repeated here.
+
+What follows from that answer does not change points 1 or 3, or this item's own
+Change/Non-goals below: the capability existing does not by itself supply the 9-class
+sink taxonomy or the return-vs-break narrowing logic the census also needs, and it
+lives beside `cosmic.teal`'s checked-environment machinery, not inside `cosmic.ast`
+itself — composed with `cosmic.ast.walk`/`match` by shared `y`/`x` position, not
+merged into it. The reachable primitive is being built as
+`«1ND6_Eum9»` (under `«HpoM_Gzj7»`, `«8b2w_hfv3»`'s own outcome) — a shared piece
+either this census or type-filtered `cosmic.ast.match` could use later, not committed
+to either consumer yet.
+
 ## Change
 
 None — this item is a question, not a build. Its resolution is a decision about
@@ -65,12 +89,18 @@ with the fact above in hand. Candidate shapes worth naming, not committing to:
   "kinds allowlist" shape casts moved to does not obviously apply to it either; if
   it is worth simplifying, that is a distinct question from this item's premise and
   would need its own spec, not a relabeling of this one.
+- Now that `«1ND6_Eum9»` lands the position→type primitive, a fourth shape becomes
+  possible but is NOT proposed here: rebuild the census as a `cosmic.ast` walk (sink
+  shape) composed with `«1ND6_Eum9»`'s primitive (nilability at that shape's
+  position). This still needs its own narrowing story (return vs. break) worked out
+  and its own spec — naming it is not committing to it.
 
 ## Non-goals
 
 Not proposing an answer here for which candidate (if any) to pursue — that decision,
 and any resulting spec, belongs to whoever picks this up, informed by the Evidence
-above.
+and Findings above. Not re-investigating `«8b2w_hfv3»`'s reachability question — cite
+its Findings, don't repeat its experiments.
 
 ## Access
 
