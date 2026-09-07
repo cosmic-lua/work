@@ -325,7 +325,8 @@ local function main(...: string): integer
       d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
   if d.command == "worktree" then
-    return gitworktree.cmd_worktree(s, id, d.parsed.values["root"] or "",
+    local who = session.resolve(d.parsed.values["session"])
+    return gitworktree.cmd_worktree(s, id, who, d.parsed.values["root"] or "",
       d.parsed.lists["ref"] or {})
   end
   if d.command == "take" then

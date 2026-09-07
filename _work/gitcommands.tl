@@ -125,7 +125,10 @@ local CSPEC: flags.CommandSpec = {
             .. "resolved from ID's repo"},
           {long = "ref", arg = "REF", repeated = true,
             help = "fetch REF into refs/spike/<basename> after "
-            .. "bootstrap (repeatable)"}}}},
+            .. "bootstrap (repeatable)"},
+          {long = "session", arg = "SESSION",
+            help = "the claiming session. Omit to derive it from the "
+            .. "environment"}}}},
     {name = "take", summary = "claim ID: the pull (spec bar and doing "
       .. "bound apply), its review when it awaits a verdict, or record "
       .. "its handover (--pr N for a diff, --open to open one, --result "
