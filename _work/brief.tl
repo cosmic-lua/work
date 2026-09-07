@@ -23,6 +23,7 @@
 --- hand.
 ---
 --- A read, not a mutation: nothing here writes the board.
+local bounce = require("_work.bounce")
 local brieftext = require("_work.brieftext")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
@@ -252,8 +253,9 @@ end
 --- rendered as an actual empty string, never left as literal
 --- placeholder text, because nothing hand-fills this one the way an
 --- orchestrator might a bounce paragraph — whenever the item is not in
---- rework, the head has not moved, the read fails, or no
---- CHANGES_REQUESTED review is found.
+--- rework, the head has not moved, the read fails, or no bounce review
+--- (`_work.bounce.is_bounce`) is found; `rounds` counts every bounce the
+--- same way, so a marked own-PR COMMENT round is not under-counted.
 --- @param s store.Store The store
 --- @param it item.Item The item under review
 --- @param p review.Pull The PR's current state
@@ -275,7 +277,7 @@ local function round_context(s: store.Store, it: item.Item, p: review.Pull): str
   end
   local rounds = 0
   for _, r in ipairs(revs) do
-    if r.state == "CHANGES_REQUESTED" then
+    if bounce.is_bounce(r.state, r.body) then
       rounds = rounds + 1
     end
   end
