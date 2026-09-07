@@ -2,7 +2,9 @@ title: cosmic-lua/cosmic's own bin/gitboard.pin is stale, missing WyFa_GL3c/YLxi
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-VFYg_q5kz-6141b568
-reviewer: review-VFYg_q5kz-6141b568
 pr: 1794
+verdict: accept
+verdict_head: 813a6f8010bcd7ce4ebf068577b17ef0bc72ba14
+verdict_spec: b4dc51c832aaa022d31f68286e622bd577325513
 builders: build-VFYg_q5kz-6141b568
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
