@@ -2,7 +2,9 @@ title: cosmic.ast: name predicates on captures and statement deletion in --rewri
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim: build-aAVJ_FXDR-f6f470de
-reviewer: review-aAVJ_FXDR-f6f470de
 pr: 1777
+verdict: accept
+verdict_head: 4c00cf59e60cd3d35e723400273d9f0fab01c6fe
+verdict_spec: 87df4d7b37bbb45aeccea12f304bac2592f215ed
 builders: build-aAVJ_FXDR-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
