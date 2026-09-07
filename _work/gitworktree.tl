@@ -16,7 +16,12 @@
 --- lands at `<checkout>/../wt/<id8>`,
 --- `<id8>` the item id's first 8 characters, `take`'s own branch
 --- name — the sequence every builder brief used to spend its first
---- 30-40 tool calls doing by hand.
+--- 30-40 tool calls doing by hand. The bootstrap's `--make fetch`/
+--- `--make build` is quiet by default: each step reduces to its own
+--- `PASS`/`FAIL` summary line, `--verbose` streams the hundreds of
+--- per-file `compile`/`compile-batch` lines verbatim instead — a
+--- failed step always prints everything captured, unfiltered,
+--- whichever mode is in play.
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -124,23 +129,67 @@ local function default_base(repo: string, base: string): string
   return "main"
 end
 
+--- The summary line(s) `--make` itself prints inside a step's captured
+--- output: `verb: PASS (...)`/`verb: FAIL (...)`, the exact shape
+--- `_tool.records.format_verdict` writes (`fetch: PASS (N pins)`,
+--- `build: PASS (N files, 1 binary)`) — everything else, a `compile`/
+--- `compile-batch` line per source file or `unpack`/`fetch`/`patch`
+--- per pin, is dropped.
+--- @param text string A step's captured stdout
+--- @return {string} The summary lines, in the order they appeared
+local function summary_of(text: string): {string}
+  local out: {string} = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    if line:match("^%a+: PASS") ~= nil or line:match("^%a+: FAIL") ~= nil then
+      out[#out + 1] = line
+    end
+  end
+  return out
+end
+
+--- Runs one bootstrap step (a `bin/cosmic --make fetch`/`--make build`
+--- invocation). `verbose` streams it verbatim — `stdout`/`stderr`
+--- inherited, as every step ran before this flag existed. Quiet (the
+--- default) instead captures it and prints only `summary_of` its
+--- output on success, or everything captured, unfiltered, the moment
+--- it fails — a failed bootstrap is never harder to read than a green
+--- one used to be.
+--- @param path string The worktree to run it in
+--- @param argv {string} The full `bin/cosmic ...` argv
+--- @param verbose boolean Stream the step verbatim instead of summarizing
+local function run_step(path: string, argv: {string}, verbose: boolean)
+  if verbose then
+    local _r, _e = child.run(argv, {cwd = path, stdout = "inherit", stderr = "inherit"})
+    return
+  end
+  local r, _e = child.run(argv, {cwd = path})
+  if r == nil then return end
+  if not r.ok then
+    print(r.stdout .. r.stderr)
+    return
+  end
+  for _, line in ipairs(summary_of(r.stdout)) do
+    print(line)
+  end
+end
+
 --- Bootstraps a fresh worktree: `bin/cosmic --make fetch` then
---- `--make build` for a cosmic tree (their own verdict lines are this
---- verb's output — streamed, not captured), nothing for a
---- cosmopolitan tree (its own gate is the builder's first) or a repo
---- this tool does not recognize. `GITBOARD_WORKTREE_BOOTSTRAP=0`
---- skips actually running the cosmic commands — a test's fixture may
---- carry a fake `bin/cosmic` it must never execute — while still
---- detecting and reporting which kind this is.
+--- `--make build` for a cosmic tree (`run_step` decides how much of
+--- their own output reaches the caller), nothing for a cosmopolitan
+--- tree (its own gate is the builder's first) or a repo this tool
+--- does not recognize. `GITBOARD_WORKTREE_BOOTSTRAP=0` skips actually
+--- running the cosmic commands — a test's fixture may carry a fake
+--- `bin/cosmic` it must never execute — while still detecting and
+--- reporting which kind this is.
 --- @param path string The fresh worktree
+--- @param verbose boolean Stream fetch/build verbatim instead of
+--- summarizing them (`--verbose`)
 --- @return string What was bootstrapped, for the verdict line
-local function bootstrap(path: string): string
+local function bootstrap(path: string, verbose: boolean): string
   if fs.is_file(fs.join(path, "bin/cosmic")) then
     if env.get("GITBOARD_WORKTREE_BOOTSTRAP") ~= "0" then
-      local _r1, _e1 = child.run({"bin/cosmic", "--make", "fetch"},
-        {cwd = path, stdout = "inherit", stderr = "inherit"})
-      local _r2, _e2 = child.run({"bin/cosmic", "--make", "build"},
-        {cwd = path, stdout = "inherit", stderr = "inherit"})
+      run_step(path, {"bin/cosmic", "--make", "fetch"}, verbose)
+      run_step(path, {"bin/cosmic", "--make", "build"}, verbose)
     end
     return "cosmic (fetch + build)"
   end
@@ -168,9 +217,11 @@ end
 --- @param root_override string `--root`, "" to auto-resolve
 --- @param refs {string} `--ref` occurrences, fetched into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
+--- @param verbose boolean `--verbose`: stream the bootstrap's fetch/build
+--- output verbatim instead of just its summary line(s)
 --- @return integer Exit code
 local function cmd_worktree(s: store.Store, id: string, session: string,
-    root_override: string, refs: {string}): integer
+    root_override: string, refs: {string}, verbose: boolean): integer
   local it, lerr = store.load(s, id)
   if it == nil then return gate.verdict_line("worktree", false, lerr) end
   local id8 = id:sub(1, 8)
@@ -213,7 +264,7 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped = bootstrap(path)
+  local bootstrapped = bootstrap(path, verbose)
   for _, ref in ipairs(refs) do
     local name = ref_basename(ref)
     local r = child.run({"git", "fetch", "origin",
@@ -230,7 +281,7 @@ end
 
 local record gitworktree
   cmd_worktree: function(s: store.Store, id: string, session: string,
-  root_override: string, refs: {string}): integer
+  root_override: string, refs: {string}, verbose: boolean): integer
   default_base: function(repo: string, base: string): string
 end
 

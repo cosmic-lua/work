@@ -327,7 +327,7 @@ local function main(...: string): integer
   if d.command == "worktree" then
     local who = session.resolve(d.parsed.values["session"])
     return gitworktree.cmd_worktree(s, id, who, d.parsed.values["root"] or "",
-      d.parsed.lists["ref"] or {})
+      d.parsed.lists["ref"] or {}, d.parsed.switches["verbose"] or false)
   end
   if d.command == "take" then
     local pr = math.tointeger(tonumber(d.parsed.values["pr"] or "0")) or 0

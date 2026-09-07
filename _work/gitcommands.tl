@@ -124,7 +124,10 @@ local CSPEC: flags.CommandSpec = {
         .. "succeeds.\n\nResolves ID's repo to a local checkout, branches "
         .. "and adds a worktree beside it\n(never reused: an existing "
         .. "branch or path both refuse), bootstraps it, then fetches "
-        .. "each --ref into\nrefs/spike/<basename>.",
+        .. "each --ref into\nrefs/spike/<basename>. The bootstrap's own "
+        .. "fetch/build is quiet by\ndefault, printing only its "
+        .. "PASS/FAIL summary line(s) on success and\neverything on a "
+        .. "failure; --verbose streams it verbatim instead.",
         flags = {dir_flag(),
           {long = "root", arg = "DIR",
             help = "the local checkout to branch from; default is "
@@ -132,6 +135,9 @@ local CSPEC: flags.CommandSpec = {
           {long = "ref", arg = "REF", repeated = true,
             help = "fetch REF into refs/spike/<basename> after "
             .. "bootstrap (repeatable)"},
+          {long = "verbose", help = "stream the bootstrap's fetch/build "
+            .. "output verbatim (a compile/compile-batch line per file) "
+            .. "instead of just its PASS/FAIL summary line(s)"},
           {long = "session", arg = "SESSION",
             help = "the claiming session. Omit to derive it from the "
             .. "environment"}}}},
