@@ -361,3 +361,29 @@ local function test_a_clean_item_is_not_flagged()
   assert(not item.is_flagged(it) and it.decode_problems == nil,
     "a well-formed item decodes with no problems attached")
 end
+
+-- `is_review_or_rework` matches `_work.indexddl`'s `substate` view
+-- exactly: an open PR or research result with no verdict yet, or a
+-- standing "request changes" — never a bare claim, an accept, or a
+-- reject's cleared fields.
+local function test_is_review_or_rework_matches_the_substate_view()
+  local function with(over: {string: any}): item.Item
+    local t = base()
+    t.parent = PARENT
+    for k, v in pairs(over) do
+      t[k] = v
+    end
+    return check.must(item.decode(t))
+  end
+  assert(not item.is_review_or_rework(with({})), "a bare todo is neither")
+  assert(not item.is_review_or_rework(with({claim = "session-a"})),
+    "claimed with no PR yet is building, not review")
+  assert(item.is_review_or_rework(with({claim = "session-a", pr = 9})),
+    "an open PR with no verdict yet is review")
+  assert(item.is_review_or_rework(with({result = "abc1234"})),
+    "a research handover with no verdict yet is review too")
+  assert(item.is_review_or_rework(with({claim = "session-a", pr = 9,
+          verdict = "request changes"})), "request changes is rework")
+  assert(not item.is_review_or_rework(with({claim = "session-a", pr = 9,
+          verdict = "accept"})), "an accept is neither — it awaits land")
+end

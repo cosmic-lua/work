@@ -81,6 +81,39 @@ local function test_role_for_every_role()
   check.must(idxmod.close(idx))
 end
 
+-- An item already carrying a live PR (`review`) or a standing
+-- "request changes" (`rework`) keeps role "work" when it gains a
+-- routine child — filing an out-of-scope finding on it is not the
+-- decomposition a bare todo/plan item gaining its first child is, so
+-- it stays independently pullable for its own review
+-- (`_work.item.is_review_or_rework`). A claimed item with no PR yet
+-- (`building`) is unaffected: the general container rule still binds.
+local function test_a_review_or_rework_parent_stays_work_with_a_child()
+  local board = make({})
+  local outcome = make({parent = board.id})
+  board.order = {outcome.id}
+  local reviewing = make({parent = outcome.id, claim = "sess", pr = 3})
+  local reworking = make({parent = outcome.id, claim = "sess", pr = 3,
+      verdict = "request changes"})
+  local building = make({parent = outcome.id, claim = "sess"})
+  local child1 = make({parent = reviewing.id})
+  local child2 = make({parent = reworking.id})
+  local child3 = make({parent = building.id})
+  local idx = make_index({board, outcome, reviewing, reworking, building,
+      child1, child2, child3})
+
+  local cases: {RoleWant} = {
+    {it = reviewing, role = "work"},
+    {it = reworking, role = "work"},
+    {it = building, role = "container"},
+  }
+  for _, want in ipairs(cases) do
+    local got = check.must(read.role(idx, want.it.id))
+    assert(got == want.role, ("%s: got %s, wanted %s"):format(want.it.id, got, want.role))
+  end
+  check.must(idxmod.close(idx))
+end
+
 local function test_state_and_substate()
   local board = make({})
   local outcome = make({parent = board.id})

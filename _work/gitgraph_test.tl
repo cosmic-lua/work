@@ -38,6 +38,31 @@ local function test_decomposition_is_one_push_two_commits()
     "gaining a child clears the lock on the new container")
 end
 
+-- A routine, out-of-scope finding filed as a child of an item already
+-- awaiting a verdict (an open PR, or mid-`request changes`) must not
+-- silently promote it to a container: its own claim and PR stand
+-- exactly as they were, and a fresh session can still claim its own
+-- review — unlike the same filing on a bare todo/plan item, which
+-- still decomposes it (`test_decomposition_is_one_push_two_commits`
+-- above covers that unchanged case for a claimed, PR-less item).
+local function test_new_parent_on_a_review_item_keeps_it_workable()
+  local s = init_state_repo("review-child")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+
+  assert(graph.cmd_new(s, "an unrelated finding", leaf, nil, "") == 0)
+
+  local after = check.must(store.load(s, leaf))
+  assert(after.claim == "session-a" and after.pr == 9,
+    "the claim and PR stand exactly as they were")
+  local role = check.must(read.role(check.must(store.read(s)), leaf))
+  assert(role == "work", "the item stays workable, not a container: got " .. role)
+  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") == 0,
+    "a fresh session can still claim the item's own review")
+end
+
 -- `new --repo` scopes the item's PR to a foreign repo; the field is
 -- what makes cross-repo work (a cosmopolitan fix serving a cosmic
 -- goal) visible instead of a URL buried in prose.
