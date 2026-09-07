@@ -82,8 +82,13 @@ local function test_attach_before_places_and_parents_in_one_publish()
   local moved = check.must(store.load(s, mover))
   assert(moved.parent == goal, "the mover is now goal's child")
   local reparent = check.must(store.load(s, goal))
-  assert(#reparent.order == 2 and reparent.order[1] == mover
-    and reparent.order[2] == other,
+  local mover_at: integer = nil
+  local other_at: integer = nil
+  for i, v in ipairs(reparent.order) do
+    if v == mover then mover_at = i end
+    if v == other then other_at = i end
+  end
+  assert(mover_at ~= nil and other_at ~= nil and mover_at == other_at - 1,
     "mover lands immediately before other: " .. table.concat(reparent.order, ","))
 end
 
@@ -97,21 +102,32 @@ local function test_attach_after_places_the_child_past_x()
   assert(graph.cmd_attach(s, mover, goal, "", other) == 0,
     "attach --after should be accepted")
   local reparent = check.must(store.load(s, goal))
-  assert(#reparent.order == 2 and reparent.order[1] == other
-    and reparent.order[2] == mover,
+  local mover_at: integer = nil
+  local other_at: integer = nil
+  for i, v in ipairs(reparent.order) do
+    if v == mover then mover_at = i end
+    if v == other then other_at = i end
+  end
+  assert(mover_at ~= nil and other_at ~= nil and mover_at == other_at + 1,
     "mover lands immediately after other: " .. table.concat(reparent.order, ","))
 end
 
 -- X has to already be a POSITIONED child of PARENT — an unranked
 -- sibling is refused the same way `rank` itself refuses one, rather
--- than silently landing the mover at the front.
+-- than silently landing the mover at the front. `new` can no longer
+-- produce an unranked child under an ordinary parent, so the
+-- unpositioned sibling here is built through a bare `attach`, which
+-- still leaves an item unranked when no --before/--after names it.
 local function test_attach_refuses_placing_against_an_unpositioned_sibling()
   local s = init_state_repo("attach-unpositioned")
-  local goal, leaf = root_with_leaf(s)
+  local goal, _leaf = root_with_leaf(s)
+  local stray = file_item(s, "a stray outcome", "")
+  assert(graph.cmd_attach(s, stray, goal) == 0,
+    "attach with no position should be accepted")
   local mover = file_item(s, "a mover", "")
   local before_parent = check.must(store.load(s, mover)).parent
-  assert(graph.cmd_attach(s, mover, goal, leaf, "") ~= 0,
-    "leaf carries no position among goal's children yet")
+  assert(graph.cmd_attach(s, mover, goal, stray, "") ~= 0,
+    "stray carries no position among goal's children yet")
   assert(check.must(store.load(s, mover)).parent == before_parent,
     "the refused attach never wrote anything")
 end

@@ -88,12 +88,19 @@ end
 -- has never been ranked is refused rather than silently placed at the
 -- front, with a message pointing at `rank X --last` (or an explicit
 -- before/after of X's own).
+-- `new` can no longer produce an unranked child under an ordinary
+-- parent, so the unpositioned X here is built through a bare
+-- `attach`, which still leaves an item unranked when no --before/
+-- --after names it.
 local function test_rank_refuses_an_unpositioned_x()
   local s = init_state_repo("rank-unpositioned")
-  local goal, leaf = root_with_leaf(s)
+  local goal, _leaf = root_with_leaf(s)
+  local stray = file_item(s, "a stray outcome", "")
+  assert(graph.cmd_attach(s, stray, goal) == 0,
+    "attach with no position should be accepted")
   local other = file_item(s, "other", goal)
-  assert(rank.cmd_rank(s, other, leaf, "", false) ~= 0,
-    "leaf carries no position among goal's children yet")
+  assert(rank.cmd_rank(s, other, stray, "", false) ~= 0,
+    "stray carries no position among goal's children yet")
 end
 
 local function test_rank_refuses_a_done_item()
@@ -104,6 +111,11 @@ local function test_rank_refuses_a_done_item()
   local it = check.must(store.load(s, leaf))
   it.resolution = "not-planned"
   assert(storewrite.save(s, it, "finish leaf for the test"))
+  -- The raw save above bypasses `gitgate.commit_and_publish`'s own
+  -- cache patch, so `store.close(s)` is this test's stand-in for
+  -- it — leaving the next `store.list` below to reopen fresh instead
+  -- of missing the resolution this write just made.
+  local _cok, _cerr = store.close(s)
   assert(rank.cmd_rank(s, leaf, other, "", false) ~= 0,
     "a done item's position is not a repair target")
 end

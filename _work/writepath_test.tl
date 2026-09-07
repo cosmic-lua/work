@@ -122,7 +122,25 @@ local function test_rank_reads_the_board_once_not_twice()
     end
   end
   assert(root ~= nil, "the new outcome is on the board")
-  assert(graph.cmd_new(a, "a piece of it", root, nil, "") == 0)
+  local before_ids: {string: boolean} = {}
+  for _, i in ipairs(seeded) do
+    before_ids[i.id] = true
+  end
+  -- Filed under the board, then attached under root with no --before/
+  -- --after — unlike `new --parent root` directly, which would rank a
+  -- bare child last on its own — so `kid` starts genuinely unranked
+  -- and the `rank` call below pays its real write path instead of
+  -- finding nothing left to do.
+  assert(graph.cmd_new(a, "a piece of it", "", nil, "") == 0)
+  local triaged = check.must(store.list(a))
+  local unplaced: string = nil
+  for _, i in ipairs(triaged) do
+    if not before_ids[i.id] then
+      unplaced = i.id
+    end
+  end
+  assert(unplaced ~= nil, "the new piece should be on the board")
+  assert(graph.cmd_attach(a, unplaced, root) == 0, "attach should be accepted")
   local all = check.must(store.list(a))
   local kid: string = nil
   for _, i in ipairs(all) do
