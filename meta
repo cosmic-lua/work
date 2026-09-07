@@ -1,9 +1,9 @@
 title: verdict: on a 422 from REQUEST_CHANGES, post the marked COMMENT — an app installation token has no GET /user to match the author against
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
-claim: build-4xPu_RtV2-f6f470de
 pr: 75
 verdict: accept
 verdict_head: 9cf70c17914aa21cf2898893e248434ac0813ddd
 verdict_spec: c8722c224c9ab6c694c26f8d65e3e60edc01b49c
+resolution: completed
 builders: build-4xPu_RtV2-f6f470de
