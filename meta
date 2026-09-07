@@ -1,10 +1,10 @@
 title: coldbuild_test: a widened call between two modules the pin ships fails in the warm worktree, not in CI's build lane
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-kkDm_pEOC-f6f470de
 pr: 1783
 verdict: accept
 verdict_head: 7acf92ce38a58672ec4d0c05deebf18f96667928
 verdict_spec: d2b2fa4c3cadb4cffc479c8e00c4ae6cede9fc2a
+resolution: completed
 builders: build-kkDm_pEOC-f6f470de
 speccers: f6f470de-dee2-5890-b8f1-db91217d1a73
