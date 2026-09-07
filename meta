@@ -2,6 +2,8 @@ title: pr.yml: state --min 76 --min-file 0 on the ci line once the pin carries t
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
 target: cosmic-lua/cosmic
 claim: build-COZq_Kk4X-f6f470de
-reviewer: review-COZq_Kk4X-f6f470de
 pr: 1781
+verdict: accept
+verdict_head: 15fac4a5679849cf21cac2ded096c4fc25e4a62e
+verdict_spec: 444354adb5abec57121ec5971c76166b7b0b47d0
 builders: build-COZq_Kk4X-f6f470de
