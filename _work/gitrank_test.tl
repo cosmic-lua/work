@@ -130,23 +130,28 @@ local function test_rank_refuses_the_board()
     "the board has no siblings to rank among")
 end
 
--- `attach` never rewrites the parent it left: a re-parented sibling's
--- entry stays exactly where it was, and `rank` leaves it untouched too
--- — moving everyone else around it rather than pruning it.
-local function test_rank_leaves_a_stale_entry_untouched()
-  local s = init_state_repo("rank-stale")
+-- `rank` leaves any OTHER stray `order` entry untouched — moving
+-- everyone else around it rather than pruning it. `attach` prunes ITS
+-- OWN stale entry in the same publish now (`_work/gitattach_test.tl`),
+-- so this hand-writes a stray entry attach never had a hand in, to
+-- isolate `rank`'s own behavior from it.
+local function test_rank_leaves_a_stray_entry_untouched()
+  local s = init_state_repo("rank-stray")
   local goal, a = root_with_leaf(s)
-  local b = file_item(s, "b", goal)
   local c = file_item(s, "c", goal)
   assert(rank.cmd_rank(s, a, "", "", true) == 0)
-  assert(rank.cmd_rank(s, b, "", "", true) == 0)
-  assert(rank.cmd_rank(s, c, "", "", true) == 0) -- a, b, c
+  assert(rank.cmd_rank(s, c, "", "", true) == 0) -- a, c
   local elsewhere = file_item(s, "elsewhere", "")
-  assert(graph.cmd_attach(s, b, elsewhere) == 0, "b moves out from under goal")
+  local stray = check.must(store.load(s, goal))
+  stray.order = {stray.order[1], elsewhere, stray.order[2]} -- a, elsewhere, c
+  assert(storewrite.save(s, stray, "hand-write a stray order entry"))
+  -- The raw save above bypasses `gitgate.commit_and_publish`'s own
+  -- cache patch, so `store.close(s)` is this test's stand-in for it.
+  local _cok, _cerr = store.close(s)
   assert(rank.cmd_rank(s, a, "", c, false) == 0, "a after c")
   local got = check.must(store.load(s, goal))
-  assert(table.concat(got.order, ",") == table.concat({b, c, a}, ","),
-    "b's stale entry stays exactly where it was: " .. table.concat(got.order, ","))
+  assert(table.concat(got.order, ",") == table.concat({elsewhere, c, a}, ","),
+    "the stray entry stays exactly where it was: " .. table.concat(got.order, ","))
 end
 
 -- Asking for a position the board already holds is the store's own
