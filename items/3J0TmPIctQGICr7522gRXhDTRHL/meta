@@ -1,0 +1,3 @@
+title: build doctrine: give a builder latitude at a file-length cap (split along a seam, or a sibling test file) instead of an automatic STOP
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/work
