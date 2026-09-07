@@ -9,6 +9,7 @@
 --- whose PR does not exist yet (`take ID --open`), so a builder never
 --- needs GitHub reach of its own.
 local api = require("_work.api")
+local bounce = require("_work.bounce")
 local child = require("cosmic.child")
 local json = require("cosmic.json")
 local review = require("_work.review")
@@ -425,11 +426,7 @@ end
 local function latest_request_changes(revs: {Review}): Review | nil
   local latest: Review | nil = nil
   for _, r in ipairs(revs) do
-    local first = r.body:match("^([^\n]*)") or r.body
-    local matches = r.state == "CHANGES_REQUESTED"
-    or (r.state == "COMMENTED"
-      and (first == "request-changes:" or first == "reject:"))
-    if matches
+    if bounce.is_bounce(r.state, r.body)
     and (latest == nil or r.submitted_at > latest.submitted_at) then
       latest = r
     end

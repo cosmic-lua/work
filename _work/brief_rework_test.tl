@@ -432,3 +432,32 @@ local function test_review_brief_leaves_round_context_empty_on_a_first_round()
       return true
     end)
 end
+
+-- A rework cycle that bounced twice — once formally, once as an
+-- own-PR marked COMMENT because GitHub refused REQUEST_CHANGES on the
+-- token's own PR — counts BOTH toward the round number: the resumed
+-- reviewer must read round 2, not round 1, or a round goes missing
+-- from what it reads back.
+local function test_review_brief_round_context_counts_a_marked_own_pr_bounce()
+  local s = init_state_repo("brief-round-context-own-pr")
+  local _, leaf = root_with_leaf(s)
+  rework_item(s, leaf, 42)
+  with_reviews_fixture({
+      {state = "CHANGES_REQUESTED", body = "an older, formal finding",
+        submitted_at = "2024-01-01T00:00:00Z"},
+      {state = "COMMENTED", body = "request-changes:\nthe retry never backs off",
+        submitted_at = "2024-01-02T00:00:00Z"},
+    }, function(): boolean
+      with_review_pr_fixture("deadbee0feedfacebeef1234567890abcdef1234",
+        function(): boolean
+          local code, out = brief_and_capture(s, "review", leaf)
+          assert(code == 0, "a rework item still earns its review brief")
+          assert(out:find("## Round 2 context", 1, true) ~= nil,
+            "an own-PR marked-COMMENT bounce counts the same as a formal "
+            .. "CHANGES_REQUESTED one, so two bounces read as round 2, "
+            .. "never under-counted to round 1: " .. out)
+          return true
+        end)
+      return true
+    end)
+end
