@@ -2,5 +2,6 @@ title: bin/gitboard.pin: bump to 2026-09-07-63bcb7a (take seeds a running CI row
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmic
 claim: build-7rXQ3Lm0-f6f470de
+reviewer: review-7rXQ_3Lm0-f6f470de
 pr: 1788
 builders: build-7rXQ3Lm0-f6f470de
