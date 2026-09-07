@@ -1,0 +1,3 @@
+title: casts: one test file allowlists the 16 kinds as AST patterns with shrink-only counts; the count floor, the tsv, and reconcile go
+parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
+target: cosmic-lua/cosmic
