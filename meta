@@ -1,0 +1,3 @@
+title: verdict accept: the documented auto-merge fallback never fires — GraphQL 403s first, and REST also needs the merge-queue path, not a direct merge
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/work
