@@ -53,19 +53,28 @@ end
 
 --- Where `id` sits in `order`, 1-based, and how many entries `order`
 --- holds — the pair the verdict line renders as "N of N" once a child
---- lands positioned. `id` is always found: called right after the
---- placement that put it there.
---- @param order {string} An item's `order`, post-placement
+--- lands positioned. Counted the way `show`'s rank line counts (the
+--- `dense_rank` view): an `order` entry whose item now sits under a
+--- DIFFERENT parent — left behind by a reattach — is not a sibling and
+--- is skipped, so the two renderings cannot disagree. `id` is always
+--- found: called right after the placement that put it there, before
+--- the index knows it, which is why it counts by name.
+--- @param parent_item item.Item The parent, its `order` post-placement
 --- @param id string The id just placed into it
---- @return integer The 1-based position; 0 if `id` is absent
---- @return integer The total entries in `order`
-local function position_in(order: {string}, id: string): integer, integer
-  for i, v in ipairs(order) do
-    if v == id then
-      return i, #order
+--- @param index item.Index Every item by id, for each entry's parent
+--- @return integer The 1-based position among live siblings; 0 if absent
+--- @return integer The live siblings in `order`
+local function position_in(parent_item: item.Item, id: string,
+    index: item.Index): integer, integer
+  local position, total = 0, 0
+  for _, v in ipairs(parent_item.order or {}) do
+    local child = index[v]
+    if v == id or (child ~= nil and child.parent == parent_item.id) then
+      total = total + 1
+      if v == id then position = total end
     end
   end
-  return 0, #order
+  return position, total
 end
 
 --- File a new item into the graph, todo if it lands below the outcome
@@ -206,7 +215,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
       return gate.verdict_line("new", false, perr)
     end
     also = add_once(also, parent_item)
-    local position, total = position_in(parent_item.order or {}, it.id)
+    local position, total = position_in(parent_item, it.id, index)
     rank_note = (", rank %d of %d under %s"):format(position, total,
       tail.handle(parent_item.id))
   end

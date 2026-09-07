@@ -138,6 +138,32 @@ local function test_new_with_no_position_flag_ranks_last_and_reports_it()
   assert(last_item.title == "a third slice", "the new child lands last")
 end
 
+-- An `order` entry whose child was since reattached elsewhere is stale:
+-- `show`'s rank line skips it, so the verdict line must too, or the
+-- two say different totals for the same child.
+local function test_new_position_skips_a_sibling_reattached_elsewhere()
+  local s = init_state_repo("new-stale-order")
+  local goal, leaf = root_with_leaf(s)
+  local other = fixture.file_item(s, "another outcome", "")
+  assert(graph.cmd_attach(s, leaf, other) == 0,
+    "reattaching the ranked leaf elsewhere should be accepted")
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local code = graph.cmd_new(s, "a fresh slice", goal, nil, "")
+  _G.print = old_print
+  assert(code == 0, "new --parent with neither flag should be accepted")
+  local out = table.concat(lines, "\n")
+  assert(out:match("rank 1 of 1 under") ~= nil,
+    "the reattached leaf is no sibling of the fresh slice: " .. out)
+end
+
 -- The handle the verdict line prints is exactly what `show` accepts —
 -- a round trip so the two renderings (this one, and `gitview.id_line`'s)
 -- can never drift apart.
