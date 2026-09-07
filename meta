@@ -2,5 +2,6 @@ title: attach prunes the moved item from its old parent's order in the same publ
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work@main
 claim: build-vGr9_mgmX-6141b568
+reviewer: review-vGr9_mgmX-6141b568
 pr: 79
 builders: build-vGr9_mgmX-6141b568
