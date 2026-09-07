@@ -2,5 +2,6 @@ title: bin/cosmic.pin: bump to 2026-09-07-2b2002d, the release carrying --min, -
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/cosmic
 claim: build-P4bN_ffc0-f6f470de
+reviewer: review-P4bN_ffc0-f6f470de
 pr: 1780
 builders: build-P4bN_ffc0-f6f470de
