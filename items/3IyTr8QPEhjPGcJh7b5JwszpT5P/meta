@@ -2,5 +2,6 @@ title: bin/gitboard: from a linked worktree, find the board beside the MAIN chec
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmic
 claim: build-Jwsz_pT5P-f6f470de
+reviewer: review-Jwsz_pT5P-f6f470de
 pr: 1782
 builders: build-Jwsz_pT5P-f6f470de
