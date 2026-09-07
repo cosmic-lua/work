@@ -1,9 +1,9 @@
 title: _tool/doc parse: a source that fails to parse surfaces its error instead of rendering an empty function list
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim: build-t5hA_ZnKG-6141b568
 pr: 1798
 verdict: accept
 verdict_head: 594076e92b7d59d01fb47e0a864ce18e830b9b02
 verdict_spec: 97e36d1fb39f3359ef66b87c46735ca18e35435c
+resolution: completed
 builders: build-t5hA_ZnKG-6141b568
