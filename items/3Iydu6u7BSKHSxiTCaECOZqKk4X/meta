@@ -2,5 +2,6 @@ title: pr.yml: state --min 76 --min-file 0 on the ci line once the pin carries t
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
 target: cosmic-lua/cosmic
 claim: build-COZq_Kk4X-f6f470de
+reviewer: review-COZq_Kk4X-f6f470de
 pr: 1781
 builders: build-COZq_Kk4X-f6f470de
