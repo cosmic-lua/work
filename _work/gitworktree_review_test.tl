@@ -61,6 +61,67 @@ local function make_pr_checkout(name: string, pr: integer): string, string
   return checkout, base
 end
 
+--- A review checkout whose `bin/cosmic` stub actually runs (bootstrap
+--- left enabled) and, real `--make fetch`/`--make build` runs' own
+--- shape, echoes a handful of `compile`/`compile-batch` lines before
+--- its own PASS summary — the noise `run_step`'s quiet default drops
+--- and `--verbose` streams, exercised here through the review path
+--- rather than the builder one (`gitworktree_test.tl`'s own
+--- `make_loud_checkout`). The loud `bin/cosmic` stub is committed on
+--- `pr-src` itself, since a review checkout lands exactly the PR
+--- head's content, never `main`'s — each step also touches its own
+--- sentinel (`fetch_ran`/`build_ran`) at the worktree root, so a test
+--- can tell it ran even when its output never reaches `print`.
+--- @param name string A unique fixture name
+--- @param pr integer The PR number to publish `refs/pull/<pr>/head` under
+--- @return string The `--root` checkout's absolute path
+local function make_loud_pr_checkout(name: string, pr: integer): string
+  local base = fs.join(tmpdir, "wt-review-" .. name)
+  assert(fs.remove_all(base))
+  assert(fs.make_dirs(base))
+  local bare = fs.join(base, "origin.git")
+  git(base, {"init", "-q", "--bare", bare})
+  local seed = fs.join(base, "seed")
+  git(base, {"clone", "-q", bare, seed})
+  git(seed, {"checkout", "-q", "-b", "main"})
+  assert(fs.write(fs.join(seed, "README"), "main content\n"))
+  git(seed, {"add", "-A"})
+  git(seed, {"commit", "-q", "-m", "seed"})
+  git(seed, {"push", "-q", "origin", "main"})
+  git(seed, {"checkout", "-q", "-b", "pr-src"})
+  assert(fs.write(fs.join(seed, "README"), "pr content\n"))
+  assert(fs.make_dirs(fs.join(seed, "bin")))
+  local script = table.concat({
+      "#!/bin/sh",
+      "here=\"$(cd \"$(dirname \"$0\")\" && pwd)\"",
+      "if [ \"$2\" = fetch ]; then",
+      "  touch \"$here/../fetch_ran\"",
+      "  echo 'unpack o/3p/cosmos'",
+      "  echo 'fetch https://example.invalid/cosmos.zip'",
+      "  echo 'fetch: PASS (2 pins)'",
+      "else",
+      "  touch \"$here/../build_ran\"",
+      "  echo 'compile o/bin/cosmic a.tl o/a.lua --include-dir .'",
+      "  echo 'compile-batch o/bin/cosmic o/.groups/x.compiled o/x --srcs a.tl'",
+      "  echo 'build: PASS (3 files, 1 binary)'",
+      "fi",
+    }, "\n") .. "\n"
+  assert(fs.write(fs.join(seed, "bin/cosmic"), script))
+  assert(fs.set_mode(fs.join(seed, "bin/cosmic"), tonumber("755", 8)))
+  git(seed, {"add", "-A"})
+  git(seed, {"commit", "-q", "-m", "pr change + loud stub"})
+  git(seed, {"push", "-q", "origin", "pr-src"})
+  local sha = assert(child.run({"git", "rev-parse", "refs/heads/pr-src"},
+      {cwd = bare}))
+  local sha_line = (sha.stdout or ""):gsub("%s+$", "")
+  git(bare, {"update-ref", ("refs/pull/%d/head"):format(pr), sha_line})
+  git(bare, {"branch", "-q", "-D", "pr-src"})
+  local checkout = fs.join(base, "checkout")
+  git(base, {"clone", "-q", bare, checkout})
+  git(checkout, {"checkout", "-q", "main"})
+  return checkout
+end
+
 --- A workable item carrying a `repo` and PR, review-claimed under
 --- `SESSION` — `worktree --review` refuses one with no PR, but
 --- refuses even sooner over an unclaimed review, so every fixture
@@ -170,4 +231,43 @@ local function test_worktree_review_refuses_a_different_sessions_claim()
   assert(out:find(SESSION, 1, true) ~= nil,
     "the refusal names whose claim it is: " .. out)
   assert(not fs.is_dir(expect), "no worktree directory was created")
+end
+
+-- --verbose applies the same way to a review checkout's bootstrap as
+-- to a builder's (`gitworktree_test.tl`'s own
+-- `test_worktree_verbose_bootstrap_streams_verbatim`): the stub still
+-- actually runs (its own sentinels prove it), but its output goes
+-- straight to the real stdout (inherited) rather than through the
+-- caller's own print — none of it, compile noise or PASS lines alike,
+-- shows up there.
+local function test_worktree_review_verbose_bootstrap_streams_verbatim()
+  local checkout = make_loud_pr_checkout("verbose", 99)
+  local s, leaf = item_with_pr("wtr-verbose", 99)
+  local id8 = leaf:sub(1, 8)
+  local wt = fs.join(fs.dirname(checkout), "wt", "review-" .. id8)
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local ok, err = pcall(function(): boolean
+      assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, true, true) == 0)
+      return true
+    end)
+  _G.print = old_print
+  if not ok then
+    error(err, 0)
+  end
+  assert(fs.is_file(fs.join(wt, "fetch_ran")), "the fetch step actually ran")
+  assert(fs.is_file(fs.join(wt, "build_ran")), "the build step actually ran")
+  local out = table.concat(lines, "\n")
+  assert(out:find("compile", 1, true) == nil
+    and out:find("PASS (2 pins)", 1, true) == nil
+    and out:find("PASS (3 files", 1, true) == nil,
+    "verbose streams straight to the real stdout, none of it through print: "
+    .. out)
 end
