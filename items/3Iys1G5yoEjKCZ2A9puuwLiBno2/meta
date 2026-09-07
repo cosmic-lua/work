@@ -2,5 +2,6 @@ title: brief round_context: count an own-PR COMMENT bounce as a round, not only 
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim: build-uwLi_Bno2-f6f470de
+reviewer: review-uwLi_Bno2-f6f470de
 pr: 77
 builders: build-uwLi_Bno2-f6f470de
