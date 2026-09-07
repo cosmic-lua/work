@@ -1,3 +1,4 @@
 title: cosmic-lua/cosmic's own bin/gitboard.pin is stale, missing WyFa_GL3c/YLxi_6fmt/HD1o_sZ5c — every gitboard invocation from a cosmic checkout runs the old buggy binary
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 target: cosmic-lua/cosmic
+speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
