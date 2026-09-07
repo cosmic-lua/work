@@ -5,4 +5,5 @@ pr: 1791
 verdict: accept
 verdict_head: 861465e9a96b8e21ae6497d11f9a857ff45c4823
 verdict_spec: 333562e4090a1517956f2ff58f68b4f7e0cc313f
+resolution: completed
 builders: build-wAe5_evHa-6141b568
