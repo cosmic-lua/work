@@ -124,7 +124,13 @@ local CSPEC: flags.CommandSpec = {
         .. "succeeds.\n\nResolves ID's repo to a local checkout, branches "
         .. "and adds a worktree beside it\n(never reused: an existing "
         .. "branch or path both refuse), bootstraps it, then fetches "
-        .. "each --ref into\nrefs/spike/<basename>.",
+        .. "each --ref into\nrefs/spike/<basename>.\n\n--review "
+        .. "provisions the REVIEW checkout instead — run right after "
+        .. "`take ID`\nclaims the review, before `brief review ID`: "
+        .. "fetches the PR's current head onto\nits own branch and "
+        .. "checks it out at wt/review-<id8>, the same path\n`brief "
+        .. "review ID` already names. Claim comes from ID's reviewer, "
+        .. "not its build\nclaim; refused when ID carries no PR yet.",
         flags = {dir_flag(),
           {long = "root", arg = "DIR",
             help = "the local checkout to branch from; default is "
@@ -132,6 +138,9 @@ local CSPEC: flags.CommandSpec = {
           {long = "ref", arg = "REF", repeated = true,
             help = "fetch REF into refs/spike/<basename> after "
             .. "bootstrap (repeatable)"},
+          {long = "review", help = "provision ID's review checkout "
+            .. "instead of a builder's — the PR's current head, "
+            .. "claimed under ID's reviewer"},
           {long = "session", arg = "SESSION",
             help = "the claiming session. Omit to derive it from the "
             .. "environment"}}}},
