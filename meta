@@ -1,9 +1,9 @@
 title: gitboard worktree: refuse an item the caller has not claimed
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
-claim: build-9doI_nexi-f6f470de
 pr: 72
 verdict: accept
 verdict_head: 7c1a47e47b8e7c905f6b0b361e4331bc032de1f8
 verdict_spec: 555e01a8bdb5b00775182a04374ed75d4c9425b4
+resolution: completed
 builders: build-9doI_nexi-f6f470de
