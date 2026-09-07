@@ -6,8 +6,10 @@
 -- taken is `_work/gitspec_test.tl`; `take --pr`'s own tests are
 -- `_work/gitverbs_pr_test.tl`, split out to stay under the file's line cap.
 
+local cache = require("_work.cache")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
+local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local item = require("_work.item")
 local publish = require("_work.publish")
@@ -189,6 +191,16 @@ local function test_take_refuses_a_pull_past_an_unclaimed_verdict()
   assert(verbs.cmd_take(s, built, "session-a", 0, false, "") == 0)
   assert(verbs.cmd_take(s, built, "session-a", 77, false, "") == 0,
     "the handover records the PR")
+  -- The handover itself seeds a `running` row, which excludes it from
+  -- debt for the window before `sync` reaches it — the fix this test's
+  -- OWN item added. The head has since settled to a real, waiting
+  -- verdict, distinct from that seeded row.
+  local handed = check.must(store.load(s, built))
+  local cc = check.must(cache.open(s.root))
+  assert(ciobs.record(cc, handed.repo, handed.pr,
+      {state = "green", head_sha = "", runs = {}}))
+  assert(cache.close(cc))
+  local _cok, _cerr = store.close(s)
   local all = check.must(store.list(s))
   local c = check.must(store.read(s))
   assert(#check.must(gate.review_debt(c, all, "session-b")) == 1,

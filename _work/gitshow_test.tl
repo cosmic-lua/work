@@ -17,6 +17,7 @@ local read = require("_work.read")
 local show = require("_work.gitshow")
 local spec = require("_work.spec")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 local verbs = require("_work.gitverbs")
 
@@ -458,10 +459,29 @@ local function test_show_id_prints_the_cached_ci_state()
     "the cached state and head render: " .. out)
 end
 
--- No cached row at all — `sync` never having reached this PR — reads
--- "not observed", not a refusal or a silent gap.
+-- No cached row at all — a PR field set directly, never through a
+-- `take --pr` handover that seeds one itself — reads "not observed",
+-- not a refusal or a silent gap.
 local function test_show_id_prints_ci_not_observed_with_no_row()
   local s = init_state_repo("show-ci-unobserved")
+  local _root, leaf = fixture.root_with_leaf(s)
+  fixture.give_spec(s, leaf)
+  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.pr = 12
+  assert(storewrite.save(s, it, "fixture: pr set with no handover"))
+
+  local code, out = show_and_capture(s, leaf)
+  assert(code == 0, out)
+  assert(out:find("\nci: not observed\n") ~= nil,
+    "a PR field with no take --pr handover behind it: " .. out)
+end
+
+-- `take --pr N` seeds its own head as `running` at handover — the
+-- window before the next `sync` observes it — so `show` never reads a
+-- freshly handed-over PR as unobserved.
+local function test_show_id_prints_running_right_after_take_pr()
+  local s = init_state_repo("show-ci-seeded")
   local _root, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
@@ -469,6 +489,6 @@ local function test_show_id_prints_ci_not_observed_with_no_row()
 
   local code, out = show_and_capture(s, leaf)
   assert(code == 0, out)
-  assert(out:find("\nci: not observed\n") ~= nil,
-    "an unobserved PR: " .. out)
+  assert(out:find("\nci: running %(head , observed %d+m ago%)\n") ~= nil,
+    "take --pr seeded a running row with no sync yet: " .. out)
 end

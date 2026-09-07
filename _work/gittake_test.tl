@@ -333,3 +333,56 @@ local function test_take_open_body_leads_with_the_board_line()
   assert(with_extra:find("a paragraph describing what changed and why", 1, true)
     ~= nil, with_extra)
 end
+
+-- `take --pr N` seeds the new head's `ci_checks` row itself, `running`,
+-- at handover — the same row `sync` would write once it observes the
+-- head, closing the window where `ci_clears_debt` would otherwise read
+-- a missing row as "never excludes" and let a diff whose CI has not
+-- even started outrank a todo pull. `sync`'s own observation
+-- (`ciobs.record`, seeded here directly) overwrites the row exactly as
+-- today once the head settles, and a settled green goes back to
+-- blocking the pull, naming the diff.
+local function test_take_pr_seeds_a_running_row_that_sync_then_overwrites()
+  local s = init_state_repo("gittake-ci-seed")
+  local goal, built = root_with_leaf(s)
+  local second = fixture.file_item(s, "the next slice", goal)
+  give_spec(s, built)
+  give_spec(s, second)
+  assert(verbs.cmd_take(s, built, "session-a", 0, false, "") == 0)
+  assert(verbs.cmd_take(s, built, "session-a", 77, false, "") == 0,
+    "the handover records the PR")
+  local handed = check.must(store.load(s, built))
+
+  local c = check.must(cache.open(s.root))
+  local seeded = ciobs.current_state(c, handed.repo, handed.pr, handed.id)
+  assert(cache.close(c))
+  assert(seeded == "running",
+    "take --pr seeded the row itself, with no sync in between: got "
+    .. tostring(seeded))
+
+  assert(verbs.cmd_take(s, second, "session-b", 0, false, "") == 0,
+    "the freshly seeded running row gives no verdict to claim yet, so "
+    .. "it does not outrank the todo pull")
+  assert(check.must(store.load(s, second)).claim == "session-b",
+    "the pull went through")
+  assert(verbs.cmd_drop(s, second, "session-b",
+      "reset for the sync-observed case", false) == 0)
+
+  -- `sync`'s own observation overwrites the seeded row, exactly as
+  -- before this change, once the head settles.
+  seed_ci_state(s, handed.repo, handed.pr, "green")
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    lines[#lines + 1] = tostring((...))
+  end
+  local ok, code = pcall(verbs.cmd_take, s, second, "session-c", 0, false, "")
+  _G.print = old_print
+  assert(ok, tostring(code))
+  assert(code ~= 0, "a sync-observed settled state still outranks the pull")
+  local out = table.concat(lines, "\n")
+  assert(out:find(built:sub(1, 8), 1, true) ~= nil,
+    "the refusal names the diff: " .. out)
+  assert(check.must(store.load(s, second)).claim == "",
+    "and the refused pull claimed nothing")
+end

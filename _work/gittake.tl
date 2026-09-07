@@ -16,7 +16,9 @@
 --- All three are motion on work already in flight and ask neither of
 --- the pull's gates. Split from `_work.gitverbs`, which sits against
 --- the file cap.
+local cache = require("_work.cache")
 local child = require("cosmic.child")
+local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gh = require("_work.gh")
@@ -256,6 +258,22 @@ local function take_open(s: store.Store, it: item.Item, session: string,
   it.pr = number
   if it.verdict == "request changes" then
     it.verdict = ""
+  end
+  -- The window between this handover and the next `sync` has no
+  -- observation of its own yet: `ci_clears_debt` reads a missing row
+  -- as "never excludes", so a freshly opened PR whose CI has not even
+  -- started would outrank a todo pull. Seed the row exactly as `sync`
+  -- would once it observes a running head, with the head sha the
+  -- `ls-remote` above already fetched — `sync`'s own observation
+  -- overwrites it as soon as one lands. Best-effort, same as
+  -- `ciobs.live`: a cache that will not even open leaves the handover
+  -- itself unaffected.
+  local head_sha = (r.stdout or ""):match("^(%x+)") or ""
+  local rc, _rcerr = cache.open(s.root)
+  if rc ~= nil then
+    local _ok, _werr = ciobs.record(rc, repo, number,
+      {state = "running", head_sha = head_sha, runs = {}})
+    local _cok, _ccerr = cache.close(rc)
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("take %s by %s pr:%d"):format(id8, session, number), "take", nil, session)
