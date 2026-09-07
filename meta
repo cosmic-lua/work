@@ -2,6 +2,8 @@ title: new --parent ID: filing a routine out-of-scope child on an item already i
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim: build-Bfzm_Iqlc-6141b568
-reviewer: review-Bfzm_Iqlc-6141b568
 pr: 83
+verdict: request changes
+verdict_head: 3ab58399e33ff1da25d89a0c156effac9acf4bd7
+verdict_spec: c8bc9a3fe00bf94814a474b95b3f07ece0da2e3b
 builders: build-Bfzm_Iqlc-6141b568
