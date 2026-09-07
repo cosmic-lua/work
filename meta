@@ -1,5 +1,6 @@
 title: cosmic-lua/work's own bin/cosmic.pin is 3 days stale — missing the cosmic.ast/--find chain, breaking a reviewer's cosmic --find in a work checkout
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-builders: build-HD1o_sZ5c-6141b568
+claim: debug-HD1o_sZ5c-6141b568
+builders: build-HD1o_sZ5c-6141b568 debug-HD1o_sZ5c-6141b568
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
