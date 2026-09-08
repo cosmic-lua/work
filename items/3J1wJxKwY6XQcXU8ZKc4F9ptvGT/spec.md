@@ -1,9 +1,8 @@
-# Intent
+## Change
 
-Make gitboard coordinate work entirely through Git data while leaving every
-authenticated or remote interaction to the caller.
-
-# Acceptance
+In `_work/gittransport.tl`, `_work/prepared.tl`, and the claim/lifecycle
+modules, make gitboard coordinate work entirely through Git data while leaving
+every authenticated or remote interaction to the caller.
 
 - Remote boards treat caller-fetched remote-tracking refs as canonical.
 - Mutations prepare exact leased Git pushes by default; `--execute` runs the
@@ -23,7 +22,7 @@ authenticated or remote interaction to the caller.
 - Documentation and tests cover the redesigned lifecycle and migration.
 - The repository's full CI passes under its GitHub coverage sandbox.
 
-# Evidence
+## Evidence
 
 Implementation: PR #90 head
 Landing: PR #90 merge
