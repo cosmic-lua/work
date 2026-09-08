@@ -58,6 +58,7 @@ local function full_item(): item.Item
         key = "release.yml",
         order = child1 .. " " .. child2,
         claim = "session-a",
+        claim_batch = ("ef"):rep(20),
         builders = "session-a session-b",
         speccers = "session-c",
         reviewer = "session-d",
@@ -85,7 +86,10 @@ local function test_meta_round_trips_every_scalar_field()
   assert(parsed.parent == it.parent)
   assert(parsed.target == it.repo .. "@" .. it.base)
   assert(parsed.key == it.key)
-  assert(parsed.claim == it.claim)
+  assert(parsed.claim == nil, "projected claim facts never ride in item history")
+  assert(parsed.claim_base == nil,
+    "projected claim bases never ride in item history")
+  assert(parsed.claim_batch == it.claim_batch)
   assert(parsed.reviewer == it.reviewer)
   assert(parsed.pr == tostring(it.pr))
   assert(parsed.verdict == it.verdict)

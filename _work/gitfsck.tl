@@ -34,6 +34,7 @@
 --- board this tool cannot even read is reported as the one problem it
 --- is, nothing else asked.
 local cacherebuild = require("_work.cacherebuild")
+local claimbatchfsck = require("_work.gitfsck_claimbatch")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
@@ -323,14 +324,21 @@ local function fail_detail(n_problems: integer, n_stale: integer): string
 end
 
 local function cmd_fsck(s: store.Store): integer
+  -- Ask the format-4 batch graph before the normal board read.  A broken
+  -- `claim_batch` intentionally makes `gitread.list` fail closed, but fsck
+  -- still has enough raw Git structure to say exactly which immutable object
+  -- or bridge is incomplete.
+  local claim_problems = claimbatchfsck.problems(s)
   -- A fresh git read, never the cache-backed `store.list`: this audit's
   -- own job is checking the database against git, so it needs to
   -- rebuild the derived rows from the refs itself rather than trust
   -- whatever `o/board.db` already holds.
   local board, lerr = gitread.list(s.root)
   if board == nil then
+    for _, p in ipairs(claim_problems) do print(p) end
     print(lerr)
-    return gate.verdict_line("fsck", false, "1 problem(s)")
+    return gate.verdict_line("fsck", false, ("%d problem(s)")
+      :format(#claim_problems + 1))
   end
   local all = board.items
   for id, sha in pairs(board.shas_by_id) do
@@ -350,6 +358,9 @@ local function cmd_fsck(s: store.Store): integer
 
   local problems: {string} = {}
   local stale_orders: {string} = {}
+  for _, p in ipairs(claim_problems) do
+    problems[#problems + 1] = p
+  end
 
   -- Rebuild the derived rows from the refs into a throwaway in-memory
   -- database, reusing `_work.cacherebuild`'s own fill path — the same

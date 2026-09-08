@@ -83,11 +83,11 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
   for _, it in ipairs(items) do
     local lease = (leases ~= nil and leases[it.id]) or EMPTY_LEASE
     local landed = try(db, [[
-      INSERT INTO items(id, title, parent, repo, base, key, claim, claim_base,
+      INSERT INTO items(id, title, parent, repo, base, key, claim, claim_base, claim_batch,
         handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
         landed_head, verdict_spec, resolution,
         ref, tip, touched_at)
-      VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :claim_base,
+      VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :claim_base, :claim_batch,
         :handover_head, :external_url, :reviewer, :pr, :result, :verdict,
         :verdict_head, :landed_head, :verdict_spec, :resolution,
         :ref, :tip, :touched_at)
@@ -95,6 +95,7 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
         id = it.id, title = it.title, parent = it.parent or "",
         repo = it.repo or "", base = it.base or "", key = it.key or "",
         claim = it.claim or "", claim_base = it.claim_base or "",
+        claim_batch = it.claim_batch or "",
         handover_head = it.handover_head or "", external_url = it.external_url or "",
         reviewer = it.reviewer or "",
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",

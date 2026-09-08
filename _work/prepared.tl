@@ -49,6 +49,7 @@ local function valid_target(ref: string): boolean
   return ref:match("^refs/heads/items/[%w_%-]+$") ~= nil
   or ref:match("^refs/heads/ended/[%w_%-]+$") ~= nil
   or ref:match("^refs/heads/board/[%w_%-]+$") ~= nil
+  or ref:match("^refs/heads/claim%-batches/[%w_%-]+$") ~= nil
 end
 
 --- Canonical manifest bytes. Sorting makes the transaction independent
@@ -234,10 +235,12 @@ end
 --- remote-tracking namespace; no local board head is overwritten.
 local function fetch_argv(remote?: string): {string}
   local name = remote or "origin"
-  return {"git", "fetch", "--prune", name,
+  return {"git", "fetch", "--atomic", "--prune", name,
     "+refs/heads/items/*:refs/remotes/" .. name .. "/items/*",
     "+refs/heads/ended/*:refs/remotes/" .. name .. "/ended/*",
-    "+refs/heads/board/*:refs/remotes/" .. name .. "/board/*"}
+    "+refs/heads/board/*:refs/remotes/" .. name .. "/board/*",
+    "+refs/heads/claim-batches/*:refs/remotes/" .. name
+    .. "/claim-batches/*"}
 end
 
 --- Explicit opt-in transport execution. This reads no credential and

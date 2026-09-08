@@ -20,10 +20,10 @@
 --- out the handed-over commit. `--verbose` applies identically.
 local child = require("cosmic.child")
 local claim = require("_work.claim")
+local claimbatch = require("_work.claimbatch")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
-local gitclaim = require("_work.gitclaim")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
@@ -40,9 +40,9 @@ local function active_claim(s: store.Store, it: item.Item, session: string):
     return nil, ("REFUSED: %s is not claimed by %s — claim it first")
     :format(it.id:sub(-8), session)
   end
-  local tip = s.leased_sha[it.id] or ""
-  if tip == "" then return nil, "could not identify the observed item commit" end
-  local st, err = gitclaim.read_state(s.root, tip, holder, it.claim_base or "")
+  local pointer = it.claim_batch or ""
+  if pointer == "" then return nil, "item has no claim batch" end
+  local st, err = claimbatch.read_state(s.root, pointer, it.id)
   if err ~= "" then return nil, err end
   local status = claim.status(st, os.time())
   if status ~= "active" then

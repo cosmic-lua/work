@@ -11,6 +11,7 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
+local gitclaim = require("_work.gitclaim")
 local graph = require("_work.gitgraph")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
@@ -133,7 +134,8 @@ local function caller_publish(s: store.Store)
       pushurl,
       "+refs/heads/items/*:refs/remotes/origin/items/*",
       "+refs/heads/ended/*:refs/remotes/origin/ended/*",
-      "+refs/heads/board/*:refs/remotes/origin/board/*"})
+      "+refs/heads/board/*:refs/remotes/origin/board/*",
+      "+refs/heads/claim-batches/*:refs/remotes/origin/claim-batches/*"})
   assert(fetched, "caller fetch failed: " .. ferr)
   -- Transport is a caller-owned step outside the verb invocation. Drop
   -- any cache handle the test kept open before inspecting the newly fetched
@@ -158,7 +160,8 @@ local function caller_fetch(s: store.Store)
       pushurl,
       "+refs/heads/items/*:refs/remotes/origin/items/*",
       "+refs/heads/ended/*:refs/remotes/origin/ended/*",
-      "+refs/heads/board/*:refs/remotes/origin/board/*"})
+      "+refs/heads/board/*:refs/remotes/origin/board/*",
+      "+refs/heads/claim-batches/*:refs/remotes/origin/claim-batches/*"})
   assert(fetched, "caller fetch failed: " .. ferr)
   assert(require("_work.publish").sync(s))
 end
@@ -289,6 +292,54 @@ local function root_with_leaf(s: store.Store): string, string
   return root, file_item(s, "a workable slice", root)
 end
 
+local claim_counter = 0
+
+--- Establish one format-4 claim-control transaction in a fixture. Tests use
+--- this instead of hand-writing the retired claim fields into item metadata.
+--- The helper performs the caller-owned transport for remote fixtures so its
+--- return means the same thing as a confirmed claim in production.
+local function control_claim(s: store.Store, ids: {string}, holder: string,
+    action?: gitclaim.Action, why?: string, product_base?: string): string
+  claim_counter = claim_counter + 1
+  local mode = refs.board_mode(s.root)
+  local requests: {gitclaim.Request} = {}
+  local batch = ("fixture-%d-%s"):format(claim_counter, ids[1]:sub(1, 8))
+  local now = os.time()
+  for _, id in ipairs(ids) do
+    local source = mode == "local" and gitclaim.target_item_ref(id)
+    or gitclaim.remote_item_ref("origin", id)
+    local tip = check.must(refs.read_ref(s.root, source))
+    requests[#requests + 1] = {root = s.root, id = id,
+      source_ref = source, target_ref = gitclaim.target_item_ref(id),
+      remote = "origin", batch = batch, caller = holder,
+      action = action or "take",
+      product_base = (action or "take") == "take"
+      and (product_base or tip) or "",
+      force = false, why = why or "", now = now}
+  end
+  local result = gitclaim.prepare_batch(requests)
+  assert(next(result.refused) == nil,
+    result.refused.batch or result.refused[ids[1]])
+  local p = check.must(result.prepared)
+  if mode == "local" then
+    assert(prepared.promote_local(s.root, p.transaction))
+    assert(store.close(s))
+  else
+    caller_publish(s)
+  end
+  return p.batch.commit
+end
+
+local function claim_item(s: store.Store, id: string, holder: string,
+    product_base?: string): string
+  return control_claim(s, {id}, holder, nil, nil, product_base)
+end
+
+local function drop_claim(s: store.Store, id: string, holder: string,
+    why: string): string
+  return control_claim(s, {id}, holder, "drop", why)
+end
+
 -- A decomposition writes the child AND the parent it de-phases —
 -- each its own commit now, but one atomic push, so half of it
 -- reaching the board would never leave a parent off the board with
@@ -324,6 +375,12 @@ local record fixture
   commit_author_email: function(s: store.Store): string
   give_spec: function(s: store.Store, id: string)
   root_with_leaf: function(s: store.Store): string, string
+  control_claim: function(s: store.Store, ids: {string}, holder: string,
+  action?: gitclaim.Action, why?: string, product_base?: string): string
+  claim_item: function(s: store.Store, id: string, holder: string,
+  product_base?: string): string
+  drop_claim: function(s: store.Store, id: string, holder: string,
+  why: string): string
   make_index: function(items: {item.Item}): idxmod.Index
 end
 
@@ -341,6 +398,9 @@ local M: fixture = {
   commit_author_email = commit_author_email,
   give_spec = give_spec,
   root_with_leaf = root_with_leaf,
+  control_claim = control_claim,
+  claim_item = claim_item,
+  drop_claim = drop_claim,
   make_index = make_index,
 }
 

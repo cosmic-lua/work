@@ -1,7 +1,7 @@
---- Canonical ref naming, local compare-and-swap, ancestry, and atomic leased
---- publication. `_work.gitobj` owns Git objects; this module owns ref identity.
+--- Canonical refs, local CAS, ancestry, and atomic leased publication.
 local child = require("cosmic.child")
-
+local config = require("_work.refsconfig")
+local type BoardMode = config.BoardMode
 --- The sha `update-ref`/`--force-with-lease` treat as "does not exist
 --- yet" — a brand-new ref's lease value.
 local ZERO_SHA < const > = ("0"):rep(40)
@@ -29,107 +29,29 @@ end
 --- The two deliberately distinct board modes. Remote-backed boards
 --- read confirmed state only from remote-tracking refs. Local boards
 --- are an explicit simulation/testing mode and read local heads.
-local enum BoardMode
-  "local"
-  "remote"
+--- A process-local view selected by `GITBOARD_DRAFT`. The durable source of
+--- truth is the draft manifest; this table only lets the existing read stack
+--- consume its frozen ref snapshot without learning about draft encoding.
+local OVERLAY_BY_ROOT: {string: {RefEntry}} = {}
+
+local function overlay_entries(root: string): {RefEntry} | nil
+  return OVERLAY_BY_ROOT[root]
 end
 
--- Mode is repository configuration, not per-read state. Canonical reads call
--- this helper several times in one operation; cache the answer by root so the
--- transport boundary does not add a `git config` process to every ref lookup.
-local MODE_BY_ROOT: {string: BoardMode} = {}
-local REMOTE_BY_ROOT: {string: string} = {}
-
---- The caller-selected Git remote whose tracking namespace is canonical for a
---- remote-backed board. `origin` is only the compatibility default; it is not
---- baked into any canonical ref mapping.
-local function board_remote(root: string): string
-  local known = REMOTE_BY_ROOT[root]
-  if known ~= nil then return known end
-  local configured = child.run({"git", "config", "--get", "gitboard.remote"},
-    {cwd = root})
-  if configured ~= nil and configured.ok then
-    local value = configured.stdout:gsub("%s+$", "")
-    if value ~= "" then
-      REMOTE_BY_ROOT[root] = value
-      return value
-    end
+local function set_overlay(root: string, entries: {RefEntry})
+  local copy: {RefEntry} = {}
+  for _, e in ipairs(entries) do
+    copy[#copy + 1] = {refname = e.refname, sha = e.sha, touched = e.touched}
   end
-  REMOTE_BY_ROOT[root] = "origin"
-  return "origin"
+  OVERLAY_BY_ROOT[root] = copy
 end
 
---- Select a remote for this invocation without performing I/O or rewriting
---- repository configuration. CLI `--remote NAME` uses this before opening the
---- store so ID resolution and later transport inspect the same namespace.
-local function use_remote(root: string, remote: string): boolean, string
-  if remote == "" or remote:match("^[%w._/-]+$") == nil
-  or remote:find("..", 1, true) ~= nil or remote:sub(1, 1) == "/"
-  or remote:sub(-1) == "/" then
-    return false, "remote name is not safe in a remote-tracking ref"
-  end
-  REMOTE_BY_ROOT[root] = remote
-  return true, ""
+local function clear_overlay(root: string)
+  OVERLAY_BY_ROOT[root] = nil
 end
 
---- Persist the canonical remote in checkout-local Git configuration.
-local function set_board_remote(root: string, remote: string): boolean, string
-  local valid, verr = use_remote(root, remote)
-  if not valid then return false, verr end
-  local r, err = child.run({"git", "config", "gitboard.remote", remote},
-    {cwd = root})
-  if r == nil then return false, err end
-  if not r.ok then
-    return false, ("git config gitboard.remote failed: %s"):format(r.stderr)
-  end
-  return true, ""
-end
-
---- Read the board mode from repository-local configuration. Older
---- repositories without the marker retain the historical inference
---- for migration only; `store.init_repo` writes the explicit value.
---- This performs local configuration reads only, never remote I/O.
-local function board_mode(root: string): BoardMode
-  local known = MODE_BY_ROOT[root]
-  if known ~= nil then
-    return known
-  end
-  local configured = child.run({"git", "config", "--get", "gitboard.mode"},
-    {cwd = root})
-  if configured ~= nil and configured.ok then
-    local value = configured.stdout:gsub("%s+$", "")
-    if value == "remote" then
-      MODE_BY_ROOT[root] = "remote"
-      return "remote"
-    end
-    if value == "local" then
-      MODE_BY_ROOT[root] = "local"
-      return "local"
-    end
-  end
-  local remotes = child.run({"git", "remote"}, {cwd = root})
-  if remotes ~= nil and remotes.ok and remotes.stdout:match("%S") ~= nil then
-    MODE_BY_ROOT[root] = "remote"
-    return "remote"
-  end
-  MODE_BY_ROOT[root] = "local"
-  return "local"
-end
-
---- Persist an explicit board mode. This changes only `.git/config`.
-local function set_board_mode(root: string, mode: BoardMode): boolean, string
-  if mode ~= "local" and mode ~= "remote" then
-    return false, "board mode must be local or remote"
-  end
-  local r, err = child.run({"git", "config", "gitboard.mode", mode}, {cwd = root})
-  if r == nil then
-    return false, err
-  end
-  if not r.ok then
-    return false, ("git config gitboard.mode failed: %s"):format(r.stderr)
-  end
-  MODE_BY_ROOT[root] = mode
-  return true, ""
+local function has_overlay(root: string): boolean
+  return OVERLAY_BY_ROOT[root] ~= nil
 end
 
 --- Map a publish target to the fetched ref that confirms it. The
@@ -140,6 +62,7 @@ local function tracking_ref(target: string, remote?: string): string | nil, stri
   local tail = target:match("^refs/heads/(items/.+)$")
   or target:match("^refs/heads/(ended/.+)$")
   or target:match("^refs/heads/(board/.+)$")
+  or target:match("^refs/heads/(claim%-batches/.+)$")
   if tail == nil then
     return nil, ("not a board ref: %s"):format(target)
   end
@@ -149,10 +72,17 @@ end
 --- The ref a board reads as confirmed state in its configured mode.
 local function canonical_ref(root: string, target: string,
     remote?: string): string | nil, string
-  if board_mode(root) == "local" then
+  local overlay = overlay_entries(root)
+  if overlay ~= nil then
+    for _, e in ipairs(overlay) do
+      if e.refname == target then return e.sha, "" end
+    end
+    return ZERO_SHA, ""
+  end
+  if config.board_mode(root) == "local" then
     return target
   end
-  return tracking_ref(target, remote or board_remote(root))
+  return tracking_ref(target, remote or config.board_remote(root))
 end
 
 --- Read exactly one ref without accepting prefix matches.
@@ -241,15 +171,32 @@ end
 --- literal refs uses `for_each_ref_raw` instead.
 local function for_each_ref(root: string,
     patterns: {string}): {RefEntry} | nil, string
-  if board_mode(root) == "local" then
+  local overlay = overlay_entries(root)
+  if overlay ~= nil then
+    local out: {RefEntry} = {}
+    for _, e in ipairs(overlay) do
+      local matched = false
+      for _, pattern in ipairs(patterns) do
+        local prefix = pattern:match("^(.-)%*$") or pattern
+        if e.refname:sub(1, #prefix) == prefix then matched = true end
+      end
+      if matched then
+        out[#out + 1] = {refname = e.refname, sha = e.sha, touched = e.touched}
+      end
+    end
+    return out, ""
+  end
+  if config.board_mode(root) == "local" then
     return for_each_ref_raw(root, patterns)
   end
   local mapped: {string} = {}
-  local remote = board_remote(root)
+  local remote = config.board_remote(root)
   for _, p in ipairs(patterns) do
     local tail = p:match("^refs/heads/(items.*)$")
     or p:match("^refs/heads/(ended.*)$")
+    or p:match("^refs/heads/(claims.*)$")
     or p:match("^refs/heads/(board.*)$")
+    or p:match("^refs/heads/(claim%-batches.*)$")
     mapped[#mapped + 1] = tail and ("refs/remotes/" .. remote .. "/" .. tail) or p
   end
   local found, err = for_each_ref_raw(root, mapped)
@@ -260,7 +207,9 @@ local function for_each_ref(root: string,
     local quoted = remote:gsub("([^%w])", "%%%1")
     local tail = e.refname:match("^refs/remotes/" .. quoted .. "/(items/.+)$")
     or e.refname:match("^refs/remotes/" .. quoted .. "/(ended/.+)$")
+    or e.refname:match("^refs/remotes/" .. quoted .. "/(claims/.+)$")
     or e.refname:match("^refs/remotes/" .. quoted .. "/(board/.+)$")
+    or e.refname:match("^refs/remotes/" .. quoted .. "/(claim%-batches/.+)$")
     if tail ~= nil then
       e.refname = "refs/heads/" .. tail
     end
@@ -274,6 +223,13 @@ end
 --- @return integer | nil Epoch seconds
 --- @return string Error message
 local function committer_date_unix(root: string, ref: string): integer | nil, string
+  local overlay = overlay_entries(root)
+  if overlay ~= nil then
+    for _, e in ipairs(overlay) do
+      if e.refname == ref then return e.touched, "" end
+    end
+    return nil, ("no such ref: %s"):format(ref)
+  end
   local canonical, cerr = canonical_ref(root, ref)
   if canonical == nil then
     return nil, cerr
@@ -359,7 +315,7 @@ local function push_atomic(root: string, specs: {PushSpec}): boolean, boolean, s
   for _, spec in ipairs(specs) do
     argv[#argv + 1] = ("--force-with-lease=%s:%s"):format(spec.ref, spec.old)
   end
-  argv[#argv + 1] = board_remote(root)
+  argv[#argv + 1] = config.board_remote(root)
   for _, spec in ipairs(specs) do
     argv[#argv + 1] = spec.ref
   end
@@ -392,7 +348,7 @@ end
 --- @return string Error message
 local function fetch_prune(root: string): boolean, string
   local r, err = child.run({"git", "-c", "push.negotiate=false",
-      "fetch", "-q", "--prune", board_remote(root)}, {cwd = root})
+      "fetch", "-q", "--prune", config.board_remote(root)}, {cwd = root})
   if r == nil then
     return false, err
   end
@@ -402,12 +358,14 @@ local function fetch_prune(root: string): boolean, string
   return true
 end
 
---- The three mirror refspecs for a configured board remote.
+--- The four mirror refspecs for a configured board remote.
 local function fetch_refspecs(remote: string): {string}
   return {
     ("+refs/heads/items/*:refs/remotes/%s/items/*"):format(remote),
     ("+refs/heads/ended/*:refs/remotes/%s/ended/*"):format(remote),
+    ("+refs/heads/claims/*:refs/remotes/%s/claims/*"):format(remote),
     ("+refs/heads/board/*:refs/remotes/%s/board/*"):format(remote),
+    ("+refs/heads/claim-batches/*:refs/remotes/%s/claim-batches/*"):format(remote),
   }
 end
 
@@ -421,7 +379,7 @@ end
 --- @return boolean True once the refspecs are present
 --- @return string Error message
 local function ensure_refspecs(root: string): boolean, string
-  local remote = board_remote(root)
+  local remote = config.board_remote(root)
   local has_remote = child.run({"git", "remote"}, {cwd = root})
   if has_remote == nil or not has_remote.ok then
     return true
@@ -454,6 +412,9 @@ local record refs
   board_mode: function(root: string): BoardMode
   set_board_mode: function(root: string, mode: BoardMode): boolean, string
   board_remote: function(root: string): string
+  set_overlay: function(root: string, entries: {RefEntry})
+  clear_overlay: function(root: string)
+  has_overlay: function(root: string): boolean
   use_remote: function(root: string, remote: string): boolean, string
   set_board_remote: function(root: string, remote: string): boolean, string
   tracking_ref: function(target: string, remote?: string): string | nil, string
@@ -476,11 +437,14 @@ end
 
 local M: refs = {
   ZERO_SHA = ZERO_SHA,
-  board_mode = board_mode,
-  set_board_mode = set_board_mode,
-  board_remote = board_remote,
-  use_remote = use_remote,
-  set_board_remote = set_board_remote,
+  board_mode = config.board_mode,
+  set_board_mode = config.set_board_mode,
+  board_remote = config.board_remote,
+  set_overlay = set_overlay,
+  clear_overlay = clear_overlay,
+  has_overlay = has_overlay,
+  use_remote = config.use_remote,
+  set_board_remote = config.set_board_remote,
   tracking_ref = tracking_ref,
   canonical_ref = canonical_ref,
   read_ref = read_ref,

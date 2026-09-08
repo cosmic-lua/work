@@ -14,6 +14,9 @@ end
 local CSPEC: flags.CommandSpec = {
   name = "gitboard",
   summary = "the work board over committed item files: todo, doing, done\n\n"
+  .. "offline workflow: refresh; claim a set; run its one atomic push; "
+  .. "refresh to gain authority;\nthen `draft begin`, compose mutations, "
+  .. "`draft show`, publish once, and refresh. See `help offline`.\n\n"
   .. "ids are KSUIDs; the board renders each item by its handle, the id's last 8 "
   .. "characters\n(e.g. «d0x1_37YJ»), accepted by every verb bare or wrapped, any "
   .. "divider, any case;\nan unambiguous prefix or the full id also work "
@@ -35,24 +38,36 @@ local CSPEC: flags.CommandSpec = {
         .. "The plain output is only the new identity, suitable for "
         .. "`export GITBOARD_SESSION=$(gitboard session new)`. Gitboard "
         .. "does not derive identity from a user, host, provider, or credential."}},
+    {name = "draft", summary = "chain mutations offline, then publish final tips once",
+      spec = {usage = "begin | show [ID] | abandon [ID] [options]",
+        summary = "manage a durable, clone-local board draft.\n\n"
+        .. "`begin` freezes the caller-fetched board view. Set GITBOARD_DRAFT "
+        .. "to its id, then ordinary mutation verbs read and extend that "
+        .. "speculative view without network access. `show` inspects the final "
+        .. "leased ref plan; `abandon` removes only local draft reachability. "
+        .. "`publish ID` prints one atomic push. See `help offline`.",
+        flags = {dir_flag(),
+          {long = "remote", arg = "NAME",
+            help = "select and bind begin to this canonical remote"},
+          {long = "print-id", help = "for begin, print only the id for command substitution"}}}},
     {name = "migrate", summary = "prepare the one-hop board format migration",
-      spec = {summary = "advance only the board format marker; existing item "
-        .. "commits remain byte-for-byte unchanged. Remote boards print exact "
+      spec = {summary = "prepare one atomic format-3 to format-4 cutover. Every "
+        .. "item ref advances to fence old prepared writes; legacy claim facts "
+        .. "move into immutable singleton batches. Remote boards print exact "
         .. "leased push/fetch instructions by default. --execute runs those "
         .. "ordinary Git commands with caller-owned authentication.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in rendered/executed instructions"},
           {long = "execute", help = "run the rendered push and confirmation fetch"}}}},
-    {name = "claim", summary = "prepare independent two-hour claims for IDs",
+    {name = "claim", summary = "prepare one all-or-nothing two-hour claim batch",
       spec = {usage = "ID... [options]",
-        summary = "prepare independent two-hour claims for IDs.\n\n"
-        .. "Each item is a separate leased ref update, so overlapping callers "
-        .. "may win different\nsubsets and can never both win one item. By "
-        .. "default this prints the exact ordinary\nGit push commands and "
-        .. "performs no network operation. --execute runs those same commands "
-        .. "with\nthe caller's Git configuration; gitboard never discovers or "
-        .. "manages credentials.",
+        summary = "prepare one atomic, all-or-nothing two-hour claim set.\n\n"
+        .. "Every requested item is validated before anything is staged. The "
+        .. "batch publishes as one `git push --atomic`, with one exact lease per "
+        .. "item ref; any overlap rejects the whole set. PREPARED or PUSHED is "
+        .. "not authority: only a fetch followed by `gitboard refresh` confirming "
+        .. "every ref permits work. Gitboard never discovers or manages credentials.",
         flags = {dir_flag(),
           {long = "session", arg = "ID", help = "minted per-run identity; "
             .. "default $GITBOARD_SESSION"},
@@ -60,13 +75,11 @@ local CSPEC: flags.CommandSpec = {
             help = "Git remote named in rendered/executed push instructions"},
           {long = "repo-dir", arg = "DIR", help = "local product repository "
             .. "override (one-item claims only); otherwise use repository mappings"},
-          {long = "force", help = "take over an unexpired foreign claim"},
-          {long = "why", arg = "REASON", help = "audited reason required with --force"},
           {long = "execute", help = "explicitly run the exact rendered Git push "
             .. "and fetch argv using caller-configured authentication"}}}},
-    {name = "renew", summary = "prepare fresh two-hour leases for owned IDs",
+    {name = "renew", summary = "prepare one atomic set of fresh two-hour leases",
       spec = {usage = "ID... [options]",
-        summary = "prepare independent renewals for active claims held by this "
+        summary = "prepare one all-or-nothing renewal set for active claims held by this "
         .. "session.\n\nRenewal preserves the initial claim identity and work "
         .. "branch. By default only exact\nleased Git instructions are printed; "
         .. "--execute opts into running them.",
@@ -85,11 +98,9 @@ local CSPEC: flags.CommandSpec = {
         .. "motion) — an unranked child can no longer result; the\n"
         .. "verdict line reports where it landed. Outcomes (no --parent) "
         .. "are the one exception\nand stay unranked until positioned.\n\n"
-        .. "A `friction:` title is refused unless its spec (--spec-file) "
-        .. "names every agent this\nsession claimed work under since the "
-        .. "pass began, one `## <kind> <handle>` heading\neach; "
-        .. "--force --why files it anyway (a pass whose transcripts are "
-        .. "gone).",
+        .. "A `friction:` title is an ordinary item. Put the relevant "
+        .. "observations, including\nany language-level findings, in its "
+        .. "spec; Gitboard does not infer a roll call from claims.",
         flags = {dir_flag(),
           {long = "parent", arg = "ID", help = "the item this decomposes; "
             .. "default is the board — the item files as an outcome"},
@@ -103,8 +114,7 @@ local CSPEC: flags.CommandSpec = {
             help = "the repo its PR lands in; default is the board's origin"},
           {long = "session", arg = "SESSION",
             help = "minted holder identity when PARENT is claimed"},
-          {long = "force", help = "file a `friction:` item over an "
-            .. "incomplete roll call"},
+          {long = "force", help = "override a claimed-parent write gate"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "attach", summary = "put ID under PARENT (adopt, re-parent)",
       spec = {usage = "ID PARENT [options]",
@@ -285,18 +295,19 @@ local CSPEC: flags.CommandSpec = {
           {long = "todo", arg = "N",
             help = "how many todo rows to show (0 = all; default 8); "
             .. "no effect with an ID"}}}},
-    {name = "publish", summary = "render or explicitly execute prepared leased pushes",
-      spec = {usage = "[TRANSACTION...] [options]",
-        summary = "render prepared transactions as exact atomic leased Git push "
-        .. "commands.\n\nWith no transaction selector, renders every prepared "
-        .. "transaction. Nothing executes\nunless --execute is present; ordinary "
+    {name = "publish", summary = "render or execute one prepared unit's atomic push",
+      spec = {usage = "[TRANSACTION|DRAFT] [options]",
+        summary = "render one prepared transaction, claim batch, or draft as one "
+        .. "exact atomic leased Git push.\n\nWith no selector, the sole prepared "
+        .. "unit is selected; multiple units are refused. Nothing executes\n"
+        .. "unless --execute is present; ordinary "
         .. "Git then owns all authentication behavior. An executed push exits "
         .. "2 until refresh confirms the fetched refs.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in the push argv"},
           {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},
-    {name = "refresh", summary = "inspect fetched refs, or explicitly fetch first",
+    {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
       spec = {summary = "confirm prepared transactions against caller-fetched "
         .. "remote-tracking refs and rebuild\nthe disposable cache. Without "
         .. "--execute, prints the exact fetch command but does not run it.\n"
@@ -317,6 +328,22 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
   },
 }
+
+-- Draft selection is intentionally uniform across board reads and ordinary
+-- mutations. Keeping the flag injection here prevents each verb declaration
+-- from drifting while the environment variable keeps the common path terse.
+local DRAFTABLE < const >: {string: boolean} = {
+  next = true, brief = true, new = true, attach = true, rank = true,
+  set = true, spec = true, worktree = true, take = true, verdict = true,
+  done = true, show = true, find = true,
+}
+for _, command in ipairs(CSPEC.commands) do
+  if DRAFTABLE[command.name] then
+    command.spec.flags = command.spec.flags or {}
+    command.spec.flags[#command.spec.flags + 1] = {long = "draft", arg = "ID",
+      help = "read and stage against this durable offline draft; default $GITBOARD_DRAFT"}
+  end
+end
 
 local record gitcommands
   CSPEC: flags.CommandSpec

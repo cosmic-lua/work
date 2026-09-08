@@ -37,7 +37,6 @@ return {
   ["_work/gitrank.tl"] = {["covered"] = 127, ["total"] = 137},
   ["_work/gitdone.tl"] = {["covered"] = 75, ["total"] = 93},
   ["_work/gitdoneroot.tl"] = {["covered"] = 39, ["total"] = 43},
-  ["_work/gitfriction.tl"] = {["covered"] = 50, ["total"] = 56},
   ["_work/gitboardstate.tl"] = {["covered"] = 38, ["total"] = 38},
   ["_work/gitfsck.tl"] = {["covered"] = 207, ["total"] = 242},
   ["_work/gitgate.tl"] = {["covered"] = 187, ["total"] = 204},

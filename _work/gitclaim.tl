@@ -1,13 +1,14 @@
---- Git-backed claim preparation. This module performs no network operation:
---- it reads caller-fetched canonical refs, writes claim commits to staging
---- refs, and returns the leased push argv the caller may execute. Item refs do
---- not move locally until a later fetch confirms publication.
-local child = require("cosmic.child")
+--- Claim policy and Git bridges around immutable `_work.claimbatch` objects.
+--- The existing item refs remain the write fence: every claimed member advances
+--- through a first-parent bridge whose tree points at the one shared batch.
+--- One ordinary prepared transaction publishes the append-only batch ref and
+--- every item bridge atomically; this module performs no network operation.
 local claim = require("_work.claim")
-local format = require("_work.format")
+local claimbatch = require("_work.claimbatch")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
 local itemtree = require("_work.itemtree")
+local prepared = require("_work.prepared")
 local refs = require("_work.refs")
 
 local enum Action
@@ -19,9 +20,7 @@ end
 local record Request
   root: string
   id: string
-  --- Caller-fetched canonical ref, normally refs/remotes/<remote>/items/ID.
   source_ref: string
-  --- Shared destination, normally refs/heads/items/ID.
   target_ref: string
   remote: string
   batch: string
@@ -33,326 +32,251 @@ local record Request
   now: integer
 end
 
-local record Prepared
+local record Member
   id: string
-  status: string -- "prepared" | "already-owned"
   old_sha: string
   new_sha: string
-  staging_ref: string
   target_ref: string
+  operation: string
   claim_root: string
   branch: string
   expires_at: integer
-  push_argv: {string}
+end
+
+local record Prepared
+  id: string
+  batch: claimbatch.Batch
+  transaction: prepared.Transaction
+  members: {Member}
+  deadline: integer
 end
 
 local record BatchResult
-  prepared: {Prepared}
-  already_owned: {Prepared}
+  prepared: Prepared | nil
   refused: {string: string}
-end
-
-local function clean_line(value: string): string
-  return ((value or ""):gsub("[%c]+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
-end
-
-local function sha_refusal(value: string, field: string): string | nil
-  if not (value or ""):match("^[0-9a-fA-F]+$") or #value ~= 40 then
-    return field .. " must be a full 40-character commit id"
-  end
-  return nil
-end
-
---- Conventional canonical ref after the caller fetches
---- `refs/heads/items/*` into the remote-tracking namespace.
-local function remote_item_ref(remote: string, id: string,
-    ended?: boolean): string
-  return ("refs/remotes/%s/%s/%s"):format(remote,
-    ended and "ended" or "items", id)
 end
 
 local function target_item_ref(id: string, ended?: boolean): string
   return (ended and "refs/heads/ended/" or "refs/heads/items/") .. id
 end
 
---- Read the newest claim control commit from the item's first-parent history.
---- Ordinary holder mutations can sit above it without extending the lease.
-local function read_state(root: string, tip: string,
-    holder: string, product_base: string): claim.State | nil, string
-  if (holder or "") == "" then return nil, "" end
-  -- The subject is ours and deliberately carries the control kind. Using
-  -- `%(trailers)` in a multi-column log format is unsafe: Git terminates each
-  -- expanded trailer value with a newline. Read the one matching commit's body
-  -- separately to recover its lineage instead.
-  local r, err = child.run({"git", "log", "--first-parent", "--format=%H%x09%ct%x09%s",
-      tip}, {cwd = root})
-  if r == nil then return nil, err end
-  if not r.ok then return nil, "git log failed: " .. r.stderr end
-  for line in r.stdout:gmatch("([^\n]+)") do
-    local sha, stamp, action, who =
-    line:match("^(%x+)\t(%d+)\tclaim ([%a%-]+) %S+ by (%S+)$")
-    if sha ~= nil and (action == "acquire" or action == "force"
-      or action == "renew" or action == "drop") then
-      if action == "drop" then return nil, "" end
-      local when = math.tointeger(tonumber(stamp)) or 0
-      local root_sha = sha
-      if action == "renew" then
-        local body = child.run({"git", "show", "-s", "--format=%B", sha}, {cwd = root})
-        if body == nil or not body.ok then return nil, "could not read claim renewal" end
-        root_sha = body.stdout:match("\nClaim%-Root: ([0-9a-f]+)\n") or ""
-      end
-      if root_sha == "" then
-        return nil, "claim renewal has no Claim-Root trailer"
-      end
-      return {
-        holder = who ~= "" and who or holder,
-        root = root_sha,
-        control = sha,
-        acquired_at = when,
-        renewed_at = when,
-        expires_at = when + claim.LEASE_S,
-        product_base = product_base or "",
-      }, ""
+local function remote_item_ref(remote: string, id: string,
+    ended?: boolean): string
+  return ("refs/remotes/%s/%s/%s"):format(remote,
+    ended and "ended" or "items", id)
+end
+
+local function batch_ref(id: string): string
+  return "refs/heads/claim-batches/" .. id
+end
+
+local function state_for(root: string, batch_sha: string,
+    id: string): claim.State | nil, string
+  if batch_sha == "" then return nil, "" end
+  return claimbatch.read_state(root, batch_sha, id)
+end
+
+local function refused(out: BatchResult): boolean
+  return next(out.refused) ~= nil
+end
+
+--- Prepare one logical all-or-nothing set. Policy is evaluated completely
+--- before objects are written, so a refused member leaves no publishable subset.
+local function prepare_batch(requests: {Request}): BatchResult
+  local out: BatchResult = {prepared = nil, refused = {}}
+  if #requests == 0 then
+    out.refused.batch = "a claim batch needs at least one item"
+    return out
+  end
+  local first = requests[1]
+  if first.now <= 0 then out.refused.batch = "now must be an epoch second"; return out end
+  local seen: {string: boolean} = {}
+  for _, req in ipairs(requests) do
+    if req.root ~= first.root or req.remote ~= first.remote
+    or req.batch ~= first.batch or req.caller ~= first.caller
+    or req.action ~= first.action or req.now ~= first.now then
+      out.refused.batch = "claim requests do not describe one batch"
+    elseif seen[req.id] then
+      out.refused[req.id] = "item occurs more than once in claim set"
+    elseif req.target_ref ~= target_item_ref(req.id)
+    and req.target_ref ~= target_item_ref(req.id, true) then
+      out.refused[req.id] = "claim target does not match item id"
     end
+    seen[req.id] = true
   end
-  -- Compatibility for an old claim: its tip is its lease root and clock.
-  local legacy = child.run({"git", "show", "-s", "--format=%ct", tip}, {cwd = root})
-  if legacy == nil or not legacy.ok then
-    return nil, "could not read legacy claim timestamp"
-  end
-  local when = math.tointeger(tonumber((legacy.stdout:gsub("%s+$", "")))) or 0
-  return {holder = holder, root = tip, control = tip, acquired_at = when,
-    renewed_at = when, expires_at = when + claim.LEASE_S,
-    product_base = product_base or ""}, ""
-end
+  if refused(out) then return out end
 
-local function message(action: string, id: string, caller: string,
-    lineage: string, base: string, target: string, why: string): string
-  local subject = ("claim %s %s by %s"):format(action, id:sub(1, 8), caller)
-  local parts: {string} = {subject, "", "Claim-Caller: " .. caller}
-  if lineage ~= "" then parts[#parts + 1] = "Claim-Root: " .. lineage end
-  if base ~= "" then parts[#parts + 1] = "Claim-Base: " .. base end
-  parts[#parts + 1] = "Claim-Target: " .. target
-  if why ~= "" then parts[#parts + 1] = "Claim-Reason: " .. clean_line(why) end
-  parts[#parts + 1] = "Op: claim-" .. action
-  return table.concat(parts, "\n")
-end
-
-local function update_staging(root: string, ref: string, sha: string): boolean, string
-  return refs.update_ref(root, ref, sha, refs.ZERO_SHA)
-end
-
---- Reconstruct one claim publication plan solely from its reachable staging
---- commit.  Keeping retry data in Git means a later process needs no sqlite or
---- process-local receipt to render the exact same leased update.
-local function prepared_from_entry(root: string, remote: string,
-    entry: refs.RefEntry): Prepared | nil, string
-  local id = entry.refname:match(
-    "^refs/gitboard/prepared%-claims/[^/]+/([^/]+)$")
-  if id == nil then return nil, "not a prepared claim ref" end
-  local detail, derr = child.run({"git", "show", "-s",
-      "--format=%P%x00%ct%x00%B", entry.sha}, {cwd = root})
-  if detail == nil then return nil, derr end
-  if not detail.ok then
-    return nil, "could not read prepared claim: " .. detail.stderr
-  end
-  local parents, stamp, body = detail.stdout:match("^([^\0]*)\0([^\0]*)\0(.*)$")
-  if parents == nil or parents == "" or parents:find(" ", 1, true) ~= nil then
-    return nil, "prepared claim must have exactly one parent: " .. entry.refname
-  end
-  local action = body:match("^claim ([%a%-]+) ") or ""
-  local lineage = body:match("\nClaim%-Root: ([0-9a-f]+)\n") or ""
-  local claim_root = entry.sha
-  if action == "renew" or action == "drop" then claim_root = lineage end
-  if claim_root == "" then
-    return nil, "prepared claim has no lineage: " .. entry.refname
-  end
-  local when = math.tointeger(tonumber(stamp)) or 0
-  -- The item's namespace is history, not workflow state: modern completed
-  -- items may still live under `items`, while imported ones live under
-  -- `ended`. Keep the exact destination in the claim commit so Git-only
-  -- retry never has to infer it from `resolution`.
-  local target = body:match("\nClaim%-Target: (refs/heads/%S+)\n") or ""
-  if target ~= target_item_ref(id) and target ~= target_item_ref(id, true) then
-    return nil, "prepared claim has no valid Claim-Target trailer"
-  end
-  local remote_name = remote ~= "" and remote or "origin"
-  return {
-    id = id, status = "prepared", old_sha = parents, new_sha = entry.sha,
-    staging_ref = entry.refname, target_ref = target, claim_root = claim_root,
-    branch = claim.branch(id, claim_root), expires_at = when + claim.LEASE_S,
-    push_argv = {"git", "push",
-      ("--force-with-lease=%s:%s"):format(target, parents), remote_name,
-      entry.refname .. ":" .. target},
-  }, ""
-end
-
---- Find an unexpired, semantically identical plan prepared by an earlier
---- invocation.  Retrying `claim` before publishing must render the same CAS,
---- not accumulate two staged successors that race each other.
-local function prepared_retry(req: Request, tip: string): Prepared | nil, string
-  local found, ferr = refs.for_each_ref_raw(req.root,
-    {"refs/gitboard/prepared-claims"})
-  if found == nil then return nil, ferr end
-  for _, entry in ipairs(found) do
-    if entry.refname:match("/" .. req.id .. "$") then
-      local p, perr = prepared_from_entry(req.root, req.remote, entry)
-      if p == nil then return nil, perr end
-      if p.expires_at <= req.now then
-        local cleaned, cerr = refs.update_ref(req.root, p.staging_ref,
-          refs.ZERO_SHA, p.new_sha)
-        if not cleaned then return nil, cerr end
-      elseif p.old_sha == tip then
-        local shown, serr = child.run(
-          {"git", "show", "-s", "--format=%B", p.new_sha}, {cwd = req.root})
-        if shown == nil then return nil, serr end
-        if not shown.ok then return nil, "could not read prepared claim message" end
-        local action, caller = shown.stdout:match(
-          "^claim ([%a%-]+) %S+ by (%S+)")
-        local compatible = (req.action == "take"
-          and (action == "acquire" or action == "force"))
-        or action == req.action
-        if compatible and caller == req.caller then
-          if req.action ~= "take"
-          or shown.stdout:match("\nClaim%-Base: ([0-9a-f]+)\n")
-          == req.product_base then
-            return p, ""
+  local loaded: {string: gitread.Loaded} = {}
+  local rows: {claimbatch.Row} = {}
+  local publish_by = 0
+  for _, req in ipairs(requests) do
+    local tip, terr = refs.read_ref(req.root, req.source_ref)
+    if tip == nil then out.refused[req.id] = terr
+    elseif tip == refs.ZERO_SHA then out.refused[req.id] = "no fetched item at " .. req.source_ref
+    else
+      local got, gerr = gitread.load(req.root, req.id, req.source_ref, tip,
+        req.now)
+      if got == nil then out.refused[req.id] = gerr else
+        loaded[req.id] = got
+        local current_batch = got.it.claim_batch or ""
+        local prior_fact, ferr = claimbatch.read_fact(req.root,
+          current_batch, req.id)
+        local st, serr = state_for(req.root, current_batch, req.id)
+        if ferr ~= "" then out.refused[req.id] = ferr
+        elseif serr ~= "" then out.refused[req.id] = serr else
+          local operation, holder = "", req.caller
+          local base, root = "", ""
+          local acquired, renewed, expires = req.now, req.now,
+          req.now + claim.LEASE_S
+          if req.action == "take" then
+            local status = claim.status(st, req.now)
+            if status == "future" then
+              out.refused[req.id] = "claim timestamp is more than five minutes in the future"
+            elseif status == "active" and st ~= nil then
+              out.refused[req.id] = ("item is claimed by %s until %d")
+              :format(st.holder, st.expires_at)
+            else
+              operation = "acquire"
+              base = prior_fact ~= nil and prior_fact.product_base
+              or req.product_base
+              if base == "" or #base ~= 40 or base:match("^[0-9a-f]+$") == nil then
+                out.refused[req.id] = "product base must be a full commit id"
+              end
+            end
+          elseif req.action == "renew" then
+            local denial = claim.renew_refusal(st, req.caller, req.now)
+            if denial ~= nil then out.refused[req.id] = denial elseif st ~= nil then
+              operation, base, root = "renew", st.product_base, st.root
+              acquired = st.acquired_at
+              if publish_by == 0 or st.expires_at < publish_by then
+                publish_by = st.expires_at
+              end
+            end
+          else
+            local denial = claim.drop_refusal(st, req.caller, req.now,
+              req.force or false, req.why or "")
+            if denial ~= nil then out.refused[req.id] = denial elseif st ~= nil then
+              operation, holder, base, root = "drop", "", st.product_base, st.root
+              acquired, renewed, expires = st.acquired_at, st.renewed_at, st.expires_at
+            end
+          end
+          if operation ~= "" then
+            rows[#rows + 1] = {id = req.id, item_tip = tip,
+              operation = operation, holder = holder, product_base = base,
+              root = root, acquired_at = acquired, renewed_at = renewed,
+              expires_at = expires}
           end
         end
       end
     end
   end
-  return nil, ""
-end
+  if refused(out) then return out end
 
---- Prepare one independent claim CAS. It never changes source_ref/target_ref and
---- never invokes push. Concurrent batches remain partially successful because
---- each Prepared has its own lease and push instruction.
-local function prepare(req: Request): Prepared | nil, string
-  if req.now == nil or req.now <= 0 then return nil, "now must be an epoch second" end
-  local current, current_err = format.require_current(req.root)
-  if not current then return nil, current_err end
-  if req.batch == "" or req.batch:find("..", 1, true) ~= nil
-  or req.batch:find("/", 1, true) ~= nil then
-    return nil, "batch must be one safe ref component"
-  end
-  -- `source_ref` is already the literal authoritative ref selected by the
-  -- caller (a remote-tracking ref on a remote board).  The canonical board
-  -- reader deliberately rewrites tracking names back to target names, which
-  -- is useful to `store.list` but would make this exact comparison miss.
-  local found, ferr = refs.for_each_ref_raw(req.root, {req.source_ref})
-  if found == nil then return nil, ferr end
-  local tip = ""
-  for _, entry in ipairs(found) do
-    if entry.refname == req.source_ref then tip = entry.sha end
-  end
-  if tip == "" then return nil, "no fetched item at " .. req.source_ref end
-  local retry, rerr = prepared_retry(req, tip)
-  if rerr ~= "" then return nil, rerr end
-  if retry ~= nil then return retry, "" end
-  local loaded, lerr = gitread.load(req.root, req.id, req.source_ref, tip)
-  if loaded == nil then return nil, lerr end
-  local it = loaded.it
-  local st, serr = read_state(req.root, tip, it.claim or "", it.claim_base or "")
-  if serr ~= "" then return nil, serr end
-
-  local op = ""
-  local lineage = ""
-  local base = it.claim_base or ""
-  if req.action == "take" then
-    local refusal, owned = claim.take_refusal(st, req.caller, req.now,
-      req.force or false, req.why or "")
-    if refusal ~= nil then return nil, refusal end
-    if owned then
-      if st == nil then return nil, "owned claim has no state" end
-      return {id = req.id, status = "already-owned", old_sha = tip,
-        new_sha = tip, staging_ref = "", target_ref = req.target_ref,
-        claim_root = st.root, branch = claim.branch(req.id, st.root),
-        expires_at = st.expires_at, push_argv = {}}, ""
-    end
-    -- `claim_base` is the base of the WORK attempt, not of each lease
-    -- holder. Once a handover exists, a reviewer acquisition inherits it;
-    -- dropping the builder's lease never destroys the lineage evidence.
-    local work_base = it.claim_base or ""
-    if work_base == "" then work_base = req.product_base or "" end
-    local badbase = sha_refusal(work_base, "product base")
-    if badbase ~= nil then return nil, badbase end
-    op = (st ~= nil and claim.status(st, req.now) == "active"
-      and st.holder ~= req.caller) and "force" or "acquire"
-    it.claim = req.caller
-    it.claim_base = work_base
-    base = work_base
-  elseif req.action == "renew" then
-    local refusal = claim.renew_refusal(st, req.caller, req.now)
-    if refusal ~= nil then return nil, refusal end
-    if st == nil then return nil, "active claim has no state" end
-    op, lineage = "renew", st.root
-  else
-    local refusal = claim.drop_refusal(st, req.caller, req.now,
-      req.force or false, req.why or "")
-    if refusal ~= nil then return nil, refusal end
-    if st == nil then return nil, "claim has no state" end
-    op, lineage = "drop", st.root
-    it.claim = ""
-  end
-
-  local spec = gitread.read_spec(req.root, {tip})
-  local tree, terr = itemtree.build_tree(req.root, it, spec, true)
-  if tree == nil then return nil, terr end
-  local date = ("%d +0000"):format(req.now)
-  local commit, cerr = gitobj.commit_tree(req.root, {
-      tree = tree, parents = {tip},
-      message = message(op, req.id, req.caller, lineage, base,
-        req.target_ref, req.why or ""),
-      author_name = req.caller, author_email = req.caller .. "@board",
-      author_date = date, committer_name = "gitboard",
-      committer_email = "gitboard@board", committer_date = date, op = "",
-    })
-  if commit == nil then return nil, cerr end
-  local staging = ("refs/gitboard/prepared-claims/%s/%s"):format(req.batch, req.id)
-  local staged, sterr = update_staging(req.root, staging, commit)
-  if not staged then return nil, sterr end
-  local root_sha = commit
-  if op ~= "acquire" and op ~= "force" then
-    if st == nil then return nil, "claim control has no prior state" end
-    root_sha = st.root
-  end
-  local remote = req.remote ~= "" and req.remote or "origin"
-  local argv = {"git", "push",
-    ("--force-with-lease=%s:%s"):format(req.target_ref, tip), remote,
-    staging .. ":" .. req.target_ref}
-  return {id = req.id, status = "prepared", old_sha = tip, new_sha = commit,
-    staging_ref = staging, target_ref = req.target_ref, claim_root = root_sha,
-    branch = claim.branch(req.id, root_sha), expires_at = req.now + claim.LEASE_S,
-    push_argv = argv}, ""
-end
-
---- Best-effort batch preparation. One refusal never rolls back or suppresses
---- another item, and all requests should carry the same `now` for one deadline.
-local function prepare_batch(requests: {Request}): BatchResult
-  local out: BatchResult = {prepared = {}, already_owned = {}, refused = {}}
+  local batch, berr = claimbatch.create(first.root, {id = first.batch,
+      caller = first.caller, remote = first.remote, action = first.action,
+      created_at = first.now,
+      publish_by = first.action == "drop" and 0
+      or (publish_by ~= 0 and publish_by or first.now + claim.LEASE_S),
+      why = first.why or "", rows = rows})
+  if batch == nil then out.refused.batch = berr; return out end
+  local updates: {prepared.Update} = {{ref = batch_ref(first.batch),
+      expected = refs.ZERO_SHA, next = batch.commit}}
+  local members: {Member} = {}
+  local deadline = batch.publish_by
   for _, req in ipairs(requests) do
-    local p, err = prepare(req)
-    if p == nil then out.refused[req.id] = err
-    elseif p.status == "already-owned" then out.already_owned[#out.already_owned + 1] = p
-    else out.prepared[#out.prepared + 1] = p end
+    local got = loaded[req.id]
+    local row: claimbatch.Row = nil
+    for _, candidate in ipairs(batch.rows) do
+      if candidate.id == req.id then row = candidate; break end
+    end
+    if row == nil then out.refused.batch = "created batch lost a member"; return out end
+    got.it.claim_batch = batch.commit
+    local spec = gitread.read_spec(first.root, {row.item_tip})
+    local tree, tree_err = itemtree.build_tree(first.root, got.it, spec, true)
+    if tree == nil then out.refused[req.id] = tree_err; return out end
+    local date = ("%d +0000"):format(first.now)
+    local subject = first.action == "take"
+    and ("take %s by %s"):format(req.id:sub(1, 8), first.caller)
+    or ("claim %s %s by %s"):format(first.action,
+      req.id:sub(1, 8), first.caller)
+    local bridge, cerr = gitobj.commit_tree(first.root, {tree = tree,
+        parents = {row.item_tip},
+        message = ("%s\n\nClaim-Batch: %s"):format(subject, batch.commit),
+        author_name = first.caller, author_email = first.caller .. "@board",
+        author_date = date, committer_name = "gitboard",
+        committer_email = "gitboard@board", committer_date = date,
+        op = "claim-bridge"})
+    if bridge == nil then out.refused[req.id] = cerr; return out end
+    updates[#updates + 1] = {ref = req.target_ref, expected = row.item_tip,
+      next = bridge}
+    local root = row.root
+    members[#members + 1] = {id = req.id, old_sha = row.item_tip,
+      new_sha = bridge, target_ref = req.target_ref, operation = row.operation,
+      claim_root = root, branch = root ~= "" and claim.branch(req.id, root) or "",
+      expires_at = row.expires_at}
   end
+  local tx, perr = prepared.prepare(first.root, updates,
+    "prepare atomic claim batch " .. first.batch)
+  if tx == nil then out.refused.batch = perr; return out end
+  out.prepared = {id = first.batch, batch = batch, transaction = tx,
+    members = members, deadline = deadline}
   return out
 end
 
---- Rediscover prepared claim operations after the preparing process exits.
---- The expected-old SHA is the staged commit's sole parent; the destination
---- follows the item-ref convention. This keeps publish/refresh callers out of
---- the private staging-ref grammar and makes retry state entirely Git-native.
-local function list_prepared(root: string, remote: string): {Prepared} | nil, string
-  local found, ferr = refs.for_each_ref_raw(root,
-    {"refs/gitboard/prepared-claims"})
-  if found == nil then return nil, ferr end
+local function push_argv(p: Prepared, remote: string,
+    now?: integer): {string} | nil, string
+  if p.deadline > 0 and (now or os.time()) >= p.deadline then
+    return nil, "prepared claim batch expired before publication"
+  end
+  return prepared.push_argv(p.transaction, remote), ""
+end
+
+local function from_transaction(root: string,
+    tx: prepared.Transaction): Prepared | nil, string
+  local batch_sha, batch_id = "", ""
+  for _, update in ipairs(tx.updates) do
+    local id = update.ref:match("^refs/heads/claim%-batches/(.+)$")
+    if id ~= nil then
+      if batch_sha ~= "" then return nil, "transaction has multiple claim batches" end
+      batch_sha, batch_id = update.next, id
+    end
+  end
+  if batch_sha == "" then return nil, "not a claim batch transaction" end
+  local batch, err = claimbatch.read(root, batch_sha)
+  if batch == nil then return nil, err end
+  if batch.id ~= batch_id then return nil, "claim batch ref and object disagree" end
+  local members: {Member} = {}
+  local deadline = batch.publish_by
+  for _, row in ipairs(batch.rows) do
+    local update: prepared.Update = nil
+    for _, candidate in ipairs(tx.updates) do
+      if candidate.ref == target_item_ref(row.id)
+      or candidate.ref == target_item_ref(row.id, true) then update = candidate; break end
+    end
+    if update == nil or update.expected ~= row.item_tip then
+      return nil, "claim transaction has no matching item bridge for " .. row.id
+    end
+    members[#members + 1] = {id = row.id, old_sha = row.item_tip,
+      new_sha = update.next, target_ref = update.ref, operation = row.operation,
+      claim_root = row.root,
+      branch = row.root ~= "" and claim.branch(row.id, row.root) or "",
+      expires_at = row.expires_at}
+  end
+  return {id = batch.id, batch = batch, transaction = tx,
+    members = members, deadline = deadline}, ""
+end
+
+local function list_prepared(root: string, _remote: string): {Prepared} | nil, string
+  local transactions, err = prepared.list(root)
+  if transactions == nil then return nil, err end
   local out: {Prepared} = {}
-  for _, entry in ipairs(found) do
-    if entry.refname:match(
-      "^refs/gitboard/prepared%-claims/[^/]+/[^/]+$") then
-      local p, perr = prepared_from_entry(root, remote, entry)
+  for _, tx in ipairs(transactions) do
+    local has_batch = false
+    for _, update in ipairs(tx.updates) do
+      if update.ref:match("^refs/heads/claim%-batches/") then has_batch = true end
+    end
+    if has_batch then
+      local p, perr = from_transaction(root, tx)
       if p == nil then return nil, perr end
       out[#out + 1] = p
     end
@@ -360,48 +284,31 @@ local function list_prepared(root: string, remote: string): {Prepared} | nil, st
   return out, ""
 end
 
---- After the caller pushes and fetches, confirm that canonical observed state
---- equals the prepared commit and remove only the disposable staging ref.
-local function confirm(root: string, source_ref: string,
-    prepared: Prepared): boolean, string
-  local found, err = refs.for_each_ref_raw(root, {source_ref})
-  if found == nil then return false, err end
-  for _, entry in ipairs(found) do
-    if entry.refname == source_ref and entry.sha == prepared.new_sha then
-      local r, derr = child.run({"git", "update-ref", "-d", prepared.staging_ref,
-          prepared.new_sha}, {cwd = root})
-      if r == nil then return false, derr end
-      if not r.ok then return false, "could not clean staging ref: " .. r.stderr end
-      return true, ""
-    end
-  end
-  return false, "fetched ref does not match prepared claim"
-end
-
 local record gitclaim
   type Action = Action
   type Request = Request
+  type Member = Member
   type Prepared = Prepared
   type BatchResult = BatchResult
-  remote_item_ref: function(remote: string, id: string,
-  ended?: boolean): string
   target_item_ref: function(id: string, ended?: boolean): string
-  read_state: function(root: string, tip: string, holder: string,
-  product_base: string): claim.State | nil, string
-  prepare: function(req: Request): Prepared | nil, string
+  remote_item_ref: function(remote: string, id: string, ended?: boolean): string
+  batch_ref: function(id: string): string
   prepare_batch: function(requests: {Request}): BatchResult
+  push_argv: function(p: Prepared, remote: string,
+  now?: integer): {string} | nil, string
+  from_transaction: function(root: string,
+  tx: prepared.Transaction): Prepared | nil, string
   list_prepared: function(root: string, remote: string): {Prepared} | nil, string
-  confirm: function(root: string, source_ref: string,
-  prepared: Prepared): boolean, string
 end
 
 local M: gitclaim = {
-  remote_item_ref = remote_item_ref,
   target_item_ref = target_item_ref,
-  read_state = read_state,
-  prepare = prepare,
+  remote_item_ref = remote_item_ref,
+  batch_ref = batch_ref,
   prepare_batch = prepare_batch,
+  push_argv = push_argv,
+  from_transaction = from_transaction,
   list_prepared = list_prepared,
-  confirm = confirm,
 }
+
 return M

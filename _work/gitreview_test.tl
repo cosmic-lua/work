@@ -24,15 +24,15 @@ local function test_a_live_review_claim_excludes_another_caller()
 end
 test_a_live_review_claim_excludes_another_caller()
 
-local function test_force_takeover_is_audited()
+local function test_force_cannot_take_over_a_live_review()
   local s, id, p = awaiting_review("review-force")
   assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
   assert(flow.claim(s, id, flow.OTHER, p, "take", true, "") ~= 0)
   assert(flow.claim(s, id, flow.OTHER, p, "take", true,
-      "reviewer stopped") == 0)
-  assert(check.must(store.load(s, id)).claim == flow.OTHER)
+      "reviewer stopped") ~= 0)
+  assert(check.must(store.load(s, id)).claim == flow.REVIEWER)
 end
-test_force_takeover_is_audited()
+test_force_cannot_take_over_a_live_review()
 
 local function test_review_acquisition_never_adds_a_builder()
   local s, id, p = awaiting_review("review-involvement")
@@ -72,12 +72,12 @@ local function test_verdict_and_done_do_not_implicitly_release()
 end
 test_verdict_and_done_do_not_implicitly_release()
 
-local function test_repeated_claim_by_same_reviewer_is_idempotent()
+local function test_repeated_claim_by_same_reviewer_is_an_overlap()
   local s, id, p = awaiting_review("review-idempotent")
   assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
   local before = check.must(store.load(s, id))
-  assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
+  assert(flow.claim(s, id, flow.REVIEWER, p) ~= 0)
   local after = check.must(store.load(s, id))
   assert(after.claim == before.claim and after.claim_base == before.claim_base)
 end
-test_repeated_claim_by_same_reviewer_is_idempotent()
+test_repeated_claim_by_same_reviewer_is_an_overlap()

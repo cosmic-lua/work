@@ -25,14 +25,12 @@
 --- parentless item — the same position `attach` never needs to move
 --- an item TO, since only `init` creates it.
 local cachequery = require("_work.cachequery")
-local friction = require("_work.gitfriction")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local rank = require("_work.gitrank")
 local read = require("_work.read")
-local session = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -119,8 +117,7 @@ end
 --- @param spec string | nil Sidecar prose to write, or nil to write none
 --- @param repo string The item's repo field; nil becomes "". Refused
 --- under a foreign owner unless `spec` names it under `## Access`
---- @param force boolean | nil File a `friction:` item over an incomplete
---- roll call — a pass whose transcripts are gone
+--- @param force boolean | nil Override a claimed-parent write gate
 --- @param why string | nil Why --force was needed
 --- @param before string | nil Place it immediately before this sibling
 --- under `parent` (the board, when `parent` is "")
@@ -138,27 +135,9 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if forced then
     return gate.verdict_line("new", false, "REFUSED: " .. forced)
   end
-  -- A friction log names every agent this session claimed work under
-  -- since the pass began, or the filing is refused: the only thing
-  -- that used to distinguish a full roll call from an empty one was
-  -- prose, and nothing refused the thinner log. `new` carries no
-  -- `--session` flag — unlike `take`/`drop`/`spec`/`verdict` — so this
-  -- resolved identity is for the friction check alone, never for
-  -- commit authorship: every `new` commits under the tool identity.
-  -- Listed once, before the friction check below: `store.list` is
-  -- what populates `s`'s per-item lease (`leased_sha`), which is what
-  -- lets `friction.friction_refusal` batch its past-filing spec reads
-  -- through `store.read_specs` instead of one `read_spec` per filing.
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("new", false, aerr)
-  end
-  if not frc and title:sub(1, 9) == "friction:" then
-    local refusal = friction.friction_refusal(s,
-      claim_session or session.resolve(nil), spec or "")
-    if refusal then
-      return gate.verdict_line("new", false, refusal)
-    end
   end
   local index = item.by_id(all)
   local c, cerr = store.read(s)

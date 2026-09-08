@@ -45,6 +45,9 @@ local record Item
   --- eventually handed over. nil/"" on unclaimed items and claims made
   --- before the lease redesign.
   claim_base: string | nil
+  --- Immutable claim-batch commit projected into `claim`/`claim_base` on
+  --- read. This pointer is durable item data; the projected facts are not.
+  claim_batch: string | nil
   --- Product commit handed over for review. It is navigation-independent:
   --- the caller may also record an external URL, but this commit alone is
   --- what verdict and completion gates consume.
@@ -129,6 +132,7 @@ local SPEC < const > = shape.record({
     order = shape.optional(shape.string),
     claim = shape.optional(shape.string),
     claim_base = shape.optional(shape.string),
+    claim_batch = shape.optional(shape.string),
     handover_head = shape.optional(shape.string),
     external_url = shape.optional(shape.string),
     builders = shape.optional(shape.string),
@@ -157,6 +161,7 @@ local record Raw
   order: string | nil
   claim: string | nil
   claim_base: string | nil
+  claim_batch: string | nil
   handover_head: string | nil
   external_url: string | nil
   builders: string | nil
@@ -284,6 +289,11 @@ local function problems(it: Item): {string}
     or (#landed_head ~= 40 and #landed_head ~= 64)) then
     out[#out + 1] = "landed_head must be a full lowercase commit id"
   end
+  local claim_batch = it.claim_batch or ""
+  if claim_batch ~= "" and (#claim_batch ~= 40
+    or claim_batch:match("^[0-9a-f]+$") == nil) then
+    out[#out + 1] = "claim_batch must be a full lowercase commit id"
+  end
   local external_url = it.external_url or ""
   if external_url ~= "" and not external_url:match("^https?://%S+$") then
     out[#out + 1] = "external_url must be one http(s) URL"
@@ -388,6 +398,7 @@ local function decode(t: {string: any}): Item | nil, string
     order = order,
     claim = raw.claim or "",
     claim_base = raw.claim_base or "",
+    claim_batch = raw.claim_batch or "",
     handover_head = raw.handover_head or "",
     external_url = raw.external_url or "",
     builders = builders,
@@ -432,8 +443,7 @@ local function encode(it: Item): {string: any}
   if (it.base or "") ~= "" then t.base = it.base end
   if (it.key or "") ~= "" then t.key = it.key end
   if #(it.order or {}) > 0 then t.order = table.concat(it.order, " ") end
-  if (it.claim or "") ~= "" then t.claim = it.claim end
-  if (it.claim_base or "") ~= "" then t.claim_base = it.claim_base end
+  if (it.claim_batch or "") ~= "" then t.claim_batch = it.claim_batch end
   if (it.handover_head or "") ~= "" then t.handover_head = it.handover_head end
   if (it.external_url or "") ~= "" then t.external_url = it.external_url end
   if #(it.builders or {}) > 0 then

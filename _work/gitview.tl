@@ -11,6 +11,7 @@
 --- stdout.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local claimbatch = require("_work.claimbatch")
 local guide = require("_work.guidance")
 local health = require("_work.health")
 local index = require("_work.index")
@@ -349,6 +350,17 @@ local function bounce_note(subject: string): string
   return (" (last drop: %s)"):format(why)
 end
 
+--- Format the reason carried by the current immutable drop batch. Claim
+--- bridges intentionally keep only a commit id; the batch is the fact.
+local function claim_bounce_note(s: store.Store, it: item.Item): string
+  local pointer = it.claim_batch or ""
+  if pointer == "" then return "" end
+  local batch, _err = claimbatch.read(s.root, pointer)
+  if batch == nil or batch.action ~= "drop"
+  or batch.why:match("%S") == nil then return "" end
+  return (" (last drop: %s)"):format(batch.why)
+end
+
 --- `next_report`, but for a decided `pull` the reason carries the
 --- why named by the item's last drop, read once for the one decided
 --- action rather than once per candidate: a session offered an item
@@ -374,10 +386,12 @@ local function next_report_live(s: store.Store, c: Index, all: {item.Item},
   local not_ready: string
   not_ready, action = readywhen.skip_not_ready(action, specs)
   if action.kind == "pull" and action.item then
-    local events = publish.history(s, action.item.id)
-    if events and events[1] then
-      action.reason = action.reason .. bounce_note(events[1].subject)
+    local note = claim_bounce_note(s, action.item)
+    if note == "" then
+      local events = publish.history(s, action.item.id)
+      if events and events[1] then note = bounce_note(events[1].subject) end
     end
+    action.reason = action.reason .. note
   end
   local prefix = not_ready == "" and "" or (not_ready .. "\n")
   return prefix .. render_action(action, specs), ""

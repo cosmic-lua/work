@@ -7,6 +7,7 @@
 --- explicitly asked to execute the rendered fetch. History remains a
 --- local Git/cache read.
 local events = require("_work.events")
+local gitdraft = require("_work.gitdraft")
 local prepared = require("_work.prepared")
 local store = require("_work.store")
 local refs = require("_work.refs")
@@ -117,8 +118,28 @@ local function publish(s: store.Store, execute?: boolean): boolean, string
     updates[#updates + 1] = {ref = p.ref, expected = expected, next = next_sha}
     -- A remote-backed board never reads local target heads as
     -- canonical, so remove the temporary fast-import ref altogether.
+    local active_draft = gitdraft.active(s.root)
     resets[#resets + 1] = {ref = p.ref, expected = next_sha,
-      next = refs.ZERO_SHA}
+      next = active_draft and gitdraft.underlying_tip(active_draft, p.ref)
+      or refs.ZERO_SHA}
+  end
+  local active_draft = gitdraft.active(s.root)
+  if active_draft ~= nil then
+    local extended, derr = gitdraft.stage(s.root, active_draft, updates,
+      "stage offline board mutation")
+    if extended == nil then return false, derr end
+    local activated, activate_err = gitdraft.activate(s.root, extended)
+    if not activated then return false, activate_err end
+    local reset, rerr = refs.update_refs_atomic(s.root, resets)
+    if not reset then
+      return false, ("draft %s advanced, but temporary heads could not be restored: %s")
+      :format(active_draft.id, rerr)
+    end
+    s.pending, s.leased_ref, s.leased_sha, s.leased_item, s.touched_at = {}, {}, {}, {}, {}
+    s.observed_seq = ""
+    local _cok, _cerr = store.close(s)
+    return true, ("STAGED draft=%s refs=%d; remote unchanged")
+    :format(extended.id, #extended.updates)
   end
   local tx, terr = prepared.prepare(s.root, updates)
   if tx == nil then

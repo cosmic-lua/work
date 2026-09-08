@@ -7,6 +7,7 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitboard = require("_work.gitboard")
 local gitclaim = require("_work.gitclaim")
+local gitdraft = require("_work.gitdraft")
 local gitobj = require("_work.gitobj")
 local prepared = require("_work.prepared")
 local refs = require("_work.refs")
@@ -50,6 +51,102 @@ local function test_claim_uses_an_explicit_non_origin_canonical_remote()
   assert(out:find("refs/remotes/origin", 1, true) == nil, out)
 end
 test_claim_uses_an_explicit_non_origin_canonical_remote()
+
+local function test_claim_set_renders_one_atomic_push()
+  local s = fixture.init_state_repo("cli-claim-atomic-set")
+  local first = fixture.file_item(s, "first atomic claim", "")
+  local second = fixture.file_item(s, "second atomic claim", "")
+  mirror_board(s.root)
+  assert(refs.set_board_mode(s.root, "remote"))
+  local root = s.root
+  local _closed, _cerr = store.close(s)
+  local code, out = capture("claim", first, second, "--session",
+    claimsession.mint(), "--dir", root)
+  assert(code == 2, out)
+  assert(select(2, out:gsub("git push %-%-atomic", "")) == 1, out)
+  assert(select(2, out:gsub("%-%-force%-with%-lease=", "")) == 3, out)
+  assert(out:find("refs/heads/claim-batches/", 1, true), out)
+end
+test_claim_set_renders_one_atomic_push()
+
+local function test_draft_cli_stages_offline_and_renders_one_final_push()
+  local s = fixture.init_state_repo("cli-draft-overlay")
+  local id = fixture.file_item(s, "before draft", "")
+  mirror_board(s.root)
+  assert(refs.set_board_mode(s.root, "remote"))
+  local root = s.root
+  local _closed, _cerr = store.close(s)
+  local draft = check.must(gitdraft.begin(root))
+
+  local code, out = capture("set", id, "--title", "inside draft",
+    "--draft", draft.id, "--dir", root)
+  assert(code == 0 and out:find("STAGED draft=", 1, true), out)
+
+  local reopened = check.must(gitdraft.open(root, draft.id))
+  assert(gitdraft.activate(root, reopened))
+  local speculative = check.must(store.open(root))
+  assert(check.must(store.load(speculative, id)).title == "inside draft")
+  local _sc, _se = store.close(speculative)
+  gitdraft.deactivate(root)
+  local canonical = check.must(store.open(root))
+  assert(check.must(store.load(canonical, id)).title == "before draft")
+  local _cc, _ce = store.close(canonical)
+
+  code, out = capture("publish", draft.id, "--dir", root)
+  assert(code == 0, out)
+  assert(select(2, out:gsub("git push %-%-atomic", "")) == 1, out)
+  assert(select(2, out:gsub("%-%-force%-with%-lease=", "")) == 1, out)
+end
+test_draft_cli_stages_offline_and_renders_one_final_push()
+
+local function test_draft_chains_new_child_and_spec_across_invocations()
+  local s = fixture.init_state_repo("cli-draft-dependent-chain")
+  local parent, _leaf = fixture.root_with_leaf(s)
+  mirror_board(s.root)
+  assert(refs.set_board_mode(s.root, "remote"))
+  local root = s.root
+  local _closed, _cerr = store.close(s)
+  local draft = check.must(gitdraft.begin(root))
+  local code, out = capture("new", "offline child", "--parent", parent,
+    "--draft", draft.id, "--dir", root)
+  assert(code == 0, out)
+  local child_id = out:match("%[([%w]+)%]")
+  assert(child_id ~= nil, out)
+  local spec_path = fs.join(root, "o", "offline-child.md")
+  assert(fs.write(spec_path, "## Change\nExercise the dependent draft chain.\n"))
+  code, out = capture("spec", child_id, spec_path,
+    "--draft", draft.id, "--dir", root)
+  assert(code == 0 and out:find("STAGED draft=", 1, true), out)
+  local reopened = check.must(gitdraft.open(root, draft.id))
+  assert(#gitdraft.plan(reopened) == 2,
+    "new child plus parent ordering should consolidate to two ref updates")
+  code, out = capture("publish", draft.id, "--dir", root)
+  assert(code == 0, out)
+  assert(select(2, out:gsub("git push %-%-atomic", "")) == 1, out)
+  assert(select(2, out:gsub("%-%-force%-with%-lease=", "")) == 2, out)
+end
+test_draft_chains_new_child_and_spec_across_invocations()
+
+local function test_local_draft_simulation_applies_only_on_execute()
+  local s = fixture.init_state_repo("cli-draft-local")
+  local id = fixture.file_item(s, "local before", "")
+  local root = s.root
+  local _closed, _cerr = store.close(s)
+  local draft = check.must(gitdraft.begin(root))
+  local code, out = capture("set", id, "--title", "local after",
+    "--draft", draft.id, "--dir", root)
+  assert(code == 0 and out:find("STAGED draft=", 1, true), out)
+  gitdraft.deactivate(root) -- a real CLI process exits here
+  local canonical = check.must(store.open(root))
+  assert(check.must(store.load(canonical, id)).title == "local before")
+  local _cc, _ce = store.close(canonical)
+  code, out = capture("publish", draft.id, "--execute", "--dir", root)
+  assert(code == 0, out)
+  canonical = check.must(store.open(root))
+  assert(check.must(store.load(canonical, id)).title == "local after")
+  local _fc, _fe = store.close(canonical)
+end
+test_local_draft_simulation_applies_only_on_execute()
 
 local function successor(root: string, parent: string): string
   local tree = check.must(gitobj.tree_of(root, parent))
@@ -142,7 +239,7 @@ local function test_refresh_defaults_to_rendered_fetch_and_local_reconciliation(
   local _closed, _cerr = store.close(s)
   local code, out = capture("refresh", "--dir", s.root)
   assert(code == 0, out)
-  assert(out:find("git fetch --prune origin", 1, true), out)
+  assert(out:find("git fetch --atomic --prune origin", 1, true), out)
   assert(out:find("refs/remotes/origin/items/", 1, true), out)
   assert(out:find("fetched refs were not changed", 1, true), out)
 end
@@ -174,34 +271,33 @@ local function test_publish_rediscovers_rendered_claim_transactions()
   local claim_code, claim_out = capture("claim", id, "--session", caller,
     "--dir", root)
   assert(claim_code == 2, claim_out)
-  assert(claim_out:find("git push --force-with-lease=", 1, true), claim_out)
+  assert(claim_out:find("git push --atomic --force-with-lease=", 1, true),
+    claim_out)
   assert(claim_out:find("PREPARED", 1, true)
     and claim_out:find("No claim was acquired", 1, true), claim_out)
   assert(claim_out:find("do not act", 1, true), claim_out)
   local staged = check.must(gitclaim.list_prepared(root, "origin"))
-  assert(#staged == 1 and staged[1].id == id,
-    "render-only claim must remain staging-reachable")
-  local retry_code, retry_out = capture("claim", id, "--session", caller,
+  assert(#staged == 1 and #staged[1].members == 1
+    and staged[1].members[1].id == id,
+    "one render-only batch must remain staging-reachable")
+  local publish_code, publish_out = capture("publish", staged[1].id,
     "--dir", root)
-  assert(retry_code == 2, retry_out)
-  local retried = check.must(gitclaim.list_prepared(root, "origin"))
-  assert(#retried == 1 and retried[1].new_sha == staged[1].new_sha,
-    "retrying a rendered claim must reuse its Git-native CAS")
-  assert(retry_out:find(staged[1].staging_ref .. ":"
-      .. staged[1].target_ref, 1, true), retry_out)
-  local publish_code, publish_out = capture("publish", "--dir", root)
   assert(publish_code == 0, publish_out)
-  assert(publish_out:find(staged[1].staging_ref .. ":"
-      .. staged[1].target_ref, 1, true), publish_out)
+  assert(publish_out:find(staged[1].batch.commit, 1, true),
+    publish_out)
+  assert(publish_out:find("refs/heads/claim-batches/", 1, true), publish_out)
   assert(publish_out:find("nothing executed", 1, true), publish_out)
 
   -- A caller may run the printed push and fetch itself.  Refresh only
   -- reconciles those already-fetched refs, then removes the staging receipt.
-  local tracked = check.must(refs.tracking_ref(staged[1].target_ref))
-  assert(refs.update_ref(root, tracked, staged[1].new_sha, staged[1].old_sha))
+  for _, update in ipairs(staged[1].transaction.updates) do
+    local tracked = check.must(refs.tracking_ref(update.ref))
+    assert(refs.update_ref(root, tracked, update.next, update.expected))
+  end
   local refresh_code, refresh_out = capture("refresh", "--dir", root)
   assert(refresh_code == 0, refresh_out)
-  assert(refresh_out:find("confirmed " .. staged[1].new_sha, 1, true),
+  assert(refresh_out:find("confirmed", 1, true)
+    and refresh_out:find(staged[1].id, 1, true),
     refresh_out)
   assert(#check.must(gitclaim.list_prepared(root, "origin")) == 0,
     "confirmed claim staging ref must be cleaned")

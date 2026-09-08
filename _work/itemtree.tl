@@ -35,7 +35,7 @@ local item = require("_work.item")
 --- combined `repo`/`base`) sits where `_work.item.Item` declares
 --- `parent`'s neighbor; `id` and `held` are not `meta` lines at all.
 local META_KEYS < const >: {string} = {
-  "title", "parent", "target", "key", "claim", "claim_base",
+  "title", "parent", "target", "key", "claim_batch",
   "handover_head", "external_url", "reviewer", "pr", "result", "verdict",
   "verdict_head", "landed_head", "verdict_spec", "resolution",
   "builders", "speccers",
@@ -129,8 +129,7 @@ local function encode_meta(it: item.Item): string
   put("parent", it.parent or "")
   put("target", format_target(it.repo or "", it.base or ""))
   put("key", it.key or "")
-  put("claim", it.claim or "")
-  put("claim_base", it.claim_base or "")
+  put("claim_batch", it.claim_batch or "")
   put("handover_head", it.handover_head or "")
   put("external_url", it.external_url or "")
   put("reviewer", it.reviewer or "")
@@ -197,8 +196,11 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     key = meta.key or "",
     order = order,
     other_edges = other_edges,
-    claim = meta.claim or "",
-    claim_base = meta.claim_base or "",
+    -- Claims are projected from refs/heads/claims/<id>; item history never
+    -- stores or revives coordination state.
+    claim = "",
+    claim_base = "",
+    claim_batch = meta.claim_batch or "",
     handover_head = meta.handover_head or "",
     external_url = meta.external_url or "",
     builders = {},

@@ -49,10 +49,8 @@ local function claimed(name: string, base: string): store.Store, string
   fixture.give_spec(s, id)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
-  it.claim = BUILDER
-  it.claim_base = base
-  assert(storewrite.save(s, it,
-      ("claim acquire %s by %s"):format(id:sub(1, 8), BUILDER)))
+  assert(storewrite.save(s, it, "fixture: set product repository"))
+  fixture.claim_item(s, id, BUILDER, base)
   return s, id
 end
 

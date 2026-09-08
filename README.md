@@ -96,9 +96,8 @@ marker on a board that has neither yet. Layout 1 (the old
 `beats`/`blocked_by`/`held`-carrying shape) has no migration path from
 here. Layout 2 upgrades to layout 3 with `gitboard migrate`: only the
 leased `board/format` ref moves, so existing item commits and histories
-are not rewritten. A still-live legacy claim blocks that cutover until
-its two-hour lease (including tolerated clock skew) has expired. The local
-SQLite cache is disposable and rebuilt after the new marker is confirmed.
+are not rewritten. The local SQLite cache is disposable and rebuilt after
+the new marker is confirmed.
 Nothing here is a file in the working tree: a read is
 `git for-each-ref`/`cat-file --batch` against
 the ref layout, and a write is one `git fast-import` stream
@@ -121,15 +120,23 @@ clear the leftover one), a stale `refs/heads/board/lanes` ref left over
 from before lane health moved to the cache, and anything the store's
 own tolerant decode had to flag.
 
-A workable item's state is DERIVED from the facts its ref carries,
-never declared: open, unclaimed, and PR-less is `todo` (pullable once
-its spec passes the bar `show ID` prints); a claim or a PR makes it
-`doing`; a resolution ends it. Which claim a `take` makes is derived
-the same way — an item awaiting a verdict, taken by a session that is
-not its builder, is the review claim. Within doing the same facts say what happens
-next — building, awaiting review, rework, accepted. Claims coordinate
-exclusive access to individual items; they do not impose global capacity.
-Callers manage their own local work limits.
+A workable item's state is DERIVED from the facts its item ref carries,
+never declared: open, unclaimed, and PR-less is `todo` (pullable once its
+spec passes the bar `show ID` prints); a confirmed claim or a PR makes it
+`doing`; a resolution ends it. Which claim a `claim` makes is derived the
+same way — an item awaiting a verdict, claimed by a session that is not its
+builder, is the review claim. Within doing the same facts say what happens
+next — building, awaiting review, rework, accepted.
+
+One invocation of `claim ID...` creates one parentless, immutable claim-batch
+commit storing the member set, caller, operation, and common two-hour deadline
+once. A unique append-only `refs/heads/claim-batches/<batch-id>` names it. One
+first-parent bridge commit per member advances the existing item ref; its tree
+stores only the batch SHA. The batch ref and every member bridge publish
+together. Item refs remain the independent compare-and-swap fences, so one
+`git push --atomic` moves the whole batch into place or none. A changed set is
+a new object and ref. Disjoint batches may proceed concurrently; an overlap
+rejects the whole later batch. Work limits remain caller-local.
 
 Roles derive from the graph — there is no kind field and no goal
 tier: the one parentless item is the board, its children are the
@@ -173,6 +180,16 @@ o/bin/gitboard show
 o/bin/gitboard next
 ```
 
+For the caller-owned, offline-capable path, run `gitboard help offline`.
+In short: refresh caller-fetched refs; prepare one immutable,
+all-or-nothing claim batch; run its one atomic push and refresh until the
+whole batch is confirmed; then work offline. Batch dependent board mutations
+by setting `GITBOARD_DRAFT` from `draft begin`.
+Each mutation extends a durable clone-local Git overlay, and `publish` renders
+one atomic push from every touched ref's original fetched tip to its final
+speculative tip. Gitboard never discovers credentials; `--execute` only runs
+the exact ordinary Git argv it otherwise prints.
+
 `o/bin/gitboard` is an ordinary cosmic binary carrying `_work/**`, so
 a verb is one process and its output is only the verdict line. Before
 `o/board` has built, `bin/cosmic --make run _work/gitboard.tl <verb>`
@@ -186,16 +203,15 @@ The pin therefore decides which fence the tests execute inside, which
 is why `bin/cosmic.pin` matters here beyond reproducibility.
 
 Every item a mutation touches lands as its OWN commit on its own ref
-— `it` and each `also` item alike — and publishing them is ONE atomic
-push, leased against the tip each was observed at. A rejected push is
-the compare half of a compare-and-swap FAILING: some ref's lease
-didn't hold because a board somebody else just moved, so the tool
-drops every commit the mutation made, whole — neither ref lands, not
-just the contested one — re-syncs onto the winner's state, and
-refuses, naming the recovery — run the same verb again, and it decides
-afresh with EVERY gate applied to the merged board, not a replayed
-commit whose preconditions may no longer hold. A mutation never
-half-lands. Reads need no network and no token, and touch no working
+— `it` and each `also` item alike. One ordinary mutation is one prepared
+atomic push; an offline draft consolidates many dependent mutations into one
+atomic push containing only each touched ref's original and final tips. Every
+ref keeps its own exact lease. A rejected push is the compare half of a
+compare-and-swap failing: some fetched expectation is stale. Because the push
+is atomic, none of its refs land. The local receipt remains inspectable; the
+caller fetches, runs `refresh`, and decides a new attempt against current
+state. Gitboard never silently rebases or replays a prepared decision. Reads
+need no network and no token, and touch no working
 tree — a read is `for-each-ref`/`cat-file --batch`, a write is one
 `git fast-import` stream per save (every item it touches as its own
 commit on whichever ref it is already on — `refs/heads/items/<id>`
@@ -205,21 +221,18 @@ is never a ref move: the pushing credential can create and update a
 branch but never delete one, so nothing here ever asks the remote for
 a deletion.
 
-A mutation's PUSH is always the compare-and-swap, leased against each
-ref's observed tip — so only a BOUNDED mutation (one whose gate reads
-the whole board before deciding, today `take`ing NEW work, against a
-shared `refs/heads/board/seq` lease) fetches the remote's state before
-it builds anything: two takes racing each other need to see the same
-seq tip, or the lease decides nothing. Every other mutation never
-touches `refs/heads/board/seq`, so it
-builds straight against this checkout's own local refs and pushes —
-a stale lease is simply refused as `LOST_RACE` by the push itself,
-recovered exactly as any lost race is, costing the extra round trip
-only when a race actually happened rather than on every call.
+A claim is its own bounded compare-and-swap. Its immutable batch commit holds
+the shared facts once; one first-parent bridge points to it from each item
+history. Publication atomically creates its append-only batch ref and leases
+the item refs, never the whole board. A stale member lease rejects the whole
+attempt as `LOST_RACE`; the caller refreshes and prepares a new batch for the
+set it now wants. No item is acquired piecemeal and an old batch is never
+edited or replayed.
 
-A mutation syncs by `git fetch --prune` against the three ref
-namespaces (`refs/heads/items`, `refs/heads/ended`, `refs/heads/board`) — never a
-merge, and never a path under the working tree, so it cannot conflict
+A mutation refreshes from caller-fetched tracking refs for the four durable
+namespaces (`refs/heads/items`, `refs/heads/ended`,
+`refs/heads/claim-batches`, and `refs/heads/board`) — never a merge, and never
+a path under the working tree, so it cannot conflict
 with or disturb anything there. `_work/**` — the machinery's own
 source, checked out on this repository's ordinary branch — is
 untouched by any of it; editing it is still its own slice of work,

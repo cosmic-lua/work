@@ -25,7 +25,6 @@ local read = require("_work.read")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
-local verbs = require("_work.gitverbs")
 
 local init_shared = fixture.init_shared
 local init_state_repo = fixture.init_state_repo
@@ -152,12 +151,7 @@ end
 local function test_graph_parent_mutations_obey_the_whole_item_claim()
   local s = init_state_repo("gate-graph-claim")
   local _root, parent = fixture.root_with_leaf(s)
-  local held = check.must(store.load(s, parent))
-  held.claim = "holder"
-  held.claim_base = ("a"):rep(40)
-  assert(gate.commit_and_publish(s, held, nil,
-      ("claim acquire %s by holder"):format(parent:sub(1, 8)),
-      "claim-acquire", nil, "holder"))
+  fixture.claim_item(s, parent, "holder")
 
   assert(graph.cmd_new(s, "foreign child", parent, nil, "", false, "",
       "", "", "stranger") ~= 0,
@@ -179,12 +173,15 @@ end
 -- Git coordinates only the per-item leases.
 local function test_the_merged_board_carries_all_claims_without_a_global_bound()
   local a, b = init_shared("gate-bound")
-  for k = 1, flow.DOING_LIMIT do
-    assert(storewrite.save(a, make_item({claim = ("wake-%d"):format(k)}),
-        "filler " .. fresh_id():sub(1, 8)))
+  local ids: {string} = {}
+  for _ = 1, flow.DOING_LIMIT do
+    local it = make_item()
+    ids[#ids + 1] = it.id
+    assert(storewrite.save(a, it, "filler " .. fresh_id():sub(1, 8)))
   end
   assert(publish.publish(a))
   fixture.caller_publish(a)
+  fixture.control_claim(a, ids, "one-worker")
   fixture.caller_fetch(b)
   check.must(store.list(b))
   local c = check.must(store.read(b))
@@ -285,28 +282,6 @@ local function test_distance_refusal_covers_builders_and_speccers()
     "an unnamed session is never involved")
 end
 
--- The one-claim-per-session guard: a live claim on ANOTHER open item
--- refuses; the item being claimed itself, and a session with no live
--- claim anywhere, are excluded.
-local function test_second_claim_refusal_scopes_to_other_open_claims()
-  local s = init_state_repo("gate-second-claim")
-  local mine = make_item({claim = "me"})
-  local theirs = make_item({claim = "someone-else"})
-  local unclaimed = make_item()
-  assert(storewrite.save(s, mine, "fixture: mine"))
-  assert(storewrite.save(s, theirs, "fixture: theirs"))
-  assert(storewrite.save(s, unclaimed, "fixture: unclaimed"))
-  local all = check.must(store.list(s))
-  assert(gate.second_claim_refusal(s, all, unclaimed.id, "me") ~= nil,
-    "a live claim on another item refuses")
-  assert(gate.second_claim_refusal(s, all, mine.id, "me") == nil,
-    "the item being claimed itself is excluded")
-  assert(gate.second_claim_refusal(s, all, unclaimed.id, "someone-else") ~= nil,
-    "symmetric for the other session")
-  assert(gate.second_claim_refusal(s, all, unclaimed.id, "nobody-yet") == nil,
-    "a session with no live claim anywhere is free to take")
-end
-
 local ACCESS_SPEC < const > = fixture.READY_SPEC
 .. "## Access\n- whilp/cosmopolitan (the fork the diff deliberately targets)\n"
 
@@ -347,8 +322,7 @@ local function test_a_legacy_foreign_owner_repo_does_not_add_a_ready_bar()
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "no provider-owned ready problem: "
     .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "the offline take proceeds")
+  fixture.claim_item(s, leaf, "session-a")
 end
 
 -- The same owner as the board passes, whatever the repository's name.
@@ -360,8 +334,7 @@ local function test_a_same_owner_repo_passes_the_bar()
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a same-owner repo is no problem: "
     .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "and the take proceeds")
+  fixture.claim_item(s, leaf, "session-a")
 end
 
 -- The deliberate cross-owner case: the spec names the slug under
@@ -371,8 +344,7 @@ local function test_a_foreign_owner_declared_under_access_passes_the_bar()
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared cross-owner repo is no problem: "
     .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "and the take proceeds")
+  fixture.claim_item(s, leaf, "session-a")
 end
 
 -- A board with no GitHub origin has no owner to compare against and

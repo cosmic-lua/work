@@ -15,7 +15,6 @@ local read = require("_work.read")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
-local verbs = require("_work.gitverbs")
 local graph = require("_work.gitgraph")
 local view = require("_work.gitview")
 
@@ -48,17 +47,17 @@ local function test_the_spec_bar_is_the_items_own()
   assert(#check.must(read.structure(c)) > 0, "the board does have a problem")
   assert(#gitready.ready_problems(s, check.must(store.load(s, leaf))) == 0,
     "a sound item meets the bar while another item is broken")
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "and it may be taken")
+  fixture.claim_item(s, leaf, "session-a")
   assert(check.must(store.load(s, leaf)).claim == "session-a", "it moved")
 end
 
--- A hollow spec still refuses, naming the sections it lacks.
-local function test_the_spec_bar_still_refuses_a_hollow_spec()
+-- A hollow spec remains visible below the ready bar. Direct claim is now
+-- exclusion only; callers decide readiness separately before doing work.
+local function test_the_spec_bar_still_reports_a_hollow_spec()
   local s = init_state_repo("hollow")
   local _, leaf = root_with_leaf(s)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "no spec, no take")
+  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf))) > 0,
+    "the direct claim is only exclusion; readiness remains separately visible")
   assert(check.must(store.load(s, leaf)).claim == "", "it stayed put")
 end
 
@@ -201,8 +200,7 @@ local function test_spec_bar_names_an_undeclared_repo()
   end
   assert(found, "the bar names the unreachable repo: "
     .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "and the take is refused")
+  assert(#problems > 0, "the item remains visibly below the ready bar")
 end
 
 -- Declaring the same repo under `## Access` clears the bar — the gate
@@ -217,8 +215,7 @@ local function test_declaring_the_repo_clears_the_bar()
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared repo clears the bar: "
     .. table.concat(problems, "; "))
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
-    "and the take proceeds")
+  fixture.claim_item(s, leaf, "session-a")
 end
 
 -- An item's own `repo` is where its diff lands, not a source read on
@@ -241,7 +238,7 @@ local function test_spec_refuses_a_foreign_live_claim()
   local s = init_state_repo("foreignspec")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  fixture.claim_item(s, leaf, "builder-a")
   local before_spec = store.read_spec(s, leaf)
   local before_commits = commits(s)
   local base = spec_file("foreign-base", before_spec)
@@ -262,7 +259,7 @@ local function test_spec_the_holders_own_rewrite_still_lands()
   local s = init_state_repo("holderspec")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  fixture.claim_item(s, leaf, "builder-a")
   local base = spec_file("holder-base", store.read_spec(s, leaf))
   local rewrite = spec_file("holder-rewrite",
     (READY_SPEC:gsub("Not that.", "Reworked answering a bounce.")))
@@ -278,7 +275,7 @@ local function test_spec_force_needs_why()
   local s = init_state_repo("specforceonly")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  fixture.claim_item(s, leaf, "builder-a")
   local before_spec = store.read_spec(s, leaf)
   local before_commits = commits(s)
   local base = spec_file("forceonly-base", before_spec)
@@ -296,7 +293,7 @@ local function test_spec_force_and_why_overrides_a_foreign_claim()
   local s = init_state_repo("specoverride")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
+  fixture.claim_item(s, leaf, "builder-a")
   local before_spec = store.read_spec(s, leaf)
   local base = spec_file("override-base", before_spec)
   local rewrite = spec_file("override-rewrite",
@@ -360,9 +357,9 @@ local function test_next_carries_the_last_drops_why()
   local s = init_state_repo("bouncenote")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_drop(s, leaf, "session-a",
-      "the builder session hit its budget", false) == 0)
+  fixture.claim_item(s, leaf, "session-a")
+  fixture.drop_claim(s, leaf, "session-a",
+    "the builder session hit its budget")
   local all = check.must(store.list(s))
   local c = check.must(store.read(s))
   local report, rerr = view.next_report_live(s, c, all, view.read_specs(s, all),

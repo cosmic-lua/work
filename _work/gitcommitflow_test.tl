@@ -4,6 +4,7 @@
 -- and records a squash landing. No remote or provider object exists.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
+local claimbatch = require("_work.claimbatch")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
@@ -11,6 +12,7 @@ local gitclaim = require("_work.gitclaim")
 local gitdone = require("_work.gitdone")
 local gittake = require("_work.gittake")
 local gitverdict = require("_work.gitverdict")
+local prepared = require("_work.prepared")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -50,6 +52,19 @@ local function product(): string, string, string, string
   return root, base, head, git(root, {"rev-parse", "HEAD"})
 end
 
+local function claim_action(s: store.Store, id: string, caller: string,
+    action: gitclaim.Action, product_base: string)
+  local target = gitclaim.target_item_ref(id)
+  local result = gitclaim.prepare_batch({{
+        root = s.root, id = id, source_ref = target, target_ref = target,
+        remote = "origin", batch = action .. "-" .. caller .. "-" .. id:sub(-8),
+        caller = caller, action = action, product_base = product_base,
+        force = false, why = "", now = os.time(),
+      }})
+  assert(result.prepared ~= nil, result.refused[id] or result.refused.batch)
+  assert(prepared.promote_local(s.root, result.prepared.transaction))
+end
+
 local function test_commit_only_flow()
   local product_root, base, head, landed = product()
   local s = fixture.init_state_repo("commit-flow")
@@ -57,10 +72,8 @@ local function test_commit_only_flow()
   fixture.give_spec(s, leaf)
   local it = check.must(store.load(s, leaf))
   it.repo = "acme/widgets"
-  it.claim = "run-a"
-  it.claim_base = base
-  assert(storewrite.save(s, it,
-      ("claim acquire %s by run-a"):format(leaf:sub(1, 8))))
+  assert(storewrite.save(s, it, "set product repository"))
+  claim_action(s, leaf, "run-a", "take", base)
   assert(#check.must(store.load(s, leaf)).builders == 0,
     "claim acquisition does not attribute a builder")
 
@@ -76,17 +89,14 @@ local function test_commit_only_flow()
 
   -- Review is a distinct caller and therefore a distinct claim. The builder
   -- explicitly releases; neither handover nor any later transition does it.
-  handed.claim = ""
-  assert(storewrite.save(s, handed,
-      ("claim drop %s by run-a"):format(leaf:sub(1, 8))))
+  claim_action(s, leaf, "run-a", "drop", "")
   local reviewing = check.must(store.load(s, leaf))
   assert(reviewing.handover_head == head,
     "explicit claim release preserves the workflow evidence")
-  reviewing.claim = "run-b"
-  assert(storewrite.save(s, reviewing,
-      ("claim acquire %s by run-b"):format(leaf:sub(1, 8))))
-  local review_claim = check.must(gitclaim.read_state(s.root, s.leased_sha[leaf],
-      "run-b", base))
+  claim_action(s, leaf, "run-b", "take", base)
+  reviewing = check.must(store.load(s, leaf))
+  local review_claim = check.must(claimbatch.read_state(s.root,
+      reviewing.claim_batch or "", leaf))
 
   assert(gitverdict.cmd_verdict_commit(s, leaf, "accept", head, "run-b",
       false, "", product_root) == 0)
@@ -116,8 +126,8 @@ local function test_commit_only_flow()
     "set title", "set", nil, "run-b")
   assert(own, oerr)
   completed = check.must(store.load(s, leaf))
-  local after_claim = check.must(gitclaim.read_state(s.root, s.leased_sha[leaf],
-      completed.claim or "", completed.claim_base or ""))
+  local after_claim = check.must(claimbatch.read_state(s.root,
+      completed.claim_batch or "", leaf))
   assert(after_claim.control == review_claim.control
     and after_claim.expires_at == review_claim.expires_at,
     "an ordinary holder mutation must not renew the lease")

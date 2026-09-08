@@ -3,6 +3,7 @@
 --- Canonical namespace selection belongs to `_work.refs`.
 local cachedb = require("_work.cachedb")
 local child = require("cosmic.child")
+local claimprojection = require("_work.claimprojection")
 local format = require("_work.format")
 local gitbatch = require("_work.gitbatch")
 local gitboardstate = require("_work.gitboardstate")
@@ -177,7 +178,7 @@ end
 --- @return Loaded | nil The item, its ref and its tip
 --- @return string Error message; "no item <id>" when absent
 local function load_item(root: string, id: string,
-    known_ref?: string, known_sha?: string): Loaded | nil, string
+    known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
   local ref, sha = known_ref, known_sha
   if ref == nil or ref == "" or sha == nil or sha == "" then
     local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
@@ -226,6 +227,8 @@ local function load_item(root: string, id: string,
   if it == nil then
     return nil, ierr
   end
+  local projected, perr = claimprojection.apply(root, {it}, now or os.time())
+  if not projected then return nil, perr end
   return {it = it, ref = ref, sha = sha}
 end
 
@@ -371,6 +374,8 @@ local function list(root: string, allow_old_format?: boolean): Board | nil, stri
     shas_by_id[id] = r.sha
     touched_by_id[id] = r.touched
   end
+  local projected, perr = claimprojection.apply(root, items, os.time())
+  if not projected then return nil, perr end
   table.sort(items, function(a: item.Item, b: item.Item): boolean
       return a.id < b.id
     end)
@@ -454,7 +459,7 @@ local record gitread
   lease_encode: function(id: string, ref: string, sha: string): string
   lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
-  known_ref?: string, known_sha?: string): Loaded | nil, string
+  known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
   list: function(root: string, allow_old_format?: boolean): Board | nil, string
   read_spec: function(root: string, candidates: {string}): string
   read_specs: function(root: string, shas_by_id: {string: string},

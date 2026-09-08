@@ -1,6 +1,6 @@
 --- Whole-item claim enforcement shared by every mutation path.
 local claim = require("_work.claim")
-local gitclaim = require("_work.gitclaim")
+local claimbatch = require("_work.claimbatch")
 local item = require("_work.item")
 local store = require("_work.store")
 
@@ -10,10 +10,10 @@ local store = require("_work.store")
 local function mutation_refusal(s: store.Store, it: item.Item,
     session: string, force: boolean, why: string): string | nil
   local before = s.leased_item[it.id]
-  local tip = s.leased_sha[it.id] or ""
-  if before == nil or tip == "" or (before.claim or "") == "" then return nil end
-  local st, err = gitclaim.read_state(s.root, tip, before.claim or "",
-    before.claim_base or "")
+  if before == nil or (before.claim_batch or "") == "" then return nil end
+  local pointer = before.claim_batch or ""
+  if pointer == "" then return "REFUSED: active claim has no batch pointer" end
+  local st, err = claimbatch.read_state(s.root, pointer, it.id)
   if err ~= "" then return "REFUSED: cannot inspect claim: " .. err end
   local refusal = claim.mutation_refusal(st, session or "", os.time(),
     force or false, why or "")
