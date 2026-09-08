@@ -3,10 +3,17 @@
 -- explicit command override. It never discovers siblings or probes remotes.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
+local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local repository_map = require("_work.repository_map")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
+
+local hermetic_config < const > = fs.join(tmpdir,
+  "repository-map-gitconfig-empty")
+assert(fs.write(hermetic_config, ""))
+assert(env.set("GIT_CONFIG_GLOBAL", hermetic_config))
+assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
 
 local function git(root: string, args: {string})
   local argv: {string} = {"git"}

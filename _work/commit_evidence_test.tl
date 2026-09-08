@@ -5,9 +5,16 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local evidence = require("_work.commit_evidence")
+local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
+
+local hermetic_config < const > = fs.join(tmpdir,
+  "commit-evidence-gitconfig-empty")
+assert(fs.write(hermetic_config, ""))
+assert(env.set("GIT_CONFIG_GLOBAL", hermetic_config))
+assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
 
 local function git(root: string, args: {string}, stdin?: string): string
   local argv: {string} = {"git", "-c", "user.email=test@example.com",
