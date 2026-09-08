@@ -1,6 +1,6 @@
---- Caller-owned transport wrapper for the one-hop board migration.
---- Preparation is local and render-only by default; the explicit execution
---- path runs only the same ordinary Git argv printed to the caller.
+--- Caller-owned transport wrapper for the one-hop board migration. The one
+--- prepared transaction bridges every item, converts embedded claims to
+--- immutable batches, and advances the format marker atomically.
 local cache = require("_work.cache")
 local gate = require("_work.gitgate")
 local gitmigrate = require("_work.gitmigrate")
@@ -16,7 +16,8 @@ local function cmd_migrate(dir: string, remote: string,
   end
   if outcome.applied then
     return gate.verdict_line("migrate", true,
-      "local-only board migrated; item histories unchanged; cache rebuilt")
+      ("local-only board migrated atomically; bridged=%d claim-batches=%d; "
+        .. "cache rebuilt"):format(outcome.bridged, outcome.batches))
   end
   local tx = outcome.transaction
   if tx == nil then
@@ -29,8 +30,9 @@ local function cmd_migrate(dir: string, remote: string,
     print(transport.render_argv(push))
     print(transport.render_argv(fetch))
     gate.verdict_line("migrate", true,
-      "PREPARED: no board format change was published; run the printed push "
-      .. "and fetch, then `gitboard refresh`")
+      ("PREPARED: bridged=%d claim-batches=%d; nothing was published. Run "
+        .. "the printed atomic push and fetch, then `gitboard refresh`")
+      :format(outcome.bridged, outcome.batches))
     return 2
   end
   local pushed, perr = prepared.execute(dir, push)
@@ -60,7 +62,9 @@ local function cmd_migrate(dir: string, remote: string,
       "format confirmed, but rebuilt cache could not close: " .. cerr)
   end
   return gate.verdict_line("migrate", true,
-    "board format published and confirmed; item histories unchanged")
+    ("board format published and confirmed atomically; bridged=%d "
+      .. "claim-batches=%d; cache rebuilt")
+    :format(outcome.bridged, outcome.batches))
 end
 
 local record gitmigrate_cli

@@ -31,7 +31,7 @@ local function test_a_different_version_refuses_and_names_both()
   assert(format.refusal("99", false) ~= nil, "wrong on an empty board refuses too")
 end
 
--- Format 2 is refused by ordinary readers/writers but is named as the one
+-- Format 3 is refused by ordinary readers/writers but is named as the one
 -- supported predecessor, with an actionable migration path.
 local function test_previous_version_is_only_migratable_not_current()
   assert(format.migratable(format.PREVIOUS .. "\n"))
@@ -42,14 +42,12 @@ local function test_previous_version_is_only_migratable_not_current()
   assert(refusal:find("gitboard migrate", 1, true) ~= nil, refusal)
 end
 
--- Layout `1` — the older beats/blocked_by/held-carrying layout,
--- from before the live board moved to layout 2 — refuses the same
--- generic way any other unexpected version does: there is no
--- migration path left to name.
-local function test_version_1_refuses_like_any_other_version()
-  local refusal = format.refusal("1", true)
+-- Layout `2` is older than the one supported migration hop and refuses the
+-- same generic way any other unexpected version does.
+local function test_version_2_refuses_like_any_other_version()
+  local refusal = format.refusal("2", true)
   assert(refusal ~= nil)
-  assert(refusal:find("1", 1, true) ~= nil, refusal)
+  assert(refusal:find("2", 1, true) ~= nil, refusal)
   assert(refusal:find(format.CURRENT, 1, true) ~= nil, refusal)
 end
 

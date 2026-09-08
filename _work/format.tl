@@ -10,8 +10,13 @@
 local gitobj = require("_work.gitobj")
 local refs = require("_work.refs")
 
-local CURRENT < const > = "3"
-local PREVIOUS < const > = "2"
+--- Format 4 records one acquisition as a parentless shared commit under the
+--- append-only `refs/heads/claim-batches/<batch-id>` namespace. Each member's
+--- item ref advances through a first-parent bridge naming that same batch,
+--- making the requested set an atomic shared fact rather than unrelated item
+--- mutations.
+local CURRENT < const > = "4"
+local PREVIOUS < const > = "3"
 
 --- Whether `found` is the one board layout this build can upgrade.
 --- Migration is deliberately one-hop: accepting an arbitrary older

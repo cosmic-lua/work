@@ -97,10 +97,12 @@ end
 local function test_fetch_instructions_target_only_remote_tracking_refs()
   local argv = prepared.fetch_argv("upstream")
   local rendered = table.concat(argv, " ")
-  assert(rendered == "git fetch --prune upstream "
+  assert(rendered == "git fetch --atomic --prune upstream "
     .. "+refs/heads/items/*:refs/remotes/upstream/items/* "
     .. "+refs/heads/ended/*:refs/remotes/upstream/ended/* "
-    .. "+refs/heads/board/*:refs/remotes/upstream/board/*", rendered)
+    .. "+refs/heads/board/*:refs/remotes/upstream/board/* "
+    .. "+refs/heads/claim-batches/*:refs/remotes/upstream/claim-batches/*",
+    rendered)
 end
 
 local function test_manifest_keeps_staged_successors_alive_through_aggressive_gc()

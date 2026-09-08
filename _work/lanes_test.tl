@@ -91,14 +91,7 @@ local function test_a_claimed_repair_is_left_alone_on_green()
   assert(lanes.mint(s, RED))
   local repair = repair_for(check.must(store.list(s)), "release.yml")
   assert(repair ~= nil)
-  repair.claim = "session-a"
-  assert(storewrite.save(s, repair, ("take %s by session-a"):format(
-        repair.id:sub(1, 8))))
-  -- Straight through `storewrite.save`, bypassing the cache patch AND
-  -- the lease `commit_and_publish` would otherwise have refreshed —
-  -- closed here so `mint` below reads a fresh lease rather than
-  -- fast-importing against the sha this claim already moved past.
-  local _cok, _cerr = store.close(s)
+  fixture.claim_item(s, repair.id, "session-a")
 
   assert(lanes.mint(s, GREEN))
   local still = check.must(store.load(s, repair.id))

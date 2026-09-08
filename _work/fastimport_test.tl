@@ -75,15 +75,16 @@ local function test_diff_item_unchanged_item_is_empty()
   assert(#ops == 0, "identical old and new items diff to nothing")
 end
 
--- A scalar field change (claim) rewrites the WHOLE meta blob (one
+-- A scalar field change (title) rewrites the WHOLE meta blob (one
 -- path, never a per-field write) and touches nothing else.
 local function test_diff_item_scalar_change_rewrites_meta_only()
   local old = make_item()
-  local new_it = make_item({claim = "session-a"})
+  local new_it = make_item({title = "a changed title"})
   local ops = fastimport.diff_item(old, new_it, nil, "")
   assert(#ops == 1, "only meta moved: " .. #ops)
   assert(ops[1].path == "meta")
-  assert(ops[1].content:find("claim: session%-a", 1, false) ~= nil, ops[1].content)
+  assert(ops[1].content:find("title: a changed title", 1, true) ~= nil,
+    ops[1].content)
 end
 
 -- An entry dropped and another added under the same kind: exactly one

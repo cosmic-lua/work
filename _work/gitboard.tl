@@ -16,6 +16,7 @@ local gate = require("_work.gitgate")
 local claimcli = require("_work.gitclaim_cli")
 local gitread = require("_work.gitread")
 local gitdone = require("_work.gitdone")
+local draftcli = require("_work.gitdraft_cli")
 local migratecli = require("_work.gitmigrate_cli")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
@@ -223,6 +224,15 @@ local function main(...: string): integer
         selerr) end
   end
   local remote = explicit_remote ~= "" and explicit_remote or refs.board_remote(dir)
+  if d.command == "draft" then
+    return draftcli.cmd_draft(dir, d.parsed.args,
+      d.parsed.switches["print-id"] or false)
+  end
+  local selected_draft, draft_err = draftcli.activate(dir, d.command,
+    d.parsed.values["draft"])
+  if selected_draft == nil then
+    return gate.verdict_line(d.command, false, "REFUSED: " .. draft_err)
+  end
   local s, serr = store.open(dir)
   if s == nil then
     io.stderr:write(tostring(serr) .. "\n")
@@ -245,7 +255,9 @@ local function main(...: string): integer
     return transport.cmd_refresh(s, remote, false)
   end
   if d.command == "publish" then
-    return transport.cmd_publish(s, d.parsed.args,
+    local selectors = d.parsed.args
+    if #selectors == 0 and selected_draft ~= "" then selectors = {selected_draft} end
+    return transport.cmd_publish(s, selectors,
       remote,
       d.parsed.switches["execute"] or false)
   end

@@ -54,9 +54,12 @@ local type Cache = index.Index
 --- (`_work.index_rank`/`_work.readddl`) instead of views — belt-and-
 --- suspenders again, since the fingerprint's own hash already changed
 --- the moment their DDL did. Bumped to 7 for format 3's optional
---- `claim_base`/commit-evidence columns. The cache is disposable: this
---- is a rebuild boundary, never an in-place data migration.
-local SCHEMA_VERSION < const > = 7
+--- `claim_base`/commit-evidence columns. Bumped to 8 for format 4's
+--- shared `refs/heads/claim-batches/*` objects and item bridge pointers: even
+--- where the SQL columns themselves remain unchanged, claim state is decoded
+--- through a different representation. The cache is disposable: this is a
+--- rebuild boundary, never an in-place data migration.
+local SCHEMA_VERSION < const > = 8
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"

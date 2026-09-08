@@ -27,7 +27,7 @@ local function test_a_claim_freezes_decomposition_except_for_its_holder()
   -- foreign caller cannot decompose it; its holder may, and the claim
   -- persists until an explicit drop or logical expiry.
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-A", 0, false, "") == 0)
+  fixture.claim_item(s, leaf, "session-A")
   assert(graph.cmd_new(s, "a foreign sub-slice", leaf, nil, "") ~= 0,
     "another caller cannot mutate a claimed item's graph")
   local before = commits(s)
@@ -52,7 +52,7 @@ local function test_new_parent_on_a_review_item_keeps_it_workable()
   local s = init_state_repo("review-child")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
+  fixture.claim_item(s, leaf, "session-a")
   local handed = check.must(store.load(s, leaf))
   local handover_head = ("a"):rep(40)
   handed.handover_head = handover_head

@@ -135,26 +135,26 @@ end
 local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
 
 --- A minimal valid workable item (under a parent the store never
---- checks — graph rules are flow's, exercised in flow_test). The
---- claim doubles as the mutable payload the round-trip tests edit.
-local function make_item(claim?: string): item.Item
+--- checks — graph rules are flow's, exercised in flow_test). Claims
+--- are projected from format-4 claim batches, so store-layer tests
+--- mutate ordinary persisted fields instead.
+local function make_item(title?: string): item.Item
   return check.must(item.decode({
-        id = fresh_id(), title = "an item", parent = PARENT,
-        claim = claim or "",
+        id = fresh_id(), title = title or "an item", parent = PARENT,
       }))
 end
 
 local function test_save_load_spec_and_history()
   local root = init_state_repo("roundtrip")
   local s = check.must(store.open(root))
-  local it = make_item("session-a")
+  local it = make_item("first title")
   local short = it.id:sub(1, 8)
   assert(storewrite.save(s, it, "new " .. short, "## Change\nG1\n"))
   local loaded = check.must(store.load(s, it.id))
-  assert(loaded.claim == "session-a", "claim: " .. loaded.claim)
+  assert(loaded.title == "first title", "title: " .. loaded.title)
   assert(store.read_spec(s, it.id) == "## Change\nG1\n", "spec sidecar")
-  loaded.claim = "session-b"
-  assert(storewrite.save(s, loaded, "take " .. short .. " by session-b"))
+  loaded.title = "second title"
+  assert(storewrite.save(s, loaded, "retitle " .. short .. " by session-b"))
   assert(store.read_spec(s, it.id) == "## Change\nG1\n",
     "a nil spec leaves the sidecar alone")
   local events = check.must(publish.history(s, it.id))
@@ -188,16 +188,16 @@ end
 local function test_save_writes_every_touched_item_as_its_own_commit()
   local root = init_state_repo("atomic")
   local s = check.must(store.open(root))
-  local parent = make_item("session-a")
+  local parent = make_item("claimed-looking title")
   assert(storewrite.save(s, parent, "new parent"))
   local before = commit_count(root)
   local kid = make_item()
-  parent.claim = ""
+  parent.title = "updated parent"
   assert(storewrite.save(s, kid, "new kid", nil, {parent}))
   assert(commit_count(root) == before + 2,
     ("one commit per item touched: %d -> %d"):format(before, commit_count(root)))
-  assert(check.must(store.load(s, parent.id)).claim == "",
-    "the unlocked parent is in that commit")
+  assert(check.must(store.load(s, parent.id)).title == "updated parent",
+    "the updated parent is in that commit")
   assert(check.must(store.load(s, kid.id)).id == kid.id, "so is the child")
 end
 
@@ -246,13 +246,13 @@ local function test_publish_fast_forward()
   local bare, clones = init_shared("ff", 2)
   assert(bare)
   local a = check.must(store.open(clones[1]))
-  local it = make_item("session-a")
+  local it = make_item("session-a title")
   assert(storewrite.save(a, it, "new item"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b, true))
   local got = check.must(store.load(b, it.id))
-  assert(got.claim == "session-a",
+  assert(got.title == "session-a title",
     "the published item reaches the second clone")
 end
 
@@ -273,14 +273,13 @@ local function test_publish_drops_a_lost_edit_of_the_same_item()
   assert(publish.sync(b, true))
 
   local ia = check.must(store.load(a, contested.id))
-  ia.claim = "session-a"
-  assert(storewrite.save(a, ia, "take contested by session-a"))
+  ia.title = "winner title"
+  assert(storewrite.save(a, ia, "retitle contested by session-a"))
   assert(publish.publish(a, true))
 
   local ib = check.must(store.load(b, contested.id))
-  ib.claim = "session-b"
   ib.pr = 7
-  assert(storewrite.save(b, ib, "take contested by session-b"))
+  assert(storewrite.save(b, ib, "set contested pr by session-b"))
   local ok = publish.publish(b, true)
   assert(not ok, "the losing edit of the same item must be refused")
   local synced, err = publish.sync(b, true)
@@ -288,8 +287,8 @@ local function test_publish_drops_a_lost_edit_of_the_same_item()
     "refresh classifies the staged successor after fetching: " .. err)
 
   local after = check.must(store.load(b, contested.id))
-  assert(after.claim == "session-a" and after.pr == 0,
-    "the loser's checkout holds the winner's state: " .. after.claim)
+  assert(after.title == "winner title" and after.pr == 0,
+    "the loser's checkout holds the winner's state: " .. after.title)
   assert(store.list(b), "the board stays readable after the refusal")
 end
 
@@ -306,17 +305,16 @@ local function test_sync_ignores_an_unpublished_local_commit()
   assert(publish.sync(b, true))
 
   local ia = check.must(store.load(a, contested.id))
-  ia.claim = "session-a"
-  assert(storewrite.save(a, ia, "take contested by session-a"))
+  ia.title = "winner title"
+  assert(storewrite.save(a, ia, "retitle contested by session-a"))
   assert(publish.publish(a, true))
 
   -- b's own commit, never published — the hand-edit-workaround shape.
   local ib = check.must(store.load(b, contested.id))
-  ib.claim = "session-b"
   ib.pr = 7
   assert(storewrite.save(b, ib, "hand-edit contested for session-b"))
   assert(publish.sync(b, true), "explicit refresh fetches but never merges")
-  assert(check.must(store.load(b, contested.id)).claim == "session-a",
+  assert(check.must(store.load(b, contested.id)).title == "winner title",
     "the local unpublished commit is overwritten by the remote's")
 end
 

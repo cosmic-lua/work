@@ -68,6 +68,39 @@ local function test_help_overview_lists_the_topics()
     "the overview carries the topic list")
 end
 
+local function test_offline_help_walks_the_authority_and_one_push_workflow()
+  local code, out = gitboard_and_capture("help", "offline")
+  assert(code == 0)
+  local claim = assert(out:find("gitboard claim A B C", 1, true))
+  local authority = assert(out:find("PREPARED and PUSHED grant no authority", 1, true))
+  local begin = assert(out:find("gitboard draft begin", 1, true))
+  local show = assert(out:find("gitboard draft show", 1, true))
+  local publish = assert(out:find("gitboard publish", begin, true))
+  assert(claim < authority and authority < begin and begin < show and show < publish,
+    "offline help presents claim confirmation before draft composition and publication")
+  assert(out:find("one atomic push", 1, true), out)
+  assert(out:find("never discovers", 1, true), out)
+  assert(out:find("parentless immutable claim-batch commit", 1, true), out)
+  assert(out:find("refs/heads/claim-batches/<batch-id>", 1, true), out)
+  assert(out:find("each bridge tree stores only the batch SHA", 1, true), out)
+  assert(out:find("batch ref and every first-parent", 1, true), out)
+  assert(out:find("including this caller's claim", 1, true), out)
+  assert(out:find("separate `renew` and `drop`", 1, true), out)
+end
+
+local function test_claim_doctrine_has_no_partial_batch_or_take_acquisition()
+  local system = assert(doctrine.page("system"))
+  local build = assert(doctrine.page("build"))
+  local orchestrate = assert(doctrine.page("orchestrate"))
+  assert(system:find("One parentless immutable batch", 1, true), system)
+  assert(build:find("Claim it (`claim ID`)", 1, true), build)
+  assert(orchestrate:find("one parentless immutable batch", 1, true), orchestrate)
+  assert(orchestrate:find("succeed for different subsets", 1, true) == nil,
+    "claim batches never expose partial authority")
+  assert(orchestrate:find("`take ID`, then `worktree ID`", 1, true) == nil,
+    "take is handover, never acquisition")
+end
+
 local function test_bar_states_the_ready_when_convention()
   local page = doctrine.page("bar")
   assert(page ~= nil, "the bar topic renders")
@@ -77,9 +110,9 @@ local function test_bar_states_the_ready_when_convention()
     "the bar topic states the evaluated shape")
   assert(page:find(
       "`next` skips a not-ready head and offers the\n"
-      .. "next candidate instead, and `take` refuses a not-ready item",
+      .. "next candidate instead. A direct claim is only a lease",
       1, true) ~= nil,
-    "the tool checks it: next skips a not-ready head, take refuses one")
+    "next checks readiness while a direct claim remains only a lease")
 end
 
 local function test_bar_forbids_a_change_with_two_mechanisms()
@@ -118,10 +151,9 @@ local function test_build_mirrors_the_ready_when_convention()
   local page = doctrine.page("build")
   assert(page ~= nil, "the build topic renders")
   assert(page:find(
-      "the tool already checked\n   `Ready when` at the take gate, so reaching this step means it\n"
-      .. "   passed",
+      "including `Ready when`, before\n   building",
       1, true) ~= nil,
-    "step 2 defers Ready when to the take gate, not a bare drop here")
+    "step 2 makes direct claim callers recheck readiness")
 end
 
 --- The first paragraph of a `---`-commented module header: lines up

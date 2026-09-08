@@ -48,7 +48,7 @@ end
 local function test_worked_item_round_trips()
   local t = base()
   t.parent = PARENT
-  t.claim = "session-a"
+  t.claim_batch = ("ab"):rep(20)
   t.pr = 456
   t.verdict = "request changes"
   t.verdict_head = "abc1234"
@@ -56,7 +56,8 @@ local function test_worked_item_round_trips()
   local back = check.must(item.decode(
       check.must(literal.parse(check.must(literal.format(item.encode(it)))))))
   assert(back.parent == PARENT, "position fields")
-  assert(back.claim == "session-a" and back.pr == 456, "coordination fields")
+  assert(back.claim_batch == t.claim_batch and back.pr == 456,
+    "durable coordination fields")
 end
 
 local function test_parentless_items_may_be_claimed()

@@ -1,13 +1,11 @@
 #!/usr/bin/env cosmic
--- V3 claim lifecycle at the command adapter boundary. Claims are
--- independent item-ref CAS operations: there is no board-wide WIP counter,
--- no implicit transport and no provider authentication.
+-- Shared claim-batch lifecycle at the command adapter boundary. Item refs are
+-- the overlap fences; there is no global WIP gate or provider authentication.
 
 local check = require("cosmic.check")
 local claimsession = require("_work.claimsession")
 local fixture = require("_work.fixture")
 local gate = require("_work.gitgate")
-local gitclaim = require("_work.gitclaim")
 local claimcli = require("_work.gitclaim_cli")
 local item = require("_work.item")
 local store = require("_work.store")
@@ -24,26 +22,19 @@ local function test_session_new_prints_one_opaque_identity()
     "session new prints only one usable opaque identity: " .. seen)
 end
 
-local function test_local_claim_is_confirmed_and_idempotent()
+local function test_local_claim_is_confirmed_and_repeat_overlaps()
   local s = fixture.init_state_repo("v3-claim-local")
   local _parent, id = fixture.root_with_leaf(s)
   assert(claimcli.cmd_claim(s, {id}, "take", CALLER_A, "origin", "",
       false, "", false) == 0)
   local first = check.must(store.load(s, id))
   assert(first.claim == CALLER_A and first.claim_base ~= "")
-  local state = check.must(gitclaim.read_state(s.root, s.leased_sha[id],
-      first.claim, first.claim_base))
-  local root, deadline = state.root, state.expires_at
   assert(claimcli.cmd_claim(s, {id}, "take", CALLER_A, "origin", "",
-      false, "", false) == 0)
-  local again = check.must(store.load(s, id))
-  local same = check.must(gitclaim.read_state(s.root, s.leased_sha[id],
-      again.claim, again.claim_base))
-  assert(same.root == root and same.expires_at == deadline,
-    "repeated acquisition is success but never an implicit renewal")
+      false, "", false) ~= 0,
+    "every live overlap rejects the whole acquisition, including same caller")
 end
 
-local function test_batch_has_no_global_wip_gate_and_keeps_partial_success()
+local function test_batch_has_no_global_wip_gate_but_is_all_or_nothing()
   local s = fixture.init_state_repo("v3-claim-batch")
   local ids: {string} = {}
   for n = 1, 12 do
@@ -51,17 +42,16 @@ local function test_batch_has_no_global_wip_gate_and_keeps_partial_success()
   end
   ids[#ids + 1] = ("z"):rep(27)
   assert(claimcli.cmd_claim(s, ids, "take", CALLER_A, "origin", "",
-      false, "", false) == 0,
-    "one bad member does not roll back the independently claimable subset")
+      false, "", false) ~= 0,
+    "one bad member rejects the requested set")
   local claimed = 0
   for _, it in ipairs(check.must(store.list(s))) do
     if it.claim == CALLER_A then claimed = claimed + 1 end
   end
-  assert(claimed == 12,
-    "WIP is caller-local policy, not a global board coordination primitive")
+  assert(claimed == 0, "an invalid member cannot leave a claimed subset")
 end
 
-local function test_foreign_claim_needs_an_audited_force_takeover()
+local function test_live_claim_cannot_be_forced_over()
   local s = fixture.init_state_repo("v3-claim-force")
   local _parent, id = fixture.root_with_leaf(s)
   assert(claimcli.cmd_claim(s, {id}, "take", CALLER_A, "origin", "",
@@ -72,8 +62,9 @@ local function test_foreign_claim_needs_an_audited_force_takeover()
   assert(claimcli.cmd_claim(s, {id}, "take", CALLER_B, "origin", "",
       true, "", false) ~= 0, "bare force is not auditable")
   assert(claimcli.cmd_claim(s, {id}, "take", CALLER_B, "origin", "",
-      true, "the original caller is gone", false) == 0)
-  assert(check.must(store.load(s, id)).claim == CALLER_B)
+      true, "the original caller is gone", false) ~= 0,
+    "force cannot bypass a live overlap")
+  assert(check.must(store.load(s, id)).claim == CALLER_A)
 end
 
 local function test_drop_releases_only_the_claim_and_preserves_workflow_facts()

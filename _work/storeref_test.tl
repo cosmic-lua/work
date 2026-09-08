@@ -89,11 +89,11 @@ end
 
 local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
 
---- A minimal valid workable item.
-local function make_item(claim?: string): item.Item
+--- A minimal valid workable item. Claims are projected from shared
+--- claim batches, so these ref-layout tests use ordinary item fields.
+local function make_item(title?: string): item.Item
   return check.must(item.decode({
-        id = fresh_id(), title = "an item", parent = PARENT,
-        claim = claim or "",
+        id = fresh_id(), title = title or "an item", parent = PARENT,
       }))
 end
 
@@ -121,22 +121,22 @@ local function test_independent_item_mutations_do_not_share_a_global_lease()
   -- honest here rather than a bare flag with nothing behind it.
   assert(store.list(a))
   local ia = check.must(store.load(a, mine.id))
-  ia.claim = "session-a"
-  assert(storewrite.save(a, ia, "take mine by session-a"))
+  ia.title = "mine by session-a"
+  assert(storewrite.save(a, ia, "retitle mine by session-a"))
   assert(publish.publish(a, true))
 
   assert(store.list(b))
   local ib = check.must(store.load(b, yours.id))
-  ib.claim = "session-b"
-  assert(storewrite.save(b, ib, "take yours by session-b"))
+  ib.title = "yours by session-b"
+  assert(storewrite.save(b, ib, "retitle yours by session-b"))
   local ok, err = publish.publish(b, true)
   assert(ok, "independent item refs both land: " .. err)
   assert(publish.sync(a, true))
   local back = check.must(store.load(b, yours.id))
-  assert(back.claim == "session-b", "the second independent claim lands")
+  assert(back.title == "yours by session-b", "the second independent edit lands")
   local winner = check.must(store.load(a, mine.id))
-  assert(winner.claim == "session-a",
-    "the first independent claim remains visible")
+  assert(winner.title == "mine by session-a",
+    "the first independent edit remains visible")
 end
 
 -- The atomicity the push provides, not the commit object: a save that
@@ -148,7 +148,7 @@ end
 local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local _, clones = init_shared("atomic-multiref", 2)
   local a = check.must(store.open(clones[1]))
-  local parent = make_item("session-a")
+  local parent = make_item("original parent")
   assert(storewrite.save(a, parent, "new parent"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
@@ -166,7 +166,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   -- the parent in the same mutation — two commits, one save.
   local pb = check.must(store.load(b, parent.id))
   local kid = make_item()
-  pb.claim = ""
+  pb.title = "retitled by b"
   assert(storewrite.save(b, kid, "new kid", nil, {pb}))
   local ok = publish.publish(b, true)
   assert(not ok, "the stale multi-ref push must be refused")
@@ -176,9 +176,9 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   assert(store.load(b, kid.id) == nil,
     "the brand-new child never lands without its parent's commit")
   local after = check.must(store.load(b, parent.id))
-  assert(after.title == "retitled by a" and after.claim == "session-a",
-    "the parent shows the winner's own state, not b's dropped claim: "
-    .. after.title .. " / " .. after.claim)
+  assert(after.title == "retitled by a",
+    "the parent shows the winner's own state, not b's dropped edit: "
+    .. after.title)
 end
 
 --- Every ref name under `refs/heads/items`/`refs/heads/ended`.

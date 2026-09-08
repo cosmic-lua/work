@@ -16,6 +16,7 @@ local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
 local claimgate = require("_work.gitclaimgate")
+local gitdraft = require("_work.gitdraft")
 local index = require("_work.index")
 local item = require("_work.item")
 local publish = require("_work.publish")
@@ -293,38 +294,6 @@ local function review_debt_refusal(c: Index, items: {item.Item},
     .. "a recorded reviewer clears it"):format(#debt, noun, first.id:sub(1, 8)), ""
 end
 
---- The refusal a NEW claim earns when `session` already holds a live
---- claim on another open item, or nil when it is free to claim. One
---- claim per name, so two runners sharing a session name collide
---- loudly here instead of silently corrupting mutual exclusion. Never
---- forced away — a collision is never repair, unlike a takeover — and
---- never asked about the item being claimed itself: a re-take of a
---- session's own item names no OTHER item and never refuses here.
---- @param s store.Store The store
---- @param all {item.Item} Every item
---- @param id string The item being claimed
---- @param session string The claiming session
---- @return string | nil The refusal
---- @return string Error message
-local function second_claim_refusal(s: store.Store, all: {item.Item},
-    id: string, session: string): string | nil, string
-  if (session or "") == "" then
-    return nil, ""
-  end
-  local ages, aerr = stale_ages(s)
-  if ages == nil then
-    return nil, aerr
-  end
-  for _, other in ipairs(all) do
-    if other.id ~= id and item.is_open(other) and other.claim == session
-    and not health.is_stale(other, ages.claim) then
-      return ("REFUSED: %s already holds %s — one claim per worker; drop "
-        .. "it or finish it first"):format(session, other.id:sub(1, 8)), ""
-    end
-  end
-  return nil, ""
-end
-
 --- Save an item and publish the commit. Everything one mutation
 --- touches goes in through `also`, so a lost race drops the whole
 --- mutation rather than half of it. There is no post-race re-check
@@ -403,7 +372,7 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   end
   -- Remote saves are only prepared; patching would expose unconfirmed data.
   -- Local simulation has completed its CAS and may patch immediately.
-  if refs.board_mode(s.root) == "local" then
+  if refs.board_mode(s.root) == "local" and gitdraft.active(s.root) == nil then
     cache.after_save(s.root, before_digest, items, body, message, written,
       s.written_at)
   end
@@ -416,6 +385,10 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   -- a remote fetch.
   local _cok, _cerr = store.close(s)
   local published, detail = publish.publish(s)
+  if published and gitdraft.active(s.root) ~= nil then
+    cache.after_save(s.root, before_digest, items, body, message, written,
+      s.written_at)
+  end
   if published and (detail or "") ~= "" then print(detail) end
   return published, detail
 end
@@ -469,8 +442,6 @@ local record gitgate
   {item.Item} | nil, string
   review_debt_refusal: function(c: Index, items: {item.Item}, session: string,
   taking: item.Item): string, string
-  second_claim_refusal: function(s: store.Store, all: {item.Item},
-  id: string, session: string): string, string
   commit_and_publish: function(s: store.Store, it: item.Item, body: string,
   message: string, verb: string, also?: {item.Item}, session?: string,
   bounded?: boolean, force?: boolean, why?: string): boolean, string
@@ -487,7 +458,6 @@ local M: gitgate = {
   distance_refusal = distance_refusal,
   review_debt = review_debt,
   review_debt_refusal = review_debt_refusal,
-  second_claim_refusal = second_claim_refusal,
   commit_and_publish = commit_and_publish,
   containered = containered,
 }

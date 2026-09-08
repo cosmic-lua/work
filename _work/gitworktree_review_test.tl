@@ -6,10 +6,12 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local claim = require("_work.claim")
+local claimbatch = require("_work.claimbatch")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
 local gitclaim = require("_work.gitclaim")
+local prepared = require("_work.prepared")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
@@ -125,22 +127,29 @@ local function item_with_pr(name: string, pr: integer,
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
   local it = check.must(store.load(s, leaf))
-  it.claim = SESSION
   it.pr = pr
   local base = assert(child.run({"git", "rev-parse", "refs/heads/main"},
       {cwd = checkout}))
   local handed = assert(child.run({"git", "rev-parse",
         ("refs/pull/%d/head"):format(pr)}, {cwd = checkout}))
-  it.claim_base = (base.stdout:gsub("%s+$", ""))
+  local product_base = (base.stdout:gsub("%s+$", ""))
   it.handover_head = (handed.stdout:gsub("%s+$", ""))
-  assert(storewrite.save(s, it, "fixture: review claim + pr for worktree"))
+  assert(storewrite.save(s, it, "fixture: review handover for worktree"))
+  local target = gitclaim.target_item_ref(leaf)
+  local result = gitclaim.prepare_batch({{
+        root = s.root, id = leaf, source_ref = target, target_ref = target,
+        remote = "origin", batch = "fixture-" .. leaf:sub(-8), caller = SESSION,
+        action = "take", product_base = product_base, force = false, why = "",
+        now = os.time(),
+      }})
+  assert(result.prepared ~= nil, result.refused[leaf] or result.refused.batch)
+  assert(prepared.promote_local(s.root, result.prepared.transaction))
   return s, leaf
 end
 
 local function branch_of(s: store.Store, id: string): string
   local it = check.must(store.load(s, id))
-  local st = check.must(gitclaim.read_state(s.root, s.leased_sha[id],
-      it.claim or "", it.claim_base or ""))
+  local st = check.must(claimbatch.read_state(s.root, it.claim_batch or "", id))
   return claim.branch(id, st.root)
 end
 

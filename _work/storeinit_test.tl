@@ -112,6 +112,8 @@ local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   assert(r.stdout:find(
       "refs/heads/ended/%*:refs/remotes/origin/ended/%*") ~= nil, r.stdout)
   assert(r.stdout:find(
+      "refs/heads/claims/%*:refs/remotes/origin/claims/%*") ~= nil, r.stdout)
+  assert(r.stdout:find(
       "refs/heads/board/%*:refs/remotes/origin/board/%*") ~= nil, r.stdout)
   -- ADDED, not substituted: the clone's own default refspec for its
   -- checked-out branch survives, so a plain `git pull` on the

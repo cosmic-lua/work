@@ -20,7 +20,38 @@ local record Page
 end
 
 local PAGES < const >: {Page} = {
-
+  {name = "offline", title = "claim, work offline, and publish once",
+    body = [[
+Gitboard keeps authentication at the caller boundary: it never discovers, stores, or
+brokers credentials. Bare transport commands prepare or print exact Git argv;
+`--execute` runs those commands through ordinary caller-configured Git.
+Acquire the work set from caller-fetched state:
+  export GITBOARD_SESSION=$(gitboard session new)
+  gitboard refresh --execute
+  gitboard claim A B C
+  # run its one printed `git push --atomic`, then
+  gitboard refresh --execute
+`claim A B C` prepares one parentless immutable claim-batch commit holding set, caller,
+operation, and common two-hour deadline. Its unique append-only
+`refs/heads/claim-batches/<batch-id>` names it. The batch ref and every first-parent
+item bridge publish atomically; each bridge tree stores only the batch SHA and item
+refs remain the CAS fences. ANY live
+overlap, including this caller's claim, rejects all. Retry a changed set as a new batch;
+use separate `renew` and `drop` for held claims. PREPARED and PUSHED grant no authority.
+Only `refresh` seeing every ref confirms the batch. Work offline until its deadline.
+Chain dependent board mutations in a durable clone-local draft:
+  export GITBOARD_DRAFT=$(gitboard draft begin --print-id)
+  gitboard new ...
+  gitboard spec ...
+  gitboard rank ...
+  gitboard draft show
+  gitboard publish "$GITBOARD_DRAFT"
+  # run the one printed atomic push, then
+  gitboard refresh --execute
+Drafts overlay a frozen snapshot and publish each ref's original and final ids in one atomic push.
+A rejected lease lands none; drafts never silently rebase. Claims stay outside drafts
+because unconfirmed coordination grants no authority. `draft abandon` is local-only.
+]]},
   {name = "system", title = "the board: states, order, exits, rules",
     body = [[
 One prioritized queue of items in this repository (cosmic-lua/work),
@@ -57,10 +88,10 @@ child resolves, and the child's `done` frees it with no further verb
 session, a spent budget — and asserts the item is fine to re-offer
 as-is (`help drop`).
 
-Claims provide mutual exclusion, not shared capacity. A caller may claim a
-set of items; each item's independent leased ref update decides whether that
-claim succeeds. Callers may enforce their own local work limits without
-coordinating them through the board.
+Claims provide mutual exclusion, not shared capacity. One parentless immutable batch
+commit stores the facts once; its append-only batch ref and every item-history bridge
+publish atomically or none does. Item refs remain the fences. Any live overlap refuses
+acquisition. Work limits remain local. See `help offline`.
 Work flows right to left — finishing beats starting — and that is
 ONE derived order, not advice: every queue ranks stage first
 (accepted, review, rework, building, lane repair, todo) and rank
@@ -68,8 +99,8 @@ order within a stage, age last (`help order`). Stage is
 lexicographically supreme — no rank moves a todo item past a
 waiting verdict, because an unreviewed diff is a wasting asset and a
 hot pull's delay is at most one review. `next` offers the queue's
-head, and `take` refuses a todo pull while a review awaits,
-unclaimed. Do what `next` names and ask again — acting moves the
+head and leaves lower-stage todo work unoffered while a review awaits.
+Do what `next` names and ask again — acting moves the
 board, so the second answer derives from the board the first left
 behind. Stop when it says `none`: do not invent work. Beyond the
 queue: triage what arrived, refine the top of todo, decompose an
@@ -106,7 +137,6 @@ Hard rules:
   sessions, the fix is a countermeasure item, never an exception.
 - a mutation the board already holds is a no-op that succeeds.
 ]]},
-
   {name = "order", title = "how items are ordered",
     body = [[
 An item's rank is a path: its position among its siblings at each
@@ -121,7 +151,6 @@ its siblings, an outcome against other outcomes the same way;
 arrives; an unranked outcome, and everything under it, is triage; an
 unranked child still pulls, just after its ranked siblings.
 ]]},
-
   {name = "bar", title = "the spec bar: what makes an item pullable",
     body = [[
 A pullable spec carries one section — `## Change` — because
@@ -188,8 +217,9 @@ gone green, a pin bumped — states that fact as a command and the
 output that means ready, in prose at the top of `## Change`: "Ready
 when: `CMD` prints `OUT`." The tool checks it rather than a puller
 reading it by eye — `next` skips a not-ready head and offers the
-next candidate instead, and `take` refuses a not-ready item
-outright. No field, no date, no other verb: the criterion is
+next candidate instead. A direct claim is only a lease, not proof of
+readiness, so its caller must check the criterion before building.
+No field, no date, no other verb: the criterion is
 whatever the command prints, and it ages with the spec.
 
 Sizing: one PR one session holds in its head (~400 changed lines is
@@ -207,16 +237,16 @@ same wrong turn appears twice, file the countermeasure as an
 ordinary item, preferring a gate in core over a doc, and a doc over
 a skill — gates transfer to every future session; prose does not.
 ]]},
-
   {name = "build", title = "building a claimed item",
     body = [[
-1. Claim it (`take ID`), then read `show ID` — the sidecar is the
+1. Claim it (`claim ID`), publish the prepared batch, refresh until confirmed,
+   then read `show ID` — the sidecar is the
    spec, and the item's verdict/pr fields carry any standing review
    state.
-2. Re-run the spec's measured commands before building — the queue
-   ages faster than the tree stands still; the tool already checked
-   `Ready when` at the take gate, so reaching this step means it
-   passed. Numbers moved but the shape holds: refresh them in place
+2. Re-run the spec's measured commands, including `Ready when`, before
+   building — the queue ages faster than the tree stands still, and a
+   direct claim proves exclusivity rather than readiness. Numbers moved
+   but the shape holds: refresh them in place
    (`spec ID FILE --base BASE`) and proceed. A fresh fact that
    breaks the shape or reopens a decision: file the question as a
    CHILD of this item (`new --parent <ID>`), then drop the claim —
@@ -251,7 +281,6 @@ filed?" — and cite the existing item rather than duplicate it; else
 Filing is never refused. Then back to the item: never widen the diff
 to cover a finding.
 ]]},
-
   {name = "review", title = "the fresh-context review and its verdicts",
     body = [[
 Nothing merges without a verdict from a review at a DISTANCE from
@@ -264,9 +293,9 @@ mints and fills the exact session label this review claims under,
 `review-<handle>-<orch8>` (`<orch8>` the first 8 characters of the
 calling session's own identity, `show`'s "session: ..." line), and
 repeats it on the brief's own verdict line so an orchestrator claims —
-`take ID --session <label>` — under that identical string BEFORE ever
+`claim ID --session <label>` — under that identical string BEFORE ever
 spawning the agent the body goes to. A solo session reviewing without
-an orchestrator instead self-names (`take ID` under its own
+an orchestrator instead self-names (`claim ID` under its own
 review-<ID>-<unique>). Either way the reviewer's session reads the
 spec off the board and the diff from local Git, and records the verdict
 itself.
@@ -320,26 +349,24 @@ When a container's last child ends, verify the container's stated
 outcome actually holds — run its observable test, not the
 children's — then end it.
 ]]},
-
   {name = "orchestrate", title = "concurrent agents and the standing loop",
     body = [[
 One orchestrator, N builders, and the board stays with the
 orchestrator — agents never run board verbs, so no agent needs this
 checkout or push rights to this board repository:
 
-- Claim first, then spawn. A single `claim ID...` may prepare a set: every
-  item has an independent leased compare-and-swap, so overlapping callers
-  succeed for different subsets and never both acquire one item. Run the
-  printed Git commands and refresh the caller-fetched tracking refs before
-  treating `PREPARED` as acquired. Use a distinct minted session name per
-  agent: `<kind>-<handle>-<orch8>` (`build`, `research`, `review`,
-  `refine` or `decompose`; `<orch8>` the first 8 characters of YOUR
-  OWN session identity, `show`'s "session: ..." line) — the same shape
+- Claim first, then spawn. `claim ID...` prepares one parentless immutable batch,
+  its append-only ref, and one first-parent item bridge per member; all publish or none.
+  Any live overlap, including your own, refuses acquisition: refresh and try a new set;
+  use `renew` or `drop` for held claims. Only refresh grants authority. Use a distinct
+  session per agent: `<kind>-<handle>-<orch8>` (`build`, `research`, `review`, `refine`
+  or `decompose`; `<orch8>` the first 8 characters of YOUR OWN
+  session identity, `show`'s "session: ..." line) — the same shape
   `brief KIND ID` mints and prints on its own verdict line, so reading
   that line before you spawn gives you the exact string to claim
   under. Embedding your own identity is what keeps two concurrent
   orchestrator sessions working the same item from minting the
-  identical label and each reading `take`'s exact-string lock as its
+  identical label and each reading `claim`'s exact-string lock as its
   own re-claim instead of a foreign one. A lost race is the lock
   working: take the next item.
 - Disjoint or not at all. `next` names one item and cannot see what
@@ -350,7 +377,7 @@ checkout or push rights to this board repository:
   — `show`'s own default trims the list to the top 8. Say what you
   skipped and why. Never split one item across agents to make it
   faster.
-- One fresh worktree per agent: `take ID`, then `worktree ID`, then
+- One fresh worktree per agent: confirmed `claim ID`, then `worktree ID`, then
   `brief builder ID`, then spawn. `worktree` resolves ID's repo to a
   local checkout, branches and adds the worktree beside it — never
   detached, never nested inside another checkout — and bootstraps it,
@@ -396,12 +423,9 @@ checkout or push rights to this board repository:
 The standing loop (a session invoked as an orchestrator with a
 width N, three to five in practice) runs ONE bounded pass and ends
 it. Never wait inside a pass — not for a wave agent, not for a
-review agent, not for CI, not for an answer. Reviews outrank pulls
-inside the pass, and the tool holds that mechanically: `take`
-refuses a todo pull while an unclaimed diff the session could
-review awaits a verdict, so a loop that reviewed less than it
-  pulled accumulated open PRs faster than they could be reviewed.
-  Claim the reviews first to keep completion ahead of starts:
+review agent, not for CI, not for an answer. Reviews outrank pulls; honor
+`next` when forming each batch. Claim reviews first to keep completion ahead
+of starts:
 
 1. Run caller-owned fetches, `refresh`, then reconcile the previous wave.
 2. Merge whatever carries an accept.

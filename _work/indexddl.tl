@@ -39,6 +39,7 @@ CREATE TABLE items (
   key TEXT NOT NULL DEFAULT '',
   claim TEXT NOT NULL DEFAULT '',
   claim_base TEXT NOT NULL DEFAULT '',
+  claim_batch TEXT NOT NULL DEFAULT '',
   handover_head TEXT NOT NULL DEFAULT '',
   external_url TEXT NOT NULL DEFAULT '',
   reviewer TEXT NOT NULL DEFAULT '',

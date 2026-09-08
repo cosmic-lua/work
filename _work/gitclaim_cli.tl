@@ -3,10 +3,10 @@
 --- `_work.gitclaim`. Default remote behavior only renders exact push argv;
 --- explicit execution uses ordinary Git with caller-owned authentication.
 local child = require("cosmic.child")
-local str = require("cosmic.string")
 local claimsession = require("_work.claimsession")
 local gate = require("_work.gitgate")
 local gitclaim = require("_work.gitclaim")
+local gitdraft = require("_work.gitdraft")
 local item = require("_work.item")
 local prepared = require("_work.prepared")
 local repository_map = require("_work.repository_map")
@@ -70,16 +70,24 @@ local function cmd_session(action: string): integer
   return 0
 end
 
---- Claim or renew an independent set of items. All requests share one clock;
---- each gets its own staging ref and CAS, so partial success is preserved.
+--- Claim or renew one atomic set of items. All requests share one clock and
+--- one batch id. Any policy refusal or stale item rejects the entire set;
+--- disjoint batches still coordinate only through their own item refs.
 local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
     explicit_session: string, remote: string, repo_dir: string,
     force: boolean, why: string, execute: boolean): integer
   local verb = action == "renew" and "renew"
   or action == "drop" and "drop" or "claim"
+  local result_label = action == "renew" and "RENEWED"
+  or action == "drop" and "RELEASED" or "ACQUIRED"
   if #ids == 0 then
     return gate.verdict_line(verb, false,
       "REFUSED: at least one ID is required")
+  end
+  if gitdraft.active(s.root) ~= nil then
+    return gate.verdict_line(verb, false,
+      "REFUSED: claim operations cannot run inside a draft overlay; "
+      .. "publish or discard the draft first")
   end
   local caller, cerr = resolve_caller(explicit_session)
   if caller == nil then
@@ -136,106 +144,106 @@ local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
       end
     end
   end
-  local result = gitclaim.prepare_batch(requests)
-  for id, err in pairs(early) do result.refused[id] = err end
-  local confirmed, staged, failed = #result.already_owned, 0, 0
-  for _, owned in ipairs(result.already_owned) do
-    print(("owned %s claim=%s branch=%s expires=%d"):format(
-        owned.id, owned.claim_root, owned.branch, owned.expires_at))
+  local result: gitclaim.BatchResult = next(early) ~= nil
+  and {prepared = nil, refused = early}
+  or gitclaim.prepare_batch(requests)
+  local refused_ids: {string} = {}
+  for id in pairs(result.refused) do refused_ids[#refused_ids + 1] = id end
+  table.sort(refused_ids)
+  for _, id in ipairs(refused_ids) do
+    print(("refused %s: %s"):format(id, result.refused[id]))
   end
-  local pushed: {gitclaim.Prepared} = {}
-  for _, p in ipairs(result.prepared) do
-    if mode == "local" then
-      local ok, err = refs.update_ref(s.root, p.target_ref, p.new_sha, p.old_sha)
-      if ok then
-        local was_confirmed, ferr = gitclaim.confirm(s.root, p.target_ref, p)
-        if was_confirmed then
-          confirmed = confirmed + 1
-          print(("confirmed %s claim=%s branch=%s expires=%d"):format(
-              p.id, p.claim_root, p.branch, p.expires_at))
-        else
-          failed = failed + 1
-          io.stderr:write(("claim %s confirmation failed: %s\n"):format(p.id, ferr))
-        end
-      else
-        failed = failed + 1
-        io.stderr:write(("claim %s lost local CAS: %s\n"):format(p.id, err))
-      end
-    elseif execute then
-      local ok, err = prepared.execute(s.root, p.push_argv)
-      if ok then pushed[#pushed + 1] = p else
-        failed = failed + 1
-        io.stderr:write(("claim %s publish failed: %s\n"):format(p.id, err))
-      end
-    else
-      staged = staged + 1
-      print(transport.render_argv(p.push_argv))
-      print(("PREPARED %s claim=%s branch=%s expires=%d"):format(
-          p.id, p.claim_root, p.branch, p.expires_at))
+  if #refused_ids > 0 or result.prepared == nil then
+    return gate.verdict_line(verb, false,
+      ("batch rejected; no item succeeded; refused=%d"):format(#refused_ids))
+  end
+  local p = result.prepared
+  local function show_members(prefix: string)
+    for _, member in ipairs(p.members) do
+      print(("%s %s claim=%s branch=%s expires=%d"):format(prefix,
+          member.id, member.claim_root, member.branch, member.expires_at))
     end
   end
-  if mode == "remote" and execute and #pushed > 0 then
-    local fetched, ferr = prepared.execute(s.root, prepared.fetch_argv(remote))
-    if not fetched then
-      io.stderr:write("claim confirmation fetch failed: " .. ferr .. "\n")
-      gate.verdict_line(verb, false,
-        ("CONFIRMATION PENDING: %d push(es) completed, but the fetched refs "
-          .. "could not be refreshed; a claim may have landed. Do not begin "
-          .. "work until `gitboard refresh --execute --remote %s` confirms it")
-        :format(#pushed, remote))
-      return 2
-    else
-      for _, p in ipairs(pushed) do
-        local source = str.replace(p.target_ref, "refs/heads/",
-          "refs/remotes/" .. remote .. "/", 1)
-        local ok, err = gitclaim.confirm(s.root, source, p)
-        if ok then
-          confirmed = confirmed + 1
-          print(("confirmed %s claim=%s branch=%s expires=%d"):format(
-              p.id, p.claim_root, p.branch, p.expires_at))
-        else
-          failed = failed + 1
-          io.stderr:write(("claim %s confirmation failed: %s\n"):format(p.id, err))
-        end
-      end
+  if mode == "local" then
+    local ok, err = prepared.promote_local(s.root, p.transaction)
+    if not ok then
+      return gate.verdict_line(verb, false,
+        "batch rejected; no item succeeded: " .. err)
     end
-  end
-  -- Local-mode promotion moves canonical refs behind the Store handle's
-  -- already-open read model. Close it once after the batch so the next
-  -- command observes the confirmed claim and refreshes its write lease.
-  -- Without this, a later holder mutation can be refused as though the
-  -- previous claimant still owned the item.
-  if mode == "local" and confirmed > 0 then
     local closed, close_err = store.close(s)
     if not closed then
       return gate.verdict_line(verb, false,
         "claim landed, but the local read model could not be invalidated: "
         .. close_err)
     end
+    show_members("confirmed")
+    return gate.verdict_line(verb, true,
+      ("%s confirmed=%d refused=0"):format(result_label, #p.members))
   end
-  local refused_ids: {string} = {}
-  for id in pairs(result.refused) do refused_ids[#refused_ids + 1] = id end
-  table.sort(refused_ids)
-  for _, id in ipairs(refused_ids) do
-    failed = failed + 1
-    print(("refused %s: %s"):format(id, result.refused[id]))
-  end
-  if confirmed == 0 and staged == 0 then
+  local argv, perr = gitclaim.push_argv(p, remote, os.time())
+  if argv == nil then
     return gate.verdict_line(verb, false,
-      ("no item succeeded; refused=%d"):format(failed))
+      "claim batch could not be published: " .. perr)
   end
-  if staged > 0 then
+  if not execute then
+    print(("PREPARED batch=%s items=%d publish-by=%d"):format(
+        p.id, #p.members, p.deadline))
+    print(transport.render_argv(argv))
+    show_members("prepared")
     gate.verdict_line(verb, true,
-      ("PREPARED=%d confirmed=%d refused=%d. No claim was acquired for a "
-        .. "prepared item. Run the printed push command(s), fetch, then `gitboard "
+      ("PREPARED=%d confirmed=0 refused=0. No claim was acquired. "
+        .. "Run the printed atomic push, fetch, then `gitboard "
         .. "refresh`; do not act on a prepared item until refresh reports "
         .. "confirmed")
-      :format(staged, confirmed, failed))
+      :format(#p.members))
     return 2
   end
+  local pushed, push_err = prepared.execute(s.root, argv)
+  if not pushed then
+    return gate.verdict_line(verb, false,
+      "claim batch publish failed; no item acquired: " .. push_err)
+  end
+  local fetched, fetch_err = prepared.execute(s.root,
+    prepared.fetch_argv(remote))
+  if not fetched then
+    gate.verdict_line(verb, false,
+      "CONFIRMATION PENDING: atomic push completed, but fetch failed: "
+      .. fetch_err .. "; do not begin work until refresh confirms it")
+    return 2
+  end
+  local outcomes, refresh_err = prepared.refresh(s.root, remote)
+  if outcomes == nil then
+    return gate.verdict_line(verb, false,
+      "claim confirmation failed: " .. refresh_err)
+  end
+  local confirmed = false
+  for _, outcome in ipairs(outcomes) do
+    if outcome.transaction.staging_ref == p.transaction.staging_ref then
+      confirmed = outcome.state == "confirmed"
+      if not confirmed then
+        return gate.verdict_line(verb, false,
+          "claim batch was not confirmed: " .. outcome.detail)
+      end
+    end
+  end
+  if not confirmed then
+    return gate.verdict_line(verb, false,
+      "claim confirmation result did not include the prepared batch")
+  end
+  if p.deadline > 0 and os.time() >= p.deadline then
+    return gate.verdict_line(verb, false,
+      "claim batch landed but expired before confirmation; no work authority granted")
+  end
+  local closed, close_err = store.close(s)
+  if not closed then
+    return gate.verdict_line(verb, false,
+      "claim landed, but the local read model could not be invalidated: "
+      .. close_err)
+  end
+  show_members("confirmed")
   return gate.verdict_line(verb, true,
-    ("ACQUIRED confirmed=%d refused=%d%s"):format(confirmed, failed,
-      execute and " (Git execution explicitly requested)" or ""))
+    ("%s confirmed=%d refused=0 (Git execution explicitly requested)")
+    :format(result_label, #p.members))
 end
 
 local record gitclaim_cli

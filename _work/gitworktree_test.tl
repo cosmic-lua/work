@@ -12,9 +12,10 @@ local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
 local gitclaim = require("_work.gitclaim")
+local claimbatch = require("_work.claimbatch")
+local prepared = require("_work.prepared")
 local refs = require("_work.refs")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
 
 local git = fixture.git
@@ -140,24 +141,24 @@ local function _with_invoking_checkout(invoking: string, f: function(): boolean)
   end
 end
 
---- Claims `id` under `session` and saves it — `worktree` reads the
---- claim from the store, not from an in-memory item, so a fixture
---- exercising anything past the claim refusal needs one on record.
---- @param s store.Store The board
---- @param id string The item to claim
---- @param session string The claiming session
+--- Give `id` a real locally-confirmed claim bridge for worktree tests.
 local function claim_as(s: store.Store, id: string, session: string,
     product_base?: string)
-  local it = check.must(store.load(s, id))
-  it.claim = session
-  it.claim_base = product_base or ""
-  assert(storewrite.save(s, it, "fixture: claim for worktree"))
+  local target = gitclaim.target_item_ref(id)
+  local tip = check.must(refs.read_ref(s.root, target))
+  local result = gitclaim.prepare_batch({{
+        root = s.root, id = id, source_ref = target, target_ref = target,
+        remote = "origin", batch = "fixture-" .. id:sub(-8),
+        caller = session, action = "take", product_base = product_base or tip,
+        force = false, why = "", now = os.time(),
+      }})
+  assert(result.prepared ~= nil, result.refused[id] or result.refused.batch)
+  assert(prepared.promote_local(s.root, result.prepared.transaction))
 end
 
 local function branch_of(s: store.Store, id: string): string
   local it = check.must(store.load(s, id))
-  local st = check.must(gitclaim.read_state(s.root, s.leased_sha[id],
-      it.claim or "", it.claim_base or ""))
+  local st = check.must(claimbatch.read_state(s.root, it.claim_batch or "", id))
   return claim.branch(id, st.root)
 end
 
@@ -478,20 +479,21 @@ local function test_worktree_refuses_an_expired_claim()
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
   local target = gitclaim.target_item_ref(leaf)
-  local tip = check.must(refs.read_ref(s.root, target))
   local base = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
   local caller = ("a"):rep(32)
-  local p = check.must(gitclaim.prepare({
+  local result = gitclaim.prepare_batch({{
         root = s.root, id = leaf, source_ref = target, target_ref = target,
         remote = "origin", batch = "expired", caller = caller,
         action = "take", product_base = (base.stdout:gsub("%s+$", "")),
         force = false, why = "", now = os.time() - claim.LEASE_S - 1,
-      }))
-  assert(refs.update_ref(s.root, target, p.new_sha, tip))
+      }})
+  assert(result.prepared ~= nil, result.refused[leaf] or result.refused.batch)
+  local p = result.prepared
+  assert(prepared.promote_local(s.root, p.transaction))
   local _closed, _cerr = store.close(s)
   local reopened = check.must(store.open(s.root))
   assert(worktree.cmd_worktree(reopened, leaf, caller, checkout, {}, false,
       false) ~= 0, "an expired claim cannot authorize a worktree")
-  local path = fs.join(fs.dirname(checkout), "wt", p.branch)
+  local path = fs.join(fs.dirname(checkout), "wt", p.members[1].branch)
   assert(not fs.is_dir(path), "no worktree was created for the expired lease")
 end
