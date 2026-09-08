@@ -12,13 +12,11 @@
 --- refuses — re-running the verb re-applies every gate against the merged board.
 local cache = require("_work.cache")
 local ciobs = require("_work.ciobs")
-local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local gitdone = require("_work.gitdone")
 local gitready = require("_work.gitready")
 local gittake = require("_work.gittake")
 local health = require("_work.health")
-local index = require("_work.index")
 local item = require("_work.item")
 local read = require("_work.read")
 local store = require("_work.store")
@@ -26,30 +24,6 @@ local store = require("_work.store")
 -- `init` lives in `_work.gitboard` now — a two-line `store.init_repo`
 -- wrapper nothing else needed, moved to keep this file under its cap.
 -- `sync` lives in `_work.gitsync` now, for the same reason.
-
---- The refusal a NEW take of `taking` earns from the doing bound, nil
---- while the board has room — `_work.read.doing_count` against
---- `flow.DOING_LIMIT`, the same bound `next`'s own offers respect. A
---- lane-repair item never asks: the fix for a red lane cannot wait on
---- a queue depth it did not cause.
---- @param c index.Index An index with `_work.readddl.ensure_views` applied
---- @param taking item.Item The item about to be taken
---- @return string | nil The refusal
---- @return string Error message
-local function doing_refusal(c: index.Index, taking: item.Item): string | nil, string
-  if (taking.key or "") ~= "" then
-    return nil, ""
-  end
-  local n, err = read.doing_count(c)
-  if n == nil then
-    return nil, err
-  end
-  if n < flow.DOING_LIMIT then
-    return nil, ""
-  end
-  return ("doing is at %d/%d — finish something before taking more")
-  :format(n, flow.DOING_LIMIT), ""
-end
 
 --- take: claim an item, record its handover, or claim its review —
 --- which one is derived from the item's own facts, never declared.
@@ -215,40 +189,9 @@ local function cmd_take(s: store.Store, id: string, session: string,
           ("REFUSED: %s misses the spec bar — refine it first"):format(
             id:sub(1, 8)))
       end
-      local bound, bderr = doing_refusal(c, it)
-      if bderr ~= "" then
-        return gate.verdict_line("take", false, bderr)
-      end
-      if bound then
-        return gate.verdict_line("take", false, "REFUSED: " .. bound)
-      end
-      local unreviewed, uerr = gate.review_debt_refusal(c, all, session, it)
-      if uerr ~= "" then
-        return gate.verdict_line("take", false, uerr)
-      end
-      if unreviewed then
-        return gate.verdict_line("take", false, "REFUSED: " .. unreviewed)
-      end
-    end
-  end
-  -- One claim per session, never forced away: a collision here is
-  -- never repair, unlike a takeover. Only a genuinely NEW claim asks —
-  -- a re-take of the session's own item leaves `it.claim` unchanged
-  -- and never reaches this.
-  if (it.claim or "") ~= session then
-    local collision, colerr = gate.second_claim_refusal(s, all, id, session)
-    if colerr ~= "" then
-      return gate.verdict_line("take", false, colerr)
-    end
-    if collision then
-      return gate.verdict_line("take", false, collision)
     end
   end
   it.claim = session
-  local recorded, ierr = item.record_involvement(it.builders, session)
-  if not recorded then
-    return gate.verdict_line("take", false, "REFUSED: " .. ierr)
-  end
   local handed = ""
   if (pr or 0) ~= 0 then
     -- Skip the collision/handover checks (a network round trip) on
@@ -314,7 +257,7 @@ local function cmd_take(s: store.Store, id: string, session: string,
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("take %s by %s%s%s"):format(id:sub(1, 8), session,
       (pr or 0) ~= 0 and (" pr:%d"):format(pr) or "",
-      gate.forced_suffix(force, why)), "take", nil, session, was_todo)
+      gate.forced_suffix(force, why)), "take", nil, session, false, force, why)
   if not ok then
     return gate.verdict_line("take", false, err)
   end
@@ -382,52 +325,22 @@ local function cmd_drop(s: store.Store, id: string, session: string,
     return gate.verdict_line("drop", false,
       ("%s is not in flight — nothing to drop"):format(id:sub(1, 8)))
   end
-  -- A drop by the session holding only the REVIEW lock releases the
-  -- review, not the item: the diff still awaits its verdict, and the
-  -- builder's claim is not the reviewer's to bounce.
-  if (it.reviewer or "") ~= "" and it.reviewer == (session or "")
-  and (it.claim or "") ~= (session or "") then
-    it.reviewer = ""
-    local rok, rerr = gate.commit_and_publish(s, it, nil,
-      ("drop %s review: %s"):format(id:sub(1, 8), why), "drop", nil, session)
-    if not rok then
-      return gate.verdict_line("drop", false, rerr)
-    end
-    return gate.verdict_line("drop", true,
-      ("%s's review is anyone's again — the reason is in the log"):format(
-        id:sub(1, 8)))
-  end
-  if (it.claim or "") ~= "" and it.claim ~= (session or "") and not force then
-    local ages, agerr = gate.stale_ages(s)
-    if ages == nil then
-      return gate.verdict_line("drop", false, agerr)
-    end
-    if not health.is_stale(it, ages.claim) then
-      return gate.verdict_line("drop", false,
-        ("REFUSED: %s is %s's live claim — the builder drops their own "
-          .. "work; abandon a dead session's with --force"):format(
-          id:sub(1, 8), it.claim))
-    end
+  if (it.claim or "") == "" then
+    return gate.verdict_line("drop", false,
+      ("REFUSED: %s has no claim"):format(id:sub(1, 8)))
   end
   it.claim = ""
-  it.reviewer = ""
-  it.pr = 0
-  it.result = ""
-  it.verdict = ""
-  it.verdict_head = ""
-  it.verdict_spec = ""
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("drop %s: %s"):format(id:sub(1, 8), why), "drop", nil, session)
+    ("drop %s: %s"):format(id:sub(1, 8), why), "drop", nil, session,
+    false, force, why)
   if not ok then
     return gate.verdict_line("drop", false, err)
   end
   -- The bare line names the child-first recovery while the dropping
   -- session still has the context to file the question.
   return gate.verdict_line("drop", true,
-    ("%s is todo again, re-offered as-is — a bare drop says the item "
-      .. "is fine; if it cannot proceed, file the question as a child "
-      .. "(`new --parent %s <question>`), then drop"):format(
-      id:sub(1, 8), id:sub(1, 8)))
+    ("%s's claim released; workflow evidence is unchanged"):format(
+      id:sub(1, 8)))
 end
 
 local record gitverbs

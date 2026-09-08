@@ -12,7 +12,7 @@ break every checkout's push-as-compare-and-swap at once.
 (no items/ directory — every item is a git ref, not a file)
 _work/       the machinery: gitboard (CLI), gitverbs (mutations),
              gitrank (the rank verb), gitview
-             (reads), gitgate (the spec bar, the doing bound, and the
+             (reads), gitgate (the spec bar and the
              commit-and-publish every mutation goes through), store
              (git-backed persistence over the ref layout — gitobj,
              refs, gitread, gitwrite and itemtree are its object,
@@ -92,10 +92,15 @@ version every reader checks before trusting anything else it read
 alongside it (`_work/format.tl`) — a board on a version this tool does
 not know, or missing the marker while it already carries items, is
 refused rather than silently misread; `gitboard init` writes the
-marker on a board that has neither yet. Layout 1 (the previous,
+marker on a board that has neither yet. Layout 1 (the old
 `beats`/`blocked_by`/`held`-carrying shape) has no migration path from
-here — every live board has already moved to layout 2. Nothing here is a file in the
-working tree: a read is `git for-each-ref`/`cat-file --batch` against
+here. Layout 2 upgrades to layout 3 with `gitboard migrate`: only the
+leased `board/format` ref moves, so existing item commits and histories
+are not rewritten. A still-live legacy claim blocks that cutover until
+its two-hour lease (including tolerated clock skew) has expired. The local
+SQLite cache is disposable and rebuilt after the new marker is confirmed.
+Nothing here is a file in the working tree: a read is
+`git for-each-ref`/`cat-file --batch` against
 the ref layout, and a write is one `git fast-import` stream
 (`_work/fastimport.tl`) — `_work/store.tl` and the modules beside it
 are the whole of that mechanism. Every verb and render still addresses
@@ -122,10 +127,9 @@ its spec passes the bar `show ID` prints); a claim or a PR makes it
 `doing`; a resolution ends it. Which claim a `take` makes is derived
 the same way — an item awaiting a verdict, taken by a session that is
 not its builder, is the review claim. Within doing the same facts say what happens
-next — building, awaiting review, rework, accepted. One WIP bound,
-`_work/flow.tl`'s `DOING_LIMIT`, covers the whole in-flight span:
-taking NEW work is refused at the limit, finishing motions never
-are.
+next — building, awaiting review, rework, accepted. Claims coordinate
+exclusive access to individual items; they do not impose global capacity.
+Callers manage their own local work limits.
 
 Roles derive from the graph — there is no kind field and no goal
 tier: the one parentless item is the board, its children are the

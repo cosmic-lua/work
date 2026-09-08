@@ -2,7 +2,7 @@
 --- rather than trusted from anywhere else: an item's history lives
 --- only in its commits (every mutation is one commit on the item's
 --- ref with a self-describing subject — `take <id8> by <session>
---- pr:N`, `verdict <id8> accept by <session> ...`, `done`, `new`,
+--- head:<sha>`, `verdict <id8> accept head:<sha> by <session>`, `done`, `new`,
 --- `attach`, `spec`, `rank`, `set`, `drop` (`_work.gitverbs`/
 --- `_work.gitgraph`/`_work.gitverdict`/`_work.gitrank`), and the index
 --- carries only an item's CURRENT scalars. `parse_subject` reads that
@@ -11,7 +11,7 @@
 --- `block`, `compare`, `hold`, `unblock`, `unhold`, `uncompare`,
 --- `repo` — none of them refused, every field left at its default on
 --- anything unparsed) into
---- `verb`/`session`/`pr`; `walk` fills a rebuild's whole `events`
+--- `verb`/`session`/`head` plus legacy `pr`; `walk` fills a rebuild's whole `events`
 --- table in one `git log` process; `since` reads one ref's new
 --- commits for the fetch patch; `_work.cache` calls `fill_rebuild`,
 --- `apply_save`, and `apply_fetch` — the only three entry points it
@@ -44,7 +44,8 @@ local sqlite = require("cosmic.sqlite")
 --- kept exactly as written (a legacy `gitboard:` or `board:` line
 --- keeps its trailing colon — nothing here normalizes the grammar,
 --- only reads it); `session` is the token right after a literal
---- ` by `, `""` when the subject carries none; `pr` is the integer
+--- ` by `, `""` when the subject carries none; `head` is the hexadecimal
+--- commit id after `head:`, `""` when absent; `pr` is the legacy integer
 --- right after `pr:`, `0` when absent. A subject this cannot parse at
 --- all (an empty commit message, in principle) leaves every field at
 --- its zero value rather than refusing — an events row always gets
@@ -52,6 +53,7 @@ local sqlite = require("cosmic.sqlite")
 local record Subject
   verb: string
   session: string
+  head: string
   pr: integer
 end
 
@@ -60,12 +62,13 @@ end
 local function parse_subject(subject: string): Subject
   local verb = subject:match("^(%S+)") or ""
   local session = subject:match(" by (%S+)") or ""
+  local head = subject:match("head:([0-9a-fA-F]+)") or ""
   local pr = 0
   local pr_str = subject:match("pr:(%d+)")
   if pr_str ~= nil then
     pr = math.tointeger(tonumber(pr_str)) or 0
   end
-  return {verb = verb, session = session, pr = pr}
+  return {verb = verb, session = session, head = head:lower(), pr = pr}
 end
 
 --- One `events` row, exactly as the table stores it — `item`/`seq`

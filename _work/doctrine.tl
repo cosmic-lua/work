@@ -57,9 +57,10 @@ child resolves, and the child's `done` frees it with no further verb
 session, a spent budget — and asserts the item is fine to re-offer
 as-is (`help drop`).
 
-Two WIP rules: each worker holds ONE claim, and one bound covers
-`doing` as a whole — at the limit, taking NEW work is refused until
-something in flight finishes; finishing motions are never refused.
+Claims provide mutual exclusion, not shared capacity. A caller may claim a
+set of items; each item's independent leased ref update decides whether that
+claim succeeds. Callers may enforce their own local work limits without
+coordinating them through the board.
 Work flows right to left — finishing beats starting — and that is
 ONE derived order, not advice: every queue ranks stage first
 (accepted, review, rework, building, lane repair, todo) and rank
@@ -88,10 +89,9 @@ Hard rules:
   only. When the tool lacks a verb, work around it ONCE by editing
   the item file and committing, and file the missing verb as an
   item.
-- claim before you build; one claim per worker; losing a claim you
+- claim before you build; losing a claim you
   went quiet on is the system working.
-- the spec bar is never lowered to make an item pullable, and the
-  doing bound never widened to admit one more take. --force exists
+- the spec bar is never lowered to make an item pullable. --force exists
   for repair, not for flow.
 - build the spec, not your memory of intent; a gap discovered
   mid-build goes back to the board as a child of the stuck item,
@@ -226,20 +226,19 @@ a skill — gates transfer to every future session; prose does not.
    silent wrong guess — and answering the question may well be your
    own next action; do that from the spec and the tree, not from
    what you remember wanting.
-3. One item = one fresh branch off the latest default branch, named
-   for the id's first 8 characters = one PR. Never stack a second
-   item on a branch, and never reuse a branch whose PR is open.
+3. One acquisition = one fresh branch at the exact product base stored in
+   its claim, named `work/<handle>/<claim-root-short>`. `worktree ID` creates
+   it from already-present local Git data. Never stack a second item on the
+   branch and never reuse an expired attempt's branch.
 4. Build exactly the `## Change`; its stated walls hold. A scope
    question the spec cannot answer goes back to the board, never
    into the diff — having written the spec is not permission to
    reinterpret it mid-build.
-5. Open the PR READY for review (not draft) with `Board: <full id>`
-   as the body's first line, and record it (`take ID --pr N`). The
-   body carries no evidence: CI proves the gate on the head
-   mechanically, and a pasted verdict line could only agree with the
-   checks tab or lie — `## Acceptance` output included. Run the gate
-   locally before pushing — a red head burns a review round — but
-   the run is for you, not for the record.
+5. Hand over the exact local product commit with `take ID --head SHA`
+   (optionally `--url URL` for navigation). If the caller opens a pull
+   request or inspects checks, it does so with its own authenticated tooling;
+   Gitboard stores no provider fact and performs no provider request. The
+   commit id is the whole durable evidence.
 6. Rejoin the loop. Never merge unreviewed work, and never accept
    your own: the verdict comes from a fresh-context review.
 
@@ -257,7 +256,7 @@ to cover a finding.
     body = [[
 Nothing merges without a verdict from a review at a DISTANCE from
 the builder: a subagent whose context window never held the build.
-Its brief carries the item id, the PR number, and the process — not
+Its brief carries the item id, the exact handed-over commit, and the process — not
 the builder's reasoning, and not a summary of intent, which would
 hand back the commitment a fresh window exists to be without. Emit
 the brief with `brief review ID` rather than hand-writing one — it
@@ -269,15 +268,15 @@ repeats it on the brief's own verdict line so an orchestrator claims —
 spawning the agent the body goes to. A solo session reviewing without
 an orchestrator instead self-names (`take ID` under its own
 review-<ID>-<unique>). Either way the reviewer's session reads the
-spec off the board and the diff off the PR, and records the verdict
+spec off the board and the diff from local Git, and records the verdict
 itself.
 
 The posture is adversarial — the job is to make the diff fail, and
 a review that only reads has verified nothing:
 
-1. Green is mechanical — CI on the PR's CURRENT head is the
-   acceptance: read it, don't re-run it. Red or still running ends
-   the review immediately. What CI cannot see is the whole job: the
+1. Mechanical checks belong to the exact handed-over commit. Inspect them
+   through caller-owned tooling or run them locally; Gitboard neither queries
+   nor records their state. What automation cannot see is the whole job: the
    diff must carry its own proof, so a claim the change makes that
    no test in the diff would catch regressing is a gap to quote.
 2. The diff is the Change — everything present, nothing extra.
@@ -299,11 +298,11 @@ Mutation-test at least one guard the change adds: break what it
 guards, watch the test go red, restore it. A gate that cannot be
 shown to fail is decoration.
 
-Three verdicts. `accept` — merge (a PR against the product repo lands
-by enabling auto-merge; a PR against this board repository itself
-merges directly), then `done ID`. `request
-changes` — the concrete gaps quoted on the PR; the claimant reworks
-on the same PR. `reject` — the approach is wrong: close the PR,
+Three verdicts. Each names the exact commit with `verdict ID KIND --head SHA`.
+`accept` — land that commit with caller-owned Git or provider tooling, then
+`done ID --landed SHA`. `request changes` — report the concrete gaps outside
+the board; the claimant reworks and hands over a new commit. `reject` — the
+approach is wrong: abandon any external review,
 record what was learned, clear the claim. A reject that reopens a
 decision files the question as a child of the item, then drops the
 claim: the item is a container until the child resolves, and the
@@ -313,12 +312,9 @@ research item takes the same verdicts, re-running its
 recorded checks in place of a diff — checks its spec carries because
 whoever claimed it (an orchestrator applying a `brief research ID`
 agent's recommendation, or a solo session) already wrote them there.
-Its handover is `take ID --result` in place of `take ID --pr N`: it
-records the spec's revision, and from then on the item awaits a
-verdict exactly as a PR does — `next` offers the review, `brief
-review ID` emits the research review. There is no PR to fetch, so
-`verdict` (no --pr, no --head) judges that spec revision, and refuses
-one that moved since the handover — hand it over again.
+Board-only research should be represented by the commit that applies its
+recommendation. Verdicts still name only that commit; prose and provider
+identifiers are never durable evidence.
 
 When a container's last child ends, verify the container's stated
 outcome actually holds — run its observable test, not the
@@ -331,8 +327,11 @@ One orchestrator, N builders, and the board stays with the
 orchestrator — agents never run board verbs, so no agent needs this
 checkout or push rights to this board repository:
 
-- Claim first, then spawn. Claim each item yourself, one at a time,
-  reading each verdict line, with a distinct minted session name per
+- Claim first, then spawn. A single `claim ID...` may prepare a set: every
+  item has an independent leased compare-and-swap, so overlapping callers
+  succeed for different subsets and never both acquire one item. Run the
+  printed Git commands and refresh the caller-fetched tracking refs before
+  treating `PREPARED` as acquired. Use a distinct minted session name per
   agent: `<kind>-<handle>-<orch8>` (`build`, `research`, `review`,
   `refine` or `decompose`; `<orch8>` the first 8 characters of YOUR
   OWN session identity, `show`'s "session: ..." line) — the same shape
@@ -376,37 +375,21 @@ checkout or push rights to this board repository:
   agent as `--out FILE`'s path, with the instruction "read it whole,
   it is your brief verbatim" — the file is exact where a pasted
   prompt may not be.
-- A research slice (its spec says its deliverable is board state, not
-  a diff — no product PR) still gets a claim and a spawned agent, via
-  `brief research ID` in place of `brief builder ID`: the agent does
-  the measuring and drafts its recommendation — the item's full new
-  spec, and each capture ready for `new`/`attach`/`rank` — but never
-  runs a `gitboard` command itself, even when the item's own spec
-  tells it to. Applying that recommendation (`spec`, then `new` /
-  `attach` / `rank` per drafted capture) is yours, same as landing a
-  PR is, and so is the handover: `take ID --result` once it is
-  applied — only then does the claimed, PR-less item await a
-  `verdict`.
-- Reconcile the wave. Finished with a PR: record it on the item
-  (`take ID --pr N`). Finished with a pushed branch: `take ID --open
-  --body FILE` — the branch names itself, and the board opens the PR
-  and records the number it gets, so the reconcile never touches
-  GitHub directly. Finished with a research recommendation: apply
-  it (above), then `take ID --result` — the research handover, which
-  puts the claimed, PR-less item in line for a verdict the same way
-  the PR does (`help review`). Dead (no PR, no recommendation, no branch):
+- Reconcile the wave. Finished work hands over its locally present commit with
+  `take ID --head SHA [--url URL]`. Opening a pull request, pushing a branch,
+  and checking automation are caller-owned authenticated operations. Dead
+  (no handover commit):
   release the claim (`drop ID --why`, a worker-side reason) so the
   item is pullable again. Still running: leave it. Then the PRs are
   yours to watch — the agents are gone.
-- Reviews fan out like builds: one fresh subagent per PR awaiting
+- Reviews fan out like builds: one fresh subagent per handed-over commit awaiting
   a verdict, each under its own minted `review-<handle>-<orch8>`
   label — `brief review ID` fills it into the body it hands the
   agent, so claim under the string its own verdict line names, all in
   the background. What the review needs is distance from the BUILDER —
   a window that never held the build — and a verdict that is one
-  agent's alone; N reviewers on N different PRs keep both. `show`'s
-  doing rows print a claimed review's `reviewer:<session>` mark
-  alongside `pr:N` — a row already carrying one is already claimed:
+  agent's alone; N reviewers on N different commits keep both. A row already
+  carrying a foreign active whole-item claim is already claimed:
   skip it, never `--force`. What never fans out is refinement, because
   two parallel refiners decompose the same outcome twice.
 
@@ -417,10 +400,10 @@ review agent, not for CI, not for an answer. Reviews outrank pulls
 inside the pass, and the tool holds that mechanically: `take`
 refuses a todo pull while an unclaimed diff the session could
 review awaits a verdict, so a loop that reviewed less than it
-pulled accumulated open PRs until the doing bound refused every
-take. Claim the reviews first and neither refusal ever fires:
+  pulled accumulated open PRs faster than they could be reviewed.
+  Claim the reviews first to keep completion ahead of starts:
 
-1. `sync`, then reconcile the previous wave (above).
+1. Run caller-owned fetches, `refresh`, then reconcile the previous wave.
 2. Merge whatever carries an accept.
 3. Claim and spawn a review for every item awaiting a verdict —
    one fresh subagent each, in the background, a distinct minted

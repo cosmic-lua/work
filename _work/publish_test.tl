@@ -1,11 +1,10 @@
 #!/usr/bin/env cosmic
 -- A mutating verb is independent of the checked-out branch's state at
--- every path — not just the paths it does not own, but ALL of them,
--- now that items are refs rather than files: `sync` is exactly `git
--- fetch --prune` against `refs/heads/items`, `refs/heads/ended` and `refs/heads/board`,
--- which never reads, merges into, or otherwise touches the working
--- tree; neither does a mutation's own commit, or the lost-race
--- recovery. A `_work/**` file mid-edit in the shared checkout —
+-- every path. Items and prepared transactions are refs rather than
+-- files: default refresh is local inspection, while an explicit
+-- caller fetch only updates remote-tracking refs. Neither reads,
+-- merges into, or otherwise touches the working tree. A `_work/**`
+-- file mid-edit in the shared checkout —
 -- machinery a developer is changing while a verb runs against the
 -- same clone — is therefore untouched by any of the three, always,
 -- by construction rather than by a targeted fast-forward and a
@@ -19,7 +18,9 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
+local prepared = require("_work.prepared")
 local publish = require("_work.publish")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -106,7 +107,7 @@ local function test_a_dirty_unrelated_file_does_not_block_a_mutation()
   local dirty_path = fs.join(b.root, "_work", "x.tl")
   assert(fs.write(dirty_path, "-- an in-progress machinery edit\n"))
 
-  assert(publish.sync(b), "sync must tolerate the unrelated dirty file")
+  fixture.caller_fetch(b)
   local after_sync = fs.read(dirty_path)
   assert(after_sync == "-- an in-progress machinery edit\n",
     "the dirty file is byte-identical after a real sync")
@@ -119,13 +120,10 @@ local function test_a_dirty_unrelated_file_does_not_block_a_mutation()
   assert(stash_list(b.root) == "", "the shared stash stack is untouched")
 end
 
--- A lost push race, with an unrelated `_work/**` file dirty, must
--- still drop the losing mutation and refuse LOST_RACE — dropping it
--- is a local `git update-ref` on the one item ref that lost its lease
--- plus a `fetch --prune`, neither of which is a working-tree
--- operation, so the old `reset --hard` hazard (every uncommitted
--- MODIFICATION in the checkout wiped, tracked paths included) has no
--- analog left to regress on.
+-- A lost push race, with an unrelated `_work/**` file dirty, leaves
+-- the losing successor staged for inspection and retry. After the
+-- caller fetches, refresh classifies the lost lease without touching
+-- the worktree, so the old `reset --hard` hazard has no analog.
 local function test_a_lost_race_preserves_unrelated_dirt()
   local a, b = init_shared("race-dirt")
   seed_tracked_file(a.root, fs.join("_work", "y.tl"), "-- base\n")
@@ -135,8 +133,11 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   -- stale rather than one that already contains it.
   local base = make_item()
   assert(storewrite.save(a, base, "seed a common base"))
-  assert(publish.publish(a))
-  assert(publish.sync(b))
+  local staged, instructions = publish.publish(a)
+  assert(staged and instructions:find("git push", 1, true) ~= nil,
+    "default publication returns caller instructions")
+  fixture.caller_publish(a)
+  fixture.caller_fetch(b)
 
   local dirty_path = fs.join(b.root, "_work", "y.tl")
   assert(fs.write(dirty_path, "-- precious uncommitted work\n"))
@@ -148,15 +149,25 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   wa.title = "a's edit wins"
   assert(storewrite.save(a, wa, "a wins the race"))
   assert(publish.publish(a))
+  fixture.caller_publish(a)
 
   -- b's edit of the same item, built and pushed against the now-stale
   -- base, loses.
   local wb = check.must(store.load(b, base.id))
   wb.title = "b's edit loses"
   assert(storewrite.save(b, wb, "b loses the race"))
-  local ok, err = publish.publish(b)
-  assert(not ok and err == store.LOST_RACE,
-    "the losing mutation must refuse LOST_RACE: " .. tostring(err))
+  local ok = publish.publish(b)
+  assert(ok, "the local successor is staged before transport")
+  local transactions = check.must(prepared.list(b.root))
+  assert(#transactions == 1, "one losing transaction is prepared")
+  local pushed, perr = prepared.execute(b.root,
+    prepared.push_argv(transactions[1]))
+  assert(not pushed, "the caller's leased push loses the race: " .. perr)
+  local fetched, ferr = prepared.execute(b.root, prepared.fetch_argv())
+  assert(fetched, "caller fetches the winning refs: " .. ferr)
+  local synced, err = publish.sync(b)
+  assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
+    "refresh classifies the losing transaction: " .. tostring(err))
   assert(check.must(store.load(b, base.id)).title == "a's edit wins",
     "the checkout holds the winner's state")
   local after = fs.read(dirty_path)
@@ -175,19 +186,24 @@ end
 -- still dirty) no longer refuses at all: sync succeeds, and the dirty
 -- edit is left exactly as it was, because nothing about it was ever
 -- in sync's way to begin with.
--- A plain `git clone` carries only the branch's refspec; the first
--- `sync` adds the mirror refspecs itself, so a session that never ran
--- `init` still reads the whole board.
-local function test_sync_adds_the_mirror_refspecs_to_a_plain_clone()
+-- A plain `git clone` carries only the branch's refspec. Default
+-- refresh does not change it; explicitly executing the rendered fetch
+-- populates the canonical board refs without requiring `init`.
+local function test_a_plain_clone_requires_an_explicit_caller_fetch()
   local a = init_shared("plain-clone-sync")
   file_item(a, "seen from a plain clone", "")
   local base = fs.dirname(a.root)
   local plain = fs.join(base, "plain")
-  local cloned = child.run({"git", "clone", "-q", fs.join(base, "remote.git"), plain})
-  assert(cloned ~= nil and cloned.ok, "clone failed")
+  assert(fs.make_dirs(plain))
+  fixture.git(plain, {"init", "-q"})
+  fixture.git(plain, {"remote", "add", "origin", fs.join(base, "remote.git")})
   local p = check.must(store.open(plain))
-  assert(#check.must(store.list(p)) == 0, "a plain clone sees no items before sync")
-  assert(publish.sync(p))
+  assert(#check.must(store.list(p)) == 0,
+    "an unfetched remote checkout sees no items before refresh")
+  assert(publish.sync(p), "default refresh performs no transport")
+  assert(#check.must(store.list(p)) == 0,
+    "default refresh leaves the clone's fetched refs untouched")
+  assert(publish.sync(p, true), "explicit execution fetches board refs")
   local remote_items = child.run({"git", "for-each-ref", "refs/heads/items"},
     {cwd = fs.join(base, "remote.git")})
   local expected = 0
@@ -216,20 +232,34 @@ local function test_an_overlapping_dirty_file_no_longer_blocks_sync()
 
   local dirty_path = fs.join(b.root, "_work", "z.tl")
   assert(fs.write(dirty_path, "-- b's uncommitted change\n"))
-  assert(publish.sync(b), "sync no longer reads the working tree at all")
+  fixture.caller_fetch(b)
   local after = fs.read(dirty_path)
   assert(after == "-- b's uncommitted change\n",
     "the overlapping edit is preserved — sync never reached it")
   assert(stash_list(b.root) == "", "the shared stash stack is untouched")
 end
 
--- An unreadable remote — the fetch itself fails — is a clean refusal
--- too, never a crash.
-local function test_an_unreachable_remote_refuses_cleanly()
+-- An unreadable remote is irrelevant to the default local inspection;
+-- only explicit caller-authorized execution attempts it and refuses.
+local function test_an_unreachable_remote_only_matters_when_execution_is_explicit()
   local a = init_shared("unreachable")
   fixture.git(a.root, {"remote", "set-url", "origin",
       fs.join(fixture.tmpdir, "no-such-remote.git")})
-  local ok, err = publish.sync(a)
-  assert(not ok, "a sync against an unreadable remote must refuse")
+  assert(publish.sync(a), "default refresh never contacts the bad remote")
+  local ok, err = publish.sync(a, true)
+  assert(not ok, "explicit fetch against an unreadable remote must refuse")
   assert(err ~= store.LOST_RACE, "an unreadable remote is not a race: " .. err)
+end
+
+local function test_default_mutation_instructions_name_the_configured_remote()
+  local s = fixture.init_state_repo("configured-remote-instructions")
+  local it = make_item()
+  assert(storewrite.save(s, it, "prepare against configured remote"))
+  assert(refs.set_board_remote(s.root, "upstream"))
+  assert(refs.set_board_mode(s.root, "remote"))
+  local ok, instructions = publish.publish(s)
+  assert(ok, instructions)
+  assert(instructions:find(" upstream ", 1, true), instructions)
+  assert(instructions:find("refs/remotes/upstream/", 1, true), instructions)
+  assert(instructions:find("refs/remotes/origin/", 1, true) == nil, instructions)
 end

@@ -168,7 +168,13 @@ end
 --- @param last boolean True to place ID last among its siblings
 --- @return integer 0 on success, 1 otherwise
 local function cmd_rank(s: store.Store, id: string, before: string, after: string,
-    last: boolean): integer
+    last: boolean, claim_session?: string, force?: boolean,
+    why?: string): integer
+  local frc, rsn = force or false, why or ""
+  local forced = gate.force_refusal(frc, rsn)
+  if forced then
+    return gate.verdict_line("rank", false, "REFUSED: " .. forced)
+  end
   local count = 0
   if before ~= "" then count = count + 1 end
   if after ~= "" then count = count + 1 end
@@ -224,7 +230,9 @@ local function cmd_rank(s: store.Store, id: string, before: string, after: strin
   parent_item.order = new_order
   local where = ("under %s"):format(parent_id:sub(1, 8))
   local ok, err = gate.commit_and_publish(s, parent_item, nil,
-    ("rank %s %s"):format(id:sub(1, 8), describe(before, after, last, where)), "rank")
+    ("rank %s %s%s"):format(id:sub(1, 8),
+      describe(before, after, last, where), gate.forced_suffix(frc, rsn)),
+    "rank", nil, claim_session, false, frc, rsn)
   if not ok then
     return gate.verdict_line("rank", false, err)
   end
@@ -239,7 +247,7 @@ local record gitrank
   place_under: function(parent_item: item.Item, id: string, before: string,
   after: string, last: boolean, index: item.Index): boolean, string
   cmd_rank: function(s: store.Store, id: string, before: string, after: string,
-  last: boolean): integer
+  last: boolean, claim_session?: string, force?: boolean, why?: string): integer
 end
 
 local M: gitrank = {

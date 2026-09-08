@@ -6,10 +6,13 @@
 
 local check = require("cosmic.check")
 local child = require("cosmic.child")
+local claim = require("_work.claim")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
+local gitclaim = require("_work.gitclaim")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
@@ -59,13 +62,11 @@ local function make_checkout(name: string, kind: string): string, string
 end
 
 --- A cosmic checkout whose `bin/cosmic` stub actually runs (bootstrap
---- left enabled) and, real `--make fetch`/`--make build` runs' own
---- shape, echoes a handful of `compile`/`compile-batch` lines before
---- its own PASS summary — `fetch: PASS (2 pins)`, `build: PASS (3
---- files, 1 binary)` — the noise `run_step`'s quiet default drops and
---- `--verbose` streams. Each step also touches its own sentinel
---- (`fetch_ran`/`build_ran`) at the worktree root, so a test can tell
---- it ran even when its output never reaches `print`.
+--- left enabled) and echoes a handful of `compile`/`compile-batch`
+--- lines before its build PASS summary — the noise `run_step`'s quiet
+--- default drops and `--verbose` streams. The build touches a sentinel
+--- at the worktree root so a test can tell it ran even when its output
+--- never reaches `print`.
 --- @param name string A unique fixture name
 --- @return string The `--root` checkout's absolute path
 local function make_loud_checkout(name: string): string
@@ -73,17 +74,10 @@ local function make_loud_checkout(name: string): string
   local script = table.concat({
       "#!/bin/sh",
       "here=\"$(cd \"$(dirname \"$0\")\" && pwd)\"",
-      "if [ \"$2\" = fetch ]; then",
-      "  touch \"$here/../fetch_ran\"",
-      "  echo 'unpack o/3p/cosmos'",
-      "  echo 'fetch https://example.invalid/cosmos.zip'",
-      "  echo 'fetch: PASS (2 pins)'",
-      "else",
-      "  touch \"$here/../build_ran\"",
-      "  echo 'compile o/bin/cosmic a.tl o/a.lua --include-dir .'",
-      "  echo 'compile-batch o/bin/cosmic o/.groups/x.compiled o/x --srcs a.tl'",
-      "  echo 'build: PASS (3 files, 1 binary)'",
-      "fi",
+      "touch \"$here/../build_ran\"",
+      "echo 'compile o/bin/cosmic a.tl o/a.lua --include-dir .'",
+      "echo 'compile-batch o/bin/cosmic o/.groups/x.compiled o/x --srcs a.tl'",
+      "echo 'build: PASS (3 files, 1 binary)'",
     }, "\n") .. "\n"
   assert(fs.write(fs.join(checkout, "bin/cosmic"), script))
   assert(fs.set_mode(fs.join(checkout, "bin/cosmic"), tonumber("755", 8)))
@@ -107,7 +101,7 @@ end
 --- @param slug string The `owner/name` `sibling`'s origin should read as
 --- @return string The sibling checkout's absolute path
 --- @return string The invoking (product-root) directory's absolute path
-local function make_sibling_checkout(name: string, slug: string): string, string
+local function _make_sibling_checkout(name: string, slug: string): string, string
   local base = fs.join(tmpdir, "wt-sib-" .. name)
   assert(fs.remove_all(base))
   assert(fs.make_dirs(base))
@@ -135,7 +129,7 @@ end
 --- restored, whatever it was before.
 --- @param invoking string The fixture's own product-root directory
 --- @param f function(): boolean The test body; returns true when done
-local function with_invoking_checkout(invoking: string, f: function(): boolean)
+local function _with_invoking_checkout(invoking: string, f: function(): boolean)
   local prior = env.get("GITBOARD_DIR")
   assert(env.set("GITBOARD_DIR", fs.join(invoking, "o/board")))
   local ok, err = pcall(f)
@@ -152,10 +146,19 @@ end
 --- @param s store.Store The board
 --- @param id string The item to claim
 --- @param session string The claiming session
-local function claim_as(s: store.Store, id: string, session: string)
+local function claim_as(s: store.Store, id: string, session: string,
+    product_base?: string)
   local it = check.must(store.load(s, id))
   it.claim = session
+  it.claim_base = product_base or ""
   assert(storewrite.save(s, it, "fixture: claim for worktree"))
+end
+
+local function branch_of(s: store.Store, id: string): string
+  local it = check.must(store.load(s, id))
+  local st = check.must(gitclaim.read_state(s.root, s.leased_sha[id],
+      it.claim or "", it.claim_base or ""))
+  return claim.branch(id, st.root)
 end
 
 --- A workable item carrying a `repo`/`base`, claimed under `SESSION` —
@@ -164,11 +167,12 @@ end
 --- fixture past that gate needs a claim too.
 --- @param name string A unique fixture name
 --- @return store.Store, string The board and the item's id
-local function item_with_repo(name: string): store.Store, string
+local function item_with_repo(name: string, checkout: string): store.Store, string
   local s = fixture.init_state_repo(name)
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
-  claim_as(s, leaf, SESSION)
+  local base = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
+  claim_as(s, leaf, SESSION, (base.stdout:gsub("%s+$", "")))
   return s, leaf
 end
 
@@ -176,34 +180,33 @@ end
 -- never nested inside it, and the verdict line names the path.
 local function test_worktree_creates_branch_and_path()
   local checkout = make_checkout("happy", "none")
-  local s, leaf = item_with_repo("wt-happy")
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local s, leaf = item_with_repo("wt-happy", checkout)
+  local branch = branch_of(s, leaf)
+  local expect = fs.join(fs.dirname(checkout), "wt", branch)
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, false, false) == 0)
   assert(fs.is_dir(expect), "the worktree exists at the sibling path")
   assert(fs.is_file(fs.join(expect, "README")), "checked out from main")
   local r = assert(child.run({"git", "rev-parse", "--abbrev-ref", "HEAD"},
       {cwd = expect}))
-  assert((r.stdout:gsub("%s+$", "")) == id8,
-    "branched under the item id's first 8 characters: " .. r.stdout)
+  assert((r.stdout:gsub("%s+$", "")) == branch,
+    "branched under the stable claim identity: " .. r.stdout)
 end
 
 -- Never reuses a worktree: an existing branch or path both refuse a
 -- second call outright, rather than silently reusing either.
 local function test_worktree_refuses_a_repeat()
   local checkout = make_checkout("repeat", "none")
-  local s, leaf = item_with_repo("wt-repeat")
+  local s, leaf = item_with_repo("wt-repeat", checkout)
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, false, false) == 0)
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, false, false) ~= 0,
     "a second call over the same branch and path refuses")
 end
 
--- Each `--ref` lands in the worktree as `refs/spike/<basename>` —
--- fetched AFTER the (stubbed) bootstrap, so its own `--make fetch`
--- cannot clobber it — named from the ref's last path segment even
+-- Each caller-prepared `--ref` lands in the worktree as
+-- `refs/spike/<basename>`, named from the ref's last path segment even
 -- when the ref itself is nested (`notes/spike` lands at
 -- `refs/spike/spike`, not `refs/spike/notes/spike`).
-local function test_worktree_fetches_each_ref()
+local function test_worktree_copies_each_prepared_ref()
   local checkout, base = make_checkout("ref", "cosmic")
   git(checkout, {"fetch", "origin", "main"})
   git(checkout, {"checkout", "-q", "-b", "notes/spike", "origin/main"})
@@ -213,14 +216,13 @@ local function test_worktree_fetches_each_ref()
   git(checkout, {"push", "-q", "origin", "notes/spike"})
   git(checkout, {"checkout", "-q", "main"})
   git(checkout, {"branch", "-q", "-D", "notes/spike"})
-  local s, leaf = item_with_repo("wt-ref")
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local s, leaf = item_with_repo("wt-ref", checkout)
+  local expect = fs.join(fs.dirname(checkout), "wt", branch_of(s, leaf))
   local prior = env.get("GITBOARD_WORKTREE_BOOTSTRAP")
   assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", "0"))
   local ok, err = pcall(function(): boolean
       assert(worktree.cmd_worktree(s, leaf, SESSION, checkout,
-          {"notes/spike"}, false, false) == 0)
+          {"refs/remotes/origin/notes/spike"}, false, false) == 0)
       return true
     end)
   if prior == nil then local _ok, _err = env.unset("GITBOARD_WORKTREE_BOOTSTRAP")
@@ -240,8 +242,7 @@ end
 -- stub `bin/cosmic` would otherwise leave a sentinel of its own.
 local function test_worktree_bootstrap_stub_skips_execution()
   local checkout, base = make_checkout("cosmic", "cosmic")
-  local s, leaf = item_with_repo("wt-cosmic")
-  local id8 = leaf:sub(1, 8)
+  local s, leaf = item_with_repo("wt-cosmic", checkout)
   local prior = env.get("GITBOARD_WORKTREE_BOOTSTRAP")
   assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", "0"))
   local old_print = _G.print
@@ -268,16 +269,16 @@ local function test_worktree_bootstrap_stub_skips_execution()
     "the verdict still names the detected tree kind: " .. out)
   assert(not fs.is_file(fs.join(base, "bootstrap_ran")),
     "the stub never actually ran bin/cosmic")
-  local wt = fs.join(fs.dirname(checkout), "wt", id8)
+  local wt = fs.join(fs.dirname(checkout), "wt", branch_of(s, leaf))
   assert(fs.is_file(fs.join(wt, "bin/cosmic")), "the tree carries bin/cosmic")
 end
 
--- Quiet is the default: a real fetch/build run's own per-file
--- compile/compile-batch noise never reaches the caller — only each
--- step's own PASS summary line does.
+-- Quiet is the default: a local build's own per-file compile/
+-- compile-batch noise never reaches the caller — only its PASS
+-- summary line does.
 local function test_worktree_quiet_bootstrap_keeps_only_summary_lines()
   local checkout = make_loud_checkout("quiet")
-  local s, leaf = item_with_repo("wt-quiet")
+  local s, leaf = item_with_repo("wt-quiet", checkout)
   local old_print = _G.print
   local lines: {string} = {}
   _G.print = function(...: any)
@@ -296,8 +297,6 @@ local function test_worktree_quiet_bootstrap_keeps_only_summary_lines()
     error(err, 0)
   end
   local out = table.concat(lines, "\n")
-  assert(out:find("fetch: PASS (2 pins)", 1, true) ~= nil,
-    "fetch's own summary line reaches the caller: " .. out)
   assert(out:find("build: PASS (3 files, 1 binary)", 1, true) ~= nil,
     "build's own summary line reaches the caller: " .. out)
   assert(out:find("compile ", 1, true) == nil,
@@ -312,9 +311,8 @@ end
 -- — none of it, compile noise or PASS lines alike, shows up there.
 local function test_worktree_verbose_bootstrap_streams_verbatim()
   local checkout = make_loud_checkout("verbose")
-  local s, leaf = item_with_repo("wt-verbose")
-  local id8 = leaf:sub(1, 8)
-  local wt = fs.join(fs.dirname(checkout), "wt", id8)
+  local s, leaf = item_with_repo("wt-verbose", checkout)
+  local wt = fs.join(fs.dirname(checkout), "wt", branch_of(s, leaf))
   local old_print = _G.print
   local lines: {string} = {}
   _G.print = function(...: any)
@@ -332,11 +330,9 @@ local function test_worktree_verbose_bootstrap_streams_verbatim()
   if not ok then
     error(err, 0)
   end
-  assert(fs.is_file(fs.join(wt, "fetch_ran")), "the fetch step actually ran")
   assert(fs.is_file(fs.join(wt, "build_ran")), "the build step actually ran")
   local out = table.concat(lines, "\n")
   assert(out:find("compile", 1, true) == nil
-    and out:find("PASS (2 pins)", 1, true) == nil
     and out:find("PASS (3 files", 1, true) == nil,
     "verbose streams straight to the real stdout, none of it through print: "
     .. out)
@@ -356,39 +352,31 @@ end
 -- bootstraps to nothing — its own gate is the builder's first.
 local function test_worktree_bootstrap_detects_cosmopolitan_tree()
   local checkout = make_checkout("cosmopolitan", "cosmopolitan")
-  local s, leaf = item_with_repo("wt-cosmopolitan")
+  local s, leaf = item_with_repo("wt-cosmopolitan", checkout)
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, false, false) == 0)
 end
 
--- With no `--root`, `worktree` resolves the item's repo on its own:
--- the invoking checkout's own origin does not match, so it walks its
--- siblings and lands on the one whose origin does.
-local function test_worktree_resolves_checkout_via_sibling_search()
-  local sibling, invoking = make_sibling_checkout("resolve", "acme/widgets")
-  local s, leaf = item_with_repo("wt-resolve")
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(sibling), "wt", id8)
-  with_invoking_checkout(invoking, function(): boolean
-      assert(worktree.cmd_worktree(s, leaf, SESSION, "", {}, false, false) == 0)
-      assert(fs.is_dir(expect),
-        "auto-resolved via the sibling whose origin matches the repo")
-      return true
-    end)
+-- With no `--root`, `worktree` resolves only the explicit repository map.
+local function test_worktree_resolves_checkout_via_repository_map()
+  local checkout = make_checkout("resolve", "none")
+  local s, leaf = item_with_repo("wt-resolve", checkout)
+  git(s.root, {"config", "--local", "--add", "gitboard.repository",
+      "acme/widgets=" .. checkout})
+  local expect = fs.join(fs.dirname(checkout), "wt", branch_of(s, leaf))
+  assert(worktree.cmd_worktree(s, leaf, SESSION, "", {}, false, false) == 0)
+  assert(fs.is_dir(expect), "resolved via the configured repository map")
 end
 
--- No sibling answers the item's repo: the refusal names the URL to
--- clone rather than guessing at a checkout that is not there.
-local function test_worktree_refuses_when_no_sibling_matches()
-  local _sibling, invoking = make_sibling_checkout("norefuse", "acme/widgets")
+-- An absent map refuses instead of guessing from sibling layout or remotes.
+local function test_worktree_refuses_when_repository_is_unmapped()
+  local checkout = make_checkout("norefuse", "none")
   local s = fixture.init_state_repo("wt-norefuse")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "someone/else", "main") == 0)
-  claim_as(s, leaf, SESSION)
-  with_invoking_checkout(invoking, function(): boolean
-      local code = worktree.cmd_worktree(s, leaf, SESSION, "", {}, false, false)
-      assert(code ~= 0, "no local checkout answers someone/else")
-      return true
-    end)
+  local base = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
+  claim_as(s, leaf, SESSION, (base.stdout:gsub("%s+$", "")))
+  local code = worktree.cmd_worktree(s, leaf, SESSION, "", {}, false, false)
+  assert(code ~= 0, "an unmapped repository is refused")
 end
 
 -- A `cosmopolitan` repo with no `base` set branches off `master`, not
@@ -412,10 +400,10 @@ local function test_worktree_defaults_cosmopolitan_repo_to_master()
   local s = fixture.init_state_repo("wt-cosmobase")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/cosmopolitan-lua-fork", nil) == 0)
-  claim_as(s, leaf, SESSION)
-  local id8 = leaf:sub(1, 8)
+  local head = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
+  claim_as(s, leaf, SESSION, (head.stdout:gsub("%s+$", "")))
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, false, false) == 0)
-  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local expect = fs.join(fs.dirname(checkout), "wt", branch_of(s, leaf))
   assert(fs.is_dir(expect), "branched off master, the cosmopolitan default")
 end
 
@@ -455,9 +443,9 @@ end
 -- it actually is rather than only who was refused.
 local function test_worktree_refuses_a_different_sessions_claim()
   local checkout = make_checkout("foreign", "none")
-  local s, leaf = item_with_repo("wt-foreign")
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local s, leaf = item_with_repo("wt-foreign", checkout)
+  local branch = branch_of(s, leaf)
+  local expect = fs.join(fs.dirname(checkout), "wt", branch)
   local old_print = _G.print
   local lines: {string} = {}
   _G.print = function(...: any)
@@ -476,7 +464,34 @@ local function test_worktree_refuses_a_different_sessions_claim()
     "the refusal names whose claim it is: " .. out)
   assert(not fs.is_dir(expect), "no worktree directory was created")
   local has_branch = child.run({"git", "rev-parse", "--verify", "--quiet",
-      "refs/heads/" .. id8}, {cwd = checkout})
+      "refs/heads/" .. branch}, {cwd = checkout})
   assert(has_branch == nil or not has_branch.ok,
     "no branch was created in the checkout")
+end
+
+-- The holder field can remain after the two-hour lease expires. Worktree
+-- derives the control timestamp from Git history and refuses that stale field
+-- rather than treating it as authorization to work offline.
+local function test_worktree_refuses_an_expired_claim()
+  local checkout = make_checkout("expired", "none")
+  local s = fixture.init_state_repo("wt-expired")
+  local _root, leaf = fixture.root_with_leaf(s)
+  assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
+  local target = gitclaim.target_item_ref(leaf)
+  local tip = check.must(refs.read_ref(s.root, target))
+  local base = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
+  local caller = ("a"):rep(32)
+  local p = check.must(gitclaim.prepare({
+        root = s.root, id = leaf, source_ref = target, target_ref = target,
+        remote = "origin", batch = "expired", caller = caller,
+        action = "take", product_base = (base.stdout:gsub("%s+$", "")),
+        force = false, why = "", now = os.time() - claim.LEASE_S - 1,
+      }))
+  assert(refs.update_ref(s.root, target, p.new_sha, tip))
+  local _closed, _cerr = store.close(s)
+  local reopened = check.must(store.open(s.root))
+  assert(worktree.cmd_worktree(reopened, leaf, caller, checkout, {}, false,
+      false) ~= 0, "an expired claim cannot authorize a worktree")
+  local path = fs.join(fs.dirname(checkout), "wt", p.branch)
+  assert(not fs.is_dir(path), "no worktree was created for the expired lease")
 end

@@ -1,49 +1,9 @@
 #!/usr/bin/env cosmic
---- Work board CLI over a state REPOSITORY, where roles emerge from the graph.
---- There are no kinds and no goal tier — the parentless item is the
---- board, its children are the outcomes, an item with open children
---- is a container being decomposed, and a childless item below the
---- outcome level is workable: the only thing that crosses the kanban.
---- Order is a path from the board — `gitboard help order` — derived by
---- `_work.rank`, never a number an item asserts about itself. Each
---- item is a git ref,
---- `refs/heads/items/<ksuid>` (`refs/heads/ended/<ksuid>` for one filed
---- before resolving stopped moving the ref), whose tip commit's tree
---- carries its fields and spec prose (`_work.store`);
---- the flow rules are `_work.flow`. Pull requests
---- stay on GitHub and carry the fix; issues shrink to an inbound
---- queue. Ids are KSUIDs; renders lead with the handle, the id's last
---- 8 characters (e.g. «d0x1_37YJ»); every verb accepts that handle,
---- bare or wrapped, either divider, case-tolerant — or an unambiguous prefix.
----
----   cosmic --make run _work/gitboard.tl init [--dir D]
----   cosmic --make run _work/gitboard.tl new "an outcome"
----   cosmic --make run _work/gitboard.tl new "a piece of it" --parent 2ai3
----   cosmic --make run _work/gitboard.tl attach 2akQ 2ai3
----   cosmic --make run _work/gitboard.tl rank 2akQ --before 2ai3 | --after 2ai3 | --last
----   cosmic --make run _work/gitboard.tl set 2akQ --title "a truer title"
----   cosmic --make run _work/gitboard.tl spec 2akQ SPEC.md
----   cosmic --make run _work/gitboard.tl show [2akQ]
----   cosmic --make run _work/gitboard.tl next [--session S]
----   cosmic --make run _work/gitboard.tl take 2akQ [--pr 42 | --result | --open]
----   cosmic --make run _work/gitboard.tl drop 2akQ --why "wave agent died"
----   cosmic --make run _work/gitboard.tl verdict 2akQ accept [--pr N]
----   cosmic --make run _work/gitboard.tl done 2akQ [--reason not-planned]
----   cosmic --make run _work/gitboard.tl brief builder 2akQ
----   cosmic --make run _work/gitboard.tl sync
----   cosmic --make run _work/gitboard.tl help system
----
---- `help <topic>` serves the doctrine pages (`_work.doctrine`) — the
---- system of work itself, not one verb's options — and the overview
---- help lists the topics.
----
---- This file is the argument parsing, prefix resolution, and dispatch
---- half; the verbs themselves are `_work.gitverbs` (the state
---- verbs), `_work.gitgraph` (the graph mutations), and `_work.gitrank`
---- (`rank`, and the placement `attach`/`new` share with it). The
---- command table itself — every verb's usage, summary, and flags —
---- is `_work.gitcommands`, split out to keep this file under its line
---- cap; `help` and `help <verb>` are generated straight from it.
+--- Work board CLI over Git-backed item refs. Roles emerge from the graph;
+--- durable workflow facts are commit IDs, and authenticated remote actions
+--- belong to the caller. Commands prepare and print exact Git instructions by
+--- default; `--execute` runs only those ordinary Git commands. The command
+--- table and help text live in `_work.gitcommands`.
 local flags = require("cosmic.flags")
 local fs = require("cosmic.fs")
 local proc = require("cosmic.proc")
@@ -53,34 +13,31 @@ local commands = require("_work.gitcommands")
 local doctrine = require("_work.doctrine")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
+local claimcli = require("_work.gitclaim_cli")
 local gitread = require("_work.gitread")
+local gitdone = require("_work.gitdone")
+local migratecli = require("_work.gitmigrate_cli")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
-local gitsync = require("_work.gitsync")
+local transport = require("_work.gittransport")
+local gittake = require("_work.gittake")
 local gitworktree = require("_work.gitworktree")
 local publish = require("_work.publish")
 local rank = require("_work.gitrank")
+local refs = require("_work.refs")
 local session = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
-local verbs = require("_work.gitverbs")
 local vrd = require("_work.gitverdict")
 local show = require("_work.gitshow")
 local view = require("_work.gitview")
 
---- The verbs whose save may be BOUNDED — advancing and leasing
---- `refs/heads/board/seq` (`_work.store.set_bounded`), so two of them racing
---- each other need to see the SAME seq tip: `take` (a NEW claim, the
---- doing bound). Only this fetches the remote's state before
---- mutating; every other write verb builds against this checkout's
---- own local refs and pushes straight away — a stale lease is refused
+--- Commands that may still use the board sequence for global ordering.
 --- as `LOST_RACE` by the push itself (`_work.publish.publish`, which
 --- re-syncs on rejection), costing a round trip only when a race
 --- actually happened. `sync` and lane minting fetch on their own,
 --- outside this dispatch.
-local FETCH_FIRST: {string: boolean} = {
-  ["take"] = true,
-}
+local FETCH_FIRST: {string: boolean} = {}
 
 --- Resolve one id-taking argument, whatever position it sits in: an
 --- id prefix is tried first; only when that refuses AND the input has
@@ -186,15 +143,87 @@ local function main(...: string): integer
     print(text)
     return 0
   end
+  if d.command == "session" then
+    return claimcli.cmd_session(d.parsed.args[1] or "")
+  end
   if d.command == "init" then
     local dir = d.parsed.values["dir"] or "."
+    local remote_name = d.parsed.values["remote-name"] or ""
+    if d.parsed.switches["remote"] and d.parsed.switches["local"] then
+      return gate.verdict_line("init", false,
+        "REFUSED: choose at most one of --remote and --local")
+    end
+    if d.parsed.switches["local"] and remote_name ~= "" then
+      return gate.verdict_line("init", false,
+        "REFUSED: --remote-name belongs to a remote-backed board")
+    end
+    -- Existing clones must select their namespace before initialization reads
+    -- any board ref. A brand-new directory has no repository config yet, so it
+    -- is initialized first and marked immediately afterward.
+    local mode_set = false
+    local remote_set = false
+    if fs.is_dir(fs.join(dir, ".git")) and remote_name ~= "" then
+      local configured, cerr = refs.set_board_remote(dir, remote_name)
+      if not configured then return gate.verdict_line("init", false, cerr) end
+      remote_set = true
+    end
+    if fs.is_dir(fs.join(dir, ".git"))
+    and (d.parsed.switches["remote"] or d.parsed.switches["local"]) then
+      local configured, cerr: boolean, string
+      if d.parsed.switches["remote"] then
+        configured, cerr = refs.set_board_mode(dir, "remote")
+      else
+        configured, cerr = refs.set_board_mode(dir, "local")
+      end
+      if not configured then return gate.verdict_line("init", false, cerr) end
+      mode_set = true
+    end
     local ok, err = store.init_repo(dir)
     if not ok then
       return gate.verdict_line("init", false, err)
     end
-    return gate.verdict_line("init", true, ("state repository ready at %s"):format(dir))
+    if not mode_set
+    and (d.parsed.switches["remote"] or d.parsed.switches["local"]) then
+      local configured, cerr: boolean, string
+      if d.parsed.switches["remote"] then
+        configured, cerr = refs.set_board_mode(dir, "remote")
+      else
+        configured, cerr = refs.set_board_mode(dir, "local")
+      end
+      if not configured then return gate.verdict_line("init", false, cerr) end
+    end
+    if remote_name ~= "" and not remote_set then
+      local configured, cerr = refs.set_board_remote(dir, remote_name)
+      if not configured then return gate.verdict_line("init", false, cerr) end
+    end
+    if remote_name ~= "" then
+      local remote_mode, merr = refs.set_board_mode(dir, "remote")
+      if not remote_mode then return gate.verdict_line("init", false, merr) end
+    end
+    return gate.verdict_line("init", true,
+      ("state repository ready at %s (%s%s)"):format(dir, refs.board_mode(dir),
+        refs.board_mode(dir) == "remote" and ", " .. refs.board_remote(dir) or ""))
   end
-  local s, serr = store.open(d.parsed.values["dir"] or ".")
+  if d.command == "migrate" then
+    local dir = d.parsed.values["dir"] or "."
+    local explicit = d.parsed.values["remote"] or ""
+    if explicit ~= "" then
+      local selected, selerr = refs.use_remote(dir, explicit)
+      if not selected then return gate.verdict_line("migrate", false, selerr) end
+    end
+    return migratecli.cmd_migrate(dir,
+      explicit ~= "" and explicit or refs.board_remote(dir),
+      d.parsed.switches["execute"] or false)
+  end
+  local dir = d.parsed.values["dir"] or "."
+  local explicit_remote = d.parsed.values["remote"] or ""
+  if explicit_remote ~= "" then
+    local selected, selerr = refs.use_remote(dir, explicit_remote)
+    if not selected then return gate.verdict_line(d.command or "gitboard", false,
+        selerr) end
+  end
+  local remote = explicit_remote ~= "" and explicit_remote or refs.board_remote(dir)
+  local s, serr = store.open(dir)
   if s == nil then
     io.stderr:write(tostring(serr) .. "\n")
     return 1
@@ -212,7 +241,37 @@ local function main(...: string): integer
     return view.cmd_next(s, who)
   end
   if d.command == "sync" then
-    return gitsync.cmd_sync(s)
+    io.stderr:write("gitboard-sync: deprecated; use `gitboard refresh`\n")
+    return transport.cmd_refresh(s, remote, false)
+  end
+  if d.command == "publish" then
+    return transport.cmd_publish(s, d.parsed.args,
+      remote,
+      d.parsed.switches["execute"] or false)
+  end
+  if d.command == "refresh" then
+    return transport.cmd_refresh(s, remote,
+      d.parsed.switches["execute"] or false)
+  end
+  if d.command == "claim" or d.command == "renew" or d.command == "drop" then
+    local ids: {string} = {}
+    for _, input_id in ipairs(d.parsed.args) do
+      local resolved, rerr = resolve_id(s, input_id)
+      if resolved == nil then
+        io.stderr:write(tostring(rerr) .. "\n")
+        return 1
+      end
+      ids[#ids + 1] = resolved
+    end
+    return claimcli.cmd_claim(s, ids,
+      d.command == "renew" and "renew"
+      or d.command == "drop" and "drop" or "take",
+      d.parsed.values["session"] or "",
+      remote,
+      d.parsed.values["repo-dir"] or "",
+      d.parsed.switches["force"] or false,
+      d.parsed.values["why"] or "",
+      d.parsed.switches["execute"] or false)
   end
   if d.command == "fsck" then
     return fsck.cmd_fsck(s)
@@ -280,8 +339,12 @@ local function main(...: string): integer
       end
       spec = body
     end
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then return gate.verdict_line("new", false, "REFUSED: " .. werr) end
     return graph.cmd_new(s, title, parent, spec, d.parsed.values["repo"] or "",
-      d.parsed.switches["force"], d.parsed.values["why"] or "", before, after)
+      d.parsed.switches["force"], d.parsed.values["why"] or "", before, after,
+      who)
   end
   local input = d.parsed.args[1] or ""
   local id, rerr = resolve_id(s, input)
@@ -300,7 +363,13 @@ local function main(...: string): integer
       io.stderr:write(baerr .. "\n")
       return 1
     end
-    return graph.cmd_attach(s, id, parent, before, after)
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then
+      return gate.verdict_line("attach", false, "REFUSED: " .. werr)
+    end
+    return graph.cmd_attach(s, id, parent, before, after, who,
+      d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
   if d.command == "rank" then
     local before, after, baerr = resolve_before_after(s, d.parsed.values)
@@ -308,11 +377,20 @@ local function main(...: string): integer
       io.stderr:write(baerr .. "\n")
       return 1
     end
-    return rank.cmd_rank(s, id, before, after, d.parsed.switches["last"] or false)
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then return gate.verdict_line("rank", false, "REFUSED: " .. werr) end
+    return rank.cmd_rank(s, id, before, after,
+      d.parsed.switches["last"] or false, who,
+      d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
   if d.command == "set" then
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then return gate.verdict_line("set", false, "REFUSED: " .. werr) end
     return graph.cmd_set(s, id, d.parsed.values["title"],
-      d.parsed.values["repo"], d.parsed.values["base"])
+      d.parsed.values["repo"], d.parsed.values["base"], who,
+      d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
   if d.command == "spec" then
     local file = d.parsed.args[2]
@@ -320,7 +398,9 @@ local function main(...: string): integer
       io.stderr:write("spec needs a markdown file\n")
       return 1
     end
-    local who = session.resolve(d.parsed.values["session"])
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then return gate.verdict_line("spec", false, "REFUSED: " .. werr) end
     return gitspec.cmd_spec(s, id, file, d.parsed.values["base"] or "", who,
       d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
@@ -331,17 +411,14 @@ local function main(...: string): integer
       d.parsed.switches["verbose"] or false)
   end
   if d.command == "take" then
-    local pr = math.tointeger(tonumber(d.parsed.values["pr"] or "0")) or 0
-    local who = session.resolve(d.parsed.values["session"])
-    return verbs.cmd_take(s, id, who, pr,
-      d.parsed.switches["force"], d.parsed.values["why"] or "",
-      d.parsed.switches["result"], d.parsed.switches["open"],
-      d.parsed.values["body"] or "")
-  end
-  if d.command == "drop" then
-    local who = session.resolve(d.parsed.values["session"])
-    return verbs.cmd_drop(s, id, who, d.parsed.values["why"] or "",
-      d.parsed.switches["force"])
+    local who, werr = claimcli.resolve_caller(d.parsed.values["session"] or "")
+    if who == nil then
+      return gate.verdict_line("take", false, "REFUSED: " .. werr)
+    end
+    local it, ierr = store.load(s, id)
+    if it == nil then return gate.verdict_line("take", false, ierr) end
+    return gittake.take_handover(s, it, who, d.parsed.values["head"] or "",
+      d.parsed.values["url"] or "", d.parsed.values["repo-dir"] or "")
   end
   if d.command == "verdict" then
     local kind = d.parsed.args[2]
@@ -349,11 +426,14 @@ local function main(...: string): integer
       io.stderr:write("verdict needs a kind: accept, request changes, reject\n")
       return 1
     end
-    local pr = math.tointeger(tonumber(d.parsed.values["pr"] or "0")) or 0
-    local who = session.resolve(d.parsed.values["session"])
-    return vrd.cmd_verdict(s, id, kind, pr, d.parsed.values["head"] or "", who,
+    local who, werr = claimcli.resolve_caller(d.parsed.values["session"] or "")
+    if who == nil then
+      return gate.verdict_line("verdict", false, "REFUSED: " .. werr)
+    end
+    return vrd.cmd_verdict_commit(s, id, kind,
+      d.parsed.values["head"] or "", who,
       d.parsed.switches["force"], d.parsed.values["why"] or "",
-      d.parsed.values["body"] or "", d.parsed.switches["no-land"])
+      d.parsed.values["repo-dir"] or "")
   end
   if d.command == "done" then
     local by = ""
@@ -366,8 +446,13 @@ local function main(...: string): integer
       end
       by = resolved
     end
-    return verbs.cmd_done(s, id, d.parsed.values["reason"] or "completed",
-      d.parsed.switches["force"], d.parsed.values["why"] or "", by)
+    local who, werr = claimcli.resolve_caller(d.parsed.values["session"] or "")
+    if who == nil then
+      return gate.verdict_line("done", false, "REFUSED: " .. werr)
+    end
+    return gitdone.cmd_done(s, id, d.parsed.values["reason"] or "completed",
+      d.parsed.switches["force"], d.parsed.values["why"] or "", by,
+      d.parsed.values["landed"] or "", d.parsed.values["repo-dir"] or "", who)
   end
   return show.cmd_show(s, id)
 end

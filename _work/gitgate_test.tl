@@ -19,8 +19,10 @@ local graph = require("_work.gitgraph")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
+local prepared = require("_work.prepared")
 local publish = require("_work.publish")
 local read = require("_work.read")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local verbs = require("_work.gitverbs")
@@ -64,11 +66,22 @@ local function test_a_lost_race_drops_the_mutation_and_refuses()
   storewrite.set_bounded(a, true)
   assert(storewrite.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
+  fixture.caller_publish(a)
 
   local mine = make_item()
   local ok, err = gate.commit_and_publish(b, mine, "a spec touch",
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
-  assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
+  assert(ok, "the stale mutation may be prepared locally: " .. tostring(err))
+  local pending = check.must(prepared.list(b.root))
+  assert(#pending == 1, "the stale mutation has one durable transaction")
+  assert(not prepared.execute(b.root, prepared.push_argv(pending[1])),
+    "the caller's leased push detects the lost race")
+  assert(prepared.execute(b.root, prepared.fetch_argv()),
+    "the caller fetches the winner after the rejected push")
+  check.must(store.close(b))
+  local outcomes = check.must(prepared.refresh(b.root))
+  assert(#outcomes == 1 and outcomes[1].state == "lost-race",
+    "refresh records the lost-race diagnosis without replaying")
   local merged = check.must(store.list(b))
   assert(item.by_id(merged)[touched.id] ~= nil,
     "the checkout was re-synced onto the winner's state")
@@ -84,41 +97,104 @@ local function test_the_rerun_publishes_against_the_merged_state()
   storewrite.set_bounded(a, true)
   assert(storewrite.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
+  fixture.caller_publish(a)
 
   local mine = make_item()
   local ok, err = gate.commit_and_publish(b, mine, "a spec touch",
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
-  assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
+  assert(ok, "the stale mutation prepares: " .. tostring(err))
+  local pending = check.must(prepared.list(b.root))
+  assert(#pending == 1)
+  assert(not prepared.execute(b.root, prepared.push_argv(pending[1])))
+  assert(prepared.execute(b.root, prepared.fetch_argv()))
+  check.must(store.close(b))
+  local outcomes = check.must(prepared.refresh(b.root))
+  assert(#outcomes == 1 and outcomes[1].state == "lost-race")
+  assert(refs.update_ref(b.root, pending[1].staging_ref, refs.ZERO_SHA,
+      pending[1].manifest), "discard the diagnosed transaction before retry")
+  check.must(store.list(b))
   local again, aerr = gate.commit_and_publish(b, mine, "a spec touch",
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
-  assert(again, "the re-run publishes: " .. tostring(aerr))
-  assert(publish.sync(a))
+  assert(again, "the re-run prepares against merged state: " .. tostring(aerr))
+  fixture.caller_publish(b)
+  fixture.caller_fetch(a)
   assert(check.must(store.load(a, mine.id)).id == mine.id,
     "and the mutation reaches the remote")
 end
 
--- What a re-run's take would see: the doing bound, applied to the
--- merged board — a board another session filled while this one was
--- deciding refuses the take the stale read would have admitted.
-local function test_the_merged_board_carries_the_doing_bound()
+-- Remote-backed mutations print the exact caller-owned transport plan at the
+-- common boundary; a local-only mutation remains quiet.
+local function test_commit_surfaces_remote_transport_but_local_stays_quiet()
+  local _a, remote = init_shared("gate-render-publish")
+  local remote_item = make_item()
+  local seen, old_print = "", _G.print
+  _G.print = function(msg: any) seen = seen .. tostring(msg) end
+  local ok, detail = gate.commit_and_publish(remote, remote_item, nil,
+    "new remote item", "new")
+  _G.print = old_print
+  assert(ok and detail:find("publish: git push", 1, true) ~= nil, detail)
+  assert(seen == detail, "the returned transport plan is printed verbatim")
+
+  local local_store = init_state_repo("gate-local-quiet")
+  local local_item = make_item()
+  seen, old_print = "", _G.print
+  _G.print = function(msg: any) seen = seen .. tostring(msg) end
+  local lok, ldetail = gate.commit_and_publish(local_store, local_item, nil,
+    "new local item", "new")
+  _G.print = old_print
+  assert(lok and ldetail == "" and seen == "",
+    "local-only publication remains a quiet success")
+end
+
+-- Graph writes include their parent/order side in the same claim check. The
+-- holder can decompose its item, a foreign caller cannot, and an audited force
+-- can repair it without implicitly releasing the claim.
+local function test_graph_parent_mutations_obey_the_whole_item_claim()
+  local s = init_state_repo("gate-graph-claim")
+  local _root, parent = fixture.root_with_leaf(s)
+  local held = check.must(store.load(s, parent))
+  held.claim = "holder"
+  held.claim_base = ("a"):rep(40)
+  assert(gate.commit_and_publish(s, held, nil,
+      ("claim acquire %s by holder"):format(parent:sub(1, 8)),
+      "claim-acquire", nil, "holder"))
+
+  assert(graph.cmd_new(s, "foreign child", parent, nil, "", false, "",
+      "", "", "stranger") ~= 0,
+    "a foreign caller cannot rewrite the claimed parent's order")
+  assert(graph.cmd_new(s, "holder child", parent, nil, "", false, "",
+      "", "", "holder") == 0,
+    "the exact holder may mutate the whole item")
+  assert(check.must(store.load(s, parent)).claim == "holder",
+    "the graph transition did not release the claim")
+  assert(graph.cmd_new(s, "repair child", parent, nil, "", true,
+      "repair ordering", "", "", "stranger") == 0,
+    "an audited force may mutate a claimed graph target")
+  assert(check.must(store.load(s, parent)).claim == "holder",
+    "the forced graph repair did not release the claim")
+end
+
+-- A fetched board preserves every claim, but no global doing bound is
+-- part of acquisition any more. Callers manage their own WIP locally;
+-- Git coordinates only the per-item leases.
+local function test_the_merged_board_carries_all_claims_without_a_global_bound()
   local a, b = init_shared("gate-bound")
   for k = 1, flow.DOING_LIMIT do
     assert(storewrite.save(a, make_item({claim = ("wake-%d"):format(k)}),
         "filler " .. fresh_id():sub(1, 8)))
   end
   assert(publish.publish(a))
-  assert(publish.sync(b))
+  fixture.caller_publish(a)
+  fixture.caller_fetch(b)
   check.must(store.list(b))
   local c = check.must(store.read(b))
   assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
-    "a take against the merged board is the verb's to refuse")
+    "claims remain observable even though their count is not a global gate")
 end
 
--- A decomposition clears the locks on the item that became a
--- container: a claim or review standing on it locks nothing anyone
--- can build. The write travels with the child's commit, which is why
--- it is returned rather than saved.
-local function test_containered_clears_the_locks()
+-- A graph-derived stage change never releases a whole-item claim.
+-- Claims move only through their explicit control operations.
+local function test_containered_preserves_claims()
   local untouched = make_item()
   local c1 = fixture.make_index({untouched})
   assert(#check.must(gate.containered(c1, untouched)) == 0,
@@ -126,8 +202,8 @@ local function test_containered_clears_the_locks()
   local held = make_item({claim = "session-A", reviewer = "review-1"})
   local c2 = fixture.make_index({held})
   local out = check.must(gate.containered(c2, held))
-  assert(#out == 1 and out[1].claim == "" and out[1].reviewer == "",
-    "the claim and the review clear together")
+  assert(#out == 0 and held.claim == "session-A" and held.reviewer == "review-1",
+    "the derived container stage leaves claim state untouched")
 end
 
 -- The one exception: a parent already awaiting a verdict (an open PR,
@@ -240,6 +316,7 @@ local function write_spec(s: store.Store, id: string, name: string,
   local path = fs.join(fixture.tmpdir, ("owner-%s.md"):format(name))
   assert(fs.write(path, body))
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
+  fixture.caller_publish(s)
 end
 
 --- A workable, placed, specced leaf whose `repo` was written the way
@@ -253,22 +330,25 @@ local function foreign_leaf(name: string, body: string): store.Store, string
   local it = check.must(store.load(s, leaf))
   it.repo = "whilp/cosmopolitan"
   assert(storewrite.save(s, it, "fixture: a repo written before the rule"))
+  assert(publish.publish(s))
+  fixture.caller_publish(s)
+  assert(check.must(store.load(s, leaf)).repo == "whilp/cosmopolitan",
+    "the caller-confirmed stale repo field is canonical")
+  assert(owner.board_owner(s) == "cosmic-lua",
+    "the board owner still comes from its configured GitHub remote")
   return s, leaf
 end
 
--- The item's own `repo` under a foreign owner is a ready-bar problem
--- naming the field, the value and the repair, and the take is refused.
-local function test_a_foreign_owner_repo_misses_the_bar()
+-- Legacy board data may still name a foreign repository, but the v3 ready bar
+-- is commit/spec-local and performs no provider ownership gate. Write-time
+-- validation remains covered in `gitowner_test`; acquisition stays offline.
+local function test_a_legacy_foreign_owner_repo_does_not_add_a_ready_bar()
   local s, leaf = foreign_leaf("foreign", fixture.READY_SPEC)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
-  assert(#problems == 1, "one problem: " .. table.concat(problems, "; "))
-  assert(problems[1]:find("repo: whilp/cosmopolitan", 1, true)
-    and problems[1]:find(("gitboard set %s --repo cosmic-lua/cosmopolitan")
-      :format(leaf:sub(1, 8)), 1, true),
-    "the problem names the value and the repair: " .. problems[1])
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") ~= 0,
-    "and the take is refused")
-  assert(check.must(store.load(s, leaf)).claim == "", "nothing was written")
+  assert(#problems == 0, "no provider-owned ready problem: "
+    .. table.concat(problems, "; "))
+  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0,
+    "the offline take proceeds")
 end
 
 -- The same owner as the board passes, whatever the repository's name.
@@ -276,6 +356,7 @@ local function test_a_same_owner_repo_passes_the_bar()
   local s, leaf = foreign_leaf("same", fixture.READY_SPEC)
   assert(graph.cmd_set(s, leaf, nil, "cosmic-lua/cosmopolitan", nil) == 0,
     "the repair the problem names is accepted")
+  fixture.caller_publish(s)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a same-owner repo is no problem: "
     .. table.concat(problems, "; "))

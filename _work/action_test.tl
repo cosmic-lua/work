@@ -8,12 +8,10 @@
 local check = require("cosmic.check")
 local act = require("_work.action")
 local fixture = require("_work.fixture")
-local flow = require("_work.flow")
 local health = require("_work.health")
 local idxmod = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
-local read = require("_work.read")
 
 local type Item = item.Item
 
@@ -213,10 +211,10 @@ local function test_pull_skips_what_misses_the_bar()
       a.item and a.item.id or ""))
 end
 
-local function test_the_doing_bound_suppresses_the_pull()
+local function test_existing_work_does_not_suppress_a_pull()
   local items: {Item} = {}
   local root = placed_root(items)
-  for k = 1, flow.DOING_LIMIT do
+  for k = 1, 12 do
     items[#items + 1] = make({parent = root.id,
         claim = ("wake-%d"):format(k)})
   end
@@ -224,15 +222,8 @@ local function test_the_doing_bound_suppresses_the_pull()
   items[#items + 1] = fresh
   local specs = ready_specs(items)
   local a = next_action(items, specs, "me")
-  assert(a.kind ~= "pull",
-    "at the bound nothing new is offered: " .. a.kind)
-  -- The terminal answer names the bound, not a decompose errand: a
-  -- session sent to make more work while pullable work waits at the
-  -- gate would deepen what cannot enter (caught by a scenario eval).
-  assert(a.kind == "none", "the honest answer is a stop: " .. a.kind)
-  assert(a.reason:find("bound", 1, true)
-    and a.reason:find("1 pullable", 1, true),
-    "and it names the bound and what it withheld: " .. a.reason)
+  assert(a.kind == "pull" and a.item.id == fresh.id,
+    "shared in-flight work does not impose global capacity: " .. a.kind)
 end
 
 local function test_the_decision_carries_alternates_across_rungs()
@@ -325,28 +316,20 @@ local function test_a_pending_review_still_outranks_the_repair()
     "a verdict awaiting a PR still comes before a lane repair: " .. a.kind)
 end
 
--- The doing bound never holds a lane repair back: the board sits
--- exactly at the bound (`_work.gitverbs`'s own `doing_refusal` would
--- refuse an ordinary take here), and `next_action` still offers the
--- repair as the pull rather than falling through to the bound's own
--- terminal "none".
-local function test_lane_repair_is_admitted_at_the_doing_bound()
+-- Existing in-flight work does not hold a lane repair back either.
+local function test_lane_repair_is_admitted_with_other_work_in_flight()
   local items: {Item} = {}
   local root = placed_root(items)
-  for k = 1, flow.DOING_LIMIT do
+  for k = 1, 12 do
     items[#items + 1] = make({parent = root.id,
         claim = ("wake-%d"):format(k)})
   end
   local repair = make({parent = root.id, key = "fuzz.yml"})
   items[#items + 1] = repair
-  local c = fixture.make_index(items)
-  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
-    "the bound sits exactly at its own limit")
-  check.must(idxmod.close(c))
   local specs = ready_specs(items)
   local a = next_action(items, specs, "me")
   assert(a.kind == "pull" and a.item.id == repair.id,
-    "the repair is still offered at the bound: " .. a.kind)
+    "the repair is still offered: " .. a.kind)
 end
 
 local function test_none_names_the_binding_fact()
@@ -387,54 +370,37 @@ local function test_a_research_handover_is_offered_as_the_review()
     .. b.kind)
 end
 
--- The review reason names what awaits the verdict — a diff or a
--- research handover — so the reviewer reaches for `--pr`/`--head` or
--- for neither. The PR wording is the one it always was.
+-- The review reason names the exact handed-over commit that awaits a
+-- verdict, so the reviewer can inspect the same local object the
+-- verdict will record.
 local function test_the_review_reason_names_what_awaits_the_verdict()
   local items: {Item} = {}
   local root = placed_root(items)
+  local head = ("ab"):rep(20)
   local handed = make({parent = root.id, claim = "who", builders = "who",
-      result = ("ab"):rep(32)})
+      handover_head = head})
   items[#items + 1] = handed
   local a = next_action(items, ready_specs(items), "me")
   assert(a.kind == "review" and a.item.id == handed.id, a.kind)
-  assert(a.reason:find("a research handover awaits a verdict", 1, true),
-    "a handover is named as one: " .. a.reason)
+  assert(a.reason:find("commit " .. head:sub(1, 12)
+      .. " awaits a verdict", 1, true),
+    "the handed-over commit is named: " .. a.reason)
   assert(not a.reason:find("PR", 1, true),
     "and no PR is claimed for it: " .. a.reason)
-  local diffs: {Item} = {}
-  local other = placed_root(diffs)
-  local diff = make({parent = other.id, claim = "who", pr = 2})
-  diffs[#diffs + 1] = diff
-  local b = next_action(diffs, ready_specs(diffs), "me")
-  assert(b.kind == "review" and b.item.id == diff.id, b.kind)
-  assert(b.reason == "a PR awaits a verdict — verdicts before new work",
-    "a diff's reason is unchanged: " .. b.reason)
 end
 
--- An accepted handover has no PR to merge, so its finish reason names
--- `done`, not a merge it will never await; an accepted diff's reason
--- is the one it always was.
+-- An accepted handover names the local landing action and the commit
+-- evidence the caller must supply; it never implies provider state.
 local function test_an_accepted_handovers_finish_reason_names_done()
   local items: {Item} = {}
   local root = placed_root(items)
   local accepted = make({parent = root.id, claim = "who", builders = "who",
-      result = ("ab"):rep(32), verdict = "accept"})
+      handover_head = ("ab"):rep(20), verdict = "accept"})
   items[#items + 1] = accepted
   local a = next_action(items, ready_specs(items), "me")
   assert(a.kind == "finish" and a.item.id == accepted.id, a.kind)
-  assert(a.reason:find("`done ID` ends it", 1, true),
+  assert(a.reason:find("`done ID --landed SHA`", 1, true),
     "names done directly: " .. a.reason)
   assert(not a.reason:find("merge", 1, true) and not a.reason:find("PR", 1, true),
     "and claims no merge: " .. a.reason)
-  local diffs: {Item} = {}
-  local other = placed_root(diffs)
-  local diff = make({parent = other.id, claim = "who", pr = 1,
-      verdict = "accept"})
-  diffs[#diffs + 1] = diff
-  local b = next_action(diffs, ready_specs(diffs), "me")
-  assert(b.kind == "finish" and b.item.id == diff.id, b.kind)
-  assert(b.reason == ("%s is accepted, awaiting merge — finishing beats "
-      .. "starting"):format(diff.id:sub(1, 8)),
-    "a diff's reason is unchanged: " .. b.reason)
 end

@@ -1,155 +1,79 @@
---- `worktree`: the orchestrator's one command for a builder's
---- checkout, run right after `take ID` succeeds — refused outright,
---- before any git or network call, when the caller does not hold ID's
---- claim (the same session identity `take` resolves). Resolves ID's repo
---- to a LOCAL checkout — the checkout `bin/gitboard` itself runs in
---- when ITS origin already is the item's repo, else the first sibling
---- directory beside it whose origin matches (`--root DIR` skips this
---- and names the checkout directly, also how a test uses a bare
---- fixture with no sibling layout to fake; neither answering refuses,
---- naming the URL to clone) — branches and adds a worktree beside it
---- (never reused: an existing branch or path both refuse, checked
---- before any network call), bootstraps it, then fetches each `--ref`
---- into `refs/spike/<ref-basename>` — after the bootstrap, whose own
---- `--make fetch` moves `FETCH_HEAD`, so a plain `git fetch` there
---- would be clobbered before a caller could read it. The worktree
---- lands at `<checkout>/../wt/<id8>`,
---- `<id8>` the item id's first 8 characters, `take`'s own branch
---- name — the sequence every builder brief used to spend its first
---- 30-40 tool calls doing by hand. The bootstrap's `--make fetch`/
---- `--make build` is quiet by default: each step reduces to its own
+--- `worktree` prepares a local checkout for a confirmed, active claim.
+--- The item repository resolves only through the checkout-local
+--- `gitboard.repository` map or the explicit `--root` override. Builder work
+--- starts at the exact product commit stored in `claim_base`; review work
+--- starts at the exact `handover_head`. Gitboard never fetches either one.
+---
+--- The stable branch is `work/<handle>/<claim-root-short>`, where the handle
+--- is the item's last eight characters. Its worktree lives at the matching
+--- nested path under `<checkout>/../wt`. A renewal preserves that name; a
+--- post-expiry acquisition gets a new claim root and cannot collide. Existing
+--- branches and paths are refused, never reused. Each caller-prepared `--ref`
+--- is copied into `refs/spike/<ref-basename>`. The bootstrap's local-only
+--- `--make build` is quiet by default: the step reduces to its own
 --- `PASS`/`FAIL` summary line, `--verbose` streams the hundreds of
 --- per-file `compile`/`compile-batch` lines verbatim instead — a
 --- failed step always prints everything captured, unfiltered,
 --- whichever mode is in play.
 ---
---- `--review` swaps the whole shape for the review checkout instead,
---- run right after `take ID` claims the REVIEW, before `brief review
---- ID`: claim comes from ID's `reviewer` field rather than its build
---- `claim`, the path is `<checkout>/../wt/review-<id8>` — the exact
---- one `_work.brieftext_review`'s `<WORKTREE>` already names — and what
---- lands there is the PR's CURRENT head (`git fetch origin
---- refs/pull/<pr>/head`) checked out on its own local branch
---- (`pr-<id8>`), never a fresh branch off base: a review reads a diff,
---- it does not extend one. Refuses the same way over an unclaimed (or
---- foreign-claimed) review, and again when ID carries no PR yet to
---- fetch. `--verbose` applies the same way to a review checkout's
---- bootstrap as to a builder's.
+--- `--review` uses the same whole-item lease and branch identity but checks
+--- out the handed-over commit. `--verbose` applies identically.
 local child = require("cosmic.child")
+local claim = require("_work.claim")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
+local gitclaim = require("_work.gitclaim")
 local item = require("_work.item")
+local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 
---- `git remote get-url origin`'s `owner/repo` for an arbitrary local
---- checkout, nil with no readable github origin (`_work.gh.slug`'s
---- URL parse, against any directory — a product repo means asking a
---- checkout the store never opens).
---- @param dir string A local checkout
---- @return string | nil The `owner/name` slug
-local function checkout_slug(dir: string): string | nil
-  local r, _err = child.run({"git", "remote", "get-url", "origin"}, {cwd = dir})
-  if r == nil or not r.ok then return nil end
-  local url = (r.stdout or ""):gsub("%s+$", "")
-  local owner, name = url:match("github%.com[:/]([^/]+)/(.+)$")
-  if owner == nil then return nil end
-  return ("%s/%s"):format(owner, (name:gsub("%.git$", "")))
-end
-
---- The checkout `bin/gitboard` itself runs in: `GITBOARD_DIR`'s
---- parent's parent when that guess carries `bin/gitboard`, else the
---- nearest ancestor of this process's cwd that does. Mirrors
---- `_work.brief`'s private `product_root` (duplicated, not exported —
---- the sibling search below asks it a different question).
---- @return string The checkout's absolute path, "" if unknown
-local function invoking_checkout(): string
-  local dir = env.get("GITBOARD_DIR")
-  if dir ~= nil and dir ~= "" then
-    local guess = fs.absolute_path(fs.dirname(fs.dirname(dir)))
-    if fs.is_file(fs.join(guess, "bin/gitboard")) then return guess end
+--- Recover and validate the Git-backed lease which authorizes local work.
+--- Looking at the durable holder field alone is insufficient: ordinary item
+--- mutations may sit above the control commit, and a two-hour lease can have
+--- expired without rewriting the item. The returned root is the stable branch
+--- identity; renewals change only the control/deadline.
+local function active_claim(s: store.Store, it: item.Item, session: string):
+  claim.State | nil, string
+  local holder = it.claim or ""
+  if holder == "" then
+    return nil, ("REFUSED: %s is not claimed by %s — claim it first")
+    :format(it.id:sub(-8), session)
   end
-  local cur, _err = fs.cwd()
-  while cur ~= nil do
-    if fs.is_file(fs.join(cur, "bin/gitboard")) then return cur end
-    local parent = fs.dirname(cur)
-    if parent == cur then break end
-    cur = parent
-  end
-  return ""
-end
-
---- The local checkout backing `repo` (`owner/name`): the invoking
---- checkout itself when its OWN origin already is `repo`, else the
---- first sibling directory beside it whose origin matches.
---- @param repo string The item's `owner/name`
---- @return string The checkout's absolute path, "" on failure
---- @return string The refusal, "" on success
-local function resolve_checkout(repo: string): string, string
-  local here = invoking_checkout()
-  if here == "" then
-    return "", ("no local checkout of bin/gitboard found to resolve %s "
-      .. "against — clone it: https://github.com/%s"):format(repo, repo)
-  end
-  if checkout_slug(here) == repo then return here, "" end
-  local parent = fs.dirname(here)
-  local dir, direrr = fs.open_dir(parent)
-  if dir == nil then return "", direrr end
-  while true do
-    local name = dir:read()
-    if name == nil then break end
-    if name ~= "." and name ~= ".." then
-      local cand = fs.join(parent, name)
-      if cand ~= here and fs.is_dir(cand) and checkout_slug(cand) == repo then
-        dir:close()
-        return cand, ""
-      end
+  local tip = s.leased_sha[it.id] or ""
+  if tip == "" then return nil, "could not identify the observed item commit" end
+  local st, err = gitclaim.read_state(s.root, tip, holder, it.claim_base or "")
+  if err ~= "" then return nil, err end
+  local status = claim.status(st, os.time())
+  if status ~= "active" then
+    if status == "future" then
+      return nil, "REFUSED: claim timestamp is more than five minutes in the future"
     end
+    return nil, ("REFUSED: %s's claim has expired — claim it again")
+    :format(it.id:sub(-8))
   end
-  dir:close()
-  return "", ("no local checkout of %s beside %s — clone it: https://github.com/%s")
-  :format(repo, parent, repo)
-end
-
---- The refusal `worktree` earns when `id`'s claim is not the caller's,
---- nil when it is — the same owner-rule shape `gitowner` uses for
---- `take --pr`: name the value in play and, once there is a caller to
---- contrast it with, name that too. Unclaimed ("") never counts as the
---- caller's, even for an unnamed caller — "" is the absence of a
---- claim, not an identity a comparison can match. `--review` passes
---- ID's `reviewer` field here in place of its `claim` — the message
---- reads identically either way, since the board's own vocabulary
---- already calls a review claim a "claim" (`take_review`'s own commit
---- message: "review %s claimed by %s").
---- @param id8 string The item id's first 8 characters, for the message
---- @param claim string The relevant claim field, "" when unclaimed
---- @param session string The caller's resolved session
---- @return string | nil The refusal
-local function claim_refusal(id8: string, claim: string, session: string): string | nil
-  if claim ~= "" and claim == session then return nil end
-  if claim == "" then
-    return ("REFUSED: %s is not claimed by %s — take it first")
-    :format(id8, session)
+  if st == nil then return nil, "active claim has no state" end
+  if st.holder ~= session then
+    return nil, ("REFUSED: %s is claimed by %s, not %s")
+    :format(it.id:sub(-8), st.holder, session)
   end
-  return ("REFUSED: %s is claimed by %s, not %s — take it first")
-  :format(id8, claim, session)
+  return st, ""
 end
 
---- The refusal `worktree --review` earns when ID carries no PR to
---- fetch — checked after the claim, so an unclaimed review still
---- refuses on the claim first.
---- @param id8 string The item id's first 8 characters, for the message
---- @param pr integer The item's `pr` field, 0 for none
---- @return string | nil The refusal
-local function no_pr_refusal(id8: string, pr: integer): string | nil
-  if (pr or 0) ~= 0 then return nil end
-  return ("REFUSED: %s has no PR recorded — a review checkout fetches "
-    .. "the PR's current head, and there is none yet"):format(id8)
+--- Resolve a full or abbreviated product commit without consulting a branch,
+--- remote, or provider. The claim and handover paths pass full ids.
+local function product_commit(root: string, sha: string): string, string
+  if sha == "" then return "", "no product commit was recorded" end
+  local r, err = child.run({"git", "rev-parse", "--verify", sha .. "^{commit}"},
+    {cwd = root})
+  if r == nil then return "", err end
+  if not r.ok then return "", ("product commit %s is not present locally"):format(sha) end
+  return (r.stdout:gsub("%s+$", "")), ""
 end
 
---- ID's PR base: the item's own `base` when set, else `master` for a
---- `cosmopolitan` repo, `main` otherwise — `_work.brief`'s own
---- `<BASE_BRANCH>` rule.
+--- Compatibility helper for callers that need a repository's conventional
+--- base name. Claim worktree creation itself never guesses a branch: it uses
+--- the exact product commit recorded in the claim.
 --- @param repo string The item's `owner/name`
 --- @param base string The item's own `base` field, "" if unset
 --- @return string The branch to fetch and branch off of
@@ -191,7 +115,7 @@ local function summary_of(text: string): {string}
   return out
 end
 
---- Runs one bootstrap step (a `bin/cosmic --make fetch`/`--make build`
+--- Runs one local bootstrap step (a `bin/cosmic --make build`
 --- invocation). `verbose` streams it verbatim — `stdout`/`stderr`
 --- inherited, as every step ran before this flag existed. Quiet (the
 --- default) instead captures it and prints only `summary_of` its
@@ -218,7 +142,7 @@ local function run_step(path: string, argv: {string}, verbose: boolean)
 end
 
 --- Bootstraps a fresh worktree, builder or review: `bin/cosmic --make
---- fetch` then `--make build` for a cosmic tree (`run_step` decides
+--- build` for a cosmic tree (`run_step` decides
 --- how much of their own output reaches the caller), nothing for a
 --- cosmopolitan tree (its own gate is the builder's first) or a repo
 --- this tool does not recognize. `GITBOARD_WORKTREE_BOOTSTRAP=0` skips
@@ -232,10 +156,9 @@ end
 local function bootstrap(path: string, verbose: boolean): string
   if fs.is_file(fs.join(path, "bin/cosmic")) then
     if env.get("GITBOARD_WORKTREE_BOOTSTRAP") ~= "0" then
-      run_step(path, {"bin/cosmic", "--make", "fetch"}, verbose)
       run_step(path, {"bin/cosmic", "--make", "build"}, verbose)
     end
-    return "cosmic (fetch + build)"
+    return "cosmic (local build)"
   end
   if fs.is_dir(fs.join(path, "third_party/lua")) then
     return "cosmopolitan (nothing needed)"
@@ -252,12 +175,37 @@ local function ref_basename(ref: string): string
   return ref:match("([^/]+)$") or ref
 end
 
---- Bootstraps `path` then fetches each `--ref` into it as
---- `refs/spike/<basename>` — the shared tail both worktree kinds run
---- once their checkout exists on disk, after the bootstrap so its own
---- `--make fetch` cannot clobber a ref landed before it.
+--- Resolve one caller-prepared ref without contacting a remote. A
+--- fully-qualified ref is used verbatim; a short name may name a local
+--- branch or an already-fetched remote-tracking branch. Ambiguous names
+--- follow that explicit order rather than Git's DWIM rules.
+--- @param path string The product checkout
+--- @param name string The caller's ref spelling
+--- @return string Commit OID, or "" when the ref is not present
+local function prepared_ref(path: string, name: string): string
+  local candidates: {string}
+  if name:match("^refs/") ~= nil then
+    candidates = {name}
+  else
+    candidates = {"refs/heads/" .. name}
+  end
+  for _, ref in ipairs(candidates) do
+    local r = child.run({"git", "rev-parse", "--verify", "--quiet",
+        ref .. "^{commit}"}, {cwd = path})
+    if r ~= nil and r.ok then
+      local sha = (r.stdout or ""):gsub("%s+$", "")
+      return sha
+    end
+  end
+  return ""
+end
+
+--- Bootstraps `path` then copies each already-present `--ref` into
+--- `refs/spike/<basename>`. The caller owns every fetch; a missing ref
+--- is an actionable precondition failure, never a reason for gitboard
+--- to contact a remote itself.
 --- @param path string The fresh worktree
---- @param refs {string} `--ref` occurrences to fetch after bootstrap
+--- @param refs {string} Caller-prepared `--ref` occurrences
 --- @param verbose boolean Stream the bootstrap verbatim (`--verbose`)
 --- @return string The bootstrap label, "" on a ref-fetch failure
 --- @return string The failure, "" on success
@@ -266,75 +214,71 @@ local function bootstrap_and_refs(path: string, refs: {string},
   local bootstrapped = bootstrap(path, verbose)
   for _, ref in ipairs(refs) do
     local name = ref_basename(ref)
-    local r = child.run({"git", "fetch", "origin",
-        ref .. ":refs/spike/" .. name}, {cwd = path})
+    local sha = prepared_ref(path, ref)
+    if sha == "" then
+      return "", ("prepared ref %s is missing — caller must fetch it before worktree")
+      :format(ref)
+    end
+    local r = child.run({"git", "update-ref", "refs/spike/" .. name,
+        sha}, {cwd = path})
     if r == nil or not r.ok then
-      return "", ("git fetch origin %s (--ref) failed: %s"):format(ref,
+      return "", ("recording prepared ref %s failed: %s"):format(ref,
         r ~= nil and r.stderr or "could not run git")
     end
   end
   return bootstrapped, ""
 end
 
---- worktree --review: create ID's review checkout in one command —
---- the PR's current head, fetched onto its own local branch and
---- checked out at `wt/review-<id8>`. Refuses before any git or
---- network call unless `session` already holds ID's review claim
---- (`reviewer`), and again when ID carries no PR yet.
+--- worktree --review: create ID's review checkout at the exact handed-over
+--- commit. Refuses before any product Git operation unless `session` holds
+--- the item's active whole-item claim.
 --- @param it item.Item The item to make a review checkout for (loaded)
---- @param id8 string The item id's first 8 characters
---- @param session string The caller's session; must hold ID's review claim
 --- @param root_override string `--root`, "" to auto-resolve
---- @param refs {string} `--ref` occurrences, fetched into the worktree
+--- @param refs {string} Caller-prepared `--ref` occurrences copied into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
 --- @param verbose boolean `--verbose`: stream the bootstrap's fetch/build
 --- output verbatim instead of just its summary line(s)
 --- @return integer Exit code
-local function cmd_worktree_review(it: item.Item, id8: string,
-    session: string, root_override: string, refs: {string},
+local function cmd_worktree_review(s: store.Store, it: item.Item,
+    st: claim.State, root_override: string, refs: {string},
     verbose: boolean): integer
-  local crefusal = claim_refusal(id8, it.reviewer or "", session)
-  if crefusal ~= nil then return gate.verdict_line("worktree", false, crefusal) end
+  local handle = it.id:sub(-8)
   local repo = it.repo or ""
   if repo == "" then
     return gate.verdict_line("worktree", false,
       ("%s has no repo set — worktree needs one to resolve a checkout")
-      :format(id8))
+      :format(handle))
   end
-  local prrefusal = no_pr_refusal(id8, it.pr or 0)
-  if prrefusal ~= nil then return gate.verdict_line("worktree", false, prrefusal) end
-  local checkout = root_override or ""
-  if checkout == "" then
-    local found, ferr = resolve_checkout(repo)
-    if found == "" then return gate.verdict_line("worktree", false, ferr) end
-    checkout = found
-  end
-  local path = fs.join(fs.dirname(checkout), "wt", "review-" .. id8)
+  local checkout, maperr = repository_map.resolve(s.root, repo, root_override or "")
+  if checkout == nil then return gate.verdict_line("worktree", false, maperr) end
+  local branch = claim.branch(it.id, st.root)
+  local path = fs.join(fs.dirname(checkout), "wt", branch)
   if fs.is_dir(path) or fs.is_file(path) then
     return gate.verdict_line("worktree", false,
       ("%s already exists — never reused"):format(path))
   end
-  local branch = "pr-" .. id8
   local brefusal = branch_taken_refusal(checkout, branch)
   if brefusal ~= nil then return gate.verdict_line("worktree", false, brefusal) end
-  local fetched = child.run({"git", "fetch", "origin",
-      ("refs/pull/%d/head:refs/heads/%s"):format(it.pr, branch)}, {cwd = checkout})
-  if fetched == nil or not fetched.ok then
+  local made, mkerr = fs.make_dirs(fs.dirname(path))
+  if not made then return gate.verdict_line("worktree", false, mkerr) end
+  local review_sha, herr = product_commit(checkout, it.handover_head or "")
+  if review_sha == "" then
     return gate.verdict_line("worktree", false,
-      ("git fetch origin refs/pull/%d/head failed: %s"):format(it.pr,
-        fetched ~= nil and fetched.stderr or "could not run git"))
+      ("%s — caller must fetch the handed-over commit before worktree")
+      :format(herr))
   end
-  local added = child.run({"git", "worktree", "add", path, branch}, {cwd = checkout})
+  local added = child.run({"git", "worktree", "add", "-b", branch, path,
+      review_sha}, {cwd = checkout})
   if added == nil or not added.ok then
     return gate.verdict_line("worktree", false,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped, rerr = bootstrap_and_refs(path, refs, verbose)
-  if rerr ~= "" then return gate.verdict_line("worktree", false, rerr) end
+  local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose)
+  if referr ~= "" then return gate.verdict_line("worktree", false, referr) end
   return gate.verdict_line("worktree", true,
-    ("%s review at %s (PR #%d, bootstrapped %s)"):format(id8, path, it.pr,
-      bootstrapped))
+    ("%s review at %s (commit %s, bootstrapped %s)"):format(handle, path,
+      review_sha, bootstrapped))
 end
 
 --- worktree: create ID's builder checkout in one command. Refuses
@@ -347,7 +291,7 @@ end
 --- @param id string The item to make a checkout for
 --- @param session string The caller's session; must hold ID's claim
 --- @param root_override string `--root`, "" to auto-resolve
---- @param refs {string} `--ref` occurrences, fetched into the worktree
+--- @param refs {string} Caller-prepared `--ref` occurrences copied into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
 --- @param review boolean `--review`: provision the review checkout instead
 --- @param verbose boolean `--verbose`: stream the bootstrap's fetch/build
@@ -358,49 +302,47 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
     verbose: boolean): integer
   local it, lerr = store.load(s, id)
   if it == nil then return gate.verdict_line("worktree", false, lerr) end
-  local id8 = id:sub(1, 8)
+  local handle = id:sub(-8)
+  local st, sterr = active_claim(s, it, session)
+  if st == nil then return gate.verdict_line("worktree", false, sterr) end
   if review then
-    return cmd_worktree_review(it, id8, session, root_override, refs, verbose)
+    return cmd_worktree_review(s, it, st, root_override, refs, verbose)
   end
-  local crefusal = claim_refusal(id8, it.claim or "", session)
-  if crefusal ~= nil then return gate.verdict_line("worktree", false, crefusal) end
   local repo = it.repo or ""
   if repo == "" then
     return gate.verdict_line("worktree", false,
       ("%s has no repo set — worktree needs one to resolve a checkout")
-      :format(id8))
+      :format(handle))
   end
-  local checkout = root_override or ""
-  if checkout == "" then
-    local found, ferr = resolve_checkout(repo)
-    if found == "" then return gate.verdict_line("worktree", false, ferr) end
-    checkout = found
-  end
-  local base = default_base(repo, it.base or "")
-  local path = fs.join(fs.dirname(checkout), "wt", id8)
+  local checkout, maperr = repository_map.resolve(s.root, repo, root_override or "")
+  if checkout == nil then return gate.verdict_line("worktree", false, maperr) end
+  local branch = claim.branch(id, st.root)
+  local path = fs.join(fs.dirname(checkout), "wt", branch)
   if fs.is_dir(path) or fs.is_file(path) then
     return gate.verdict_line("worktree", false,
       ("%s already exists — never reused"):format(path))
   end
-  local brefusal = branch_taken_refusal(checkout, id8)
+  local brefusal = branch_taken_refusal(checkout, branch)
   if brefusal ~= nil then return gate.verdict_line("worktree", false, brefusal) end
-  local fetched = child.run({"git", "fetch", "origin", base}, {cwd = checkout})
-  if fetched == nil or not fetched.ok then
+  local made, mkerr = fs.make_dirs(fs.dirname(path))
+  if not made then return gate.verdict_line("worktree", false, mkerr) end
+  local base_sha, berr = product_commit(checkout, st.product_base)
+  if base_sha == "" then
     return gate.verdict_line("worktree", false,
-      ("git fetch origin %s failed: %s"):format(base,
-        fetched ~= nil and fetched.stderr or "could not run git"))
+      ("%s — caller must fetch the claim base before worktree"):format(berr))
   end
-  local added = child.run({"git", "worktree", "add", "-b", id8, path,
-      "origin/" .. base}, {cwd = checkout})
+  local added = child.run({"git", "worktree", "add", "-b", branch, path,
+      base_sha}, {cwd = checkout})
   if added == nil or not added.ok then
     return gate.verdict_line("worktree", false,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped, rerr = bootstrap_and_refs(path, refs, verbose)
-  if rerr ~= "" then return gate.verdict_line("worktree", false, rerr) end
+  local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose)
+  if referr ~= "" then return gate.verdict_line("worktree", false, referr) end
   return gate.verdict_line("worktree", true,
-    ("%s at %s (bootstrapped %s)"):format(id8, path, bootstrapped))
+    ("%s at %s on %s (bootstrapped %s)"):format(handle, path, branch,
+      bootstrapped))
 end
 
 local record gitworktree

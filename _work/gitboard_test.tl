@@ -91,12 +91,10 @@ local function test_help_documents_the_id_forms()
     "help should say a handle is accepted bare or wrapped\ngot: " .. printed)
   assert(printed:find("unambiguous prefix", 1, true),
     "help should say an unambiguous prefix also works\ngot: " .. printed)
-  assert(printed:find("branches are named", 1, true),
-    "help should describe how branches are named\ngot: " .. printed)
-  assert(printed:find("first 8", 1, true),
-    "help should name the branch as the id's first 8 characters\ngot: " .. printed)
-  assert(printed:find("different string", 1, true),
-    "help should call out that the branch differs from the handle\ngot: " .. printed)
+  assert(printed:find("work/<handle>/<claim>", 1, true),
+    "help should name the per-claim work branch\ngot: " .. printed)
+  assert(printed:find("expired attempts never collide", 1, true),
+    "help should explain why work branches include the claim\ngot: " .. printed)
 end
 
 -- `resolve_id`'s tail (handle) branch leases the id it resolves to

@@ -5,12 +5,11 @@
 --- gate here is unchanged, since the board carries no claim, PR or
 --- builders (`item.problems`) for any of them to fire on.
 local doneroot = require("_work.gitdoneroot")
+local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
-local gh = require("_work.gh")
 local item = require("_work.item")
-local publish = require("_work.publish")
 local read = require("_work.read")
-local review = require("_work.review")
+local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 
 --- @param by string | nil The completed child verifying an outcome, "" off one
@@ -21,7 +20,8 @@ local store = require("_work.store")
 --- @param why string Why --force was needed
 --- @return integer Exit code
 local function cmd_done(s: store.Store, id: string, reason: string,
-    force: boolean, why: string, by?: string): integer
+    force: boolean, why: string, by?: string, landed?: string,
+    repo_dir?: string, session?: string): integer
   local forced = gate.force_refusal(force, why)
   if forced then
     return gate.verdict_line("done", false, "REFUSED: " .. forced)
@@ -78,31 +78,34 @@ local function cmd_done(s: store.Store, id: string, reason: string,
         .. "a verdict too; record one (`gitboard verdict`), or end it "
         .. "without review via --force --why"):format(id:sub(1, 8)))
   end
-  -- The accepted path verifies the merge before ending the item: an
-  -- item ended over an unmerged request says the work landed when it
-  -- did not, and nothing downstream would catch it. Whether the merge
-  -- happened is the one fact the board cannot hold itself, so the
-  -- request is read every time (a local-only board has none to read).
-  if (it.pr or 0) ~= 0 and (it.verdict or "") == "accept"
-  and publish.has_origin(s) and not force then
-    local p, perr = gh.pull(s, it.pr, it.repo)
-    if p == nil then
-      return gate.verdict_line("done", false,
-        ("cannot read PR #%d: %s"):format(it.pr, perr))
+  -- Commit-only completion. The caller fetched the product repository and
+  -- supplied the landed commit. Gitboard proves locally that the accepted
+  -- commit is in its ancestry or that a bounded first-parent suffix carries
+  -- the exact accepted content patch (squash/rebase).
+  local handed = it.handover_head or ""
+  if reason == "completed" and (it.verdict or "") == "accept"
+  and handed ~= "" then
+    if (landed or "") == "" then
+      if not force then
+        return gate.verdict_line("done", false,
+          "REFUSED: completed accepted work names its landed commit with --landed")
+      end
+    else
+      local root, maperr = repository_map.resolve(s.root, it.repo or "",
+        repo_dir or "")
+      if root == nil then
+        return gate.verdict_line("done", false, "REFUSED: " .. maperr)
+      end
+      local canonical, verr = commit_evidence.verify_landing(root,
+        it.claim_base or "", it.verdict_head or "", landed or "")
+      if canonical == nil then
+        return gate.verdict_line("done", false, "REFUSED: " .. verr)
+      end
+      it.landed_head = canonical
     end
-    local blocked = review.blocks_land(p, it.verdict_head, id)
-    if blocked then
-      return gate.verdict_line("done", false, "REFUSED: " .. blocked)
-    end
-    -- A merge cannot be undone, so a head that moved past the one the
-    -- accept judged is not a refusal: refusing would strand the item
-    -- forever. Say it loudly instead, so the substitution is in the
-    -- log rather than nowhere.
-    if review.head_moved(p, it.verdict_head) then
-      print(("gitboard-done: WARNING PR #%d merged at %s but the accept "
-          .. "judged %s"):format(it.pr, (p.head_sha or ""):sub(1, 7),
-          (it.verdict_head or ""):sub(1, 7)))
-    end
+  elseif (landed or "") ~= "" then
+    return gate.verdict_line("done", false,
+      "REFUSED: --landed belongs to completed accepted work")
   end
   local role, rerr = read.role(c, it.id)
   if role == nil then
@@ -124,8 +127,6 @@ local function cmd_done(s: store.Store, id: string, reason: string,
       from = sub
     end
   end
-  it.claim = ""
-  it.reviewer = ""
   it.resolution = reason
   -- CHILD rides the commit subject and the verdict line: the log names
   -- the evidence a verified outcome stands on.
@@ -135,7 +136,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("done %s %s%s (from %s)%s"):format(id:sub(1, 8), reason, by_note, from,
-      gate.forced_suffix(force, why)), "done")
+      gate.forced_suffix(force, why)), "done", nil, session, false, force, why)
   if not ok then
     return gate.verdict_line("done", false, err)
   end
@@ -168,7 +169,8 @@ end
 
 local record gitdone
   cmd_done: function(s: store.Store, id: string, reason: string,
-  force: boolean, why: string, by?: string): integer
+  force: boolean, why: string, by?: string, landed?: string,
+  repo_dir?: string, session?: string): integer
 end
 
 local M: gitdone = {

@@ -213,7 +213,10 @@ local function save_batch(req: Request): Outcome | nil, string
   for ref in pairs(extra_old) do
     patterns[#patterns + 1] = ref
   end
-  local found, ferr = refs.for_each_ref(req.root, patterns)
+  -- These are the temporary local target refs fast-import just moved,
+  -- not confirmed board refs (remote-backed reads normally resolve
+  -- through `for_each_ref` to remote-tracking state).
+  local found, ferr = refs.for_each_ref_raw(req.root, patterns)
   if found == nil then
     return nil, ("fast-import applied, but its result could not be read back: %s")
     :format(ferr)

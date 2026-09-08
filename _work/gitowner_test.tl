@@ -14,6 +14,7 @@ local fixture = require("_work.fixture")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
 local owner = require("_work.gitowner")
+local refs = require("_work.refs")
 local store = require("_work.store")
 
 local ACCESS_SPEC < const > = fixture.READY_SPEC
@@ -64,6 +65,17 @@ local function test_board_owner_is_the_origins_owner()
     .. tostring(owner.board_owner(s)))
 end
 
+-- Repository identity follows the caller-selected board remote; `origin` is
+-- only the default, not part of the data model.
+local function test_board_owner_uses_the_configured_non_origin_remote()
+  local s = github_board("configured-owner")
+  fixture.git(s.root, {"remote", "add", "upstream",
+      "https://github.com/alternate/board.git"})
+  assert(refs.use_remote(s.root, "upstream"))
+  assert(owner.board_owner(s) == "alternate", "got: "
+    .. tostring(owner.board_owner(s)))
+end
+
 -- `new --repo` under a foreign owner is refused with the value and the
 -- repair, and nothing is filed; the same owner as the board lands.
 local function test_new_refuses_a_foreign_owner_repo()
@@ -81,6 +93,7 @@ local function test_new_refuses_a_foreign_owner_repo()
   end
   assert(graph.cmd_new(s, "a fork-side slice", root, nil,
       "cosmic-lua/cosmopolitan") == 0, "the board's own owner lands")
+  fixture.caller_publish(s)
 end
 
 -- A `--spec-file` naming the slug under `## Access` is the escape at
@@ -90,6 +103,7 @@ local function test_new_accepts_a_foreign_owner_the_spec_declares()
   local before = ids(s)
   assert(graph.cmd_new(s, "a fork-side slice", root, ACCESS_SPEC,
       "whilp/cosmopolitan") == 0, "a declared cross-owner repo lands")
+  fixture.caller_publish(s)
   local filed: string = nil
   for id in pairs(ids(s)) do
     if not before[id] then filed = id end
@@ -114,8 +128,10 @@ local function test_set_refuses_a_foreign_owner_repo_until_declared()
   local path = fs.join(fixture.tmpdir, "write-set-access.md")
   assert(fs.write(path, ACCESS_SPEC))
   assert(gitspec.cmd_spec(s, leaf, path) == 0)
+  fixture.caller_publish(s)
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0,
     "declared under the item's own spec, the field is accepted")
+  fixture.caller_publish(s)
   assert(check.must(store.load(s, leaf)).repo == "whilp/cosmopolitan")
 end
 

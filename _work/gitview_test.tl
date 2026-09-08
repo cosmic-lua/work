@@ -61,7 +61,7 @@ local function board_items(): {item.Item}
     check.must(item.decode({id = CONTAINER, title = "a container",
           parent = GOAL})),
     check.must(item.decode({id = LEAF, title = "a leaf", parent = CONTAINER,
-          claim = "session-a", pr = 42})),
+          claim = "session-a", handover_head = ("ab"):rep(20)})),
     check.must(item.decode({id = FRESH, title = "a fresh leaf",
           parent = GOAL})),
     check.must(item.decode({id = LESSER, title = "a lesser outcome", parent = BOARD})),
@@ -157,12 +157,12 @@ local function test_status_shows_no_trailer_when_todo_equals_the_total()
   assert(not has(lines, "more$"), table.concat(lines, "\n"))
 end
 
-local function test_status_renders_doing_against_the_bound()
+local function test_status_renders_doing_without_shared_capacity()
   local lines, verdict = status(board_items(), full_specs())
-  assert(has(lines, "^doing  1/10$"), table.concat(lines, "\n"))
+  assert(has(lines, "^doing  1$"), table.concat(lines, "\n"))
   assert(has(lines, "%[review%]"), "the substate shows")
   assert(has(lines, "@session%-a"), "so does the claim")
-  assert(has(lines, "pr:42"), "and the PR")
+  assert(has(lines, "handover:abababababab"), "and the handed-over commit")
   assert(has(lines, "^todo   1 %(1 pullable%)$"),
     "todo renders its depth and its pullable count: "
     .. table.concat(lines, "\n"))
@@ -170,7 +170,7 @@ local function test_status_renders_doing_against_the_bound()
       .. " a fresh leaf %[pullable%]$"),
     "the top of todo shows the wrapped handle and its marks: "
     .. table.concat(lines, "\n"))
-  assert(verdict == "doing 1/10", verdict)
+  assert(verdict == "doing 1", verdict)
 end
 
 -- A doing row under review names its reviewer beside the PR, so a
@@ -226,7 +226,7 @@ local function test_status_names_graph_problems()
   assert(verdict:find("graph problem%(s%)"), verdict)
 end
 
-local function test_status_reports_the_bound_binding()
+local function test_status_reports_the_unbounded_doing_count()
   local items = board_items()
   for k = 1, 10 do
     items[#items + 1] = check.must(item.decode({id = fresh_id(),
@@ -234,7 +234,7 @@ local function test_status_reports_the_bound_binding()
           claim = ("wake-%d"):format(k)}))
   end
   local _, verdict = status(items, full_specs())
-  assert(verdict:find("bound: doing is at 11/10", 1, true), verdict)
+  assert(verdict == "doing 11", verdict)
 end
 
 -- The lanes row renders one `lane=conclusion` pair per required lane,
@@ -393,7 +393,7 @@ local function test_repo_is_rendered_in_show_and_status()
     "status marks the item with its repo: " .. table.concat(status_lines, "\n"))
   local leaf_line = ""
   for _, line in ipairs(status_lines) do
-    if line:find("pr:42", 1, true) then
+    if line:find("handover:abababababab", 1, true) then
       leaf_line = line
     end
   end

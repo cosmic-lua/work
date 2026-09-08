@@ -83,18 +83,23 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
   for _, it in ipairs(items) do
     local lease = (leases ~= nil and leases[it.id]) or EMPTY_LEASE
     local landed = try(db, [[
-      INSERT INTO items(id, title, parent, repo, base, key, claim, reviewer,
-        pr, result, verdict, verdict_head, verdict_spec, resolution,
+      INSERT INTO items(id, title, parent, repo, base, key, claim, claim_base,
+        handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
+        landed_head, verdict_spec, resolution,
         ref, tip, touched_at)
-      VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :reviewer,
-        :pr, :result, :verdict, :verdict_head, :verdict_spec, :resolution,
+      VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :claim_base,
+        :handover_head, :external_url, :reviewer, :pr, :result, :verdict,
+        :verdict_head, :landed_head, :verdict_spec, :resolution,
         :ref, :tip, :touched_at)
     ]], {
         id = it.id, title = it.title, parent = it.parent or "",
         repo = it.repo or "", base = it.base or "", key = it.key or "",
-        claim = it.claim or "", reviewer = it.reviewer or "",
+        claim = it.claim or "", claim_base = it.claim_base or "",
+        handover_head = it.handover_head or "", external_url = it.external_url or "",
+        reviewer = it.reviewer or "",
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",
-        verdict_head = it.verdict_head or "", verdict_spec = it.verdict_spec or "",
+        verdict_head = it.verdict_head or "", landed_head = it.landed_head or "",
+        verdict_spec = it.verdict_spec or "",
         resolution = it.resolution or "",
         ref = lease.ref, tip = lease.tip, touched_at = lease.touched_at,
       }, nil, problems, it.id)

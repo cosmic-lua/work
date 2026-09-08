@@ -15,10 +15,12 @@ local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
+local claimgate = require("_work.gitclaimgate")
 local index = require("_work.index")
 local item = require("_work.item")
 local publish = require("_work.publish")
 local read = require("_work.read")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -351,7 +353,14 @@ end
 --- @return string Error; `store.LOST_RACE` for a lost race, `store.is_noop` for a no-op
 local function commit_and_publish(s: store.Store, it: item.Item, body: string,
     message: string, verb: string, also?: {item.Item}, session?: string,
-    bounded?: boolean): boolean, string
+    bounded?: boolean, force?: boolean, why?: string): boolean, string
+  local protected: {item.Item} = {it}
+  for _, x in ipairs(also or {}) do protected[#protected + 1] = x end
+  for _, x in ipairs(protected) do
+    local refusal = claimgate.mutation_refusal(s, x, session or "",
+      force or false, why or "")
+    if refusal ~= nil then return false, refusal end
+  end
   storewrite.set_session(s, session or "")
   storewrite.set_op(s, verb)
   storewrite.set_bounded(s, bounded or false)
@@ -392,30 +401,31 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
       written[x.id] = new_sha
     end
   end
-  cache.after_save(s.root, before_digest, items, body, message, written,
-    s.written_at)
-  -- The cache file's own digest just moved (`after_save`'s patch
-  -- recorded it), but `s.index` — the CONNECTION this store has held
-  -- open since its first read — did not: a prepared statement query_one
-  -- checked out and released without a query in between never resets,
-  -- which pins that connection's OWN read snapshot to whatever it was
-  -- at that statement's last step — a `cosmic.sqlite` behavior no
-  -- in-connection re-read can undo. Closing the handle here, rather
-  -- than leaving it standing, is what makes the NEXT `store.read`/
-  -- `list` reopen against the fresh digest instead of handing a
-  -- follow-up mutation this store makes a guard already behind what
-  -- it just wrote — the reopen is a cheap reuse, never a rebuild,
-  -- since the file's own digest already matches.
+  -- Remote saves are only prepared; patching would expose unconfirmed data.
+  -- Local simulation has completed its CAS and may patch immediately.
+  if refs.board_mode(s.root) == "local" then
+    cache.after_save(s.root, before_digest, items, body, message, written,
+      s.written_at)
+  end
+  -- A local cache's digest may just have moved, while this connection's
+  -- read snapshot has not: a released prepared statement can pin it to
+  -- its prior read. A remote cache deliberately did not move, and must
+  -- not carry an open snapshot across the caller's later transport.
+  -- Closing makes the next read reopen against whichever canonical refs
+  -- exist then: a cheap reuse locally, or a digest-driven rebuild after
+  -- a remote fetch.
   local _cok, _cerr = store.close(s)
-  return publish.publish(s)
+  local published, detail = publish.publish(s)
+  if published and (detail or "") ~= "" then print(detail) end
+  return published, detail
 end
 
---- The locks a decomposition clears on the parent that just gained a
---- child: it is no longer workable, so a claim or review standing on
---- it locks nothing anyone can build. A DONE outcome reopens the same
---- way: filing or attaching a child under it is evidence against it,
---- so its resolution clears too — verified and retired outcomes
---- alike, no separate verb. The board itself never carries a
+--- A parent that just gained a child. Claims are leases over the whole
+--- item and are never released by a stage transition: only explicit
+--- `drop` (or logical expiry) makes another acquisition eligible. A
+--- DONE outcome still reopens when a child is filed or attached under
+--- it, because that graph edit is explicit evidence against the outcome.
+--- The board itself never carries a
 --- resolution to reopen (`_work.gitdoneroot` refuses `done` on it
 --- outright), so `index` is only ever consulted to tell an outcome
 --- from anything else.
@@ -442,15 +452,8 @@ local function containered(c: Index, parent: item.Item): {item.Item} | nil, stri
     return nil, rerr
   end
   local reopened = role == "outcome" and (parent.resolution or "") ~= ""
-  if (parent.claim or "") == "" and (parent.reviewer or "") == ""
-  and not reopened then
-    return {}, ""
-  end
-  parent.claim = ""
-  parent.reviewer = ""
-  if reopened then
-    parent.resolution = ""
-  end
+  if not reopened then return {}, "" end
+  parent.resolution = ""
   return {parent}, ""
 end
 
@@ -470,7 +473,7 @@ local record gitgate
   id: string, session: string): string, string
   commit_and_publish: function(s: store.Store, it: item.Item, body: string,
   message: string, verb: string, also?: {item.Item}, session?: string,
-  bounded?: boolean): boolean, string
+  bounded?: boolean, force?: boolean, why?: string): boolean, string
   containered: function(c: Index, parent: item.Item): {item.Item} | nil, string
 end
 

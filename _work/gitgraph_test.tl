@@ -5,8 +5,8 @@
 -- outlive the decomposition that made their holder a container.
 
 local check = require("cosmic.check")
-local flow = require("_work.flow")
 local gitboard = require("_work.gitboard")
+local gate = require("_work.gitgate")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local store = require("_work.store")
@@ -20,27 +20,30 @@ local commits = fixture.commits
 local give_spec = fixture.give_spec
 local root_with_leaf = fixture.root_with_leaf
 
-local function test_decomposition_is_one_push_two_commits()
+local function test_a_claim_freezes_decomposition_except_for_its_holder()
   local s = init_state_repo("decompose")
   local _, leaf = root_with_leaf(s)
-  -- The leaf is mid-build when the child arrives: the decomposition
-  -- clears the lock — the child's OWN commit and the lock-clearing
-  -- commit on the parent, landed together in one atomic push.
+  -- A claim is over the whole item, including its graph position. A
+  -- foreign caller cannot decompose it; its holder may, and the claim
+  -- persists until an explicit drop or logical expiry.
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "session-A", 0, false, "") == 0)
+  assert(graph.cmd_new(s, "a foreign sub-slice", leaf, nil, "") ~= 0,
+    "another caller cannot mutate a claimed item's graph")
   local before = commits(s)
-  local _kid = file_item(s, "a sub-slice", leaf)
+  assert(graph.cmd_new(s, "a sub-slice", leaf, nil, "", false, nil,
+      nil, nil, "session-A") == 0)
   assert(commits(s) == before + 2,
-    ("one push, two commits — child and de-phased parent: %d -> %d")
+    ("the child and its parent's new order are two commits: %d -> %d")
     :format(before, commits(s)))
   local parent = check.must(store.load(s, leaf))
-  assert(parent.claim == "",
-    "gaining a child clears the lock on the new container")
+  assert(parent.claim == "session-A",
+    "a graph transition does not implicitly release the claim")
 end
 
 -- A routine, out-of-scope finding filed as a child of an item already
--- awaiting a verdict (an open PR, or mid-`request changes`) must not
--- silently promote it to a container: its own claim and PR stand
+-- awaiting a verdict (a commit handover, or mid-`request changes`) must not
+-- silently promote it to a container: its own claim and handover stand
 -- exactly as they were, and a fresh session can still claim its own
 -- review — unlike the same filing on a bare todo/plan item, which
 -- still decomposes it (`test_decomposition_is_one_push_two_commits`
@@ -50,17 +53,23 @@ local function test_new_parent_on_a_review_item_keeps_it_workable()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  local handed = check.must(store.load(s, leaf))
+  local handover_head = ("a"):rep(40)
+  handed.handover_head = handover_head
+  assert(gate.commit_and_publish(s, handed, nil,
+      ("take %s by session-a head:%s"):format(leaf:sub(1, 8),
+        handover_head:sub(1, 12)), "take", nil, "session-a"))
 
-  assert(graph.cmd_new(s, "an unrelated finding", leaf, nil, "") == 0)
+  assert(graph.cmd_new(s, "an unrelated finding", leaf, nil, "", false,
+      nil, nil, nil, "session-a") == 0)
 
   local after = check.must(store.load(s, leaf))
-  assert(after.claim == "session-a" and after.pr == 9,
-    "the claim and PR stand exactly as they were")
+  assert(after.claim == "session-a" and after.handover_head == handover_head,
+    "the claim and commit handover stand exactly as they were")
   local role = check.must(read.role(check.must(store.read(s)), leaf))
   assert(role == "work", "the item stays workable, not a container: got " .. role)
-  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") == 0,
-    "a fresh session can still claim the item's own review")
+  assert(verbs.cmd_take(s, leaf, "session-b", 0, false, "") ~= 0,
+    "a graph transition does not let another caller replace the whole-item claim")
 end
 
 -- `new --repo` scopes the item's PR to a foreign repo; the field is
@@ -103,29 +112,24 @@ local function test_new_refuses_a_multiline_or_padded_title()
   assert(#after == #before, "neither refusal filed an item")
 end
 
--- Filing and adoption are never refused: todo is unbounded by design
--- — the queue intake writes into can always accept — and the doing
--- bound binds at take, where committing to work is the expensive
--- decision. A board at the bound still files and still adopts.
-local function test_filing_is_admitted_at_the_doing_bound()
-  local s = init_state_repo("bound")
+-- Gitboard no longer coordinates a global WIP limit. Callers may manage
+-- their own local WIP, while independent claims remain admissible even
+-- beyond the historical board-wide bound.
+local function test_filing_and_claiming_have_no_global_wip_bound()
+  local s = init_state_repo("no-global-bound")
   local goal, leaf = root_with_leaf(s)
-  for k = 1, flow.DOING_LIMIT do
+  for k = 1, 12 do
     local id = file_item(s, ("in flight %d"):format(k), goal)
     give_spec(s, id)
     assert(verbs.cmd_take(s, id, ("wake-%d"):format(k), 0, false, "") == 0,
-      "the bound admits takes up to its number")
+      "independent claims remain admissible")
   end
-  check.must(store.list(s))
-  local c = check.must(store.read(s))
-  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
-    "the board is at the bound")
   local capture = file_item(s, "a capture", "")
   assert(graph.cmd_attach(s, capture, goal) == 0,
-    "adoption is admitted at the bound")
+    "graph intake remains admissible")
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "one-more", 0, false, "") ~= 0,
-    "and the take is what the bound refuses")
+  assert(verbs.cmd_take(s, leaf, "one-more", 0, false, "") == 0,
+    "there is no shared WIP refusal")
 end
 
 -- `set` repairs the three destination facts a refinement can outgrow:

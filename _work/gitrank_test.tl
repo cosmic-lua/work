@@ -12,7 +12,8 @@ local rank = require("_work.gitrank")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
-local publish = require("_work.publish")
+local prepared = require("_work.prepared")
+local refs = require("_work.refs")
 
 local init_state_repo = fixture.init_state_repo
 local init_shared = fixture.init_shared
@@ -178,13 +179,30 @@ local function test_an_outcome_rank_survives_a_rebase()
   local r1 = file_item(a, "outcome one", "")
   local r2 = file_item(a, "outcome two", "")
   assert(rank.cmd_rank(a, r1, "", "", true) == 0)
-  assert(publish.sync(b))
+  fixture.caller_publish(a)
+  fixture.caller_fetch(b)
   assert(rank.cmd_rank(b, r2, "", "", true) == 0,
     "b ranks r2 last first, moving the board's own ref out from under a")
-  assert(rank.cmd_rank(a, r2, r1, "", false) ~= 0,
-    "the stale run is refused, not replayed")
+  fixture.caller_publish(b)
+
+  assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
+    "the stale caller may prepare against its fetched snapshot")
+  local pending = check.must(prepared.list(a.root))
+  assert(#pending == 1, "the stale rank has one durable transaction")
+  local pushed = prepared.execute(a.root, prepared.push_argv(pending[1]))
+  assert(not pushed, "the remote lease, not local preparation, rejects the race")
+  assert(prepared.execute(a.root, prepared.fetch_argv()),
+    "the caller refreshes its tracking refs after the rejected push")
+  check.must(store.close(a))
+  local outcomes = check.must(prepared.refresh(a.root))
+  assert(#outcomes == 1 and outcomes[1].state == "lost-race",
+    "refresh classifies the rejected lease")
+  assert(refs.update_ref(a.root, pending[1].staging_ref, refs.ZERO_SHA,
+      pending[1].manifest), "the caller discards the diagnosed transaction")
+
   assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
     "the re-run lands against the merged board")
+  fixture.caller_publish(a)
   check.must(store.list(a))
   local c = check.must(store.read(a))
   local board_id = check.must(read.board(c))

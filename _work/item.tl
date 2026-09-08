@@ -1,39 +1,7 @@
---- One work item: a git ref, its tip commit's tree holding the fields
---- here and its prose spec (`_work.itemtree` is that shape). The
---- decode/encode this file itself carries — the literal-table form,
---- through `cosmic.literal` — is the OLD `items/<ksuid>.tl` layout;
---- `_work.import` is its only remaining caller, replaying a git
---- directory's history at the move into the ref layout. There is ONE
---- record and no kind field — an item's role emerges from where it
---- sits in the dependency graph, the same way a file's role in cosmic
---- emerges from its position:
----
----   the board  the one parentless item — never workable, never taken
----   an outcome a direct child of the board — decomposed, never taken
----   a container any item with open children, being decomposed —
----              except a parent already carrying an open PR or
----              research result with no verdict clearing it yet,
----              which stays "work" through a routine child
----   work       a childless item below the outcome level
----
---- The depth tests that tell these apart (`_work.flow.is_board`,
---- `_work.flow.is_outcome`) need more than one item to answer, so they
---- live in `_work.flow`, not here; this file only validates per-item
---- shape (fields, exclusivity rules) and, where a rule needs no more
---- than "does this item have a parent at all", tests that directly.
----
---- A workable item's state is DERIVED from the facts it carries,
---- never declared: open and unclaimed with no PR is `todo`; a claim
---- or a PR makes it `doing`; a non-empty resolution ends it. The
---- derivation lives in `_work.flow` — this file only validates
---- per-item shape (fields, exclusivity rules).
----
---- There is no goal tier either: every item is the same record, and
---- what makes one more important than another is its position in the
---- rank path (`_work.rank`), never a field asserting its own rank. The
---- outcome prose that gives the tree its meaning lives in
---- `docs/goals.md` on cosmic's own `main` and is read by people, not
---- by this.
+--- One work item: a git ref whose tip tree holds these fields and its prose
+--- spec (`_work.itemtree`). This decoder also supports the old literal-table
+--- import layout. Role and state are derived from graph position and lifecycle
+--- facts; this module validates only one item's shape.
 local identity = require("_work.identity")
 local ksuid = require("_work.ksuid")
 local shape = require("cosmic.shape")
@@ -51,20 +19,9 @@ local record Item
   --- The id this item decomposes; "" for the board, the one parentless
   --- item.
   parent: string
-  --- The owner/name the item's PR lands in. The board carries no repo
-  --- at all (`problems` refuses one that does); every workable item
-  --- should name one explicitly — most target `_work.product.REPO`,
-  --- the product repo this board exists to move work on, and an item
-  --- whose PR targets this board repository's own machinery instead
-  --- names it explicitly too. "" reads as unset, never as "the
-  --- board's own origin" the way it once did before the board moved
-  --- out of cosmic's `board` branch into its own repository history.
+  --- Product repository, as owner/name; "" is unset.
   repo: string
-  --- The branch the item's PR targets; "" = ungated — no verb checks
-  --- it and no PR is refused for disagreeing. Set it once a non-default
-  --- target is known — an item touching this board repository's own
-  --- machinery names its `main`; `gitready.handover_refusal` compares
-  --- it against the PR's own base ref.
+  --- Product base branch; "" is unset.
   base: string
   --- The scheduled workflow file this item repairs; "" for ordinary
   --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN
@@ -83,6 +40,18 @@ local record Item
   other_edges: {string: {string: string}} | nil
   --- The session that claimed it; "" when unclaimed.
   claim: string
+  --- Product commit the current claim started from. Claims use this
+  --- immutable base to name their work branch and to verify the change
+  --- eventually handed over. nil/"" on unclaimed items and claims made
+  --- before the lease redesign.
+  claim_base: string | nil
+  --- Product commit handed over for review. It is navigation-independent:
+  --- the caller may also record an external URL, but this commit alone is
+  --- what verdict and completion gates consume.
+  handover_head: string | nil
+  --- Optional provider-neutral navigation URL. No state transition or gate
+  --- depends on it.
+  external_url: string | nil
   --- Every session that has held the claim, oldest first. Stored as
   --- one "name name" string — the literal domain has no lists.
   ---
@@ -121,6 +90,9 @@ local record Item
   verdict: string
   --- Head commit the last verdict was written against.
   verdict_head: string
+  --- Product commit recorded when accepted work is completed. Empty on an
+  --- open item and on non-completed resolutions.
+  landed_head: string | nil
   --- The spec revision the verdict judged (`_work.spec.revision` of
   --- the sidecar as it stood). A review judges a diff AND the spec it
   --- is measured against, so the head alone cannot say whether a
@@ -156,6 +128,9 @@ local SPEC < const > = shape.record({
     key = shape.optional(shape.string),
     order = shape.optional(shape.string),
     claim = shape.optional(shape.string),
+    claim_base = shape.optional(shape.string),
+    handover_head = shape.optional(shape.string),
+    external_url = shape.optional(shape.string),
     builders = shape.optional(shape.string),
     speccers = shape.optional(shape.string),
     reviewer = shape.optional(shape.string),
@@ -163,6 +138,7 @@ local SPEC < const > = shape.record({
     result = shape.optional(shape.string),
     verdict = shape.optional(shape.string),
     verdict_head = shape.optional(shape.string),
+    landed_head = shape.optional(shape.string),
     verdict_spec = shape.optional(shape.string),
     resolution = shape.optional(shape.string),
   })
@@ -180,6 +156,9 @@ local record Raw
   key: string | nil
   order: string | nil
   claim: string | nil
+  claim_base: string | nil
+  handover_head: string | nil
+  external_url: string | nil
   builders: string | nil
   speccers: string | nil
   reviewer: string | nil
@@ -187,6 +166,7 @@ local record Raw
   result: string | nil
   verdict: string | nil
   verdict_head: string | nil
+  landed_head: string | nil
   verdict_spec: string | nil
   resolution: string | nil
 end
@@ -217,23 +197,20 @@ local function is_open(it: Item): boolean
 end
 
 --- Whether `it` already stands in the substate `_work.indexddl`'s
---- `substate` view names "review" (an open PR or research result, no
---- verdict yet) or "rework" (a standing "request changes") — matching
---- that view's own CASE exactly, branch for branch: "rework" is the
---- verdict alone, unconditional, so a claimed item mid-rework with no
---- PR and no result (the send-back answered in place, not yet handed
---- back over) still counts; "review" still needs a PR or a result,
---- since an empty verdict with neither is merely claimed and building.
+--- `substate` view names "review" (a handed-over commit with no verdict
+--- yet) or "rework" (a standing "request changes") — matching that
+--- view's own CASE exactly, branch for branch. `pr` and `result` remain
+--- read compatibility for pre-v3 item trees.
 --- `_work.gitgate.containered` reads this to leave such a parent's
---- role and its live claim/PR untouched when a routine child lands on
+--- role and its live claim/handover untouched when a routine child lands on
 --- it, rather than treating the child as a decomposition. This is a
 --- broader test than `_work.gitverbs.cmd_take`'s own review-claim
---- eligibility, which additionally needs a PR or result to exist
+--- eligibility, which additionally needs a handover to exist
 --- (there being nothing to claim a review of otherwise) — that check
 --- stays inline in `cmd_take`, not routed through here.
 --- @param it Item The item
 --- @return boolean True while it carries a standing "request changes",
---- or an empty verdict with a PR/result awaiting one
+--- or an empty verdict with a commit handover awaiting one
 local function is_review_or_rework(it: Item): boolean
   local verdict = it.verdict or ""
   if verdict == "request changes" then
@@ -242,7 +219,8 @@ local function is_review_or_rework(it: Item): boolean
   if verdict ~= "" then
     return false
   end
-  return (it.pr or 0) ~= 0 or (it.result or "") ~= ""
+  return (it.handover_head or "") ~= "" or (it.pr or 0) ~= 0
+  or (it.result or "") ~= ""
 end
 
 --- Whether an item is parentless — the board, in a well-formed tree,
@@ -296,15 +274,36 @@ local function problems(it: Item): {string}
   if not RESOLUTIONS[it.resolution or ""] then
     out[#out + 1] = ("unknown resolution: %s"):format(tostring(it.resolution))
   end
-  if not is_open(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= "") then
-    out[#out + 1] = "a done item holds no claim and no review"
+  local handover_head = it.handover_head or ""
+  if handover_head ~= "" and (not handover_head:match("^[0-9a-f]+$")
+    or (#handover_head ~= 40 and #handover_head ~= 64)) then
+    out[#out + 1] = "handover_head must be a full lowercase commit id"
   end
-  if is_parentless(it) and ((it.claim or "") ~= "" or (it.reviewer or "") ~= ""
+  local landed_head = it.landed_head or ""
+  if landed_head ~= "" and (not landed_head:match("^[0-9a-f]+$")
+    or (#landed_head ~= 40 and #landed_head ~= 64)) then
+    out[#out + 1] = "landed_head must be a full lowercase commit id"
+  end
+  local external_url = it.external_url or ""
+  if external_url ~= "" and not external_url:match("^https?://%S+$") then
+    out[#out + 1] = "external_url must be one http(s) URL"
+  end
+  if handover_head ~= "" and (it.verdict_head or "") ~= ""
+  and it.verdict_head ~= handover_head then
+    out[#out + 1] = "verdict_head must equal the handed-over commit"
+  end
+  if landed_head ~= "" and it.resolution ~= "completed" then
+    out[#out + 1] = "landed_head belongs only to completed items"
+  end
+  if not is_open(it) and (it.reviewer or "") ~= "" then
+    out[#out + 1] = "a done item holds no review"
+  end
+  if is_parentless(it) and ((it.reviewer or "") ~= ""
     or (it.pr or 0) ~= 0
     or (it.verdict or "") ~= "" or (it.repo or "") ~= ""
     or (it.base or "") ~= "") then
     out[#out + 1] =
-    "claim/reviewer/pr/verdict/repo/base belong to worked items, never the "
+    "reviewer/pr/verdict/repo/base belong to worked items, never the "
     .. "board"
   end
   if (it.pr or 0) ~= 0 and (it.result or "") ~= "" then
@@ -388,6 +387,9 @@ local function decode(t: {string: any}): Item | nil, string
     key = raw.key or "",
     order = order,
     claim = raw.claim or "",
+    claim_base = raw.claim_base or "",
+    handover_head = raw.handover_head or "",
+    external_url = raw.external_url or "",
     builders = builders,
     speccers = speccers,
     reviewer = raw.reviewer or "",
@@ -395,6 +397,7 @@ local function decode(t: {string: any}): Item | nil, string
     result = raw.result or "",
     verdict = raw.verdict or "",
     verdict_head = raw.verdict_head or "",
+    landed_head = raw.landed_head or "",
     verdict_spec = raw.verdict_spec or "",
     resolution = raw.resolution or "",
   }
@@ -430,6 +433,9 @@ local function encode(it: Item): {string: any}
   if (it.key or "") ~= "" then t.key = it.key end
   if #(it.order or {}) > 0 then t.order = table.concat(it.order, " ") end
   if (it.claim or "") ~= "" then t.claim = it.claim end
+  if (it.claim_base or "") ~= "" then t.claim_base = it.claim_base end
+  if (it.handover_head or "") ~= "" then t.handover_head = it.handover_head end
+  if (it.external_url or "") ~= "" then t.external_url = it.external_url end
   if #(it.builders or {}) > 0 then
     t.builders = table.concat(it.builders, " ")
   end
@@ -441,6 +447,7 @@ local function encode(it: Item): {string: any}
   if (it.result or "") ~= "" then t.result = it.result end
   if (it.verdict or "") ~= "" then t.verdict = it.verdict end
   if (it.verdict_head or "") ~= "" then t.verdict_head = it.verdict_head end
+  if (it.landed_head or "") ~= "" then t.landed_head = it.landed_head end
   if (it.verdict_spec or "") ~= "" then t.verdict_spec = it.verdict_spec end
   if (it.resolution or "") ~= "" then t.resolution = it.resolution end
   return t

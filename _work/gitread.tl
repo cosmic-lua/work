@@ -1,20 +1,6 @@
---- The store's read path: loading one item and listing the whole
---- board, each in a fixed number of git processes regardless of how
---- many items exist, and tolerating the one shape a half-landed
---- resolution can leave behind: an id filed under BOTH
---- `refs/heads/items` and `refs/heads/ended` at once, because the
---- pushing credential landed the create half of an old-style
---- namespace move and lost the delete half (it can create and update
---- a branch but never delete one). `load` and `list` each keep
---- exactly one entry per id when that happens (`pick_duplicate`,
---- exported for `_work.gitreadmany.load_many` to reuse the same rule);
---- `list` also reports every duplicate it found in `Board.duplicates`
---- so `_work.gitfsck` can name it for a human to clear. Split out of
---- `_work.store` to stay under its line cap; `_work.store` is the only
---- caller of `load`/`list` outside tests. `_work.gitreadmany.load_many`
---- — a named-id-set batch `_work.cache`'s fetch-path refresh uses — is
---- split out the same way, on the helpers this module exports below;
---- `_work.gitboardstate` holds the two board-level refs' own reading.
+--- Fixed-process board reads. Duplicate `items`/`ended` refs from legacy
+--- half-landed moves are resolved consistently and reported for repair.
+--- Canonical namespace selection belongs to `_work.refs`.
 local cachedb = require("_work.cachedb")
 local child = require("cosmic.child")
 local format = require("_work.format")
@@ -256,9 +242,9 @@ end
 --- rather than in every reader: a board on a layout this tool cannot
 --- trust is refused before anything else it read alongside it is
 --- believed.
---- `allow_old_format` lets `gitboard migrate` — the one verb layout 1
---- is not refused for — read a board `format.refusal` would otherwise
---- refuse: the bypass applies ONLY when the marker actually reads "1",
+--- `allow_old_format` lets `gitboard migrate` read the one immediately
+--- previous layout a normal `format.refusal` rejects. The bypass applies
+--- ONLY when `format.migratable` says the marker is the supported predecessor,
 --- never to a missing marker or an unknown future version, both of
 --- which stay refused exactly as before. Every other caller omits it.
 --- @param root string The repository root
@@ -335,8 +321,7 @@ local function list(root: string, allow_old_format?: boolean): Board | nil, stri
   local format_content = gitboardstate.read(board_refs, batch)
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
-    local trimmed = (format_content or ""):gsub("%s+$", "")
-    if not (allow_old_format and trimmed == "1") then
+    if not (allow_old_format and format.migratable(format_content)) then
       return gitbatch.session_fail(sess, frefusal)
     end
   end
@@ -402,7 +387,21 @@ end
 --- @return string The spec markdown, possibly empty
 local function read_spec(root: string, candidates: {string}): string
   for _, ref in ipairs(candidates) do
-    local r = child.run({"git", "cat-file", "-p", ref .. ":spec.md"}, {cwd = root})
+    -- `refs.for_each_ref` deliberately presents canonical entries
+    -- under their transport-neutral `refs/heads/*` names: those are
+    -- the names a later write publishes to, not necessarily the refs
+    -- a remote-backed checkout reads. Map a board ref back through the
+    -- configured mode before dereferencing it. A raw object id (used
+    -- by claim preparation) is already unambiguous and passes through
+    -- unchanged.
+    local object = ref
+    if ref:match("^refs/heads/") ~= nil then
+      local canonical = refs.canonical_ref(root, ref)
+      if canonical ~= nil then
+        object = canonical
+      end
+    end
+    local r = child.run({"git", "cat-file", "-p", object .. ":spec.md"}, {cwd = root})
     if r ~= nil and r.ok then
       return r.stdout
     end

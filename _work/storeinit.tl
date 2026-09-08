@@ -56,12 +56,8 @@ end
 --- one (a clone of an already-initialized board, or a second call over
 --- the same tree) is untouched. Mirrors `format.ensure`'s own shape:
 --- the tree, commit, and ref are written directly (`itemtree.build_tree`
---- with `write`, `gitobj.commit_tree`, `refs.update_ref`), then
---- best-effort pushed to `origin` when one exists, so the first clone
---- of a brand-new board is also the one that puts it on the remote for
---- every later clone to fetch — a plain (non-forced) push that loses to
---- a board another clone already pushed just means this checkout has
---- not fetched it yet, resolved the same way any other stale ref is.
+--- with `write`, `gitobj.commit_tree`, `refs.update_ref`). It performs
+--- no publication: the caller owns every remote interaction.
 --- @param dir string The directory to prepare
 --- @return boolean True on success
 --- @return string Error message
@@ -73,6 +69,30 @@ local function ensure_board(dir: string): boolean, string
   for _, existing in ipairs(board.items) do
     if (existing.parent or "") == "" then
       return true, ""
+    end
+  end
+  -- As with `format.ensure`, a remote-backed board initialized against an
+  -- empty remote has a short caller-owned publication window: its seed board
+  -- exists only as a local target ref until push+fetch. Inspect raw local item
+  -- refs solely to make a repeated init idempotent; ordinary reads still use
+  -- fetched remote-tracking refs and can never mistake this seed for confirmed
+  -- state.
+  local local_items, lerr = refs.for_each_ref_raw(dir,
+    {"refs/heads/items", "refs/heads/ended"})
+  if local_items == nil then
+    return false, lerr
+  end
+  for _, entry in ipairs(local_items) do
+    local id = entry.refname:match("^refs/heads/items/(.+)$")
+    or entry.refname:match("^refs/heads/ended/(.+)$")
+    if id ~= nil and #id == 27 and id:match("^%w+$") ~= nil then
+      local loaded, load_err = gitread.load(dir, id, entry.refname, entry.sha)
+      if loaded == nil then
+        return false, load_err
+      end
+      if (loaded.it.parent or "") == "" then
+        return true, ""
+      end
     end
   end
   local id = ksuid.new()
@@ -99,24 +119,14 @@ local function ensure_board(dir: string): boolean, string
   if not moved then
     return false, uerr
   end
-  local has_origin = child.run({"git", "remote"}, {cwd = dir})
-  if has_origin ~= nil and has_origin.ok
-  and has_origin.stdout:find("origin", 1, true) ~= nil then
-    -- Best-effort, exactly as `format.ensure`'s own push is: a losing
-    -- push here just means another clone's push already landed the
-    -- board, which the next ordinary fetch picks up like any other
-    -- stale ref.
-    local _pushed, _perr = child.run({"git", "-c", "push.negotiate=false", "push",
-        "origin", "refs/heads/items/" .. id}, {cwd = dir})
-  end
   return true, ""
 end
 
 --- Create a state repository at `dir`: a git repository (initialized
---- when none is there yet), with the mirror refspecs ADDED to
---- `remote.origin.fetch` (`refs.ensure_refspecs`; `sync` adds them too,
+--- when none is there yet), with board mirror refspecs added to the configured
+--- remote (`refs.ensure_refspecs`),
 --- so a plain clone needs no `init` to read the board), `refs/heads/board/format`
---- created (and best-effort pushed) when this repository has none yet
+--- created locally when this repository has none yet
 --- (`format.ensure`), and the board item itself created the same way
 --- when this repository carries none (`ensure_board`) — the one
 --- parentless item `new` files under when no `--parent` names

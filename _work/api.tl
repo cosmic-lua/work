@@ -1,13 +1,13 @@
---- The authenticated GitHub REST core the board's calls are built on:
+--- The legacy GitHub REST codec the board's old calls are built on:
 --- one request function, its error rendering, and the success test.
 --- `_work.gh` holds the board-shaped calls; this holds the transport
 --- they share. Almost every call the board makes is a GET — the board
 --- mostly reads GitHub — but a caller that passes a body writes: that
 --- request carries no ETag and is neither read from nor written to
---- the cache below. Auth is a GITHUB_TOKEN (or GH_TOKEN) env var; HTTPS_PROXY is
---- honored, and behind a TLS-intercepting proxy set
---- SSL_USE_SYSTEM_CERTS=1 SSL_CERT_FILE=<bundle> (read by the cosmos
---- TLS root loader).
+--- the cache below. Production gitboard deliberately installs no live
+--- transport: provider interaction and authentication belong to its
+--- caller. The swappable transport remains as a unit-test seam while
+--- these legacy provider-shaped calls are removed.
 ---
 --- The whole fleet shares one account's REST quota (5,000 calls/hour,
 --- across every token), so every call here spends it carefully: a GET
@@ -20,7 +20,6 @@
 --- miss or a write failure here is exactly a cache miss, never a
 --- failure the call itself reports. Keyed by request path, one file
 --- per (method, path) pair.
-local env = require("cosmic.env")
 local fetch = require("cosmic.fetch")
 local fs = require("cosmic.fs")
 local hash = require("cosmic.hash")
@@ -252,13 +251,15 @@ local record api_module
 end
 
 --- The board's transport, swappable for tests: same shape as
---- `cosmic.fetch.fetch`. Bound to the real thing below; a test that
---- needs a deterministic exchange (no live network, no token spent)
---- replaces `M.transport` with a fake and restores it afterward.
+--- `cosmic.fetch.fetch`. Bound to a local refusal below; a test that
+--- needs a deterministic exchange replaces `M.transport` with a fake
+--- and restores it afterward.
 local M: api_module
 
---- One authenticated REST call. nil only when no response arrived
---- (missing token, transport failure); an HTTP error status is a
+--- One REST-codec call through the module's injected transport. The
+--- production transport always refuses without doing I/O; unit tests
+--- inject fabricated responses to keep response parsing covered. nil
+--- only when no response arrived; an HTTP error status is a
 --- result — callers branch on res.status.
 --- @param method string HTTP method
 --- @param path string Path under api.github.com, leading slash
@@ -270,14 +271,9 @@ local M: api_module
 --- @return string Error message when no response arrived
 local function api(method: string, path: string, root: string,
     body?: string): ApiResult, string
-  local token = env.get("GITHUB_TOKEN") or env.get("GH_TOKEN")
-  if token == nil or token == "" then
-    return nil, "no GitHub token: set GITHUB_TOKEN (or GH_TOKEN)"
-  end
   local cached = (method == "GET" and body == nil)
   and read_cache(root, method, path) or nil
   local headers: {string: string} = {
-    ["authorization"] = "Bearer " .. token,
     ["accept"] = "application/vnd.github+json",
     ["x-github-api-version"] = "2022-11-28",
     ["user-agent"] = "cosmic-work-board",
@@ -291,7 +287,6 @@ local function api(method: string, path: string, root: string,
   local resp, err = M.transport(API .. path, {
       method = method,
       body = body,
-      proxy = env.get("HTTPS_PROXY") or env.get("https_proxy"),
       headers = headers,
     })
   if resp == nil then
@@ -378,8 +373,18 @@ local function own_login(root: string): string | nil, string
   return own_login_value, ""
 end
 
+--- The CLI's transport: an unconditional local refusal. Provider reads
+--- and writes must be performed by the caller, then represented to
+--- gitboard by commit IDs. This function must never grow credential or
+--- proxy discovery; doing so would collapse that boundary again.
+local function no_transport(_url: string, _opts: fetch.Options):
+  fetch.Response | nil, fetch.Error
+  -- cast: fetch.Error is an opaque string error from cosmic.fetch
+  return nil, "GitHub transport is external to gitboard" as fetch.Error
+end
+
 M = {
-  transport = fetch.fetch,
+  transport = no_transport,
   call = api,
   error_of = api_error,
   is_success = is_success,

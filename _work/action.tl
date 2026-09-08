@@ -6,7 +6,7 @@
 ---
 --- There is ONE worker and one ordering. Work flows right to left —
 --- whatever is closest to completion moves first, because finishing
---- beats starting — so an accepted PR is merged before a verdict is
+--- beats starting — so an accepted commit is landed before a verdict is
 --- written, a verdict before a build is finished, and finishing
 --- before pulling. Only then does anything new enter, and those rungs
 --- are `_work.intake`: triage, refinement, and decomposition.
@@ -17,8 +17,8 @@
 --- times.
 ---
 --- Which is why every action this returns must be one the verb gates
---- would ACCEPT: a pull is offered only under the doing bound and
---- only for items that pass the spec bar, or asking again would
+--- would ACCEPT: a pull is offered only for items that pass the spec bar,
+--- or asking again would
 --- return the same refused answer forever. When nothing in flight is
 --- this session's to move and nothing passes, the ordering falls
 --- through to the intake half — triage and refinement are real work
@@ -83,8 +83,8 @@ local record Phased
   reviewing: integer
   --- Accepted items already queued to merge, never a head to finish.
   queued: integer
-  --- Pullable items the saturated doing bound refused to offer: the
-  --- bound must name itself, or the stall reads as an empty queue.
+  --- Retained in the result shape for source compatibility. Claims no
+  --- longer impose shared board capacity, so this is always zero.
   suppressed: integer
   --- Reviewable diffs stepped over because CI on the head has not
   --- settled — offering one would hand a reader a verdict it cannot
@@ -184,11 +184,6 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
   end
   rows = seed_mod.tie_break(rows, seed)
   local by_id = item.by_id(items)
-  local doing_n, dnerr = read.doing_count(c)
-  if doing_n == nil then
-    return nil, dnerr
-  end
-  local room = flow.DOING_LIMIT - doing_n
   local acts: {Action} = {}
   local held = 0
   local reviewing = 0
@@ -197,11 +192,6 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
   local ci_running = 0
   local ci_red = 0
   local ci_blocked: {string} = {}
-  -- Ordinary pulls are capped by the room the doing bound leaves and
-  -- by the candidate slots the finishing stages left behind, computed
-  -- at the first ordinary todo item — the queue's stage order
-  -- guarantees every earlier stage has claimed its slots by then.
-  local cap = -1
   for _, row in ipairs(rows) do
     local i = by_id[row.id]
     if i ~= nil then
@@ -212,15 +202,8 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
           -- terminal answer would misname it "resolve the blockers".
           queued = queued + 1
         elseif #acts < CANDIDATES then
-          -- A handover has no PR to merge — `done` skips that read when
-          -- `pr` is 0 — so its accepted reason names the verb that
-          -- actually ends it rather than a merge it will never await.
-          local reason = ("%s is accepted, awaiting merge — finishing beats "
-            .. "starting"):format(i.id:sub(1, 8))
-          if (i.result or "") ~= "" then
-            reason = ("%s is accepted — `done ID` ends it"):format(
-              i.id:sub(1, 8))
-          end
+          local reason = ("%s is accepted — land it, then record the landed "
+            .. "commit with `done ID --landed SHA`"):format(i.id:sub(1, 8))
           acts[#acts + 1] = {
             kind = "finish",
             item = i,
@@ -250,18 +233,11 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
         and review_ages[i.id] == nil then
           reviewing = reviewing + 1
         elseif #acts < CANDIDATES then
-          -- What awaits the verdict is a diff or a spec, never both
-          -- (`item.problems`), and the reason names which so the
-          -- reviewer reaches for the right one.
-          local awaiting = "a PR"
-          if (i.result or "") ~= "" then
-            awaiting = "a research handover"
-          end
           acts[#acts + 1] = {
             kind = "review",
             item = i,
-            reason = ("%s awaits a verdict — verdicts before new work"):format(
-              awaiting),
+            reason = ("commit %s awaits a verdict — verdicts before new work")
+            :format((i.handover_head or ""):sub(1, 12)),
           }
         end
       elseif stage == flow.STAGE_REWORK or stage == flow.STAGE_BUILDING then
@@ -293,10 +269,7 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
           -- A todo item below the bar is refinement's to answer, and the
           -- intake half owns that; the queue steps past it silently.
         elseif stage == flow.STAGE_REPAIR then
-          -- A red lane's repair is the pull that cannot wait: never
-          -- capped by the doing bound — the same lane bypass the take
-          -- gate holds (`_work.read.doing_count`, over the SAME rows a
-          -- `doing_refusal` check compares against `DOING_LIMIT`).
+          -- A red lane's repair is the pull that cannot wait.
           if #acts < CANDIDATES then
             acts[#acts + 1] = {
               kind = "pull",
@@ -304,22 +277,12 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
               reason = ("lane repair: %s"):format(i.key),
             }
           end
-        elseif room <= 0 then
-          -- The bound refused to offer anything: count what it withheld,
-          -- so the terminal answer names the bound, not an empty queue.
-          suppressed = suppressed + 1
-        else
-          if cap < 0 then
-            cap = math.min(room, math.max(CANDIDATES - #acts, 0))
-          end
-          if cap > 0 then
-            acts[#acts + 1] = {
-              kind = "pull",
-              item = i,
-              reason = "highest-ranked todo item passing the spec bar",
-            }
-            cap = cap - 1
-          end
+        elseif #acts < CANDIDATES then
+          acts[#acts + 1] = {
+            kind = "pull",
+            item = i,
+            reason = "highest-ranked todo item passing the spec bar",
+          }
         end
       end
     end
@@ -375,23 +338,6 @@ local function next_action(c: Index, items: {Item}, specs: Specs,
   local phased = ph.action
   if phased then
     return phased, ""
-  end
-  -- Pullable work the saturated bound withheld outranks intake
-  -- advice: the honest answer is the bound, named — a session sent
-  -- to decompose while ten builds are in flight and work waits at
-  -- the gate would only deepen what cannot enter.
-  if ph.suppressed > 0 then
-    local n, nerr = read.doing_count(c)
-    if n == nil then
-      return nil, nerr
-    end
-    return {
-      kind = "none",
-      reason = ("doing is at %d/%d and %d pullable item(s) wait — the "
-        .. "bound throttles starting; nothing here is yours until "
-        .. "something in flight finishes"):format(
-        n, flow.DOING_LIMIT, ph.suppressed),
-    }, ""
   end
   local taking, ierr = intake.intake_action(c, items, specs)
   if ierr ~= "" then

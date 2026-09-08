@@ -234,27 +234,25 @@ local function test_the_items_own_repo_needs_no_declaring()
 end
 
 -- The reproduced incident: a foreign session silently replacing the
--- definition of work another session already built and handed to
--- review. `spec` refuses it, and nothing moves.
+-- definition of work another session currently claims. `spec` refuses it,
+-- and nothing moves; no provider-shaped PR handover is needed to prove the
+-- whole-item exclusion.
 local function test_spec_refuses_a_foreign_live_claim()
   local s = init_state_repo("foreignspec")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 7, false, "") == 0,
-    "builder-a hands the build over for review")
   local before_spec = store.read_spec(s, leaf)
   local before_commits = commits(s)
   local base = spec_file("foreign-base", before_spec)
   local rewrite = spec_file("foreign-rewrite",
     (before_spec:gsub("Not that.", "Rewritten.")))
   assert(gitspec.cmd_spec(s, leaf, rewrite, base, "refiner-b") ~= 0,
-    "a foreign session may not redefine work another session has "
-    .. "already built and handed to review")
+    "a foreign session may not redefine work another session claims")
   assert(store.read_spec(s, leaf) == before_spec, "the sidecar is untouched")
   assert(commits(s) == before_commits, "and nothing was committed")
   local it = check.must(store.load(s, leaf))
-  assert(it.claim == "builder-a" and it.pr == 7, "the claim and PR stand")
+  assert(it.claim == "builder-a", "the claim stands")
 end
 
 -- What stays legal: the claim holder rewriting their OWN item's spec

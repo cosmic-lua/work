@@ -2,9 +2,9 @@
 -- The item codec is pure: encode omits zero values, decode fills them
 -- back in and validates, and the two round-trip through cosmic.literal
 -- byte-for-byte. The per-item rules pin the emergent-role invariants a
--- single file can carry: only parented items hold coordination
--- fields, a parentless one holds none of them, and done items hold no
--- locks.
+-- single file can carry. Claims are deliberately orthogonal to role:
+-- any existing item, including the board or a resolved item, may be
+-- coordinated by one.
 
 local check = require("cosmic.check")
 local item = require("_work.item")
@@ -59,23 +59,23 @@ local function test_worked_item_round_trips()
   assert(back.claim == "session-a" and back.pr == 456, "coordination fields")
 end
 
-local function test_parentless_items_hold_no_locks()
+local function test_parentless_items_may_be_claimed()
   local claimed = base()
   claimed.claim = "session-a"
   local it = check.must(item.decode(claimed))
-  assert(has_problem(it, "never the board"),
-    "a claimed parentless item decodes flagged: "
+  assert(not item.is_flagged(it),
+    "claims coordinate any existing item, including the board: "
     .. table.concat(it.decode_problems or {}, "; "))
 end
 
-local function test_done_items_hold_no_locks()
+local function test_done_items_may_be_claimed()
   local t = base()
   t.parent = PARENT
   t.claim = "session-a"
   t.resolution = "completed"
   local it = check.must(item.decode(t))
-  assert(has_problem(it, "no claim"),
-    "a done claimed item decodes flagged: "
+  assert(not item.is_flagged(it),
+    "claims coordinate any existing item, including a resolved one: "
     .. table.concat(it.decode_problems or {}, "; "))
   t.claim = nil
   local done = check.must(item.decode(t))
@@ -378,6 +378,9 @@ local function test_is_review_or_rework_matches_the_substate_view()
   assert(not item.is_review_or_rework(with({})), "a bare todo is neither")
   assert(not item.is_review_or_rework(with({claim = "session-a"})),
     "claimed with no PR yet is building, not review")
+  assert(item.is_review_or_rework(with({claim = "session-a",
+          handover_head = ("a"):rep(40)})),
+    "a commit handover with no verdict yet is review")
   assert(item.is_review_or_rework(with({claim = "session-a", pr = 9})),
     "an open PR with no verdict yet is review")
   assert(item.is_review_or_rework(with({result = "abc1234"})),

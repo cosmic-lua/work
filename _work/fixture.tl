@@ -15,6 +15,7 @@ local graph = require("_work.gitgraph")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
 local item = require("_work.item")
+local prepared = require("_work.prepared")
 local rank = require("_work.gitrank")
 local readddl = require("_work.readddl")
 local refs = require("_work.refs")
@@ -54,27 +55,29 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
---- A fresh local-only state repo: `store.init_repo` (a bare git init
+--- A fresh explicitly local-only state repo: `store.init_repo` (a bare git init
 --- plus the `refs/heads/board/format` marker every board now carries),
 --- nothing filed yet — every item lives as a ref, so there is nothing
---- else to seed.
+--- else to seed. Tests must not inherit mode from topology: local mode
+--- is a supported simulation/migration surface, not merely "no origin".
 local function init_state_repo(name: string): store.Store
   local root = fs.join(tmpdir, "verbs-" .. name)
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
+  git(root, {"init", "-q"})
+  assert(refs.set_board_mode(root, "local"))
   assert(store.init_repo(root))
   return check.must(store.open(root))
 end
 
---- A bare "remote" with nothing filed yet, plus two clones — each
---- carrying the mirror refspecs `store.init_repo` writes once it sees
---- their `origin`, the same way a real `gitboard init` after a clone
---- would. The first clone's `init_repo` mints the board (titled
---- "board") and best-effort pushes it; the second clone FETCHES before
---- its own `init_repo` runs, so it finds that board already there
---- instead of minting a second one — `init_repo` has no way to see a
---- remote's state on its own, only what this checkout has already
---- fetched.
+--- A bare "remote" with nothing filed yet, plus two remote-mode clones.
+--- Initialization itself deliberately performs no transport. The fixture
+--- therefore acts as its caller: clone one initializes in explicit local
+--- mode, pushes the seed board and format refs, then switches to remote
+--- mode and fetches them into the canonical remote-tracking namespace.
+--- Clone two fetches those refs before initialization, proving it observes
+--- the one existing board rather than minting a second one. No production
+--- path gains implicit network behavior from this test scaffolding.
 local function init_shared(name: string): store.Store, store.Store
   local base = fs.join(tmpdir, "verbs-shared-" .. name)
   assert(fs.remove_all(base))
@@ -85,17 +88,79 @@ local function init_shared(name: string): store.Store, store.Store
   local dir1 = fs.join(base, "clone1")
   git(base, {"clone", "-q", bare, dir1})
   git(dir1, {"config", "core.createObject", "rename"})
+  assert(refs.set_board_mode(dir1, "local"))
   assert(store.init_repo(dir1))
+  git(dir1, {"push", "--atomic", "origin",
+      "refs/heads/items/*:refs/heads/items/*",
+      "refs/heads/board/*:refs/heads/board/*"})
+  assert(refs.set_board_mode(dir1, "remote"))
+  assert(refs.fetch_prune(dir1))
   local s1 = check.must(store.open(dir1))
 
   local dir2 = fs.join(base, "clone2")
   git(base, {"clone", "-q", bare, dir2})
   git(dir2, {"config", "core.createObject", "rename"})
+  assert(refs.set_board_mode(dir2, "remote"))
   assert(refs.ensure_refspecs(dir2))
   assert(refs.fetch_prune(dir2))
   assert(store.init_repo(dir2))
   local s2 = check.must(store.open(dir2))
   return s1, s2
+end
+
+--- Perform the ordinary Git transport a remote fixture's caller owes after
+--- a mutating verb prepared its transaction. Local fixtures have already
+--- promoted their mutation and need nothing. Keeping this explicit in the
+--- harness makes production's default-print contract visible: no verb gets
+--- an ambient or test-only permission to contact a remote.
+--- @param s store.Store The fixture store whose plans should be published
+local function caller_publish(s: store.Store)
+  if refs.board_mode(s.root) == "local" then
+    return
+  end
+  local transactions = check.must(prepared.list(s.root))
+  for _, tx in ipairs(transactions) do
+    local ok, err = prepared.execute(s.root, prepared.push_argv(tx))
+    assert(ok, "caller push failed: " .. err)
+  end
+  -- Some provider-facing fixtures deliberately give `origin` a GitHub
+  -- read URL while retaining their local bare repository as its push URL.
+  -- Their board transport is the latter in both directions; using the
+  -- display/read URL here would leak a hermetic test onto the network.
+  local pushurl = check.must(store.git_ok(s,
+      {"remote", "get-url", "--push", "origin"})).stdout:gsub("%s+$", "")
+  local fetched, ferr = prepared.execute(s.root, {"git", "fetch", "--prune",
+      pushurl,
+      "+refs/heads/items/*:refs/remotes/origin/items/*",
+      "+refs/heads/ended/*:refs/remotes/origin/ended/*",
+      "+refs/heads/board/*:refs/remotes/origin/board/*"})
+  assert(fetched, "caller fetch failed: " .. ferr)
+  -- Transport is a caller-owned step outside the verb invocation. Drop
+  -- any cache handle the test kept open before inspecting the newly fetched
+  -- canonical snapshot, matching the fresh process a real next command gets.
+  assert(store.close(s))
+  local refreshed = check.must(prepared.refresh(s.root))
+  for _, result in ipairs(refreshed) do
+    assert(result.state == "confirmed", result.detail)
+  end
+end
+
+--- Fetch board refs as an explicit fixture caller, then let gitboard inspect
+--- and rebuild against those already-fetched canonical refs.
+--- @param s store.Store The remote fixture store to refresh
+local function caller_fetch(s: store.Store)
+  if refs.board_mode(s.root) == "local" then
+    return
+  end
+  local pushurl = check.must(store.git_ok(s,
+      {"remote", "get-url", "--push", "origin"})).stdout:gsub("%s+$", "")
+  local fetched, ferr = prepared.execute(s.root, {"git", "fetch", "--prune",
+      pushurl,
+      "+refs/heads/items/*:refs/remotes/origin/items/*",
+      "+refs/heads/ended/*:refs/remotes/origin/ended/*",
+      "+refs/heads/board/*:refs/remotes/origin/board/*"})
+  assert(fetched, "caller fetch failed: " .. ferr)
+  assert(require("_work.publish").sync(s))
 end
 
 --- Point a store's origin at GitHub for READING while its pushes keep
@@ -130,6 +195,7 @@ local function file_item(s: store.Store, title: string,
   end
   assert(graph.cmd_new(s, title, parent, nil, "") == 0,
     "new should be accepted: " .. title)
+  caller_publish(s)
   for _, i in ipairs(check.must(store.list(s))) do
     if not before[i.id] then
       return i.id
@@ -205,6 +271,7 @@ local function give_spec(s: store.Store, id: string)
   local path = fs.join(tmpdir, "ready-spec.md")
   assert(fs.write(path, READY_SPEC))
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
+  caller_publish(s)
 end
 
 --- An organizing outcome (filed under the board by `new`'s own default,
@@ -218,6 +285,7 @@ local function root_with_leaf(s: store.Store): string, string
   local _peer = file_item(s, "a lesser outcome", "")
   assert(rank.cmd_rank(s, root, "", "", true) == 0,
     "rank should be accepted")
+  caller_publish(s)
   return root, file_item(s, "a workable slice", root)
 end
 
@@ -247,6 +315,8 @@ local record fixture
   git: function(cwd: string, argv: {string})
   init_state_repo: function(name: string): store.Store
   init_shared: function(name: string): store.Store, store.Store
+  caller_publish: function(s: store.Store)
+  caller_fetch: function(s: store.Store)
   github_origin: function(s: store.Store, slug: string)
   file_item: function(s: store.Store, title: string,
   parent: string): string
@@ -263,6 +333,8 @@ local M: fixture = {
   git = git,
   init_state_repo = init_state_repo,
   init_shared = init_shared,
+  caller_publish = caller_publish,
+  caller_fetch = caller_fetch,
   github_origin = github_origin,
   file_item = file_item,
   commits = commits,

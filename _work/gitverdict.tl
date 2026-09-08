@@ -1,46 +1,12 @@
---- The review verdict: one verb, one commit, recording what a
---- fresh-context reviewer judged and what that does to the item.
----
---- A verdict judges a PR, so it binds only where one stands with no
---- verdict already on it — an accept given anywhere else would carry
---- unreviewed work to a merge past the one gate in front of it. The
---- head guard keeps a verdict informative rather than ceremonial: a
---- head already judged has nothing new to say.
----
---- Three kinds, three effects, all derived-state moves with no column
---- to cross:
----
----   accept           the item awaits its merge (`land` finishes it);
----                    a PR found already merged ends the item here
----   request changes  the send-back stands on the item; the claimant
----                    reworks on the same PR and `take --pr` re-opens
----                    the verdict for the new head
----   reject           the approach was wrong: claim, handover (PR or
----                    research result) and verdict clear together,
----                    the item is todo again, and the learning goes
----                    in its spec — wrong work merged is expensive,
----                    rejection is cheap by design
----
---- `--session` is the audit half: the name it gives rides in the
---- commit subject — every board commit is authored as one fixed
---- identity, so the subject is the only place the log can record who
---- judged. The one refusal on it is shape (`item.identity_refusal`):
---- a dash-led name is a flag a mangled argv absorbed, not a session.
-local fs = require("cosmic.fs")
+--- Provider-neutral review verdicts. Gitboard neither reads nor writes a
+--- forge: the caller inspects checks externally and names the exact product
+--- commit it judged. The only durable evidence is that commit id.
+local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
-local gh = require("_work.gh")
-local ghwrite = require("_work.ghwrite")
 local item = require("_work.item")
-local publish = require("_work.publish")
-local review = require("_work.review")
-local spec = require("_work.spec")
+local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 
---- The spellings people actually type for the middle verdict: the
---- GitHub hyphenation and the skill's noun. Both mean "request
---- changes" — without them a guessed spelling falls through to the
---- unknown-kind error, and the next guess a reviewer reaches for is
---- reject, which is much harsher.
 local KIND_ALIASES: {string: string} = {
   ["request-changes"] = "request changes",
   ["rework"] = "request changes",
@@ -52,349 +18,112 @@ local KINDS: {string: boolean} = {
   ["reject"] = true,
 }
 
---- The refusal for a head+spec pair judged before. Some cures happen
---- OUTSIDE the PR — a fix landing elsewhere can make the spec's claims
---- true with the head and spec both unmoved — and the doctrine for
---- that stays record-the-cure-on-the-spec rather than a new guard
---- surface, so the refusal names that way forward instead of dead-
---- ending: append what changed to the item's spec, then judge again.
---- @param id string The item under verdict
---- @param head string The head already judged
---- @return string The refusal
 local function already_judged_refusal(id: string, head: string): string
-  return ("%s's head %s was already judged with this spec — neither "
-    .. "the diff nor the spec has moved since. If something outside "
-    .. "the PR cured it, append a short Rework note to the item's "
-    .. "spec (`gitboard spec`) and record the verdict again. Recording "
-    .. "from the SAME session that just respecced it trips the "
-    .. "distance guard next — `--force --why <reason>` is the "
-    .. "audited repair path for that."):format(
-    id:sub(1, 8), head:sub(1, 7))
+  return ("%s's commit %s was already given this verdict — hand over a new "
+    .. "commit before judging again"):format(id:sub(1, 8), head:sub(1, 12))
 end
 
---- @param s store.Store The store
---- @param id string The item under verdict
---- @param kind string accept | request changes | reject (aliases apply)
---- @param pr integer The PR the verdict judges, 0 to use the item's own
---- @param head string The head commit the verdict judges
---- @param session string | nil The reviewing session; rides in the subject
---- @param force boolean | nil Record over the distance guard — repair only
---- @param why string | nil Why --force was needed
---- @param body_file string | nil The formal review's body, a request
---- changes or reject verdict against a real PR requires this
---- @param no_land boolean | nil An accept skips the GitHub write and
---- records only, for a repo the token cannot merge
---- @return integer Exit code
-local function cmd_verdict(s: store.Store, id: string, kind: string,
-    pr: integer, head: string, session?: string, force?: boolean,
-    why?: string, body_file?: string, no_land?: boolean): integer
-  local frc = force or false
-  local rsn = why or ""
-  local forced = gate.force_refusal(frc, rsn)
+--- Record a verdict over one locally inspectable product commit. The reviewer
+--- must hold the current whole-item claim and must be independent of the
+--- builder/speccer unless an audited repair says otherwise. Review acquisition
+--- is therefore explicit: builder handover, builder drop, reviewer claim.
+--- Verdict never releases the reviewer's claim.
+local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
+    head: string, session: string, force: boolean, why: string,
+    repo_dir: string): integer
+  local forced = gate.force_refusal(force, why)
   if forced then
     return gate.verdict_line("verdict", false, "REFUSED: " .. forced)
   end
-  local bad_session = item.identity_refusal(session or "")
+  local bad_session = item.identity_refusal(session)
   if bad_session then
     return gate.verdict_line("verdict", false, "REFUSED: " .. bad_session)
   end
   kind = KIND_ALIASES[kind] or kind
   if not KINDS[kind] then
     return gate.verdict_line("verdict", false,
-      ("unknown verdict: %s — the kinds are accept, 'request changes' "
-        .. "(request-changes and rework are aliases) and reject "
-        .. "(claim and PR clear; the item is todo again)"):format(kind))
+      ("unknown verdict: %s"):format(kind))
   end
-  -- One `store.list` rather than a `store.load` followed by one:
-  -- `list`'s fixed-process board read already carries this item's own
-  -- lease, so a second, item-scoped read would only re-fetch it.
-  local all, aerr = store.list(s)
-  if all == nil then
-    return gate.verdict_line("verdict", false, aerr)
+  local it, ierr = store.load(s, id)
+  if it == nil then return gate.verdict_line("verdict", false, ierr) end
+  if not force then
+    local distance = gate.distance_refusal(it, session)
+    if distance then return gate.verdict_line("verdict", false, distance) end
   end
-  local it = item.by_id(all)[id]
-  if it == nil then
-    return gate.verdict_line("verdict", false, ("no item %s"):format(id))
-  end
-  -- The distance guard, same predicate the review-claim derivation
-  -- refuses on — here with `--force --why` as the audited repair
-  -- escape, since a verdict already recorded is a fact to correct on
-  -- the log, not a claim to take over.
-  if not frc then
-    local distance = gate.distance_refusal(it, session or "")
-    if distance then
-      return gate.verdict_line("verdict", false, distance)
-    end
-  end
-  if (it.verdict or "") == "accept" then
+  if (it.claim or "") ~= session then
     return gate.verdict_line("verdict", false,
-      ("REFUSED: %s already carries an accept — land it"):format(id:sub(1, 8)))
+      ("REFUSED: %s's verdict belongs to its claim holder"):format(id:sub(1, 8)))
   end
-  -- A verdict judges evidence: a diff, or a claimed item's recorded
-  -- work. Neither exists on an item still sitting untouched in
-  -- todo — nothing was done yet for a reviewer to read. Once claimed,
-  -- a PR-less item judges its evidence the same way a PR judges its
-  -- diff: no head to verify shape against, no request to fetch, and
-  -- the stored `verdict_head` stays empty — the reviewer's job is the
-  -- one SKILL.md names, re-running the spec's recorded checks.
-  local judged = (pr or 0) ~= 0 and pr or it.pr
-  local pr_less = judged == 0
-  if pr_less and (it.claim or "") == "" then
+  local handed = it.handover_head or ""
+  if handed == "" then
     return gate.verdict_line("verdict", false,
-      ("%s has no PR and is not claimed — nothing to judge yet"):format(
-        id:sub(1, 8)))
+      ("REFUSED: %s has no commit handover to judge"):format(id:sub(1, 8)))
   end
-  -- A research handover (`take --result`) is judged as the spec it
-  -- handed over: the sidecar's revision recorded then. A spec that
-  -- moved since is the same fact as a PR head that moved past the one
-  -- under verdict — the reviewer read one thing and would record a
-  -- judgment on another — so it is refused the same way: hand it over
-  -- again. A PR offered against a handover is refused too: the item's
-  -- deliverable is board state, and there is no diff to pair it with.
-  local judged_spec = spec.revision(store.read_spec(s, id))
-  if (it.result or "") ~= "" then
-    if not pr_less then
-      return gate.verdict_line("verdict", false,
-        ("REFUSED: %s carries a research handover, not a PR — record the "
-          .. "verdict without --pr/--head"):format(id:sub(1, 8)))
-    end
-    if judged_spec ~= it.result then
-      return gate.verdict_line("verdict", false,
-        ("REFUSED: %s's spec moved since its handover (%s, now %s) — "
-          .. "re-read it and hand it over again (`take %s --result`), then "
-          .. "judge"):format(id:sub(1, 8), it.result:sub(1, 7),
-          judged_spec:sub(1, 7), id:sub(1, 8)))
-    end
-  end
-  -- The head is verified before anything downstream treats it as
-  -- true: the shape half always, because a non-hex value would just
-  -- make the pair guard and `head_moved` silently never match; the PR
-  -- half whenever a request stands to check against, because a gate
-  -- that waves a head through when it cannot see the PR is worse than
-  -- no gate at all. Neither half applies with no PR to judge.
-  local p: review.Pull | nil = nil
-  if pr_less then
-    head = ""
-  else
-    local shape_err = review.head_refusal(nil, head)
-    if shape_err then
-      return gate.verdict_line("verdict", false, "REFUSED: " .. shape_err)
-    end
-    -- Hoisted so the accept path below reuses this same read instead of
-    -- fetching the PR again: one snapshot decides both which head was
-    -- judged and whether it is fit to land.
-    if publish.has_origin(s) then
-      local perr: string
-      p, perr = gh.pull(s, judged, it.repo)
-      if p == nil then
-        return gate.verdict_line("verdict", false,
-          ("REFUSED: cannot verify --head against PR #%d: %s"):format(
-            judged, perr or ""))
-      end
-      local head_err = review.head_refusal(p, head)
-      if head_err then
-        return gate.verdict_line("verdict", false, "REFUSED: " .. head_err)
-      end
-      -- The PR's own full head is canonical; the caller may have passed
-      -- a short prefix.
-      head = p.head_sha
-    end
-  end
-  -- A verdict judges a head AND the spec that head is measured
-  -- against: a rework can answer a bounce by rewriting the spec,
-  -- which moves no commit. Judging the same PAIR twice says nothing
-  -- new happened between them — that is "nothing to judge" rather
-  -- than a fresh round. An unrecorded revision refuses nothing: the
-  -- board cannot say what spec an older verdict read. A PR-less item
-  -- has no head to pair, so the guard degrades to the spec revision
-  -- alone — an unchanged spec is still nothing new to judge.
-  local paired: boolean
-  if pr_less then
-    paired = (it.verdict_spec or "") ~= "" and judged_spec == it.verdict_spec
-  else
-    paired = (head or "") ~= "" and head == (it.verdict_head or "")
-    and (it.verdict_spec or "") ~= "" and judged_spec == it.verdict_spec
-  end
-  if paired then
+  local claim_base = it.claim_base or ""
+  if claim_base == "" then
     return gate.verdict_line("verdict", false,
-      "REFUSED: " .. already_judged_refusal(id, head))
+      ("REFUSED: %s's claim has no product base commit"):format(id:sub(1, 8)))
   end
-  -- A verdict against a real PR performs the GitHub side itself, so a
-  -- reviewer touches no GitHub tool of its own — the one write is
-  -- skipped exactly when there is nothing to write to: no origin (a
-  -- local-only board), or a research handover with no PR at all. `p`
-  -- is the same read the head guard above already made — one
-  -- snapshot for every decision below — so there is nothing further
-  -- to fetch here.
-  local merged_sha = ""
-  local pre_merged = false
-  -- Set when `ghwrite.post_review`'s 422 retry is what actually
-  -- posted — an app installation token has no `GET /user` to match
-  -- against the PR's own author, so the cheap own-login check cannot
-  -- catch its own PR and the write falls back at GitHub's refusal
-  -- instead. The verdict still records; this only changes what the
-  -- line says about how the review landed.
-  local bounced_as_comment = false
-  -- A landing failure is never the verdict's own failure: the
-  -- judgment is true whether or not GitHub can act on it yet, so a
-  -- failed merge PUT or auto-merge mutation is carried here and
-  -- reported on the verdict line below, after the record — not
-  -- returned early, which would refuse the whole verb and lose the
-  -- verdict along with the merge.
-  local landing_err = ""
-  if judged ~= 0 and p ~= nil then
-    if kind == "accept" then
-      -- An accept asserts the work is fit to land, so it is the one
-      -- verdict whose truth depends on the request's own state. This
-      -- collapses two cases the landing step below handles badly: a
-      -- merged request needs no land at all, and a closed unmerged
-      -- one has no land that could succeed.
-      local blocked = review.blocks_accept(p)
-      if blocked then
-        return gate.verdict_line("verdict", false, "REFUSED: " .. blocked)
-      end
-      if p.merged then
-        merged_sha, pre_merged = p.merge_sha, true
-      elseif not no_land then
-        -- The `sha` field makes a head that moved since the review a
-        -- refused merge, not a merge of unreviewed code. A 405/409
-        -- (branch protection, a merge queue, or "not mergeable") is
-        -- not a failure to report — it falls back to arming
-        -- auto-merge, which lands the same accept once the repo's
-        -- own requirements clear.
-        local slugged, slerr = gh.slug(s, it.repo)
-        if slugged == nil then
-          landing_err = slerr
-        else
-          local ok, msg = ghwrite.merge_pull(s, slugged, judged, p.head_sha)
-          if ok then
-            merged_sha = msg
-          elseif msg:find("HTTP 405", 1, true) ~= nil
-          or msg:find("HTTP 409", 1, true) ~= nil then
-            local amok, amerr = ghwrite.enable_auto_merge(s, p.node_id)
-            if not amok then
-              landing_err = amerr
-            end
-          else
-            landing_err = msg
-          end
-        end
-      end
-    elseif kind == "request changes" or kind == "reject" then
-      -- The formal review `bounce_context` looks for — a plain
-      -- comment never satisfies it — so `--body` is required here,
-      -- not optional prose left to the caller's judgment.
-      if (body_file or "") == "" then
-        return gate.verdict_line("verdict", false,
-          ("REFUSED: %s on a PR needs --body FILE — the formal review "
-            .. "GitHub records"):format(kind))
-      end
-      local text, rerr = fs.read(body_file)
-      if text == nil then
-        return gate.verdict_line("verdict", false,
-          ("REFUSED: cannot read --body %s: %s"):format(body_file, rerr))
-      end
-      local slugged, slerr = gh.slug(s, it.repo)
-      if slugged == nil then
-        return gate.verdict_line("verdict", false, "REFUSED: " .. slerr)
-      end
-      local pok, perr = ghwrite.post_review(s, slugged, judged, p.head_sha, text,
-        kind, p.author_login)
-      if not pok then
-        return gate.verdict_line("verdict", false, "REFUSED: " .. perr)
-      end
-      bounced_as_comment = perr == "comment-fallback"
-      if kind == "reject" then
-        local cok, cerr = ghwrite.close_pull(s, slugged, judged)
-        if not cok then
-          return gate.verdict_line("verdict", false, "REFUSED: " .. cerr)
-        end
-      end
-    end
+  local root, rerr = repository_map.resolve(s.root, it.repo or "", repo_dir)
+  if root == nil then
+    return gate.verdict_line("verdict", false, "REFUSED: " .. rerr)
   end
-  -- The judgment consumes the review claim, whoever held it: the
-  -- claim is mutual exclusion over the reading, and the reading is
-  -- over.
-  it.reviewer = ""
-  it.verdict_head = head or ""
-  it.verdict_spec = judged_spec
-  if pr ~= nil and pr ~= 0 then
-    it.pr = pr
+  local lineage, verr = commit_evidence.verify_lineage(root, claim_base, head)
+  if lineage == nil then
+    return gate.verdict_line("verdict", false, "REFUSED: " .. verr)
   end
-  local outcome = "recorded"
-  if kind == "accept" then
-    outcome = "awaiting merge — land it"
-    -- A handover has no PR to land — `done` skips that read when
-    -- `pr` is 0 — so its accept outcome names the verb that actually
-    -- ends it rather than a merge it will never await.
-    if (it.result or "") ~= "" then
-      outcome = "accepted — `done ID` ends it"
-    elseif landing_err ~= "" then
-      -- The verdict is recorded exactly as `--no-land` would leave it
-      -- — nothing here reads `landing_err` — this only changes what
-      -- the line says about it: a failed landing names itself instead
-      -- of the ordinary reminder to land it.
-      outcome = ("awaiting merge — landing failed (%s), land it by hand")
-      :format(landing_err)
-    end
-  elseif kind == "request changes" then
-    outcome = "rework — the claimant fixes on the same PR"
+  local canonical = lineage.head
+  if canonical ~= handed then
+    return gate.verdict_line("verdict", false,
+      ("REFUSED: verdict names %s, but the handover is %s")
+      :format(canonical, handed))
   end
+  if (it.verdict_head or "") == canonical and (it.verdict or "") == kind then
+    return gate.verdict_line("verdict", false,
+      "REFUSED: " .. already_judged_refusal(id, canonical))
+  end
+  if it.verdict == "accept" then
+    return gate.verdict_line("verdict", false,
+      ("REFUSED: %s already carries an accept — complete it")
+      :format(id:sub(1, 8)))
+  end
+
+  it.verdict_head = canonical
+  it.verdict_spec = ""
   if kind == "reject" then
-    -- Nothing stands after a reject: the item is todo again, and the
-    -- spec (plus the closed PR) carries what was learned.
+    -- The rejected handover no longer stands, but the claim does. Its holder
+    -- explicitly drops or renews; no workflow transition releases it.
     it.verdict = ""
-    it.verdict_head = ""
-    it.verdict_spec = ""
-    it.claim = ""
-    it.pr = 0
-    it.result = ""
-    outcome = "reject — todo again"
+    it.handover_head = ""
+    it.external_url = ""
   else
     it.verdict = kind
   end
-  local also: {item.Item} = {}
-  local landed = ""
-  if merged_sha ~= "" then
-    -- Already merged: the landing this accept authorises has
-    -- happened, so the item ends HERE rather than waiting for a
-    -- `land` whose only remaining act is to notice the same thing.
-    -- The merge commit goes in the subject — the log says which merge
-    -- completed the item without `Item` growing a field for it.
-    it.resolution = "completed"
-    it.claim = ""
-    landed = (", merged %s"):format(merged_sha:sub(1, 7))
-    outcome = "accept — completed"
-  end
-  -- The reviewer rides in the subject rather than the author: every
-  -- board commit is the one fixed identity, so without this the log
-  -- cannot show whether an accept was written by the builder, and the
-  -- distance is unauditable after the fact.
-  local by = ""
-  if (session or "") ~= "" then
-    by = (" by %s"):format(session)
-  end
+  local by = session == "" and "" or (" by %s"):format(session)
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("verdict %s %s%s%s%s"):format(id:sub(1, 8), kind, by, landed,
-      gate.forced_suffix(frc, rsn)), "verdict", also, session)
-  if not ok then
-    return gate.verdict_line("verdict", false, err)
-  end
-  if store.is_noop(err) then
-    return gate.verdict_line("verdict", true, err)
-  end
-  local note = ""
-  if pre_merged then
-    note = (" (PR #%d was already merged)"):format(it.pr)
-  elseif bounced_as_comment then
-    note = " (bounce posted as a marked comment: the token cannot " ..
-    "request changes on its own PR)"
-  end
+    ("verdict %s %s head:%s%s%s"):format(id:sub(1, 8), kind,
+      canonical:sub(1, 12), by, gate.forced_suffix(force, why)),
+    "verdict", nil, session, false, force, why)
+  if not ok then return gate.verdict_line("verdict", false, err) end
   return gate.verdict_line("verdict", true,
-    ("%s on %s: %s%s"):format(kind, id:sub(1, 8), outcome, note))
+    ("%s on %s at %s: recorded"):format(
+      kind, id:sub(1, 8), canonical:sub(1, 12)))
+end
+
+--- One-release compatibility surface for pre-v3 callers. It performs no
+--- provider read or write and cannot mutate the board.
+local function cmd_verdict(_s: store.Store, _id: string, _kind: string,
+    _pr: integer, _head: string, _session?: string, _force?: boolean,
+    _why?: string, _body_file?: string, _no_land?: boolean): integer
+  return gate.verdict_line("verdict", false,
+    "REFUSED: legacy PR verdict is disabled — inspect checks externally "
+    .. "and run `gitboard verdict ID KIND --head SHA`")
 end
 
 local record gitverdict
+  cmd_verdict_commit: function(s: store.Store, id: string, kind: string,
+  head: string, session: string, force: boolean, why: string,
+  repo_dir: string): integer
   cmd_verdict: function(s: store.Store, id: string, kind: string,
   pr: integer, head: string, session?: string, force?: boolean,
   why?: string, body_file?: string, no_land?: boolean): integer
@@ -402,6 +131,7 @@ local record gitverdict
 end
 
 local M: gitverdict = {
+  cmd_verdict_commit = cmd_verdict_commit,
   cmd_verdict = cmd_verdict,
   already_judged_refusal = already_judged_refusal,
 }

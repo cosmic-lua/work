@@ -69,34 +69,26 @@ local function test_the_stop_rule_keeps_the_diff_on_a_bounce()
     .. "unpushed, never reverted")
 end
 
-local function test_step_seven_reports_a_base_conflict_rather_than_rebasing()
+local function test_step_seven_leaves_authenticated_operations_to_the_caller()
   assert(BUILDER:find(
-      "If the push or the PR shows a conflict with the base branch, "
-      .. "stop and report it with the conflicting files; merging the "
-      .. "base into the item branch is the orchestrator's, never a "
-      .. "builder's rebase.", 1, true) ~= nil,
-    "step 7 must tell a builder to stop and report a base conflict, "
-    .. "never rebase it themselves")
+      "The caller owns every authenticated operation: do not push or "
+      .. "open an external review unless it explicitly asks you to.",
+      1, true) ~= nil,
+    "step 7 leaves pushes and provider interactions with the caller")
 end
 
-local function test_the_builder_never_opens_its_own_pr()
+local function test_the_builder_hands_over_a_commit_id()
   assert(BUILDER:find("create_pull_request", 1, true) == nil,
-    "the builder brief must not send a builder to open its own PR — "
-    .. "that reach is the orchestrator's, through `gitboard take ID "
-    .. "--open`")
-  assert(BUILDER:find("take ID --open", 1, true) ~= nil,
-    "the builder's Open a PR step must hand the PR off to "
-    .. "`gitboard take ID --open` instead of opening one itself")
+    "the builder brief must not send a builder to a provider API")
+  assert(BUILDER:find("gitboard take <ITEM_ID> --head SHA [--url URL]",
+      1, true) ~= nil,
+    "the builder reports the commit-only handover command")
 end
 
--- `verdict` performs the GitHub side of a review itself, so the
--- review brief must send a reviewer to no GitHub tool of its own —
--- neither the `gh` CLI nor an MCP tool, and no "enable auto-merge"
--- instruction, since `bin/gitboard verdict` is now the one command.
-local function test_the_review_brief_touches_no_github_tool_itself()
+-- `verdict` performs only local Git verification and a board mutation.
+local function test_the_review_brief_records_only_the_commit()
   assert(REVIEW:find("mcp__github", 1, true) == nil,
-    "the review brief must name no GitHub MCP tool — `verdict` performs "
-    .. "the write itself")
+    "the review brief must name no provider MCP tool")
   assert(REVIEW:find("enable_pr_auto_merge", 1, true) == nil
     and REVIEW:find("enable auto-merge", 1, true) == nil,
     "the review brief must not instruct a reviewer to enable auto-merge "
@@ -104,10 +96,11 @@ local function test_the_review_brief_touches_no_github_tool_itself()
   assert(REVIEW:find("bin/gitboard verdict <ITEM_ID> accept", 1, true) ~= nil,
     "the accept line runs `gitboard verdict` directly")
   assert(REVIEW:find(
-      "bin/gitboard verdict <ITEM_ID> request-changes --body FILE", 1, true)
-    ~= nil, "the request-changes line requires --body FILE")
-  assert(REVIEW:find("bin/gitboard verdict <ITEM_ID> reject --body FILE",
-      1, true) ~= nil, "the reject line requires --body FILE")
+      "bin/gitboard verdict <ITEM_ID> request-changes", 1, true)
+    ~= nil, "request-changes records the same commit id")
+  assert(REVIEW:find("--body FILE", 1, true) == nil
+    and REVIEW:find("--pr", 1, true) == nil,
+    "review prose and provider ids are not board evidence")
 end
 
 local function test_mutation_step_says_what_a_real_break_is()
@@ -136,23 +129,21 @@ end
 
 local function test_step_one_bars_a_reviewer_from_rerunning_ci()
   assert(REVIEW:find(
-      "Green means the gate ran on this exact head — never re-run "
-      .. "`--make ci` or the full test stage yourself; the checks you "
-      .. "run are the ones the diff's own test file and your mutation "
-      .. "need.", 1, true) ~= nil,
-    "step 1 must tell a reviewer never to re-run --make ci or the "
-    .. "full test stage on a green head")
+      "If the caller supplies external checks, confirm they name that SHA; "
+      .. "red or running means stop and record nothing. Never infer check "
+      .. "state from the board.", 1, true) ~= nil,
+    "step 1 keeps external check inspection caller-owned and SHA-bound")
 end
 
-local function test_step_two_reruns_find_against_the_pr_head()
+local function test_step_two_reruns_find_against_the_handover()
   assert(REVIEW:find(
       "When the spec states a pattern and a count, re-run "
-      .. "`cosmic --find` on the PR head from your checkout: the hit "
+      .. "`cosmic --find` on the handed-over commit from your checkout: the hit "
       .. "list IS the expected change set — a hit the diff leaves "
       .. "unchanged, or a changed site outside the hits, is a "
       .. "finding.", 1, true) ~= nil,
-    "step 2 must send a reviewer to re-run cosmic --find on the PR "
-    .. "head when the spec states a pattern and a count")
+    "step 2 must send a reviewer to re-run cosmic --find on the exact "
+    .. "handover when the spec states a pattern and a count")
 end
 
 local function test_mutation_step_names_the_one_file_shape()

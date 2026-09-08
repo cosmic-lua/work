@@ -4,9 +4,8 @@
 -- report the `cmd_show` wrapper prints: fields, derived state, the
 -- take gate's problem list, the sidecar, the git history.
 
-local cache = require("_work.cache")
 local check = require("cosmic.check")
-local ciobs = require("_work.ciobs")
+local commit_flow = require("_work.commit_flow_fixture")
 local eventsmod = require("_work.events")
 local fixture = require("_work.fixture")
 local gitread = require("_work.gitread")
@@ -17,9 +16,7 @@ local read = require("_work.read")
 local show = require("_work.gitshow")
 local spec = require("_work.spec")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
-local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
@@ -39,6 +36,8 @@ local UNDER < const > = next_id()
 local WORK < const > = next_id()
 local ADRIFT < const > = next_id()
 local BEATEN < const > = next_id()
+local BASE < const > = ("a"):rep(40)
+local HEAD < const > = ("b"):rep(40)
 
 --- A spec sidecar whose last section ends at a thematic break.
 local SIDECAR < const > = table.concat({
@@ -65,7 +64,8 @@ local function a_board(): {item.Item}
     check.must(item.decode({id = ROOT, title = "an outcome", parent = BOARD})),
     check.must(item.decode({id = UNDER, title = "a container", parent = ROOT})),
     check.must(item.decode({id = WORK, title = "a slice", parent = UNDER,
-          claim = "session-a", pr = 42})),
+          claim = "session-a", claim_base = BASE, handover_head = HEAD,
+          builders = "session-a"})),
     check.must(item.decode({id = ADRIFT, title = "a fresh leaf",
           parent = ROOT})),
     check.must(item.decode({id = BEATEN, title = "a lesser outcome", parent = BOARD})),
@@ -144,7 +144,7 @@ local function test_show_prints_fields_role_and_history()
     "the header carries the wrapped handle and the full id: " .. lines[1])
   assert(matched(lines, "^role: work$"), table.concat(lines, "\n"))
   assert(matched(lines, "^state: review$"), "its state")
-  assert(matched(lines, "^pr: #42$"), "its PR")
+  assert(matched(lines, "^handover: " .. HEAD .. "$"), "its exact handover")
   assert(matched(lines, "^%-%-%- spec %-%-%-$"), "the sidecar is the spec")
   assert(matched(lines, "abc1234 move it"), "git log IS the item's history")
   assert(verdict == WORK:sub(1, 8) .. " is review", verdict)
@@ -165,30 +165,26 @@ local function test_show_prints_repo_and_base()
   assert(not matched(plain, "^base:"), "no base, no line")
 end
 
--- `show` prints the CI observation line the review brief already
--- tells a reader to check `show ID` for — cached state, head, and age,
--- never `done`/`total` (`_work.ciobs` stores no check count).
-local function test_show_prints_the_ci_line_for_a_doing_items_pr()
+-- Provider observations are never part of the board report, even if a legacy
+-- caller supplies compatibility arguments to the pure rendering function.
+local function test_show_ignores_legacy_ci_arguments()
   local all = a_board()
   local lines = report_for(all[3], all, "", {}, {}, nil, "green",
     "cafef00dabc", 125)
-  assert(matched(lines, "^ci: green %(head cafef00, observed 2m ago%)$"),
-    table.concat(lines, "\n"))
+  assert(not matched(lines, "^ci:"), table.concat(lines, "\n"))
 end
 
--- No cached row (`ci_state` nil) reads "not observed", distinct from
--- no line at all for an item CI has nothing to say about.
-local function test_show_prints_ci_not_observed_with_no_cached_row()
+local function test_show_prints_no_ci_without_legacy_arguments()
   local all = a_board()
   local lines = report_for(all[3], all, "", {}, {})
-  assert(matched(lines, "^ci: not observed$"), table.concat(lines, "\n"))
+  assert(not matched(lines, "^ci:"), table.concat(lines, "\n"))
 end
 
 -- A todo item carries no PR by definition (`_work.indexddl`'s `state`
 -- view: `pr <> 0` alone already reads as doing), and a resolved item's
 -- leftover PR field is CI's business no longer — neither prints a
 -- `ci:` line, whatever `ci_state` a caller happens to pass in.
-local function test_show_prints_no_ci_line_without_an_open_doing_pr()
+local function test_show_prints_no_ci_line_for_any_item()
   local all = a_board()
   local todo_lines = report_for(all[4], all, "", {}, {}, nil, "green")
   assert(not matched(todo_lines, "^ci:"),
@@ -438,57 +434,20 @@ local function test_show_id_history_matches_between_cache_and_git_log()
     .. "\nfallback:\n" .. out)
 end
 
--- `show ID`'s CI line comes from `_work.ciobs`'s own cache, wired
--- through `cmd_show` exactly as `cmd_show` reads role, rank, and
--- state — a real cache row, not a hand-built one.
-local function test_show_id_prints_the_cached_ci_state()
-  local s = init_state_repo("show-ci-observed")
-  local _root, leaf = fixture.root_with_leaf(s)
-  fixture.give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 11, false, "") == 0)
-  local it = assert(store.load(s, leaf))
-  local c = assert(cache.open(s.root))
-  assert(ciobs.record(c, it.repo, it.pr,
-      {state = "green", head_sha = "cafef00dabc", runs = {}}))
-  assert(cache.close(c))
-
+-- The live wrapper renders the same commit-only facts as the pure report. The
+-- optional URL is visibly navigation metadata and no CI cache line appears.
+local function test_show_id_prints_commit_only_handover_facts()
+  local s, leaf, product = commit_flow.fresh("show-commit-facts")
+  assert(commit_flow.claim(s, leaf, commit_flow.BUILDER, product) == 0)
+  assert(commit_flow.handover(s, leaf, commit_flow.BUILDER, product,
+      product.head, "https://example.test/change/7") == 0)
   local code, out = show_and_capture(s, leaf)
   assert(code == 0, out)
-  assert(out:find("\nci: green %(head cafef00, observed %d+m ago%)\n") ~= nil,
-    "the cached state and head render: " .. out)
-end
-
--- No cached row at all — a PR field set directly, never through a
--- `take --pr` handover that seeds one itself — reads "not observed",
--- not a refusal or a silent gap.
-local function test_show_id_prints_ci_not_observed_with_no_row()
-  local s = init_state_repo("show-ci-unobserved")
-  local _root, leaf = fixture.root_with_leaf(s)
-  fixture.give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
-  local it = check.must(store.load(s, leaf))
-  it.pr = 12
-  assert(storewrite.save(s, it, "fixture: pr set with no handover"))
-
-  local code, out = show_and_capture(s, leaf)
-  assert(code == 0, out)
-  assert(out:find("\nci: not observed\n") ~= nil,
-    "a PR field with no take --pr handover behind it: " .. out)
-end
-
--- `take --pr N` seeds its own head as `running` at handover — the
--- window before the next `sync` observes it — so `show` never reads a
--- freshly handed-over PR as unobserved.
-local function test_show_id_prints_running_right_after_take_pr()
-  local s = init_state_repo("show-ci-seeded")
-  local _root, leaf = fixture.root_with_leaf(s)
-  fixture.give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "builder-a", 12, false, "") == 0)
-
-  local code, out = show_and_capture(s, leaf)
-  assert(code == 0, out)
-  assert(out:find("\nci: running %(head , observed %d+m ago%)\n") ~= nil,
-    "take --pr seeded a running row with no sync yet: " .. out)
+  assert(out:find("\nclaim base: " .. product.base .. "\n", 1, true) ~= nil)
+  assert(out:find("\nhandover: " .. product.head .. "\n", 1, true) ~= nil)
+  assert(out:find("\nexternal: https://example.test/change/7 "
+      .. "(navigation only)\n", 1, true) ~= nil)
+  assert(out:find("\nci:", 1, true) == nil
+    and out:find("\npr:", 1, true) == nil,
+    "provider observations and identifiers do not render: " .. out)
 end

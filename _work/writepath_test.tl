@@ -34,6 +34,7 @@ local SPEC_BODY < const > = "## Change\ndo it\n## Non-goals\nnot that\n"
 --- formatter mis-indents when the line wraps.
 local record Counter
   n: integer
+  calls: {string}
   restore: function()
 end
 
@@ -45,12 +46,13 @@ end
 --- @return Counter The live counter; call `.restore()` exactly once
 local function count_for_each_ref(): Counter
   local original = refs.for_each_ref
-  local counter: Counter = {n = 0, restore = function()
+  local counter: Counter = {n = 0, calls = {}, restore = function()
       refs.for_each_ref = original
     end}
   refs.for_each_ref = function(root: string, patterns: {string}):
     {refs.RefEntry} | nil, string
     counter.n = counter.n + 1
+    counter.calls[#counter.calls + 1] = table.concat(patterns, ",")
     return original(root, patterns)
   end
   return counter
@@ -73,14 +75,10 @@ local function count_gitread_load(): Counter
   return counter
 end
 
--- `new` on a fixture with a local bare origin: one `for-each-ref`
--- snapshot (`store.list`, inside `cmd_new`), one read-back of the
--- ref the fast-import just wrote, and one more the cache's own
--- post-write digest check pays (`_work.cache.after_save`'s `apply_patch`,
--- which has no cheap way to learn the new digest without a fresh read —
--- a separate, narrower cost than the one this item's Change removes,
--- left as it stands) — three total, never the six a duplicated
--- snapshot and a cold cache-open would have cost. The cache is warmed
+-- `new` on a remote-mode fixture takes one canonical `for-each-ref`
+-- snapshot (`store.list`, inside `cmd_new`). The successor is prepared,
+-- not confirmed, so it neither patches the canonical cache nor takes a
+-- second canonical snapshot. The cache is warmed
 -- first so `similar_lines`'s own `cache.open` finds a file already
 -- valid at the snapshot `store.list` just took, the same way a real
 -- run's second-and-later mutation always does.
@@ -97,21 +95,25 @@ local function test_new_reads_the_board_once_and_rereads_only_the_written_ref()
 
   assert(rc == 0, "new should be accepted")
   assert(ld.n == 0, "new must never fall back to a per-item load: got " .. ld.n)
-  assert(fe.n == 3, ("new should pay exactly one snapshot, one written-ref "
-      .. "read-back, and one cache after-write digest check — not a "
-      .. "duplicated snapshot on top: got %d"):format(fe.n))
+  assert(fe.n == 2, ("new should pay one board snapshot plus the duplicate "
+      .. "search's guarded cache open, and must not patch an unconfirmed "
+      .. "successor into the cache: got %d")
+    :format(fe.n))
 end
 
 -- `rank` on the same kind of fixture: the defect this item's Evidence
 -- names directly — a second, full `store.list` call after the write,
 -- to report the new standing, which loaded the whole board's
--- cat-file batches a second time. Ranking a CHILD under its parent
+-- cat-file batches a second time. The other ref enumeration is the
+-- deliberately narrow format-marker compatibility check before a
+-- write. Ranking a CHILD under its parent
 -- exercises the same `commit_and_publish` path `new` above does —
 -- an outcome's own `rank` (the board's own `order`) goes through the
 -- identical path too, since the board is simply its parent.
 local function test_rank_reads_the_board_once_not_twice()
   local a, _b = fixture.init_shared("rank-load-count")
   assert(graph.cmd_new(a, "an outcome", "", nil, "") == 0)
+  fixture.caller_publish(a)
   local seeded = check.must(store.list(a))
   assert(#seeded == 2, "the board plus one outcome should be on the board: got "
     .. #seeded)
@@ -132,6 +134,7 @@ local function test_rank_reads_the_board_once_not_twice()
   -- and the `rank` call below pays its real write path instead of
   -- finding nothing left to do.
   assert(graph.cmd_new(a, "a piece of it", "", nil, "") == 0)
+  fixture.caller_publish(a)
   local triaged = check.must(store.list(a))
   local unplaced: string = nil
   for _, i in ipairs(triaged) do
@@ -141,14 +144,12 @@ local function test_rank_reads_the_board_once_not_twice()
   end
   assert(unplaced ~= nil, "the new piece should be on the board")
   assert(graph.cmd_attach(a, unplaced, root) == 0, "attach should be accepted")
-  local all = check.must(store.list(a))
-  local kid: string = nil
-  for _, i in ipairs(all) do
-    if i.parent == root then
-      kid = i.id
-    end
-  end
-  assert(kid ~= nil, "the child should be on the board")
+  fixture.caller_publish(a)
+  local direct = check.must(store.load(a, unplaced))
+  assert(direct.parent == root,
+    "the caller-confirmed item ref carries its new parent: " .. direct.parent)
+  assert(a.index == nil, "the mutation closed the pre-transport cache handle")
+  local kid = unplaced
 
   -- The two seeding reads above already opened `a`'s own board cache
   -- (`store.list` holds it for the rest of this invocation) — closed
@@ -168,10 +169,13 @@ local function test_rank_reads_the_board_once_not_twice()
 
   assert(rc == 0, "rank should be accepted")
   assert(ld.n == 0, "rank must never fall back to a per-item load: got " .. ld.n)
-  assert(fe.n == 3, ("rank should read the board once — one snapshot, "
-      .. "one written-ref read-back, one cache after-write digest check — "
-      .. "never a second full snapshot a stale reported standing used "
-      .. "to cost: got %d"):format(fe.n))
+  assert(fe.n == 2, ("rank should take one board snapshot and one narrow "
+      .. "format-marker read: got %d (%s)")
+    :format(fe.n, table.concat(fe.calls, "; ")))
+  assert(fe.calls[1] == table.concat({"refs/heads/items", "refs/heads/ended",
+        "refs/heads/board"}, ","), "first read must be the canonical board snapshot")
+  assert(fe.calls[2] == "refs/heads/items,refs/heads/ended,refs/heads/board/format",
+    "second read must be the narrow write compatibility check")
 end
 
 -- `new` never asks git for `<new-id>:spec.md`: the id being minted has
