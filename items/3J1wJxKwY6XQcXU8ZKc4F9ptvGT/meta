@@ -1,7 +1,6 @@
 title: gitboard: caller-owned Git transport and offline two-hour claims
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
-claim: 6fac96ee1a17646491828c8cf8d764d2
 claim_base: 810ad912639000eae52cf50752f56f9d272d88dd
 handover_head: cde528f2c3ac9c20830a38f1b69a3614e125af5d
 external_url: https://github.com/cosmic-lua/work/pull/90
