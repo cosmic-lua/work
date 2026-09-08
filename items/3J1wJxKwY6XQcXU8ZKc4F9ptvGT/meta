@@ -3,3 +3,6 @@ parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work
 claim: 615f8f680399368546721e2abc68f259
 claim_base: 810ad912639000eae52cf50752f56f9d272d88dd
+handover_head: cde528f2c3ac9c20830a38f1b69a3614e125af5d
+external_url: https://github.com/cosmic-lua/work/pull/90
+builders: 615f8f680399368546721e2abc68f259
