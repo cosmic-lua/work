@@ -9,7 +9,6 @@
 --- that prints it: what a session reads is the contract, and a report
 --- that returns its lines can be asserted on without capturing
 --- stdout.
-local ciobs = require("_work.ciobs")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
 local guide = require("_work.guidance")
@@ -17,7 +16,6 @@ local health = require("_work.health")
 local index = require("_work.index")
 local item = require("_work.item")
 local act = require("_work.action")
-local lanes = require("_work.lanes")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
 local read = require("_work.read")
@@ -48,46 +46,6 @@ local function stale_ages(s: store.Store): health.StaleAges
   return health.from_rows(rows)
 end
 
---- CI check-run state for each open review-stage item that carries a
---- PR, read from `_work.ciobs`'s cached observation — a live
---- `gh.head_checks` call only for a candidate whose row is absent or
---- has aged past the freshness window, never one call per item on
---- every render. A candidate `ciobs` cannot report on (a cache that
---- will not even open, an `observe` failure — no GitHub reach, no
---- origin, no token, a network error) is simply left out of the map —
---- exactly what `action.tl`'s `phased_action` already treats as
---- "unknown", offered the same as it always was.
---- @param s store.Store The store
---- @param all {item.Item} Every item
---- @return act.CiStates CI state by item id
-local function ci_states(s: store.Store, all: {item.Item}): act.CiStates
-  local out: act.CiStates = {}
-  local c, _cerr = store.read(s)
-  if c == nil then
-    return out
-  end
-  local rows, _qerr = read.queue(c)
-  if rows == nil then
-    return out
-  end
-  local stage_by_id: {string: integer} = {}
-  for _, row in ipairs(rows) do
-    stage_by_id[row.id] = row.stage
-  end
-  for _, i in ipairs(all) do
-    if ciobs.is_candidate(i, stage_by_id) then
-      local state, age = ciobs.read(c, i.repo, i.pr)
-      if state == nil or not ciobs.fresh(age) then
-        state = ciobs.observe(s, c, i.repo, i.pr)
-      end
-      if state ~= nil then
-        out[i.id] = state
-      end
-    end
-  end
-  return out
-end
-
 --- Every spec sidecar, by item id, for the bar checks the reports
 --- run. Read once per render, in one batch — `store.read_specs`, not
 --- one `read_spec` per item — so a board-wide render stays a fixed
@@ -116,7 +74,7 @@ local function lanes_row(facts: {string: string} | nil): string | nil
     return nil
   end
   local parts: {string} = {}
-  for _, lane in ipairs(lanes.LANES) do
+  for _, lane in ipairs({"release.yml", "fuzz.yml", "docs.yml"}) do
     local c = facts[lane]
     if c ~= nil and c ~= "" then
       parts[#parts + 1] = ("%s=%s"):format(lane, c)
@@ -138,7 +96,7 @@ local record TodoRow
   ranked: boolean
 end
 
---- The board: doing item by item against the one bound, the top of
+--- The board: doing item by item, the top of
 --- todo with its pullable marks, the triage queue, and board-wide
 --- graph health. Health reports HERE rather than in the spec bar:
 --- one item's broken chain is everyone's to see and nobody's reason
@@ -178,13 +136,16 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     end
   end
   local out: {string} = {}
-  out[#out + 1] = ("%-6s %d/%d"):format("doing", #doing, flow.DOING_LIMIT)
+  out[#out + 1] = ("%-6s %d"):format("doing", #doing)
   for _, d in ipairs(doing) do
     local i = d.it
     local sub = flow.substate_of_stage(d.stage)
     local marks = (" [%s]"):format(sub)
     if i.claim ~= "" then marks = marks .. " @" .. i.claim end
-    if i.pr ~= 0 then marks = marks .. (" pr:%d"):format(i.pr) end
+    if (i.handover_head or "") ~= "" then
+      marks = marks .. (" handover:%s"):format(
+        (i.handover_head or ""):sub(1, 12))
+    end
     if i.reviewer ~= "" then marks = marks .. " reviewer:" .. i.reviewer end
     if i.result ~= "" then
       marks = marks .. (" result:%s"):format(i.result:sub(1, 7))
@@ -252,11 +213,7 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
   for _, p in ipairs(structure) do
     out[#out + 1] = ("  graph: %s: %s"):format(p.id, p.detail)
   end
-  local verdict = ("doing %d/%d"):format(#doing, flow.DOING_LIMIT)
-  if #doing >= flow.DOING_LIMIT then
-    verdict = ("bound: doing is at %d/%d — finish something before taking "
-      .. "more"):format(#doing, flow.DOING_LIMIT)
-  end
+  local verdict = ("doing %d"):format(#doing)
   if #structure > 0 then
     verdict = ("%s; %d graph problem(s)"):format(verdict, #structure)
   end
@@ -299,19 +256,8 @@ local function cmd_status(s: store.Store, todo_shown?: integer): integer
   if c == nil then
     return verdict_line("show", false, cerr)
   end
-  -- An unsynced board has no lanes_state.tl at all, and read_state
-  -- reports that the same way it reports every lane already at its
-  -- last-recorded value: an empty map. That is also, and only, what
-  -- a synced-but-all-green board with nothing to say would look
-  -- like — except `record` never commits with nothing changed, so an
-  -- empty map here means the file was never written.
-  local facts = lanes.read_state(s)
-  local lane_facts: {string: string} | nil = nil
-  if next(facts) ~= nil then
-    lane_facts = facts
-  end
   local lines, verdict = status_report(c, all, read_specs(s, all),
-    stale_ages(s).claim, lane_facts, todo_shown)
+    stale_ages(s).claim, nil, todo_shown)
   if lines == nil then
     return verdict_line("show", false, verdict)
   end
@@ -414,14 +360,14 @@ end
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Stale claim ages, by id
 --- @param review_ages health.Ages Stale review ages, by id
---- @param ci act.CiStates CI state by item id, absent when unknown
+--- @param ci act.CiStates Retired compatibility argument; ignored
 --- @return string The action, its target, the rule behind it, and its guidance
 --- @return string Error message
 local function next_report_live(s: store.Store, c: Index, all: {item.Item},
     specs: act.Specs, session?: string, ages?: health.Ages,
-    review_ages?: health.Ages, ci?: act.CiStates): string, string
+    review_ages?: health.Ages, _ci?: act.CiStates): string, string
   local action, err = act.next_action(c, all, specs, session, ages,
-    review_ages, session, ci)
+    review_ages, session)
   if action == nil then
     return "", err
   end
@@ -449,7 +395,7 @@ local function cmd_next(s: store.Store, session?: string): integer
   end
   local ages = stale_ages(s)
   local report, rerr = next_report_live(s, c, all, read_specs(s, all), session,
-    ages.claim, ages.review, ci_states(s, all))
+    ages.claim, ages.review)
   if rerr ~= "" then
     return verdict_line("next", false, rerr)
   end

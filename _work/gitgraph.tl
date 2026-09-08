@@ -129,7 +129,7 @@ end
 --- @return integer 0 on success, 1 otherwise
 local function cmd_new(s: store.Store, title: string, parent: string,
     spec: string | nil, repo: string, force?: boolean, why?: string,
-    before?: string, after?: string): integer
+    before?: string, after?: string, claim_session?: string): integer
   local frc = force or false
   local rsn = why or ""
   local bfr = before or ""
@@ -154,7 +154,8 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     return gate.verdict_line("new", false, aerr)
   end
   if not frc and title:sub(1, 9) == "friction:" then
-    local refusal = friction.friction_refusal(s, session.resolve(nil), spec or "")
+    local refusal = friction.friction_refusal(s,
+      claim_session or session.resolve(nil), spec or "")
     if refusal then
       return gate.verdict_line("new", false, refusal)
     end
@@ -247,7 +248,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   local ok, err = gate.commit_and_publish(s, it, spec,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
-    "new", also)
+    "new", also, claim_session, false, frc, rsn)
   if not ok then
     return gate.verdict_line("new", false, err)
   end
@@ -277,7 +278,13 @@ end
 --- at most one of before/after
 --- @return integer 0 on success, 1 otherwise
 local function cmd_attach(s: store.Store, id: string, parent: string,
-    before?: string, after?: string): integer
+    before?: string, after?: string, claim_session?: string,
+    force?: boolean, why?: string): integer
+  local frc, rsn = force or false, why or ""
+  local forced = gate.force_refusal(frc, rsn)
+  if forced then
+    return gate.verdict_line("attach", false, "REFUSED: " .. forced)
+  end
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line("attach", false, aerr)
@@ -356,7 +363,7 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("attach %s under %s"):format(id:sub(1, 8), parent:sub(1, 8)),
-    "attach", also)
+    "attach", also, claim_session, false, frc, rsn)
   if not ok then
     return gate.verdict_line("attach", false, err)
   end
@@ -401,7 +408,13 @@ end
 --- @param new_base string | nil The new base branch, nil to leave it unchanged
 --- @return integer Exit code
 local function cmd_set(s: store.Store, id: string, title: string | nil,
-    repo: string | nil, new_base: string | nil): integer
+    repo: string | nil, new_base: string | nil, claim_session?: string,
+    force?: boolean, why?: string): integer
+  local frc, rsn = force or false, why or ""
+  local forced = gate.force_refusal(frc, rsn)
+  if forced then
+    return gate.verdict_line("set", false, "REFUSED: " .. forced)
+  end
   if title == nil and repo == nil and new_base == nil then
     return gate.verdict_line("set", false,
       "REFUSED: set needs at least one of --title, --repo, --base")
@@ -450,7 +463,8 @@ local function cmd_set(s: store.Store, id: string, title: string | nil,
     return gate.verdict_line("set", false, table.concat(bad, "; "))
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
-    ("set %s %s"):format(id:sub(1, 8), table.concat(fields, " ")), "set")
+    ("set %s %s%s"):format(id:sub(1, 8), table.concat(fields, " "),
+      gate.forced_suffix(frc, rsn)), "set", nil, claim_session, false, frc, rsn)
   if not ok then
     return gate.verdict_line("set", false, err)
   end
@@ -464,11 +478,13 @@ end
 local record gitgraph
   cmd_new: function(s: store.Store, title: string, parent: string,
   spec: string | nil, repo: string, force?: boolean, why?: string,
-  before?: string, after?: string): integer
+  before?: string, after?: string, claim_session?: string): integer
   cmd_attach: function(s: store.Store, id: string, parent: string,
-  before?: string, after?: string): integer
+  before?: string, after?: string, claim_session?: string,
+  force?: boolean, why?: string): integer
   cmd_set: function(s: store.Store, id: string, title: string | nil,
-  repo: string | nil, new_base: string | nil): integer
+  repo: string | nil, new_base: string | nil, claim_session?: string,
+  force?: boolean, why?: string): integer
 end
 
 local M: gitgraph = {

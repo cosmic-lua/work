@@ -1,5 +1,5 @@
 --- The review-role prompts `_work.brief` emits: `REVIEW` judges a
---- builder's PR the adversarial way, `REVIEW_SCRIPT` judges a
+--- builder's handed-over commit the adversarial way, `REVIEW_SCRIPT` judges a
 --- mechanical one (no `.tl` file outside `*_test.tl`, or under 20
 --- changed lines) with a fixed four-move script instead,
 --- `RESEARCH_REVIEW` judges a research slice's spec update. Split out
@@ -29,12 +29,8 @@
 --- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
 --- (its parent's parent), since `bin/gitboard` fetches and execs its
 --- own pinned release rather than something built in the board
---- checkout. `SSL_USE_SYSTEM_CERTS=1` stays in every verdict block: a
---- direct `cosmic.fetch` against `api.github.com` — the same call the
---- verdict's PR-head check makes through `_work.gh`/`_work.api` —
---- fails TLS verification without it and succeeds with it on the
---- network this was measured against; the measurement used a plain
---- fetch rather than a live `verdict`, which would mutate the board.
+--- checkout. Verdict records the exact handed-over commit and performs no
+--- provider or authenticated operation.
 ---
 --- `<ROUND_CONTEXT>` (`REVIEW` only, between the spec block and "How
 --- to review") is `_work.brief`'s fill for a SECOND (or later) review
@@ -68,14 +64,12 @@ from a distance from the builder. Everything you need is below.
 
 Board item id: `<ITEM_ID>` (handle <HANDLE>)
 Title: <TITLE>
-Pull request: <PR_URL> (head sha `<HEAD_SHA>`)
+<CHANGE_SOURCE>
 
-Fetch the PR diff and description yourself. Read the current PR
-state fresh; do not trust anything here except the spec below, which
-is authoritative. The builder's PR description makes claims — read
-them, but verify independently. Its `## Acceptance` bullets, if any,
-were the refiner's worked proof at spec time, not a checklist this
-review re-executes.
+The caller has made this exact commit available in your local checkout.
+Review `<CLAIM_BASE>..<HEAD_SHA>`; never substitute a branch tip or provider
+state for either commit. The spec below is authoritative. External checks,
+when used, must be inspected by the caller on this exact SHA.
 
 ## The spec this PR is supposed to satisfy (verbatim)
 
@@ -89,18 +83,15 @@ review re-executes.
 Your job is to try to make this diff fail, not to confirm it looks
 fine.
 
-1. CI is mechanical, but read it fresh on the PR's CURRENT head. Red
-   or still running ends the review immediately — record nothing,
-   stop and report why. Green means the gate ran on this exact head —
-   never re-run `--make ci` or the full test stage yourself; the
-   checks you run are the ones the diff's own test file and your
-   mutation need.
+1. Confirm you are reading exactly `<HEAD_SHA>`. If the caller supplies
+   external checks, confirm they name that SHA; red or running means stop and
+   record nothing. Never infer check state from the board.
 2. The diff is the Change — everything present, nothing extra. List
    the changed files and confirm each is inside the spec's stated
    scope. Anything outside it is scope creep — quote it, even when
    it looks good; good ideas become their own items. When the spec
-   states a pattern and a count, re-run `cosmic --find` on the PR
-   head from your checkout: the hit list IS the expected change
+   states a pattern and a count, re-run `cosmic --find` on the handed-over
+   commit from your checkout: the hit list IS the expected change
    set — a hit the diff leaves unchanged, or a changed site outside
    the hits, is a finding.
 3. The walls held: every `## Non-goals` line honored, frozen
@@ -127,37 +118,27 @@ another agent's worktree.
 
 ## Recording your verdict
 
-`verdict` performs the GitHub side of your verdict itself — you touch
-no GitHub tool of your own. CI is read from `gitboard show <ITEM_ID>`
-(the board's own head-check observation); read the diff with `git
-fetch origin <branch>` in your own checkout at `<WORKTREE>`. That
-checkout has no `o/3p` cache yet — run `bin/cosmic --make fetch`
-before its first test, and `--make build` once if you run any test.
-`bin/gitboard` in the product checkout fetches its own pinned release;
-this review is claimed under session `<REVIEW_SESSION>` — you MUST use
-that exact string. Export SSL_USE_SYSTEM_CERTS=1 before `verdict`,
-which reaches GitHub on your behalf.
+`verdict` verifies and records one local commit id. It performs no fetch,
+credential lookup, check read, merge, or provider write. The caller owns
+those operations. This review is claimed under session `<REVIEW_SESSION>` —
+you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+`bin/cosmic --make fetch` before its first test, and `--make build` once if
+you run any test.
 
 ```
 cd <PRODUCT_ROOT>
-export SSL_USE_SYSTEM_CERTS=1
 bin/gitboard verdict <ITEM_ID> accept \
-  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
-bin/gitboard verdict <ITEM_ID> request-changes --body FILE \
-  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
-bin/gitboard verdict <ITEM_ID> reject --body FILE \
-  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+bin/gitboard verdict <ITEM_ID> request-changes \
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+bin/gitboard verdict <ITEM_ID> reject \
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
 ```
 
-Run exactly the one line matching your judgment: accept lands the PR
-itself (or arms auto-merge when GitHub refuses a direct merge); the
-middle and reject kinds need `--body FILE` — the concrete gaps, or
-what was fundamentally wrong, quoted with file:line, which `verdict`
-posts as the formal review. Do NOT call `gitboard done` after an
-accept — the item ends only once its merge completes, which is the
-orchestrator's job. If a reject failed because a decision is open,
-tell the orchestrator in your report so the question is filed as a
-child of the item and the item dropped.
+Run exactly the one line matching your judgment. The board stores the SHA,
+not review prose. Put concrete gaps in your final report for the caller. An
+accept does not merge or complete the item; after landing, the caller runs
+`gitboard done <ITEM_ID> --landed SHA`.
 
 ## Final report
 
@@ -175,14 +156,12 @@ from a distance from the builder. Everything you need is below.
 
 Board item id: `<ITEM_ID>` (handle <HANDLE>)
 Title: <TITLE>
-Pull request: <PR_URL> (head sha `<HEAD_SHA>`)
+<CHANGE_SOURCE>
 
-Fetch the PR diff and description yourself. Read the current PR
-state fresh; do not trust anything here except the spec below, which
-is authoritative. The builder's PR description makes claims — read
-them, but verify independently. Its `## Acceptance` bullets, if any,
-were the refiner's worked proof at spec time, not a checklist this
-review re-executes.
+The caller has made this exact commit available in your local checkout.
+Review `<CLAIM_BASE>..<HEAD_SHA>`; never substitute a branch tip or provider
+state for either commit. The spec below is authoritative. External checks,
+when used, must be inspected by the caller on this exact SHA.
 
 ## The spec this PR is supposed to satisfy (verbatim)
 
@@ -195,11 +174,9 @@ review re-executes.
 This diff is mechanical: no changed `.tl` file outside `*_test.tl`,
 or fewer than 20 changed lines in total. Four fixed moves, in order:
 
-1. Read the diff and the check runs, fresh, on the PR's CURRENT
-   head. Red or still running ends the review immediately — record
-   nothing, stop and report why. Green means the gate already ran on
-   this exact head — never re-run `--make ci` or the full test stage
-   yourself.
+1. Confirm you are reading exactly `<HEAD_SHA>`. If the caller supplies
+   external checks, confirm they name that SHA; red or running means stop and
+   record nothing. Never infer check state from the board.
 2. Verify the one measured fact the spec names, against the diff's
    real effect. A moved number is a finding to quote, not by itself
    a reason to stop.
@@ -216,37 +193,27 @@ never in a worktree, and confirm the refusal.
 
 ## Recording your verdict
 
-`verdict` performs the GitHub side of your verdict itself — you touch
-no GitHub tool of your own. CI is read from `gitboard show <ITEM_ID>`
-(the board's own head-check observation); read the diff with `git
-fetch origin <branch>` in your own checkout at `<WORKTREE>`. That
-checkout has no `o/3p` cache yet — run `bin/cosmic --make fetch`
-before its first test, and `--make build` once if you run any test.
-`bin/gitboard` in the product checkout fetches its own pinned release;
-this review is claimed under session `<REVIEW_SESSION>` — you MUST use
-that exact string. Export SSL_USE_SYSTEM_CERTS=1 before `verdict`,
-which reaches GitHub on your behalf.
+`verdict` verifies and records one local commit id. It performs no fetch,
+credential lookup, check read, merge, or provider write. The caller owns
+those operations. This review is claimed under session `<REVIEW_SESSION>` —
+you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+`bin/cosmic --make fetch` before its first test, and `--make build` once if
+you run any test.
 
 ```
 cd <PRODUCT_ROOT>
-export SSL_USE_SYSTEM_CERTS=1
 bin/gitboard verdict <ITEM_ID> accept \
-  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
-bin/gitboard verdict <ITEM_ID> request-changes --body FILE \
-  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
-bin/gitboard verdict <ITEM_ID> reject --body FILE \
-  --pr <PR_NUMBER> --head <HEAD_SHA> --session <REVIEW_SESSION>
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+bin/gitboard verdict <ITEM_ID> request-changes \
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+bin/gitboard verdict <ITEM_ID> reject \
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
 ```
 
-Run exactly the one line matching your judgment: accept lands the PR
-itself (or arms auto-merge when GitHub refuses a direct merge); the
-middle and reject kinds need `--body FILE` — the concrete gaps, or
-what was fundamentally wrong, quoted with file:line, which `verdict`
-posts as the formal review. Do NOT call `gitboard done` after an
-accept — the item ends only once its merge completes, which is the
-orchestrator's job. If a reject failed because a decision is open,
-tell the orchestrator in your report so the question is filed as a
-child of the item and the item dropped.
+Run exactly the one line matching your judgment. The board stores the SHA,
+not review prose. Put concrete gaps in your final report for the caller. An
+accept does not merge or complete the item; after landing, the caller runs
+`gitboard done <ITEM_ID> --landed SHA`.
 
 ## Final report
 
@@ -306,15 +273,13 @@ reads well.
 
 ## Recording your verdict
 
-Three verdicts: `accept`, `request-changes`, `reject`. `bin/gitboard`
-in the product checkout fetches its own pinned release; this review
-is claimed under session `<REVIEW_SESSION>` — you MUST use that exact
-string. Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches
-GitHub.
+Three verdicts: `accept`, `request-changes`, `reject`. Use the already
+installed `bin/gitboard`; it performs no authenticated provider operation.
+This review is claimed under session `<REVIEW_SESSION>` — you MUST use that
+exact string.
 
 ```
 cd <PRODUCT_ROOT>
-export SSL_USE_SYSTEM_CERTS=1
 bin/gitboard verdict <ITEM_ID> <accept|request-changes|reject> \
   --session <REVIEW_SESSION>
 ```
@@ -326,9 +291,8 @@ stop and report that; never edit the spec yourself.
 Then, by verdict:
 - accept: do NOT call `gitboard done` — ending the item is the
   orchestrator's job.
-- request-changes: there is no PR to comment on, so the concrete
-  gaps go in your final report, each quoted with the probe and what
-  it returned. The claimant reworks the spec in place.
+- request-changes: the concrete gaps go in your final report, each quoted
+  with the probe and what it returned. The claimant reworks the spec in place.
 - reject: say what was fundamentally wrong with the recommendation.
   If it failed because a decision is open, tell the orchestrator in
   your report so the question is filed as a child of the item and

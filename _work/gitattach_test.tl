@@ -10,7 +10,8 @@ local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
-local publish = require("_work.publish")
+local prepared = require("_work.prepared")
+local refs = require("_work.refs")
 
 local init_shared = fixture.init_shared
 local init_state_repo = fixture.init_state_repo
@@ -30,13 +31,29 @@ local function test_a_reparent_survives_a_rebase()
   local goal, leaf = root_with_leaf(a)
   local other = file_item(a, "another leaf", goal)
   local another = file_item(a, "yet another leaf", goal)
-  assert(publish.sync(b))
+  fixture.caller_fetch(b)
   assert(graph.cmd_attach(b, leaf, another) == 0,
     "b moves leaf's ref first")
-  assert(graph.cmd_attach(a, leaf, other) ~= 0,
-    "the stale run is refused, not replayed")
+  fixture.caller_publish(b)
+
+  assert(graph.cmd_attach(a, leaf, other) == 0,
+    "the stale caller may prepare against its fetched snapshot")
+  local pending = check.must(prepared.list(a.root))
+  assert(#pending == 1, "the stale move has one durable transaction")
+  local pushed = prepared.execute(a.root, prepared.push_argv(pending[1]))
+  assert(not pushed, "the remote lease, not local preparation, rejects the race")
+  assert(prepared.execute(a.root, prepared.fetch_argv()),
+    "the caller refreshes its tracking refs after the rejected push")
+  check.must(store.close(a))
+  local outcomes = check.must(prepared.refresh(a.root))
+  assert(#outcomes == 1 and outcomes[1].state == "lost-race",
+    "refresh classifies the rejected lease")
+  assert(refs.update_ref(a.root, pending[1].staging_ref, refs.ZERO_SHA,
+      pending[1].manifest), "the caller discards the diagnosed transaction")
+
   assert(graph.cmd_attach(a, leaf, other) == 0,
     "the re-run lands against the merged board")
+  fixture.caller_publish(a)
   local after = check.must(store.load(a, leaf))
   assert(after.parent == other, "the re-parent landed: " .. after.parent)
 end

@@ -53,8 +53,10 @@ local type Cache = index.Index
 --- `rank_path`/`role` becoming maintained tables
 --- (`_work.index_rank`/`_work.readddl`) instead of views — belt-and-
 --- suspenders again, since the fingerprint's own hash already changed
---- the moment their DDL did.
-local SCHEMA_VERSION < const > = 6
+--- the moment their DDL did. Bumped to 7 for format 3's optional
+--- `claim_base`/commit-evidence columns. The cache is disposable: this
+--- is a rebuild boundary, never an in-place data migration.
+local SCHEMA_VERSION < const > = 7
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"

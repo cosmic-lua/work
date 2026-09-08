@@ -12,6 +12,7 @@
 --- `linked_worktree_refusal` — the same guard `init_repo` runs, so
 --- there is one implementation of the check, not two).
 local item = require("_work.item")
+local format = require("_work.format")
 local gitwrite = require("_work.gitwrite")
 local refs = require("_work.refs")
 local store = require("_work.store")
@@ -86,6 +87,10 @@ local function save(s: store.Store, it: item.Item, message: string,
   local refusal = storeinit.linked_worktree_refusal(s.root)
   if refusal ~= nil then
     return false, refusal
+  end
+  local current, ferr = format.require_current(s.root)
+  if not current then
+    return false, ferr
   end
   local batch: {item.Item} = {it}
   for _, other in ipairs(also or {}) do

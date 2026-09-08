@@ -1,20 +1,13 @@
---- Publishing a store's pending writes to its remote: the atomic,
---- leased push every `save` queues into `s.pending`, and the
---- lost-race recovery when another writer moved a ref first. A
---- mutation is commit-then-push; a lost push race is detected on the
---- push's own rejection text (`stale info`/`rejected`, never exit
---- code alone — `_work.refs.push_atomic`), and recovered with `git
---- fetch --prune`, which resets every local ref this checkout's mirror
---- refspecs cover to the winner's value. There is no working tree to
---- restore afterward — nothing here ever held one — so the recovery
---- is exactly that one fetch. `history` reads the `events` cache when
---- it is current, falling back to the same `git log` `touched_at`
---- still always uses; `sync` is the fetch, standalone. The git
---- identity every call runs under, and the `Store` it runs against,
---- live in `_work.store`; every git command here goes back through
---- its `git`/`git_ok`.
-local cache = require("_work.cache")
+--- Publication planning and confirmation. A mutation becomes a
+--- Git-native prepared transaction; by default its exact atomic
+--- leased push and fetch commands are returned to the caller and no
+--- remote I/O occurs. An explicit execution flag runs those ordinary
+--- Git commands with caller-configured credentials. `sync` likewise
+--- refreshes from already-fetched remote-tracking refs unless
+--- explicitly asked to execute the rendered fetch. History remains a
+--- local Git/cache read.
 local events = require("_work.events")
+local prepared = require("_work.prepared")
 local store = require("_work.store")
 local refs = require("_work.refs")
 
@@ -29,122 +22,155 @@ local record Event
   subject: string
 end
 
---- Whether the store has an `origin` remote to publish to. A store
+--- Whether the store has its configured board remote. A store
 --- without one is local-only: it publishes trivially, and the gates
 --- that ask GitHub about a pull request have nothing to ask. Memoized
 --- on `s` — `git remote` never changes within one run, and this is
 --- asked more than once in some verbs (`sync`, then `publish`, then a
 --- verb's own pre-check), so only the first ask ever spawns it.
 --- @param s store.Store The store
---- @return boolean True when origin exists
+--- @return boolean True when the configured remote exists
 local function has_origin(s: store.Store): boolean
   if not s.remote_present_read then
     local r = store.git(s, {"remote"})
-    s.remote_present = r ~= nil and r.ok and r.stdout:find("origin", 1, true) ~= nil
+    local wanted = refs.board_remote(s.root)
+    s.remote_present = r ~= nil and r.ok
+    and ("\n" .. r.stdout .. "\n"):find("\n" .. wanted .. "\n", 1, true) ~= nil
     s.remote_present_read = true
   end
   return s.remote_present
 end
 
---- Pull concurrent state: a store with no origin is local-only and
---- syncs trivially; one with an origin fetches with `--prune`, which
---- resets every mirrored ref (`refs/heads/items`, `refs/heads/ended`,
---- `refs/heads/board`) to what the remote holds. There is no working tree
---- to merge into, so this is the whole of sync.
---- The fetch moves refs behind `s.index`'s back exactly like a
---- mutation's own write does — `cache.around_fetch` patches the cache
---- FILE from a separate connection, but the connection `s` has held
---- open since its first read never sees that patch (a `cosmic.sqlite`
---- `query_one` never resets its statement between calls, which pins a
---- long-lived connection's own snapshot to whatever it was at its last
---- read) — so it is closed here too, the same as after a mutation.
+--- Confirm prepared transactions against refs the caller has already
+--- fetched. With `execute=true`, first run the exact ordinary Git
+--- fetch command using the caller's configured credentials.
 --- @param s store.Store The store
 --- @return boolean True on success
 --- @return string Error message
-local function sync(s: store.Store): boolean, string
-  if not has_origin(s) then
-    return true
+local function sync(s: store.Store, execute?: boolean): boolean, string
+  local remote = refs.board_remote(s.root)
+  if execute and refs.board_mode(s.root) == "remote" then
+    local fetched, ferr = prepared.execute(s.root, prepared.fetch_argv(remote))
+    if not fetched then
+      return false, ferr
+    end
   end
-  local specs_ok, serr = refs.ensure_refspecs(s.root)
-  if not specs_ok then
-    return false, serr
+  local results, err = prepared.refresh(s.root, remote)
+  if results == nil then
+    return false, err
   end
-  local ok, err = cache.around_fetch(s.root, function(): boolean, string
-      return refs.fetch_prune(s.root)
-    end)
   local _cok, _cerr = store.close(s)
-  return ok, err
+  local pending_count, lost_count = 0, 0
+  for _, result in ipairs(results) do
+    if result.state == "pending" then
+      pending_count = pending_count + 1
+    elseif result.state == "lost-race" then
+      lost_count = lost_count + 1
+    end
+  end
+  if lost_count > 0 then
+    return false, ("%d prepared transaction(s) lost their ref lease; "
+      .. "they remain under refs/gitboard/prepared for inspection"):format(lost_count)
+  end
+  if pending_count > 0 then
+    return true, ("%d prepared transaction(s) are not confirmed; fetch with: %s")
+    :format(pending_count, table.concat(prepared.fetch_argv(remote), " "))
+  end
+  if not execute and refs.board_mode(s.root) == "remote" then
+    return true, "refresh inspected fetched refs only; to fetch first, run: "
+    .. table.concat(prepared.fetch_argv(remote), " ")
+  end
+  return true, "state is current"
 end
 
---- Publish every ref the pending saves touched, in one atomic push
---- leased against the tip each was observed at. Rejection is
---- diagnosed from the push's own text: a `stale info`/`rejected`
---- refusal means a concurrent writer moved a ref this mutation leased
---- — nothing is replayed, since the gates that decided this mutation
---- may no longer hold against the winner's state — so the checkout is
---- re-synced with `fetch --prune` and the refusal is `store.LOST_RACE`,
---- whose recovery is re-running the verb against the merged board. A
---- rejection that names something else — a pre-receive hook, a
---- read-only token — is policy, not a race: the local commits and the
---- pending push both stay exactly as they are, so a caller can fix
---- the policy problem and publish again without redoing the mutation.
+--- Convert every pending save into one staged CAS manifest. Default
+--- behavior returns caller instructions. `execute=true` runs the same
+--- push/fetch explicitly; there is still no implicit network path.
 --- @param s store.Store The store
 --- @return boolean True once every pending ref landed (or there was
 --- nothing to push)
 --- @return string Error message; `LOST_RACE` exactly, for a lost race
-local function publish(s: store.Store): boolean, string
-  if not has_origin(s) or #s.pending == 0 then
+local function publish(s: store.Store, execute?: boolean): boolean, string
+  local remote = refs.board_remote(s.root)
+  if #s.pending == 0 then
     s.pending = {}
     return true
   end
-  local ok, stale, err = refs.push_atomic(s.root, s.pending)
-  if ok then
+
+  -- `gitwrite` has just created the successor commits and temporarily
+  -- moved their local target refs. Capture the successors, commit the
+  -- Git-native CAS manifest, then put a remote-backed checkout's
+  -- local heads back exactly where they were. From that point onward
+  -- the manifest is the only reachable local publication plan and
+  -- fetched remote-tracking refs are the only confirmed state.
+  local updates: {prepared.Update} = {}
+  local resets: {refs.RefUpdate} = {}
+  for _, p in ipairs(s.pending) do
+    local next_sha, nerr = refs.read_ref(s.root, p.ref)
+    if next_sha == nil or next_sha == refs.ZERO_SHA then
+      return false, nerr ~= "" and nerr or "prepared successor ref disappeared"
+    end
+    local expected = p.old
+    if expected == "" then
+      expected = refs.ZERO_SHA
+    end
+    updates[#updates + 1] = {ref = p.ref, expected = expected, next = next_sha}
+    -- A remote-backed board never reads local target heads as
+    -- canonical, so remove the temporary fast-import ref altogether.
+    resets[#resets + 1] = {ref = p.ref, expected = next_sha,
+      next = refs.ZERO_SHA}
+  end
+  local tx, terr = prepared.prepare(s.root, updates)
+  if tx == nil then
+    return false, terr
+  end
+  if refs.board_mode(s.root) == "local" then
+    -- The local fast-import already performed the CAS. Refresh sees
+    -- those local heads as canonical and cleans the manifest.
     s.pending = {}
-    return true
+    local confirmed, cerr = prepared.refresh(s.root, remote)
+    if confirmed == nil then
+      return false, cerr
+    end
+    return true, ""
   end
-  if not stale then
-    return false, ("the push was rejected, and not by a concurrent "
-      .. "mutation — the commit is still local; the remote said: %s"):format(err)
+
+  local reset, rerr = refs.update_refs_atomic(s.root, resets)
+  if not reset then
+    return false, ("prepared %s, but could not restore local heads: %s")
+    :format(tx.staging_ref, rerr)
   end
-  s.pending = {}
-  s.leased_ref = {}
-  s.leased_sha = {}
-  -- A cleared lease means "unobserved" to the fast-import diff too
-  -- (`_work.gitwrite.plan_one` reads `leased_item[id]`): a snapshot
-  -- surviving this reset would go on comparing a re-run's item
-  -- against a ref `fetch_prune` may have just pruned out from under
-  -- it, silently treating real fields as unchanged and skipping the
-  -- `meta` write a brand-new root commit still needs.
-  s.leased_item = {}
-  -- Same reasoning as the lease reset above: a snapshot's committer
-  -- date is only as trustworthy as the ref it was read from, and
-  -- `fetch_prune` is about to move that ref out from under it.
-  s.touched_at = {}
-  local synced, serr = cache.around_fetch(s.root, function(): boolean, string
-      return refs.fetch_prune(s.root)
-    end)
-  -- The re-sync fetch moves refs the same way `sync` above does, so
-  -- `s.index` — if this store's caller happens to re-read through the
-  -- same `Store` rather than starting a fresh one — closes here too.
-  local _cok, _cerr = store.close(s)
-  if not synced then
-    return false, ("lost the push race — the mutation was dropped whole, "
-      .. "and the re-sync then stopped: %s"):format(serr)
-  end
-  -- The next bounded save's lease has to be the tip this fetch just
-  -- landed, not whatever `s.observed_seq` held before it — otherwise a
-  -- re-run's own bounded save would lease against a value the remote
-  -- has already moved past, losing a race against itself.
-  local seq_found, sferr = refs.for_each_ref(s.root, {"refs/heads/board/seq"})
-  if seq_found == nil then
-    return false, ("lost the push race — the mutation was dropped whole, "
-      .. "and refs/heads/board/seq could not be re-read: %s"):format(sferr)
-  end
+  s.pending, s.leased_ref, s.leased_sha, s.leased_item, s.touched_at = {}, {}, {}, {}, {}
   s.observed_seq = ""
-  if #seq_found > 0 then
-    s.observed_seq = seq_found[1].sha
+  local _cok, _cerr = store.close(s)
+
+  local push = prepared.push_argv(tx, remote)
+  local fetch = prepared.fetch_argv(remote)
+  if not execute then
+    return true, ("prepared %s\npublish: %s\nrefresh refs: %s")
+    :format(tx.staging_ref, table.concat(push, " "), table.concat(fetch, " "))
   end
-  return false, store.LOST_RACE
+  local pushed, perr = prepared.execute(s.root, push)
+  if not pushed then
+    -- A failed explicit push never replays the mutation. It remains
+    -- staged with its original leases for retry or diagnosis.
+    return false, perr
+  end
+  local fetched, ferr = prepared.execute(s.root, fetch)
+  if not fetched then
+    return false, ("published, but refresh fetch failed: %s"):format(ferr)
+  end
+  local outcomes, oerr = prepared.refresh(s.root, remote)
+  if outcomes == nil then
+    return false, oerr
+  end
+  for _, outcome in ipairs(outcomes) do
+    if outcome.transaction.staging_ref == tx.staging_ref
+    and outcome.state ~= "confirmed" then
+      return false, outcome.detail
+    end
+  end
+  return true, ""
 end
 
 --- The fixed width `history` abbreviates every sha to, on both paths —
@@ -309,8 +335,8 @@ end
 local record publish_module
   type Event = Event
   has_origin: function(s: store.Store): boolean
-  sync: function(s: store.Store): boolean, string
-  publish: function(s: store.Store): boolean, string
+  sync: function(s: store.Store, execute?: boolean): boolean, string
+  publish: function(s: store.Store, execute?: boolean): boolean, string
   history: function(s: store.Store, id?: string): {Event} | nil, string
   touched_at: function(s: store.Store, id: string): integer | nil, string
 end

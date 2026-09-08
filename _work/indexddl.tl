@@ -38,11 +38,15 @@ CREATE TABLE items (
   base TEXT NOT NULL DEFAULT '',
   key TEXT NOT NULL DEFAULT '',
   claim TEXT NOT NULL DEFAULT '',
+  claim_base TEXT NOT NULL DEFAULT '',
+  handover_head TEXT NOT NULL DEFAULT '',
+  external_url TEXT NOT NULL DEFAULT '',
   reviewer TEXT NOT NULL DEFAULT '',
   pr INTEGER NOT NULL DEFAULT 0,
   result TEXT NOT NULL DEFAULT '',
   verdict TEXT NOT NULL DEFAULT '' CHECK(verdict IN ('', 'accept', 'request changes')),
   verdict_head TEXT NOT NULL DEFAULT '',
+  landed_head TEXT NOT NULL DEFAULT '',
   verdict_spec TEXT NOT NULL DEFAULT '',
   resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned')),
   -- The write lease: the branch this item lives on
@@ -124,28 +128,27 @@ CREATE VIEW workable AS
   AND i.parent NOT IN (SELECT id FROM roots)
   AND NOT EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);
 
--- Mirrors `_work.flow.is_doing` and the resolution rule exactly; it
+-- Mirrors the resolution rule and commit-only lifecycle exactly; it
 -- says nothing about role, the way `is_doing`/`is_open` do not either
 -- — `workable` is where role is asked.
 CREATE VIEW state AS
   SELECT id,
     CASE
       WHEN resolution <> '' THEN 'ended'
-      WHEN claim <> '' OR pr <> 0 THEN 'doing'
+      WHEN claim <> '' OR handover_head <> '' OR pr <> 0 OR result <> ''
+        THEN 'doing'
       ELSE 'todo'
     END AS state
   FROM items;
 
--- Mirrors `_work.flow.substate` with no `queued` argument — the store
--- has no live GitHub read to supply one, which is exactly what
--- `substate`'s own header documents as its unsupplied-argument
--- behavior: an accept reads as the ordinary wait.
+-- The current lifecycle is commit-only: a handover commit awaits a verdict.
+-- `pr` and `result` remain read compatibility for pre-v3 item trees only.
 CREATE VIEW substate AS
   SELECT id,
     CASE
       WHEN verdict = 'accept' THEN 'accepted'
       WHEN verdict = 'request changes' THEN 'rework'
-      WHEN pr <> 0 OR result <> '' THEN 'review'
+      WHEN handover_head <> '' OR pr <> 0 OR result <> '' THEN 'review'
       ELSE 'building'
     END AS substate
   FROM items;

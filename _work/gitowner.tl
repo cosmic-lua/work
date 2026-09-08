@@ -14,17 +14,17 @@
 --- entering). A board whose origin does not resolve to a GitHub slug
 --- has no owner to compare against and skips the rule — the same
 --- local-only waiver the handover gate uses.
-local gh = require("_work.gh")
+local gitslug = require("_work.gitslug")
 local spec = require("_work.spec")
 local store = require("_work.store")
 
---- The board's own GitHub owner — the owner half of `gh.slug`'s
+--- The board's own GitHub owner — the owner half of `gitslug.slug`'s
 --- reading of the origin remote — or nil when the origin is missing
 --- or is not a GitHub remote.
 --- @param s store.Store The store
 --- @return string | nil The owner, as the remote spells it
 local function board_owner(s: store.Store): string | nil
-  local slugged, _err = gh.slug(s, nil)
+  local slugged, _err = gitslug.slug(s, nil)
   if slugged == nil then
     return nil
   end

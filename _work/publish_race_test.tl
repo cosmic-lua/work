@@ -11,6 +11,7 @@ local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
 local item = require("_work.item")
+local prepared = require("_work.prepared")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local store = require("_work.store")
@@ -34,15 +35,17 @@ local function test_concurrent_done_of_the_last_two_children_both_land()
   local parent = file_item(a, "a slice being decomposed", root)
   local c1 = file_item(a, "the first child", parent)
   local c2 = file_item(a, "the second child", parent)
-  assert(publish.sync(b))
+  fixture.caller_fetch(b)
 
   assert(verbs.cmd_done(a, c1, "completed", false, "") == 0)
+  fixture.caller_publish(a)
   -- b still sees c1 open when it decides, but c2's ref never
   -- overlaps c1's — the close lands on its own, no LOST_RACE.
   assert(verbs.cmd_done(b, c2, "completed", false, "") == 0,
     "an unbounded done on a different item never contends")
+  fixture.caller_publish(b)
   assert(not item.is_open(check.must(store.load(b, c2))), "c2 is closed")
-  assert(publish.sync(a))
+  fixture.caller_fetch(a)
   assert(not item.is_open(check.must(store.load(a, c2))), "and reaches a too")
   check.must(store.list(a))
   local c = check.must(store.read(a))
@@ -51,27 +54,32 @@ local function test_concurrent_done_of_the_last_two_children_both_land()
     "the parent is workable again — derived fresh, nothing to have lost")
 end
 
--- `set` never touches `refs/heads/board/seq` (it is not in `gitboard.tl`'s
--- FETCH_FIRST set), so the CLI dispatch builds and pushes it straight
--- against this checkout's own local refs, with no fetch first. Racing
--- it against the SAME item from a checkout that never synced past a's
--- first edit still has to lose cleanly: the push's own
--- `--force-with-lease` is the compare-and-swap, stale or not, and a
--- rejection there is refused as LOST_RACE exactly as a pre-fetched
--- mutation's would be — the skipped fetch only removes a round trip
--- from the common case, never the guarantee.
-local function test_an_unbounded_dispatch_against_a_stale_ref_refuses_lost_race()
+-- A stale offline dispatch may prepare successfully: no remote is
+-- consulted during mutation. Its caller-owned leased push is the CAS;
+-- after a fetch, refresh classifies the staged successor as a lost
+-- race and canonical reads expose the winner.
+local function test_a_stale_dispatch_is_classified_after_caller_transport()
   local a, b = init_shared("race-unbounded-dispatch")
   local id = file_item(a, "a title worth racing over", "")
-  assert(publish.sync(b))
+  fixture.caller_fetch(b)
 
   assert(gitboard.main("set", id, "--title", "a's title wins", "--dir", a.root)
-    == 0, "a's set lands")
+    == 0, "a's set prepares")
+  fixture.caller_publish(a)
   -- b's local refs still hold what it synced before a's write above —
   -- exactly the stale-checkout shape, and `set` skips the pre-fetch a
   -- bounded verb like `take`/`block` would still pay for.
   assert(gitboard.main("set", id, "--title", "b's title loses", "--dir", b.root)
-    ~= 0, "b's stale set is refused")
+    == 0, "b's stale set can be prepared offline")
+  local transactions = check.must(prepared.list(b.root))
+  assert(#transactions == 1, "b has one prepared successor")
+  local pushed = prepared.execute(b.root, prepared.push_argv(transactions[1]))
+  assert(not pushed, "the caller's leased push is refused")
+  local fetched, ferr = prepared.execute(b.root, prepared.fetch_argv())
+  assert(fetched, "caller fetches the winning refs: " .. ferr)
+  local synced, serr = publish.sync(b)
+  assert(not synced and serr:find("lost their ref lease", 1, true) ~= nil,
+    "refresh identifies the stale prepared transaction: " .. serr)
   assert(check.must(store.load(b, id)).title == "a's title wins",
     "b's checkout now holds the remote's (a's) state, not its own stale write")
   local remote_all = check.must(store.list(a))

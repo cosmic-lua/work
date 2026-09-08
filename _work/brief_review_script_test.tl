@@ -10,17 +10,17 @@
 -- one).
 
 local check = require("cosmic.check")
+local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local brief = require("_work.brief")
-local gh = require("_work.gh")
 local gitspec = require("_work.gitspec")
-local review = require("_work.review")
+local item = require("_work.item")
+local specmod = require("_work.spec")
 local store = require("_work.store")
-local verbs = require("_work.gitverbs")
+local storewrite = require("_work.storewrite")
 
-local init_shared = fixture.init_shared
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
 local root_with_leaf = fixture.root_with_leaf
@@ -80,40 +80,40 @@ local function brief_and_capture_kind(s: store.Store, kind: string,
   return result, table.concat(lines, "\n")
 end
 
---- Stand a green, fixed-shape PR in for the duration of `f`: CI is
---- always green (the selection only runs once a review would
---- otherwise emit), and `files`/`additions`/`deletions` are exactly
---- what the case under test wants to probe.
---- @param files {string} The PR's changed file paths
---- @param additions integer
---- @param deletions integer
---- @param f function(): boolean The test body; returns true when done
-local function with_diff_fixture(files: {string}, additions: integer,
-    deletions: integer, f: function(): boolean)
-  local real_head_checks, real_pull, real_checks, real_get_files
-  = gh.head_checks, gh.pull, gh.checks, gh.get_files
-  local sha = "d1ffbeef00d1ffbeef00d1ffbeef00d1ffbeef0"
-  gh.head_checks = function(_s: store.Store, _pr: integer, _repo: string | nil):
-    gh.HeadChecks | nil, string
-    return {state = "green", head_sha = sha, runs = {}}, ""
-  end
-  gh.pull = function(_s: store.Store, number: integer, _repo: string | nil):
-    review.Pull | nil, string
-    return {number = number, draft = false, merged = false, body = "",
-      head_sha = sha, base = "", state = "open", merge_sha = "",
-      additions = additions, deletions = deletions}, ""
-  end
-  gh.checks = function(_s: store.Store, _sha: string, _repo: string | nil):
-    {review.CheckRun} | nil, string
-    return {}, ""
-  end
-  gh.get_files = function(_s: store.Store, _n: integer, _r: string | nil): {string} | nil, string
-    return files, ""
-  end
-  local ok, err = pcall(f)
-  gh.head_checks, gh.pull, gh.checks, gh.get_files
-  = real_head_checks, real_pull, real_checks, real_get_files
-  if not ok then error(err, 0) end
+local function git(root: string, args: {string}): string
+  local argv: {string} = {"git", "-c", "user.email=test@example.com",
+    "-c", "user.name=test"}
+  for _, value in ipairs(args) do argv[#argv + 1] = value end
+  local r = check.must(child.run(argv, {cwd = root}))
+  assert(r.ok, r.stderr)
+  return (r.stdout:gsub("%s+$", ""))
+end
+
+--- Make a local product change and record its two exact commits on the item.
+local function handover_diff(s: store.Store, id: string, name: string,
+    path: string, lines: integer)
+  local root = fs.join(os.getenv("TEST_TMPDIR") or "/tmp",
+    "brief-review-product-" .. name)
+  assert(fs.remove_all(root) and fs.make_dirs(root))
+  git(root, {"init", "-q"})
+  assert(fs.make_dirs(fs.dirname(fs.join(root, path))))
+  assert(fs.write(fs.join(root, path), "base\n"))
+  git(root, {"add", path})
+  git(root, {"commit", "-q", "-m", "base"})
+  local base = git(root, {"rev-parse", "HEAD"})
+  local body = "base\n"
+  for n = 1, lines do body = body .. ("line %d\n"):format(n) end
+  assert(fs.write(fs.join(root, path), body))
+  git(root, {"commit", "-q", "-am", "change"})
+  local head = git(root, {"rev-parse", "HEAD"})
+  git(s.root, {"config", "--local", "--add", "gitboard.repository",
+      "acme/widgets=" .. root})
+  local it = check.must(store.load(s, id))
+  it.repo, it.claim = "acme/widgets", "session-a"
+  it.claim_base, it.handover_head = base, head
+  assert(item.record_involvement(it.builders, "session-a"))
+  assert(storewrite.save(s, it,
+      ("take %s by session-a head:%s"):format(id:sub(1, 8), head:sub(1, 12))))
 end
 
 -- The selection rule is the spec's own, checked at both ends: a
@@ -123,35 +123,30 @@ end
 -- `REVIEW`.
 local function test_diff_shape_picks_the_review_template()
   for _, case in ipairs({
-      {name = "pin", files = {"3p/cosmos/cosmos_pin.tl"}, additions = 1,
-        deletions = 1, script = true},
-      {name = "tl", files = {"cosmic/example.tl"}, additions = 150,
-        deletions = 50, script = false},
+      {name = "pin", path = "3p/cosmos/cosmos_pin.tl", lines = 2,
+        script = true},
+      {name = "tl", path = "cosmic/example.tl", lines = 200,
+        script = false},
     }) do
     local s = init_state_repo("brief-review-script-" .. case.name)
     local _, leaf = root_with_leaf(s)
     give_spec(s, leaf)
-    assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-    assert(verbs.cmd_take(s, leaf, "session-a", 13, false, "") == 0)
-    with_diff_fixture(case.files, case.additions, case.deletions,
-      function(): boolean
-        local code, out = brief_and_capture(s, leaf)
-        assert(code == 0, ("%s: a green diff still earns the brief: %s")
-          :format(case.name, out))
-        if case.script then
-          assert(out:find("git show", 1, true) ~= nil,
-            ("%s: a small diff selects the numbered script: %s")
-            :format(case.name, out))
-        else
-          assert(out:find("fresh-context code reviewer", 1, true) ~= nil,
-            ("%s: a big .tl diff keeps the adversarial REVIEW: %s")
-            :format(case.name, out))
-          assert(out:find("How to review — a numbered script", 1, true) == nil,
-            ("%s: REVIEW never carries the script's own heading: %s")
-            :format(case.name, out))
-        end
-        return true
-      end)
+    handover_diff(s, leaf, case.name, case.path, case.lines)
+    local code, out = brief_and_capture(s, leaf)
+    assert(code == 0, ("%s: a local commit diff earns the brief: %s")
+      :format(case.name, out))
+    if case.script then
+      assert(out:find("git show", 1, true) ~= nil,
+        ("%s: a small diff selects the numbered script: %s")
+        :format(case.name, out))
+    else
+      assert(out:find("fresh-context code reviewer", 1, true) ~= nil,
+        ("%s: a big .tl diff keeps the adversarial REVIEW: %s")
+        :format(case.name, out))
+      assert(out:find("How to review — a numbered script", 1, true) == nil,
+        ("%s: REVIEW never carries the script's own heading: %s")
+        :format(case.name, out))
+    end
   end
 end
 
@@ -175,8 +170,7 @@ Not that.
 --- actually answered — names none at all, even though `<N>` and
 --- `<REVIEW_SESSION>` still ride the printed body verbatim.
 local function test_verdict_line_ignores_placeholders_quoted_in_the_spec()
-  local s = init_shared("brief-review-script-injection")
-  fixture.github_origin(s, "acme/widgets")
+  local s = init_state_repo("brief-review-script-injection")
   local _, leaf = root_with_leaf(s)
   local path = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "injection-spec.md")
   assert(fs.write(path, INJECTION_SPEC))
@@ -193,8 +187,13 @@ local function test_verdict_line_ignores_placeholders_quoted_in_the_spec()
   assert(vline:find("<WORKTREE>", 1, true) ~= nil,
     "a genuine survivor still names itself: " .. vline)
 
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "", true) == 0)
+  local it = check.must(store.load(s, leaf))
+  it.repo, it.claim = "acme/widgets", "session-a"
+  assert(item.record_involvement(it.builders, "session-a"))
+  it.result = specmod.revision(store.read_spec(s, leaf))
+  assert(storewrite.save(s, it,
+      ("take %s by session-a result:%s"):format(
+        leaf:sub(1, 8), it.result:sub(1, 7))))
   local prior = env.get("GITBOARD_DIR")
   check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
   local rcode, rout = brief_and_capture_kind(s, "review", leaf)

@@ -23,8 +23,8 @@ need is below.
 Your git worktree is already checked out at:
 `<WORKTREE>`
 
-It is on a fresh branch `<BRANCH>`, branched off the latest
-`origin/<BASE_BRANCH>`. Work exclusively inside that directory.
+It is on branch `<BRANCH>`, branched from product commit recorded by
+the claim. Work exclusively inside that directory.
 It is already bootstrapped: `o/` is warm, the pins are fetched. Do not
 fetch or build before your first edit; `--check types` the files you
 touch, run one test file after each edit, `--make build` only after
@@ -103,17 +103,13 @@ and nothing less:
    decoration.
 6. Commit with a clear, descriptive message. No model name or
    identifier in it.
-7. Push: `git push -u origin <BRANCH>`. If the push or the PR shows
-   a conflict with the base branch, stop and report it with the
-   conflicting files; merging the base into the item branch is the
-   orchestrator's, never a builder's rebase.
-8. Do not open a PR. Your final report carries the branch name and
-   one paragraph describing what changed and why, written for the PR
-   body — the orchestrator opens the PR with `gitboard take ID
-   --open`. Never poll or subscribe to GitHub events (no
-   `subscribe_pr_activity`, no re-check loops) — CI and review are the
-   orchestrator's to watch; report and end.
-9. Do NOT merge the PR. Do NOT run any `gitboard` command — board
+7. Commit the complete change. The caller owns every authenticated
+   operation: do not push or open an external review unless it explicitly
+   asks you to. Report the exact commit id so it can fetch/push it and run
+   `gitboard take <ITEM_ID> --head SHA [--url URL]`.
+8. Never poll or subscribe to provider events. External checks and review
+   UI are the caller's to inspect; gitboard records only commit ids.
+9. Do NOT merge the change. Do NOT run any `gitboard` command — board
    state is the orchestrator's job.
 
 ## If you get stuck
@@ -132,14 +128,14 @@ orchestrator files it.
 
 ## Final report
 
-PR URL/number if opened, or the exact blocker if you stopped short,
-plus any out-of-scope findings as separate paragraphs. Keep it
-factual and concise.
+The exact commit id, one paragraph describing what changed and why,
+or the exact blocker if you stopped short, plus any out-of-scope findings
+as separate paragraphs. Keep it factual and concise.
 ]]
 
 --- The `<BOUNCE_CONTEXT>` section for a rework hand-back — an item
---- that already carries a `request changes` verdict on an open PR.
---- `_work.brief` fills `<REVIEWER_FINDING>` and `<BRANCH>` itself
+--- that already carries a `request changes` verdict on a commit.
+--- `_work.brief` fills `<JUDGED_HEAD>` and `<BRANCH>` itself
 --- (the same `<UPPER_SNAKE>` grammar `fill` implements) before
 --- splicing the result into `BUILDER`'s own `<BOUNCE_CONTEXT>` slot,
 --- so a fresh pull — nothing to fill this WITH — never sees this text
@@ -148,20 +144,16 @@ factual and concise.
 local REWORK < const > = [[
 ## This is a rework, not a fresh pull
 
-The item already carries a `request changes` verdict on an open PR.
-Reuse its existing worktree and branch — do NOT branch fresh and do
-NOT discard the diff already there. Before touching anything, confirm
-the worktree at `<WORKTREE>` still exists, `git status` is clean, and
-its head matches what was last pushed to `<BRANCH>`; if it does not,
-stop and report the mismatch rather than rebuilding it from scratch.
+The item carries `request changes` on commit `<JUDGED_HEAD>`. Reuse its
+existing worktree and branch — do NOT branch fresh and do NOT discard the
+diff already there. Before touching anything, confirm the worktree at
+`<WORKTREE>` still exists, `git status` is clean, and its history contains
+that commit; if it does not, stop and report the mismatch rather than
+rebuilding it from scratch.
 
-The reviewer's most recent finding, verbatim:
-
-> <REVIEWER_FINDING>
-
-Fix what it names, then push a fix to the SAME branch
-(`git push origin <BRANCH>`) rather than opening a new pull request —
-the existing PR updates itself from the push.
+The board deliberately stores no review prose: its evidence is only the
+judged commit id. Apply the findings supplied by the caller, commit the
+repair on `<BRANCH>`, and report the new commit id for a new handover.
 ]]
 
 local RESEARCH < const > = [[

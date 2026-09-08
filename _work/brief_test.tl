@@ -9,14 +9,12 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
-local cache = require("_work.cache")
-local ciobs = require("_work.ciobs")
 local fixture = require("_work.fixture")
-local gh = require("_work.gh")
-local review = require("_work.review")
+local item = require("_work.item")
+local specmod = require("_work.spec")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
-local verbs = require("_work.gitverbs")
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -26,58 +24,30 @@ local root_with_leaf = fixture.root_with_leaf
 local PRODUCT_ROOT < const > = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "brief-product-root")
 assert(fs.make_dirs(fs.join(PRODUCT_ROOT, "bin")) and fs.write(fs.join(PRODUCT_ROOT, "bin/gitboard"), ""))
 
---- The check runs `with_ci_fixture` reports for a state, shared between
---- its `gh.head_checks` and `gh.checks` stubs so the two ride the same
---- fixture data rather than two copies that could drift apart.
---- @param state string The state to fabricate runs for
---- @return {review.CheckRun} The fixture runs
-local function fixture_runs(state: string): {review.CheckRun}
-  if state == "red" then
-    return {{name = "ci", status = "completed", conclusion = "failure"}}
-  end
-  if state == "running" then
-    return {{name = "ci", status = "completed", conclusion = "success"},
-      {name = "smoke", status = "in_progress", conclusion = ""}}
-  end
-  return {}
+local BASE < const > = ("a"):rep(40)
+local HEAD < const > = ("b"):rep(40)
+
+--- Put an item in the v3 commit-handover shape without involving a provider.
+local function handover(s: store.Store, id: string, url?: string)
+  local it = check.must(store.load(s, id))
+  it.repo = "acme/widgets"
+  it.claim = "session-a"
+  it.claim_base = BASE
+  it.handover_head = HEAD
+  it.external_url = url or ""
+  assert(item.record_involvement(it.builders, "session-a"))
+  assert(storewrite.save(s, it,
+      ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12))))
 end
 
---- Stand `gh.head_checks`, `gh.pull`, `gh.checks` and `gh.get_files`
---- in for a fixed PR fixture for the duration of `f`, restoring all
---- four even when `f` fails an assertion — a fixture PR in each of
---- the four states, the way `_work.gitreview_test`'s own
---- `with_ci_state` covers `take`. `_work.gh`'s own `head_checks` is a
---- closure over its OWN `pull`/`checks` upvalues rather than the `gh`
---- table's fields, so faking those two does not reach it — it needs
---- its own stub, given the same fixture data.
---- @param state string The state `head_checks` reports
---- @param sha string The fixture PR's head sha
---- @param f function(): boolean The test body; returns true when done
-local function with_ci_fixture(state: string, sha: string,
-    f: function(): boolean)
-  local real_head_checks, real_pull, real_checks, real_get_files
-  = gh.head_checks, gh.pull, gh.checks, gh.get_files
-  gh.head_checks = function(_s: store.Store, _pr: integer, _repo: string | nil):
-    gh.HeadChecks | nil, string
-    return {state = state, head_sha = sha, runs = fixture_runs(state)}, ""
-  end
-  gh.pull = function(_s: store.Store, number: integer, _repo: string | nil):
-    review.Pull | nil, string
-    return {number = number, draft = false, merged = false, body = "",
-      head_sha = sha, base = "", state = "open", merge_sha = "",
-      additions = 120, deletions = 30}, ""
-  end
-  gh.checks = function(_s: store.Store, _sha: string, _repo: string | nil):
-    {review.CheckRun} | nil, string
-    return fixture_runs(state), ""
-  end
-  gh.get_files = function(_s: store.Store, _n: integer, _r: string | nil): {string} | nil, string
-    return {"cosmic/example.tl"}, ""
-  end
-  local ok, err = pcall(f)
-  gh.head_checks, gh.pull, gh.checks, gh.get_files
-  = real_head_checks, real_pull, real_checks, real_get_files
-  if not ok then error(err, 0) end
+local function research_handover(s: store.Store, id: string)
+  local it = check.must(store.load(s, id))
+  it.claim = "session-a"
+  assert(item.record_involvement(it.builders, "session-a"))
+  it.result = specmod.revision(store.read_spec(s, id))
+  assert(storewrite.save(s, it,
+      ("take %s by session-a result:%s"):format(
+        id:sub(1, 8), it.result:sub(1, 7))))
 end
 
 --- Pin the session identity `_work.session` derives for the duration
@@ -175,15 +145,17 @@ local function test_review_brief_needs_the_handover()
   local s = init_state_repo("brief-review")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
   assert(brief.cmd_brief(s, "review", leaf) ~= 0,
-    "no PR recorded, no review brief — the handover is what a review judges")
-  assert(verbs.cmd_take(s, leaf, "session-a", 42, false, "") == 0)
+    "no commit recorded, no review brief — the handover is what a review judges")
+  handover(s, leaf, "https://example.test/change/42")
   pin_session("deadbeef1234cafefeed")
   local code, out = brief_and_capture(s, "review", leaf)
   unpin_session()
-  assert(code == 0, "the recorded PR unlocks the review brief")
-  assert(out:find("--pr 42", 1, true) ~= nil, "the PR number is filled")
+  assert(code == 0, "the recorded commit unlocks the review brief")
+  assert(out:find(HEAD, 1, true) ~= nil, "the exact commit is filled")
+  assert(out:find("https://example.test/change/42", 1, true) ~= nil,
+    "the optional navigation URL is filled")
+  assert(out:find("--pr", 1, true) == nil, "no provider identifier is evidence")
   assert(out:find("bin/gitboard verdict", 1, true) ~= nil,
     "the verdict command names the product checkout's bin/gitboard: " .. out)
   assert(out:find("o/bin/gitboard", 1, true) == nil,
@@ -213,8 +185,7 @@ local function test_product_root_fills_from_gitboard_dir()
   local s = init_state_repo("brief-product-root")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 7, false, "") == 0)
+  handover(s, leaf)
   pin_session("f005cafe00001234dead")
   local prior = env.get("GITBOARD_DIR")
   check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
@@ -222,101 +193,27 @@ local function test_product_root_fills_from_gitboard_dir()
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
   unpin_session()
-  assert(code == 0, "the recorded PR unlocks the review brief")
+  assert(code == 0, "the recorded commit unlocks the review brief")
   assert(out:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "PRODUCT_ROOT is GITBOARD_DIR's parent's parent: " .. out)
   assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
     "the placeholder is gone once GITBOARD_DIR answers it")
 end
 
--- Green and a repo with no checks at all both earn the brief — a
--- fixture PR in each of the four states, the way `take`'s own gate is
--- covered — but only green is trusted enough to fill `<HEAD_SHA>`:
--- "none" leaves it for the caller, exactly as an offline read would.
-local function test_green_fills_head_sha_none_leaves_it()
-  for _, case in ipairs({
-      {state = "green", filled = true},
-      {state = "none", filled = false},
-    }) do
-    local s = init_state_repo("brief-ci-" .. case.state)
-    local _, leaf = root_with_leaf(s)
-    give_spec(s, leaf)
-    assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-    assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
-    with_ci_fixture(case.state, "cafef00dfeedfacebeef1234567890abcdef1234",
-      function(): boolean
-        local code, out = brief_and_capture(s, "review", leaf)
-        assert(code == 0, ("state %s should emit the brief"):format(
-            case.state))
-        if case.filled then
-          assert(out:find("cafef00dfee", 1, true) ~= nil,
-            "the head sha is filled: " .. out)
-          assert(out:find("<HEAD_SHA>", 1, true) == nil,
-            "the placeholder is gone")
-        else
-          assert(out:find("<HEAD_SHA>", 1, true) ~= nil,
-            "the placeholder survives for the caller: " .. out)
-        end
-        return true
-      end)
-  end
-end
-
--- Running and red both refuse to emit the brief at all — the costly
--- spawn this item exists to prevent — with a verdict line naming why.
-local function test_running_and_red_refuse_to_emit_the_brief()
-  local s = init_state_repo("brief-ci-running")
+-- A brief trusts the exact handover commit and never reads provider check
+-- state. The caller may inspect checks externally before passing it on.
+local function test_commit_handover_fills_head_without_provider_state()
+  local s = init_state_repo("brief-commit-head")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
-  with_ci_fixture("running", "cafef00dfeedfacebeef1234567890abcdef1234",
-    function(): boolean
-      local code, out = brief_and_capture(s, "review", leaf)
-      assert(code ~= 0, "running refuses the brief")
-      assert(out:find("has CI running", 1, true) ~= nil,
-        "the refusal names why: " .. out)
-      assert(out:find("fresh-context code reviewer", 1, true) == nil,
-        "the costly body is never printed on a refusal: " .. out)
-      return true
-    end)
-
-  local red_s = init_state_repo("brief-ci-red")
-  local _, red_leaf = root_with_leaf(red_s)
-  give_spec(red_s, red_leaf)
-  assert(verbs.cmd_take(red_s, red_leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(red_s, red_leaf, "session-a", 9, false, "") == 0)
-  with_ci_fixture("red", "cafef00dfeedfacebeef1234567890abcdef1234",
-    function(): boolean
-      local code = brief.cmd_brief(red_s, "review", red_leaf)
-      assert(code ~= 0, "red refuses the brief too")
-      return true
-    end)
-end
-
--- `ci_refusal`'s live read writes through to `_work.ciobs`'s cache the
--- same way `take --pr`'s does (`_work/gitverbs.tl`'s own write-through
--- test): a `gitboard brief review` a session runs before acting leaves
--- the row set, so the render that follows has nothing left to fetch.
-local function test_a_review_briefs_live_read_writes_through()
-  local s = init_state_repo("brief-write-through")
-  local _, leaf = root_with_leaf(s)
-  give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
-  with_ci_fixture("green", "cafef00dfeedfacebeef1234567890abcdef1234",
-    function(): boolean
-      local code = brief.cmd_brief(s, "review", leaf)
-      assert(code == 0, "green emits the brief")
-
-      local it = assert(store.load(s, leaf))
-      local c = assert(cache.open(s.root))
-      local cached, age = ciobs.read(c, it.repo, it.pr)
-      assert(cached == "green", tostring(cached))
-      assert(ciobs.fresh(age), "the write-through row is fresh immediately")
-      assert(cache.close(c))
-      return true
-    end)
+  handover(s, leaf)
+  local code, out = brief_and_capture(s, "review", leaf)
+  assert(code == 0)
+  assert(out:find(HEAD, 1, true) ~= nil and out:find("<HEAD_SHA>", 1, true) == nil,
+    "the board's exact commit is the only evidence: " .. out)
+  assert(out:find("CI is read from", 1, true) == nil
+    and out:find("performs the GitHub side", 1, true) == nil,
+    "the brief performs no provider observation: " .. out)
 end
 
 local function test_brief_refusals_and_the_spec_less_decompose()
@@ -378,8 +275,7 @@ local function test_review_brief_of_a_research_handover()
   local s = init_state_repo("brief-research-review")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "", true) == 0)
+  research_handover(s, leaf)
   pin_session("f00dcafe9999beefdead")
   local code, out = brief_and_capture(s, "review", leaf)
   unpin_session()
@@ -445,8 +341,7 @@ local function test_orch8_differs_by_session_identity_alone()
   local s = init_state_repo("brief-orch8")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  handover(s, leaf)
   pin_session("11111111aaaaaaaa")
   local _, out_one = brief_and_capture(s, "review", leaf)
   pin_session("22222222bbbbbbbb")
@@ -488,8 +383,7 @@ local function test_every_kind_carries_the_friction_ask()
   assert(dcode == 0, "decompose brief: " .. dout)
   assert(flat(dout):find(opener, 1, true) ~= nil,
     "decompose brief must carry the friction ask: " .. dout)
-  assert(verbs.cmd_take(s, leaf, "session-a", 0, false, "") == 0)
-  assert(verbs.cmd_take(s, leaf, "session-a", 9, false, "") == 0)
+  handover(s, leaf)
   pin_session("f005ba11cafed00d")
   local rcode, rout = brief_and_capture(s, "review", leaf)
   unpin_session()

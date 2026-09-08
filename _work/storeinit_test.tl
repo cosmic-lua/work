@@ -87,9 +87,10 @@ local function test_init_repo_creates_exactly_one_board()
   assert(board_count() == 1, "a second init_repo mints no second board")
 end
 
--- A clone that already has an `origin` gets the mirror refspecs ADDED
--- to `remote.origin.fetch` — the whole lost-race recovery depends on
--- every clone fetching the same three patterns.
+-- A clone that already has an `origin` gets remote-tracking board
+-- refspecs ADDED to `remote.origin.fetch`. Fetching never overwrites
+-- local staging/target refs; confirmation inspects these canonical
+-- remote-tracking names instead.
 local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   local bare = fs.join(tmpdir, "init-origin.git")
   assert(fs.remove_all(bare))
@@ -98,12 +99,20 @@ local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   assert(fs.remove_all(dir))
   git(tmpdir, {"clone", "-q", bare, "init-origin-clone"})
   assert(store.init_repo(dir))
+  local upstream = check.must(child.run(
+      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items",
+        "refs/heads/board"}, {cwd = bare}))
+  assert(upstream.ok and upstream.stdout == "",
+    "init prepares local refs but performs no authenticated publication")
   local r = check.must(child.run({"git", "config", "--get-all", "remote.origin.fetch"},
       {cwd = dir}))
   assert(r.ok, "git config failed: " .. r.stderr)
-  assert(r.stdout:find("refs/heads/items/%*:refs/heads/items/%*") ~= nil, r.stdout)
-  assert(r.stdout:find("refs/heads/ended/%*:refs/heads/ended/%*") ~= nil, r.stdout)
-  assert(r.stdout:find("refs/heads/board/%*:refs/heads/board/%*") ~= nil, r.stdout)
+  assert(r.stdout:find(
+      "refs/heads/items/%*:refs/remotes/origin/items/%*") ~= nil, r.stdout)
+  assert(r.stdout:find(
+      "refs/heads/ended/%*:refs/remotes/origin/ended/%*") ~= nil, r.stdout)
+  assert(r.stdout:find(
+      "refs/heads/board/%*:refs/remotes/origin/board/%*") ~= nil, r.stdout)
   -- ADDED, not substituted: the clone's own default refspec for its
   -- checked-out branch survives, so a plain `git pull` on the
   -- machinery keeps working after `init_repo` runs.

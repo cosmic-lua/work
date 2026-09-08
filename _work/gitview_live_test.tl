@@ -6,39 +6,21 @@
 
 local cache = require("_work.cache")
 local check = require("cosmic.check")
-local ciobs = require("_work.ciobs")
-local env = require("cosmic.env")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
-local gh = require("_work.gh")
 local gitspec = require("_work.gitspec")
+local item = require("_work.item")
 local rank = require("_work.gitrank")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 local verbs = require("_work.gitverbs")
 local view = require("_work.gitview")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
-
---- Stand `gh.head_checks` in for a fixed state for the duration of
---- `f`, restoring the real function even when `f` fails an assertion
---- — the same swap-and-restore `gitreview_test.tl`'s `with_ci_state`
---- uses, sized to the two states this file actually exercises.
---- @param state string The state `head_checks` reports
---- @param f function(): boolean The test body; returns true when done
-local function with_ci_state(state: string, f: function(): boolean)
-  local real = gh.head_checks
-  gh.head_checks = function(_s: store.Store, _pr: integer, _repo: string | nil):
-    gh.HeadChecks | nil, string
-    return {state = state, head_sha = "", runs = {}}, ""
-  end
-  local ok, err = pcall(f)
-  gh.head_checks = real
-  if not ok then
-    error(err, 0)
-  end
-end
+local BASE < const > = ("a"):rep(40)
+local HEAD < const > = ("b"):rep(40)
 
 --- Run `view.cmd_next` and capture exactly what it prints via
 --- `print()` -- the same swap-and-restore pattern `gitboard_test.tl`'s
@@ -66,17 +48,20 @@ local function cmd_next_and_capture(s: store.Store, session: string):
   return result, table.concat(lines, "\n")
 end
 
--- A reviewable item taken and handed over carrying a PR. The initial
+-- A reviewable item with a commit-only handover. The initial
 -- claim is forced: the leaf's root is deliberately left unplaced (see
 -- `unplaced_root_with_leaf`), and an unplaced item's own spec bar
 -- normally refuses `take` — `--force` is only how this fixture skips
 -- straight to "in review", not a claim about the real gate.
-local function handed_over(s: store.Store, leaf: string, builder: string,
-    pr: integer)
+local function handed_over(s: store.Store, leaf: string, builder: string)
   fixture.give_spec(s, leaf)
-  assert(verbs.cmd_take(s, leaf, builder, 0, true,
-      "test fixture: skip the position gate") == 0)
-  assert(verbs.cmd_take(s, leaf, builder, pr, false, "") == 0)
+  local it = check.must(store.load(s, leaf))
+  it.repo, it.claim, it.claim_base = "acme/widgets", builder, BASE
+  it.handover_head = HEAD
+  assert(item.record_involvement(it.builders, builder))
+  assert(storewrite.save(s, it,
+      ("take %s by %s head:%s"):format(leaf:sub(1, 8), builder,
+        HEAD:sub(1, 12))))
 end
 
 --- A deliberately UNPLACED root with one workable leaf under it — the
@@ -92,47 +77,20 @@ local function unplaced_root_with_leaf(s: store.Store): string
   return fixture.file_item(s, "a workable slice", root)
 end
 
--- The wiring this item adds: `next` (through `gitview.cmd_next`, the
--- actual entry `gitboard next` reaches) reads live CI state for a
--- reviewable item carrying a PR and steps it out of the offer exactly
--- as `_work/action_ci_test.tl` proves `action.tl` alone can — proof
--- that a real `gitboard next` invocation now builds and passes the
--- `CiStates` map, not only that `next_action` honors one when handed
--- one directly.
-local function test_live_next_skips_a_reviewable_item_with_ci_running()
-  local s = fixture.init_state_repo("next-ci-running")
+-- `next` offers the exact handed-over commit without attempting to discover
+-- provider check state. The caller inspects external checks on this SHA.
+local function test_live_next_offers_a_commit_handover_without_provider_state()
+  local s = fixture.init_state_repo("next-commit-review")
   local leaf = unplaced_root_with_leaf(s)
-  handed_over(s, leaf, "builder-a", 9)
-  with_ci_state("running", function(): boolean
-      local code, printed = cmd_next_and_capture(s, "")
-      assert(code == 0, printed)
-      assert(printed:find("ci running", 1, true) ~= nil,
-        "a running head is not offered by a live next: " .. printed)
-      return true
-    end)
-end
-
--- Same wiring, the red case: already decided, but the move is the
--- builder's, not a reviewer's — and the live path renders that
--- distinctly from "running", the same as the pure layer already does.
-local function test_live_next_skips_a_reviewable_item_with_ci_red()
-  local s = fixture.init_state_repo("next-ci-red")
-  local leaf = unplaced_root_with_leaf(s)
-  -- `handed_over`'s own `take --pr` seeds a fresh `running` row (the
-  -- gap this item's own change closes) — `GITBOARD_CI_FRESH` forces
-  -- `next`'s read past that freshly-seeded row so the live mock below
-  -- is what actually answers, exactly as it would once the row ages
-  -- out of the freshness window on its own.
-  handed_over(s, leaf, "builder-a", 9)
-  assert(env.set(ciobs.FRESH_ENV, "1"))
-  with_ci_state("red", function(): boolean
-      local code, printed = cmd_next_and_capture(s, "")
-      assert(code == 0, printed)
-      assert(printed:find("ci red — builder's", 1, true) ~= nil,
-        "a red head reads as the builder's move on a live next: " .. printed)
-      return true
-    end)
-  assert(env.unset(ciobs.FRESH_ENV))
+  handed_over(s, leaf, "builder-a")
+  local code, printed = cmd_next_and_capture(s, "")
+  assert(code == 0, printed)
+  assert(printed:find(tail.handle(leaf), 1, true) ~= nil
+    and printed:find("review", 1, true) ~= nil,
+    "the commit handover is offered for review: " .. printed)
+  assert(printed:find("ci running", 1, true) == nil
+    and printed:find("ci red", 1, true) == nil,
+    "next reconstructs no provider state: " .. printed)
 end
 
 -- A recommended head whose `Ready when:` mismatches is never offered:

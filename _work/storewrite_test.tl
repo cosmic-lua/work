@@ -5,10 +5,9 @@
 -- what `_work.publish` builds on it: a local-only store for the
 -- save/load/spec mechanics, and a bare "remote" with clones for
 -- publish — including the case the whole design exists for, where two
--- sessions race and the loser's push comes back rejected: the
--- mutation is dropped whole, the checkout re-syncs onto the winner's
--- state, and the refusal is LOST_RACE, so the re-run verb decides
--- against the merged board. `_work/store_test.tl` covers the read
+-- sessions race and the loser's leased push comes back rejected: the
+-- prepared successor remains reachable, and an explicit caller fetch
+-- lets refresh classify it against the winner. `_work/store_test.tl` covers the read
 -- half `save` here builds on: `open`/`resolve`/`load`/`list` and the
 -- flagged-item tolerance.
 
@@ -19,6 +18,7 @@ local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
+local prepared = require("_work.prepared")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -85,6 +85,15 @@ local function init_shared(name: string, clones: integer): string, {string}
       assert(refs.fetch_prune(dir))
     end
     assert(store.init_repo(dir))
+    if i == 1 then
+      -- Initialization is local-only. The fixture plays the caller:
+      -- publish the initial format and board refs, then fetch their
+      -- canonical remote-tracking names before opening the store.
+      git(dir, {"push", "-q", "--atomic", "origin",
+          "refs/heads/items/*:refs/heads/items/*",
+          "refs/heads/board/*:refs/heads/board/*"})
+      assert(refs.fetch_prune(dir))
+    end
     out[#out + 1] = dir
   end
   return bare, out
@@ -239,9 +248,9 @@ local function test_publish_fast_forward()
   local a = check.must(store.open(clones[1]))
   local it = make_item("session-a")
   assert(storewrite.save(a, it, "new item"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
-  assert(publish.sync(b))
+  assert(publish.sync(b, true))
   local got = check.must(store.load(b, it.id))
   assert(got.claim == "session-a",
     "the published item reaches the second clone")
@@ -250,33 +259,33 @@ end
 -- The bounded-mutation seq lease (a take of new work, racing another
 -- across two DIFFERENT items) has its own test: `_work/storeref_test.tl`.
 
--- Two sessions edit the SAME item. The loser's commit is dropped
--- before anything downstream could see it, so there is no half-landed
--- state for a later verb to trip on: the refusal is the same
--- LOST_RACE every lost race gets, and the re-run verb — loading the
--- winner's state — is what discovers the semantic collision (a claim
--- guard, a phase gate) and names it.
+-- Two sessions edit the SAME item. The loser's prepared successor
+-- remains intact after its leased push is refused; once the caller
+-- fetches, refresh classifies it as a lost race and canonical reads
+-- expose the winner.
 local function test_publish_drops_a_lost_edit_of_the_same_item()
   local _, clones = init_shared("conflict", 2)
   local a = check.must(store.open(clones[1]))
   local contested = make_item()
   assert(storewrite.save(a, contested, "new contested"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
-  assert(publish.sync(b))
+  assert(publish.sync(b, true))
 
   local ia = check.must(store.load(a, contested.id))
   ia.claim = "session-a"
   assert(storewrite.save(a, ia, "take contested by session-a"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
 
   local ib = check.must(store.load(b, contested.id))
   ib.claim = "session-b"
   ib.pr = 7
   assert(storewrite.save(b, ib, "take contested by session-b"))
-  local ok, err = publish.publish(b)
+  local ok = publish.publish(b, true)
   assert(not ok, "the losing edit of the same item must be refused")
-  assert(err == store.LOST_RACE, "got: " .. err)
+  local synced, err = publish.sync(b, true)
+  assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
+    "refresh classifies the staged successor after fetching: " .. err)
 
   local after = check.must(store.load(b, contested.id))
   assert(after.claim == "session-a" and after.pr == 0,
@@ -284,32 +293,29 @@ local function test_publish_drops_a_lost_edit_of_the_same_item()
   assert(store.list(b), "the board stays readable after the refusal")
 end
 
--- `sync` never merges — it is exactly `fetch --prune` against the
--- mirror refspecs — so a checkout's own unpublished commit on a ref
--- the remote also moved is not a conflict to refuse: the local ref is
--- simply force-reset to the remote's value, same as any other lost
--- race's recovery. There is no working tree left to carry conflict
--- markers, and nothing here is ever destructive beyond that reset.
-local function test_sync_overwrites_an_unpublished_local_commit()
+-- Explicit refresh fetches only remote-tracking refs. A local
+-- unpublished successor can remain in Git, but canonical board reads
+-- ignore it and expose the fetched remote value.
+local function test_sync_ignores_an_unpublished_local_commit()
   local _, clones = init_shared("sync-overwrite", 2)
   local a = check.must(store.open(clones[1]))
   local contested = make_item()
   assert(storewrite.save(a, contested, "new contested"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
-  assert(publish.sync(b))
+  assert(publish.sync(b, true))
 
   local ia = check.must(store.load(a, contested.id))
   ia.claim = "session-a"
   assert(storewrite.save(a, ia, "take contested by session-a"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
 
   -- b's own commit, never published — the hand-edit-workaround shape.
   local ib = check.must(store.load(b, contested.id))
   ib.claim = "session-b"
   ib.pr = 7
   assert(storewrite.save(b, ib, "hand-edit contested for session-b"))
-  assert(publish.sync(b), "sync always succeeds — it never merges")
+  assert(publish.sync(b, true), "explicit refresh fetches but never merges")
   assert(check.must(store.load(b, contested.id)).claim == "session-a",
     "the local unpublished commit is overwritten by the remote's")
 end
@@ -317,14 +323,9 @@ end
 -- The atomic multi-ref publish (a save touching two items, one
 -- contested) has its own test: `_work/storeref_test.tl`.
 
--- A rejection with the remote unmoved is the remote's policy — a
--- pre-receive hook, a read-only token — not a race. The destructive
--- branch must not run: the commit stays local, the refusal does not
--- claim a race, and the remote's own words reach the caller instead
--- of being swallowed. This is also the one place "rejected" alone
--- must NOT be read as a lost race: git's hook-decline text is
--- "[remote rejected]", a different marker from the lease failure's
--- "[rejected] ... (stale info)".
+-- A rejection with the remote unmoved is remote policy, not a race.
+-- The prepared transaction stays as the durable reachability root,
+-- and the remote's own words reach the caller.
 local function test_publish_keeps_the_mutation_on_a_policy_rejection()
   local bare, clones = init_shared("policy", 1)
   local a = check.must(store.open(clones[1]))
@@ -335,17 +336,19 @@ local function test_publish_keeps_the_mutation_on_a_policy_rejection()
 
   local it = make_item("session-a")
   assert(storewrite.save(a, it, "new under policy"))
-  local before = commit_count(clones[1])
-  local ok, err = publish.publish(a)
+  local ok, err = publish.publish(a, true)
   assert(not ok, "the rejected push must refuse")
   assert(err ~= store.LOST_RACE and not err:find("lost the push race", 1, true),
     "no race is claimed when the remote never moved: " .. err)
   assert(err:find("policy: board is read-only", 1, true),
     "the remote's own words reach the caller: " .. err)
-  assert(err:find("still local", 1, true), "and the refusal says the "
-    .. "commit survives: " .. err)
-  assert(commit_count(clones[1]) == before,
-    "the mutation was not destroyed")
-  assert(check.must(store.load(a, it.id)).claim == "session-a",
-    "and still reads back")
+  local staged = check.must(prepared.list(a.root))
+  assert(#staged == 1,
+    "the rejected successor stays reachable through its prepared transaction")
+  assert(staged[1].updates[1].ref == "refs/heads/items/" .. it.id,
+    "the retryable transaction still targets the requested item")
+  local reachable = check.must(child.run(
+      {"git", "cat-file", "-e", staged[1].updates[1].next .. "^{commit}"},
+      {cwd = a.root}))
+  assert(reachable.ok, "the staged successor remains reachable for retry")
 end

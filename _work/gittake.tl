@@ -9,25 +9,73 @@
 ---                research slice over for that verdict — the mirror
 ---                of `take ID --pr N` for work whose deliverable is
 ---                board state, not a diff
----   take_open    `take ID --open`, the claim holder handing a diff
----                over by having gitboard open its PR, then recording
----                the number exactly as `take ID --pr N` would
+---   take_open    `take ID --open`, the claim holder asking for the
+---                caller-side PR operation gitboard no longer performs
 ---
 --- All three are motion on work already in flight and ask neither of
 --- the pull's gates. Split from `_work.gitverbs`, which sits against
 --- the file cap.
-local cache = require("_work.cache")
-local child = require("cosmic.child")
-local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
+local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
-local gh = require("_work.gh")
-local gitready = require("_work.gitready")
-local gitworktree = require("_work.gitworktree")
 local health = require("_work.health")
 local item = require("_work.item")
+local repository_map = require("_work.repository_map")
 local spec = require("_work.spec")
 local store = require("_work.store")
+
+--- Record a commit-only handover after verifying the product commit locally.
+--- The optional URL is navigation metadata and participates in no gate.
+local function take_handover(s: store.Store, it: item.Item, session: string,
+    head: string, external_url: string, repo_dir: string): integer
+  local id8 = it.id:sub(1, 8)
+  if (it.claim or "") ~= session then
+    return gate.verdict_line("take", false,
+      ("REFUSED: %s's handover belongs to its claim holder"):format(id8))
+  end
+  local claim_base = it.claim_base or ""
+  if claim_base == "" then
+    return gate.verdict_line("take", false,
+      ("REFUSED: %s's claim has no product base commit"):format(id8))
+  end
+  local root, rerr = repository_map.resolve(s.root, it.repo or "", repo_dir)
+  if root == nil then
+    return gate.verdict_line("take", false, "REFUSED: " .. rerr)
+  end
+  local lineage, verr = commit_evidence.verify_lineage(root, claim_base, head)
+  if lineage == nil then
+    return gate.verdict_line("take", false, "REFUSED: " .. verr)
+  end
+  local canonical = lineage.head
+  if external_url ~= "" and not external_url:match("^https?://%S+$") then
+    return gate.verdict_line("take", false,
+      "REFUSED: --url must be one http(s) URL")
+  end
+  if (it.handover_head or "") == canonical
+  and (external_url == "" or (it.external_url or "") == external_url)
+  and (it.verdict or "") ~= "request changes" then
+    return gate.verdict_line("take", true,
+      ("%s already hands over %s"):format(id8, canonical:sub(1, 12)))
+  end
+  it.handover_head = canonical
+  local recorded, ierr = item.record_involvement(it.builders, session)
+  if not recorded then
+    return gate.verdict_line("take", false, "REFUSED: " .. ierr)
+  end
+  if external_url ~= "" then it.external_url = external_url end
+  it.pr, it.result, it.verdict_head, it.verdict_spec = 0, "", "", ""
+  if it.verdict == "request changes" then it.verdict = "" end
+  local bad = item.problems(it)
+  if #bad > 0 then
+    return gate.verdict_line("take", false, "REFUSED: " .. table.concat(bad, "; "))
+  end
+  local ok, err = gate.commit_and_publish(s, it, nil,
+    ("take %s by %s head:%s"):format(id8, session, canonical:sub(1, 12)),
+    "take", nil, session)
+  if not ok then return gate.verdict_line("take", false, err) end
+  return gate.verdict_line("take", true,
+    ("%s hands over %s — awaiting review"):format(id8, canonical:sub(1, 12)))
+end
 
 --- The review claim: the lock pushed BEFORE the
 --- reading starts, so two sessions never verify one diff. Reached by
@@ -187,107 +235,27 @@ local function open_body(id: string, body_file: string): string | nil, string
   return board_line .. "\n\n" .. extra, ""
 end
 
---- The GitHub handover: what `take --pr N` is for a diff whose PR
---- already exists, for one whose PR does not exist yet. `take` names
---- the branch a build pushes to (the item id's first 8 characters),
---- so gitboard already knows what to open: from that branch, into the
---- item's own `base`, titled and bodied from the item itself
---- (`Board: <full id>`, plus the contents of `--body FILE` when one
---- was given). Everything checkable without spending GitHub's write
---- quota is checked first; only then does the one call happen, and
---- its number is recorded exactly as `--pr N` would record a number
---- the caller already had.
----
---- Only the live claim holder hands over — same rule as any other
---- handover here — and never alongside a `--pr` of its own: an item's
---- deliverable is one diff, opened once.
+--- One-release compatibility surface for the removed `take --open` flow.
+--- Gitboard does not render provider-specific commands: the caller owns the
+--- authenticated push/open interaction, then records only its local product
+--- commit (and optionally a navigation URL) through `take --head`.
 --- @param s store.Store The store
 --- @param it item.Item The item handed over
 --- @param session string The handing-over session
 --- @param pr integer The `--pr` given alongside, 0 for none
 --- @param body_file string A file whose contents extend the PR body, "" for none
 --- @return integer Exit code
-local function take_open(s: store.Store, it: item.Item, session: string,
-    pr: integer, body_file: string): integer
-  local id8 = it.id:sub(1, 8)
-  if (pr or 0) ~= 0 then
-    return gate.verdict_line("take", false,
-      "REFUSED: --open and --pr together — a diff's PR is opened or "
-      .. "recorded, never both at once")
-  end
-  if (it.claim or "") ~= session then
-    local holder = "unclaimed"
-    if (it.claim or "") ~= "" then
-      holder = ("claimed by %s"):format(it.claim)
-    end
-    return gate.verdict_line("take", false,
-      ("REFUSED: %s is %s — the handover is the claim holder's; take it "
-        .. "first"):format(id8, holder))
-  end
-  local repo = it.repo or ""
-  if repo == "" then
-    return gate.verdict_line("take", false,
-      ("REFUSED: %s has no repo set — --open needs one to open a PR "
-        .. "against"):format(id8))
-  end
-  local base = gitworktree.default_base(repo, it.base or "")
-  local remote = ("https://github.com/%s.git"):format(repo)
-  local r = child.run({"git", "ls-remote", "--heads", remote, id8})
-  if r == nil or not r.ok or (r.stdout or ""):match("%S") == nil then
-    return gate.verdict_line("take", false,
-      ("REFUSED: %s has no branch %s on %s — push it first"):format(
-        id8, id8, repo))
-  end
-  local body, berr = open_body(it.id, body_file)
-  if body == nil then
-    return gate.verdict_line("take", false, "REFUSED: " .. berr)
-  end
-  local number, oerr = gh.open_pull(s, repo, id8, base, it.title, body)
-  if number == nil then
-    return gate.verdict_line("take", false,
-      ("REFUSED: opening the PR failed: %s"):format(oerr))
-  end
-  local all, aerr = store.list(s)
-  if all == nil then
-    return gate.verdict_line("take", false, aerr)
-  end
-  local collision = gitready.pr_collision_refusal(all, it.id, number)
-  if collision then
-    return gate.verdict_line("take", false, collision)
-  end
-  it.pr = number
-  if it.verdict == "request changes" then
-    it.verdict = ""
-  end
-  -- The window between this handover and the next `sync` has no
-  -- observation of its own yet: `ci_clears_debt` reads a missing row
-  -- as "never excludes", so a freshly opened PR whose CI has not even
-  -- started would outrank a todo pull. Seed the row exactly as `sync`
-  -- would once it observes a running head, with the head sha the
-  -- `ls-remote` above already fetched — `sync`'s own observation
-  -- overwrites it as soon as one lands. Best-effort, same as
-  -- `ciobs.live`: a cache that will not even open leaves the handover
-  -- itself unaffected.
-  local head_sha = (r.stdout or ""):match("^(%x+)") or ""
-  local rc, _rcerr = cache.open(s.root)
-  if rc ~= nil then
-    local _ok, _werr = ciobs.record(rc, repo, number,
-      {state = "running", head_sha = head_sha, runs = {}})
-    local _cok, _ccerr = cache.close(rc)
-  end
-  local ok, err = gate.commit_and_publish(s, it, nil,
-    ("take %s by %s pr:%d"):format(id8, session, number), "take", nil, session)
-  if not ok then
-    return gate.verdict_line("take", false, err)
-  end
-  if store.is_noop(err) then
-    return gate.verdict_line("take", true, err)
-  end
-  return gate.verdict_line("take", true,
-    ("%s is yours pr:%d — awaiting review"):format(id8, number))
+local function take_open(_s: store.Store, _it: item.Item, _session: string,
+    _pr: integer, _body_file: string): integer
+  return gate.verdict_line("take", false,
+    "REFUSED: legacy --open is disabled — push and open through the caller's "
+    .. "authenticated tooling, then run `gitboard take ID --head SHA "
+    .. "[--url URL]`")
 end
 
 local record gittake
+  take_handover: function(s: store.Store, it: item.Item, session: string,
+  head: string, external_url: string, repo_dir: string): integer
   take_review: function(s: store.Store, it: item.Item, session: string,
   force: boolean, why: string): integer
   take_result: function(s: store.Store, it: item.Item, session: string,
@@ -301,6 +269,7 @@ local record gittake
 end
 
 local M: gittake = {
+  take_handover = take_handover,
   take_review = take_review,
   take_open = take_open,
   open_body = open_body,

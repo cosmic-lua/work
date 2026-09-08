@@ -6,57 +6,26 @@
 --- sits against the file cap; the identity, force and claim-lease
 --- refusals stay there.
 local flow = require("_work.flow")
-local gh = require("_work.gh")
 local item = require("_work.item")
 local overlap = require("_work.overlap")
-local owner = require("_work.gitowner")
-local publish = require("_work.publish")
 local read = require("_work.read")
-local review = require("_work.review")
 local spec = require("_work.spec")
 local store = require("_work.store")
 
---- The refusal a PR handover earns from GitHub, or nil when the
---- request is worth a reviewer's time: open, not a draft, joined
---- to its item by a `Board:` line, targeting the item's own `base`
---- when it names one, and not already known to fail CI.
----
---- A missing token is itself a refusal rather than a silent pass —
---- a gate that waves things through when it cannot see is worse than
---- no gate — and `--force` is the way past it, exactly as with every
---- other refusal here.
+--- Compatibility refusal for the removed provider-shaped PR handover.
+--- Gitboard's authoritative handover fact is now only a locally present
+--- product commit. The caller may create or inspect a pull request using any
+--- authenticated tooling, then records that commit with `take --head SHA`.
 --- @param s store.Store The store
 --- @param id string The item being handed over
 --- @param number integer The PR number
 --- @param repo string | nil The item's repo field, when it carries one
 --- @param base string | nil The item's base field, when it carries one
 --- @return string | nil The refusal
-local function handover_refusal(s: store.Store, id: string,
-    number: integer, repo: string | nil, base: string | nil): string
-  -- A local-only board has no pull requests to ask about, the same
-  -- reason publishing there is a no-op.
-  if not publish.has_origin(s) then
-    return nil
-  end
-  local p, perr = gh.pull(s, number, repo)
-  if p == nil then
-    return ("cannot read PR #%d: %s; --force to hand it over anyway"):format(
-      number, perr)
-  end
-  local blocked = review.blocks_check(p, id)
-  if blocked then
-    return blocked
-  end
-  local off_base = review.blocks_base(p, base or "")
-  if off_base then
-    return off_base
-  end
-  local runs, cerr = gh.checks(s, p.head_sha, repo)
-  if runs == nil then
-    return ("cannot read CI for %s: %s; --force to hand it over anyway")
-    :format(p.head_sha:sub(1, 7), cerr)
-  end
-  return review.blocks_on_ci(runs)
+local function handover_refusal(_s: store.Store, _id: string,
+    number: integer, _repo: string | nil, _base: string | nil): string
+  return ("PR #%d is navigation, not evidence; use take ID --head SHA "
+    .. "[--url URL] after inspecting it with caller-owned tooling"):format(number)
 end
 
 --- The refusal a PR handover earns when another OPEN item already
@@ -158,13 +127,6 @@ local function ready_problems(s: store.Store, it: item.Item,
     out[#out + 1] = ("spec reaches %s with no declared read access — name "
       .. "it under \"## Access\"; undeclared, it strands the claim now "
       .. "and the review just as surely"):format(repo)
-  end
-  -- The item's own `repo` is exempt above because it is where the diff
-  -- lands — which is exactly why it must be somewhere the claiming
-  -- session can land one (`_work.gitowner`).
-  local foreign = owner.repo_problem(s, it.repo, spec_body, it.id)
-  if foreign then
-    out[#out + 1] = foreign
   end
   return out
 end

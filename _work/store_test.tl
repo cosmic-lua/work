@@ -157,7 +157,7 @@ end
 -- storage looking multiline — the line format is what refuses it now,
 -- before `item.problems` ever gets a say. The tolerance this pins is
 -- the same one either way: a content-invalid item — here, a PARENTLESS
--- item hand-edited to carry a claim, a shape only `write_unchecked`
+-- item hand-edited to carry a reviewer, a shape only `write_unchecked`
 -- can produce — must not abort `list`; the rest still reads, the bad
 -- one comes back flagged, not dropped, and write-refusal is unchanged.
 local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
@@ -166,7 +166,7 @@ local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
   local good = make_item()
   assert(storewrite.save(s, good, "new good"))
   local bad = check.must(item.decode({id = fresh_id(), title = "a root"}))
-  bad.claim = "session-x"
+  bad.reviewer = "session-x"
   local ok, serr = store.stage(s, bad)
   assert(not ok and serr:find("belong to worked items, never the board", 1, true) ~= nil,
     "stage refuses the same shape: " .. tostring(serr))
@@ -188,15 +188,15 @@ local function test_a_flagged_item_is_repairable_through_the_tolerant_decode()
   local root = init_state_repo("repair")
   local s = check.must(store.open(root))
   local seed = check.must(item.decode({id = fresh_id(), title = "a root"}))
-  seed.claim = "session-x"
+  seed.reviewer = "session-x"
   write_unchecked(s, seed)
   local loaded = check.must(store.load(s, seed.id))
   assert(item.is_flagged(loaded), "the bad record still loads, flagged")
-  loaded.claim = ""
-  assert(storewrite.save(s, loaded, "set " .. seed.id:sub(1, 8) .. " claim"),
+  loaded.reviewer = ""
+  assert(storewrite.save(s, loaded, "set " .. seed.id:sub(1, 8) .. " reviewer"),
     "the repair commits: problems(it) is now empty")
   local fixed = check.must(store.load(s, seed.id))
-  assert(not item.is_flagged(fixed) and fixed.claim == "", "clean")
+  assert(not item.is_flagged(fixed) and fixed.reviewer == "", "clean")
   assert(store.flagged_summary(check.must(store.list(s))) == "",
     "listing recovers: nothing left flagged")
 end

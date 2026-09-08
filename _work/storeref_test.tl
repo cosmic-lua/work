@@ -1,7 +1,7 @@
 #!/usr/bin/env cosmic
 -- Properties specific to the ref layout itself, as opposed to
--- `_work/store_test.tl`'s save/load/publish mechanics: the bounded
--- mutation seq lease, atomicity across every ref one save touches,
+-- `_work/store_test.tl`'s save/load/publish mechanics: independent
+-- item leases, atomicity across every ref one save touches,
 -- the ended-item ref move, and `list`'s fixed process count. Its own
 -- file so `store_test.tl` stays under the line cap.
 
@@ -15,7 +15,7 @@ local gitview = require("_work.gitview")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
-local read = require("_work.read")
+local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -60,7 +60,20 @@ local function init_shared(name: string, clones: integer): string, {string}
     local dir = fs.join(base, ("clone%d"):format(i))
     git(base, {"clone", "-q", bare, dir})
     git(dir, {"config", "core.createObject", "rename"})
+    if i > 1 then
+      assert(refs.ensure_refspecs(dir))
+      assert(refs.fetch_prune(dir))
+    end
     assert(store.init_repo(dir))
+    if i == 1 then
+      -- Initialization only creates local refs. The fixture explicitly
+      -- performs the caller-owned bootstrap transport and fetches the
+      -- canonical remote-tracking refs back.
+      git(dir, {"push", "-q", "--atomic", "origin",
+          "refs/heads/items/*:refs/heads/items/*",
+          "refs/heads/board/*:refs/heads/board/*"})
+      assert(refs.fetch_prune(dir))
+    end
     out[#out + 1] = dir
   end
   return bare, out
@@ -84,20 +97,10 @@ local function make_item(claim?: string): item.Item
       }))
 end
 
--- Two sessions race the last doing slot on TWO DIFFERENT items. Under
--- the ref layout that alone is no longer a collision — unrelated
--- items live on unrelated refs, and an unbounded take of one never
--- contends with a take of the other. What still makes them race is
--- `refs/heads/board/seq`: `take`ing NEW work is a BOUNDED mutation (its gate
--- read the whole board first, to judge the doing bound), so its save
--- ALSO advances and leases seq — the one shared ref that puts two
--- otherwise-unrelated takes back in each other's way, exactly the way
--- the real doing bound needs them to be. The first push wins; the
--- loser's publish drops its commit whole, re-syncs, and refuses with
--- LOST_RACE — the verb re-runs against the merged board, whose doing
--- bound refuses the take, which is the compare-and-swap a lagged
--- index cannot give.
-local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
+-- Even with enough already-claimed items to exceed the former shared
+-- WIP cap, two sessions changing different item refs can both land.
+-- No board-wide seq lease serializes independent work acquisition.
+local function test_independent_item_mutations_do_not_share_a_global_lease()
   local _, clones = init_shared("cas", 2)
   local a = check.must(store.open(clones[1]))
   for i = 1, flow.DOING_LIMIT - 1 do
@@ -108,9 +111,9 @@ local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
   local yours = make_item()
   assert(storewrite.save(a, mine, "new mine"))
   assert(storewrite.save(a, yours, "new yours"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
-  assert(publish.sync(b))
+  assert(publish.sync(b, true))
 
   -- Both sides read the whole board (as `flow.doing_refusal`'s own
   -- caller does) before deciding to take — this is what a bounded
@@ -119,43 +122,37 @@ local function test_bounded_seq_lease_stops_two_new_takes_from_both_landing()
   assert(store.list(a))
   local ia = check.must(store.load(a, mine.id))
   ia.claim = "session-a"
-  storewrite.set_bounded(a, true)
   assert(storewrite.save(a, ia, "take mine by session-a"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
 
   assert(store.list(b))
   local ib = check.must(store.load(b, yours.id))
   ib.claim = "session-b"
-  storewrite.set_bounded(b, true)
   assert(storewrite.save(b, ib, "take yours by session-b"))
-  local ok, err = publish.publish(b)
-  assert(not ok, "the losing take must be refused")
-  assert(err == store.LOST_RACE, "got: " .. err)
+  local ok, err = publish.publish(b, true)
+  assert(ok, "independent item refs both land: " .. err)
+  assert(publish.sync(a, true))
   local back = check.must(store.load(b, yours.id))
-  assert(back.claim == "", "the dropped mutation is undone whole")
-  local winner = check.must(store.load(b, mine.id))
+  assert(back.claim == "session-b", "the second independent claim lands")
+  local winner = check.must(store.load(a, mine.id))
   assert(winner.claim == "session-a",
-    "the winning take is visible after the sync")
-  check.must(store.list(b))
-  local c = check.must(store.read(b))
-  assert(check.must(read.doing_count(c)) >= flow.DOING_LIMIT,
-    "doing holds exactly its bound — the re-run verb's own gate now "
-    .. "refuses this take")
+    "the first independent claim remains visible")
 end
 
 -- The atomicity the push provides, not the commit object: a save that
 -- touches two items (a decomposition's child and the parent it
 -- de-phases) makes two commits, and when the remote has moved under
--- ONE of them, the WHOLE push is refused — neither ref lands, not
--- just the contested one.
+-- ONE of them, the WHOLE push is refused. The staged multi-ref
+-- transaction stays intact for diagnosis; canonical refs expose the
+-- winner after the caller fetches.
 local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local _, clones = init_shared("atomic-multiref", 2)
   local a = check.must(store.open(clones[1]))
   local parent = make_item("session-a")
   assert(storewrite.save(a, parent, "new parent"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
-  assert(publish.sync(b))
+  assert(publish.sync(b, true))
 
   -- a moves the parent forward, out from under b — a distinct,
   -- checkable change (the title), so the assertion below cannot be
@@ -163,7 +160,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local pa = check.must(store.load(a, parent.id))
   pa.title = "retitled by a"
   assert(storewrite.save(a, pa, "set parent title"))
-  assert(publish.publish(a))
+  assert(publish.publish(a, true))
 
   -- b, still on the stale parent, writes a new child AND de-phases
   -- the parent in the same mutation — two commits, one save.
@@ -171,8 +168,11 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local kid = make_item()
   pb.claim = ""
   assert(storewrite.save(b, kid, "new kid", nil, {pb}))
-  local ok, err = publish.publish(b)
-  assert(not ok and err == store.LOST_RACE, "got: " .. tostring(err))
+  local ok = publish.publish(b, true)
+  assert(not ok, "the stale multi-ref push must be refused")
+  local synced, err = publish.sync(b, true)
+  assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
+    "refresh classifies the staged multi-ref race: " .. tostring(err))
   assert(store.load(b, kid.id) == nil,
     "the brand-new child never lands without its parent's commit")
   local after = check.must(store.load(b, parent.id))

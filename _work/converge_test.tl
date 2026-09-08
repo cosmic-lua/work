@@ -5,15 +5,15 @@
 -- by hand.
 --
 -- Two different claims. SAFETY: every action the ordering names is
--- one the verbs would carry out — no take the doing bound refuses, no
--- pull of something bar-failing, no claim of another session's live
+-- one the verbs would carry out — no pull of something bar-failing, no
+-- claim of another session's live
 -- work. LIVENESS: a board holding only finishable work
 -- drains to nothing. Safety without liveness refuses everything;
 -- liveness without safety is the livelock this file keeps out, where
 -- `next` names an action, the gate rejects it, and the answer repeats.
 --
 -- The driver applies an action the way the verbs do and through the
--- same gates they call (the doing bound, the bar), so the refusal
+-- same gates they call (the spec bar and claim ownership), so the refusal
 -- asserted here is the real one. It carries no git plumbing: a
 -- mutation is a table write, not a commit, which lets a walk run
 -- hundreds of steps — each rebuilding a fresh in-memory index over the
@@ -162,10 +162,6 @@ local function apply(c: Index, items: {Item}, specs: act.Specs, a: act.Action,
     return nil
   end
   if a.kind == "pull" then
-    local n = check.must(read.doing_count(c))
-    if (it.key or "") == "" and n >= flow.DOING_LIMIT then
-      return ("doing is at %d/%d"):format(n, flow.DOING_LIMIT)
-    end
     it.claim = session
     return nil
   end
@@ -232,17 +228,8 @@ local function generate(r: Rng, leaves: integer,
     local name = (alone or who == 1) and session
     or ("wake-%d"):format(roll(r, 3))
     -- Shapes 1-2 are todo; 3 builds, 4 reviews, 5 reworks, 6 stands
-    -- accepted — but never past the doing bound, or the generator
-    -- would hand the ordering a board the verbs could not have made.
-    local doing = 0
-    for _, i in ipairs(items) do
-      if item.is_open(i) and ((i.claim or "") ~= "" or (i.pr or 0) ~= 0) then
-        doing = doing + 1
-      end
-    end
-    if shape >= 3 and doing >= flow.DOING_LIMIT then
-      shape = roll(r, 2)
-    end
+    -- accepted. Gitboard imposes no global work-in-progress capacity,
+    -- so generated boards may contain any number of in-flight items.
     if shape == 3 then
       over.claim = name
     elseif shape == 4 then
@@ -301,8 +288,6 @@ local function test_no_walk_ever_names_an_action_the_gates_refuse()
           ("seed %d: pulled in-flight work"):format(seed))
         assert(#flow.ready_gaps(specs[a.item.id] or "") == 0,
           ("seed %d: pulled past the spec bar"):format(seed))
-        assert((a.item.key or "") ~= "" or check.must(read.doing_count(c)) < flow.DOING_LIMIT,
-          ("seed %d: pulled past the doing bound"):format(seed))
       end
       if a.kind == "finish" and check.must(read.substate(c, a.item.id)) ~= "accepted" then
         local mine = (a.item.claim or "") == ""

@@ -7,12 +7,10 @@
 
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
-local cachequery = require("_work.cachequery")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local find = require("_work.find")
 local fixture = require("_work.fixture")
-local read = require("_work.read")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gitbatch = require("_work.gitbatch")
@@ -20,7 +18,6 @@ local gitobj = require("_work.gitobj")
 local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
-local publish = require("_work.publish")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
@@ -231,6 +228,10 @@ local CACHE_TABLES < const >: {string} = {
 --- @param s store.Store The store
 --- @param label string What step this check is verifying, for the message
 local function assert_cache_matches_cold_rebuild(s: store.Store, label: string)
+  -- Caller-owned transport moves canonical refs without touching the
+  -- disposable read model. A normal guarded open is the boundary that
+  -- notices the new digest and rebuilds before consumers inspect it.
+  check.must(cache.close(check.must(cache.open(s.root))))
   local raw = check.must(sqlite.open(cache.path_of(s.root)))
   local live: {string: {string}} = {}
   for _, t in ipairs(CACHE_TABLES) do
@@ -265,15 +266,17 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   local a, b = init_shared("cache-ratchet")
   local root_a, leaf_a = fixture.root_with_leaf(a)
   fixture.give_spec(a, leaf_a)
-  assert(publish.sync(b))
+  fixture.caller_fetch(b)
 
   -- 1) BOUNDED: a fresh take against the doing bound leases and
   -- advances refs/heads/board/seq.
   assert(verbs.cmd_take(a, leaf_a, "session-a", 0, false, "") == 0)
+  fixture.caller_publish(a)
   assert_cache_matches_cold_rebuild(a, "after a bounded take")
 
   -- 2) ENDED: the item's ref moves from refs/heads/items to refs/heads/ended.
   assert(verbs.cmd_done(a, leaf_a, "completed", true, "test: no PR to review") == 0)
+  fixture.caller_publish(a)
   assert_cache_matches_cold_rebuild(a, "after an ended move")
 
   -- 3) RANK: an item's own `order` changes — `ranks` rows at
@@ -289,17 +292,19 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   root_it.order = {other_leaf}
   assert(gate.commit_and_publish(a, root_it, nil, "rank root_a's child",
       "rank"))
+  fixture.caller_publish(a)
   assert_cache_matches_cold_rebuild(a, "after an order change")
 
   -- B syncs onto everything A just did, then makes a save of its own.
-  assert(publish.sync(b))
+  fixture.caller_fetch(b)
   local b_leaf = file_item(b, "a slice b files", root_a)
   local b_leaf_it = check.must(store.load(b, b_leaf))
   b_leaf_it.claim = "session-b"
   assert(gate.commit_and_publish(b, b_leaf_it, nil, "claim b_leaf", "take"))
+  fixture.caller_publish(b)
 
   -- A syncs LAST: its cache takes the FETCH path, not the save path.
-  assert(publish.sync(a))
+  fixture.caller_fetch(a)
   assert_cache_matches_cold_rebuild(a, "after A's fetch of B's save")
 end
 
@@ -365,8 +370,10 @@ local function test_two_processes_racing_the_cache_never_corrupts_it()
         "--title", "y, renamed by process two", "--dir", s.root}))
   local r1 = check.must(h1:wait(30000))
   local r2 = check.must(h2:wait(30000))
-  assert(r1.ok, "process one failed: " .. r1.stderr)
-  assert(r2.ok, "process two failed: " .. r2.stderr)
+  assert(r1.ok, ("process one failed (exit %s): %s%s"):format(
+      tostring(r1.code), r1.stderr, r1.stdout))
+  assert(r2.ok, ("process two failed (exit %s): %s%s"):format(
+      tostring(r2.code), r2.stderr, r2.stdout))
 
   if not cache_matches_cold_rebuild(s) then
     -- A skipped patch: still stale, by design, until the next open.
@@ -406,39 +413,6 @@ local function test_open_with_a_known_digest_skips_for_each_ref()
   end
   assert(calls == 0, "a known digest must skip open's own for-each-ref: " .. calls)
   check.must(cache.close(c as cache.Cache)) -- cast: pcall erases the union
-end
-
--- The board's own outcome ranking is an ordinary item field, so a
--- fetch that moves the board item's own ref (ranking an outcome moves
--- it, the same as any other write to the board item) patches the
--- cache incrementally exactly like any other item's move: no special
--- "leave it stale" path is needed for it any more.
-local function test_a_synced_outcome_rank_patches_the_cache_incrementally()
-  local a, b = init_shared("outcome-rank-fetch")
-  local root = file_item(a, "an outcome", "")
-  assert(publish.sync(b))
-  check.must(cache.close(check.must(cache.open(b.root))))
-  local before_raw = check.must(sqlite.open(cache.path_of(b.root)))
-  local before_digest = check.must(cachedb.meta_get(before_raw, "refs_digest"))
-  check.must(before_raw:close())
-
-  assert(gitrank.cmd_rank(a, root, "", "", true) == 0)
-  assert(publish.sync(b))
-
-  local after_raw = check.must(sqlite.open(cache.path_of(b.root)))
-  local after_digest = check.must(cachedb.meta_get(after_raw, "refs_digest"))
-  check.must(after_raw:close())
-  assert(after_digest ~= before_digest,
-    "the fetch's incremental patch records the board item's moved digest directly")
-
-  local c = check.must(cache.open(b.root))
-  local all = check.must(cachequery.items(c))
-  local board_id = check.must(read.board(c))
-  check.must(cache.close(c))
-  local board = check.must(item.by_id(all)[board_id], "the board is among the items")
-  assert(table.concat(board.order, " ") == root,
-    ("the board's own order after the incremental patch: %s"):format(
-      table.concat(board.order, " ")))
 end
 
 --- `store.list`, after an ordinary gated save, hydrates the saved

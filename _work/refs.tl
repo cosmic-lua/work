@@ -1,11 +1,5 @@
---- Ref plumbing: reading `refs/heads/items/*`, `refs/heads/ended/*` and
---- `refs/heads/board/*` with `for-each-ref`, moving one ref with
---- `update-ref` (a single compare-and-swap), telling whether one
---- commit descends from another (`is_ancestor` — how a reader picks a
---- winner when one id ends up filed under both namespaces), and
---- pushing every ref one save touched in a single atomic, leased
---- push. `_work.gitobj` is the object half; this is the naming half,
---- and `_work.store` is the only caller outside tests.
+--- Canonical ref naming, local compare-and-swap, ancestry, and atomic leased
+--- publication. `_work.gitobj` owns Git objects; this module owns ref identity.
 local child = require("cosmic.child")
 
 --- The sha `update-ref`/`--force-with-lease` treat as "does not exist
@@ -19,13 +13,188 @@ local record RefEntry
   touched: integer
 end
 
---- One ref this push moves: `old` is the lease (the tip observed at
---- load, or "" for a ref that must not exist remotely yet). The
---- pushing credential can create and update a branch but never
---- delete one, so nothing here ever asks for a deletion.
+--- One ref this push moves; `old` is its observed lease.
 local record PushSpec
   ref: string
   old: string
+end
+
+--- One compare-and-swap in a prepared board transaction.
+local record RefUpdate
+  ref: string
+  expected: string
+  next: string
+end
+
+--- The two deliberately distinct board modes. Remote-backed boards
+--- read confirmed state only from remote-tracking refs. Local boards
+--- are an explicit simulation/testing mode and read local heads.
+local enum BoardMode
+  "local"
+  "remote"
+end
+
+-- Mode is repository configuration, not per-read state. Canonical reads call
+-- this helper several times in one operation; cache the answer by root so the
+-- transport boundary does not add a `git config` process to every ref lookup.
+local MODE_BY_ROOT: {string: BoardMode} = {}
+local REMOTE_BY_ROOT: {string: string} = {}
+
+--- The caller-selected Git remote whose tracking namespace is canonical for a
+--- remote-backed board. `origin` is only the compatibility default; it is not
+--- baked into any canonical ref mapping.
+local function board_remote(root: string): string
+  local known = REMOTE_BY_ROOT[root]
+  if known ~= nil then return known end
+  local configured = child.run({"git", "config", "--get", "gitboard.remote"},
+    {cwd = root})
+  if configured ~= nil and configured.ok then
+    local value = configured.stdout:gsub("%s+$", "")
+    if value ~= "" then
+      REMOTE_BY_ROOT[root] = value
+      return value
+    end
+  end
+  REMOTE_BY_ROOT[root] = "origin"
+  return "origin"
+end
+
+--- Select a remote for this invocation without performing I/O or rewriting
+--- repository configuration. CLI `--remote NAME` uses this before opening the
+--- store so ID resolution and later transport inspect the same namespace.
+local function use_remote(root: string, remote: string): boolean, string
+  if remote == "" or remote:match("^[%w._/-]+$") == nil
+  or remote:find("..", 1, true) ~= nil or remote:sub(1, 1) == "/"
+  or remote:sub(-1) == "/" then
+    return false, "remote name is not safe in a remote-tracking ref"
+  end
+  REMOTE_BY_ROOT[root] = remote
+  return true, ""
+end
+
+--- Persist the canonical remote in checkout-local Git configuration.
+local function set_board_remote(root: string, remote: string): boolean, string
+  local valid, verr = use_remote(root, remote)
+  if not valid then return false, verr end
+  local r, err = child.run({"git", "config", "gitboard.remote", remote},
+    {cwd = root})
+  if r == nil then return false, err end
+  if not r.ok then
+    return false, ("git config gitboard.remote failed: %s"):format(r.stderr)
+  end
+  return true, ""
+end
+
+--- Read the board mode from repository-local configuration. Older
+--- repositories without the marker retain the historical inference
+--- for migration only; `store.init_repo` writes the explicit value.
+--- This performs local configuration reads only, never remote I/O.
+local function board_mode(root: string): BoardMode
+  local known = MODE_BY_ROOT[root]
+  if known ~= nil then
+    return known
+  end
+  local configured = child.run({"git", "config", "--get", "gitboard.mode"},
+    {cwd = root})
+  if configured ~= nil and configured.ok then
+    local value = configured.stdout:gsub("%s+$", "")
+    if value == "remote" then
+      MODE_BY_ROOT[root] = "remote"
+      return "remote"
+    end
+    if value == "local" then
+      MODE_BY_ROOT[root] = "local"
+      return "local"
+    end
+  end
+  local remotes = child.run({"git", "remote"}, {cwd = root})
+  if remotes ~= nil and remotes.ok and remotes.stdout:match("%S") ~= nil then
+    MODE_BY_ROOT[root] = "remote"
+    return "remote"
+  end
+  MODE_BY_ROOT[root] = "local"
+  return "local"
+end
+
+--- Persist an explicit board mode. This changes only `.git/config`.
+local function set_board_mode(root: string, mode: BoardMode): boolean, string
+  if mode ~= "local" and mode ~= "remote" then
+    return false, "board mode must be local or remote"
+  end
+  local r, err = child.run({"git", "config", "gitboard.mode", mode}, {cwd = root})
+  if r == nil then
+    return false, err
+  end
+  if not r.ok then
+    return false, ("git config gitboard.mode failed: %s"):format(r.stderr)
+  end
+  MODE_BY_ROOT[root] = mode
+  return true, ""
+end
+
+--- Map a publish target to the fetched ref that confirms it. The
+--- caller fetches `refs/heads/items/*` to
+--- `refs/remotes/<remote>/items/*` (and likewise for ended/board);
+--- gitboard itself never fetches.
+local function tracking_ref(target: string, remote?: string): string | nil, string
+  local tail = target:match("^refs/heads/(items/.+)$")
+  or target:match("^refs/heads/(ended/.+)$")
+  or target:match("^refs/heads/(board/.+)$")
+  if tail == nil then
+    return nil, ("not a board ref: %s"):format(target)
+  end
+  return ("refs/remotes/%s/%s"):format(remote or "origin", tail)
+end
+
+--- The ref a board reads as confirmed state in its configured mode.
+local function canonical_ref(root: string, target: string,
+    remote?: string): string | nil, string
+  if board_mode(root) == "local" then
+    return target
+  end
+  return tracking_ref(target, remote or board_remote(root))
+end
+
+--- Read exactly one ref without accepting prefix matches.
+local function read_ref(root: string, ref: string): string | nil, string
+  local r, err = child.run({"git", "rev-parse", "--verify", "--quiet", ref},
+    {cwd = root})
+  if r == nil then
+    return nil, err
+  end
+  if not r.ok then
+    return ZERO_SHA, ""
+  end
+  return (r.stdout:gsub("%s+$", "")), ""
+end
+
+--- Apply a set of local ref CAS operations as one `update-ref`
+--- transaction. This is used only to promote local-only boards and to
+--- clean staging refs. Durable remote publication remains caller-owned
+--- and MUST use atomic leased transport.
+local function update_refs_atomic(root: string,
+    updates: {RefUpdate}): boolean, string
+  if #updates == 0 then
+    return true, ""
+  end
+  local lines: {string} = {"start\n"}
+  for _, u in ipairs(updates) do
+    if u.next == ZERO_SHA then
+      lines[#lines + 1] = ("delete %s %s\n"):format(u.ref, u.expected)
+    else
+      lines[#lines + 1] = ("update %s %s %s\n"):format(u.ref, u.next, u.expected)
+    end
+  end
+  lines[#lines + 1] = "prepare\ncommit\n"
+  local r, err = child.run({"git", "-c", "core.createObject=rename",
+      "update-ref", "--stdin"}, {cwd = root, stdin = table.concat(lines)})
+  if r == nil then
+    return false, err
+  end
+  if not r.ok then
+    return false, ("git update-ref transaction refused: %s"):format(r.stderr)
+  end
+  return true, ""
 end
 
 --- List every ref under the given patterns, with its current object and
@@ -40,7 +209,8 @@ end
 --- @param patterns {string} Ref path prefixes, e.g. "refs/heads/items"
 --- @return {RefEntry} | nil The refs found, possibly empty
 --- @return string Error message
-local function for_each_ref(root: string, patterns: {string}): {RefEntry} | nil, string
+local function for_each_ref_raw(root: string,
+    patterns: {string}): {RefEntry} | nil, string
   local argv: {string} = {"git", "for-each-ref",
     "--format=%(refname) %(objectname) %(committerdate:unix)"}
   for _, p in ipairs(patterns) do
@@ -64,14 +234,52 @@ local function for_each_ref(root: string, patterns: {string}): {RefEntry} | nil,
   return out
 end
 
+--- List confirmed board refs. Remote-backed repositories translate
+--- the familiar target namespace to the configured remote's tracking refs, then
+--- translate result names back to targets so the rest of the board
+--- model remains transport-neutral. Staging/write plumbing that needs
+--- literal refs uses `for_each_ref_raw` instead.
+local function for_each_ref(root: string,
+    patterns: {string}): {RefEntry} | nil, string
+  if board_mode(root) == "local" then
+    return for_each_ref_raw(root, patterns)
+  end
+  local mapped: {string} = {}
+  local remote = board_remote(root)
+  for _, p in ipairs(patterns) do
+    local tail = p:match("^refs/heads/(items.*)$")
+    or p:match("^refs/heads/(ended.*)$")
+    or p:match("^refs/heads/(board.*)$")
+    mapped[#mapped + 1] = tail and ("refs/remotes/" .. remote .. "/" .. tail) or p
+  end
+  local found, err = for_each_ref_raw(root, mapped)
+  if found == nil then
+    return nil, err
+  end
+  for _, e in ipairs(found) do
+    local quoted = remote:gsub("([^%w])", "%%%1")
+    local tail = e.refname:match("^refs/remotes/" .. quoted .. "/(items/.+)$")
+    or e.refname:match("^refs/remotes/" .. quoted .. "/(ended/.+)$")
+    or e.refname:match("^refs/remotes/" .. quoted .. "/(board/.+)$")
+    if tail ~= nil then
+      e.refname = "refs/heads/" .. tail
+    end
+  end
+  return found, ""
+end
+
 --- One ref's committer date, as `%(committerdate:unix)` reports it.
 --- @param root string The repository root
 --- @param ref string The full ref name
 --- @return integer | nil Epoch seconds
 --- @return string Error message
 local function committer_date_unix(root: string, ref: string): integer | nil, string
+  local canonical, cerr = canonical_ref(root, ref)
+  if canonical == nil then
+    return nil, cerr
+  end
   local r, err = child.run({"git", "for-each-ref",
-      "--format=%(committerdate:unix)", ref}, {cwd = root})
+      "--format=%(committerdate:unix)", canonical}, {cwd = root})
   if r == nil then
     return nil, err
   end
@@ -151,7 +359,7 @@ local function push_atomic(root: string, specs: {PushSpec}): boolean, boolean, s
   for _, spec in ipairs(specs) do
     argv[#argv + 1] = ("--force-with-lease=%s:%s"):format(spec.ref, spec.old)
   end
-  argv[#argv + 1] = "origin"
+  argv[#argv + 1] = board_remote(root)
   for _, spec in ipairs(specs) do
     argv[#argv + 1] = spec.ref
   end
@@ -176,15 +384,15 @@ local function push_atomic(root: string, specs: {PushSpec}): boolean, boolean, s
   return false, stale, detail
 end
 
---- Fetch the remote's refs, pruning any local ref it no longer holds:
---- the whole lost-race recovery, given the mirror refspecs
---- `store.init_repo` writes to `remote.origin.fetch`.
+--- Fetch the configured board remote's refs, pruning any local ref it no
+--- longer holds. This compatibility helper still performs I/O; new CLI paths
+--- render equivalent caller-owned transport through `_work.gittransport`.
 --- @param root string The repository root
 --- @return boolean True on success
 --- @return string Error message
 local function fetch_prune(root: string): boolean, string
   local r, err = child.run({"git", "-c", "push.negotiate=false",
-      "fetch", "-q", "--prune", "origin"}, {cwd = root})
+      "fetch", "-q", "--prune", board_remote(root)}, {cwd = root})
   if r == nil then
     return false, err
   end
@@ -194,38 +402,45 @@ local function fetch_prune(root: string): boolean, string
   return true
 end
 
---- The three mirror refspecs every clone of the board repository
---- fetches with, so a `fetch --prune` is the whole lost-race recovery.
-local FETCH_REFSPECS < const >: {string} = {
-  "+refs/heads/items/*:refs/heads/items/*",
-  "+refs/heads/ended/*:refs/heads/ended/*",
-  "+refs/heads/board/*:refs/heads/board/*",
-}
+--- The three mirror refspecs for a configured board remote.
+local function fetch_refspecs(remote: string): {string}
+  return {
+    ("+refs/heads/items/*:refs/remotes/%s/items/*"):format(remote),
+    ("+refs/heads/ended/*:refs/remotes/%s/ended/*"):format(remote),
+    ("+refs/heads/board/*:refs/remotes/%s/board/*"):format(remote),
+  }
+end
 
---- Add the mirror refspecs to `remote.origin.fetch` when the clone has
---- an `origin` that lacks them. A plain `git clone` fetches only the
+--- Add the remote-tracking refspecs to the configured board remote when the
+--- clone has that remote. A plain `git clone` fetches only the
 --- checked-out branch's refs, so a fresh clone that runs `sync` before
 --- any `init` needs this to see the board at all. Existing refspecs are
 --- never replaced, so a `git pull` on the branch keeps working; a
---- repository without `origin` needs nothing.
+--- repository without the configured remote needs nothing.
 --- @param root string The repository root
 --- @return boolean True once the refspecs are present
 --- @return string Error message
 local function ensure_refspecs(root: string): boolean, string
-  local has_origin = child.run({"git", "remote"}, {cwd = root})
-  if has_origin == nil or not has_origin.ok
-  or has_origin.stdout:find("origin", 1, true) == nil then
+  local remote = board_remote(root)
+  local has_remote = child.run({"git", "remote"}, {cwd = root})
+  if has_remote == nil or not has_remote.ok then
     return true
   end
-  local current = child.run({"git", "config", "--get-all", "remote.origin.fetch"},
+  local found = false
+  for name in (has_remote.stdout .. "\n"):gmatch("([^\n]+)\n") do
+    if name == remote then found = true end
+  end
+  if not found then return true end
+  local key = "remote." .. remote .. ".fetch"
+  local current = child.run({"git", "config", "--get-all", key},
     {cwd = root})
   local have = (current ~= nil and current.ok) and current.stdout or ""
-  for _, spec in ipairs(FETCH_REFSPECS) do
+  for _, spec in ipairs(fetch_refspecs(remote)) do
     if have:find(spec, 1, true) == nil then
-      local added = child.run({"git", "config", "--add", "remote.origin.fetch", spec},
+      local added = child.run({"git", "config", "--add", key, spec},
         {cwd = root})
       if added == nil or not added.ok then
-        return false, ("could not set remote.origin.fetch %s"):format(spec)
+        return false, ("could not set %s %s"):format(key, spec)
       end
     end
   end
@@ -234,10 +449,23 @@ end
 
 local record refs
   ZERO_SHA: string
+  type RefUpdate = RefUpdate
+  type BoardMode = BoardMode
+  board_mode: function(root: string): BoardMode
+  set_board_mode: function(root: string, mode: BoardMode): boolean, string
+  board_remote: function(root: string): string
+  use_remote: function(root: string, remote: string): boolean, string
+  set_board_remote: function(root: string, remote: string): boolean, string
+  tracking_ref: function(target: string, remote?: string): string | nil, string
+  canonical_ref: function(root: string, target: string,
+  remote?: string): string | nil, string
+  read_ref: function(root: string, ref: string): string | nil, string
+  update_refs_atomic: function(root: string, updates: {RefUpdate}): boolean, string
   ensure_refspecs: function(root: string): boolean, string
   type RefEntry = RefEntry
   type PushSpec = PushSpec
   for_each_ref: function(root: string, patterns: {string}): {RefEntry} | nil, string
+  for_each_ref_raw: function(root: string, patterns: {string}): {RefEntry} | nil, string
   committer_date_unix: function(root: string, ref: string): integer | nil, string
   update_ref: function(root: string, ref: string, new_sha: string,
   old_sha: string): boolean, string
@@ -248,8 +476,18 @@ end
 
 local M: refs = {
   ZERO_SHA = ZERO_SHA,
+  board_mode = board_mode,
+  set_board_mode = set_board_mode,
+  board_remote = board_remote,
+  use_remote = use_remote,
+  set_board_remote = set_board_remote,
+  tracking_ref = tracking_ref,
+  canonical_ref = canonical_ref,
+  read_ref = read_ref,
+  update_refs_atomic = update_refs_atomic,
   ensure_refspecs = ensure_refspecs,
   for_each_ref = for_each_ref,
+  for_each_ref_raw = for_each_ref_raw,
   committer_date_unix = committer_date_unix,
   update_ref = update_ref,
   is_ancestor = is_ancestor,

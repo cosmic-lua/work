@@ -18,6 +18,7 @@ local view = require("_work.gitview")
 --- session, so guidance that outgrows the action it explains is its
 --- own failure.
 local MAX_LINES < const > = 6
+local HEAD < const > = ("a"):rep(40)
 
 local function test_every_action_kind_has_guidance()
   for _, kind in ipairs(decision.KINDS) do
@@ -87,7 +88,7 @@ local function board_items(): {item.Item}
     check.must(item.decode({id = container, title = "a piece of it",
           parent = root})),
     check.must(item.decode({id = fresh_id(), title = "a slice",
-          parent = container, claim = "who", pr = 7,
+          parent = container, claim = "who", handover_head = HEAD,
           verdict = "accept"})),
   }
 end
@@ -115,70 +116,25 @@ local function test_next_prints_guidance_under_the_action()
   end
 end
 
---- A review of a research handover records its verdict with no PR
---- and no head to cite, and the guidance says so: the item `next`
---- names selects the reading, a diff's review still cites both, and
---- with no item at all the diff reading stands. The handover reading
---- keeps the same budget and width as every other kind.
-local function test_a_research_handover_review_cites_no_pr()
-  local handed = check.must(item.decode({id = fresh_id(), title = "a handover",
-        claim = "who", builders = "who", result = ("ab"):rep(32)}))
+--- Guidance is invariant across item shapes: the current lifecycle always
+--- names commit ids, while legacy provider fields are read compatibility only.
+local function test_guidance_is_commit_only()
+  local handed = check.must(item.decode({id = fresh_id(), title = "a change",
+        claim = "who", builders = "who", handover_head = HEAD}))
   local lines = guidance.lines("review", handed)
   assert(#lines > 0 and #lines <= MAX_LINES, "within the budget: " .. #lines)
   for _, line in ipairs(lines) do
     assert(#line <= guidance.WIDTH, "within the width: " .. line)
   end
   local text = table.concat(lines, " ")
-  assert(text:find(
-      "`verdict ID <accept|request-changes|reject> --session <you>`", 1, true),
-    "the handover verdict names no PR: " .. text)
-  assert(not text:find("--pr", 1, true) and not text:find("--head", 1, true),
-    "nothing cites a PR or a head: " .. text)
-  local diff = check.must(item.decode({id = fresh_id(), title = "a diff",
-        claim = "who", pr = 7}))
-  local diff_text = table.concat(guidance.lines("review", diff), " ")
-  assert(diff_text:find("--pr N --head SHA --session <you>", 1, true),
-    "a diff's review still cites the PR and head: " .. diff_text)
-  assert(table.concat(guidance.lines("review"), " ") == diff_text,
-    "and with no item, the diff reading stands")
-  local board = fresh_id()
-  local root = fresh_id()
-  local items2 = {
-    check.must(item.decode({id = board, title = "board"})),
-    check.must(item.decode({id = root, title = "an outcome", parent = board})),
-    check.must(item.decode({id = fresh_id(), title = "a slice", parent = root,
-          claim = "who", builders = "who", result = ("ab"):rep(32)})),
-  }
-  local c2 = fixture.make_index(items2)
-  local report, rerr = view.next_report(c2, items2, {}, "me")
-  assert(rerr == "", rerr)
-  assert(report:find("  " .. lines[#lines], 1, true),
-    "`next` prints the handover reading under the action: " .. report)
-end
+  assert(text:find("--head SHA", 1, true), "the verdict names its commit: " .. text)
+  assert(not text:find("--pr", 1, true) and not text:find("CI proves", 1, true),
+    "no provider fact becomes evidence: " .. text)
 
---- A finish of an accepted handover cites `done`, not a PR to merge —
---- `done` skips the merge read entirely with no `pr` on the item, so
---- guidance that told a session to await one would be lying. A diff's
---- finish notes still cite `pr` and merge; with no item, they stand.
-local function test_a_handovers_finish_notes_cite_no_pr()
-  local handed = check.must(item.decode({id = fresh_id(), title = "a handover",
-        claim = "who", builders = "who", result = ("ab"):rep(32),
-        verdict = "accept"}))
-  local lines = guidance.lines("finish", handed)
-  assert(#lines > 0 and #lines <= MAX_LINES, "within the budget: " .. #lines)
-  for _, line in ipairs(lines) do
-    assert(#line <= guidance.WIDTH, "within the width: " .. line)
-  end
-  local text = table.concat(lines, " ")
-  assert(text:find("`done ID` ends it", 1, true),
-    "the handover reading names done directly: " .. text)
-  assert(not text:find("--pr", 1, true) and not text:find("`pr`", 1, true),
-    "nothing cites the pr field: " .. text)
-  local diff = check.must(item.decode({id = fresh_id(), title = "a diff",
-        claim = "who", pr = 7, verdict = "accept"}))
-  local diff_text = table.concat(guidance.lines("finish", diff), " ")
-  assert(diff_text:find("verifies the PR its `pr` field names", 1, true),
-    "a diff's finish notes still cite the PR: " .. diff_text)
-  assert(table.concat(guidance.lines("finish"), " ") == diff_text,
-    "and with no item, the diff reading stands")
+  local finish = table.concat(guidance.lines("finish", handed), " ")
+  assert(finish:find("done ID --landed SHA", 1, true),
+    "completion records the landed commit: " .. finish)
+  assert(finish:find("take ID --head SHA", 1, true),
+    "handover records the product commit: " .. finish)
+  assert(not finish:find("--pr", 1, true), "finish cites no PR: " .. finish)
 end

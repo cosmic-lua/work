@@ -183,8 +183,9 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   local order: {string} = {}
   local by_id: {string: item.Item} = {}
   local rows, err = c.db:query([[
-    SELECT id, title, parent, repo, base, key, claim, reviewer, pr,
-      result, verdict, verdict_head, verdict_spec, resolution
+    SELECT id, title, parent, repo, base, key, claim, claim_base,
+      handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
+      landed_head, verdict_spec, resolution
     FROM items ORDER BY id
   ]])
   if rows == nil then
@@ -202,6 +203,9 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       key = row.key as string, -- cast: from any (sqlite row)
       order = {},
       claim = row.claim as string, -- cast: from any (sqlite row)
+      claim_base = row.claim_base as string, -- cast: from any (sqlite row)
+      handover_head = row.handover_head as string, -- cast: from any (sqlite row)
+      external_url = row.external_url as string, -- cast: from any (sqlite row)
       builders = {},
       speccers = {},
       reviewer = row.reviewer as string, -- cast: from any (sqlite row)
@@ -209,6 +213,7 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       result = row.result as string, -- cast: from any (sqlite row)
       verdict = row.verdict as string, -- cast: from any (sqlite row)
       verdict_head = row.verdict_head as string, -- cast: from any (sqlite row)
+      landed_head = row.landed_head as string, -- cast: from any (sqlite row)
       verdict_spec = row.verdict_spec as string, -- cast: from any (sqlite row)
       resolution = row.resolution as string, -- cast: from any (sqlite row)
     }

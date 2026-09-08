@@ -1,8 +1,8 @@
 --- `brief`: emit the prompt a subagent runs one role from — builder,
 --- research, review, refine, decompose — with every placeholder the board can
 --- answer already filled: the item's id, handle, title, spec sidecar
---- verbatim, repo and base branch, the item branch, the PR under
---- review, and this checkout's own absolute path. Templates are
+--- verbatim, repo and base branch, the item branch, the exact product
+--- commit under review, and this checkout's own absolute path. Templates are
 --- `_work.brieftext` and `_work.brieftext_review`; `review` picks
 --- between two by the handover the item carries — a PR (`REVIEW`) or
 --- a research result (`RESEARCH_REVIEW`); the fill grammar is
@@ -23,17 +23,15 @@
 --- hand.
 ---
 --- A read, not a mutation: nothing here writes the board.
-local bounce = require("_work.bounce")
 local brieftext = require("_work.brieftext")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
-local ciobs = require("_work.ciobs")
+local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
-local gh = require("_work.gh")
 local item = require("_work.item")
-local review = require("_work.review")
+local repository_map = require("_work.repository_map")
 local session = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -142,52 +140,6 @@ local function survivors(template: string, values: {string: string}): {string}
   return out
 end
 
---- The refusal `brief review` earns from a PR's CI state, and the
---- head sha to fill `<HEAD_SHA>` with when there is one worth
---- trusting — green only, so a reviewer is handed a head worth
---- reading rather than one the brief's own rules already say to stop
---- on. A read failure (no origin, no token, a network error) answers
---- neither: a brief for a store with no GitHub reach emits exactly as
---- it always has, `<HEAD_SHA>` left for the caller to fill.
----
---- One `ciobs.live` call does the whole read: the sha and run list
---- this needs both for `<HEAD_SHA>` and for the running/red refusal
---- text ride the returned record, so nothing here re-fetches the PR
---- or its checks a second time — and the live read writes through to
---- the render-side cache as a side effect, the same way `take --pr`'s
---- own live read does (`_work/gitverbs.tl`), so the brief a session
---- reads before acting leaves `next`'s next render nothing to fetch.
---- @param s store.Store The store
---- @param it item.Item The item under review
---- @param id8 string The item's handle, for the refusal text
---- @return string The refusal, "" when the brief may emit
---- @return string The PR's head sha, "" when unknown or not green
-local function ci_refusal(s: store.Store, it: item.Item, id8: string):
-  string, string
-  local hc, _herr = ciobs.live(s, it.repo, it.pr)
-  if hc == nil
-  or (hc.state ~= "green" and hc.state ~= "running" and hc.state ~= "red") then
-    return "", ""
-  end
-  if hc.state == "green" then
-    return "", hc.head_sha
-  end
-  local sha7 = "?"
-  if hc.head_sha ~= "" then
-    sha7 = hc.head_sha:sub(1, 7)
-  end
-  if hc.state == "running" then
-    local done = 0
-    for _, r in ipairs(hc.runs) do
-      if r.status == "completed" then done = done + 1 end
-    end
-    return ("REFUSED: %s's head %s has CI running (%d of %d checks done) — "
-      .. "review when it settles"):format(id8, sha7, done, #hc.runs), ""
-  end
-  return "REFUSED: " .. (review.blocks_on_ci(hc.runs)
-    or "CI has already concluded failure on this head"), ""
-end
-
 --- Whether a diff is small and mechanical enough to earn
 --- `brieftext_review.REVIEW_SCRIPT`'s numbered script instead of
 --- `REVIEW`'s full adversarial prompt: every changed `.tl` file is a
@@ -210,77 +162,41 @@ local function is_mechanical_diff(files: {string}, additions: integer,
   return true
 end
 
---- The `<BOUNCE_CONTEXT>` a rework hand-back fills into a builder
---- brief: the item's own most recent `request changes` verdict on an
---- open PR, quoting the latest CHANGES_REQUESTED review's finding
---- verbatim, plus the worktree-reuse and push-not-new-PR instructions
---- an orchestrator otherwise hand-assembles every round. "" — an
---- unfilled placeholder, exactly the fresh-pull behavior — whenever
---- the item is not standing in rework, or the read fails (no reviews
---- found, no token, a network error): a strict improvement over
---- today's always-empty case, never a new failure mode.
+--- Inspect a handed-over change using only the caller-managed local product
+--- checkout. Failure to resolve the mapping merely selects the full review:
+--- it never triggers a fetch, credential lookup, or provider request.
 --- @param s store.Store The store
 --- @param it item.Item The item under brief
---- @return string The filled section, "" when there is nothing to fill it with
-local function bounce_context(s: store.Store, it: item.Item): string
-  if (it.verdict or "") ~= "request changes" or (it.pr or 0) == 0 then
-    return ""
+--- @return boolean True when local Git proves the change is mechanical
+local function local_mechanical_diff(s: store.Store, it: item.Item): boolean
+  local base, head = it.claim_base or "", it.handover_head or ""
+  if base == "" or head == "" then return false end
+  local root, _rerr = repository_map.resolve(s.root, it.repo or "", "")
+  if root == nil then return false end
+  local r, _err = child.run({"git", "diff", "--numstat", "--no-renames",
+      base, head, "--"}, {cwd = root})
+  if r == nil or not r.ok then return false end
+  local files: {string} = {}
+  local additions, deletions = 0, 0
+  for line in r.stdout:gmatch("([^\n]+)") do
+    local a, d, path = line:match("^(%S+)\t(%S+)\t(.+)$")
+    if a == nil or d == nil or path == nil then return false end
+    files[#files + 1] = path
+    local ai, di = math.tointeger(tonumber(a)), math.tointeger(tonumber(d))
+    if ai == nil or di == nil then return false end
+    additions, deletions = additions + ai, deletions + di
   end
-  local revs, _err = gh.reviews(s, it.pr, it.repo)
-  if revs == nil then
-    return ""
-  end
-  local finding = gh.latest_request_changes(revs)
-  if finding == nil then
-    return ""
-  end
-  return fill(brieftext.REWORK,
-    {REVIEWER_FINDING = finding.body, BRANCH = it.id:sub(1, 8)})
+  return is_mechanical_diff(files, additions, deletions)
 end
 
---- The `<ROUND_CONTEXT>` a second (or later) review round fills into a
---- review brief: the review-side twin of `bounce_context` above, same
---- shape — `gh.reviews` then `gh.latest_request_changes` — but read
---- for the REVIEWER instead of the builder, and gated on the PR's head
---- having actually moved past the one the standing verdict judged
---- (`review.head_moved`), never merely on a `request changes` verdict
---- standing: a re-review of the SAME head is not a new round. "" —
---- rendered as an actual empty string, never left as literal
---- placeholder text, because nothing hand-fills this one the way an
---- orchestrator might a bounce paragraph — whenever the item is not in
---- rework, the head has not moved, the read fails, or no bounce review
---- (`_work.bounce.is_bounce`) is found; `rounds` counts every bounce the
---- same way, so a marked own-PR COMMENT round is not under-counted.
---- @param s store.Store The store
---- @param it item.Item The item under review
---- @param p review.Pull The PR's current state
---- @return string The filled section, "" when there is nothing to fill it with
-local function round_context(s: store.Store, it: item.Item, p: review.Pull): string
-  if (it.verdict or "") ~= "request changes" then
-    return ""
-  end
-  if not review.head_moved(p, it.verdict_head or "") then
-    return ""
-  end
-  local revs, _err = gh.reviews(s, it.pr, it.repo)
-  if revs == nil then
-    return ""
-  end
-  local finding = gh.latest_request_changes(revs)
-  if finding == nil then
-    return ""
-  end
-  local rounds = 0
-  for _, r in ipairs(revs) do
-    if bounce.is_bounce(r.state, r.body) then
-      rounds = rounds + 1
-    end
-  end
-  return fill(brieftext_review.ROUND, {
-      ROUND_NUMBER = tostring(rounds),
-      JUDGED_HEAD = (it.verdict_head or ""):sub(1, 7),
-      CURRENT_HEAD = (p.head_sha or ""):sub(1, 7),
-      ROUND_FINDING = finding.body,
+--- Rework context contains only facts the board actually owns: the verdict
+--- kind and commit id. Review prose and provider comments are caller state,
+--- never evidence reconstructed by gitboard.
+local function bounce_context(it: item.Item): string
+  if (it.verdict or "") ~= "request changes" then return "" end
+  return fill(brieftext.REWORK, {
+      JUDGED_HEAD = it.verdict_head or "",
+      BRANCH = it.id:sub(1, 8),
     })
 end
 
@@ -353,34 +269,20 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       ("%s has no spec sidecar — a %s brief carries the spec verbatim, "
         .. "so refine it first"):format(id:sub(1, 8), kind))
   end
-  -- A review judges a handover, and there are two: a PR for a diff,
-  -- a research result for a spec. Which template the brief is comes
-  -- from the item, never from the caller — and a PR handover picks
-  -- again, between the full adversarial `REVIEW` and the numbered
-  -- `REVIEW_SCRIPT`, by the diff's own shape.
+  -- A review judges a handover. Commit work carries an exact local Git object;
+  -- research carries a spec revision. Which template applies comes from the
+  -- item, never from a provider read.
   local head_sha = ""
-  local round_ctx = ""
   if kind == "review" then
     if (it.result or "") ~= "" then
       template = brieftext_review.RESEARCH_REVIEW
-    elseif (it.pr or 0) == 0 then
+    elseif (it.handover_head or "") == "" then
       return gate.verdict_line("brief", false,
-        ("%s has no handover recorded — `take %s --pr N` (a diff) or "
-          .. "`take %s --result` (a research spec) is what a review "
-          .. "judges"):format(id:sub(1, 8), id:sub(1, 8), id:sub(1, 8)))
+        ("%s has no handover recorded — `take %s --head SHA` is what "
+          .. "a commit review judges"):format(id:sub(1, 8), id:sub(1, 8)))
     else
-      local refusal, sha = ci_refusal(s, it, id:sub(1, 8))
-      if refusal ~= "" then
-        return gate.verdict_line("brief", false, refusal)
-      end
-      head_sha = sha
-      local p, _perr = gh.pull(s, it.pr, it.repo)
-      local files, _ferr = gh.get_files(s, it.pr, it.repo)
-      if p ~= nil then
-        round_ctx = round_context(s, it, p)
-      end
-      if p ~= nil and files ~= nil
-      and is_mechanical_diff(files, p.additions, p.deletions) then
+      head_sha = it.handover_head or ""
+      if local_mechanical_diff(s, it) then
         template = brieftext_review.REVIEW_SCRIPT
       end
     end
@@ -395,7 +297,12 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     CURRENT_SPEC = spec ~= "" and spec or "(the item has no spec sidecar)",
     BOARD_DIR = fs.absolute_path(s.root),
     REVIEW_SESSION = label,
-    ROUND_CONTEXT = round_ctx,
+    ROUND_CONTEXT = "",
+    CLAIM_BASE = it.claim_base or "",
+    CHANGE_SOURCE = (it.external_url or "") ~= ""
+    and (("Commit: `%s`\nExternal link (navigation only): %s")
+      :format(head_sha, it.external_url or ""))
+    or (("Commit: `%s`"):format(head_sha)),
   }
   local root = product_root()
   if root ~= "" then
@@ -416,16 +323,13 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     end
   end
   if kind == "builder" then
-    local bc = bounce_context(s, it)
+    local bc = bounce_context(it)
     if bc ~= "" then
       values["BOUNCE_CONTEXT"] = bc
     end
   end
-  -- The slug can fail (no origin remote in a scratch checkout); the
-  -- brief still emits, with <REPO> surviving for the caller — named
-  -- by the verdict line like any other unanswered placeholder.
-  local repo, _rerr = gh.slug(s, it.repo)
-  if repo ~= nil then
+  local repo = it.repo or ""
+  if repo ~= "" then
     values["REPO"] = repo
     if (it.base or "") ~= "" then
       values["BASE_BRANCH"] = it.base
@@ -434,14 +338,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     else
       values["BASE_BRANCH"] = "main"
     end
-    if (it.pr or 0) ~= 0 then
-      values["PR_URL"] = ("https://github.com/%s/pull/%d"):format(repo, it.pr)
-    end
   elseif (it.base or "") ~= "" then
     values["BASE_BRANCH"] = it.base
-  end
-  if (it.pr or 0) ~= 0 then
-    values["PR_NUMBER"] = ("%d"):format(it.pr)
   end
   if head_sha ~= "" then
     values["HEAD_SHA"] = head_sha

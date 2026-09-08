@@ -17,11 +17,66 @@ local CSPEC: flags.CommandSpec = {
   .. "ids are KSUIDs; the board renders each item by its handle, the id's last 8 "
   .. "characters\n(e.g. «d0x1_37YJ»), accepted by every verb bare or wrapped, any "
   .. "divider, any case;\nan unambiguous prefix or the full id also work "
-  .. "everywhere; item branches are named\nby the id's first 8 characters — a "
-  .. "different string from the handle.",
+  .. "everywhere; each claim's work branch is\nwork/<handle>/<claim>, so "
+  .. "expired attempts never collide.",
   commands = {
-    {name = "init", summary = "prepare a state repository (a git repo, if needed)",
-      spec = {flags = {dir_flag()}}},
+    {name = "init", summary = "prepare a remote-backed or local-only board",
+      spec = {summary = "prepare a state repository. --remote records that "
+        .. "caller-fetched remote-tracking refs are authoritative; --local "
+        .. "selects the explicit test/migration mode. Without either, mode is "
+        .. "inferred from whether a configured Git remote exists.", flags = {dir_flag(),
+          {long = "remote", help = "use caller-fetched remote-tracking refs"},
+          {long = "remote-name", arg = "NAME", help = "persist the Git remote "
+            .. "whose tracking refs are canonical (default: origin)"},
+          {long = "local", help = "use local heads (tests and migrations)"}}}},
+    {name = "session", summary = "mint an opaque per-run claim identity",
+      spec = {usage = "new",
+        summary = "mint an opaque per-run claim identity.\n\n"
+        .. "The plain output is only the new identity, suitable for "
+        .. "`export GITBOARD_SESSION=$(gitboard session new)`. Gitboard "
+        .. "does not derive identity from a user, host, provider, or credential."}},
+    {name = "migrate", summary = "prepare the one-hop board format migration",
+      spec = {summary = "advance only the board format marker; existing item "
+        .. "commits remain byte-for-byte unchanged. Remote boards print exact "
+        .. "leased push/fetch instructions by default. --execute runs those "
+        .. "ordinary Git commands with caller-owned authentication.",
+        flags = {dir_flag(),
+          {long = "remote", arg = "NAME",
+            help = "Git remote named in rendered/executed instructions"},
+          {long = "execute", help = "run the rendered push and confirmation fetch"}}}},
+    {name = "claim", summary = "prepare independent two-hour claims for IDs",
+      spec = {usage = "ID... [options]",
+        summary = "prepare independent two-hour claims for IDs.\n\n"
+        .. "Each item is a separate leased ref update, so overlapping callers "
+        .. "may win different\nsubsets and can never both win one item. By "
+        .. "default this prints the exact ordinary\nGit push commands and "
+        .. "performs no network operation. --execute runs those same commands "
+        .. "with\nthe caller's Git configuration; gitboard never discovers or "
+        .. "manages credentials.",
+        flags = {dir_flag(),
+          {long = "session", arg = "ID", help = "minted per-run identity; "
+            .. "default $GITBOARD_SESSION"},
+          {long = "remote", arg = "NAME",
+            help = "Git remote named in rendered/executed push instructions"},
+          {long = "repo-dir", arg = "DIR", help = "local product repository "
+            .. "override (one-item claims only); otherwise use repository mappings"},
+          {long = "force", help = "take over an unexpired foreign claim"},
+          {long = "why", arg = "REASON", help = "audited reason required with --force"},
+          {long = "execute", help = "explicitly run the exact rendered Git push "
+            .. "and fetch argv using caller-configured authentication"}}}},
+    {name = "renew", summary = "prepare fresh two-hour leases for owned IDs",
+      spec = {usage = "ID... [options]",
+        summary = "prepare independent renewals for active claims held by this "
+        .. "session.\n\nRenewal preserves the initial claim identity and work "
+        .. "branch. By default only exact\nleased Git instructions are printed; "
+        .. "--execute opts into running them.",
+        flags = {dir_flag(),
+          {long = "session", arg = "ID", help = "minted per-run identity; "
+            .. "default $GITBOARD_SESSION"},
+          {long = "remote", arg = "NAME",
+            help = "Git remote named in rendered/executed instructions"},
+          {long = "execute", help = "explicitly run the exact rendered Git push "
+            .. "and fetch argv using caller-configured authentication"}}}},
     {name = "new", summary = "open an item titled TITLE; role comes from the graph",
       spec = {usage = "TITLE [options]",
         summary = "open an item titled TITLE; role comes from the graph.\n\n"
@@ -46,6 +101,8 @@ local CSPEC: flags.CommandSpec = {
           {long = "spec-file", arg = "FILE", help = "spec markdown sidecar"},
           {long = "repo", arg = "OWNER/NAME",
             help = "the repo its PR lands in; default is the board's origin"},
+          {long = "session", arg = "SESSION",
+            help = "minted holder identity when PARENT is claimed"},
           {long = "force", help = "file a `friction:` item over an "
             .. "incomplete roll call"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
@@ -60,7 +117,11 @@ local CSPEC: flags.CommandSpec = {
             help = "place it immediately before X among PARENT's children"},
           {long = "after", arg = "X",
             help = "place it immediately after X among PARENT's children "
-            .. "(at most one of --before/--after)"}}}},
+            .. "(at most one of --before/--after)"},
+          {long = "session", arg = "SESSION",
+            help = "minted holder identity for claimed items"},
+          {long = "force", help = "audited repair of another holder's item"},
+          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "rank", summary = "position ID among its siblings: before or "
       .. "after X, or last; outcomes rank against outcomes",
       spec = {usage = "ID --before X | --after X | --last [options]",
@@ -71,7 +132,11 @@ local CSPEC: flags.CommandSpec = {
         flags = {dir_flag(),
           {long = "before", arg = "X", help = "place ID immediately before X"},
           {long = "after", arg = "X", help = "place ID immediately after X"},
-          {long = "last", help = "place ID last among its siblings"}}}},
+          {long = "last", help = "place ID last among its siblings"},
+          {long = "session", arg = "SESSION",
+            help = "minted holder identity for claimed items"},
+          {long = "force", help = "audited repair of another holder's item"},
+          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "set", summary = "repair ID's title, repo and/or base "
       .. "(at least one; nothing else moves here)",
       spec = {usage = "ID [options]", flags = {dir_flag(),
@@ -80,7 +145,11 @@ local CSPEC: flags.CommandSpec = {
             help = "the repo its PR lands in; refused on the board — it "
             .. "carries no repo"},
           {long = "base", arg = "BRANCH",
-            help = "the branch its PR targets"}}}},
+            help = "the branch its PR targets"},
+          {long = "session", arg = "SESSION",
+            help = "minted holder identity for a claimed item"},
+          {long = "force", help = "audited repair of another holder's item"},
+          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "spec", summary = "replace ID's spec sidecar with FILE",
       spec = {usage = "ID FILE [options]", flags = {dir_flag(),
           {long = "base", arg = "FILE",
@@ -119,126 +188,90 @@ local CSPEC: flags.CommandSpec = {
     {name = "worktree", summary = "create ID's builder checkout: branch, "
       .. "worktree, bootstrap, all in one command",
       spec = {usage = "ID [options]",
-        summary = "create ID's builder checkout: branch, worktree, "
-        .. "bootstrap, all in one\ncommand — run right after `take ID` "
-        .. "succeeds.\n\nResolves ID's repo to a local checkout, branches "
-        .. "and adds a worktree beside it\n(never reused: an existing "
-        .. "branch or path both refuse), bootstraps it, then fetches "
-        .. "each --ref into\nrefs/spike/<basename>. The bootstrap's own "
+        summary = "create ID's checkout from its confirmed active claim.\n\n"
+        .. "Resolves ID's repo through the explicit repository map (or "
+        .. "--root), creates\nwork/<handle>/<claim-root-short> at the exact "
+        .. "recorded claim base, and adds a\nmatching nested worktree beside "
+        .. "the checkout. Existing names refuse. Each already-present\n"
+        .. "--ref is copied into refs/spike/<basename>. The bootstrap's own "
         .. "fetch/build is quiet by\ndefault, printing only its "
         .. "PASS/FAIL summary line(s) on success and\neverything on a "
         .. "failure; --verbose streams it verbatim instead.\n\n--review "
-        .. "provisions the REVIEW checkout instead — run right after "
-        .. "`take ID`\nclaims the review, before `brief review ID`: "
-        .. "fetches the PR's current head onto\nits own branch and "
-        .. "checks it out at wt/review-<id8>, the same path\n`brief "
-        .. "review ID` already names. Claim comes from ID's reviewer, "
-        .. "not its build\nclaim; refused when ID carries no PR yet. "
+        .. "starts the same claim branch at the exact handed-over commit. "
+        .. "Gitboard performs no fetch;\nthe caller must make every named "
+        .. "commit and ref locally inspectable first. "
         .. "--verbose applies to either\ncheckout's bootstrap.",
         flags = {dir_flag(),
           {long = "root", arg = "DIR",
-            help = "the local checkout to branch from; default is "
-            .. "resolved from ID's repo"},
+            help = "local product checkout override; otherwise use the "
+            .. "configured repository mapping"},
           {long = "ref", arg = "REF", repeated = true,
             help = "fetch REF into refs/spike/<basename> after "
             .. "bootstrap (repeatable)"},
-          {long = "review", help = "provision ID's review checkout "
-            .. "instead of a builder's — the PR's current head, "
-            .. "claimed under ID's reviewer"},
+          {long = "review", help = "start at ID's exact handed-over commit "
+            .. "instead of its claim base"},
           {long = "verbose", help = "stream the bootstrap's fetch/build "
             .. "output verbatim (a compile/compile-batch line per file) "
             .. "instead of just its PASS/FAIL summary line(s)"},
           {long = "session", arg = "SESSION",
             help = "the claiming session. Omit to derive it from the "
             .. "environment"}}}},
-    {name = "take", summary = "claim ID: the pull (spec bar and doing "
-      .. "bound apply), its review when it awaits a verdict, or record "
-      .. "its handover (--pr N for a diff, --open to open one, --result "
-      .. "for a research spec)",
-      spec = {usage = "ID [options]", flags = {dir_flag(),
+    {name = "take", summary = "record the claimed work's commit handover",
+      spec = {usage = "ID --head SHA [options]",
+        summary = "record a locally verified product commit as the handover. "
+        .. "The commit must descend from the product base recorded by the "
+        .. "claim. An optional URL is navigation only; Gitboard performs no "
+        .. "provider operation or authenticated network request.",
+        flags = {dir_flag(),
           {long = "session", arg = "SESSION",
-            help = "the claiming session. Omit to derive it from the "
-            .. "environment"},
-          {long = "pr", arg = "N",
-            help = "record the PR that hands the build over for review"},
-          {long = "open", help = "open the PR yourself, from the branch "
-            .. "`take` names, and record the number it gets — the "
-            .. "handover for a diff whose PR does not exist yet. The "
-            .. "claim holder's own motion; never with --pr"},
-          {long = "body", arg = "FILE",
-            help = "with --open, a paragraph appended to the PR body "
-            .. "after its `Board:` line"},
-          {long = "result", help = "record the research handover: the "
-            .. "spec as it stands is the deliverable, awaiting a verdict. "
-            .. "The claim holder's own motion; never with --pr"},
-          {long = "force", help = "take over another session's LIVE claim "
-            .. "(a stale one needs no force), or skip the take gates"},
-          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
+            help = "minted claim identity; default $GITBOARD_SESSION"},
+          {long = "head", arg = "SHA", help = "product commit handed over"},
+          {long = "url", arg = "URL", help = "optional non-authoritative link"},
+          {long = "repo-dir", arg = "DIR", help = "local product checkout; "
+            .. "otherwise use the configured repository mapping"}}}},
     {name = "drop", summary = "return ID's lease; the item, blockers "
       .. "included, is untouched",
       spec = {usage = "ID [options]",
-        summary = "return ID's lease: the claim (or the review claim "
-        .. "alone) releases; the\nitem, its blockers included, is "
-        .. "untouched.\n\nA bare drop asserts the WORKER stopped — a dead "
-        .. "wave agent, a session out\nof budget, a review nobody can "
-        .. "finish — so the item is safe to re-offer\nas-is. An ITEM that "
-        .. "cannot proceed is never dropped bare: file the\nquestion as a "
-        .. "child (`new --parent <ID>`), then drop.",
+        summary = "prepare release of the whole-item claim without changing "
+        .. "workflow fields. By default Gitboard prints an exact leased push; "
+        .. "--execute runs ordinary Git using caller-owned authentication.",
         flags = {dir_flag(),
           {long = "why", arg = "REASON",
             help = "why the session lets go (a dead agent, a build out of "
             .. "budget) — worker-side, never the item's gap"},
           {long = "session", arg = "SESSION",
-            help = "the dropping session. Omit to derive it from the "
-            .. "environment"},
-          {long = "force", help = "drop another session's live claim"}}}},
-    {name = "verdict", summary = "record a review verdict on a PR or a "
-      .. "research handover (`take --result`); its effect follows",
-      spec = {usage = "ID KIND [options]",
-        summary = "record a review verdict on a PR or a research handover "
-        .. "(`take --result`).\n\n"
-        .. "Against a real PR, `verdict` performs the GitHub side itself: "
-        .. "an accept lands the PR\n(a squash merge, falling back to "
-        .. "auto-merge when GitHub refuses one directly);\na `request-"
-        .. "changes` or `reject` posts the formal review `--body FILE` "
-        .. "carries,\nand a reject then closes the PR. A reviewer runs "
-        .. "this command and touches no\nGitHub tool of its own.\n\n"
-        .. "The auto-merge fallback can itself be refused — not only the "
-        .. "repo-level \"Allow\nauto-merge\" gap (a one-time repo setting), "
-        .. "but a session-scope refusal some sandboxed\nenvironments place "
-        .. "on gitboard's own pinned token specifically, distinct from "
-        .. "that\nrepo setting and from anything `verdict` can route "
-        .. "around by switching REST calls.\nEither way the verdict "
-        .. "still records and the line names the landing failure — "
-        .. "nothing is\nlost. Recovery: an orchestrating session with "
-        .. "its own broader GitHub access arms\nauto-merge (or merges "
-        .. "directly) with its own tool; once GitHub accepts that, "
-        .. "nothing\nfurther is needed here.",
+            help = "minted claim identity; default $GITBOARD_SESSION"},
+          {long = "remote", arg = "NAME",
+            help = "Git remote named in rendered/executed instructions"},
+          {long = "execute", help = "run the rendered push and confirmation fetch"},
+          {long = "force", help = "drop another session's active claim"}}}},
+    {name = "verdict", summary = "record a verdict on one exact commit",
+      spec = {usage = "ID KIND --head SHA [options]",
+        summary = "record a review verdict whose only evidence is the exact "
+        .. "handed-over commit. Gitboard verifies it locally and never reads "
+        .. "remote checks or performs a provider write.",
         flags = {dir_flag(),
-          {long = "pr", arg = "N", help = "the PR the verdict judges; a "
-            .. "research handover has none — omit --pr and --head, the "
-            .. "verdict judges the spec revision the handover recorded"},
-          {long = "head", arg = "SHA", help = "head commit it judges"},
-          {long = "body", arg = "FILE", help = "the formal review's body; "
-            .. "required for request-changes and reject against a PR"},
-          {long = "no-land", help = "accept only: skip the GitHub merge/"
-            .. "auto-merge write and record only, for a repo the token "
-            .. "cannot merge"},
+          {long = "head", arg = "SHA", help = "exact product commit judged"},
+          {long = "repo-dir", arg = "DIR", help = "local product checkout; "
+            .. "otherwise use the configured repository mapping"},
           {long = "session", arg = "SESSION",
-            help = "the reviewing session; it rides in the commit "
-            .. "subject. Omit to derive it from the environment"},
+            help = "minted reviewing claim identity; default $GITBOARD_SESSION"},
           {long = "force", help = "record over the distance guard "
             .. "(the session built or specced this item) — repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
-    {name = "done", summary = "end ID, recording why (an accepted PR is "
-      .. "verified merged first; an outcome's `completed` needs --by CHILD)",
+    {name = "done", summary = "end ID after locally verifying its landed commit",
       spec = {usage = "ID [options]", flags = {dir_flag(),
           {long = "reason", arg = "REASON", default = "completed",
             help = "completed or not-planned"},
           {long = "by", arg = "CHILD", help = "an outcome's evidence: its "
             .. "completed child, required with --reason completed"},
-          {long = "force", help = "end an item under an unjudged PR, or "
-            .. "without reading its merge"},
+          {long = "landed", arg = "SHA", help = "landed product commit for "
+            .. "completed accepted work"},
+          {long = "repo-dir", arg = "DIR", help = "local product checkout; "
+            .. "otherwise use the configured repository mapping"},
+          {long = "session", arg = "SESSION",
+            help = "minted claim identity; default $GITBOARD_SESSION"},
+          {long = "force", help = "audited repair past normal completion gates"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "show", summary = "the board (no ID), or one item: fields, "
       .. "spec-bar problems, spec, git history",
@@ -252,8 +285,31 @@ local CSPEC: flags.CommandSpec = {
           {long = "todo", arg = "N",
             help = "how many todo rows to show (0 = all; default 8); "
             .. "no effect with an ID"}}}},
-    {name = "sync", summary = "rebase onto the remote's state",
-      spec = {flags = {dir_flag()}}},
+    {name = "publish", summary = "render or explicitly execute prepared leased pushes",
+      spec = {usage = "[TRANSACTION...] [options]",
+        summary = "render prepared transactions as exact atomic leased Git push "
+        .. "commands.\n\nWith no transaction selector, renders every prepared "
+        .. "transaction. Nothing executes\nunless --execute is present; ordinary "
+        .. "Git then owns all authentication behavior. An executed push exits "
+        .. "2 until refresh confirms the fetched refs.",
+        flags = {dir_flag(),
+          {long = "remote", arg = "NAME",
+            help = "Git remote named in the push argv"},
+          {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},
+    {name = "refresh", summary = "inspect fetched refs, or explicitly fetch first",
+      spec = {summary = "confirm prepared transactions against caller-fetched "
+        .. "remote-tracking refs and rebuild\nthe disposable cache. Without "
+        .. "--execute, prints the exact fetch command but does not run it.\n"
+        .. "--execute runs that same ordinary Git argv before confirmation; "
+        .. "credentials remain caller-owned. Exit 2 means publication remains "
+        .. "unconfirmed; a lost lease exits 1.",
+        flags = {dir_flag(),
+          {long = "remote", arg = "NAME",
+            help = "Git remote and remote-tracking namespace to inspect"},
+          {long = "execute", help = "explicitly execute the exact rendered fetch argv"}}}},
+    {name = "sync", summary = "deprecated alias for local-only refresh",
+      spec = {summary = "deprecated: use refresh. This compatibility alias never "
+        .. "fetches or performs provider operations.", flags = {dir_flag()}}},
     {name = "fsck", summary = "read-only board audit: edges, trees, keys, flags",
       spec = {flags = {dir_flag()}}},
     {name = "find", summary = "full-text search over titles and specs, "

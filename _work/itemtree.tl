@@ -35,8 +35,9 @@ local item = require("_work.item")
 --- combined `repo`/`base`) sits where `_work.item.Item` declares
 --- `parent`'s neighbor; `id` and `held` are not `meta` lines at all.
 local META_KEYS < const >: {string} = {
-  "title", "parent", "target", "key", "claim", "reviewer", "pr",
-  "result", "verdict", "verdict_head", "verdict_spec", "resolution",
+  "title", "parent", "target", "key", "claim", "claim_base",
+  "handover_head", "external_url", "reviewer", "pr", "result", "verdict",
+  "verdict_head", "landed_head", "verdict_spec", "resolution",
   "builders", "speccers",
 }
 
@@ -129,6 +130,9 @@ local function encode_meta(it: item.Item): string
   put("target", format_target(it.repo or "", it.base or ""))
   put("key", it.key or "")
   put("claim", it.claim or "")
+  put("claim_base", it.claim_base or "")
+  put("handover_head", it.handover_head or "")
+  put("external_url", it.external_url or "")
   put("reviewer", it.reviewer or "")
   if (it.pr or 0) ~= 0 then
     parts[#parts + 1] = ("pr: %d\n"):format(it.pr)
@@ -136,6 +140,7 @@ local function encode_meta(it: item.Item): string
   put("result", it.result or "")
   put("verdict", it.verdict or "")
   put("verdict_head", it.verdict_head or "")
+  put("landed_head", it.landed_head or "")
   put("verdict_spec", it.verdict_spec or "")
   put("resolution", it.resolution or "")
   if #(it.builders or {}) > 0 then
@@ -193,6 +198,9 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     order = order,
     other_edges = other_edges,
     claim = meta.claim or "",
+    claim_base = meta.claim_base or "",
+    handover_head = meta.handover_head or "",
+    external_url = meta.external_url or "",
     builders = {},
     speccers = {},
     reviewer = meta.reviewer or "",
@@ -200,6 +208,7 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     result = meta.result or "",
     verdict = meta.verdict or "",
     verdict_head = meta.verdict_head or "",
+    landed_head = meta.landed_head or "",
     verdict_spec = meta.verdict_spec or "",
     resolution = meta.resolution or "",
   }
