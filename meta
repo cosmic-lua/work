@@ -5,4 +5,6 @@ claim: 6fac96ee1a17646491828c8cf8d764d2
 claim_base: 810ad912639000eae52cf50752f56f9d272d88dd
 handover_head: cde528f2c3ac9c20830a38f1b69a3614e125af5d
 external_url: https://github.com/cosmic-lua/work/pull/90
+verdict: accept
+verdict_head: cde528f2c3ac9c20830a38f1b69a3614e125af5d
 builders: 615f8f680399368546721e2abc68f259
