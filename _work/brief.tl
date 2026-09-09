@@ -470,7 +470,7 @@ local record brief
   unfilled: function(text: string): {string}
   mint_label: function(kind: string, handle: string): string
   cmd_brief: function(s: store.Store, kind: string, id: string, out?: string,
-    tree?: string): integer
+  tree?: string): integer
 end
 
 local M: brief = {

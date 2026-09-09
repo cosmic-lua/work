@@ -110,8 +110,8 @@ No refusal.
   local add = check.must(child.run({"git", "add", "measured.tl"}, {cwd = s.root}))
   assert(add.ok, "the measurement fixture is staged: " .. add.stderr)
   local commit = check.must(child.run({"git", "-c", "user.email=test@example.com",
-    "-c", "user.name=test", "commit", "-q", "-m", "measurement fixture"},
-    {cwd = s.root}))
+        "-c", "user.name=test", "commit", "-q", "-m", "measurement fixture"},
+      {cwd = s.root}))
   assert(commit.ok, "the measurement fixture has a HEAD: " .. commit.stderr)
   local code, out = brief_and_capture(s, "builder", leaf, s.root)
   assert(code == 0, "tree measurement earns a builder brief: " .. out)
