@@ -162,6 +162,9 @@ Title: <TITLE>
 <CHANGE_SOURCE>
 
 The caller has made this exact commit available in your local checkout.
+The checkout that holds the board worktree (`<BOARD_DIR>/..`) is the
+orchestrator's and is stale by construction; never read, grep or build
+in it. Your worktree is the only tree.
 Review `<CLAIM_BASE>..<HEAD_SHA>`; never substitute a branch tip or provider
 state for either commit. The spec below is authoritative. External checks,
 when used, must be inspected by the caller on this exact SHA.

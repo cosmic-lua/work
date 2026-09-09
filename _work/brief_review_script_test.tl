@@ -58,6 +58,16 @@ local function brief_and_capture(s: store.Store, id: string): integer, string
   return result, table.concat(lines, "\n")
 end
 
+local function flat_text(text: string): string
+  return (text:gsub("%s+", " "))
+end
+
+local function stale_board_sentence(s: store.Store): string
+  return "The checkout that holds the board worktree (`"
+    .. fs.absolute_path(s.root)
+    .. "/..`) is the orchestrator's and is stale by construction; never read, grep or build in it. Your worktree is the only tree."
+end
+
 --- The same capture as `brief_and_capture` above, for any `kind` —
 --- the survivor-list coverage below needs both `builder` and `review`.
 --- @param s store.Store The store
@@ -149,6 +159,12 @@ local function test_diff_shape_picks_the_review_template()
     if case.script then
       assert(out:find("git show", 1, true) ~= nil,
         ("%s: a small diff selects the numbered script: %s")
+        :format(case.name, out))
+      assert(flat_text(out):find(flat_text(stale_board_sentence(s)), 1, true) ~= nil,
+        ("%s: REVIEW_SCRIPT names the stale board checkout and fills its path: %s")
+        :format(case.name, out))
+      assert(out:find("<BOARD_DIR>", 1, true) == nil,
+        ("%s: REVIEW_SCRIPT fills the board directory placeholder: %s")
         :format(case.name, out))
     else
       assert(out:find("fresh-context code reviewer", 1, true) ~= nil,
