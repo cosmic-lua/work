@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 95026d6a9dfa647bdd395d71bd6e2ee0
+caller 1dd38b7b27753fb730bdcd7e7dd43dab
+remote origin
+action drop
+created 1788926019
+publish-by 0
+reason blocked by child DUXW_Y3Ut: claim base resolves to board commit
+
+3J19VYeNvxUpaNxPS9T1ND6Eum9 2d4c886e256a100b6f0bc413489ff2b1d458147f drop - b7367648921a110852fe04d856ff13cbd3cf4084 49357b6138ce8d2b68fd491fa3b8e0303e990e0b 1788925909 1788925909 1788933109
