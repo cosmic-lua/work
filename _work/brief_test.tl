@@ -5,11 +5,13 @@
 -- for the kinds that carry the spec, a review with no PR recorded.
 
 local check = require("cosmic.check")
+local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
 local fixture = require("_work.fixture")
+local gitspec = require("_work.gitspec")
 local item = require("_work.item")
 local specmod = require("_work.spec")
 local store = require("_work.store")
@@ -74,7 +76,7 @@ end
 --- @return integer cmd_brief's exit code
 --- @return string Every print()'d line, newline-joined
 local function brief_and_capture(s: store.Store, kind: string,
-    id: string): integer, string
+    id: string, tree?: string): integer, string
   local old_print = _G.print
   local lines: {string} = {}
   _G.print = function(...: any)
@@ -84,12 +86,60 @@ local function brief_and_capture(s: store.Store, kind: string,
     end
     lines[#lines + 1] = table.concat(parts, "\t")
   end
-  local ok, result = pcall(brief.cmd_brief, s, kind, id)
+  local ok, result = pcall(brief.cmd_brief, s, kind, id, nil, tree)
   _G.print = old_print
   if not ok then
     error(result, 0)
   end
   return result, table.concat(lines, "\n")
+end
+
+local function test_tree_measurement_appends_to_builder_and_review()
+  local s = init_state_repo("brief-tree")
+  local _, leaf = root_with_leaf(s)
+  local path = fs.join(s.root, "-probe.tl")
+  assert(fs.write(path, ("line\n"):rep(490)))
+  local spec_file = fs.join(s.root, "tree-spec.md")
+  assert(fs.write(spec_file, [[
+## Change
+-probe.tl and absent.tl
+## Non-goals
+No refusal.
+]]))
+  assert(gitspec.cmd_spec(s, leaf, spec_file) == 0)
+  local add = check.must(child.run({"git", "add", "--", "-probe.tl"}, {cwd = s.root}))
+  assert(add.ok, "the measurement fixture is staged: " .. add.stderr)
+  local commit = check.must(child.run({"git", "-c", "user.email=test@example.com",
+        "-c", "user.name=test", "commit", "-q", "-m", "measurement fixture"},
+      {cwd = s.root}))
+  assert(commit.ok, "the measurement fixture has a HEAD: " .. commit.stderr)
+  local code, out = brief_and_capture(s, "builder", leaf, s.root)
+  assert(code == 0, "tree measurement earns a builder brief: " .. out)
+  assert(out:find("## Measured at brief time (" .. s.root .. ", ", 1, true) ~= nil,
+    "the measured section names the tree and HEAD: " .. out)
+  assert(out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
+    "the measured file carries its headroom: " .. out)
+  assert(out:find("absent.tl  absent", 1, true) ~= nil,
+    "the missing Change path is explicit: " .. out)
+  assert(out:find("measured Change paths under " .. s.root, 1, true) ~= nil,
+    "the verdict names what was measured: " .. out)
+  handover(s, leaf)
+  local review_code, review_out = brief_and_capture(s, "review", leaf, s.root)
+  assert(review_code == 0, "tree measurement earns a review brief: " .. review_out)
+  assert(review_out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
+    "review carries the measured section: " .. review_out)
+end
+
+local function test_tree_measurement_refuses_a_non_directory()
+  local s = init_state_repo("brief-tree-refusal")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  local not_dir = fs.join(s.root, "not-a-directory.tl")
+  assert(fs.write(not_dir, "not a directory\n"))
+  local code, out = brief_and_capture(s, "builder", leaf, not_dir)
+  assert(code ~= 0, "a non-directory --tree is refused")
+  assert(out:find("--tree '" .. not_dir .. "' must be a directory", 1, true) ~= nil,
+    "the refusal is a verdict line: " .. out)
 end
 
 local function test_fill_answers_only_what_the_map_holds()
