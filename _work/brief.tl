@@ -4,8 +4,7 @@
 --- verbatim, repo and base branch, the item branch, the exact product
 --- commit under review, and this checkout's own absolute path. Templates are
 --- `_work.brieftext` and `_work.brieftext_review`; `review` picks
---- between two by the handover the item carries — a PR (`REVIEW`) or
---- a research result (`RESEARCH_REVIEW`); the fill grammar is
+--- between full and mechanical exact-head reviews; the fill grammar is
 --- `<UPPER_SNAKE>`, and a placeholder the board cannot answer (a
 --- worktree path, a bounce paragraph) survives the fill — the closing
 --- verdict line names each survivor, so the caller's whole job is
@@ -312,14 +311,17 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       ("%s has no spec sidecar — a %s brief carries the spec verbatim, "
         .. "so refine it first"):format(id:sub(1, 8), kind))
   end
-  -- A review judges a handover. Commit work carries an exact local Git object;
-  -- research carries a spec revision. Which template applies comes from the
-  -- item, never from a provider read.
+  -- Every review judges an exact product handover, including research.
+  -- Legacy result metadata cannot substitute for or override that commit.
   local head_sha = ""
   if kind == "review" then
-    if (it.result or "") ~= "" then
-      template = brieftext_review.RESEARCH_REVIEW
-    elseif (it.handover_head or "") == "" then
+    if (it.handover_head or "") == "" then
+      if (it.result or "") ~= "" then
+        return gate.verdict_line("brief", false,
+          ("%s has a legacy research result but no commit handover — the caller must "
+            .. "supply the applying product commit with `take %s --head SHA`")
+          :format(id:sub(1, 8), id:sub(1, 8)))
+      end
       return gate.verdict_line("brief", false,
         ("%s has no handover recorded — `take %s --head SHA` is what "
           .. "a commit review judges"):format(id:sub(1, 8), id:sub(1, 8)))

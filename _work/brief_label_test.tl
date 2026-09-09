@@ -150,7 +150,6 @@ local function test_legacy_research_and_current_subjects_share_one_counter()
   local it = check.must(store.load(s, id))
   it.result = spec.revision(store.read_spec(s, id))
   assert(item.record_involvement(it.builders, "research-builder"))
-  it.handover_head = ""
   assert(storewrite.save(s, it, "take old result:" .. it.result))
   assert_review(s, id, 4)
   assert(env.set("GITBOARD_SESSION", "0123456789abcdef"))

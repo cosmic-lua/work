@@ -19,7 +19,6 @@ local gitclaim = require("_work.gitclaim")
 local gitspec = require("_work.gitspec")
 local item = require("_work.item")
 local prepared = require("_work.prepared")
-local specmod = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -214,19 +213,13 @@ local function test_verdict_line_ignores_placeholders_quoted_in_the_spec()
   assert(vline:find("<WORKTREE>", 1, true) ~= nil,
     "a genuine survivor still names itself: " .. vline)
 
-  local it = check.must(store.load(s, leaf))
-  it.repo, it.claim = "acme/widgets", "session-a"
-  assert(item.record_involvement(it.builders, "session-a"))
-  it.result = specmod.revision(store.read_spec(s, leaf))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a result:%s"):format(
-        leaf:sub(1, 8), it.result:sub(1, 7))))
+  handover_diff(s, leaf, "injection", "proof.txt", 1)
   local prior = env.get("GITBOARD_DIR")
   check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
   local rcode, rout = brief_and_capture_kind(s, "review", leaf)
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
-  assert(rcode == 0, "the research handover unlocks the review brief: " .. rout)
+  assert(rcode == 0, "the exact handover unlocks the review brief: " .. rout)
   assert(rout:find("`take ID --pr <N>`", 1, true) ~= nil,
     "the spec's own quoted example still rides the fully-filled body: " .. rout)
   assert(rout:find("nothing left to fill", 1, true) ~= nil,

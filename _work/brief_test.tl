@@ -335,39 +335,16 @@ local function test_refine_brief_carries_the_current_spec_as_base()
   assert(rout:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "refine: PRODUCT_ROOT fills from GITBOARD_DIR: " .. rout)
 end
-
--- A research handover earns the review brief too, as the research
--- template: the spec verbatim, no PR to fetch, the probes to re-run
--- and the captures to check, and a verdict command with no --pr/--head.
-local function test_review_brief_of_a_research_handover()
+-- Legacy research metadata is readable, but only an exact head earns review.
+local function test_review_brief_refuses_a_result_only_handover()
   local s = init_state_repo("brief-research-review")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   research_handover(s, leaf)
-  pin_session("f00dcafe9999beefdead")
   local code, out = brief_and_capture(s, "review", leaf)
-  unpin_session()
-  assert(code == 0, "the research handover unlocks the review brief")
-  assert(out:find("RESEARCH SLICE", 1, true) ~= nil, "the research template")
-  assert(out:find("Do exactly this.", 1, true) ~= nil,
-    "the spec sidecar rides verbatim")
-  assert(out:find("Re-run EVERY probe", 1, true) ~= nil
-    and out:find("captures landed", 1, true) ~= nil,
-    "the probes are re-run and the captures checked")
-  assert(out:find("<PR_", 1, true) == nil
-    and out:find("<HEAD_SHA>", 1, true) == nil,
-    "no PR placeholder is left to fill: " .. out)
-  local label = ("review-%s-f00dcafe"):format(tail.bare(leaf))
-  assert(out:find(("verdict %s <accept|request-changes|reject> \\\n"
-        .. "  --session %s"):format(leaf, label), 1, true) ~= nil,
-    "the verdict command carries neither --pr nor --head, and the "
-    .. "minted label filled in: " .. out)
-  assert(out:find("bin/gitboard verdict", 1, true) ~= nil,
-    "the verdict command names the product checkout's bin/gitboard: " .. out)
-  assert(out:find("o/bin/gitboard", 1, true) == nil,
-    "the stale o/bin/gitboard path is gone: " .. out)
-  assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
-    "the placeholder is gone — the brief mints and fills the label itself")
+  assert(code ~= 0, "a result-only handover cannot earn review")
+  assert(out:find("has a legacy research result but no commit handover", 1, true) ~= nil, out)
+  assert(out:find("take " .. leaf:sub(1, 8) .. " --head SHA", 1, true) ~= nil, out)
 end
 
 -- The minted label is `<kind>-<handle>-<orch8>` for every kind, printed
