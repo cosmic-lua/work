@@ -2,3 +2,5 @@ title: test: friction item lookup must not assume KSUID creation order
 parent: 3J4mbmWTnGXnSFnnFGUbtFzueMf
 target: cosmic-lua/work
 claim_batch: 00b82ee602a997ac4e4463a145cc263719b07108
+handover_head: 7f70cbde5779e9fea5363aa7abcb3cd8084824ed
+builders: ba33ac12d32cb6a07a79caaee603b6bf
