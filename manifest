@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 767091e910d7f004256c5a0272444bcd
+caller build-YLxi_6fmt-6141b568
+remote origin
+action migrate
+created 1788920183
+publish-by 0
+reason format-3 claim cutover
+
+3J0Tn5BN10TtXPZUrmOYLxi6fmt 83906e05ae6ad1dbb6e09e87e30a6ba64f487ceb drop - - 83906e05ae6ad1dbb6e09e87e30a6ba64f487ceb 1788808867 1788808867 1788816067
