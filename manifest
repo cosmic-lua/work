@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 172eb69842a33407f645525d2ab49b6e
+caller d42a7adb7ddaf6ea241562a537178966
+remote origin
+action drop
+created 1788929576
+publish-by 0
+reason blocking-test-child-filed
+
+3J4mbmWTnGXnSFnnFGUbtFzueMf eb7cd617557a2c46a7d797be8970ce73398d8432 drop - 3423bac684a241a19b94416e525729074cccdb29 1b8a1d08b67882b5cf1f80b540f982282d99f07d 1788928846 1788928846 1788936046
