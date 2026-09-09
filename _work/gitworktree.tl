@@ -71,6 +71,31 @@ local function product_commit(root: string, sha: string): string, string
   return (r.stdout:gsub("%s+$", "")), ""
 end
 
+--- Ask Git for effective identity without rewriting shared configuration.
+local function identity_refusal(path: string): string
+  for _, key in ipairs({"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"}) do
+    local r, err = child.run({"git", "var", key}, {cwd = path})
+    if r == nil or not r.ok then
+      return ("%s unavailable in %s: %s; configure user.name and user.email "
+        .. "with `git -C %q config --local KEY VALUE`, use that checkout's "
+        .. "--worktree scope, or provide intentional Git identity environment overrides")
+      :format(key, path, r ~= nil and r.stderr or err, path)
+    end
+  end
+  return ""
+end
+
+--- Validate repository-independent checkout postconditions, not build artifacts.
+local function checkout_refusal(path: string, expected: string): string
+  if not fs.is_dir(path) then return "checkout directory is missing: " .. path end
+  local head, err = product_commit(path, "HEAD")
+  if head == "" then return err end
+  if head ~= expected then
+    return ("checkout HEAD %s does not equal requested commit %s"):format(head, expected)
+  end
+  return identity_refusal(path)
+end
+
 --- Compatibility helper for callers that need a repository's conventional
 --- base name. Claim worktree creation itself never guesses a branch: it uses
 --- the exact product commit recorded in the claim.
@@ -125,20 +150,26 @@ end
 --- @param path string The worktree to run it in
 --- @param argv {string} The full `bin/cosmic ...` argv
 --- @param verbose boolean Stream the step verbatim instead of summarizing
-local function run_step(path: string, argv: {string}, verbose: boolean)
+--- @return boolean Whether the subprocess ran and exited successfully
+--- @return string Failure diagnostic, empty on success
+local function run_step(path: string, argv: {string}, verbose: boolean): boolean, string
+  local r: child.Result
+  local err: string
   if verbose then
-    local _r, _e = child.run(argv, {cwd = path, stdout = "inherit", stderr = "inherit"})
-    return
+    r, err = child.run(argv, {cwd = path, stdout = "inherit", stderr = "inherit"})
+  else
+    r, err = child.run(argv, {cwd = path})
   end
-  local r, _e = child.run(argv, {cwd = path})
-  if r == nil then return end
+  local command = table.concat(argv, " ")
+  if r == nil then return false, command .. ": " .. err end
   if not r.ok then
-    print(r.stdout .. r.stderr)
-    return
+    if not verbose then print(r.stdout .. r.stderr) end
+    return false, ("%s failed (exit %d)"):format(command, r.code)
   end
-  for _, line in ipairs(summary_of(r.stdout)) do
-    print(line)
+  if not verbose then
+    for _, line in ipairs(summary_of(r.stdout)) do print(line) end
   end
+  return true, ""
 end
 
 --- Bootstraps a fresh worktree, builder or review: `bin/cosmic --make
@@ -152,18 +183,21 @@ end
 --- @param path string The fresh worktree
 --- @param verbose boolean Stream fetch/build verbatim instead of
 --- summarizing them (`--verbose`)
---- @return string What was bootstrapped, for the verdict line
-local function bootstrap(path: string, verbose: boolean): string
+--- @return string Bootstrap status (not artifact validation), empty on failure
+--- @return string Failure diagnostic, empty on success
+local function bootstrap(path: string, verbose: boolean): string, string
   if fs.is_file(fs.join(path, "bin/cosmic")) then
-    if env.get("GITBOARD_WORKTREE_BOOTSTRAP") ~= "0" then
-      run_step(path, {"bin/cosmic", "--make", "build"}, verbose)
+    if env.get("GITBOARD_WORKTREE_BOOTSTRAP") == "0" then
+      return "cosmic (skipped: GITBOARD_WORKTREE_BOOTSTRAP=0)", ""
     end
-    return "cosmic (local build)"
+    local ok, err = run_step(path, {"bin/cosmic", "--make", "build"}, verbose)
+    if not ok then return "", err end
+    return "cosmic (local build)", ""
   end
   if fs.is_dir(fs.join(path, "third_party/lua")) then
-    return "cosmopolitan (nothing needed)"
+    return "cosmopolitan (nothing needed)", ""
   end
-  return "nothing (unrecognized tree)"
+  return "nothing (unrecognized tree)", ""
 end
 
 --- The local name a `--ref` value lands under: its last `/`-separated
@@ -207,11 +241,15 @@ end
 --- @param path string The fresh worktree
 --- @param refs {string} Caller-prepared `--ref` occurrences
 --- @param verbose boolean Stream the bootstrap verbatim (`--verbose`)
---- @return string The bootstrap label, "" on a ref-fetch failure
+--- @param expected string The exact commit the checkout must retain
+--- @return string The bootstrap label, "" on any preparation failure
 --- @return string The failure, "" on success
 local function bootstrap_and_refs(path: string, refs: {string},
-    verbose: boolean): string, string
-  local bootstrapped = bootstrap(path, verbose)
+    verbose: boolean, expected: string): string, string
+  local invalid = checkout_refusal(path, expected)
+  if invalid ~= "" then return "", invalid end
+  local bootstrapped, berr = bootstrap(path, verbose)
+  if berr ~= "" then return "", berr end
   for _, ref in ipairs(refs) do
     local name = ref_basename(ref)
     local sha = prepared_ref(path, ref)
@@ -226,6 +264,8 @@ local function bootstrap_and_refs(path: string, refs: {string},
         r ~= nil and r.stderr or "could not run git")
     end
   end
+  local final = checkout_refusal(path, expected)
+  if final ~= "" then return "", final end
   return bootstrapped, ""
 end
 
@@ -267,6 +307,8 @@ local function cmd_worktree_review(s: store.Store, it: item.Item,
       ("%s — caller must fetch the handed-over commit before worktree")
       :format(herr))
   end
+  local identity = identity_refusal(checkout)
+  if identity ~= "" then return gate.verdict_line("worktree", false, identity) end
   local added = child.run({"git", "worktree", "add", "-b", branch, path,
       review_sha}, {cwd = checkout})
   if added == nil or not added.ok then
@@ -274,10 +316,13 @@ local function cmd_worktree_review(s: store.Store, it: item.Item,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose)
-  if referr ~= "" then return gate.verdict_line("worktree", false, referr) end
+  local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose, review_sha)
+  if referr ~= "" then
+    return gate.verdict_line("worktree", false,
+      ("checkout created at %s; preparation failed: %s"):format(path, referr))
+  end
   return gate.verdict_line("worktree", true,
-    ("%s review at %s (commit %s, bootstrapped %s)"):format(handle, path,
+    ("%s review at %s (commit %s, bootstrap: %s)"):format(handle, path,
       review_sha, bootstrapped))
 end
 
@@ -331,6 +376,8 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
     return gate.verdict_line("worktree", false,
       ("%s — caller must fetch the claim base before worktree"):format(berr))
   end
+  local identity = identity_refusal(checkout)
+  if identity ~= "" then return gate.verdict_line("worktree", false, identity) end
   local added = child.run({"git", "worktree", "add", "-b", branch, path,
       base_sha}, {cwd = checkout})
   if added == nil or not added.ok then
@@ -338,10 +385,13 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
       ("git worktree add failed: %s"):format(
         added ~= nil and added.stderr or "could not run git"))
   end
-  local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose)
-  if referr ~= "" then return gate.verdict_line("worktree", false, referr) end
+  local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose, base_sha)
+  if referr ~= "" then
+    return gate.verdict_line("worktree", false,
+      ("checkout created at %s; preparation failed: %s"):format(path, referr))
+  end
   return gate.verdict_line("worktree", true,
-    ("%s at %s on %s (bootstrapped %s)"):format(handle, path, branch,
+    ("%s at %s on %s (bootstrap: %s)"):format(handle, path, branch,
       bootstrapped))
 end
 

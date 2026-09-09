@@ -60,6 +60,8 @@ local function make_pr_checkout(name: string, pr: integer): string, string
   local checkout = fs.join(base, "checkout")
   git(base, {"clone", "-q", bare, checkout})
   git(checkout, {"checkout", "-q", "main"})
+  git(checkout, {"config", "user.name", "test"})
+  git(checkout, {"config", "user.email", "test@example.com"})
   git(checkout, {"fetch", "-q", "origin",
       ("refs/pull/%d/head:refs/pull/%d/head"):format(pr, pr)})
   return checkout, base
@@ -111,6 +113,8 @@ local function make_loud_pr_checkout(name: string, pr: integer): string
   local checkout = fs.join(base, "checkout")
   git(base, {"clone", "-q", bare, checkout})
   git(checkout, {"checkout", "-q", "main"})
+  git(checkout, {"config", "user.name", "test"})
+  git(checkout, {"config", "user.email", "test@example.com"})
   git(checkout, {"fetch", "-q", "origin",
       ("refs/pull/%d/head:refs/pull/%d/head"):format(pr, pr)})
   return checkout
