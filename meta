@@ -1,7 +1,7 @@
 title: coldbuild_test: verify it fires on the first --make ci after a field/arity widening, not a second run
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim_batch: 82c0e60b0bc2904a5fc84365549dd5210135af8e
+claim_batch: 4477887f3e602e8ecc7bcb28d5ad4ce5b6a62b4b
 handover_head: 5bfd5b8db33ddb56f69ef3771ad732385af7d009
 builders: build-GxC2_k4BZ-6141b568 5ae58dde67b0a52d533516e42e0f46f0
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
