@@ -32,6 +32,20 @@ local function gitboard_and_capture(...: string): integer, string
   return result, table.concat(lines, "\n")
 end
 
+local function test_bar_requires_an_existing_row_migration_plan()
+  local code, out = gitboard_and_capture("help", "bar")
+  assert(code == 0, out)
+  local flat = out:gsub("%s+", " ")
+  assert(flat:find(
+      "A `## Change` that alters the shape of a committed tracking file "
+      .. "(a TSV, a baseline `.tl`, or a `.cosmic-*` floor) states how its "
+      .. "existing rows reach the new shape: a first-run migration the "
+      .. "change performs, an exact one-off command, or a rewrite committed "
+      .. "with the change. The caller checks this before building; a missing "
+      .. "plan means stop and refine the spec, not invent a bridge.", 1, true) ~= nil,
+    "help bar must require an existing-row plan and caller refinement: " .. out)
+end
+
 local function test_every_topic_renders()
   local names = doctrine.names()
   assert(#names >= 5, "the system ships at least its five pages")

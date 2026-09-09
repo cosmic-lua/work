@@ -18,6 +18,21 @@ Add the verb.
 No contract changes.
 ]]
 
+-- Migration adequacy stays a caller judgment, not a filename/keyword grammar.
+local function test_tracking_file_mentions_do_not_add_a_machine_migration_grammar()
+  for _, change in ipairs({
+      "Change docs/design/cast-sites.tsv from 3 columns to 5.",
+      "Change docs/design/cast-sites.tsv from 3 columns to 5. "
+      .. "Migrate existing rows with a committed rewrite.",
+      "Correct one row in docs/design/cast-sites.tsv without changing its shape.",
+      "Add one entry to _work/example_baseline.tl.",
+    }) do
+    local gaps = spec.ready_gaps("## Change\n" .. change .. "\n")
+    assert(#gaps == 0, "syntax-only bar must preserve this body: " .. change
+      .. "; got " .. table.concat(gaps, ", "))
+  end
+end
+
 local function test_ready_gaps_complete()
   local gaps = spec.ready_gaps(READY_BODY)
   assert(#gaps == 0, "unexpected gaps: " .. table.concat(gaps, ", "))

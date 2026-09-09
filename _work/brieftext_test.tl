@@ -22,6 +22,16 @@ local BUILDER < const > = flat(brieftext.BUILDER)
 local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 
+local function test_builder_requires_a_committed_migration_and_caller_report()
+  assert(BUILDER:find(
+      "When `## Change` alters a committed tracking file's shape, follow "
+      .. "its migration plan and commit the migrated file with the change; "
+      .. "name the first-run or one-off bridge, if any, in your final report "
+      .. "for the caller's PR body. If the plan is absent, STOP and request "
+      .. "refinement before editing the tracking file.", 1, true) ~= nil,
+    "the builder must commit migrated rows, report the bridge, or stop for refinement")
+end
+
 local function test_step_one_measures_headroom_before_the_first_edit()
   assert(BUILDER:find(
       "Before the first edit, `wc -l` every file the Change names.",

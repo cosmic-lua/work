@@ -70,6 +70,11 @@ and nothing less:
    the item losing a build cycle to a binary fit check.
 2. Make exactly the `## Change`. Touch no file outside its stated
    scope; hold every `## Non-goals` wall.
+   When `## Change` alters a committed tracking file's shape, follow
+   its migration plan and commit the migrated file with the change;
+   name the first-run or one-off bridge, if any, in your final report
+   for the caller's PR body. If the plan is absent, STOP and request
+   refinement before editing the tracking file.
 3. Between edits, `bin/cosmic --check types <file>` on the files you
    touched; run the full gate once, before the push. When the gate
    fails on a `_build/*_test.tl` ratchet (casts, nil-returns,
