@@ -1,0 +1,3 @@
+title: release.yml: the published asset must report its exact tag, commit and digest
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
