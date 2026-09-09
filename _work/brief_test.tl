@@ -96,8 +96,8 @@ end
 
 local function stale_board_sentence(s: store.Store): string
   return "The checkout that holds the board worktree (`"
-    .. fs.absolute_path(s.root)
-    .. "/..`) is the orchestrator's and is stale by construction; never read, grep or build in it. Your worktree is the only tree."
+  .. fs.absolute_path(s.root)
+  .. "/..`) is the orchestrator's and is stale by construction; never read, grep or build in it. Your worktree is the only tree."
 end
 
 local function flat_text(text: string): string
