@@ -119,11 +119,8 @@ local function prepare_batch(requests: {Request}): BatchResult
       if got == nil then out.refused[req.id] = gerr else
         loaded[req.id] = got
         local current_batch = got.it.claim_batch or ""
-        local prior_fact, ferr = claimbatch.read_fact(req.root,
-          current_batch, req.id)
         local st, serr = state_for(req.root, current_batch, req.id)
-        if ferr ~= "" then out.refused[req.id] = ferr
-        elseif serr ~= "" then out.refused[req.id] = serr else
+        if serr ~= "" then out.refused[req.id] = serr else
           local operation, holder = "", req.caller
           local base, root = "", ""
           local acquired, renewed, expires = req.now, req.now,
@@ -137,8 +134,9 @@ local function prepare_batch(requests: {Request}): BatchResult
               :format(st.holder, st.expires_at)
             else
               operation = "acquire"
-              base = prior_fact ~= nil and prior_fact.product_base
-              or req.product_base
+              -- A new lease starts from the current target, even when a
+              -- historical claim records a different product base.
+              base = req.product_base
               if base == "" or #base ~= 40 or base:match("^[0-9a-f]+$") == nil then
                 out.refused[req.id] = "product base must be a full commit id"
               end
