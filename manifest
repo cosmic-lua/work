@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch c89564806c8b284edc235c4c1373dfce
+caller 7da0e2f13c7b49f4ae0c6e5d8b214739
+remote origin
+action drop
+created 1788965596
+publish-by 0
+reason normal release gate requires additive API prerequisite; child 3J5z88tS filed with proven exact split
+
+3J1B5l8QWSTTfWOobuKlmuuJdtZ 605037e10a9fa9f41487a3d6f2720eaaf152835f drop - 0887935e2e072b0fffe52508a6115003f22eacc6 0c3293901f4241d739c69b2f81fa2cae2528ec24 1788963425 1788963425 1788970625
