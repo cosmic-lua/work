@@ -2,3 +2,5 @@ title: briefs: the agent's worktree is the only tree it reads — the orchestrat
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work@main
 claim_batch: 4fb78bf7cb63410cd5c8e6fd55ebfebf8fe1ce8c
+handover_head: 3689a72cd51045413f2ca3971503656f94d9052d
+builders: 3f3f1c86687d19df1111e7af5f2c2d30
