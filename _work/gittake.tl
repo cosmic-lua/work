@@ -47,13 +47,15 @@ local function take_handover(s: store.Store, it: item.Item, session: string,
     return gate.verdict_line("take", false, "REFUSED: " .. verr)
   end
   local canonical = lineage.head
+  local accepted = it.verdict == "accept" and it.verdict_head == canonical
   if external_url ~= "" and not external_url:match("^https?://%S+$") then
     return gate.verdict_line("take", false,
       "REFUSED: --url must be one http(s) URL")
   end
   if (it.handover_head or "") == canonical
   and (external_url == "" or (it.external_url or "") == external_url)
-  and (it.verdict or "") ~= "request changes" then
+  and (it.verdict or "") ~= "request changes"
+  and (it.verdict ~= "accept" or accepted) then
     return gate.verdict_line("take", true,
       ("%s already hands over %s"):format(id8, canonical:sub(1, 12)))
   end
@@ -63,8 +65,12 @@ local function take_handover(s: store.Store, it: item.Item, session: string,
     return gate.verdict_line("take", false, "REFUSED: " .. ierr)
   end
   if external_url ~= "" then it.external_url = external_url end
-  it.pr, it.result, it.verdict_head, it.verdict_spec = 0, "", "", ""
-  if it.verdict == "request changes" then it.verdict = "" end
+  it.pr, it.result = 0, ""
+  -- Acceptance belongs to one commit. Prior verdicts remain in item history;
+  -- a different handover needs a fresh verdict, while URL-only edits do not.
+  if not accepted then
+    it.verdict, it.verdict_head, it.verdict_spec = "", "", ""
+  end
   local bad = item.problems(it)
   if #bad > 0 then
     return gate.verdict_line("take", false, "REFUSED: " .. table.concat(bad, "; "))

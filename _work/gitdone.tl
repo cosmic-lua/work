@@ -85,6 +85,10 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   local handed = it.handover_head or ""
   if reason == "completed" and (it.verdict or "") == "accept"
   and handed ~= "" then
+    if (it.verdict_head or "") ~= handed then
+      return gate.verdict_line("done", false,
+        "REFUSED: acceptance must name the current handover commit")
+    end
     if (landed or "") == "" then
       if not force then
         return gate.verdict_line("done", false,
