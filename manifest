@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 220df56750f40ac964ecfb63b2a6f9a1
+caller build-WyFa_GL3c-6141b568
+remote origin
+action migrate
+created 1788920183
+publish-by 0
+reason format-3 claim cutover
+
+3IqZYVwIWyLfPsGKg62WyFaGL3c 6d48d6712644a73e9ddeaa1b5d16ec7548e9a63e drop - - 6d48d6712644a73e9ddeaa1b5d16ec7548e9a63e 1788807181 1788807181 1788814381
