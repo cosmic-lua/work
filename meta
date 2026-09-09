@@ -1,7 +1,7 @@
 title: cosmic.ast.match: a local/global declaration's parser-stamped typeid isn't excluded from structural comparison, so any pattern matching a type-annotated decl silently never matches
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim_batch: e42d5e715532d1343a54ecb5a7a8b56c24be05d3
+claim_batch: 3dd5ae6c210b38363ff3eab43a5e1bafd521fe21
 handover_head: 2daadbbb8d00254f161260b32d2afdb35b211654
 verdict: request changes
 verdict_head: 2daadbbb8d00254f161260b32d2afdb35b211654
