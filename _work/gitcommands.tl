@@ -184,7 +184,9 @@ local CSPEC: flags.CommandSpec = {
         flags = {dir_flag(),
           {long = "out", arg = "FILE",
             help = "write the filled body to FILE instead of stdout, "
-            .. "immune to a channel that decodes escapes"}}}},
+            .. "immune to a channel that decodes escapes"},
+          {long = "tree", arg = "DIR",
+            help = "measure Teal paths named by ## Change beneath DIR"}}}},
     {name = "worktree", summary = "create ID's builder checkout: branch, "
       .. "worktree, bootstrap, all in one command",
       spec = {usage = "ID [options]",

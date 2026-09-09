@@ -238,6 +238,77 @@ local function product_root(): string
   return ""
 end
 
+--- Collect the Teal paths named by the item's `## Change` section, once
+--- each and in first-seen order.
+local function change_paths(spec: string): {string}
+  local paths: {string} = {}
+  local seen: {string: boolean} = {}
+  local in_change = false
+  for line in (spec .. "\n"):gmatch("([^\n]*)\n") do
+    if line:match("^##%s+Change%s*$") ~= nil then
+      in_change = true
+    elseif in_change and line:match("^##%s+") ~= nil then
+      break
+    elseif in_change then
+      for path in line:gmatch("[A-Za-z0-9_./-]+%.tl") do
+        if not seen[path] then
+          seen[path] = true
+          paths[#paths + 1] = path
+        end
+      end
+    end
+  end
+  return paths
+end
+
+--- Measure the Change paths from a caller-provided product checkout.
+--- @param spec string The item's spec sidecar
+--- @param tree string The checkout to measure beneath
+--- @return string | nil The appended section, or nil on failure
+--- @return string The failure detail, empty on success
+local function measure_change(spec: string, tree: string): string | nil, string
+  local rev, rerr = child.run({"git", "rev-parse", "--short", "HEAD"},
+    {cwd = tree})
+  if rev == nil then
+    return nil, rerr or "could not resolve the tree's HEAD"
+  end
+  if not rev.ok then
+    return nil, (rev.stderr or "could not resolve the tree's HEAD")
+  end
+  local head = rev.stdout:match("%S+") or ""
+  if head == "" then
+    return nil, "the tree's HEAD was empty"
+  end
+  local rows: {string} = {}
+  for _, path in ipairs(change_paths(spec)) do
+    local full = fs.join(tree, path)
+    if not fs.is_file(full) then
+      rows[#rows + 1] = path .. "  absent"
+    else
+      local count, werr = child.run({"wc", "-l", path}, {cwd = tree})
+      if count == nil then
+        return nil, werr or ("could not count " .. path)
+      end
+      if not count.ok then
+        return nil, (count.stderr or ("could not count " .. path))
+      end
+      local n = math.tointeger(tonumber(count.stdout:match("%d+")))
+      if n == nil then
+        return nil, "wc returned no line count for " .. path
+      end
+      local marker = ""
+      if n <= 500 and 500 - n <= 40 then
+        marker = (" (%d under the 500 cap)"):format(500 - n)
+      elseif n > 500 then
+        marker = (" (%d over the 500 cap)"):format(n - 500)
+      end
+      rows[#rows + 1] = ("%s  %d lines%s"):format(path, n, marker)
+    end
+  end
+  return ("## Measured at brief time (%s, %s)\n%s"):format(tree, head,
+    table.concat(rows, "\n")), ""
+end
+
 --- brief: print one role's prompt for an item, filled from the board.
 --- The body prints first and the verdict line closes it (the `show`
 --- shape), naming the placeholders left for the caller. `out`, when
@@ -252,12 +323,17 @@ end
 --- @param out string | nil Write the body here instead of stdout
 --- @return integer Exit code
 local function cmd_brief(s: store.Store, kind: string, id: string,
-    out?: string): integer
+    out?: string, tree?: string): integer
   out = out or ""
+  tree = tree or ""
   local template = KINDS[kind or ""]
   if template == nil then
     return gate.verdict_line("brief", false,
       ("unknown brief '%s' — one of: %s"):format(tostring(kind), KIND_LIST))
+  end
+  if tree ~= "" and not fs.is_dir(tree) then
+    return gate.verdict_line("brief", false,
+      ("--tree '%s' must be a directory"):format(tree))
   end
   local it, lerr = store.load(s, id)
   if it == nil then
@@ -344,7 +420,18 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   if head_sha ~= "" then
     values["HEAD_SHA"] = head_sha
   end
-  local body = fill(template, values) .. "\n\n" .. brieftext_friction.ASK
+  local body = fill(template, values)
+  local measured = false
+  if tree ~= "" and (kind == "builder" or kind == "review") then
+    local section, merr = measure_change(spec, tree)
+    if section == nil then
+      return gate.verdict_line("brief", false,
+        ("could not measure --tree '%s': %s"):format(tree, merr))
+    end
+    body = body .. "\n\n" .. section
+    measured = true
+  end
+  body = body .. "\n\n" .. brieftext_friction.ASK
   local left = survivors(template, values)
   if out ~= "" then
     local wok, werr = fs.write(out, body)
@@ -357,6 +444,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       tail_note = ("fill %s, then read it whole, it is your brief verbatim"):format(
         table.concat(left, ", "))
     end
+    if measured then
+      tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
+    end
     return gate.verdict_line("brief",
       true, ("%s brief for %s written to %s, claim it as %s — %s"):format(
         kind, tail.handle(it.id), out, label, tail_note))
@@ -367,6 +457,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     tail_note = ("fill %s, then paste the body verbatim"):format(
       table.concat(left, ", "))
   end
+  if measured then
+    tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
+  end
   return gate.verdict_line("brief",
     true, ("%s brief for %s, claim it as %s — %s"):format(
       kind, tail.handle(it.id), label, tail_note))
@@ -376,7 +469,8 @@ local record brief
   fill: function(text: string, values: {string: string}): string
   unfilled: function(text: string): {string}
   mint_label: function(kind: string, handle: string): string
-  cmd_brief: function(s: store.Store, kind: string, id: string, out?: string): integer
+  cmd_brief: function(s: store.Store, kind: string, id: string, out?: string,
+    tree?: string): integer
 end
 
 local M: brief = {
