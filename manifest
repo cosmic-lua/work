@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch b15e4062f4d560e0fd2216b15d4e9b5d
+caller 4c72f7b6e98c4b0aa4be1c039cc19d84
+remote origin
+action drop
+created 1788962460
+publish-by 0
+reason mandatory cold proof exposed blocking explicit-manifest generator boundary; research child 3J5smkm8 filed
+
+3J1B5l8QWSTTfWOobuKlmuuJdtZ cd6c95ef0fe266ada919f910f3fb093c4217cfc9 drop - 0887935e2e072b0fffe52508a6115003f22eacc6 950b466048ebb4887e00177a5757f7ca4756b7ff 1788961368 1788961368 1788968568
