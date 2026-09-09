@@ -59,6 +59,8 @@ local function make_checkout(name: string, kind: string): string, string
   local checkout = fs.join(base, "checkout")
   git(base, {"clone", "-q", bare, checkout})
   git(checkout, {"checkout", "-q", "main"})
+  git(checkout, {"config", "user.name", "test"})
+  git(checkout, {"config", "user.email", "test@example.com"})
   return checkout, base
 end
 
@@ -89,56 +91,6 @@ local function make_loud_checkout(name: string): string
   git(checkout, {"commit", "-q", "-m", "loud stub"})
   git(checkout, {"push", "-q", "origin", "main"})
   return checkout
-end
-
---- A sibling pair beside one fixture base: `sibling` is a real
---- checkout cloned from a bare repo placed at a path ENDING in
---- `github.com/<slug>.git` — a real, fetchable local path whose
---- string still matches `resolve_checkout`'s own `github%.com[:/]`
---- parse verbatim once cloned, with no URL-rewrite trick needed —
---- `invoking` carries only `bin/gitboard`, no git repo of its own, the
---- anchor `invoking_checkout` finds via `GITBOARD_DIR`.
---- @param name string A unique fixture name
---- @param slug string The `owner/name` `sibling`'s origin should read as
---- @return string The sibling checkout's absolute path
---- @return string The invoking (product-root) directory's absolute path
-local function _make_sibling_checkout(name: string, slug: string): string, string
-  local base = fs.join(tmpdir, "wt-sib-" .. name)
-  assert(fs.remove_all(base))
-  assert(fs.make_dirs(base))
-  local bare = fs.join(base, "remotes/github.com", slug .. ".git")
-  assert(fs.make_dirs(fs.dirname(bare)))
-  git(base, {"init", "-q", "--bare", bare})
-  local seed = fs.join(base, "seed")
-  git(base, {"clone", "-q", bare, seed})
-  git(seed, {"checkout", "-q", "-b", "main"})
-  assert(fs.write(fs.join(seed, "README"), "seed\n"))
-  git(seed, {"add", "-A"})
-  git(seed, {"commit", "-q", "-m", "seed"})
-  git(seed, {"push", "-q", "origin", "main"})
-  local sibling = fs.join(base, "sibling-checkout")
-  git(base, {"clone", "-q", bare, sibling})
-  git(sibling, {"checkout", "-q", "main"})
-  local invoking = fs.join(base, "product-root")
-  assert(fs.make_dirs(fs.join(invoking, "bin")))
-  assert(fs.write(fs.join(invoking, "bin/gitboard"), ""))
-  return sibling, invoking
-end
-
---- `f`, with `GITBOARD_DIR` pointed at `<invoking>/o/board` for its
---- duration — `invoking_checkout`'s own dirname-dirname guess — then
---- restored, whatever it was before.
---- @param invoking string The fixture's own product-root directory
---- @param f function(): boolean The test body; returns true when done
-local function _with_invoking_checkout(invoking: string, f: function(): boolean)
-  local prior = env.get("GITBOARD_DIR")
-  assert(env.set("GITBOARD_DIR", fs.join(invoking, "o/board")))
-  local ok, err = pcall(f)
-  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
-  else assert(env.set("GITBOARD_DIR", prior)) end
-  if not ok then
-    error(err, 0)
-  end
 end
 
 --- Give `id` a real locally-confirmed claim bridge for worktree tests.
@@ -266,7 +218,7 @@ local function test_worktree_bootstrap_stub_skips_execution()
     error(err, 0)
   end
   local out = table.concat(lines, "\n")
-  assert(out:find("bootstrapped cosmic", 1, true) ~= nil,
+  assert(out:find("bootstrap: cosmic (skipped: GITBOARD_WORKTREE_BOOTSTRAP=0)", 1, true) ~= nil,
     "the verdict still names the detected tree kind: " .. out)
   assert(not fs.is_file(fs.join(base, "bootstrap_ran")),
     "the stub never actually ran bin/cosmic")
@@ -398,6 +350,8 @@ local function test_worktree_defaults_cosmopolitan_repo_to_master()
   local checkout = fs.join(base, "checkout")
   git(base, {"clone", "-q", bare, checkout})
   git(checkout, {"checkout", "-q", "master"})
+  git(checkout, {"config", "user.name", "test"})
+  git(checkout, {"config", "user.email", "test@example.com"})
   local s = fixture.init_state_repo("wt-cosmobase")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/cosmopolitan-lua-fork", nil) == 0)
