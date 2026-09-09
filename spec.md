@@ -201,3 +201,149 @@ No launcher rewrite, package.loaded reset/reload, ambient search-path
 export, fetch change, generic manifest behavior change, normal cache
 redesign, new ADR, or claim that the unchanged old pin acquired new
 startup behavior. Pin activation is a separately authorized prerequisite.
+
+---
+
+# lmuu_JdtZ replacement/addendum: command-local dispatcher dependencies
+
+Apply this to the revised lmuu specification produced by fnOH_hQmv. The
+top-level effective-make selection, root-aware uncached source loader,
+compiler context, pinned boundary, ordinary-script rules, and release/pin
+dependency remain in force. This addendum closes the demonstrated child
+dispatcher gap; it does not authorize a different manifest searcher.
+
+## Corrected premise
+
+A generated manifest carries the generator's transitive imports, NOT the
+dispatcher's imports. `_make.generate.run_generator` calls
+`_make.closure.argv`, then executes `{cosmic, "--modules", manifest, gen,
+dest}`. The manifest root is the already-discovered absolute `proj.root`.
+For `_types/tlast_gen.tl` the current manifest has 17 `mod` rows; neither
+`_cli.main_handlers` nor `_cli.lint` is one of them. Before a generator
+script executes, eagerly loading main_handlers therefore uses manifest
+layer 3 when its built Lua is absent. That unchanged strict cached fallback
+type-checks the widened handler against the pin's old lint signature.
+
+Early top-level make installation does not alter this separate process.
+Installing a source-only searcher on top of every explicit manifest would
+change the closure contract and is NOT the fix chosen here.
+
+## Smallest implementation extension
+
+1. Make `_cli.main_handlers` command-local in `cmd/cosmic/main.tl`.
+   Remove the unconditional local require. Each selected branch obtains
+   the existing handler only when it needs that operation, using ordinary
+   `require("_cli.main_handlers")` (normal package.loaded memoization).
+   Prefer explicit local/inline requires, not a dynamic proxy or new
+   dispatch framework. Top-level make still installs its searcher BEFORE
+   its selected handler is loaded. Keep existing option/error precedence.
+
+2. Do not load main_handlers merely to ask whether zero file commands
+   conflict. Guard the existing `refuse_combined_file_commands` call with
+   `#opts.format > 0 or #opts.fix > 0 or opts.check_kind ~= nil`.
+   For a selected file command, call the existing refusal function with
+   the existing arguments; do not duplicate its diagnostics or weaken
+   conflicting-command refusal. Zero file commands always returned false.
+
+3. Extract the existing `load_script_file` implementation into a small
+   `_cli/script.tl` module exporting `load_script_file(path)` with exactly
+   its current signature and behavior. The dispatcher script branch calls
+   this helper directly, not main_handlers. Keep
+   `_cli.main_handlers.load_script_file` as a forwarding compatibility
+   entry point so existing callers/tests retain the same API. This helper
+   must not import main_handlers, `_make`, lint, or any command registry.
+   Preserve lax `teal.compile_cached(path)` for the ENTRY script, Lua
+   loadfile behavior, chunk names, shebang handling, returned errors, and
+   the existing package.path append. The make source searcher's STRICT,
+   uncached module compilation is a different contract and stays so.
+
+4. `_cli.run` is needed only in the script branch; require it there.
+   Leave require-hints behavior intact, including its environment opt-out.
+   Do not change first-run welcome/TTY behavior. Handler access on genuine
+   welcome/version/format/compile/etc. branches remains legitimate.
+
+5. Do not change `_make.closure`, `_make.generate`, the manifest grammar,
+   `install_manifest`, `install_argv_manifest`, closure or build-directory
+   precedence, ordinary source-cache semantics, or user `--modules`.
+   Do not add a generator flag, environment marker, root inference, or
+   package.loaded reset. The child already has its root in the existing
+   explicit manifest; this solution does not need another root channel.
+
+## Exact load boundary and remaining limits
+
+Top-level make retains the original revised spec's pinned parser/root/
+searcher/compiler prefix. After installation, selected make handlers load
+from root source with fresh root-aware type environments.
+
+Explicit-manifest children retain the existing EARLY manifest install.
+Their parser/startup/require-hints imports still use that manifest; script
+execution additionally needs `_cli.script` and `_cli.run`. The new script
+helper depends only on the existing cosmic.teal script-loader API and Lua
+load/loadfile facilities. It is not a back door to a command registry.
+For the ordinary generator script path, `_cli.main_handlers` must remain
+absent from package.loaded unless the generator itself requires it.
+
+These are not newly pinned copies: the child manifest continues to choose
+its built closure, built directory, strict source fallback, then binary.
+The change removes an UNUSED dispatcher dependency; it does not make all
+manifest-source sibling changes generally safe. A generator's own explicit
+or computed require still follows the old manifest rules. Do not describe
+this as a generic manifest source/cache fix in AGENTS.md or the ratchet.
+
+The existing conservative whole-tree pinned-boundary overlay remains,
+with comments accurately separating top-level make, the child prelude,
+explicit manifest resolution, and actual executable cold proofs. The new
+helper's API must remain satisfiable by the pinned compiler boundary; do
+not widen cosmic.teal to implement this extraction.
+
+## Required additional proofs
+
+1. FIRST, run the full-source cold #1775 fixture against a candidate
+   carrying this dispatcher change and the prior make-startup capability.
+   Widen both lint declaration/interface AND main_handlers' caller.
+   Start with only verified `o/3p` AND `o/bootstrap` artifacts; copy no
+   compiled `o/_cli`, generated declarations, previous graph, or code cache.
+   `o/bootstrap/cosmic` must be present because the cold ratchet declares
+   it as a read input. Assert completion of generation 1, not merely the
+   generator or a later warm convergence. The original verified pin and
+   make-only candidate without this extension are negative controls.
+
+2. In the failing fixture's existing generator manifest, an explicit
+   `-e` that only prints a marker must reach entry. An explicit generator
+   script must run without importing main_handlers. In separate fresh
+   processes, restore eager handler loading or route script loading back
+   through main_handlers: the relevant control must fail with the old
+   handler's given-2/expects-1 diagnostic. Restoring only a later make
+   install must NOT fix this child control.
+
+3. Prove unchanged user-manifest resolution separately from fewer imports:
+   an explicit `require("_cli.main_handlers")` under that same root-only
+   source fallback must still produce the same arity error; a named built
+   closure entry must still win; an absent named built entry must still
+   fail loudly; source errors must not fall back. Ordinary script requires
+   in that root remain `/zip`, including `script --make build` and
+   `-- script --make build`. Keep the existing `--modules` spelling/scanner
+   tests, missing-manifest diagnostic, and conflicting-file-command tests.
+
+4. Protect the dependency boundary with a fresh process assertion that
+   non-handler commands and generator scripts do not load main_handlers.
+   Check helper file behavior for `.lua`, `.tl`, shebangs, missing files,
+   syntax/type-load errors, traceback trimming, and compatibility forwarding.
+   Do not achieve the assertion by clearing package.loaded in production.
+
+5. Run the original revised spec's mutations and scoped/full gates, plus
+   supported Linux cold-build/repro lanes. Research prototypes are not
+   production typecheck, coverage, Linux, or release evidence.
+
+## Release/pin staging
+
+Both dispatcher capability pieces must ship in the same capability-bearing
+release used for activation. Releasing only the make-only candidate leaves
+the reproduced child failure intact. The production capability commit must
+build under the current verified pin; the old-pin boundary overlay may
+still reject the new install_make_root call until authorized pin activation.
+Do not silently weaken that guard, substitute a local experimental runtime
+for the old pin, or claim activation before the real release URL and SHA-256
+are installed. After release/pin activation, repeat the cold fixture through
+the ordinary `bin/cosmic` wrapper and all required Linux lanes.
+
