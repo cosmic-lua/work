@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch e44ee8952fc9c0bfb815158409b19f67
+caller build-GxC2_k4BZ-6141b568
+remote origin
+action migrate
+created 1788920183
+publish-by 0
+reason format-3 claim cutover
+
+3J1B5Tqg78E70nqDQJkGxC2k4BZ d814ea16a81e337e664a47e90ea2f95b03c6be7b drop - - d814ea16a81e337e664a47e90ea2f95b03c6be7b 1788818633 1788818633 1788825833
