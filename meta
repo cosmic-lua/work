@@ -6,4 +6,5 @@ pr: 87
 verdict: accept
 verdict_head: 3e254561baf339600c2190e3cffea3d1dc293079
 verdict_spec: 397928ee3dd124867336abaebff058a01a06f7e1
+resolution: completed
 builders: build-YLxi_6fmt-6141b568
