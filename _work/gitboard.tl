@@ -17,7 +17,6 @@ local claimcli = require("_work.gitclaim_cli")
 local gitread = require("_work.gitread")
 local gitdone = require("_work.gitdone")
 local draftcli = require("_work.gitdraft_cli")
-local migratecli = require("_work.gitmigrate_cli")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local transport = require("_work.gittransport")
@@ -204,17 +203,6 @@ local function main(...: string): integer
     return gate.verdict_line("init", true,
       ("state repository ready at %s (%s%s)"):format(dir, refs.board_mode(dir),
         refs.board_mode(dir) == "remote" and ", " .. refs.board_remote(dir) or ""))
-  end
-  if d.command == "migrate" then
-    local dir = d.parsed.values["dir"] or "."
-    local explicit = d.parsed.values["remote"] or ""
-    if explicit ~= "" then
-      local selected, selerr = refs.use_remote(dir, explicit)
-      if not selected then return gate.verdict_line("migrate", false, selerr) end
-    end
-    return migratecli.cmd_migrate(dir,
-      explicit ~= "" and explicit or refs.board_remote(dir),
-      d.parsed.switches["execute"] or false)
   end
   local dir = d.parsed.values["dir"] or "."
   local explicit_remote = d.parsed.values["remote"] or ""

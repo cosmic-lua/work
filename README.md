@@ -94,10 +94,11 @@ not know, or missing the marker while it already carries items, is
 refused rather than silently misread; `gitboard init` writes the
 marker on a board that has neither yet. Layout 1 (the old
 `beats`/`blocked_by`/`held`-carrying shape) has no migration path from
-here. Layout 2 upgrades to layout 3 with `gitboard migrate`: only the
-leased `board/format` ref moves, so existing item commits and histories
-are not rewritten. The local SQLite cache is disposable and rebuilt after
-the new marker is confirmed.
+here. The live board now uses layout 4. The one-time format-3 to
+format-4 migration has been retired; older layouts remain refused.
+Migration-created claim batches remain part of the durable format-4
+history and are still read normally. The local SQLite cache is disposable
+and can be rebuilt from the current refs.
 Nothing here is a file in the working tree: a read is
 `git for-each-ref`/`cat-file --batch` against
 the ref layout, and a write is one `git fast-import` stream

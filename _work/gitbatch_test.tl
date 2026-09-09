@@ -93,8 +93,9 @@ end
 -- never fills either pipe on its own, and passes even with chunking
 -- disabled. Run in a bounded, throwaway subprocess: a regression here
 -- is exactly the shape that hangs indefinitely rather than answering
--- wrong, so `timeout` turns that into a failed assertion within
--- seconds instead of a stuck suite.
+-- wrong, so a timed wait turns that into a failed assertion within
+-- seconds instead of a stuck suite. The close-scoped handle kills and
+-- reaps the subprocess even when that assertion fails.
 local function test_batch_session_answers_a_pipe_saturating_round()
   local root = fresh_repo("pipe-saturating")
   local payload = ("y"):rep(2000)
@@ -114,7 +115,9 @@ local function test_batch_session_answers_a_pipe_saturating_round()
     assert(sess:close())
     os.exit(0)
   ]]):format(root, n, sha, sha, payload)
-  local r = check.must(child.run({"timeout", "-k", "5", "20", exe, "-e", script}))
+  local h < close > = check.must(child.start({exe, "-e", script}))
+  local r, err = h:wait(20000)
+  assert(r ~= nil, "a pipe-saturating round must answer within 20s: " .. tostring(err))
   assert(r.ok, "a pipe-saturating round must answer within 20s, not deadlock: code="
     .. tostring(r.code) .. " stderr=" .. tostring(r.stderr))
 end

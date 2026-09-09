@@ -179,19 +179,16 @@ local function test_help_exposes_only_commit_and_caller_owned_remote_contracts()
 end
 test_help_exposes_only_commit_and_caller_owned_remote_contracts()
 
-local function test_init_records_explicit_mode_and_migrate_dispatches_pre_open()
+local function test_init_records_explicit_mode()
   local root = fs.join(fixture.tmpdir, "verbs-cli-explicit-init")
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
   local code, out = capture("init", "--local", "--dir", root)
   assert(code == 0 and refs.board_mode(root) == "local", out)
-  local migrate_code, migrate_out = capture("migrate", "--dir", root)
-  assert(migrate_code == 0
-    and migrate_out:find("already current", 1, true), migrate_out)
   local refused = capture("init", "--local", "--remote", "--dir", root)
   assert(refused ~= 0, "init must reject contradictory board modes")
 end
-test_init_records_explicit_mode_and_migrate_dispatches_pre_open()
+test_init_records_explicit_mode()
 
 local function test_refspec_setup_uses_the_configured_remote_name()
   local base = fs.join(fixture.tmpdir, "configured-refspec")
