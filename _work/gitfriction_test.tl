@@ -11,6 +11,8 @@ local store = require("_work.store")
 local function test_friction_item_accepts_the_spec_the_caller_supplies()
   local s = fixture.init_state_repo("friction-ordinary-item")
   local before = check.must(store.list(s))
+  local before_ids: {string: boolean} = {}
+  for _, it in ipairs(before) do before_ids[it.id] = true end
   local body = [[
 ## Workflow
 The prepared transaction took more calls than expected.
@@ -22,7 +24,12 @@ The record type made the intended boundary unclear.
     "a friction item needs no claim-derived roll call")
   local after = check.must(store.list(s))
   assert(#after == #before + 1)
-  local filed = after[#after]
+  -- Same-second KSUIDs sort by random payload, not filing order.
+  local filed_id: string = nil
+  for _, it in ipairs(after) do
+    if not before_ids[it.id] then filed_id = it.id end
+  end
+  local filed = check.must(store.load(s, check.must(filed_id)))
   assert(filed.title == "friction: offline claim pass")
   local saved = store.read_spec(s, filed.id)
   assert(saved:find("## Workflow", 1, true)
