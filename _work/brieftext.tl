@@ -1,6 +1,6 @@
 --- The brief templates `brief` emits: the prompt handed verbatim to a
 --- builder, research, refiner, or decomposer subagent. The two
---- reviewer templates (of a PR, or of a research handover) live in
+--- reviewer templates (full and mechanical exact-head review) live in
 --- `_work.brieftext_review` instead — split out so this module keeps
 --- headroom to grow. Templates live in the tool, not in prose,
 --- because a hand-written brief drifts — one once dropped the Board:

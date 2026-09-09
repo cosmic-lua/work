@@ -336,14 +336,14 @@ record what was learned, clear the claim. A reject that reopens a
 decision files the question as a child of the item, then drops the
 claim: the item is a container until the child resolves, and the
 child's `done` frees it with no further verb (`help order`).
-Rejection is cheap by design; wrong work merged is expensive. A
-research item takes the same verdicts, re-running its
-recorded checks in place of a diff — checks its spec carries because
-whoever claimed it (an orchestrator applying a `brief research ID`
-agent's recommendation, or a solo session) already wrote them there.
-Board-only research should be represented by the commit that applies its
-recommendation. Verdicts still name only that commit; prose and provider
-identifiers are never durable evidence.
+Rejection is cheap by design; wrong work merged is expensive.
+Research agents return recommendations; the caller applies them in the product
+repository and hands over its exact commit through `take ID --head SHA`.
+That commit must descend from the claim's product base. A result digest or
+unrelated board item-ref commit is not a substitute. If no applying product
+commit exists, no review brief is available: stop for caller preparation.
+Research uses ordinary exact-head review; no result-only review template
+or additional agent board-read instructions are emitted.
 
 When a container's last child ends, verify the container's stated
 outcome actually holds — run its observable test, not the
