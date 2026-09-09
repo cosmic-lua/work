@@ -2,5 +2,7 @@ title: cosmic.searcher: install a tree-first searcher for --make's own bootstrap
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
 claim_batch: 1827463d5428a70c8788250e7016594fa1ff6231
-builders: build-lmuu_JdtZ-6141b568
+handover_head: b597161a574b0eb5fec5dd00475dd79707ff6037
+external_url: https://github.com/cosmic-lua/cosmic/pull/1808
+builders: build-lmuu_JdtZ-6141b568 f18c34a92d6b47e58103ac7fb295d064
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
