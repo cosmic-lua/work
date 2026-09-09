@@ -165,6 +165,44 @@ local function test_bootstrap_failures_propagate_in_both_modes_and_roles()
   end
 end
 
+local function test_signal_termination_reports_failure_in_both_modes_and_roles()
+  for _, review in ipairs({false, true}) do
+    for _, verbose in ipairs({false, true}) do
+      isolated(function()
+          local c = fresh("signal-" .. tostring(review) .. tostring(verbose), "cosmic",
+            "echo signal-out\necho signal-err >&2\nkill -TERM $$\n")
+          local board = check.must(store.git_ok(c.s, {"show-ref"})).stdout
+          local original = child.run
+          local seen = false
+          child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
+            if argv[1] == "bin/cosmic" then
+              seen = true
+              assert(opts ~= nil and opts.cwd == c.path)
+              assert((opts.stdout == "inherit") == verbose)
+              assert((opts.stderr == "inherit") == verbose)
+            end
+            return original(argv, opts)
+          end
+          local code, out = capture(c, review, verbose, {"refs/heads/supplied"})
+          assert(seen, "bootstrap was attempted")
+          assert_created_failure(c, code, out)
+          assert(out:find("bin/cosmic --make build failed (signal 15)", 1, true) ~= nil, out)
+          if not verbose then
+            assert(out:find("signal-out", 1, true) ~= nil and out:find("signal-err", 1, true) ~= nil, out)
+          end
+          assert(fs.is_dir(c.path), "signal-terminated checkout is retained")
+          assert(git_output(c.path, {"rev-parse", "HEAD"}) == (review and c.head or c.base))
+          assert(git_output(c.root, {"rev-parse", "refs/heads/" .. c.branch}) ~= "")
+          local ref = check.must(child.run({"git", "show-ref", "--verify", "--quiet",
+                "refs/spike/supplied"}, {cwd = c.root}))
+          assert(not ref.ok, "signal termination must not copy prepared refs")
+          assert(check.must(store.git_ok(c.s, {"show-ref"})).stdout == board)
+          assert(store.close(c.s))
+        end)
+    end
+  end
+end
+
 local function test_success_preserves_exact_heads_and_inherited_identity()
   for _, review in ipairs({false, true}) do
     isolated(function()

@@ -164,6 +164,9 @@ local function run_step(path: string, argv: {string}, verbose: boolean): boolean
   if r == nil then return false, command .. ": " .. err end
   if not r.ok then
     if not verbose then print(r.stdout .. r.stderr) end
+    if r.signal ~= nil then
+      return false, ("%s failed (signal %d)"):format(command, r.signal)
+    end
     return false, ("%s failed (exit %d)"):format(command, r.code)
   end
   if not verbose then
