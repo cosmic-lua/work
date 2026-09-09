@@ -1,3 +1,4 @@
 title: briefs: the agent's worktree is the only tree it reads — the orchestrator's checkout is stale by construction
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work@main
+claim_batch: 4fb78bf7cb63410cd5c8e6fd55ebfebf8fe1ce8c
