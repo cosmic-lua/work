@@ -6,5 +6,6 @@ pr: 88
 verdict: accept
 verdict_head: 2766df0e20849deccae5b307fd1233093dfa00f1
 verdict_spec: 2d0c6be96209df3b6a8e6c24ee48b139604743f5
+resolution: completed
 builders: build-WyFa_GL3c-6141b568
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
