@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 81efc82dc42c6df16b665262fb9a35f6
+caller 3c078053380f6c09e444aa1a07336808
+remote origin
+action drop
+created 1788927897
+publish-by 0
+reason github-merge-group-check-failed
+
+3J4hj6YKVuLqqZey2xtChdI9LOi f0e57fce98b1f81908ccc697bdc197553c1f6d72 drop - 3423bac684a241a19b94416e525729074cccdb29 4675a81b128aad6ba2eb3a1e13ffa9a3e24691ed 1788927029 1788927029 1788934229
