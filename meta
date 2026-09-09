@@ -1,7 +1,7 @@
 title: gitboard brief: the fill-placeholders verdict line names only the template's own placeholders, never one quoted in a spec
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work@main
-claim: build-WyFa_GL3c-6141b568
+claim_batch: 0dac90443f01a616783e00581ff3873962f2f184
 pr: 88
 verdict: accept
 verdict_head: 2766df0e20849deccae5b307fd1233093dfa00f1
