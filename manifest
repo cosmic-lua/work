@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 18182d7cf25f3feb71165b27adce89af
+caller gitboard-migrate
+remote origin
+action migrate
+created 1788920183
+publish-by 0
+reason format-3 claim cutover
+
+3J1wJxKwY6XQcXU8ZKc4F9ptvGT 1eba650fdc304f970acd60f359373f48fe596988 drop - 810ad912639000eae52cf50752f56f9d272d88dd 665ceebc4bddc2a880db8f0916959d41182f5ed6 1788843027 1788843222 1788850422
