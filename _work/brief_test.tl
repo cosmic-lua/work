@@ -94,6 +94,16 @@ local function brief_and_capture(s: store.Store, kind: string,
   return result, table.concat(lines, "\n")
 end
 
+local function stale_board_sentence(s: store.Store): string
+  return "The checkout that holds the board worktree (`"
+    .. fs.absolute_path(s.root)
+    .. "/..`) is the orchestrator's and is stale by construction; never read, grep or build in it. Your worktree is the only tree."
+end
+
+local function flat_text(text: string): string
+  return (text:gsub("%s+", " "))
+end
+
 local function test_tree_measurement_appends_to_builder_and_review()
   local s = init_state_repo("brief-tree")
   local _, leaf = root_with_leaf(s)
@@ -157,6 +167,10 @@ local function test_builder_brief_carries_the_item_and_names_the_rest()
   local code, out = brief_and_capture(s, "builder", leaf)
   assert(code == 0, "a specced item earns its builder brief")
   assert(out:find(leaf, 1, true) ~= nil, "the full id rides the brief")
+  assert(flat_text(out):find(flat_text(stale_board_sentence(s)), 1, true) ~= nil,
+    "the builder names the stale board checkout and fills its path")
+  assert(out:find("<BOARD_DIR>", 1, true) == nil,
+    "the builder fills the board directory placeholder")
   assert(out:find(tail.handle(leaf), 1, true) ~= nil, "so does the handle")
   assert(out:find("Do exactly this.", 1, true) ~= nil,
     "the spec sidecar rides verbatim")
@@ -203,6 +217,10 @@ local function test_review_brief_needs_the_handover()
   unpin_session()
   assert(code == 0, "the recorded commit unlocks the review brief")
   assert(out:find(HEAD, 1, true) ~= nil, "the exact commit is filled")
+  assert(flat_text(out):find(flat_text(stale_board_sentence(s)), 1, true) ~= nil,
+    "the review names the stale board checkout and fills its path")
+  assert(out:find("<BOARD_DIR>", 1, true) == nil,
+    "the review fills the board directory placeholder")
   assert(out:find("https://example.test/change/42", 1, true) ~= nil,
     "the optional navigation URL is filled")
   assert(out:find("--pr", 1, true) == nil, "no provider identifier is evidence")

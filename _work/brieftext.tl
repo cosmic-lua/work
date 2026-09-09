@@ -30,6 +30,9 @@ fetch or build before your first edit; `--check types` the files you
 touch, run one test file after each edit, `--make build` only after
 changing a signature other files call, and the full gate once before
 the push.
+The checkout that holds the board worktree (`<BOARD_DIR>/..`) is the
+orchestrator's and is stale by construction; never read, grep or build
+in it. Your worktree is the only tree.
 
 ## The item
 
