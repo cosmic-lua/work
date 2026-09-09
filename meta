@@ -1,6 +1,6 @@
 title: cosmic.searcher: install a tree-first searcher for --make's own bootstrap, closing the Path B cold-build exposure
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim_batch: 1ce6e39a32bad4d2b2c2a1f0b60bac34661dfd2d
+claim_batch: ef6d2ce592116bc9b985b99f0d8dace28b3bfb79
 builders: build-lmuu_JdtZ-6141b568
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
