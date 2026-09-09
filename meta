@@ -1,3 +1,3 @@
 title: a boot-surface module cannot call a new function in a non-boot module: cold --make build fails in generate, and --make ci's convergence hides it
-parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
