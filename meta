@@ -1,7 +1,7 @@
 title: expose tl's position→type report as cosmic._teal_types
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic@main
-claim_batch: 1cedbf0f1f27167508fa7015f7b8e4094925fcbe
+claim_batch: 58d2008c2b3a0891ff27b55d996f3e7c6ac88834
 handover_head: cc43af6cc0808c841d08e452b27c202445ca307c
 builders: 0fef10599629073d06a1f46e9df06ab0
 speccers: 58254892-8aca-4268-93b6-5c426eeaccaf
