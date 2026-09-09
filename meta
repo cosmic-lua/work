@@ -2,3 +2,5 @@ title: handover: a new head must supersede an accepted verdict
 parent: 3J4hj6YKVuLqqZey2xtChdI9LOi
 target: cosmic-lua/work
 claim_batch: 40f956722c211924e72cb40ec10b37573489f43a
+handover_head: 22bb2fb8e1e0463476e0641e489db20fc5737afb
+builders: 0735e5974965bd7ac0997ac19dd66053
