@@ -285,7 +285,11 @@ local function measure_change(spec: string, tree: string): string | nil, string
     if not fs.is_file(full) then
       rows[#rows + 1] = path .. "  absent"
     else
-      local count, werr = child.run({"wc", "-l", path}, {cwd = tree})
+      local operand = path
+      if path:sub(1, 1) == "-" then
+        operand = "./" .. path
+      end
+      local count, werr = child.run({"wc", "-l", operand}, {cwd = tree})
       if count == nil then
         return nil, werr or ("could not count " .. path)
       end

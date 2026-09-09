@@ -97,17 +97,17 @@ end
 local function test_tree_measurement_appends_to_builder_and_review()
   local s = init_state_repo("brief-tree")
   local _, leaf = root_with_leaf(s)
-  local path = fs.join(s.root, "measured.tl")
+  local path = fs.join(s.root, "-probe.tl")
   assert(fs.write(path, ("line\n"):rep(490)))
   local spec_file = fs.join(s.root, "tree-spec.md")
   assert(fs.write(spec_file, [[
 ## Change
-measured.tl and absent.tl
+-probe.tl and absent.tl
 ## Non-goals
 No refusal.
 ]]))
   assert(gitspec.cmd_spec(s, leaf, spec_file) == 0)
-  local add = check.must(child.run({"git", "add", "measured.tl"}, {cwd = s.root}))
+  local add = check.must(child.run({"git", "add", "--", "-probe.tl"}, {cwd = s.root}))
   assert(add.ok, "the measurement fixture is staged: " .. add.stderr)
   local commit = check.must(child.run({"git", "-c", "user.email=test@example.com",
         "-c", "user.name=test", "commit", "-q", "-m", "measurement fixture"},
@@ -117,7 +117,7 @@ No refusal.
   assert(code == 0, "tree measurement earns a builder brief: " .. out)
   assert(out:find("## Measured at brief time (" .. s.root .. ", ", 1, true) ~= nil,
     "the measured section names the tree and HEAD: " .. out)
-  assert(out:find("measured.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
+  assert(out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
     "the measured file carries its headroom: " .. out)
   assert(out:find("absent.tl  absent", 1, true) ~= nil,
     "the missing Change path is explicit: " .. out)
@@ -126,7 +126,7 @@ No refusal.
   handover(s, leaf)
   local review_code, review_out = brief_and_capture(s, "review", leaf, s.root)
   assert(review_code == 0, "tree measurement earns a review brief: " .. review_out)
-  assert(review_out:find("measured.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
+  assert(review_out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
     "review carries the measured section: " .. review_out)
 end
 
