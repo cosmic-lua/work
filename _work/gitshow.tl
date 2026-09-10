@@ -286,8 +286,9 @@ end
 --- Print one item.
 --- @param s store.Store The store
 --- @param id string The item id or an unambiguous prefix
+--- @param raw boolean Whether to print only the spec sidecar bytes
 --- @return integer Exit code
-local function cmd_show(s: store.Store, id: string): integer
+local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
   -- The target item itself still comes from `store.load`, not the
   -- cache: a resolved id's lease (`resolve_id`'s own glob or prefix
   -- match) is what lets `publish.history` below skip its own
@@ -299,6 +300,16 @@ local function cmd_show(s: store.Store, id: string): integer
   local it, lerr = store.load(s, id)
   if it == nil then
     return verdict_line("show", false, lerr)
+  end
+  if raw then
+    local body = store.read_spec(s, id)
+    local written, werr = io.stdout:write(body)
+    if written == nil then
+      io.stderr:write(("gitboard-show: could not write raw spec: %s\n")
+        :format(tostring(werr)))
+      return 1
+    end
+    return 0
   end
   local c, cerr = store.read(s)
   if c == nil then
@@ -409,7 +420,7 @@ local record gitshow
   events: {publish.Event}, problems: {string}, children_lines: {string},
   overlaps?: {string}, headroom?: {string}, ci_state?: string, ci_head?: string,
   ci_age_s?: integer): {string}, string
-  cmd_show: function(s: store.Store, id: string): integer
+  cmd_show: function(s: store.Store, id: string, raw?: boolean): integer
 end
 
 local M: gitshow = {
