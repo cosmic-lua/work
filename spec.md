@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+The file-cap evidence below is historical: `_work/brief_test.tl` is 438 lines at work a43d1824cd5d48408b780f2ac16a3b42e0c5cd38. Re-measure before resuming; do not keep this item blocked on the former 499-line measurement. Use ordinary automatically discovered `_test.tl` coverage, in the current file when it fits or a cohesive sibling when needed. Test both an unset repo and verbatim explicit repo, after verifying the current intended fallback. Test placement within an obvious low-risk split is an implementation decision, not a question requiring further user approval. Preserve the parent's product contract; do not assume its old unpushed commit is still applicable.
+
 ## Question
 
 `«MD7t_OaND»`'s `## Change` asks for a new test in `_work/brief_test.tl` asserting
@@ -40,3 +46,4 @@ fmt`, `--check lint`, and the existing `_work/brief_test.tl` suite unchanged at
 14/14) in the worktree at `/home/user/wt/3Ix3ztns`, committed locally as
 `fba58ef1` on branch `3Ix3ztns`, but NOT pushed — left in place for whoever
 resumes this item once the test-placement question is settled.
+
