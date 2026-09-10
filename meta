@@ -1,3 +1,4 @@
 title: make lock: atomic generation-safe directory claims
 parent: 3I7QhBNc3Dwc1abDYZbjVjrG7kp
 target: cosmic-lua/cosmic
+claim_batch: 9ed728c02e878061686f7a833d4c2954aa610872
