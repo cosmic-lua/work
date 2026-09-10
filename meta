@@ -1,0 +1,3 @@
+title: _make/lockdir_test.tl: two cases assume non-root and fail as a false product FAIL under a root runner
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
