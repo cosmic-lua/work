@@ -37,6 +37,29 @@ This establishes this host's shell invocation, not native ELF portability.
 reported gitworktree 79/95, gitboard 117/216, gitcommands 199/199;
 no preparation_receipt row. These are existing floors, not current coverage.
 
+Narrow publication correction measured in the claimed checkout
+`wt/work/5VQXQrYT/2726070f38ff` at that same product SHA, with clean
+`git status --short` and the same verified runtime hash. The full local
+`_work/doctrine_bar.tl` was read; no gitboard command ran. This temporary-only
+probe ran under the verified pin:
+
+```sh
+sh o/bootstrap/cosmic -e 'local fs=require("cosmic.fs"); local p=assert(fs.temp_dir("/tmp/5VQX-link-XXXXXX")); local staged=fs.join(p,"staged"); local destination=fs.join(p,"destination"); assert(fs.write(staged,"verified")); assert(fs.write(destination,"winner")); local ok,err=fs.link(staged,destination); print("existing-link="..tostring(ok)); print("existing-error="..tostring(err)); print("winner-bytes="..assert(fs.read(destination))); local published=fs.join(p,"published"); assert(fs.link(staged,published)); assert(fs.remove(staged)); print("after-temp-unlink="..assert(fs.read(published))); local replacement=fs.join(p,"replacement"); assert(fs.write(replacement,"replacement")); assert(fs.move(replacement,destination)); print("move-overwrites="..assert(fs.read(destination)))'
+```
+
+Output:
+
+```text
+existing-link=false
+existing-error=link: /tmp/5VQX-link-en8xxh/staged -> /tmp/5VQX-link-en8xxh/destination: EEXIST: File exists
+winner-bytes=winner
+after-temp-unlink=verified
+move-overwrites=replacement
+```
+
+This replaces the unavailable no-overwrite rename premise only; the remaining
+workflow, runtime trust, receipt, scope and sequencing contracts are unchanged.
+
 ## Change
 
 Make ordinary pinned-cosmic worktree creation cache-first, and add explicit
@@ -98,9 +121,26 @@ This flag NEVER means board refresh or Git object fetching.
    output ancestors and any tracked or non-ignored intended output path;
    rehash the staged bytes before execution. Do not launch
    a mutable source candidate after checking it. Retain a verified pristine
-   copy at target `o/bootstrap/cosmic.ape` by same-directory temporary write,
-   rehash and atomic rename only if that destination is absent; if present,
-   validate it or report its rejection, never overwrite arbitrary bytes.
+   copy at target `o/bootstrap/cosmic.ape` by a uniquely created same-directory
+   temporary write, rehash, then exclusive hard-link publication with
+   `fs.link(temporary, destination)`, followed by `fs.remove(temporary)`.
+   The temporary must be a separate byte copy, not a hard link to the private
+   execution file. Never use fs.move/rename, remove the destination, or treat
+   a prior absence check as exclusion: the destination can appear meanwhile.
+   A successful link publishes those complete verified bytes without replacing
+   an existing entry. Remove only this invocation's temporary name after every
+   link outcome; a cleanup failure is a preparation error, never permission
+   to remove the destination.
+   On EEXIST (including a destination created by another preparer), leave the
+   winner untouched and repeat the regular-file/non-symlink/size/hash checks.
+   A valid winner satisfies cache publication; an invalid winner earns the
+   existing rejection diagnostic and remains untouched while preparation uses
+   its separately verified private execution file. Do not retry by replacing
+   it. If the competing destination disappears or cannot be validated, report
+   its rejection and continue with the private file, without a publication
+   success claim. Other hard-link errors fail preparation after temporary
+   cleanup; no rename/copy-overwrite fallback. For a destination already present
+   before staging, apply the same validate-or-report policy without replacing it.
    Do not create an assimilation stamp or claim this copy is native ELF.
    The private execution file, not `o/bin/cosmic` or the repository launcher,
    is the command interpreter for this preparation run.
@@ -213,6 +253,18 @@ This flag NEVER means board refresh or Git object fetching.
      missing candidates; no invalid runtime marker ever executes;
    - source changes after read cannot change staged execution; target runtime
      changes after probe are caught before another step/receipt;
+   - deterministic concurrent-destination publication: interpose BOTH fs.link
+     and fs.move for the final destination, creating a distinct sentinel AFTER
+     the caller's absence check but immediately before delegating to whichever
+     real publication primitive was called. Thus the overwrite mutant cannot
+     bypass the race injection by avoiding fs.link. Assert sentinel bytes survive,
+     rejection is reported, the private verified runtime remains separate, and
+     the publication temporary is unlinked. Repeat with a matching-digest winner:
+     it is accepted without replacement. Cover vanished/unreadable winners,
+     other link errors and unlink failure; restore mocks with pcall. Also prove
+     successful absent-only linking leaves correct cache bytes after temporary
+     unlink. Replace exclusive fs.link publication with overwriting fs.move as
+     a separate mutation; this concurrent-destination regression must fail.
    - both invocation forms, wrong probe output, both failed probes, signal,
      copy/hash/read/write failure, bounded exact curl argv, download digest
      mismatch, cache hit before network, no download/fetch absent --fetch;
