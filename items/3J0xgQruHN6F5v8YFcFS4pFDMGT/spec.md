@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+Use this as a concrete absent-versus-empty regression for the typed-template migration (https://github.com/cosmic-lua/work/issues/103) and Cosmic capability work (https://github.com/cosmic-lua/cosmic/issues/1809). GitBoard decides that no bounce means a resolved empty value; generic rendering must preserve that distinction from a genuinely unresolved caller field. Current code initializes ROUND_CONTEXT to an empty string, while BOUNCE_CONTEXT is only populated for nonempty bounce text; verify that current path in the reproduction. Keep the immediate bug fix small, with fresh/rework cases. Do not add another rendered-body scan or silently blank every missing required field.
+
 ## Evidence
 
 `«WyFa_GL3c»` (merged, PR #88) replaced `_work/brief.tl`'s old
@@ -82,3 +88,4 @@ designed; the bug is purely in what `values` is populated with.
 ## Access
 
 cosmic-lua/work, read and write on a branch; no other repository.
+
