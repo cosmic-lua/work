@@ -2,3 +2,5 @@ title: cosmic --diff OLD: activate archive surface comparison in the CLI
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
 claim_batch: ec46af6fcbe2269389a587c8f7ad04fa0ba3a422
+handover_head: 11cdd43ee7df77aa999109cf1dd6a7afb9725d6c
+builders: 7afecddf5908085e35b0edcee0fcf145
