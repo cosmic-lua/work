@@ -12,17 +12,13 @@
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
 ---
---- `<WORKTREE>` (`REVIEW` and `REVIEW_SCRIPT`) is `_work.brief`'s own
---- `<root>/../wt/review-<id8>`, always filled — a fresh checkout the
---- reviewer creates, unlike a builder's, which is filled only once
---- `worktree ID` has actually made it. `REVIEW_SCRIPT`'s own mutation
---- step never needs it — `git show <head>:<path>` into the scratchpad
---- replaces the checkout for that one step — but its "Recording your
---- verdict" section still names it for reading the diff itself, kept
---- verbatim from `REVIEW`. That shared "Recording your verdict" text
---- also says the checkout has no `o/3p` cache yet, unlike a builder's
---- already-bootstrapped one — one line pointing at `bin/cosmic --make
---- fetch`, not a repeat of AGENTS.md's own fetch/pin section.
+--- `<WORKTREE>` in `REVIEW` is `_work.brief`'s own
+--- `<root>/../wt/review-<id8>`, filled for the reviewer-created fresh
+--- checkout. `REVIEW_SCRIPT` is checkout-free: its mutation step uses
+--- `git show <head>:<path>` into the scratchpad, and its verdict block
+--- reads the diff from `<PRODUCT_ROOT>` without a `<WORKTREE>`
+--- placeholder. The shared checkout note still points at `bin/cosmic
+--- --make fetch` before a review test runs.
 ---
 --- `<PRODUCT_ROOT>` is the product checkout holding `bin/gitboard`;
 --- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
@@ -200,19 +196,21 @@ never in a worktree, and confirm the refusal.
 
 `verdict` verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
-those operations. This review is claimed under session `<REVIEW_SESSION>` —
-you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+those operations. Read the diff with `git fetch origin <branch>` and `git
+show <head>:<path>` in the product checkout at `<PRODUCT_ROOT>`; you create
+no worktree. This review is claimed under session `<REVIEW_SESSION>` — you
+MUST use that exact string. That checkout has no `o/3p` cache yet — run
 `bin/cosmic --make fetch` before its first test, and `--make build` once if
 you run any test.
 
 ```
 cd <PRODUCT_ROOT>
 bin/gitboard verdict <ITEM_ID> accept \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
 bin/gitboard verdict <ITEM_ID> request-changes \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
 bin/gitboard verdict <ITEM_ID> reject \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
 ```
 
 Run exactly the one line matching your judgment. The board stores the SHA,
