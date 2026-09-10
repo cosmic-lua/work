@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 068434781dbea6a39218c88274c4a03a
+caller 60fbdd41c9a770ef31a5e56ca0f7121b
+remote origin
+action drop
+created 1789058202
+publish-by 0
+reason worktree branched from stale local main (32e7a711); current main deleted/restructured .cosmic-coverage and _build/public_surface_baseline.tl underneath it, making the diff's ratchet-satisfying steps obsolete; re-claiming fresh against the fixed base
+
+3ItRn3u15eMjvsQPhxXUqZnjV6U 75cd1e13b410968c6e1984fe98f10db4ae43d463 drop - 32e7a71108b9e6f23adc14940123e00091f74a9a f2632fffdf7d7aa1ad21f13047885ab3af87e76a 1789055539 1789055539 1789062739
