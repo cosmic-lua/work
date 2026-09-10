@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch aebc1848f7e4ddf8072f83de07295029
+caller beeb64c57b6985dbd5dc639a21b74a14
+remote origin
+action drop
+created 1789060239
+publish-by 0
+reason PR #1824 already merged (80223084) via GitHub CI + auto-merge; take/done refuse because the claim base predates the rebase and the real commit is a squash-merge with no clean ancestry to either base — this is 5PCV_sHrL's exact gap, filed separately. Releasing the claim; the code has shipped even though board bookkeeping can't cleanly record it yet.
+
+3Ivx3eC0CE1g3wbvFspha5ljXYz e31795393944875574d2b1c3ae2530e46b13cebf drop - 32e7a71108b9e6f23adc14940123e00091f74a9a e5f6b5fc93733b4111c24f0b76f11c0be7ab5d00 1789055549 1789055549 1789062749
