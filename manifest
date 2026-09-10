@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 140c6cf9e5465a098cdf658ab589480e
+caller 9effca5f525f53d0867e2fb8e6b51178
+remote origin
+action drop
+created 1789042647
+publish-by 0
+reason Reclaim from current main so the authoritative review range contains only the scoped pin edit.
+
+3J8IeYp7pMLAS7dMBtGnR9A5QMS e3e05f101a3a2c7e2e7360121b4a4cfa8b9cd0a3 drop - 6a9f47c9f6a8b7db7583b5913d6ff6f487371956 defa43bff3042b39d17579da9e268afc78f87416 1789036430 1789036430 1789043630
