@@ -1,3 +1,4 @@
 title: release gate: preserve version stamp through convergence
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
+claim_batch: 26f195ffb80cc34da7e986727324df35bccc1570
