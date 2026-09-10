@@ -102,9 +102,10 @@ conflict witness locally, not presume an observation remains current.
      existing dirty-file, winning-state and no-stash assertions.
 
 Keep each file below 500 lines. Current production headroom permits the private
-helper in prepared; do not reorganize unrelated modules. Add observed coverage
-rows for both new test files in `.cosmic-coverage`; ratchet changed existing rows
-up when measured, never lower a floor. No cast/nil-baseline additions are needed.
+helper in prepared; do not reorganize unrelated modules. The pinned coverage
+collector intentionally excludes `_test.tl` files, so do not invent test-file
+baseline rows; ratchet only observable changed production rows when measured,
+never lowering a floor. No cast/nil-baseline additions are needed.
 
 Run focused test/coverage targets for the six named test files, then the complete
 `bin/cosmic --make ci` gate (verified pinned runtime fallback:
@@ -193,4 +194,3 @@ are not fetched/pushed by board transport. Old prepared receipts migrate lazily
 on qualifying refresh; old binaries ignore the new namespace. No blanket purge,
 remote-loss attestation, ancestry-based confirmation, background fetch, plan
 replay, restore/prune CLI, or automatic deletion of quarantined objects.
-
