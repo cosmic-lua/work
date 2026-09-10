@@ -26,6 +26,12 @@ local record RefUpdate
   next: string
 end
 
+--- One read-only condition in a local ref transaction.
+local record RefCheck
+  ref: string
+  expected: string
+end
+
 --- The two deliberately distinct board modes. Remote-backed boards
 --- read confirmed state only from remote-tracking refs. Local boards
 --- are an explicit simulation/testing mode and read local heads.
@@ -103,11 +109,14 @@ end
 --- clean staging refs. Durable remote publication remains caller-owned
 --- and MUST use atomic leased transport.
 local function update_refs_atomic(root: string,
-    updates: {RefUpdate}): boolean, string
-  if #updates == 0 then
+    updates: {RefUpdate}, checks?: {RefCheck}): boolean, string
+  if #updates == 0 and (checks == nil or #checks == 0) then
     return true, ""
   end
   local lines: {string} = {"start\n"}
+  for _, c in ipairs(checks or {}) do
+    lines[#lines + 1] = ("verify %s %s\n"):format(c.ref, c.expected)
+  end
   for _, u in ipairs(updates) do
     if u.next == ZERO_SHA then
       lines[#lines + 1] = ("delete %s %s\n"):format(u.ref, u.expected)
@@ -408,6 +417,7 @@ end
 local record refs
   ZERO_SHA: string
   type RefUpdate = RefUpdate
+  type RefCheck = RefCheck
   type BoardMode = BoardMode
   board_mode: function(root: string): BoardMode
   set_board_mode: function(root: string, mode: BoardMode): boolean, string
@@ -421,7 +431,8 @@ local record refs
   canonical_ref: function(root: string, target: string,
   remote?: string): string | nil, string
   read_ref: function(root: string, ref: string): string | nil, string
-  update_refs_atomic: function(root: string, updates: {RefUpdate}): boolean, string
+  update_refs_atomic: function(root: string, updates: {RefUpdate},
+  checks?: {RefCheck}): boolean, string
   ensure_refspecs: function(root: string): boolean, string
   type RefEntry = RefEntry
   type PushSpec = PushSpec

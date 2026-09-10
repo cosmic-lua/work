@@ -48,8 +48,11 @@ local function test_a_reparent_survives_a_rebase()
   local outcomes = check.must(prepared.refresh(a.root))
   assert(#outcomes == 1 and outcomes[1].state == "lost-race",
     "refresh classifies the rejected lease")
-  assert(refs.update_ref(a.root, pending[1].staging_ref, refs.ZERO_SHA,
-      pending[1].manifest), "the caller discards the diagnosed transaction")
+  assert(check.must(refs.read_ref(a.root, pending[1].staging_ref)) == refs.ZERO_SHA)
+  assert(outcomes[1].quarantine_ref == "refs/gitboard/quarantined/lost-race/"
+    .. pending[1].id)
+  assert(check.must(refs.read_ref(a.root, outcomes[1].quarantine_ref))
+    == pending[1].manifest, "the diagnosed transaction remains inspectable")
 
   assert(graph.cmd_attach(a, leaf, other) == 0,
     "the re-run lands against the merged board")

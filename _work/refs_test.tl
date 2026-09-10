@@ -28,3 +28,22 @@ local function test_for_each_ref_parses_the_committer_date()
     ("the third field should parse as the write's own committer date: "
       .. "got %d, wanted [%d, %d]"):format(entry.touched, before, after))
 end
+
+local function test_atomic_checks_only_and_failed_witness_preserve_all_refs()
+  local s = fixture.init_state_repo("refs-atomic-checks")
+  local id = fixture.file_item(s, "witness", "")
+  local witness = "refs/heads/items/" .. id
+  local sha = check.must(refs.read_ref(s.root, witness))
+  assert(refs.update_refs_atomic(s.root, {}, {{ref = witness, expected = sha}}))
+  local ok = refs.update_refs_atomic(s.root, {},
+    {{ref = witness, expected = refs.ZERO_SHA}})
+  assert(not ok, "checks-only transactions must verify their witness")
+  local destination = "refs/gitboard/check-destination"
+  ok = refs.update_refs_atomic(s.root, {
+      {ref = destination, expected = refs.ZERO_SHA, next = sha},
+      {ref = witness, expected = sha, next = refs.ZERO_SHA},
+    }, {{ref = "refs/heads/absent-witness", expected = sha}})
+  assert(not ok, "a bad witness must abort the entire transaction")
+  assert(check.must(refs.read_ref(s.root, destination)) == refs.ZERO_SHA)
+  assert(check.must(refs.read_ref(s.root, witness)) == sha)
+end
