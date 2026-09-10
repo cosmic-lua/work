@@ -1,0 +1,3 @@
+title: gitboard worktree --adopt's own recovery line omits --root, and names a non-existent --repo-dir path
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/work
