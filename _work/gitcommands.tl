@@ -189,7 +189,15 @@ local CSPEC: flags.CommandSpec = {
           {long = "tree", arg = "DIR",
             help = "measure Teal paths named by ## Change beneath DIR"},
           {long = "receipt", arg = "FILE", help = "validate a v1 builder preparation receipt"},
-          {long = "session", arg = "SESSION", help = "receipt caller; default $GITBOARD_SESSION"}}}},
+          {long = "session", arg = "SESSION", help = "receipt caller; default $GITBOARD_SESSION"},
+          {long = "gitboard-command", arg = "TEXT",
+            help = "the caller's own exact GitBoard invocation (loader plus absolute "
+            .. "executable), rendered verbatim as the prefix for every board command "
+            .. "the brief prints; requires --gitboard-cwd. A builder brief with "
+            .. "--receipt uses the receipt's recorded invocation instead when this "
+            .. "is omitted"},
+          {long = "gitboard-cwd", arg = "DIR",
+            help = "cwd for --gitboard-command; requires --gitboard-command"}}}},
     {name = "worktree", summary = "create ID's builder checkout: branch, "
       .. "worktree, bootstrap, all in one command",
       spec = {usage = "ID [options]",

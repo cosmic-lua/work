@@ -90,9 +90,10 @@ end
 local function test_the_builder_hands_over_a_commit_id()
   assert(BUILDER:find("create_pull_request", 1, true) == nil,
     "the builder brief must not send a builder to a provider API")
-  assert(BUILDER:find("gitboard take <ITEM_ID> --head SHA [--url URL]",
+  assert(BUILDER:find("<GITBOARD_CMD> take <ITEM_ID> --head SHA [--url URL]",
       1, true) ~= nil,
-    "the builder reports the commit-only handover command")
+    "the builder reports the commit-only handover command, prefixed with "
+    .. "the caller's own exact GitBoard invocation")
 end
 
 -- `verdict` performs only local Git verification and a board mutation.
@@ -103,10 +104,11 @@ local function test_the_review_brief_records_only_the_commit()
     and REVIEW:find("enable auto-merge", 1, true) == nil,
     "the review brief must not instruct a reviewer to enable auto-merge "
     .. "itself")
-  assert(REVIEW:find("bin/gitboard verdict <ITEM_ID> accept", 1, true) ~= nil,
-    "the accept line runs `gitboard verdict` directly")
+  assert(REVIEW:find("<GITBOARD_CMD> verdict <ITEM_ID> accept", 1, true) ~= nil,
+    "the accept line runs the caller's own GitBoard invocation, not a "
+    .. "guessed bin/gitboard")
   assert(REVIEW:find(
-      "bin/gitboard verdict <ITEM_ID> request-changes", 1, true)
+      "<GITBOARD_CMD> verdict <ITEM_ID> request-changes", 1, true)
     ~= nil, "request-changes records the same commit id")
   assert(REVIEW:find("--body FILE", 1, true) == nil
     and REVIEW:find("--pr", 1, true) == nil,

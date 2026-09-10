@@ -11,6 +11,7 @@ local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
 local fixture = require("_work.fixture")
+local gitinvocation = require("_work.gitinvocation")
 local gitspec = require("_work.gitspec")
 local item = require("_work.item")
 local specmod = require("_work.spec")
@@ -230,15 +231,13 @@ local function test_review_brief_needs_the_handover()
   assert(out:find("https://example.test/change/42", 1, true) ~= nil,
     "the optional navigation URL is filled")
   assert(out:find("--pr", 1, true) == nil, "no provider identifier is evidence")
-  assert(out:find("bin/gitboard verdict", 1, true) ~= nil,
-    "the verdict command names the product checkout's bin/gitboard: " .. out)
-  assert(out:find("o/bin/gitboard", 1, true) == nil,
-    "the stale o/bin/gitboard path is gone: " .. out)
-  assert(out:find("<PRODUCT_ROOT>", 1, true) ~= nil,
-    "with no GITBOARD_DIR to derive it from, the placeholder survives: "
-    .. out)
-  assert(out:find("<PRODUCT_ROOT>", #out - 200, true) ~= nil,
-    "the verdict line names it among the survivors: " .. out:sub(#out - 200))
+  assert(out:find("bin/gitboard", 1, true) == nil,
+    "no caller-supplied invocation, so no guessed product-checkout "
+    .. "bin/gitboard either: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED .. " verdict", 1, true) ~= nil,
+    "the verdict command uses the explicit unresolved sentinel instead: " .. out)
+  assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
+    "the review no longer carries a PRODUCT_ROOT-based invocation at all: " .. out)
   assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
     "the placeholder is gone — the brief fills the claim's own session")
   local label = "session-b"
@@ -251,10 +250,12 @@ local function test_review_brief_needs_the_handover()
     .. "the board already holds")
 end
 
--- `<PRODUCT_ROOT>` is `GITBOARD_DIR`'s parent's parent — the checkout
--- root `bin/gitboard` itself execs from, since it exports
--- `GITBOARD_DIR` as `<root>/o/board` before handing off to the pinned
--- binary.
+-- `PRODUCT_ROOT` is `GITBOARD_DIR`'s parent's parent — the checkout root
+-- `bin/gitboard` itself execs from, since it exports `GITBOARD_DIR` as
+-- `<root>/o/board` before handing off to the pinned binary. It still
+-- resolves the reviewer's own fresh worktree guess; it no longer
+-- supplies the GitBoard invocation itself — that is `<GITBOARD_CMD>`,
+-- unresolved here since no caller command was given.
 local function test_product_root_fills_from_gitboard_dir()
   local s = init_state_repo("brief-product-root")
   local _, leaf = root_with_leaf(s)
@@ -267,10 +268,16 @@ local function test_product_root_fills_from_gitboard_dir()
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
   assert(code == 0, "the recorded commit unlocks the review brief")
-  assert(out:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
-    "PRODUCT_ROOT is GITBOARD_DIR's parent's parent: " .. out)
-  assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
+  local worktree = fs.join(fs.dirname(PRODUCT_ROOT), "wt", "review-" .. leaf:sub(1, 8))
+  assert(out:find(worktree, 1, true) ~= nil,
+    "PRODUCT_ROOT (from GITBOARD_DIR) still resolves the review's own fresh worktree: "
+    .. out)
+  assert(out:find("<WORKTREE>", 1, true) == nil,
     "the placeholder is gone once GITBOARD_DIR answers it")
+  assert(out:find("bin/gitboard", 1, true) == nil,
+    "still no guessed product-checkout bin/gitboard: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) ~= nil,
+    "GITBOARD_CMD is unresolved on its own — no caller command was given: " .. out)
 end
 
 -- A brief trusts the exact handover commit and never reads provider check
