@@ -2,4 +2,6 @@ title: surface diff: compare and render deterministic name-level changes
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
 handover_head: 46abc1e9f9ce268f46d7d31e6c58c13b8770b723
+verdict: accept
+verdict_head: 46abc1e9f9ce268f46d7d31e6c58c13b8770b723
 builders: 2598e3bbd4f6e3302d6e892bce6617c0
