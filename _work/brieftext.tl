@@ -116,7 +116,7 @@ and nothing less:
 7. Commit the complete change. The caller owns every authenticated
    operation: do not push or open an external review unless it explicitly
    asks you to. Report the exact commit id so it can fetch/push it and run
-   `gitboard take <ITEM_ID> --head SHA [--url URL]`.
+   `<GITBOARD_CMD> take <ITEM_ID> --head SHA [--url URL]`.
 8. Never poll or subscribe to provider events. External checks and review
    UI are the caller's to inspect; gitboard records only commit ids.
 9. Do NOT merge the change. Do NOT run any `gitboard` command — board

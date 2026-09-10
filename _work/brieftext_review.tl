@@ -20,12 +20,18 @@
 --- placeholder. The shared checkout note still points at `bin/cosmic
 --- --make fetch` before a review test runs.
 ---
---- `<PRODUCT_ROOT>` is the product checkout holding `bin/gitboard`;
---- `_work.brief` derives it from the `GITBOARD_DIR` it was run under
---- (its parent's parent), since `bin/gitboard` fetches and execs its
---- own pinned release rather than something built in the board
---- checkout. Verdict records the exact handed-over commit and performs no
---- provider or authenticated operation.
+--- `<PRODUCT_ROOT>` is the reviewer's own local product checkout — where the
+--- diff is read and, in `REVIEW_SCRIPT`, the `--repo-dir` the caller passes;
+--- `_work.brief` derives it from the `GITBOARD_DIR` it was run under (its
+--- parent's parent). It is never the invocation gitboard itself runs
+--- through: that is `<GITBOARD_CMD>`, the caller's own exact loader-plus-
+--- executable prefix (`_work.brief` fills it from a builder's `--receipt`
+--- or from `--gitboard-command`/`--gitboard-cwd` given directly to this
+--- brief), rendered once and reused before every verb below. Unresolved —
+--- no caller command supplied — renders as an explicit sentinel, never a
+--- guessed `bin/gitboard` that would strand a fresh reviewer behind a
+--- product-checkout network bootstrap. Verdict records the exact
+--- handed-over commit and performs no provider or authenticated operation.
 ---
 --- `<ROUND_CONTEXT>` (`REVIEW` only, between the spec block and "How
 --- to review") is `_work.brief`'s fill for a SECOND (or later) review
@@ -123,20 +129,24 @@ you MUST use that exact string. That checkout has no `o/3p` cache yet — run
 `bin/cosmic --make fetch` before its first test, and `--make build` once if
 you run any test.
 
+GitBoard invocation for this review: `<GITBOARD_CMD>` — the exact
+loader and absolute executable the caller runs board commands through.
+Use it verbatim as the prefix below; never guess a product-checkout
+substitute of your own, and never bootstrap one yourself.
+
 ```
-cd <PRODUCT_ROOT>
-bin/gitboard verdict <ITEM_ID> accept \
+<GITBOARD_CMD> verdict <ITEM_ID> accept \
   --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
-bin/gitboard verdict <ITEM_ID> request-changes \
+<GITBOARD_CMD> verdict <ITEM_ID> request-changes \
   --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
-bin/gitboard verdict <ITEM_ID> reject \
+<GITBOARD_CMD> verdict <ITEM_ID> reject \
   --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
 ```
 
 Run exactly the one line matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`gitboard done <ITEM_ID> --landed SHA`.
+`<GITBOARD_CMD> done <ITEM_ID> --landed SHA`.
 
 ## Final report
 
@@ -203,20 +213,24 @@ MUST use that exact string. That checkout has no `o/3p` cache yet — run
 `bin/cosmic --make fetch` before its first test, and `--make build` once if
 you run any test.
 
+GitBoard invocation for this review: `<GITBOARD_CMD>` — the exact
+loader and absolute executable the caller runs board commands through.
+Use it verbatim as the prefix below; never guess a product-checkout
+substitute of your own, and never bootstrap one yourself.
+
 ```
-cd <PRODUCT_ROOT>
-bin/gitboard verdict <ITEM_ID> accept \
+<GITBOARD_CMD> verdict <ITEM_ID> accept \
   --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
-bin/gitboard verdict <ITEM_ID> request-changes \
+<GITBOARD_CMD> verdict <ITEM_ID> request-changes \
   --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
-bin/gitboard verdict <ITEM_ID> reject \
+<GITBOARD_CMD> verdict <ITEM_ID> reject \
   --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
 ```
 
 Run exactly the one line matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`gitboard done <ITEM_ID> --landed SHA`.
+`<GITBOARD_CMD> done <ITEM_ID> --landed SHA`.
 
 ## Final report
 
