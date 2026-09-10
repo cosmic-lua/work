@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+The existing choice of public `cosmic.ast` is correct. Use parse/walk/match/find_all (and rewrite only where safe) rather than grep or raw tl internals. A syntax match does not establish `T | nil`, identity across shadowed bindings, or control-flow ordering. Scope traversal to the containing function and verify guard/assignment refer to the same target; cover alternate guards, nested functions, shadowing, unrelated fields, and already-fixed cases. Use checker-backed reproductions to validate semantic claims. If public AST APIs cannot express a required relation cleanly, capture an executable gap probe and file a reusable Cosmic extension before duplicating generic analysis in GitBoard. Do not invent a general data-flow API without such evidence; retain the one-time sweep scope.
+
 ## Evidence
 
 Board item «HD1o_sZ5c» bumped `cosmic-lua/work`'s own `bin/cosmic.pin`
@@ -69,3 +75,4 @@ for a follow-on item, don't build the ratchet here.
 ## Access
 
 cosmic-lua/work, read and write on a branch; no other repository.
+
