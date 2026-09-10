@@ -2,4 +2,6 @@ title: cosmic --diff OLD: activate archive surface comparison in the CLI
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
 handover_head: 8b5299d56df2089f44c74f4e6db9428721b09eef
+verdict: request changes
+verdict_head: 8b5299d56df2089f44c74f4e6db9428721b09eef
 builders: 7afecddf5908085e35b0edcee0fcf145
