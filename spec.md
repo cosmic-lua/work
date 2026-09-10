@@ -18,7 +18,7 @@ No change to `REVIEW`'s verdict block; no change to the mechanical-diff rule.
 
 ## Access
 
-cosmic-lua/work, read and write on a branch; no other repository.
+cosmic-lua/work, read and write on a branch; cosmic-lua/cosmic, read-only for the linked typed-template migration context; no other repository.
 
 ## Ready when
 
