@@ -4,4 +4,6 @@ target: cosmic-lua/cosmic
 claim_batch: 95decef53e6a37fba31835e08fe2904534f4bc8f
 handover_head: c3a4fe1c751f0b4917a9075bded66942e315c478
 external_url: https://github.com/cosmic-lua/cosmic/pull/1814
+verdict: request changes
+verdict_head: c3a4fe1c751f0b4917a9075bded66942e315c478
 builders: ba1dac0e781ab643202a44367075b799 282269d3671247608aac48429578ee81 eba9e2813ebec970784996deb0a9b140
