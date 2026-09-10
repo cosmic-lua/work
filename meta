@@ -1,7 +1,7 @@
 title: gitboard done/claim: the prepare/publish/refresh split is undocumented on the mutating verbs themselves
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: 3630deeac65d29ae058a62a4cadfc894e61cc991
+claim_batch: 1388b5b1c3bbec48da20c4c1666159ca98e6bff4
 handover_head: 8f19756b0960617d36bb26555efb6c1c2a5c3500
 external_url: https://github.com/cosmic-lua/work/pull/112
 builders: dcaccd9bfbb5fcc1807ef338f533ff37
