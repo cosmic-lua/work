@@ -2,4 +2,6 @@ title: gitboard show ID --raw prints the spec sidecar byte-exact so spec --base 
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 handover_head: 3b69174bdfa28e4de62893d57092a5fa1e0d2500
+verdict: accept
+verdict_head: 3b69174bdfa28e4de62893d57092a5fa1e0d2500
 builders: 8d5cba475fce4cd7804d80fe524002d8
