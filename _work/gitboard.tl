@@ -458,7 +458,7 @@ local function main(...: string): integer
       d.parsed.switches["force"], d.parsed.values["why"] or "", by,
       d.parsed.values["landed"] or "", d.parsed.values["repo-dir"] or "", who)
   end
-  return show.cmd_show(s, id)
+  return show.cmd_show(s, id, d.parsed.switches["raw"] or false)
 end
 
 if proc.is_main() then

@@ -295,7 +295,8 @@ local CSPEC: flags.CommandSpec = {
         flags = {dir_flag(),
           {long = "todo", arg = "N",
             help = "how many todo rows to show (0 = all; default 8); "
-            .. "no effect with an ID"}}}},
+            .. "no effect with an ID"},
+          {long = "raw", help = "print an ID's spec sidecar byte-exactly"}}}},
     {name = "publish", summary = "render or execute one prepared unit's atomic push",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
         summary = "render one prepared transaction, claim batch, or draft as one "

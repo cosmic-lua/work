@@ -12,10 +12,12 @@ local cachedb = require("_work.cachedb")
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
+local gate = require("_work.gitgate")
 local gitboard = require("_work.gitboard")
 local item = require("_work.item")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 
 local init_state_repo = fixture.init_state_repo
@@ -45,6 +47,58 @@ local function gitboard_and_capture(...: string): integer, string
     error(result, 0)
   end
   return result, table.concat(lines, "\n")
+end
+
+--- Run `show ID --raw` with stdout redirected to a file, preserving every
+--- byte for an assertion instead of routing it through `print()`.
+local function gitboard_raw_capture(s: store.Store, id: string): integer, string
+  local path = fs.join(tmpdir, "raw-show-output")
+  local real_stdout = io.stdout
+  local output = assert(io.open(path, "w"))
+  io.stdout = output
+  local ok, result = pcall(gitboard.main, "show", id, "--raw",
+    "--dir", s.root)
+  output:flush()
+  output:close()
+  io.stdout = real_stdout
+  if not ok then
+    error(result, 0)
+  end
+  return result, assert(fs.read(path))
+end
+
+-- Raw output is the exact sidecar, including its unusual-but-valid edge
+-- cases. It emits no verdict, header, history, or synthetic newline.
+local function test_show_raw_round_trips_the_sidecar_byte_exactly()
+  local s = init_state_repo("show-raw-byte-exact")
+  local bodies = {
+    "line with a trailing newline\n",
+    "line without a trailing newline",
+    "",
+    "literal ${template-looking} text\n",
+  }
+  for n, body in ipairs(bodies) do
+    local id = file_item(s, "raw sidecar " .. tostring(n), "")
+    local it = check.must(store.load(s, id))
+    assert(storewrite.save(s, it, "raw fixture", body))
+    fixture.caller_publish(s)
+    local code, output = gitboard_raw_capture(s, id)
+    assert(code == 0, "raw show should succeed: " .. output)
+    assert(output == body,
+      "raw show must preserve body " .. tostring(n) .. ": " .. output)
+  end
+end
+
+-- The CAS refusal gives a caller the same raw command that produces a
+-- reusable base file, rather than the human report that adds formatting.
+local function test_stale_spec_refusal_names_the_raw_show_command()
+  local base = fs.join(tmpdir, "stale-raw-show-base")
+  assert(fs.write(base, "old"))
+  local msg = check.must(gate.base_refusal("current", base, "12345678"))
+  assert(msg:find("`gitboard show 12345678 --raw`", 1, true) ~= nil,
+    "the refusal should name byte-exact output: " .. msg)
+  assert(msg:find("`gitboard show 12345678`", 1, true) == nil,
+    "the refusal should not suggest the formatted report: " .. msg)
 end
 
 -- `attach`'s PARENT slot: a handle-form second argument resolves the

@@ -103,7 +103,7 @@ local function base_refusal(current: string, base: string,
       .. "text you read; a write with no base is last-write-wins"):format(id8)
   end
   return ("REFUSED: %s's spec changed since you read it — re-read it "
-    .. "(`gitboard show %s`), re-apply your edit, and pass the re-read "
+    .. "(`gitboard show %s --raw`), re-apply your edit, and pass the re-read "
     .. "text as --base"):format(id8, id8)
 end
 
