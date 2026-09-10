@@ -202,18 +202,22 @@ local CSPEC: flags.CommandSpec = {
         .. "PASS/FAIL summary line(s) on success and\neverything on a "
         .. "failure; --verbose streams it verbatim instead.\n\n--review "
         .. "starts the same claim branch at the exact handed-over commit. "
-        .. "Gitboard performs no fetch;\nthe caller must make every named "
+        .. "Gitboard performs no Git fetch;\nthe caller must make every named "
         .. "commit and ref locally inspectable first. "
-        .. "--verbose applies to either\ncheckout's bootstrap.",
+        .. "--verbose applies to either\ncheckout's bootstrap. Pinned cosmic targets use verified cache bytes. "
+        .. "--fetch authorizes product acquisition, never board refresh. "
+        .. "Local build runs repository code and is not an OS network sandbox.",
         flags = {dir_flag(),
           {long = "root", arg = "DIR",
             help = "local product checkout override; otherwise use the "
             .. "configured repository mapping"},
           {long = "receipt-out", arg = "FILE", help = "write a v1 builder preparation receipt"},
+          {long = "adopt", arg = "DIR", help = "explicitly prepare this exact retained claim checkout; needs --receipt-out"},
+          {long = "fetch", help = "allow pinned runtime download on cache miss and product dependency fetch"},
           {long = "gitboard-command", arg = "TEXT", help = "caller-provided invocation, not verified"},
           {long = "gitboard-cwd", arg = "DIR", help = "cwd for the caller-provided invocation"},
           {long = "ref", arg = "REF", repeated = true,
-            help = "fetch REF into refs/spike/<basename> after "
+            help = "copy locally prepared REF into refs/spike/<basename> after "
             .. "bootstrap (repeatable)"},
           {long = "review", help = "start at ID's exact handed-over commit "
             .. "instead of its claim base"},

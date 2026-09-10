@@ -411,7 +411,8 @@ local function main(...: string): integer
     return gitworktree.cmd_worktree(s, id, who, d.parsed.values["root"] or "",
       d.parsed.lists["ref"] or {}, d.parsed.switches["review"] or false,
       d.parsed.switches["verbose"] or false, d.parsed.values["receipt-out"],
-      d.parsed.values["gitboard-command"], d.parsed.values["gitboard-cwd"])
+      d.parsed.values["gitboard-command"], d.parsed.values["gitboard-cwd"],
+      d.parsed.values["adopt"], d.parsed.switches["fetch"] or false)
   end
   if d.command == "take" then
     local who, werr = claimcli.resolve_caller(d.parsed.values["session"] or "")
