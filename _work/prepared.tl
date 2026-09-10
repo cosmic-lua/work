@@ -116,13 +116,19 @@ local function read_transaction(root: string,
   if staging_ref:sub(1, #PREFIX) ~= PREFIX then
     return nil, ("not a prepared transaction ref: %s"):format(staging_ref)
   end
+  -- Contents and the later CAS must name the same immutable snapshot, even
+  -- when another process replaces the staging ref while objects are loaded.
+  local manifest, merr = refs.read_ref(root, staging_ref)
+  if manifest == nil or manifest == refs.ZERO_SHA then
+    return nil, merr ~= "" and merr or "prepared transaction ref disappeared"
+  end
   local got, err = gitobj.cat_file_batch(root,
-    {staging_ref, staging_ref .. ":manifest"})
+    {manifest, manifest .. ":manifest"})
   if got == nil then
     return nil, err
   end
-  local commit = got[staging_ref]
-  local blob = got[staging_ref .. ":manifest"]
+  local commit = got[manifest]
+  local blob = got[manifest .. ":manifest"]
   if commit == nil or commit.otype ~= "commit"
   or blob == nil or blob.otype ~= "blob" then
     return nil, ("unreadable prepared transaction: %s"):format(staging_ref)
@@ -130,10 +136,6 @@ local function read_transaction(root: string,
   local updates, derr = decode(blob.content)
   if updates == nil then
     return nil, derr
-  end
-  local manifest, merr = refs.read_ref(root, staging_ref)
-  if manifest == nil or manifest == refs.ZERO_SHA then
-    return nil, merr ~= "" and merr or "prepared transaction ref disappeared"
   end
   return {id = staging_ref:sub(#PREFIX + 1), staging_ref = staging_ref,
     manifest = manifest, updates = updates}, ""

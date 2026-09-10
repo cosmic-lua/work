@@ -162,3 +162,44 @@ local function test_later_observation_errors_do_not_retire_an_earlier_conflict()
     assert(check.must(refs.read_ref(root, destination)) == refs.ZERO_SHA)
   end
 end
+
+local function test_replaced_receipt_at_load_boundary_keeps_its_fresh_plan()
+  for _, before_read in ipairs({false, true}) do
+    local root, stale, winner, destination = setup("quarantine-load-race")
+    local fresh = check.must(prepared.prepare(root, {
+          {ref = stale.updates[1].ref, expected = winner,
+            next = successor(root, winner, "fresh plan")},
+        }))
+    assert(refs.update_ref(root, fresh.staging_ref, refs.ZERO_SHA, fresh.manifest))
+    local original = gitobj.cat_file_batch
+    local fired = false
+    gitobj.cat_file_batch = function(path: string,
+        queries: {string}): {string: gitobj.BatchEntry} | nil, string
+      local replace = path == root and not fired
+      if replace then
+        fired = true
+        if before_read then
+          assert(refs.update_ref(root, stale.staging_ref, fresh.manifest, stale.manifest))
+        end
+      end
+      local result, err = original(path, queries)
+      if replace and not before_read then
+        assert(refs.update_ref(root, stale.staging_ref, fresh.manifest, stale.manifest))
+      end
+      return result, err
+    end
+    local ok, result, err = pcall(prepared.refresh, root)
+    gitobj.cat_file_batch = original
+    assert(ok, tostring(result))
+    assert(fired, "replacement must interleave with the manifest load")
+    assert(result == nil and err ~= "", "a loaded snapshot cannot retire a replacement")
+    assert(check.must(refs.read_ref(root, stale.staging_ref)) == fresh.manifest,
+      "the fresh plan must remain active")
+    assert(check.must(refs.read_ref(root, destination)) == refs.ZERO_SHA,
+      "old updates must not quarantine a fresh manifest")
+    local pending = check.must(prepared.refresh(root))
+    assert(#pending == 1 and pending[1].state == "pending")
+    assert(pending[1].transaction.manifest == fresh.manifest)
+    assert(pending[1].transaction.updates[1].expected == winner)
+  end
+end
