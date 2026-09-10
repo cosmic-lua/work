@@ -190,6 +190,32 @@ local function test_help_documents_the_id_forms()
     "help should explain why work branches include the claim\ngot: " .. printed)
 end
 
+-- The eight verbs that only stage a `commit_and_publish` transaction
+-- say so in their own help, naming the follow-up that actually
+-- pushes; `claim` already carries --execute and its own authority
+-- wording, so the constant must not be sprayed onto it too.
+local function test_help_names_the_prepare_only_verbs()
+  for _, verb in ipairs({"new", "attach", "rank", "set", "spec", "take",
+      "verdict", "done"}) do
+    local code, printed = gitboard_and_capture("help", verb)
+    assert(code == 0, ("help %s should exit 0, got %d"):format(verb, code))
+    assert(printed:find("only PREPARES", 1, true) ~= nil,
+      ("help %s should say it only PREPARES\ngot: %s"):format(verb, printed))
+    -- The constant wraps "gitboard publish" and "--execute" onto
+    -- separate rendered lines, so the two follow-ups are checked
+    -- apart rather than as one joined phrase.
+    assert(printed:find("gitboard publish", 1, true) ~= nil,
+      ("help %s should name gitboard publish\ngot: %s"):format(verb, printed))
+    assert(printed:find("gitboard refresh --execute", 1, true) ~= nil,
+      ("help %s should name gitboard refresh --execute\ngot: %s")
+      :format(verb, printed))
+  end
+  local claim_code, claim_printed = gitboard_and_capture("help", "claim")
+  assert(claim_code == 0, "help claim should exit 0, got " .. claim_code)
+  assert(claim_printed:find("only PREPARES", 1, true) == nil,
+    "help claim should not carry the prepare-only constant\ngot: " .. claim_printed)
+end
+
 -- `resolve_id`'s tail (handle) branch leases the id it resolves to
 -- from its own `for-each-ref` glob's matched row, the same one-shot
 -- ticket a prefix match leaves for `load` — so `show <handle>` never
