@@ -4,5 +4,6 @@ target: cosmic-lua/cosmic
 handover_head: 5826ef4f5b149a1cfab9091cb689edd254dff80f
 verdict: accept
 verdict_head: 5826ef4f5b149a1cfab9091cb689edd254dff80f
+resolution: completed
 builders: d83b0a168499ffd0e236da3871162bef 7b47bb431081ba8b39ba1c3239f8ab89 5c44041b4e248f1623ca43352de13ebf
 speccers: d83b0a168499ffd0e236da3871162bef
