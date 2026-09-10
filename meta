@@ -1,4 +1,4 @@
 title: cosmic with no script arg and piped non-tty stdin silently drops into the REPL instead of running it as a script
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
-claim_batch: c0d14971d58a3aea2663b1ba2904a478a09c19d3
+claim_batch: f7fd3d85dee4e0135b69acd77cef581b378401e6
