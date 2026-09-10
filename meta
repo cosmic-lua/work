@@ -5,4 +5,6 @@ claim_batch: 26f195ffb80cc34da7e986727324df35bccc1570
 handover_head: 4b552c946a598f08e2bc328e8c397c5ecd4fcc68
 verdict: accept
 verdict_head: 4b552c946a598f08e2bc328e8c397c5ecd4fcc68
+landed_head: 851d5ec655d54353b1fa24a9b5d6d4cbd02c0f47
+resolution: completed
 builders: ff7c12b0821a331eec6107046042a1a2
