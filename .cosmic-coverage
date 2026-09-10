@@ -1,4 +1,5 @@
 return {
+  ["_work/repoprofile.tl"] = {["covered"] = 76, ["total"] = 77},
   ["_fuzz/driver.tl"] = {["covered"] = 92, ["total"] = 151},
   ["_fuzz/shrink.tl"] = {["covered"] = 12, ["total"] = 99},
   ["_fuzz/source.tl"] = {["covered"] = 15, ["total"] = 45},
