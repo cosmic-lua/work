@@ -1,6 +1,6 @@
 title: test runner: bound every subprocess and distinguish product failure from unavailable host capability
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
-claim_batch: ab13d9f20abdf18fb03cd63a0b4a624b46c1632b
+claim_batch: 5452b793b7d83c011b91b2e40858672c7c2b5c3b
 handover_head: bf2b44d30bebc18190009d1ec8229e17f0dd6ad5
 builders: fd4611d10ca488747d2538ac52183d55
