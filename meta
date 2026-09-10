@@ -2,8 +2,6 @@ title: surface scanner: lex record fields and enum values into canonical members
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
 claim_batch: 9e145d713c219a4560eb1ef7d3391a3b755abe8a
-handover_head: 0b47592bf995cadf6581e0210149d15aa8259622
-verdict: request changes
-verdict_head: 0b47592bf995cadf6581e0210149d15aa8259622
+handover_head: c061a3e5ba8b51456ca5df371c5d807f69a386f3
 builders: 276f82433650b5a60314ec2a8edd26f7
 speccers: 276f82433650b5a60314ec2a8edd26f7
