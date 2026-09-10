@@ -128,3 +128,31 @@ orchestrator's own branch. No work was lost (caught immediately via a
 countermeasure is procedural: every git operation against a worktree
 should use `git -C <worktree-path>` explicitly, never a bare `cd` whose
 persistence across tool calls cannot be relied on.
+
+## Update — the ancestry gap recurred twice more, `verdict`'s own --force can't repair it
+
+The same squash-merge ancestry problem (`5PCV_sHrL`) recurred twice more
+after the update above: once landing `ha5l_jXYz` (a genuine accepted
+verdict couldn't be recorded via `done --landed` either, only worked
+around via `--force` on `done` itself, which `verdict` does not offer
+an equivalent for), and once on `UqZn_jV6U`'s own rework round — a
+follow-up PR fixing a real perf regression an independent review found
+in the first round. In both cases the actual work (a genuine
+fresh-context review, mutation-tested) completed correctly, and the
+code merged correctly; only the board's own bookkeeping failed to
+record it, because `gitboard verdict`'s ancestry check has no `--force`
+override at all (`done --force --landed` at least accepts one) —
+`verdict ID accept --head SHA --force --why "..."` still refused
+identically to the unforced call. Net effect: two items on this board
+now sit in `review`/`building` state forever despite their code being
+live on `main`, and no available command can close that gap without
+losing the "landed SHA differs from reviewed SHA" evidence trail
+`verdict`/`done` are supposed to preserve.
+
+Countermeasure candidates for whoever refines this: either give
+`verdict` the same `--force --why` escape hatch `done` has (audited,
+not silent), or make BOTH commands verify ancestry against the
+resolved landed/handover commit's *content* (a byte-diff, the way
+`ha5l_jXYz`'s original recovery attempt described) rather than strict
+git ancestry, since a squash merge legitimately breaks ancestry while
+preserving content.
