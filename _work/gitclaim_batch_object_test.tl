@@ -104,12 +104,14 @@ local function test_overlapping_sets_reject_wholly_but_disjoint_sets_both_land()
   assert(remote_tip(b_side.root, gitclaim.batch_ref(overlap.id)) == refs.ZERO_SHA,
     "the rejected set's shared batch ref must not leak")
 
-  -- A lost race deliberately remains as a local receipt for diagnosis. This
-  -- test has inspected the failure above, so discard that receipt before the
-  -- fixture's next caller-owned fetch checks that every remaining receipt is
-  -- confirmable.
-  assert(refs.update_ref(b_side.root, overlap.transaction.staging_ref,
-      refs.ZERO_SHA, overlap.transaction.manifest))
+  assert(prepared.execute(b_side.root, prepared.fetch_argv()))
+  local outcomes = check.must(prepared.refresh(b_side.root))
+  assert(#outcomes == 1 and outcomes[1].state == "lost-race")
+  assert(outcomes[1].quarantine_ref ~= "")
+  assert(check.must(refs.read_ref(b_side.root, outcomes[1].quarantine_ref))
+    == overlap.transaction.manifest)
+  assert(check.must(refs.read_ref(b_side.root, overlap.transaction.staging_ref))
+    == refs.ZERO_SHA)
 
   fixture.caller_fetch(b_side)
   local disjoint = prepare_set(b_side, {c, d}, "disjoint", BOB)

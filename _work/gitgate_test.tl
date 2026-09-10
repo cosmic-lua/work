@@ -109,8 +109,11 @@ local function test_the_rerun_publishes_against_the_merged_state()
   check.must(store.close(b))
   local outcomes = check.must(prepared.refresh(b.root))
   assert(#outcomes == 1 and outcomes[1].state == "lost-race")
-  assert(refs.update_ref(b.root, pending[1].staging_ref, refs.ZERO_SHA,
-      pending[1].manifest), "discard the diagnosed transaction before retry")
+  assert(check.must(refs.read_ref(b.root, pending[1].staging_ref)) == refs.ZERO_SHA)
+  assert(outcomes[1].quarantine_ref == "refs/gitboard/quarantined/lost-race/"
+    .. pending[1].id)
+  assert(check.must(refs.read_ref(b.root, outcomes[1].quarantine_ref))
+    == pending[1].manifest, "the diagnosed transaction remains inspectable")
   check.must(store.list(b))
   local again, aerr = gate.commit_and_publish(b, mine, "a spec touch",
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)

@@ -90,8 +90,46 @@ local function test_refresh_preserves_a_lost_race_for_diagnosis()
 
   local result = check.must(prepared.refresh(root))
   assert(#result == 1 and result[1].state == "lost-race")
-  assert(check.must(refs.read_ref(root, tx.staging_ref)) == tx.manifest,
-    "a losing transaction remains inspectable and is never replayed")
+  local quarantine = "refs/gitboard/quarantined/lost-race/" .. tx.id
+  assert(result[1].quarantine_ref == quarantine)
+  assert(result[1].detail:find(quarantine, 1, true))
+  assert(check.must(refs.read_ref(root, tx.staging_ref)) == refs.ZERO_SHA)
+  assert(check.must(refs.read_ref(root, quarantine)) == tx.manifest)
+  assert(#check.must(prepared.refresh(root)) == 0, "a retired loss is reported once")
+  assert(prepared.load(root, quarantine) == nil, "quarantine is not a plan")
+end
+
+local function test_missing_and_overlay_observations_keep_the_receipt()
+  local root, old, _next_sha, tx = one_update("prepared-ambiguous")
+  assert(refs.set_board_mode(root, "remote"))
+  local result = check.must(prepared.refresh(root))
+  assert(result[1].state == "lost-race" and result[1].quarantine_ref == "")
+  assert(check.must(refs.read_ref(root, tx.staging_ref)) == tx.manifest)
+  local winner = next_commit(root, old, "overlay conflict")
+  refs.set_overlay(root, {
+      {refname = tx.updates[1].ref, sha = winner, touched = 0},
+      {refname = tx.staging_ref, sha = tx.manifest, touched = 0},
+    })
+  local observed, err = prepared.refresh(root)
+  refs.clear_overlay(root)
+  result = check.must(observed, err)
+  assert(result[1].state == "lost-race" and result[1].quarantine_ref == "")
+  assert(check.must(refs.read_ref(root, tx.staging_ref)) == tx.manifest)
+end
+
+local function test_a_later_nonzero_conflict_retires_despite_an_earlier_missing_ref()
+  local root, old, next_sha, first = one_update("prepared-mixed-conflicts")
+  assert(refs.update_ref(root, first.staging_ref, refs.ZERO_SHA, first.manifest))
+  local tx = check.must(prepared.prepare(root, {
+        {ref = "refs/heads/items/a", expected = old, next = next_sha},
+        {ref = "refs/heads/items/b", expected = old, next = next_sha},
+      }))
+  assert(refs.set_board_mode(root, "remote"))
+  local winner = next_commit(root, next_sha, "a later canonical successor")
+  assert(refs.update_ref(root, "refs/remotes/origin/items/b", winner, refs.ZERO_SHA))
+  local result = check.must(prepared.refresh(root))
+  assert(result[1].state == "lost-race" and result[1].quarantine_ref ~= "")
+  assert(check.must(refs.read_ref(root, tx.staging_ref)) == refs.ZERO_SHA)
 end
 
 local function test_fetch_instructions_target_only_remote_tracking_refs()

@@ -168,6 +168,8 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   local synced, err = publish.sync(b)
   assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
     "refresh classifies the losing transaction: " .. tostring(err))
+  assert(err:find("1 quarantined under refs/gitboard/quarantined/lost-race", 1, true), err)
+  assert(publish.sync(b), "the same quarantined loss must not fail the next sync")
   assert(check.must(store.load(b, base.id)).title == "a's edit wins",
     "the checkout holds the winner's state")
   local after = fs.read(dirty_path)

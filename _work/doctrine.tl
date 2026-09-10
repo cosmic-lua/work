@@ -40,6 +40,10 @@ refs remain the CAS fences. ANY live
 overlap, including this caller's claim, rejects all. Retry a changed set as a new batch;
 use separate `renew` and `drop` for held claims. PREPARED and PUSHED grant no authority.
 Only `refresh` seeing every ref confirms the batch. Work offline until its deadline.
+On a verified nonzero ref conflict, refresh reports the loss and quarantines the
+stale plan locally, preserving its manifest outside active publication plans.
+Inspect `git show <printed-quarantine-ref>:manifest`; prepare a new transaction
+from current state. Missing observations remain staged, not quarantined.
 Chain dependent board mutations in a durable clone-local draft:
   export GITBOARD_DRAFT=$(gitboard draft begin --print-id)
   gitboard new ...

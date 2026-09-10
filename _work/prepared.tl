@@ -39,6 +39,7 @@ local record RefreshResult
   transaction: Transaction
   state: RefreshState
   detail: string
+  quarantine_ref: string
 end
 
 local function valid_sha(sha: string): boolean
@@ -271,11 +272,36 @@ local function remove(root: string, tx: Transaction): boolean, string
   return false, err
 end
 
+--- Preserve a stale plan without leaving it selectable for publication.
+local function retire(root: string, tx: Transaction,
+    witness: refs.RefCheck): string, string
+  local destination = "refs/gitboard/quarantined/lost-race/" .. tx.id
+  local before, berr = refs.read_ref(root, destination)
+  if before == nil then return "", berr end
+  if before ~= refs.ZERO_SHA and before ~= tx.manifest then
+    return "", "quarantine destination names a different manifest: " .. destination
+  end
+  local moved, err = refs.update_refs_atomic(root, {
+      {ref = destination, expected = before, next = tx.manifest},
+      {ref = tx.staging_ref, expected = tx.manifest, next = refs.ZERO_SHA},
+    }, {witness})
+  if moved then return destination, "" end
+  -- Only another complete retirement of this exact manifest is success.
+  local source, serr = refs.read_ref(root, tx.staging_ref)
+  if source == nil then return "", serr end
+  local after, aerr = refs.read_ref(root, destination)
+  if after == nil then return "", aerr end
+  if source == refs.ZERO_SHA and after == tx.manifest then
+    return destination, ""
+  end
+  return "", err
+end
+
 --- Compare prepared transactions with state the CALLER already
 --- fetched. Confirmed manifests are cleaned automatically. A target
---- that is neither expected nor next is a lost race and remains
---- staged for diagnosis; an expected target is merely unpublished or
---- not yet fetched. This function performs no fetch.
+--- outside expected/next is a lost race; verified nonzero conflicts
+--- quarantine the receipt for diagnosis. Missing observations remain
+--- staged. This function performs no fetch or publication retry.
 local function refresh(root: string, remote?: string): {RefreshResult} | nil, string
   local pending, err = list(root)
   if pending == nil then
@@ -285,6 +311,7 @@ local function refresh(root: string, remote?: string): {RefreshResult} | nil, st
   for _, tx in ipairs(pending) do
     local state: RefreshState = "confirmed"
     local detail = "all fetched refs match the prepared transaction"
+    local witness: refs.RefCheck = {ref = "", expected = ""}
     for _, u in ipairs(tx.updates) do
       local observed_ref = refs.canonical_ref(root, u.ref, remote)
       if observed_ref == nil then
@@ -296,22 +323,36 @@ local function refresh(root: string, remote?: string): {RefreshResult} | nil, st
       end
       if observed ~= u.next then
         if observed ~= u.expected then
+          if state ~= "lost-race" then
+            detail = ("%s names %s, expected %s or %s"):format(
+              observed_ref, observed, u.expected, u.next)
+          end
           state = "lost-race"
-          detail = ("%s names %s, expected %s or %s"):format(
-            observed_ref, observed, u.expected, u.next)
-          break
+          if observed ~= refs.ZERO_SHA
+          and (witness.ref == "" or observed_ref < witness.ref) then
+            witness = {ref = observed_ref, expected = observed}
+          end
+        elseif state ~= "lost-race" then
+          state = "pending"
+          detail = ("%s still names the expected object"):format(observed_ref)
         end
-        state = "pending"
-        detail = ("%s still names the expected object"):format(observed_ref)
       end
     end
+    local quarantine_ref = ""
     if state == "confirmed" then
       local cleaned, cerr = remove(root, tx)
       if not cleaned then
         return nil, cerr
       end
+    elseif state == "lost-race" and witness.ref ~= ""
+    and not refs.has_overlay(root) then
+      local retired, rerr = retire(root, tx, witness)
+      if retired == "" then return nil, rerr end
+      quarantine_ref = retired
+      detail = detail .. "; quarantined at " .. retired
     end
-    out[#out + 1] = {transaction = tx, state = state, detail = detail}
+    out[#out + 1] = {transaction = tx, state = state, detail = detail,
+      quarantine_ref = quarantine_ref}
   end
   return out, ""
 end

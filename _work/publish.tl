@@ -61,17 +61,27 @@ local function sync(s: store.Store, execute?: boolean): boolean, string
     return false, err
   end
   local _cok, _cerr = store.close(s)
-  local pending_count, lost_count = 0, 0
+  local pending_count, lost_count, quarantined_count = 0, 0, 0
   for _, result in ipairs(results) do
     if result.state == "pending" then
       pending_count = pending_count + 1
     elseif result.state == "lost-race" then
       lost_count = lost_count + 1
+      if result.quarantine_ref ~= "" then quarantined_count = quarantined_count + 1 end
     end
   end
   if lost_count > 0 then
-    return false, ("%d prepared transaction(s) lost their ref lease; "
-      .. "they remain under refs/gitboard/prepared for inspection"):format(lost_count)
+    local detail = ("%d prepared transaction(s) lost their ref lease"):format(lost_count)
+    if quarantined_count > 0 then
+      detail = detail .. ("; %d quarantined under refs/gitboard/quarantined/lost-race")
+      :format(quarantined_count)
+    end
+    local active_count = lost_count - quarantined_count
+    if active_count > 0 then
+      detail = detail .. ("; %d still active under refs/gitboard/prepared for inspection")
+      :format(active_count)
+    end
+    return false, detail
   end
   if pending_count > 0 then
     return true, ("%d prepared transaction(s) are not confirmed; fetch with: %s")
