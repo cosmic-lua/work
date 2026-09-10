@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 8af0201c247e8abd214b3eb120dd7a18
+caller a167f60294e09fc102cf08ca5ac015b8
+remote origin
+action drop
+created 1789083524
+publish-by 0
+reason PR #111 merged (9c523d1d) via auto-merge before an independent review's REQUEST CHANGES verdict landed (racing pattern, same as earlier items); the review's one real finding (stale doctrine.tl review-topic text) was fixed and shipped separately as PR #113. Releasing the claim; verdict/done both refuse on the same squash-ancestry gap 5PCV_sHrL tracks.
+
+3J919QefFpob2Q0FArVeXY3wPY6 299296169918e0cf7bd6e5558cca970f824ea152 drop - 18f723e64325e37e015c435b683b88e55bcb9a39 7b0b5ede2828aa7db264c3539d3598e0bfb68fa0 1789082291 1789082291 1789089491
