@@ -100,7 +100,8 @@ local function base_refusal(current: string, base: string,
   local id8 = id:sub(1, 8)
   if base == "" then
     return ("REFUSED: %s already has a spec — pass --base FILE holding the "
-      .. "text you read; a write with no base is last-write-wins"):format(id8)
+      .. "text you read (from `gitboard show %s --raw`); a write with no "
+      .. "base is last-write-wins"):format(id8, id8)
   end
   return ("REFUSED: %s's spec changed since you read it — re-read it "
     .. "(`gitboard show %s --raw`), re-apply your edit, and pass the re-read "

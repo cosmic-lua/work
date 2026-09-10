@@ -101,6 +101,45 @@ local function test_stale_spec_refusal_names_the_raw_show_command()
     "the refusal should not suggest the formatted report: " .. msg)
 end
 
+-- The command's own byte stream is a usable CAS base: an unchanged write
+-- accepts it, an intervening one-byte edit makes that same base stale, and
+-- both refusal forms point back to the raw producer.
+local function test_raw_show_output_round_trips_through_spec_base_cas()
+  local s = init_state_repo("show-raw-spec-cas")
+  local id = file_item(s, "raw CAS item", "")
+  local original = "## Change\noriginal\n"
+  local it = check.must(store.load(s, id))
+  assert(storewrite.save(s, it, "raw CAS fixture", original))
+  fixture.caller_publish(s)
+
+  local code, base_text = gitboard_raw_capture(s, id)
+  assert(code == 0 and base_text == original, "raw output is the base text")
+  local base = fs.join(tmpdir, "raw-spec-cas-base")
+  local same = fs.join(tmpdir, "raw-spec-cas-same")
+  local intervening = fs.join(tmpdir, "raw-spec-cas-intervening")
+  local edit = fs.join(tmpdir, "raw-spec-cas-edit")
+  assert(fs.write(base, base_text))
+  assert(fs.write(same, base_text))
+  assert(gitboard.main("spec", id, same, "--base", base, "--dir", s.root) == 0,
+    "the raw base accepts an unchanged spec write")
+  assert(fs.write(intervening, "## Change\noriginaL\n"))
+  assert(gitboard.main("spec", id, intervening, "--base", base,
+      "--dir", s.root) == 0, "the raw base permits the intervening write")
+  assert(fs.write(edit, "## Change\nmy edit\n"))
+  local stale_code, stale_output = gitboard_and_capture("spec", id, edit,
+    "--base", base, "--dir", s.root)
+  assert(stale_code ~= 0, "the one-byte intervening change makes base stale")
+  assert(stale_output:find("`gitboard show " .. id:sub(1, 8)
+      .. " --raw`", 1, true) ~= nil,
+    "stale refusal names the raw producer: " .. stale_output)
+  local no_base_code, no_base_output = gitboard_and_capture("spec", id, edit,
+    "--dir", s.root)
+  assert(no_base_code ~= 0, "an existing spec still requires a base")
+  assert(no_base_output:find("`gitboard show " .. id:sub(1, 8)
+      .. " --raw`", 1, true) ~= nil,
+    "no-base refusal names the raw producer: " .. no_base_output)
+end
+
 -- `attach`'s PARENT slot: a handle-form second argument resolves the
 -- same as a prefix would, so a session pasting a handle from `show`
 -- output can attach with it directly.
