@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 75cca65591f4c77b997afe9d05e15581
+caller b23e3318198790bf196fbfdf7d01f088
+remote origin
+action drop
+created 1789058194
+publish-by 0
+reason worktree branched from stale local main (32e7a711); current main deleted/restructured .cosmic-coverage and cast-sites.tsv underneath it, making the diff's ratchet-satisfying steps obsolete; re-claiming fresh against the fixed base
+
+3IvkpjGyB2Xmlj8HTy3jqgpBzmp 61bf41f6044dd26db5e7c8c56698048eb9c4c35b drop - 32e7a71108b9e6f23adc14940123e00091f74a9a 5ec7f7c62fb199f3d2dcce320e5978cd4f701e78 1789055544 1789055544 1789062744
