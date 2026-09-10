@@ -17,13 +17,24 @@ Canonical type text joins the selected tokens with one space. Enum values are
 decoded to semantic bytes and percent-encoded reversibly for a key segment;
 their stored type is `enum`.
 
+The scanner must tolerate valid non-member syntax inside a record without
+emitting it. Consume and skip nested `type Alias = ...` declarations, direct
+array headers such as `{string}`, and nested `interface ... end` declarations,
+then continue scanning later fields. For a typed field followed by
+`= macroexp ... end`, emit the field and its declared type, skip the initializer
+body, and continue. These are syntax-tolerance rules, not new surface kinds;
+unknown or malformed constructs still fail atomically as ambiguous syntax.
+
 Tests cover top-level and nested records/enums, function-typed and multiline
 fields, balanced generics/tables/tuples, trailing comments, string-literal
-spellings, malformed lexing, missing `end`, and locations. Keep the combined
-change between 300 and 390 lines; bounce rather than adding another module.
+spellings, malformed lexing, missing `end`, and locations. Add before/after
+field regressions for aliases, direct array headers, nested interfaces, and
+macroexp initializers, including the existing Cosmic spellings named by the
+review. Keep the combined change at or below 500 lines; bounce rather than
+adding another module or surface kind.
 
 ## Non-goals
 
 No filesystem/module visibility, shard ownership, surface keys, diff/render,
-ZIP reading, CLI wiring, type aliases, or semantic type equivalence.
-
+ZIP reading, CLI wiring, emitted alias/interface/array-header/initializer
+members, alias target interpretation, or semantic type equivalence.
