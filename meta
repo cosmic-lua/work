@@ -3,4 +3,6 @@ parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
 claim_batch: 5452b793b7d83c011b91b2e40858672c7c2b5c3b
 handover_head: bf2b44d30bebc18190009d1ec8229e17f0dd6ad5
+verdict: request changes
+verdict_head: bf2b44d30bebc18190009d1ec8229e17f0dd6ad5
 builders: fd4611d10ca488747d2538ac52183d55
