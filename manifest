@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 3aefc472b68ab6100716bf8e541581a7
+caller a7c42e33a12cd42eefa5d6c4a2175959
+remote origin
+action drop
+created 1789039503
+publish-by 0
+reason second review complete; returning narrowed race findings for rework
+
+3J8G3aLl65OGJFI881jxL2iAJuE c94a9a8345c98c9584f4dd23ee45b3b11073f900 drop - ce5747ff91574594cd59782ecfe8b0ce59da73d1 6971b2d1f6238611272b62d81f716e988ca7ff78 1789038701 1789038701 1789045901
