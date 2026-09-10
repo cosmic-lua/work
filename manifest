@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch dcb1455b51d876497cb9dec51724c7a6
+caller 0cbc9881952cd40aa7b40b0b2e7ba949
+remote origin
+action drop
+created 1789041116
+publish-by 0
+reason final narrow repair handed over for fresh exact-head review
+
+3J8G3aLl65OGJFI881jxL2iAJuE 3217e5904fc28f5fb41b27f651952aac7bf2cde2 drop - ce5747ff91574594cd59782ecfe8b0ce59da73d1 b55edaa4ae19c6855e2946999b89af12c714e015 1789040673 1789040673 1789047873
