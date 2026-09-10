@@ -1,7 +1,7 @@
 title: rewrite: non-writing preview validates replacements and reports refusals
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
 target: cosmic-lua/cosmic
-claim_batch: 10bede732edff209ad25eeabe0973d2f2eb25e66
+claim_batch: 8a8fa98ffa2dd045026ae095a457dc62392a5884
 handover_head: d71619314d44687993eb057005f6a2397f59bb7b
 verdict: request changes
 verdict_head: d71619314d44687993eb057005f6a2397f59bb7b
