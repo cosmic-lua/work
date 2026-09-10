@@ -25,6 +25,27 @@ local function run(root: string, argv: {string})
   assert(result.ok, result.stderr)
 end
 
+local function with_environment(values: {string: string}, f: function())
+  local previous: {string: string} = {}
+  for name in pairs(values) do previous[name] = os.getenv(name) end
+  local ok, err = pcall(function()
+      for name, value in pairs(values) do assert(env.set(name, value)) end
+      f()
+    end)
+  for name in pairs(values) do
+    if previous[name] == nil then assert(env.unset(name))
+    else assert(env.set(name, previous[name])) end
+  end
+  if not ok then error(err, 0) end
+end
+
+local function with_git_config(f: function())
+  local root = directory()
+  write(root, "gitconfig", "")
+  with_environment({GIT_CONFIG_GLOBAL = fs.join(root, "gitconfig"),
+      GIT_CONFIG_NOSYSTEM = "1"}, f)
+end
+
 local function equal(got: {string}, expected: {string})
   assert(#got == #expected, "argv length differs")
   for i, word in ipairs(expected) do assert(got[i] == word, "argv differs at " .. i) end
@@ -269,7 +290,7 @@ local function test_bounded_read_and_close_on_all_outcomes()
   end
 end
 
-local function test_default_base_is_a_local_independent_git_read()
+local function default_base_fixtures()
   local kinds: {repoprofile.Kind} = {"absent", "make", "cosmic"}
   for _, kind in ipairs(kinds) do
     local root = directory()
@@ -293,6 +314,30 @@ local function test_default_base_is_a_local_independent_git_read()
   if ceiling == nil then assert(env.unset("GIT_CEILING_DIRECTORIES"))
   else assert(env.set("GIT_CEILING_DIRECTORIES", ceiling)) end
   assert(ok, tostring(err))
+end
+
+local function test_default_base_is_a_local_independent_git_read()
+  with_git_config(default_base_fixtures)
+end
+
+local function test_git_fixture_config_isolation_restores_even_after_failure()
+  local root = directory()
+  write(root, "host-config", "deliberately invalid Git configuration\n")
+  local hostile = fs.join(root, "host-config")
+  with_environment({GIT_CONFIG_GLOBAL = hostile, GIT_CONFIG_SYSTEM = hostile,
+      GIT_CONFIG_NOSYSTEM = "0"}, function()
+      local failed = check.must(child.run({"git", "init", "-q"}, {cwd = root}))
+      assert(not failed.ok, "the inherited fixture config must genuinely fail Git")
+      with_git_config(function()
+          run(root, {"git", "init", "-q"})
+          assert(repoprofile.default_base(root) == "")
+        end)
+      local ok, err = pcall(with_git_config, function() error("fixture sentinel") end)
+      assert(not ok and tostring(err):find("fixture sentinel", 1, true))
+      assert(os.getenv("GIT_CONFIG_GLOBAL") == hostile)
+      assert(os.getenv("GIT_CONFIG_SYSTEM") == hostile)
+      assert(os.getenv("GIT_CONFIG_NOSYSTEM") == "0")
+    end)
 end
 
 local function test_default_base_exact_argv_and_failure_grammar()
