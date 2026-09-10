@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 13a79712ab5f7c1c7cad2f9e0b6db228
+caller 881b5035b400c2009e8172d192d2b12f
+remote origin
+action drop
+created 1789056211
+publish-by 0
+reason worktree branched from a stale local main (32e7a711, ~107 commits behind origin/main); builder correctly stopped on a false blocker, re-claiming against the fixed base
+
+3IyXK5TT3zTMiW8e5blrs8cfor0 dc878bf42396090290f2342aa60bdb01dbbba541 drop - 32e7a71108b9e6f23adc14940123e00091f74a9a bf2bcb3d685b5b395646b2470b5947c2b00ccf08 1789055555 1789055555 1789062755
