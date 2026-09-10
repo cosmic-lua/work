@@ -2,3 +2,5 @@ title: surface extractor: assemble public-module declarations across shards
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
 claim_batch: 030cbb5a4f4763804efe8731fb8e38386d0899aa
+handover_head: a95db745e658629d5a11d230a3ef6f22001f14cf
+builders: 67191ac224f82eb2997e4839e5942e43
