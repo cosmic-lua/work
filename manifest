@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 57f7005faf7ef0ff06edf4140efb40b1
+caller c3a6042f1cd1847ead723d247744151d
+remote origin
+action drop
+created 1789057106
+publish-by 0
+reason worktree branched from a stale local cosmic-lua/work main (98dd25d7, ~100 commits behind origin/main); rebase produced conflicts across all 5 touched files, re-claiming against the fixed base for a clean redo
+
+3J8sT7HyoXdIilPxdpEdnMI0WRU 8e374b861b3272f89b9c46f1b5a59891b4ca5247 drop - 98dd25d705accd52c1077bfbba2d526a4713dcd1 bb9256064f87100c8c38c6b50f2222c536a55ec1 1789055533 1789055533 1789062733
