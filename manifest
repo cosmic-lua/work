@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 647dcf88b1092dc49051925c4a1b5b06
+caller 1e8135e09fbe1bc9af31256ef0e8b443
+remote origin
+action drop
+created 1789045447
+publish-by 0
+reason Blocked by historical archive duplicate-type conflict; preserve assembler semantics in a separate prerequisite before resuming exact CLI commit ac156def.
+
+3J7aacax6bC4kPaZYNjyyq2d2rJ 9eb078aeec92516f71f80bb60c03d93494c1b2f9 drop - 65cce9fc0ac678c7653493ae282709ef0b7911d9 aa7309245ab17299e7029bece8430d49c45d7df4 1789044219 1789044219 1789051419
