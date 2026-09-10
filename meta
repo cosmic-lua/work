@@ -1,0 +1,3 @@
+title: test suite: assumptions baked in for one host environment (root vs non-root, etc.) misreport as product failures
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
