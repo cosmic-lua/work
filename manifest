@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 65b6fcd8034f0841651f40c5664dbaf1
+caller 7629ddf1ab19b2e4042fad1752c410e3
+remote origin
+action drop
+created 1789070476
+publish-by 0
+reason builder handed over rework; releasing for fresh-context review
+
+3ItRn3u15eMjvsQPhxXUqZnjV6U 53e88d7155bdb0a8846f2fea354f2ee0b135da88 drop - af03b5d54ec0311cf780dd05e7abf529346c243e 94729604b256ed77d1a8cda2457a3c0e6df7d2c9 1789067443 1789067443 1789074643
