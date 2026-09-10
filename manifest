@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 9483043622f522f220829889e84fc4cf
+caller ef735a00a0ab4fbd8c09521038939599
+remote origin
+action drop
+created 1789067429
+publish-by 0
+reason worktree claim base was itself stale (a44b020, predating this item's own #1828 merge) — local main had fallen behind again after several later merges; re-claiming against the now-refreshed base
+
+3ItRn3u15eMjvsQPhxXUqZnjV6U a400a3f55fa6049fbaa89ac7a51406cef28c5001 drop - a44b020d8b044130b9f8abdc199d46373b3a8963 8c7b2cc4606fc6c5fa835e7b0480ca2119ac9254 1789067259 1789067259 1789074459
