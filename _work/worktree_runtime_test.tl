@@ -170,10 +170,12 @@ local function test_publication_vanished_unreadable_and_other_errors_preserve_de
         fs.link = function(old: string, new: string): boolean, string
           temporary = old
           if kind == "other" then return false, "injected EPERM" end
-          if kind == "vanished" then return false, "EEXIST: disappeared" end
-          if kind == "unreadable" then
+          if kind == "vanished" or kind == "unreadable" then
             assert(fs.write(destination, "winner"))
-            return false, "EEXIST: unreadable"
+            local ok, err = link(old, new)
+            assert(not ok, err)
+            if kind == "vanished" then assert(remove(destination)) end
+            return ok, err
           end
           return link(old, new)
         end
@@ -197,6 +199,28 @@ local function test_publication_vanished_unreadable_and_other_errors_preserve_de
         if kind == "unlink" then assert(check.must(fs.read(destination)) == SCRIPT) end
       end)
   end
+end
+
+local function test_publication_errno_looking_paths_do_not_hide_real_link_failure()
+  fresh("EEXIST: misleading", function(c: Case)
+      cache(c.source)
+      local link, temporary, failure = fs.link, "", ""
+      fs.link = function(old: string, new: string): boolean, string
+        temporary = old
+        assert(fs.move(old, old .. ".hidden"))
+        local ok, err = link(old, new)
+        assert(fs.move(old .. ".hidden", old))
+        local prefix = "link: " .. old .. " -> " .. new .. ": ENOENT: "
+        assert(not ok and err:sub(1, #prefix) == prefix, err)
+        failure = err
+        return ok, err
+      end
+      local r, err = runtime.prepare(c.source, c.root, c.pin, false, false)
+      assert(r == nil and err == failure and failure ~= "", "real ENOENT must fail despite EEXIST path text")
+      assert(temporary ~= "" and not fs.is_present(temporary), "publication temporary must be removed")
+      assert(not fs.is_present(fs.join(c.root, "o/bootstrap/cosmic.ape")))
+      assert(not fs.is_present(fs.join(c.root, "o/steps")), "publication failure must precede execution")
+    end)
 end
 
 local function test_probe_native_shell_fallback_and_failures()

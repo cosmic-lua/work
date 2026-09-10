@@ -83,6 +83,6 @@ return {
   ["_work/storewrite.tl"] = {["covered"] = 62, ["total"] = 64},
   ["_work/tail.tl"] = {["covered"] = 38, ["total"] = 38},
   ["_work/worktree_adopt.tl"] = {["covered"] = 67, ["total"] = 67},
-  ["_work/worktree_runtime.tl"] = {["covered"] = 230, ["total"] = 237},
+  ["_work/worktree_runtime.tl"] = {["covered"] = 231, ["total"] = 238},
   ["cmd/gitboard/main.tl"] = {["covered"] = 0, ["total"] = 2},
 }

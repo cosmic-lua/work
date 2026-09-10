@@ -173,7 +173,9 @@ local function publish(root: string, pin: Pin, text: string): string
   if not removed then return "publication temporary cleanup failed: " .. rerr end
   if staged == nil then return serr end
   if not linked then
-    if not lerr:find("EEXIST", 1, true) then return lerr end
+    -- fs.link prefixes errno with these exact paths; path text is not errno.
+    local exists = "link: " .. temporary .. " -> " .. destination .. ": EEXIST: "
+    if lerr:sub(1, #exists) ~= exists then return lerr end
     local winner, werr = verified(destination, pin.digest)
     if winner == nil then rejection(destination, werr) end
   end
