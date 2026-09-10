@@ -13,6 +13,12 @@
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
 
+local BUILDER_PREPARATION < const > = [[It is already bootstrapped: `o/` is warm, the pins are fetched. Do not
+fetch or build before your first edit; `--check types` the files you
+touch, run one test file after each edit, `--make build` only after
+changing a signature other files call, and the full gate once before
+the push.]]
+
 local BUILDER < const > = [[
 You are a builder agent for `<REPO>`, working one item from the work
 board. You have no memory of any prior conversation — everything you
@@ -25,11 +31,7 @@ Your git worktree is already checked out at:
 
 It is on branch `<BRANCH>`, branched from product commit recorded by
 the claim. Work exclusively inside that directory.
-It is already bootstrapped: `o/` is warm, the pins are fetched. Do not
-fetch or build before your first edit; `--check types` the files you
-touch, run one test file after each edit, `--make build` only after
-changing a signature other files call, and the full gate once before
-the push.
+<PREPARATION>
 The checkout that holds the board worktree (`<BOARD_DIR>/..`) is the
 orchestrator's and is stale by construction; never read, grep or build
 in it. Your worktree is the only tree.
@@ -379,6 +381,7 @@ ordered, and the verb verdict lines. Keep it factual and concise.
 ]]
 
 local record brieftext
+  BUILDER_PREPARATION: string
   BUILDER: string
   REWORK: string
   RESEARCH: string
@@ -387,6 +390,7 @@ local record brieftext
 end
 
 local M: brieftext = {
+  BUILDER_PREPARATION = BUILDER_PREPARATION,
   BUILDER = BUILDER,
   REWORK = REWORK,
   RESEARCH = RESEARCH,

@@ -307,7 +307,8 @@ local function main(...: string): integer
       target = resolved
     end
     return brief.cmd_brief(s, d.parsed.args[1] or "", target,
-      d.parsed.values["out"], d.parsed.values["tree"])
+      d.parsed.values["out"], d.parsed.values["tree"],
+      d.parsed.values["receipt"], d.parsed.values["session"])
   end
   if d.command == "new" then
     local title = d.parsed.args[1]
@@ -409,7 +410,8 @@ local function main(...: string): integer
     local who = session.resolve(d.parsed.values["session"])
     return gitworktree.cmd_worktree(s, id, who, d.parsed.values["root"] or "",
       d.parsed.lists["ref"] or {}, d.parsed.switches["review"] or false,
-      d.parsed.switches["verbose"] or false)
+      d.parsed.switches["verbose"] or false, d.parsed.values["receipt-out"],
+      d.parsed.values["gitboard-command"], d.parsed.values["gitboard-cwd"])
   end
   if d.command == "take" then
     local who, werr = claimcli.resolve_caller(d.parsed.values["session"] or "")

@@ -24,6 +24,7 @@
 --- A read, not a mutation: nothing here writes the board.
 local brief_label = require("_work.brief_label")
 local brieftext = require("_work.brieftext")
+local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
 local child = require("cosmic.child")
@@ -154,11 +155,11 @@ end
 --- Rework context contains only facts the board actually owns: the verdict
 --- kind and commit id. Review prose and provider comments are caller state,
 --- never evidence reconstructed by gitboard.
-local function bounce_context(it: item.Item): string
+local function bounce_context(it: item.Item, branch?: string): string
   if (it.verdict or "") ~= "request changes" then return "" end
   return fill(brieftext.REWORK, {
       JUDGED_HEAD = it.verdict_head or "",
-      BRANCH = it.id:sub(1, 8),
+      BRANCH = branch or it.id:sub(1, 8),
     })
 end
 
@@ -289,7 +290,7 @@ end
 --- @param out string | nil Write the body here instead of stdout
 --- @return integer Exit code
 local function cmd_brief(s: store.Store, kind: string, id: string,
-    out?: string, tree?: string): integer
+    out?: string, tree?: string, receipt_file?: string, caller?: string): integer
   out = out or ""
   tree = tree or ""
   local template = KINDS[kind or ""]
@@ -305,6 +306,12 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   if it == nil then
     return gate.verdict_line("brief", false, lerr)
   end
+  if receipt_file == "" then return gate.verdict_line("brief", false, "empty --receipt") end
+  if caller ~= nil and receipt_file == nil then
+    return gate.verdict_line("brief", false, "--session requires a builder --receipt")
+  end
+  local prep, perr = receipt.read(s, it, kind, receipt_file or "", caller or "", tree)
+  if perr ~= "" then return gate.verdict_line("brief", false, perr) end
   local spec = store.read_spec(s, id)
   if spec == "" and kind ~= "decompose" then
     return gate.verdict_line("brief", false,
@@ -333,7 +340,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     end
   end
   local label = ""
-  if kind == "review" then
+  if prep.session ~= nil then
+    label = prep.session
+  elseif kind == "review" then
     local review_label, err = brief_label.review(s, it.id)
     if review_label == nil then
       return gate.verdict_line("brief", false, err)
@@ -343,22 +352,24 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     label = mint_label(kind, tail.bare(it.id))
   end
   local values: {string: string} = {
+    PREPARATION = prep.session ~= nil and receipt.context(prep) or brieftext.BUILDER_PREPARATION,
     ITEM_ID = it.id,
     HANDLE = tail.handle(it.id),
     TITLE = it.title,
-    BRANCH = it.id:sub(1, 8),
+    BRANCH = prep.branch or it.id:sub(1, 8),
+    WORKTREE = prep.worktree,
     SPEC = spec,
     CURRENT_SPEC = spec ~= "" and spec or "(the item has no spec sidecar)",
     BOARD_DIR = fs.absolute_path(s.root),
     REVIEW_SESSION = label,
     ROUND_CONTEXT = "",
-    CLAIM_BASE = it.claim_base or "",
+    CLAIM_BASE = prep["product-base"] or it.claim_base or "",
     CHANGE_SOURCE = (it.external_url or "") ~= ""
     and (("Commit: `%s`\nExternal link (navigation only): %s")
       :format(head_sha, it.external_url or ""))
     or (("Commit: `%s`"):format(head_sha)),
   }
-  local root = product_root()
+  local root = prep.session == nil and product_root() or ""
   if root ~= "" then
     values["PRODUCT_ROOT"] = root
     -- `<WORKTREE>`: `worktree ID` (run after `take ID`) already made
@@ -377,7 +388,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     end
   end
   if kind == "builder" then
-    local bc = bounce_context(it)
+    local bc = bounce_context(it, prep.branch)
     if bc ~= "" then
       values["BOUNCE_CONTEXT"] = bc
     end
@@ -411,6 +422,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   body = body .. "\n\n" .. brieftext_friction.ASK
   local left = survivors(template, values)
+  local session_phrase = prep.session ~= nil and "prepared session" or "claim it as"
   if out ~= "" then
     local wok, werr = fs.write(out, body)
     if not wok then
@@ -426,8 +438,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
     end
     return gate.verdict_line("brief",
-      true, ("%s brief for %s written to %s, claim it as %s — %s"):format(
-        kind, tail.handle(it.id), out, label, tail_note))
+      true, ("%s brief for %s written to %s, %s %s — %s"):format(
+        kind, tail.handle(it.id), out, session_phrase, label, tail_note))
   end
   print(body)
   local tail_note = "nothing left to fill — paste the body verbatim"
@@ -439,8 +451,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
   end
   return gate.verdict_line("brief",
-    true, ("%s brief for %s, claim it as %s — %s"):format(
-      kind, tail.handle(it.id), label, tail_note))
+    true, ("%s brief for %s, %s %s — %s"):format(
+      kind, tail.handle(it.id), session_phrase, label, tail_note))
 end
 
 local record brief
@@ -448,7 +460,7 @@ local record brief
   unfilled: function(text: string): {string}
   mint_label: function(kind: string, handle: string): string
   cmd_brief: function(s: store.Store, kind: string, id: string, out?: string,
-  tree?: string): integer
+  tree?: string, receipt_file?: string, caller?: string): integer
 end
 
 local M: brief = {
