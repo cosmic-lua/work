@@ -76,3 +76,55 @@ Not a request to change the doctrine's substance — the two-hour claim
 lease, the prepare/publish/refresh split, and the session-mint
 requirement are all working as designed. This is about the printed
 strings not matching what the next command accepts.
+
+## Update — the real cost of finding #0
+
+Once all 5 builders in the wave reported, #0's true blast radius
+became clear: **4 of 5 (all but `ha5l_jXYz`) branched from one of two
+stale local `main`s** (`cosmic-lua/cosmic`'s at `32e7a711`, ~107
+commits behind; `cosmic-lua/work`'s at a separate stale commit, ~100
+commits behind — both from a `git checkout -B <branch>` earlier in the
+session that created a new branch without ever fast-forwarding
+`main` itself). Per-builder token/tool cost from each `Agent` call's
+own usage report:
+
+| item | tokens | tool calls | outcome |
+|---|---|---|---|
+| `rs8c_for0` | 102,711 | 25 | false blocker — spec's feature genuinely absent from the stale base, present and correct on real `main`; builder correctly stopped, but the diagnosis was wasted |
+| `UqZn_jV6U` | 216,771 | 104 | full build completed against the stale base; needs a full redo |
+| `jqgp_Bzmp` | 223,167 | 106 | full build completed against the stale base; needs a full redo |
+| `dnMI_0WRU` | 208,275 | 109 | full build completed against the stale base; needs a full redo |
+| `ha5l_jXYz` | 103,958 | 39 | only survivor — touched files happened to be untouched by the ~107 intervening commits |
+
+~751k of ~855k total builder tokens across the wave were spent against
+an avoidably wrong base. Worse, the obvious fix (cherry-pick each
+builder's commit onto real `main`) is **not just a textual rebase**:
+`cosmic-lua/cosmic`'s real `main` had independently deleted/restructured
+`.cosmic-coverage` and `_build/public_surface_baseline.tl` underneath
+the stale branch in the same commit range — the coverage-ratchet and
+public-surface mechanisms both changed shape, so a clean cherry-pick
+would have silently reintroduced dead tracking files rather than using
+current main's actual (different) mechanism. Every affected item had to
+be dropped and rebuilt from scratch against the corrected base, not
+merely rebased.
+
+One instance of `#0` should be board-fatal enough on its own to always
+verify the resolved base before handing it to a builder — 4 confirmed
+occurrences in one 5-item wave makes this the single highest-cost
+defect found this session.
+
+A second, compounding near-miss surfaced while attempting the
+cherry-picks by hand: running `git checkout -b ...`/`cherry-pick` in a
+worktree via a bare `cd <path> && git ...` Bash call, then a *later*
+Bash call (after an intervening command auto-backgrounded past its
+timeout, which silently did not carry its own `cd` forward) executed
+follow-up `git checkout`/`branch -D` commands against the orchestrator's
+own main checkout instead of the intended worktree — because shell cwd
+is not guaranteed to persist across tool calls once a backgrounded
+command intervenes. This briefly left the main checkout on a
+builder's item branch (and its stale file contents) rather than the
+orchestrator's own branch. No work was lost (caught immediately via a
+"file changed on disk" notice and `git worktree list`), but the
+countermeasure is procedural: every git operation against a worktree
+should use `git -C <worktree-path>` explicitly, never a bare `cd` whose
+persistence across tool calls cannot be relied on.
