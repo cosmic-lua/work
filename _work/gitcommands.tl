@@ -186,7 +186,9 @@ local CSPEC: flags.CommandSpec = {
             help = "write the filled body to FILE instead of stdout, "
             .. "immune to a channel that decodes escapes"},
           {long = "tree", arg = "DIR",
-            help = "measure Teal paths named by ## Change beneath DIR"}}}},
+            help = "measure Teal paths named by ## Change beneath DIR"},
+          {long = "receipt", arg = "FILE", help = "validate a v1 builder preparation receipt"},
+          {long = "session", arg = "SESSION", help = "receipt caller; default $GITBOARD_SESSION"}}}},
     {name = "worktree", summary = "create ID's builder checkout: branch, "
       .. "worktree, bootstrap, all in one command",
       spec = {usage = "ID [options]",
@@ -207,6 +209,9 @@ local CSPEC: flags.CommandSpec = {
           {long = "root", arg = "DIR",
             help = "local product checkout override; otherwise use the "
             .. "configured repository mapping"},
+          {long = "receipt-out", arg = "FILE", help = "write a v1 builder preparation receipt"},
+          {long = "gitboard-command", arg = "TEXT", help = "caller-provided invocation, not verified"},
+          {long = "gitboard-cwd", arg = "DIR", help = "cwd for the caller-provided invocation"},
           {long = "ref", arg = "REF", repeated = true,
             help = "fetch REF into refs/spike/<basename> after "
             .. "bootstrap (repeatable)"},

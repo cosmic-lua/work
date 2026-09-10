@@ -20,7 +20,7 @@
 --- out the handed-over commit. `--verbose` applies identically.
 local child = require("cosmic.child")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
+local receipt = require("_work.preparation_receipt")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
@@ -28,37 +28,7 @@ local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 
---- Recover and validate the Git-backed lease which authorizes local work.
---- Looking at the durable holder field alone is insufficient: ordinary item
---- mutations may sit above the control commit, and a two-hour lease can have
---- expired without rewriting the item. The returned root is the stable branch
---- identity; renewals change only the control/deadline.
-local function active_claim(s: store.Store, it: item.Item, session: string):
-  claim.State | nil, string
-  local holder = it.claim or ""
-  if holder == "" then
-    return nil, ("REFUSED: %s is not claimed by %s — claim it first")
-    :format(it.id:sub(-8), session)
-  end
-  local pointer = it.claim_batch or ""
-  if pointer == "" then return nil, "item has no claim batch" end
-  local st, err = claimbatch.read_state(s.root, pointer, it.id)
-  if err ~= "" then return nil, err end
-  local status = claim.status(st, os.time())
-  if status ~= "active" then
-    if status == "future" then
-      return nil, "REFUSED: claim timestamp is more than five minutes in the future"
-    end
-    return nil, ("REFUSED: %s's claim has expired — claim it again")
-    :format(it.id:sub(-8))
-  end
-  if st == nil then return nil, "active claim has no state" end
-  if st.holder ~= session then
-    return nil, ("REFUSED: %s is claimed by %s, not %s")
-    :format(it.id:sub(-8), st.holder, session)
-  end
-  return st, ""
-end
+local active_claim = receipt.active_claim
 
 --- Resolve a full or abbreviated product commit without consulting a branch,
 --- remote, or provider. The claim and handover paths pass full ids.
@@ -347,12 +317,24 @@ end
 --- @return integer Exit code
 local function cmd_worktree(s: store.Store, id: string, session: string,
     root_override: string, refs: {string}, review: boolean,
-    verbose: boolean): integer
+    verbose: boolean, receipt_file?: string, command?: string, cwd?: string): integer
+  if receipt_file == "" then return gate.verdict_line("worktree", false, "empty --receipt-out") end
+  if (command ~= nil or cwd ~= nil) and (receipt_file == nil or command == nil or cwd == nil
+    or command == "" or cwd == "") then
+    return gate.verdict_line("worktree", false, "invocation flags require --receipt-out and nonempty command/cwd")
+  end
+  local file, invocation, directory = receipt_file or "", command or "", cwd or ""
+  local opt = receipt.options(file, invocation, directory, review)
+  if opt ~= "" then return gate.verdict_line("worktree", false, opt) end
   local it, lerr = store.load(s, id)
   if it == nil then return gate.verdict_line("worktree", false, lerr) end
   local handle = id:sub(-8)
   local st, sterr = active_claim(s, it, session)
   if st == nil then return gate.verdict_line("worktree", false, sterr) end
+  if file ~= "" then
+    st, sterr = receipt.confirmed(s, it, session)
+    if st == nil then return gate.verdict_line("worktree", false, sterr) end
+  end
   if review then
     return cmd_worktree_review(s, it, st, root_override, refs, verbose)
   end
@@ -389,6 +371,9 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
         added ~= nil and added.stderr or "could not run git"))
   end
   local bootstrapped, referr = bootstrap_and_refs(path, refs, verbose, base_sha)
+  if referr == "" and file ~= "" then
+    referr = receipt.write(s, it, st, checkout, branch, path, bootstrapped, file, invocation, directory)
+  end
   if referr ~= "" then
     return gate.verdict_line("worktree", false,
       ("checkout created at %s; preparation failed: %s"):format(path, referr))
@@ -401,7 +386,7 @@ end
 local record gitworktree
   cmd_worktree: function(s: store.Store, id: string, session: string,
   root_override: string, refs: {string}, review: boolean,
-  verbose: boolean): integer
+  verbose: boolean, receipt_file?: string, command?: string, cwd?: string): integer
   default_base: function(repo: string, base: string): string
 end
 
