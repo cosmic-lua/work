@@ -127,6 +127,11 @@ local function test_mixed_result_and_head_render_identically_for_both_templates(
             "acme/widgets=" .. p.root}))
     end
     legacy_result(s, id)
+    -- A review needs distance from the builder: drop the standing build
+    -- claim (an active foreign claim refuses acquisition outright) and
+    -- re-claim as the reviewer before the brief will fill one.
+    assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
+    assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
     local before = check.must(store.git_ok(s, {"show-ref"})).stdout
     local code, mixed = capture(s, "review", id)
     assert(code == 0, mixed)
@@ -165,11 +170,14 @@ local function test_legacy_result_migrates_only_through_product_commit_handover(
     if event.subject == "take old result:" .. digest then found = true end
   end
   assert(found, "migration must preserve the historical result")
+  -- A review needs distance from the builder: drop the standing build
+  -- claim (an active foreign claim refuses acquisition outright) and
+  -- re-claim as the reviewer before the brief will fill one.
+  assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
+  assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
   local code, out = capture(s, "review", id)
   assert(code == 0, out)
   assert_exact_review(out, p.head)
-  assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
-  assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
   assert(gitverdict.cmd_verdict_commit(s, id, "accept", p.next_head,
       flow.REVIEWER, false, "", p.root) ~= 0, "a different head is not the handover")
   assert(gitverdict.cmd_verdict_commit(s, id, "accept", p.head,

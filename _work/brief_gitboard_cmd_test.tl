@@ -36,15 +36,29 @@ assert(fs.make_dirs(BOARD_CWD))
 assert(fs.make_dirs(PRODUCT_WORKTREE))
 local COMMAND < const > = "sh " .. BOARD_APE
 
+--- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
+--- read time (`_work.claimprojection`), never from the item's own history,
+--- so the real claim comes from `fixture.claim_item` rather than a direct
+--- field assignment.
 local function handover(s: store.Store, id: string)
+  fixture.claim_item(s, id, "session-a", BASE)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
-  it.claim = "session-a"
-  it.claim_base = BASE
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12))))
+end
+
+--- Move `id`'s claim from the builder to the reviewing session named by
+--- `session` — the step the orchestrator takes between a builder's
+--- handover and `brief review ID`. A review now refuses outright when the
+--- item has no active claim or when the claim belongs to its own
+--- builders, so a fresh reviewing claim is required here to reach the
+--- rendering behavior these tests exercise.
+local function reclaim(s: store.Store, id: string, session: string)
+  fixture.drop_claim(s, id, "session-a", "handed over")
+  fixture.claim_item(s, id, session, BASE)
 end
 
 local function capture(f: function(): integer): integer, string
@@ -66,6 +80,7 @@ local function test_review_renders_the_exact_ape_invocation_and_cwd()
   local _, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
   handover(s, leaf)
+  reclaim(s, leaf, "f00dcafe00001234dead")
   check.must(env.set("GITBOARD_SESSION", "f00dcafe00001234dead"))
   local code, out = capture(function(): integer
       return gitboard.main("brief", "review", leaf, "--dir", s.root,
@@ -95,6 +110,7 @@ local function test_review_with_no_caller_command_is_labeled_unresolved()
   local _, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
   handover(s, leaf)
+  reclaim(s, leaf, "f00dcafe00002468dead")
   check.must(env.set("GITBOARD_SESSION", "f00dcafe00002468dead"))
   local code, out = capture(function(): integer
       return gitboard.main("brief", "review", leaf, "--dir", s.root)

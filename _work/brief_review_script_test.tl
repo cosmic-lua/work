@@ -134,6 +134,11 @@ local function handover_diff(s: store.Store, id: string, name: string,
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(id:sub(1, 8), head:sub(1, 12))))
+  -- A review needs distance from the builder: drop the standing build
+  -- claim (an active foreign claim refuses acquisition outright) and
+  -- re-claim as the reviewer before a review brief will fill one.
+  fixture.drop_claim(s, id, "session-a", "handed over")
+  fixture.claim_item(s, id, "session-b", base)
 end
 
 -- The selection rule is the spec's own, checked at both ends: a

@@ -70,14 +70,28 @@ end
 local BASE < const > = ("a"):rep(40)
 local HEAD < const > = ("b"):rep(40)
 
+-- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
+-- read time (`_work.claimprojection`), never from the item's own history,
+-- so the real claim comes from `fixture.claim_item` rather than a direct
+-- field assignment.
 local function handover_item(s: store.Store, leaf: string)
   give_spec(s, leaf)
+  fixture.claim_item(s, leaf, "session-a", BASE)
   local it = assert(store.load(s, leaf))
-  it.repo, it.claim, it.claim_base = "acme/widgets", "session-a", BASE
+  it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12))))
+end
+
+-- A review needs distance from the builder: drop the standing build claim
+-- (an active foreign claim refuses acquisition outright, even with
+-- --force) and re-claim as the reviewer before a review brief will fill
+-- one.
+local function reclaim_for_review(s: store.Store, leaf: string)
+  fixture.drop_claim(s, leaf, "session-a", "handed over")
+  fixture.claim_item(s, leaf, "reviewer-a", BASE)
 end
 
 --- Put a fresh item in a v3 rework state without a provider object.
@@ -198,6 +212,7 @@ local function test_review_brief_names_its_own_worktree_path_unconditionally()
   local s = init_state_repo("brief-wt-review")
   local _, leaf = root_with_leaf(s)
   handover_item(s, leaf)
+  reclaim_for_review(s, leaf)
   local id8 = leaf:sub(1, 8)
   local expect = fs.join(fs.dirname(WT_ROOT), "wt", "review-" .. id8)
   with_product_root(function(): boolean
@@ -217,6 +232,7 @@ local function test_review_brief_has_no_provider_round_context()
   local s = init_state_repo("brief-round-context-first")
   local _, leaf = root_with_leaf(s)
   handover_item(s, leaf)
+  reclaim_for_review(s, leaf)
   local code, out = brief_and_capture(s, "review", leaf)
   assert(code == 0, "a commit handover still earns its review brief")
   assert(out:find("<ROUND_CONTEXT>", 1, true) == nil
@@ -228,6 +244,7 @@ local function test_review_brief_preserves_literal_template_tokens_in_spec()
   local s = init_state_repo("brief-literal-spec")
   local _, leaf = root_with_leaf(s)
   handover_item(s, leaf)
+  reclaim_for_review(s, leaf)
   local it = assert(store.load(s, leaf))
   local spec = "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
   .. "## Non-goals\nNothing else.\n"
