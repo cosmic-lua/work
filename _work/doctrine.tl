@@ -280,16 +280,10 @@ checkout or push rights to this board repository:
   its append-only ref, and one first-parent item bridge per member; all publish or none.
   Any live overlap, including your own, refuses acquisition: refresh and try a new set;
   use `renew` or `drop` for held claims. Only refresh grants authority. Use a distinct
-  session per agent: `<kind>-<handle>-<orch8>` (`build`, `research`, `review`, `refine`
-  or `decompose`; `<orch8>` the first 8 characters of YOUR OWN
-  session identity, `show`'s "session: ..." line) — the same shape
-  `brief KIND ID` mints and prints on its own verdict line, so reading
-  that line before you spawn gives you the exact string to claim
-  under. Embedding your own identity is what keeps two concurrent
-  orchestrator sessions working the same item from minting the
-  identical label and each reading `claim`'s exact-string lock as its
-  own re-claim instead of a foreign one. A lost race is the lock
-  working: take the next item.
+  session per agent: one `gitboard session new` per agent, passed as `--session`
+  (or exported as `GITBOARD_SESSION`). The ids are 128-bit, so two concurrent
+  orchestrators cannot mint the same one and no derivation from your own
+  identity is needed. A lost race is the lock working: take the next item.
 - Disjoint or not at all. `next` names one item and cannot see what
   else you are taking; file-disjointness across the wave is your
   check, judged on the MERGE — a shared file with thin headroom
@@ -331,9 +325,8 @@ checkout or push rights to this board repository:
   item is pullable again. Still running: leave it. Then the PRs are
   yours to watch — the agents are gone.
 - Reviews fan out like builds: one fresh subagent per handed-over commit awaiting
-  a verdict, each under its own minted `review-<handle>-<orch8>`
-  label — `brief review ID` fills it into the body it hands the
-  agent, so claim under the string its own verdict line names, all in
+  a verdict, each claimed first with its own minted session — `brief
+  review ID` then fills that claim into the body it hands the agent, all in
   the background. What the review needs is distance from the BUILDER —
   a window that never held the build — and a verdict that is one
   agent's alone; N reviewers on N different commits keep both. A row already

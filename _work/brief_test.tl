@@ -30,11 +30,15 @@ local BASE < const > = ("a"):rep(40)
 local HEAD < const > = ("b"):rep(40)
 
 --- Put an item in the v3 commit-handover shape without involving a provider.
+--- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
+--- read time (`_work.claimprojection`), never from the item's own history,
+--- so the real claim comes from `fixture.claim_item` rather than a direct
+--- field assignment — a workflow transition never releases the claim, so
+--- this leaves "session-a" holding it exactly as a real handover would.
 local function handover(s: store.Store, id: string, url?: string)
+  fixture.claim_item(s, id, "session-a", BASE)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
-  it.claim = "session-a"
-  it.claim_base = BASE
   it.handover_head = HEAD
   it.external_url = url or ""
   assert(item.record_involvement(it.builders, "session-a"))
@@ -52,20 +56,22 @@ local function research_handover(s: store.Store, id: string)
         id:sub(1, 8), it.result:sub(1, 7))))
 end
 
---- Pin the session identity `_work.session` derives for the duration
---- of a test, so a minted label's `<orch8>` is a known, fixed value
---- rather than whatever ambient identity this process happens to
---- carry. `GITBOARD_SESSION` leads the ladder, so setting only it is
---- enough regardless of what else the environment sets.
---- @param id string The session identity to pin
-local function pin_session(id: string)
-  check.must(env.set("GITBOARD_SESSION", id))
-end
-
---- Undo `pin_session`, restoring the derivation to whatever the
---- ambient environment (if anything) names.
-local function unpin_session()
-  local _ok, _err = env.unset("GITBOARD_SESSION")
+--- Move `id`'s claim from the builder to a fresh reviewing session, the
+--- step the orchestrator takes between a builder's handover and `brief
+--- review ID` — dropping the standing builder claim first, since an
+--- active foreign claim refuses acquisition outright, even with
+--- `--force` (`_work.gitclaim_test`'s
+--- `test_active_foreign_claim_refuses_even_when_force_is_requested`).
+--- Without this, the claim stays the builder's own and a review brief
+--- refuses (`distance_refusal`) — the point of the fix this file's own
+--- `brief_session_test.tl` sibling covers; this helper just keeps the
+--- tests below that exercise unrelated review behavior past it.
+--- @param s store.Store The store
+--- @param id string The item id
+--- @param session string The reviewing session to claim under
+local function reclaim(s: store.Store, id: string, session: string)
+  fixture.drop_claim(s, id, "session-a", "handed over")
+  fixture.claim_item(s, id, session, BASE)
 end
 
 --- Run brief.cmd_brief and capture exactly what it prints via
@@ -134,6 +140,7 @@ No refusal.
   assert(out:find("measured Change paths under " .. s.root, 1, true) ~= nil,
     "the verdict names what was measured: " .. out)
   handover(s, leaf)
+  reclaim(s, leaf, "session-b")
   local review_code, review_out = brief_and_capture(s, "review", leaf, s.root)
   assert(review_code == 0, "tree measurement earns a review brief: " .. review_out)
   assert(review_out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
@@ -212,9 +219,8 @@ local function test_review_brief_needs_the_handover()
   assert(brief.cmd_brief(s, "review", leaf) ~= 0,
     "no commit recorded, no review brief — the handover is what a review judges")
   handover(s, leaf, "https://example.test/change/42")
-  pin_session("deadbeef1234cafefeed")
+  reclaim(s, leaf, "session-b")
   local code, out = brief_and_capture(s, "review", leaf)
-  unpin_session()
   assert(code == 0, "the recorded commit unlocks the review brief")
   assert(out:find(HEAD, 1, true) ~= nil, "the exact commit is filled")
   assert(flat_text(out):find(flat_text(stale_board_sentence(s)), 1, true) ~= nil,
@@ -234,15 +240,15 @@ local function test_review_brief_needs_the_handover()
   assert(out:find("<PRODUCT_ROOT>", #out - 200, true) ~= nil,
     "the verdict line names it among the survivors: " .. out:sub(#out - 200))
   assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
-    "the placeholder is gone — the brief mints and fills the label itself")
-  local label = ("review-%s-deadbeef"):format(tail.bare(leaf))
+    "the placeholder is gone — the brief fills the claim's own session")
+  local label = "session-b"
   assert(out:find("session `" .. label .. "`", 1, true) ~= nil,
     "the review is told the exact session it is claimed under: " .. out)
   assert(out:find("--session " .. label, 1, true) ~= nil,
     "and records its verdict under the same string")
-  assert(out:find("claim it as " .. label, 1, true) ~= nil,
-    "the verdict line repeats it, so an orchestrator claims under the "
-    .. "identical string before ever spawning the agent")
+  assert(out:find("claimed under session " .. label, 1, true) ~= nil,
+    "the verdict line repeats it, so the reviewer reads the exact claim "
+    .. "the board already holds")
 end
 
 -- `<PRODUCT_ROOT>` is `GITBOARD_DIR`'s parent's parent — the checkout
@@ -254,13 +260,12 @@ local function test_product_root_fills_from_gitboard_dir()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   handover(s, leaf)
-  pin_session("f005cafe00001234dead")
+  reclaim(s, leaf, "session-b")
   local prior = env.get("GITBOARD_DIR")
   check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
   local code, out = brief_and_capture(s, "review", leaf)
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
-  unpin_session()
   assert(code == 0, "the recorded commit unlocks the review brief")
   assert(out:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "PRODUCT_ROOT is GITBOARD_DIR's parent's parent: " .. out)
@@ -275,6 +280,7 @@ local function test_commit_handover_fills_head_without_provider_state()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   handover(s, leaf)
+  reclaim(s, leaf, "session-b")
   local code, out = brief_and_capture(s, "review", leaf)
   assert(code == 0)
   assert(out:find(HEAD, 1, true) ~= nil and out:find("<HEAD_SHA>", 1, true) == nil,
@@ -347,58 +353,6 @@ local function test_review_brief_refuses_a_result_only_handover()
   assert(out:find("take " .. leaf:sub(1, 8) .. " --head SHA", 1, true) ~= nil, out)
 end
 
--- The minted label is `<kind>-<handle>-<orch8>` for every kind, printed
--- on the brief's own verdict line even for the kinds whose template
--- carries no in-body placeholder to fill — so an orchestrator claiming
--- ANY kind of work reads the exact string to `take ID --session` under
--- straight off the brief, rather than inventing one.
-local function test_every_kind_prints_its_minted_claim_label()
-  local s = init_state_repo("brief-labels")
-  local root, leaf = root_with_leaf(s)
-  give_spec(s, leaf)
-  pin_session("0123456789abcdef")
-  local prefixes: {string: string} = {
-    builder = "build",
-    research = "research",
-    refine = "refine",
-  }
-  for kind, prefix in pairs(prefixes) do
-    local code, out = brief_and_capture(s, kind, leaf)
-    assert(code == 0, kind .. " brief: " .. out)
-    local label = ("%s-%s-01234567"):format(prefix, tail.bare(leaf))
-    assert(out:find("claim it as " .. label, 1, true) ~= nil,
-      ("%s brief names its own claim label: %s"):format(kind, out))
-  end
-  local code, out = brief_and_capture(s, "decompose", root)
-  assert(code == 0)
-  local label = ("decompose-%s-01234567"):format(tail.bare(root))
-  assert(out:find("claim it as " .. label, 1, true) ~= nil,
-    "decompose brief names its own claim label too: " .. out)
-  unpin_session()
-end
-
--- Two orchestrator sessions minting the label for the SAME kind and
--- item differ in exactly the field meant to differ: `<orch8>`. Same
--- kind, same handle, different session identity, different string —
--- the collision the friction log measured cannot happen once brief
--- mints it.
-local function test_orch8_differs_by_session_identity_alone()
-  local s = init_state_repo("brief-orch8")
-  local _, leaf = root_with_leaf(s)
-  give_spec(s, leaf)
-  handover(s, leaf)
-  pin_session("11111111aaaaaaaa")
-  local _, out_one = brief_and_capture(s, "review", leaf)
-  pin_session("22222222bbbbbbbb")
-  local _, out_two = brief_and_capture(s, "review", leaf)
-  unpin_session()
-  local prefix = ("review-%s-"):format(tail.bare(leaf))
-  assert(out_one:find(prefix .. "11111111", 1, true) ~= nil, out_one)
-  assert(out_two:find(prefix .. "22222222", 1, true) ~= nil, out_two)
-  assert(out_one:find(prefix .. "22222222", 1, true) == nil,
-    "the first session's brief never carries the second session's orch8")
-end
-
 --- `s` with every run of whitespace collapsed to one space, so a
 --- sentence pinned here reads the same whether the text wraps it
 --- across one line or several — the same helper `_work.brieftext_test`
@@ -429,9 +383,8 @@ local function test_every_kind_carries_the_friction_ask()
   assert(flat(dout):find(opener, 1, true) ~= nil,
     "decompose brief must carry the friction ask: " .. dout)
   handover(s, leaf)
-  pin_session("f005ba11cafed00d")
+  reclaim(s, leaf, "session-b")
   local rcode, rout = brief_and_capture(s, "review", leaf)
-  unpin_session()
   assert(rcode == 0, "review brief: " .. rout)
   assert(flat(rout):find(opener, 1, true) ~= nil,
     "review brief must carry the friction ask: " .. rout)

@@ -10,11 +10,12 @@
 --- verdict line names each survivor, so the caller's whole job is
 --- those and pasting the body verbatim.
 ---
---- Every brief also mints and fills the session label this kind's own
---- claim belongs under (`mint_label`) and repeats it on the closing
---- verdict line, so the orchestrator claims — `take ID --session
---- <label>` — under the exact string the brief just printed, before
---- ever spawning the agent the body is handed to.
+--- Every brief also names the session its subject is already claimed
+--- under (`it.claim`) on the closing verdict line, so the caller
+--- claims — `take ID --session <label>` — under the exact string
+--- already on the board, before ever spawning the agent the body is
+--- handed to; `gitboard session new` is the only way a claim identity
+--- comes into existence, so no brief kind mints one of its own.
 ---
 --- Every body also carries `_work.brieftext_friction`'s `ASK` after
 --- its own "Final report" section, unconditionally — the friction ask
@@ -22,7 +23,6 @@
 --- hand.
 ---
 --- A read, not a mutation: nothing here writes the board.
-local brief_label = require("_work.brief_label")
 local brieftext = require("_work.brieftext")
 local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
@@ -46,9 +46,6 @@ local KINDS < const >: {string: string} = {
 
 --- The kind names, alphabetical, for refusals and help.
 local KIND_LIST < const > = "builder, decompose, refine, research, review"
-
--- Compatibility formatter: history-aware numbering belongs only to cmd_brief.
-local mint_label = brief_label.mint_label
 
 --- Replace every `<UPPER_SNAKE>` placeholder that `values` answers;
 --- one the map does not answer survives verbatim.
@@ -338,18 +335,25 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
         template = brieftext_review.REVIEW_SCRIPT
       end
     end
+    -- A review names a live claim `verdict` will accept — never mints one.
+    if (it.claim or "") == "" then
+      return gate.verdict_line("brief", false,
+        ("%s carries no active claim — a review records its verdict under "
+          .. "the claim it is spawned from; claim it with a session from "
+          .. "`gitboard session new`, then re-run this brief"):format(id:sub(1, 8)))
+    end
+    local distance = gate.distance_refusal(it, it.claim)
+    if distance ~= nil then
+      return gate.verdict_line("brief", false,
+        ("%s is still claimed by the session that built it — %s"):format(
+          id:sub(1, 8), distance))
+    end
   end
   local label = ""
   if prep.session ~= nil then
     label = prep.session
-  elseif kind == "review" then
-    local review_label, err = brief_label.review(s, it.id)
-    if review_label == nil then
-      return gate.verdict_line("brief", false, err)
-    end
-    label = review_label
   else
-    label = mint_label(kind, tail.bare(it.id))
+    label = it.claim or ""
   end
   local values: {string: string} = {
     PREPARATION = prep.session ~= nil and receipt.context(prep) or brieftext.BUILDER_PREPARATION,
@@ -421,7 +425,11 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   body = body .. "\n\n" .. brieftext_friction.ASK
   local left = survivors(template, values)
-  local session_phrase = prep.session ~= nil and "prepared session" or "claim it as"
+  -- An unclaimed item's brief (builder, research, refine, decompose) has
+  -- no session to name, so it carries no clause and no minted stand-in.
+  local session_phrase = prep.session ~= nil and "prepared session" or "claimed under session"
+  local session_clause = label ~= "" and (", %s %s"):format(session_phrase, label) or ""
+  local mint_note = "mint a session with `gitboard session new` and claim it before spawning — "
   if out ~= "" then
     local wok, werr = fs.write(out, body)
     if not wok then
@@ -436,9 +444,10 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     if measured then
       tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
     end
+    tail_note = label == "" and (mint_note .. tail_note) or tail_note
     return gate.verdict_line("brief",
-      true, ("%s brief for %s written to %s, %s %s — %s"):format(
-        kind, tail.handle(it.id), out, session_phrase, label, tail_note))
+      true, ("%s brief for %s written to %s%s — %s"):format(
+        kind, tail.handle(it.id), out, session_clause, tail_note))
   end
   print(body)
   local tail_note = "nothing left to fill — paste the body verbatim"
@@ -449,15 +458,15 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   if measured then
     tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
   end
+  tail_note = label == "" and (mint_note .. tail_note) or tail_note
   return gate.verdict_line("brief",
-    true, ("%s brief for %s, %s %s — %s"):format(
-      kind, tail.handle(it.id), session_phrase, label, tail_note))
+    true, ("%s brief for %s%s — %s"):format(
+      kind, tail.handle(it.id), session_clause, tail_note))
 end
 
 local record brief
   fill: function(text: string, values: {string: string}): string
   unfilled: function(text: string): {string}
-  mint_label: function(kind: string, handle: string): string
   cmd_brief: function(s: store.Store, kind: string, id: string, out?: string,
   tree?: string, receipt_file?: string, caller?: string): integer
 end
@@ -465,7 +474,6 @@ end
 local M: brief = {
   fill = fill,
   unfilled = unfilled,
-  mint_label = mint_label,
   cmd_brief = cmd_brief,
 }
 

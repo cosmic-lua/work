@@ -123,7 +123,7 @@ local function test_out_verdict_names_the_path_not_the_body()
     "the verdict line carries doctrine's own instruction: " .. verdict)
   assert(verdict:find("```", 1, true) == nil,
     "the body's own fence never reaches the printed verdict: " .. verdict)
-  assert(verdict:find("claim it as", 1, true) ~= nil,
-    "the minted claim label still rides the verdict, same as a bare brief: "
-    .. verdict)
+  assert(verdict:find("mint a session with `gitboard session new`", 1, true) ~= nil,
+    "the unclaimed item's verdict still points at how to get a claim, "
+    .. "same as a bare brief: " .. verdict)
 end
