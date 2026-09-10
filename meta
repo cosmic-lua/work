@@ -2,3 +2,5 @@ title: test runner: bound every subprocess and distinguish product failure from 
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
 claim_batch: e474c7de5c061c88cc41c1c9541ba40fbc8f6e8f
+handover_head: bf2b44d30bebc18190009d1ec8229e17f0dd6ad5
+builders: fd4611d10ca488747d2538ac52183d55
