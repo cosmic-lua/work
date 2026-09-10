@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+User decision: dependency declarations are explicit, and the board enforces declared dependencies when selecting ready work. Do not infer a dependency merely because an item was captured inside another slice. Refine this against the current format-4 board model; the historical `blocked_by` representation below is not an instruction to restore obsolete schema. Specify declaration, readiness, and landed-prerequisite verification before implementation. This is GitBoard ordering policy; use Cosmic's existing file/process utilities where needed, without inventing a Cosmic dependency-policy abstraction. No implementation or graph change is authorized by this spec note alone.
+
 ## Evidence
 
 A slice that files a capture almost always files it against the tree the
@@ -66,3 +72,4 @@ choice is `plan`'s.
 
 The 17 items above are already repaired, so this item is about the next
 seventeen.
+
