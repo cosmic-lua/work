@@ -1,7 +1,7 @@
 title: cosmic with no script arg and piped non-tty stdin silently drops into the REPL instead of running it as a script
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
-claim_batch: a30c69005aa1844bd9a0010d67ba309045f1096f
+claim_batch: c79edcf32a09f77f4e1b4daa876d5f506e5e68a9
 handover_head: 21ad765d41ad1e1067421fb7006f61eff280c538
 external_url: https://github.com/cosmic-lua/cosmic/pull/1827
 builders: edb6913078a080f25585a847657450b5
