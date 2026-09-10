@@ -200,6 +200,20 @@ local function test_the_review_script_mutates_a_git_show_copy()
     "the script template must never send a reviewer to a fresh checkout")
 end
 
+local function test_the_review_script_verdict_is_checkout_free()
+  assert(REVIEW_SCRIPT:find("own checkout", 1, true) == nil,
+    "the script verdict must not send a reviewer to an own checkout")
+  assert(REVIEW_SCRIPT:find("<WORKTREE>", 1, true) == nil,
+    "the script template must not contain a worktree placeholder")
+  assert(REVIEW_SCRIPT:find("git show", 1, true) ~= nil
+    and REVIEW_SCRIPT:find("product checkout", 1, true) ~= nil,
+    "the script verdict must name the product checkout and git show")
+  assert(REVIEW:find("fresh checkout", 1, true) ~= nil,
+    "the full review must retain its own checkout wording")
+  assert(REVIEW:find("<WORKTREE>", 1, true) ~= nil,
+    "the full review must retain its worktree placeholder")
+end
+
 -- A freshly made review checkout has no `o/3p` cache — the same gap
 -- `worktree ID` already closes for a builder — so both review
 -- templates must send a reviewer to `--make fetch` (and, for any

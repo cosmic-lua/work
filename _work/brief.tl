@@ -376,14 +376,13 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     -- the builder's checkout at exactly this path, so a builder brief
     -- fills it only once that worktree exists on disk — the same
     -- "unfilled until the board can answer it" rule every other
-    -- placeholder follows. A review names its OWN fresh checkout
-    -- instead, always — the reviewer creates it, so there is nothing
-    -- to check for.
+    -- placeholder follows. A review fills it only when the selected
+    -- template contains the placeholder.
     local id8 = it.id:sub(1, 8)
     local wt = fs.join(fs.dirname(root), "wt", id8)
     if kind == "builder" and fs.is_dir(wt) then
       values["WORKTREE"] = wt
-    elseif kind == "review" then
+    elseif kind == "review" and template:find("<WORKTREE>", 1, true) ~= nil then
       values["WORKTREE"] = fs.join(fs.dirname(root), "wt", "review-" .. id8)
     end
   end
