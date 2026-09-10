@@ -11,16 +11,13 @@
 --- those and pasting the body verbatim.
 ---
 --- Every brief also names the session its subject is already claimed
---- under (`it.claim`) on the closing verdict line, so the caller
---- claims — `take ID --session <label>` — under the exact string
---- already on the board, before ever spawning the agent the body is
---- handed to; `gitboard session new` is the only way a claim identity
---- comes into existence, so no brief kind mints one of its own.
+--- under (`it.claim`) on the closing verdict line — `gitboard session
+--- new` is the only way a claim identity comes into existence, so no
+--- brief kind mints one of its own.
 ---
 --- Every body also carries `_work.brieftext_friction`'s `ASK` after
---- its own "Final report" section, unconditionally — the friction ask
---- rides with the brief instead of an orchestrator appending it by
---- hand.
+--- its own "Final report" section, unconditionally, instead of an
+--- orchestrator appending it by hand.
 ---
 --- A read, not a mutation: nothing here writes the board.
 local brieftext = require("_work.brieftext")
@@ -371,12 +368,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
           id:sub(1, 8), distance))
     end
   end
-  local label = ""
-  if prep.session ~= nil then
-    label = prep.session
-  else
-    label = it.claim or ""
-  end
+  local label = prep.session or it.claim or ""
   local values: {string: string} = {
     PREPARATION = prep.session ~= nil and receipt.context(prep) or brieftext.BUILDER_PREPARATION,
     ITEM_ID = it.id,
