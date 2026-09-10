@@ -1,7 +1,7 @@
 title: lint --max-lines: one end-to-end case through the built binary, so the dispatcher seam has a test
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
 target: cosmic-lua/cosmic
-claim_batch: 0c2ec0659a609dbf002525621bfc6900afb26842
+claim_batch: 37ffc7a610e9c90099eee668505cdb9a14372963
 handover_head: ae1461b1d3f5a610efd96cbcbd77d1d701a8e0e3
 external_url: https://github.com/cosmic-lua/cosmic/pull/1825
 builders: 4ba6b933603d91d83463edf6808b25ca
