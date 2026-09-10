@@ -1,7 +1,7 @@
 title: release.yml: the published asset must report its exact tag, commit and digest
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
-claim_batch: 0d886fc6dc4d89f196d5685c0d52f0cc8483aa40
+claim_batch: 70929fdc88aacf6b21e46dab483fc467a56ab8bc
 handover_head: ef2a6a2c39098bbe6e71f1ec6b4b2010e06d8ad1
 verdict: request changes
 verdict_head: ef2a6a2c39098bbe6e71f1ec6b4b2010e06d8ad1
