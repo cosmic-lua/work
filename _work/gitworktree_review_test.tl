@@ -32,7 +32,7 @@ local SESSION < const > = "review-fixture-9doI"
 --- rather than `main`.
 --- @param name string A unique fixture name
 --- @param pr integer The PR number to publish `refs/pull/<pr>/head` under
---- @return string The `--root` checkout's absolute path
+--- @return string The `--repo-dir` checkout's absolute path
 --- @return string The fixture's own base directory
 local function make_pr_checkout(name: string, pr: integer): string, string
   local base = fs.join(tmpdir, "wt-review-" .. name)
@@ -75,7 +75,7 @@ end
 --- root so a test can tell it ran even when output never reaches print.
 --- @param name string A unique fixture name
 --- @param pr integer The PR number to publish `refs/pull/<pr>/head` under
---- @return string The `--root` checkout's absolute path
+--- @return string The `--repo-dir` checkout's absolute path
 local function make_loud_pr_checkout(name: string, pr: integer): string
   local base = fs.join(tmpdir, "wt-review-" .. name)
   assert(fs.remove_all(base))

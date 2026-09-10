@@ -1,6 +1,6 @@
 --- `worktree` prepares a local checkout for a confirmed, active claim.
 --- The item repository resolves only through the checkout-local
---- `gitboard.repository` map or the explicit `--root` override. Builder work
+--- `gitboard.repository` map or the explicit `--repo-dir` override. Builder work
 --- starts at the exact product commit stored in `claim_base`; review work
 --- starts at the exact `handover_head`. Gitboard never fetches either one.
 ---
@@ -228,7 +228,7 @@ end
 --- commit. Refuses before any product Git operation unless `session` holds
 --- the item's active whole-item claim.
 --- @param it item.Item The item to make a review checkout for (loaded)
---- @param root_override string `--root`, "" to auto-resolve
+--- @param root_override string `--repo-dir`, "" to auto-resolve
 --- @param refs {string} Caller-prepared `--ref` occurrences copied into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
 --- @param verbose boolean `--verbose`: stream the bootstrap's fetch/build
@@ -291,7 +291,7 @@ end
 --- @param s store.Store The store
 --- @param id string The item to make a checkout for
 --- @param session string The caller's session; must hold ID's claim
---- @param root_override string `--root`, "" to auto-resolve
+--- @param root_override string `--repo-dir`, "" to auto-resolve
 --- @param refs {string} Caller-prepared `--ref` occurrences copied into the worktree
 --- as `refs/spike/<ref-basename>` after bootstrap
 --- @param review boolean `--review`: provision the review checkout instead
@@ -377,11 +377,17 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
     referr = receipt.write(s, it, context.initial, checkout, branch, path, bootstrapped, file, invocation, directory)
   end
   if referr ~= "" then
+    local recovery = ""
+    if adopt == nil then
+      recovery = ("; recovery: gitboard worktree %q --adopt %q --receipt-out FILE")
+      :format(id, path)
+      if root_override ~= "" then
+        recovery = recovery .. (" --repo-dir %q"):format(root_override)
+      end
+    end
     return gate.verdict_line("worktree", false,
       ("checkout %s at %s; preparation failed: %s%s"):format(
-        adopt ~= nil and "retained" or "created", path, referr,
-        adopt ~= nil and "" or ("; recovery: gitboard worktree %q --adopt %q --receipt-out FILE")
-        :format(id, path)))
+        adopt ~= nil and "retained" or "created", path, referr, recovery))
   end
   return gate.verdict_line("worktree", true,
     ("%s at %s on %s (bootstrap: %s)"):format(handle, path, branch,
