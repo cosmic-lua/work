@@ -97,6 +97,11 @@ conflict witness locally, not presume an observation remains current.
      of the overlapping loser at lines 107–113 with explicit caller fetch plus
      refresh/quarantine assertions. Preserve the partial-visibility receipt test:
      an expected/next mixture still grants no authority and remains prepared.
+   - In `_work/gitattach_test.tl`, `_work/gitgate_test.tl`, and
+     `_work/gitrank_test.tl`, replace only obsolete cleanup that CAS-deletes a
+     diagnosed receipt after refresh with assertions that the active source is
+     absent and the exact quarantine manifest remains. Preserve their rerun and
+     authority checks; make no unrelated test changes.
    - Extend the lost-race test in `_work/publish_test.tl` to require the first
      sync failure reports quarantine and the second succeeds, retaining all
      existing dirty-file, winning-state and no-stash assertions.
@@ -107,7 +112,7 @@ collector intentionally excludes `_test.tl` files, so do not invent test-file
 baseline rows; ratchet only observable changed production rows when measured,
 never lowering a floor. No cast/nil-baseline additions are needed.
 
-Run focused test/coverage targets for the six named test files, then the complete
+Run focused test/coverage targets for the nine named test files, then the complete
 `bin/cosmic --make ci` gate (verified pinned runtime fallback:
 `sh o/bootstrap/cosmic --make ci`). Demonstrate two reverted mutations: bypass
 retirement (the lifecycle/selectorless test must fail), and omit the witness
