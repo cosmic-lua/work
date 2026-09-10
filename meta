@@ -2,3 +2,6 @@ title: lint --max-lines: one end-to-end case through the built binary, so the di
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
 target: cosmic-lua/cosmic
 claim_batch: 02430d1e62004e9a87b3247dbbc87c7964ec7585
+handover_head: ae1461b1d3f5a610efd96cbcbd77d1d701a8e0e3
+external_url: https://github.com/cosmic-lua/cosmic/pull/1825
+builders: 4ba6b933603d91d83463edf6808b25ca
