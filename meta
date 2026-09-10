@@ -2,3 +2,4 @@ title: bootstrap pin: adopt parser-capable 2026-09-10 release
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
 target: cosmic-lua/cosmic
 claim_batch: defa43bff3042b39d17579da9e268afc78f87416
+speccers: 9effca5f525f53d0867e2fb8e6b51178
