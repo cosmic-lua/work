@@ -308,7 +308,8 @@ local function main(...: string): integer
     end
     return brief.cmd_brief(s, d.parsed.args[1] or "", target,
       d.parsed.values["out"], d.parsed.values["tree"],
-      d.parsed.values["receipt"], d.parsed.values["session"])
+      d.parsed.values["receipt"], d.parsed.values["session"],
+      d.parsed.values["gitboard-command"], d.parsed.values["gitboard-cwd"])
   end
   if d.command == "new" then
     local title = d.parsed.args[1]

@@ -24,6 +24,7 @@
 --- A read, not a mutation: nothing here writes the board.
 local brief_label = require("_work.brief_label")
 local brieftext = require("_work.brieftext")
+local gitinvocation = require("_work.gitinvocation")
 local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
@@ -288,11 +289,19 @@ end
 --- @param kind string builder | research | review | refine | decompose
 --- @param id string The item the brief is about
 --- @param out string | nil Write the body here instead of stdout
+--- @param gb_command string | nil `--gitboard-command`: the caller's own exact
+--- invocation, rendered as the prefix for every board command the brief
+--- prints; requires `gb_cwd`. Falls back to a builder `--receipt`'s
+--- recorded invocation when omitted; unresolved when neither is present
+--- @param gb_cwd string | nil `--gitboard-cwd`: cwd for `gb_command`
 --- @return integer Exit code
 local function cmd_brief(s: store.Store, kind: string, id: string,
-    out?: string, tree?: string, receipt_file?: string, caller?: string): integer
+    out?: string, tree?: string, receipt_file?: string, caller?: string,
+    gb_command?: string, gb_cwd?: string): integer
   out = out or ""
   tree = tree or ""
+  gb_command = gb_command or ""
+  gb_cwd = gb_cwd or ""
   local template = KINDS[kind or ""]
   if template == nil then
     return gate.verdict_line("brief", false,
@@ -301,6 +310,10 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   if tree ~= "" and not fs.is_dir(tree) then
     return gate.verdict_line("brief", false,
       ("--tree '%s' must be a directory"):format(tree))
+  end
+  if (gb_command == "") ~= (gb_cwd == "") then
+    return gate.verdict_line("brief", false,
+      "--gitboard-command and --gitboard-cwd must be supplied together")
   end
   local it, lerr = store.load(s, id)
   if it == nil then
@@ -312,6 +325,15 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   local prep, perr = receipt.read(s, it, kind, receipt_file or "", caller or "", tree)
   if perr ~= "" then return gate.verdict_line("brief", false, perr) end
+  -- The caller's own flags win outright; a builder with no direct flags
+  -- falls back to the exact invocation its --receipt already recorded at
+  -- worktree-preparation time. Neither present leaves it unresolved —
+  -- never a guessed product-checkout `bin/gitboard`.
+  local gitboard_command, gitboard_cwd = gb_command, gb_cwd
+  if gitboard_command == "" and kind == "builder" then
+    gitboard_command = prep["gitboard-command"] or ""
+    gitboard_cwd = prep["gitboard-cwd"] or ""
+  end
   local spec = store.read_spec(s, id)
   if spec == "" and kind ~= "decompose" then
     return gate.verdict_line("brief", false,
@@ -368,6 +390,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     and (("Commit: `%s`\nExternal link (navigation only): %s")
       :format(head_sha, it.external_url or ""))
     or (("Commit: `%s`"):format(head_sha)),
+    GITBOARD_CMD = gitinvocation.prefix(gitboard_command, gitboard_cwd),
   }
   local root = prep.session == nil and product_root() or ""
   if root ~= "" then
@@ -459,7 +482,8 @@ local record brief
   unfilled: function(text: string): {string}
   mint_label: function(kind: string, handle: string): string
   cmd_brief: function(s: store.Store, kind: string, id: string, out?: string,
-  tree?: string, receipt_file?: string, caller?: string): integer
+  tree?: string, receipt_file?: string, caller?: string,
+  gb_command?: string, gb_cwd?: string): integer
 end
 
 local M: brief = {
