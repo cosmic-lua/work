@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+Use the existing canonical spec reader and byte-preserving standard output (`io.stdout:write` with errors handled); do not round-trip through display formatting or `print`, which adds a newline. Cosmic file/stream primitives are sufficient: no new serialization or rendering abstraction is needed. Test trailing-newline and no-trailing-newline cases, empty content, and literal template-looking text, alongside the unchanged/stale compare-and-swap cases already required. Preserve the existing concurrency checks.
+
 ## Evidence
 
 Ending «npTS_YYtP» not-planned, the orchestrator tried to record the disproof on its spec: `gitboard spec ID FILE` → "REFUSED: claimed by … needs --force --why"; with `--force --why` → "REFUSED: already has a spec — pass --base FILE holding the text you read"; with `--base` holding what `gitboard show ID` had printed under `--- spec ---` seconds earlier → "REFUSED: spec changed since you read it — re-read it (`gitboard show`) …". Three refusals, and the evidence never reached the board. `show`'s rendering of the spec is not byte-equal to the sidecar (`show` was the only reader the refusal named), so the `--base` contract cannot be met from the tool's own output.
@@ -17,3 +23,4 @@ cosmic-lua/work, read and write on a branch; no other repository.
 ## Ready when
 
 `gitboard show ID --raw | gitboard spec ID NEW --base /dev/stdin` (or the two-step equivalent) succeeds on an unchanged spec, and `gitboard spec` with no `--base` names `show ID --raw` in its refusal.
+
