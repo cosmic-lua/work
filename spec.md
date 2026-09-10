@@ -1,11 +1,6 @@
 ## Change
 
-Ready when all of these print `READY`:
-
-```
-test -f _tool/surface_diff.tl -a -f _tool/surface_archive.tl && echo READY
-bin/cosmic -e 'local fs=require("cosmic.fs"); local p=require("cosmic.proc").interpreter(); local a=assert(require("cosmic.zip").open(p)); local s=assert(a:read(".tl/_cli/parse.tl")); assert(a:close()); print(s:match("\n%s+diff:%s+string%s*\n") and "READY" or "WAIT")'
-```
+Ready when: `test -f _tool/surface_diff.tl -a -f _tool/surface_archive.tl && bin/cosmic -e 'local p=assert(require("cosmic.proc").interpreter()); local a=assert(require("cosmic.zip").open(p)); local s=assert(a:read(".tl/_cli/parse.tl")); assert(a:close()); print(s:match("\n%s+diff:%s+string%s*\n") and "READY" or "WAIT")'` prints `READY`.
 
 Add `_cli/diff.tl` and `_cli/diff_test.tl`; add the `--diff BINARY` flag to
 `_cli/args.tl`, populate it in `_cli/parse.tl`, exclude `opts.diff` from
