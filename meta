@@ -1,7 +1,7 @@
 title: gitboard: claim/brief session strings don't match what claim --session accepts
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: 1c9b4c293e2423b65f4e351a3688cf788541bc09
+claim_batch: bbf6e156aa0b401ea80e88db6d98961b2a1ef62f
 handover_head: 3dc7ed1138d03f34beb193c65cc1baa08e392e03
 external_url: https://github.com/cosmic-lua/work/pull/111
 builders: 1b6b0c5a18e9d3bb0429076dca96e4e8
