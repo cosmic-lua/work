@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+The hypothesized capture-order defect below is unconfirmed and is not apparent in current work a43d1824cd5d48408b780f2ac16a3b42e0c5cd38: `fill(template, values)` writes a separate body, and `survivors(template, values)` still receives the original template. First reproduce with the exact current tool and spec. If it no longer reproduces, retain useful regression coverage and record that result rather than forcing a code change based on the old hypothesis. Test inserted `<ID>`, `<BOUNCE_CONTEXT>`, and `{{.field}}` as literal data across builder/review variants. Carry these cases into work#103 and Cosmic#1809; generic template parsing belongs in Cosmic, board-specific unresolved-value policy remains in GitBoard.
+
 ## Evidence
 
 `«WyFa_GL3c»` (merged, PR #88) fixed `_work/brief.tl`'s `survivors()`
@@ -76,3 +82,4 @@ capture-order bug affecting every kind that splices a spec.
 ## Access
 
 cosmic-lua/work, read and write on a branch; no other repository.
+
