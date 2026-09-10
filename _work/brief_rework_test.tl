@@ -223,3 +223,23 @@ local function test_review_brief_has_no_provider_round_context()
     and out:find("CHANGES_REQUESTED", 1, true) == nil,
     "no provider review history is reconstructed: " .. out)
 end
+
+local function test_review_brief_preserves_literal_template_tokens_in_spec()
+  local s = init_state_repo("brief-literal-spec")
+  local _, leaf = root_with_leaf(s)
+  handover_item(s, leaf)
+  local it = assert(store.load(s, leaf))
+  local spec = "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
+  .. "## Non-goals\nNothing else.\n"
+  assert(storewrite.save(s, it, "spec literal template tokens", spec))
+  with_product_root(function(): boolean
+      local code, out = brief_and_capture(s, "review", leaf)
+      assert(code == 0, "a commit handover still earns its review brief")
+      assert(out:find(spec, 1, true) ~= nil,
+        "the complete spec remains verbatim in the rendered brief: " .. out)
+      local final_line = out:match("[^\n]*$")
+      assert(final_line:find("nothing left to fill", 1, true) ~= nil,
+        "the final line confirms every genuine placeholder was filled: " .. final_line)
+      return true
+    end)
+end
