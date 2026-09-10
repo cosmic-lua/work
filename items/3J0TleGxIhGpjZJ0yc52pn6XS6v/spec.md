@@ -1,3 +1,9 @@
+## Current refinement — native Cosmic reuse review
+
+This refinement supersedes conflicting implementation assumptions in the historical spec below; its original evidence is retained for context.
+
+Express correctness-critical behavioral reproductions as focused `cosmic.test` cases or small Cosmic scripts using `cosmic.child`, rather than creating a bespoke shell harness. Existing `child.start`/Handle:wait(timeout_ms) can provide bounded waits, but a wait timeout alone is not proof of child termination: use and test explicit cleanup/reaping when a probe times out. Reuse the active canonical test-runner timeout/capability work rather than implementing a second framework here. Keep the original limitation to premises the change relies on; unsupported host capability is distinct from disproven product behavior. This remains brief guidance plus focused tests, not a general test-runner redesign.
+
 ## Evidence
 
 Board item `9R8e_zA8Q` ("gitboard help new: --repo option text should note it
@@ -69,3 +75,4 @@ caught for a quarter of the eventual cost.
 ## Access
 
 cosmic-lua/work, read and write on a branch; no other repository.
+
