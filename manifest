@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 9c849e9f1e7439d77cbee5607396d543
+caller a9eacdefdb28ea39a05c00d399aad885
+remote origin
+action drop
+created 1789072141
+publish-by 0
+reason PR #1829 (perf-fix rework) already merged (f8149470); a genuine fresh-context review completed and accepted this exact commit, but verdict/done both refuse because the claim base (post-merge main) isn't an ancestor of the reviewed commit -- same squash-merge ancestry gap as ha5l_jXYz and item 5PCV_sHrL describe. Releasing the claim; the fix has shipped and was reviewed even though board bookkeeping can't cleanly record the verdict.
+
+3ItRn3u15eMjvsQPhxXUqZnjV6U d4b9041a9c6f2fb906825ea8c994e800f2383cd8 drop - f81494706b96833e930b65a058fcd565b4a99122 f7a42251ae6081542c48b3bef7e04162df53be61 1789070482 1789070482 1789077682
