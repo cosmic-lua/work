@@ -1,7 +1,7 @@
 title: make lock: atomic generation-safe directory claims
 parent: 3I7QhBNc3Dwc1abDYZbjVjrG7kp
 target: cosmic-lua/cosmic
-claim_batch: b55edaa4ae19c6855e2946999b89af12c714e015
+claim_batch: 9d74999be0f76e06f366b3a1c8de422222170ddf
 handover_head: 270bec0441f675df1bad3d2191f93ea11bb1d80d
 external_url: https://github.com/cosmic-lua/cosmic/pull/1814
 builders: ba1dac0e781ab643202a44367075b799 282269d3671247608aac48429578ee81 eba9e2813ebec970784996deb0a9b140 0cbc9881952cd40aa7b40b0b2e7ba949
