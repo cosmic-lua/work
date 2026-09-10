@@ -3,5 +3,7 @@ parent: 3HyRdABz3YA28CsiM5alei5yM5b
 target: cosmic-lua/cosmic
 claim_batch: 4173d51f0334417a91d6b157cff96ad6382f0496
 handover_head: f32e2b1e40fb5a80b05ed74fb31b28c12eb0c27c
+verdict: accept
+verdict_head: f32e2b1e40fb5a80b05ed74fb31b28c12eb0c27c
 builders: 911325df82843acc507f7b8cc83afbf8 882ec898396c5e42b40a0c1c2aa3e29b a94fa4c4def9e43e1a591c4c9b4e9e45 92d02657d2738fe4860edef218f82a33 3a87c4849082ebcd5331219af2ac733e
 speccers: 911325df82843acc507f7b8cc83afbf8
