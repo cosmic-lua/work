@@ -1,7 +1,7 @@
 title: cosmic.graph: reachability, closure, cycle detection and toposort — written three times across priority.tl, flow.tl and _make/deps.tl
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
 target: cosmic-lua/cosmic
-claim_batch: 4e9e520ada244188186d13b74ce003cb72040546
+claim_batch: 8c7b2cc4606fc6c5fa835e7b0480ca2119ac9254
 handover_head: b525bcd3890456460c09a9080fa9dd82fdf72053
 external_url: https://github.com/cosmic-lua/cosmic/pull/1828
 verdict: request changes
