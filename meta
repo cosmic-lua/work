@@ -3,6 +3,7 @@ parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim_batch: fb8ff8cd33d2abed7b01c119865e408482932e8b
 handover_head: 9b785e3fe17be17781a78c952045d81aadf222e4
+external_url: https://github.com/cosmic-lua/work/pull/109
 verdict: accept
 verdict_head: 9b785e3fe17be17781a78c952045d81aadf222e4
 builders: cb538eb89d57f71188ff4ab8139a09b5
