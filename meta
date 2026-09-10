@@ -4,5 +4,7 @@ target: cosmic-lua/work
 claim_batch: 6156b35304a0f86f2f9aa952d43c509bfe46fd2e
 handover_head: ea85a220e1a9af5b046cac9970caa5abf9a9adea
 external_url: https://github.com/cosmic-lua/work/pull/105
+verdict: accept
+verdict_head: ea85a220e1a9af5b046cac9970caa5abf9a9adea
 builders: 002eea735e76485dafbe1e2f0d0f55dd
 speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85 002eea735e76485dafbe1e2f0d0f55dd
