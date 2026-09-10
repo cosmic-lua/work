@@ -208,18 +208,15 @@ Nothing merges without a verdict from a review at a DISTANCE from
 the builder: a subagent whose context window never held the build.
 Its brief carries the item id, the exact handed-over commit, and the process — not
 the builder's reasoning, and not a summary of intent, which would
-hand back the commitment a fresh window exists to be without. Emit
-the brief with `brief review ID` rather than hand-writing one — it
-mints and fills the exact session label this review claims under,
-`review-<handle>-<orch8>` (`<orch8>` the first 8 characters of the
-calling session's own identity, `show`'s "session: ..." line), and
-repeats it on the brief's own verdict line so an orchestrator claims —
-`claim ID --session <label>` — under that identical string BEFORE ever
-spawning the agent the body goes to. A solo session reviewing without
-an orchestrator instead self-names (`claim ID` under its own
-review-<ID>-<unique>). Either way the reviewer's session reads the
-spec off the board and the diff from local Git, and records the verdict
-itself.
+hand back the commitment a fresh window exists to be without. Claim
+the item under a fresh `gitboard session new` identity BEFORE
+spawning the reviewing agent — `brief review ID` refuses outright when
+the item carries no active claim, or when the claim belongs to the
+item's own builders/speccers, so the claim must exist first and must
+not be theirs. The brief then names that same claim on its own
+verdict line for the caller to spawn under; either way the reviewer's
+session reads the spec off the board and the diff from local Git, and
+records the verdict itself.
 
 The posture is adversarial — the job is to make the diff fail, and
 a review that only reads has verified nothing:
