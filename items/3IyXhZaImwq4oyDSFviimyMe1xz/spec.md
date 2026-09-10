@@ -18,7 +18,7 @@ No change to `brief.tl`'s behaviour.
 
 ## Access
 
-cosmic-lua/work, read and write on a branch; no other repository.
+cosmic-lua/work, read and write on a branch; cosmic-lua/cosmic, read-only for the linked typed-template migration context; no other repository.
 
 ## Ready when
 
