@@ -1,6 +1,6 @@
 #!/usr/bin/env cosmic
 -- `worktree`: branches, adds a worktree beside a local checkout, and
--- bootstraps it. Every test drives it against `--root DIR` naming a
+-- bootstraps it. Every test drives it against `--repo-dir DIR` naming a
 -- fixture checkout directly, bypassing the sibling-checkout search —
 -- exactly how a test with no real sibling layout to fake uses it.
 
@@ -29,10 +29,10 @@ local SESSION < const > = "build-fixture-9doI"
 --- (by `kind`) a `bin/cosmic` stub (executable, leaves a sentinel
 --- rather than doing real work, so a test can tell whether bootstrap
 --- actually ran it) or a bare `third_party/lua` marker — and a second
---- clone at `<base>/checkout` to pass as `--root`.
+--- clone at `<base>/checkout` to pass as `--repo-dir`.
 --- @param name string A unique fixture name
 --- @param kind string "none" | "cosmic" | "cosmopolitan"
---- @return string The `--root` checkout's absolute path
+--- @return string The `--repo-dir` checkout's absolute path
 --- @return string The fixture's own base directory (for the sentinel)
 local function make_checkout(name: string, kind: string): string, string
   local base = fs.join(tmpdir, "wt-verb-" .. name)
@@ -71,7 +71,7 @@ end
 --- at the worktree root so a test can tell it ran even when its output
 --- never reaches `print`.
 --- @param name string A unique fixture name
---- @return string The `--root` checkout's absolute path
+--- @return string The `--repo-dir` checkout's absolute path
 local function make_loud_checkout(name: string): string
   local checkout = make_checkout(name, "cosmic")
   local script = table.concat({
@@ -309,7 +309,7 @@ local function test_worktree_bootstrap_detects_cosmopolitan_tree()
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, false, false) == 0)
 end
 
--- With no `--root`, `worktree` resolves only the explicit repository map.
+-- With no `--repo-dir`, `worktree` resolves only the explicit repository map.
 local function test_worktree_resolves_checkout_via_repository_map()
   local checkout = make_checkout("resolve", "none")
   local s, leaf = item_with_repo("wt-resolve", checkout)

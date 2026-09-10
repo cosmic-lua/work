@@ -203,7 +203,7 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "ID [options]",
         summary = "create ID's checkout from its confirmed active claim.\n\n"
         .. "Resolves ID's repo through the explicit repository map (or "
-        .. "--root), creates\nwork/<handle>/<claim-root-short> at the exact "
+        .. "--repo-dir), creates\nwork/<handle>/<claim-root-short> at the exact "
         .. "recorded claim base, and adds a\nmatching nested worktree beside "
         .. "the checkout. Existing names refuse. Each already-present\n"
         .. "--ref is copied into refs/spike/<basename>. The bootstrap's own "
@@ -217,9 +217,8 @@ local CSPEC: flags.CommandSpec = {
         .. "--fetch authorizes product acquisition, never board refresh. "
         .. "Local build runs repository code and is not an OS network sandbox.",
         flags = {dir_flag(),
-          {long = "root", arg = "DIR",
-            help = "local product checkout override; otherwise use the "
-            .. "configured repository mapping"},
+          {long = "repo-dir", arg = "DIR", help = "local product checkout; "
+            .. "otherwise use the configured repository mapping"},
           {long = "receipt-out", arg = "FILE", help = "write a v1 builder preparation receipt"},
           {long = "adopt", arg = "DIR", help = "explicitly prepare this exact retained claim checkout; needs --receipt-out"},
           {long = "fetch", help = "allow pinned runtime download on cache miss and product dependency fetch"},

@@ -101,7 +101,7 @@ local function isolated(f: function())
 end
 
 local function capture(c: Case, review: boolean, verbose: boolean,
-    refs?: {string}): integer, string
+    refs?: {string}, root_override?: string): integer, string
   local old_print = _G.print
   local lines: {string} = {}
   _G.print = function(...: any)
@@ -109,8 +109,8 @@ local function capture(c: Case, review: boolean, verbose: boolean,
     for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
     lines[#lines + 1] = table.concat(parts, "\t")
   end
-  local ok, code = pcall(worktree.cmd_worktree, c.s, c.id, SESSION, c.root,
-    refs or {}, review, verbose)
+  local ok, code = pcall(worktree.cmd_worktree, c.s, c.id, SESSION,
+    root_override or c.root, refs or {}, review, verbose)
   _G.print = old_print
   if not ok then error(code, 0) end
   return code, table.concat(lines, "\n")
@@ -380,6 +380,35 @@ local function test_prepared_ref_failure_names_the_preserved_checkout()
       assert_created_failure(c, code, out)
       assert(out:find("prepared ref refs/heads/absent is missing", 1, true) ~= nil, out)
       assert(fs.is_dir(c.path))
+      assert(store.close(c.s))
+    end)
+end
+
+-- The recovery line echoes --repo-dir only when the failing invocation
+-- itself supplied one; a run resolved through the configured map must not
+-- be told to pass a flag it never used.
+local function test_recovery_line_echoes_repo_dir_only_when_supplied()
+  local script = "exit 17\n"
+  isolated(function()
+      local c = fresh("recovery-override", "cosmic", script)
+      local code, out = capture(c, false, false, {}, c.root)
+      assert_created_failure(c, code, out)
+      assert(out:find("--adopt", 1, true) ~= nil, out)
+      assert(out:find("--receipt-out FILE", 1, true) ~= nil, out)
+      assert(out:find(("--repo-dir %q"):format(c.root), 1, true) ~= nil, out)
+      assert(out:find("--root", 1, true) == nil, out)
+      assert(store.close(c.s))
+    end)
+  isolated(function()
+      local c = fresh("recovery-mapped", "cosmic", script)
+      git(c.s.root, {"config", "--local", "--add", "gitboard.repository",
+          "acme/widgets=" .. c.root})
+      local code, out = capture(c, false, false, {}, "")
+      assert_created_failure(c, code, out)
+      assert(out:find("--adopt", 1, true) ~= nil, out)
+      assert(out:find("--receipt-out FILE", 1, true) ~= nil, out)
+      assert(out:find("--repo-dir", 1, true) == nil, out)
+      assert(out:find("--root", 1, true) == nil, out)
       assert(store.close(c.s))
     end)
 end

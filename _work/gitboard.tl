@@ -409,7 +409,7 @@ local function main(...: string): integer
   end
   if d.command == "worktree" then
     local who = session.resolve(d.parsed.values["session"])
-    return gitworktree.cmd_worktree(s, id, who, d.parsed.values["root"] or "",
+    return gitworktree.cmd_worktree(s, id, who, d.parsed.values["repo-dir"] or "",
       d.parsed.lists["ref"] or {}, d.parsed.switches["review"] or false,
       d.parsed.switches["verbose"] or false, d.parsed.values["receipt-out"],
       d.parsed.values["gitboard-command"], d.parsed.values["gitboard-cwd"],
