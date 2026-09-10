@@ -178,7 +178,10 @@ local function publish(s: store.Store, execute?: boolean): boolean, string
   local push = prepared.push_argv(tx, remote)
   local fetch = prepared.fetch_argv(remote)
   if not execute then
-    return true, ("prepared %s\npublish: %s\nrefresh refs: %s")
+    return true, ("prepared %s\npublish: %s\nrefresh refs: %s\n"
+      .. "NOT PUBLISHED: the board is unchanged until `gitboard publish "
+      .. "--execute` sends the push above and `gitboard refresh --execute` "
+      .. "confirms it.")
     :format(tx.staging_ref, table.concat(push, " "), table.concat(fetch, " "))
   end
   local pushed, perr = prepared.execute(s.root, push)

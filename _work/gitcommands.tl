@@ -11,6 +11,12 @@ local function dir_flag(): flags.Flag
     help = "state repository checkout (default: $GITBOARD_DIR, else .)"}
 end
 
+local PREPARES_ONLY < const > =
+"This verb only PREPARES: it stages the mutation and prints the exact\n"
+.. "atomic push, and the board is unchanged until `gitboard publish\n"
+.. "--execute` sends it and `gitboard refresh --execute` confirms it.\n"
+.. "There is no --execute here — claim, renew and drop carry one."
+
 local CSPEC: flags.CommandSpec = {
   name = "gitboard",
   summary = "the work board over committed item files: todo, doing, done\n\n"
@@ -90,7 +96,8 @@ local CSPEC: flags.CommandSpec = {
         .. "are the one exception\nand stay unranked until positioned.\n\n"
         .. "A `friction:` title is an ordinary item. Put the relevant "
         .. "observations, including\nany language-level findings, in its "
-        .. "spec; Gitboard does not infer a roll call from claims.",
+        .. "spec; Gitboard does not infer a roll call from claims.\n\n"
+        .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "parent", arg = "ID", help = "the item this decomposes; "
             .. "default is the board — the item files as an outcome"},
@@ -111,7 +118,8 @@ local CSPEC: flags.CommandSpec = {
         summary = "put ID under PARENT (adopt, re-parent).\n\n"
         .. "--before/--after place it among PARENT's other children in the "
         .. "same commit; X\nmust already be one of them, positioned "
-        .. "(`rank X --last` first if not).",
+        .. "(`rank X --last` first if not).\n\n"
+        .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "before", arg = "X",
             help = "place it immediately before X among PARENT's children"},
@@ -128,7 +136,8 @@ local CSPEC: flags.CommandSpec = {
         summary = "position ID among its siblings: before or after X, or "
         .. "last.\n\nID and X must be siblings — the same parent, or both "
         .. "outcomes (children of the board). X absent from its\nparent's "
-        .. "order is refused as unpositioned: rank X first, or use --last.",
+        .. "order is refused as unpositioned: rank X first, or use --last.\n\n"
+        .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "before", arg = "X", help = "place ID immediately before X"},
           {long = "after", arg = "X", help = "place ID immediately after X"},
@@ -139,7 +148,11 @@ local CSPEC: flags.CommandSpec = {
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "set", summary = "repair ID's title, repo and/or base "
       .. "(at least one; nothing else moves here)",
-      spec = {usage = "ID [options]", flags = {dir_flag(),
+      spec = {usage = "ID [options]",
+        summary = "repair ID's title, repo and/or base "
+        .. "(at least one; nothing else moves here).\n\n"
+        .. PREPARES_ONLY,
+        flags = {dir_flag(),
           {long = "title", arg = "TITLE", help = "the item's title"},
           {long = "repo", arg = "OWNER/NAME",
             help = "the repo its PR lands in; refused on the board — it "
@@ -151,7 +164,10 @@ local CSPEC: flags.CommandSpec = {
           {long = "force", help = "audited repair of another holder's item"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "spec", summary = "replace ID's spec sidecar with FILE",
-      spec = {usage = "ID FILE [options]", flags = {dir_flag(),
+      spec = {usage = "ID FILE [options]",
+        summary = "replace ID's spec sidecar with FILE.\n\n"
+        .. PREPARES_ONLY,
+        flags = {dir_flag(),
           {long = "base", arg = "FILE",
             help = "the spec text you read, as the compare-and-swap base"},
           {long = "session", arg = "SESSION",
@@ -241,7 +257,8 @@ local CSPEC: flags.CommandSpec = {
         summary = "record a locally verified product commit as the handover. "
         .. "The commit must descend from the product base recorded by the "
         .. "claim. An optional URL is navigation only; Gitboard performs no "
-        .. "provider operation or authenticated network request.",
+        .. "provider operation or authenticated network request.\n\n"
+        .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "session", arg = "SESSION",
             help = "minted claim identity; default $GITBOARD_SESSION"},
@@ -269,7 +286,8 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "ID KIND --head SHA [options]",
         summary = "record a review verdict whose only evidence is the exact "
         .. "handed-over commit. Gitboard verifies it locally and never reads "
-        .. "remote checks or performs a provider write.",
+        .. "remote checks or performs a provider write.\n\n"
+        .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "head", arg = "SHA", help = "exact product commit judged"},
           {long = "repo-dir", arg = "DIR", help = "local product checkout; "
@@ -280,7 +298,10 @@ local CSPEC: flags.CommandSpec = {
             .. "(the session built or specced this item) — repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "done", summary = "end ID after locally verifying its landed commit",
-      spec = {usage = "ID [options]", flags = {dir_flag(),
+      spec = {usage = "ID [options]",
+        summary = "end ID after locally verifying its landed commit.\n\n"
+        .. PREPARES_ONLY,
+        flags = {dir_flag(),
           {long = "reason", arg = "REASON", default = "completed",
             help = "completed or not-planned"},
           {long = "by", arg = "CHILD", help = "an outcome's evidence: its "

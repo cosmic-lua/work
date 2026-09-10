@@ -265,3 +265,20 @@ local function test_default_mutation_instructions_name_the_configured_remote()
   assert(instructions:find("refs/remotes/upstream/", 1, true), instructions)
   assert(instructions:find("refs/remotes/origin/", 1, true) == nil, instructions)
 end
+
+-- A caller reading only the three transport lines could mistake
+-- preparation for a completed push; the render must also say the
+-- board is unchanged and name both follow-up commands.
+local function test_default_mutation_instructions_say_the_board_is_unchanged()
+  local a = init_shared("not-published-instructions")
+  local it = make_item()
+  assert(storewrite.save(a, it, "prepare a mutation"))
+  local ok, instructions = publish.publish(a)
+  assert(ok, instructions)
+  assert(instructions:find("prepared ", 1, true), instructions)
+  assert(instructions:find("publish: git push", 1, true), instructions)
+  assert(instructions:find("refresh refs: git fetch", 1, true), instructions)
+  assert(instructions:find("NOT PUBLISHED", 1, true), instructions)
+  assert(instructions:find("gitboard publish --execute", 1, true), instructions)
+  assert(instructions:find("gitboard refresh --execute", 1, true), instructions)
+end
