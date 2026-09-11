@@ -2,3 +2,4 @@ title: coverage ratchet: a declined row names its uncovered lines, so a builder 
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim_batch: 671cc8818ed068a94c766932d825334bd5574ccf
+speccers: 13adca796a8db5cb6dda8fef09dd97ec
