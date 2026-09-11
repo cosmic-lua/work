@@ -239,3 +239,23 @@ local function test_step_five_says_to_commit_before_mutating()
     "step 5 must say to commit the real change before "
     .. "mutation-testing it, so a checkout-restore cannot wipe it")
 end
+
+-- The orchestrator recovers a stalled build by working directly in the
+-- builder's own worktree, so a builder that meets foreign history there
+-- must neither investigate it as a broken environment nor undo it.
+local function test_where_to_work_warns_the_worktree_is_shared()
+  assert(BUILDER:find(
+      "The worktree is yours to work in, but not yours alone: while "
+      .. "your turn is between tool calls the orchestrator may run "
+      .. "commands in it, edit files, commit, and push — most often to "
+      .. "finish a build you left waiting on a background command.",
+      1, true) ~= nil,
+    "Where to work must say the orchestrator may work directly in the "
+    .. "builder's own worktree between its turns")
+  assert(BUILDER:find(
+      "Never investigate one as an environment bug, and never undo it "
+      .. "— no `git reset --hard`, no `git revert`, no force-push.",
+      1, true) ~= nil,
+    "Where to work must forbid investigating or undoing a change in "
+    .. "the worktree the builder did not make")
+end
