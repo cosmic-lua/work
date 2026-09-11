@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 5b8375fdc2daf9b0d275e75e96db3b37
+caller b3c3943c04c6ae8e188bc8818165bacf
+remote origin
+action drop
+created 1789102632
+publish-by 0
+reason claim base was accidentally captured from an unrelated later commit; re-claiming from a checkout pinned to the item's real original base
+
+3J919QefFpob2Q0FArVeXY3wPY6 9522f40b2f992aa01e0bbace667eec43cc0efc8b drop - ec7d867aa2bb139f64881e1ae4e7ea7f3c7a4ce3 e1cce571e9ff4816ab3b42b88212db84ed9ee16d 1789100969 1789100969 1789108169
