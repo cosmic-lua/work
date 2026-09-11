@@ -1,7 +1,7 @@
 title: worktree: materialize the verified Cosmic runtime at the declared bootstrap path
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: 1d91b49e5fe64e380dc093c1bc4fb1618e787e8b
+claim_batch: dbe4ff259df80b138c430167ca2d573df9c22a6c
 handover_head: 3f9d12734590c647aef9842394a5b5647bc7294c
 external_url: https://github.com/cosmic-lua/work/pull/115
 builders: 99390bab10aaa0f4bc43fc566ae88784
