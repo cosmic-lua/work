@@ -2,3 +2,4 @@ title: gitboard spec --print: emit raw spec markdown alone, for use as spec --ba
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
 claim_batch: aea98aa23c562a3690559c40ccfa965b52445351
+resolution: not-planned
