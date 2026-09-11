@@ -220,6 +220,24 @@ Builder and review now follow ONE rule: fill with the path `worktree`
 built, or leave the placeholder for the verdict line to report. Net
 effect on the file is about +10 lines (482 of 500).
 
+**What this reaches, and what it does not.** The fill needs the
+item's repo mapped in the board checkout, because that is what
+`worktree` resolved to. Some boards have no mapping and drive
+`worktree` with `--root` instead; this one is such a board:
+
+```
+$ git config --local --get-all gitboard.repository ; echo "exit=$?"
+exit=1
+```
+
+There `worktree_path` returns "" and `<WORKTREE>` survives, with the
+closing verdict line naming it owed — which is the whole point: an
+unfilled placeholder the caller fills from `worktree`'s own verdict
+line, instead of a confident path to a directory that does not exist.
+Where a mapping IS configured the fill is automatic. Teaching `brief`
+its own `--root`/`--repo-dir` so it can answer without a mapping is a
+separate item (see Non-goals).
+
 ### 4. `_work/brieftext_review.tl` (240 lines) — the stale docstring
 
 Lines 15-17 state the fabricated derivation:
@@ -349,7 +367,10 @@ that check stays as it is (see Non-goals).
 - `worktree --review` itself is correct and does not move. Nothing in
   `_work/gitworktree.tl` changes except the two `path` expressions.
 - No new verb, flag, or item field — `_work/gitcommands.tl`,
-  `_work/gitboard.tl` and `_work/gitverbs.tl` are untouched.
+  `_work/gitboard.tl` and `_work/gitverbs.tl` are untouched. In
+  particular `brief` gets no `--root`/`--repo-dir` of its own: on a
+  board with no `gitboard.repository` mapping the placeholder survives
+  for the caller, and closing that gap is its own item.
 
 The guard this diff adds lives in `_work/brief_rework_test.tl`; the
 two it repairs live in `_work/gitworktree_review_test.tl` and
