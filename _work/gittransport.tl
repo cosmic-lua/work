@@ -3,6 +3,7 @@
 --- explicit `--execute` runs the exact ordinary Git argv being rendered; this
 --- module never discovers or handles credentials.
 local cache = require("_work.cache")
+local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gitclaim = require("_work.gitclaim")
 local gitdraft = require("_work.gitdraft")
@@ -118,6 +119,22 @@ local function select_transactions(root: string, selectors: {string},
   return out, ""
 end
 
+--- The URL the configured remote resolves to in this checkout — the
+--- repository an executed publish actually writes to, and the one fact
+--- neither the rendered argv nor the `published:` line carries.
+--- `--push` falls back to the fetch URL when no separate push URL is
+--- configured, so it is never less correct than the plain read.
+--- @param s store.Store The store
+--- @param remote string The remote name the push argv names
+--- @return string The URL, or a readable stand-in when git cannot read it
+local function remote_push_url(s: store.Store, remote: string): string
+  local r = store.git(s, {"remote", "get-url", "--push", remote})
+  if r == nil or not r.ok then
+    return ("unreadable (no %s remote in this checkout)"):format(remote)
+  end
+  return (r.stdout:gsub("%s+$", ""))
+end
+
 --- Render or explicitly execute prepared pushes. Execution delegates
 --- authentication entirely to ordinary Git.
 local function cmd_publish(s: store.Store, selectors: {string}, remote: string,
@@ -161,6 +178,8 @@ local function cmd_publish(s: store.Store, selectors: {string}, remote: string,
       ("local simulation applied atomically: draft=%s refs=%d"):format(
         plan.id, #plan.updates))
   end
+  print(("target: dir=%s remote=%s url=%s"):format(
+      fs.absolute_path(s.root), remote, remote_push_url(s, remote)))
   local failed = 0
   for _, plan in ipairs(plans) do
     local argv = plan.argv

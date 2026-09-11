@@ -220,6 +220,8 @@ local function test_publish_defaults_to_an_exact_render_without_moving_refs()
   local _closed, _cerr = store.close(s)
   local code, out = capture("publish", tx.id, "--dir", s.root)
   assert(code == 0, out)
+  assert(out:find("target: dir=" .. fs.absolute_path(s.root)
+      .. " remote=origin url=", 1, true), out)
   assert(out:find("git push --atomic", 1, true), out)
   assert(out:find("--force-with-lease=" .. target .. ":" .. old, 1, true), out)
   assert(out:find(next_sha .. ":" .. target, 1, true), out)
@@ -228,6 +230,25 @@ local function test_publish_defaults_to_an_exact_render_without_moving_refs()
     "rendering publication cannot move canonical refs")
 end
 test_publish_defaults_to_an_exact_render_without_moving_refs()
+
+local function test_publish_execute_names_the_repository_it_pushed_to()
+  local _s1, s2 = fixture.init_shared("cli-publish-target")
+  local root = s2.root
+  local _closed, _cerr = store.close(s2)
+  local new_code, new_out = capture("new", "execute target", "--dir", root)
+  assert(new_code == 0, new_out)
+  local bare = fs.join(fixture.tmpdir, "verbs-shared-cli-publish-target",
+    "remote.git")
+  local code, out = capture("publish", "--execute", "--dir", root)
+  assert(code == 2, out)
+  local target_at = out:find("target: dir=" .. fs.absolute_path(root)
+    .. " remote=origin url=" .. bare, 1, true)
+  local published_at = out:find("published: ", 1, true)
+  assert(target_at ~= nil and published_at ~= nil, out)
+  assert(target_at < published_at,
+    "the target line must print above published:\n" .. out)
+end
+test_publish_execute_names_the_repository_it_pushed_to()
 
 local function test_refresh_defaults_to_rendered_fetch_and_local_reconciliation()
   local s = fixture.init_state_repo("cli-refresh-render")
