@@ -1,7 +1,7 @@
 title: claim: stale local target refs cannot poison squash landing verification
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: e004f1c7a9c4770d7d7cb116232789662a9a244f
+claim_batch: 6b48bd9b47b742da02dabd2bd354d998482acaa8
 handover_head: 41f6fc4e65591cdbc22f5c839461f05cf56a21d8
 external_url: https://github.com/cosmic-lua/work/pull/116
 builders: fcea75b59d6295c326d96a43390d0777
