@@ -1,6 +1,9 @@
 #!/usr/bin/env cosmic
 -- Preparation postconditions use real isolated Git checkouts; bootstrap
--- programs are committed shell stubs, never downloads or host toolchains.
+-- programs are committed shell stubs or mocked subprocess calls, never
+-- downloads or a real host toolchain — a `make`-kind fixture's Makefile
+-- exists only for `_work.repoprofile` to read its literal header, and
+-- `child.run` is mocked shut wherever a case only needs the resolved argv.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -33,6 +36,13 @@ local function git_output(root: string, argv: {string}): string
   return (r.stdout:gsub("%s+$", ""))
 end
 
+local function equal_argv(got: {string}, expected: {string})
+  assert(#got == #expected, "argv length differs: " .. table.concat(got, " "))
+  for i, word in ipairs(expected) do
+    assert(got[i] == word, ("argv differs at %d: %s"):format(i, table.concat(got, " ")))
+  end
+end
+
 local function fresh(name: string, kind: string, script?: string): Case
   local dir = fs.join(fixture.tmpdir, "worktree-bootstrap-" .. name)
   assert(fs.remove_all(dir) and fs.make_dirs(dir))
@@ -48,11 +58,22 @@ local function fresh(name: string, kind: string, script?: string): Case
   git(root, {"commit", "-q", "-m", "initial"})
   if kind == "cosmic" then
     assert(fs.make_dirs(fs.join(root, "bin")))
+    -- A stable detach target with bin/cosmic already present: the
+    -- moved-head fixture's script checks this out instead of a relative
+    -- ancestor, so the fetch-then-build plan's second step still finds
+    -- the executable after the first moves HEAD.
+    assert(fs.write(fs.join(root, "bin/cosmic"), "#!/bin/sh\nexit 0\n"))
+    assert(fs.set_mode(fs.join(root, "bin/cosmic"), tonumber("755", 8)))
+    git(root, {"add", "bin/cosmic"})
+    git(root, {"commit", "-q", "-m", "decoy"})
+    git(root, {"branch", "decoy"})
     assert(fs.write(fs.join(root, "bin/cosmic"), "#!/bin/sh\n" .. (script or "exit 0\n")))
     assert(fs.set_mode(fs.join(root, "bin/cosmic"), tonumber("755", 8)))
-  elseif kind == "cosmopolitan" then
-    assert(fs.make_dirs(fs.join(root, "third_party/lua")))
-    assert(fs.write(fs.join(root, "third_party/lua/lua.c"), ""))
+  elseif kind == "make-bootstrap" then
+    assert(fs.write(fs.join(root, "Makefile"),
+        ".PHONY: bootstrap\nbootstrap:\n\ttouch bootstrap-ran\n"))
+  elseif kind == "make-none" then
+    assert(fs.write(fs.join(root, "Makefile"), ".PHONY: gate\ngate:\n\ttrue\n"))
   end
   assert(fs.write(fs.join(root, "README"), "base\n"))
   git(root, {"add", "-A"})
@@ -186,7 +207,7 @@ local function test_signal_termination_reports_failure_in_both_modes_and_roles()
           local code, out = capture(c, review, verbose, {"refs/heads/supplied"})
           assert(seen, "bootstrap was attempted")
           assert_created_failure(c, code, out)
-          assert(out:find("bin/cosmic --make build failed (signal 15)", 1, true) ~= nil, out)
+          assert(out:find("bin/cosmic --make fetch failed (signal 15)", 1, true) ~= nil, out)
           if not verbose then
             assert(out:find("signal-out", 1, true) ~= nil and out:find("signal-err", 1, true) ~= nil, out)
           end
@@ -209,7 +230,7 @@ local function test_success_preserves_exact_heads_and_inherited_identity()
         local c = fresh("success-" .. tostring(review), "cosmic", "echo 'build: PASS (fixture)'\n")
         local config = check.must(fs.read(fs.join(c.root, ".git/config")))
         local code, out = capture(c, review, false, {"refs/heads/supplied"})
-        assert(code == 0 and out:find("bootstrap: cosmic (local build)", 1, true) ~= nil, out)
+        assert(code == 0 and out:find("bootstrap: cosmic (fetch + build)", 1, true) ~= nil, out)
         assert(git_output(c.path, {"rev-parse", "HEAD"}) == (review and c.head or c.base))
         assert(git_output(c.path, {"rev-parse", "refs/spike/supplied"}) == c.head)
         for _, key in ipairs({"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"}) do
@@ -244,7 +265,7 @@ end
 local function test_bootstrap_moving_head_is_refused_at_final_validation()
   for _, review in ipairs({false, true}) do
     isolated(function()
-        local c = fresh("moved-head-" .. tostring(review), "cosmic", "git checkout -q --detach HEAD^\n")
+        local c = fresh("moved-head-" .. tostring(review), "cosmic", "git checkout -q --detach decoy\n")
         local code, out = capture(c, review, false)
         assert_created_failure(c, code, out)
         assert(out:find("does not equal requested commit", 1, true) ~= nil, out)
@@ -361,16 +382,81 @@ local function test_skipping_is_explicit_and_still_checks_identity()
 end
 
 local function test_no_action_trees_keep_their_honest_labels()
-  for _, kind in ipairs({"none", "cosmopolitan"}) do
-    isolated(function()
-        local c = fresh("no-action-" .. kind, kind)
-        local code, out = capture(c, false, false)
-        local label = kind == "none" and "nothing (unrecognized tree)" or "cosmopolitan (nothing needed)"
-        assert(code == 0 and out:find("bootstrap: " .. label, 1, true) ~= nil, out)
-        assert(git_output(c.path, {"rev-parse", "HEAD"}) == c.base)
-        assert(store.close(c.s))
-      end)
-  end
+  isolated(function()
+      local c = fresh("no-action-none", "none")
+      local code, out = capture(c, false, false)
+      assert(code == 0 and out:find("bootstrap: nothing (unrecognized tree)", 1, true) ~= nil, out)
+      assert(git_output(c.path, {"rev-parse", "HEAD"}) == c.base)
+      assert(store.close(c.s))
+    end)
+end
+
+-- A `cosmic` kind's resolved plan runs fetch then build, in that order.
+local function test_cosmic_kind_runs_its_resolved_fetch_then_build_plan()
+  isolated(function()
+      local c = fresh("cosmic-order", "cosmic", "exit 0\n")
+      local original = child.run
+      local seen: {{string}} = {}
+      child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
+        if argv[1] == "bin/cosmic" then
+          seen[#seen + 1] = argv
+          assert(opts ~= nil and opts.cwd == c.path)
+          return {ok = true, code = 0, signal = 0, stdout = "", stderr = ""}, ""
+        end
+        return original(argv, opts)
+      end
+      local code, out = capture(c, false, false)
+      child.run = original
+      assert(#seen == 2, "expected exactly one fetch and one build invocation")
+      equal_argv(seen[1], {"bin/cosmic", "--make", "fetch"})
+      equal_argv(seen[2], {"bin/cosmic", "--make", "build"})
+      assert(code == 0 and out:find("bootstrap: cosmic (fetch + build)", 1, true) ~= nil, out)
+      assert(store.close(c.s))
+    end)
+end
+
+-- A `make`-kind repo that advertises a `bootstrap` target gets it run —
+-- the generalization of the old cosmopolitan-specific branch. `child.run`
+-- is mocked so this proves the resolved argv without a real `make`.
+local function test_make_kind_runs_its_resolved_bootstrap_target()
+  isolated(function()
+      local c = fresh("make-bootstrap", "make-bootstrap")
+      local original = child.run
+      local seen: {string}
+      child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
+        if argv[1] == "make" then
+          seen = argv
+          assert(opts ~= nil and opts.cwd == c.path)
+          return {ok = true, code = 0, signal = 0, stdout = "", stderr = ""}, ""
+        end
+        return original(argv, opts)
+      end
+      local code, out = capture(c, false, false)
+      child.run = original
+      assert(seen ~= nil, "the resolved bootstrap target was never run")
+      equal_argv(seen, {"make", "-f", "Makefile", "bootstrap"})
+      assert(code == 0 and out:find("bootstrap: make (bootstrap)", 1, true) ~= nil, out)
+      assert(store.close(c.s))
+    end)
+end
+
+-- A `make`-kind repo with no bootstrap target needs nothing — the resolver
+-- reports an empty plan and no subprocess is ever attempted.
+local function test_make_kind_without_a_bootstrap_target_needs_nothing()
+  isolated(function()
+      local c = fresh("make-none", "make-none")
+      local original = child.run
+      local touched = false
+      child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
+        if argv[1] == "make" then touched = true end
+        return original(argv, opts)
+      end
+      local code, out = capture(c, false, false)
+      child.run = original
+      assert(not touched, "no bootstrap target means no make invocation")
+      assert(code == 0 and out:find("bootstrap: nothing needed", 1, true) ~= nil, out)
+      assert(store.close(c.s))
+    end)
 end
 
 local function test_prepared_ref_failure_names_the_preserved_checkout()

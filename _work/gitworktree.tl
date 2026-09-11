@@ -74,12 +74,18 @@ end
 
 --- Compatibility helper for callers that need a repository's conventional
 --- base name. Claim worktree creation itself never guesses a branch: it uses
---- the exact product commit recorded in the claim.
+--- the exact product commit recorded in the claim. `base` always wins; absent
+--- that, the resolver's own cached `origin/HEAD` read wins over the
+--- repo-name heuristic, which stays only as the fallback for a shallow
+--- clone or a remote that reports no default.
 --- @param repo string The item's `owner/name`
 --- @param base string The item's own `base` field, "" if unset
+--- @param checkout string The local checkout to read `origin/HEAD` from
 --- @return string The branch to fetch and branch off of
-local function default_base(repo: string, base: string): string
+local function default_base(repo: string, base: string, checkout: string): string
   if (base or "") ~= "" then return base end
+  local resolved = repoprofile.default_base(checkout)
+  if resolved ~= "" then return resolved end
   if repo:find("cosmopolitan", 1, true) ~= nil then return "master" end
   return "main"
 end
@@ -100,30 +106,40 @@ end
 
 local run_step = runtime.run_step
 
---- Bootstraps a fresh worktree, builder or review: `bin/cosmic --make
---- build` for a cosmic tree (`run_step` decides
---- how much of their own output reaches the caller), nothing for a
---- cosmopolitan tree (its own gate is the builder's first) or a repo
---- this tool does not recognize. `GITBOARD_WORKTREE_BOOTSTRAP=0` skips
---- actually running the cosmic commands — a test's fixture may carry
---- a fake `bin/cosmic` it must never execute — while still detecting
---- and reporting which kind this is.
+--- Bootstraps a fresh worktree, builder or review: the checkout's resolved
+--- repo-mechanics profile (`_work.repoprofile`) decides what runs, never a
+--- hardcoded repo name or marker-file check here. A `cosmic` kind runs its
+--- resolved `bootstrap` plan — `bin/cosmic --make fetch` then `--make
+--- build` (`run_step` decides how much of their own output reaches the
+--- caller). A `make` kind runs its resolved `bootstrap` target when the
+--- repo declares one, or needs nothing when it does not — this covers any
+--- `make`-kind repo with no bootstrap step, cosmopolitan included until it
+--- declares one of its own. An absent resolution needs nothing this tool
+--- recognizes. `GITBOARD_WORKTREE_BOOTSTRAP=0` skips actually running the
+--- cosmic commands — a test's fixture may carry a fake `bin/cosmic` it must
+--- never execute — while still detecting and reporting which kind this is.
 --- @param path string The fresh worktree
 --- @param verbose boolean Stream fetch/build verbatim instead of
 --- summarizing them (`--verbose`)
 --- @return string Bootstrap status (not artifact validation), empty on failure
 --- @return string Failure diagnostic, empty on success
 local function bootstrap(path: string, verbose: boolean): string, string
-  if fs.is_file(fs.join(path, "bin/cosmic")) then
+  local prof = repoprofile.resolve(path)
+  if prof.kind == "cosmic" then
     if env.get("GITBOARD_WORKTREE_BOOTSTRAP") == "0" then
       return "cosmic (skipped: GITBOARD_WORKTREE_BOOTSTRAP=0)", ""
     end
-    local ok, err = run_step(path, {"bin/cosmic", "--make", "build"}, verbose)
-    if not ok then return "", err end
-    return "cosmic (local build)", ""
+    for _, plan in ipairs(prof.bootstrap) do
+      local ok, err = run_step(path, plan, verbose)
+      if not ok then return "", err end
+    end
+    return "cosmic (fetch + build)", ""
   end
-  if fs.is_dir(fs.join(path, "third_party/lua")) then
-    return "cosmopolitan (nothing needed)", ""
+  if prof.kind == "make" then
+    if #prof.bootstrap == 0 then return "nothing needed", "" end
+    local ok, err = run_step(path, prof.bootstrap[1], verbose)
+    if not ok then return "", err end
+    return "make (bootstrap)", ""
   end
   return "nothing (unrecognized tree)", ""
 end
@@ -399,7 +415,7 @@ local record gitworktree
   root_override: string, refs: {string}, review: boolean,
   verbose: boolean, receipt_file?: string, command?: string, cwd?: string,
   adopt?: string, fetch?: boolean): integer
-  default_base: function(repo: string, base: string): string
+  default_base: function(repo: string, base: string, checkout: string): string
 end
 
 local M: gitworktree = {
