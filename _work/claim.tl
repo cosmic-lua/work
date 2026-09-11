@@ -3,6 +3,7 @@
 --- two hours after the newest acquire/force/renew control commit. Expiry is
 --- deliberately acquisition-only: it lets another caller race for the item,
 --- but does not erase the old claimant's work or manufacture an expiry commit.
+local fs = require("cosmic.fs")
 local identity = require("_work.identity")
 
 local LEASE_S < const > = 2 * 60 * 60
@@ -124,6 +125,15 @@ local function branch(item_id: string, root: string): string
   return ("work/%s/%s"):format(item_id:sub(-8), root:sub(1, 12))
 end
 
+--- The worktree path a claim's branch takes: the `wt` directory beside
+--- the product checkout, then the branch name.
+--- @param checkout string The local product checkout
+--- @param claim_branch string The claim's branch, from `branch` above
+--- @return string The worktree path
+local function worktree(checkout: string, claim_branch: string): string
+  return fs.join(fs.dirname(checkout), "wt", claim_branch)
+end
+
 local record claim
   LEASE_S: integer
   FUTURE_SKEW_S: integer
@@ -138,6 +148,7 @@ local record claim
   drop_refusal: function(st: State | nil, caller: string, now: integer,
   force: boolean, why: string): string | nil
   branch: function(item_id: string, root: string): string
+  worktree: function(checkout: string, claim_branch: string): string
 end
 
 local M: claim = {
@@ -149,6 +160,7 @@ local M: claim = {
   renew_refusal = renew_refusal,
   drop_refusal = drop_refusal,
   branch = branch,
+  worktree = worktree,
 }
 
 return M

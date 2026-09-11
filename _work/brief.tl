@@ -1,14 +1,13 @@
 --- `brief`: emit the prompt a subagent runs one role from — builder,
---- research, review, refine, decompose — with every placeholder the board can
---- answer already filled: the item's id, handle, title, spec sidecar
---- verbatim, repo and base branch, the item branch, the exact product
---- commit under review, and this checkout's own absolute path. Templates are
---- `_work.brieftext` and `_work.brieftext_review`; `review` picks
---- between full and mechanical exact-head reviews; the fill grammar is
---- `<UPPER_SNAKE>`, and a placeholder the board cannot answer (a
---- worktree path, a bounce paragraph) survives the fill — the closing
---- verdict line names each survivor, so the caller's whole job is
---- those and pasting the body verbatim.
+--- research, review, refine, decompose — with every placeholder the board
+--- can answer already filled: id, handle, title, spec sidecar verbatim,
+--- repo/base/item branch, the exact product commit, this checkout's own
+--- path. Templates are `_work.brieftext` and `_work.brieftext_review`;
+--- `review` picks between full and mechanical exact-head reviews. The
+--- fill grammar is `<UPPER_SNAKE>`, and a placeholder the board cannot
+--- answer (a worktree path, a bounce paragraph) survives the fill — the
+--- closing verdict line names each survivor, so the caller's whole job
+--- is those and pasting the body verbatim.
 ---
 --- Every brief also names the session its subject is already claimed
 --- under (`it.claim`) on the closing verdict line — `gitboard session
@@ -26,6 +25,8 @@ local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
 local brieftext_review = require("_work.brieftext_review")
 local child = require("cosmic.child")
+local claim = require("_work.claim")
+local claimbatch = require("_work.claimbatch")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
@@ -58,9 +59,8 @@ local function fill(text: string, values: {string: string}): string
 end
 
 --- The `<UPPER_SNAKE>` placeholder-shaped tokens present in `text`,
---- first-seen order, each once. Used both on a raw template (to find
---- the placeholders it declares) and, in the test below, on an
---- already-filled string.
+--- first-seen order, each once. Used on a raw template (its declared
+--- placeholders) and, in the test below, on an already-filled string.
 --- @param text string The text to scan
 --- @return {string} Placeholder names, possibly empty
 local function unfilled(text: string): {string}
@@ -78,12 +78,10 @@ end
 --- The `template`'s OWN declared placeholders that `values` leaves
 --- unanswered — checked by looking `values` up directly, never by
 --- scanning the filled body. A spec quoting a placeholder-shaped token
---- verbatim (`<N>`, `<ID>`, `<REVIEW_SESSION>` as example command
---- syntax or old-name prose) rides inside `values["SPEC"]`'s own text;
---- since only names the template itself declares are ever candidates,
---- and a candidate survives only when `values` truly holds no answer
---- for it, such a token can never be mistaken for one the caller still
---- owes a fill, no matter where in the body it ends up appearing.
+--- verbatim (`<N>`, `<ID>`, `<REVIEW_SESSION>` as example syntax or
+--- old-name prose) rides inside `values["SPEC"]`'s own text; since only
+--- names the template itself declares are ever candidates, such a token
+--- can never be mistaken for one the caller still owes a fill.
 --- @param template string The raw, unfilled template
 --- @param values {string: string} The fill values actually used
 --- @return {string} Placeholder names still unanswered, first-seen order
@@ -101,8 +99,7 @@ end
 --- Whether a diff is small and mechanical enough to earn
 --- `brieftext_review.REVIEW_SCRIPT`'s numbered script instead of
 --- `REVIEW`'s full adversarial prompt: every changed `.tl` file is a
---- `*_test.tl` file (there may be none at all), or the diff totals
---- fewer than 20 changed lines — either alone is enough.
+--- `*_test.tl` file, or the diff totals fewer than 20 changed lines.
 --- @param files {string} The PR's changed file paths
 --- @param additions integer The PR's added line count
 --- @param deletions integer The PR's removed line count
@@ -120,9 +117,8 @@ local function is_mechanical_diff(files: {string}, additions: integer,
   return true
 end
 
---- Inspect a handed-over change using only the caller-managed local product
---- checkout. Failure to resolve the mapping merely selects the full review:
---- it never triggers a fetch, credential lookup, or provider request.
+--- Inspect a handed-over change using only the caller-managed local
+--- product checkout; a failed mapping merely selects the full review.
 --- @param s store.Store The store
 --- @param it item.Item The item under brief
 --- @return boolean True when local Git proves the change is mechanical
@@ -147,9 +143,8 @@ local function local_mechanical_diff(s: store.Store, it: item.Item): boolean
   return is_mechanical_diff(files, additions, deletions)
 end
 
---- Rework context contains only facts the board actually owns: the verdict
---- kind and commit id. Review prose and provider comments are caller state,
---- never evidence reconstructed by gitboard.
+--- Rework context contains only facts the board actually owns: the
+--- verdict kind and commit id, never review prose reconstructed by gitboard.
 local function bounce_context(it: item.Item, branch?: string): string
   if (it.verdict or "") ~= "request changes" then return "" end
   return fill(brieftext.REWORK, {
@@ -159,20 +154,13 @@ local function bounce_context(it: item.Item, branch?: string): string
 end
 
 --- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`. The first
---- attempt is `GITBOARD_DIR`'s parent's parent — `bin/gitboard` exports
---- `GITBOARD_DIR` as `<root>/o/board` in the cold-start bootstrap, so
---- that guess is right and cheap for the common case. It is wrong in
---- the documented sibling-reuse bootstrap, where `GITBOARD_DIR` is
---- instead set to a sibling clone's own root (never `<root>/o/board`):
---- there the guess lands somewhere with no `bin/gitboard` at all —
---- verified by checking for that file rather than trusting the
---- arithmetic. When the guess fails that check, fall back to searching
---- upward from this process's OWN working directory (always a real
---- product checkout — that's what `bin/gitboard` was invoked from) for
---- the nearest ancestor holding `bin/gitboard`. "" when neither the
---- guess nor the search finds one — `GITBOARD_DIR` unset included —
---- leaving the placeholder for the caller to fill, the same way
---- `<WORKTREE>` survives when the board cannot answer it.
+--- attempt is `GITBOARD_DIR`'s parent's parent, right and cheap for the
+--- cold-start bootstrap that sets `GITBOARD_DIR` to `<root>/o/board`; it
+--- is wrong for the sibling-reuse bootstrap (`GITBOARD_DIR` a sibling
+--- clone's own root instead), verified by checking for `bin/gitboard`
+--- rather than trusting the arithmetic. On failure, fall back to
+--- searching upward from this process's own cwd for the nearest
+--- ancestor holding `bin/gitboard`. "" when neither finds one.
 --- @return string The product checkout's absolute path, "" if unknown
 local function product_root(): string
   local dir = env.get("GITBOARD_DIR")
@@ -194,6 +182,24 @@ local function product_root(): string
     cur = parent
   end
   return ""
+end
+
+--- The checkout `worktree ID` makes for this item's claim: the same
+--- `<checkout>/../wt/<branch>` path `_work.gitworktree` builds, from the
+--- same repository map and claim batch. "" when the item has no claim
+--- batch, its batch no longer holds a claim, or no local checkout is
+--- mapped for its repo.
+--- @param s store.Store The store
+--- @param it item.Item The item under brief
+--- @return string The worktree path, "" when it cannot be derived
+local function worktree_path(s: store.Store, it: item.Item): string
+  local pointer = it.claim_batch or ""
+  if pointer == "" then return "" end
+  local st, _serr = claimbatch.read_state(s.root, pointer, it.id)
+  if st == nil then return "" end
+  local checkout, _cerr = repository_map.resolve(s.root, it.repo or "", "")
+  if checkout == nil then return "" end
+  return claim.worktree(checkout, claim.branch(it.id, st.root))
 end
 
 --- Collect the Teal paths named by the item's `## Change` section, once
@@ -283,10 +289,10 @@ end
 --- @param kind string builder | research | review | refine | decompose
 --- @param id string The item the brief is about
 --- @param out string | nil Write the body here instead of stdout
---- @param gb_command string | nil `--gitboard-command`: the caller's own exact
---- invocation, rendered as the prefix for every board command the brief
---- prints; requires `gb_cwd`. Falls back to a builder `--receipt`'s
---- recorded invocation when omitted; unresolved when neither is present
+--- @param gb_command string | nil `--gitboard-command`: caller's exact
+--- invocation, prefixed onto every board command printed; requires
+--- `gb_cwd`. Falls back to a builder `--receipt`'s own recorded
+--- invocation when omitted; unresolved when neither is present
 --- @param gb_cwd string | nil `--gitboard-cwd`: cwd for `gb_command`
 --- @return integer Exit code
 local function cmd_brief(s: store.Store, kind: string, id: string,
@@ -320,9 +326,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   local prep, perr = receipt.read(s, it, kind, receipt_file or "", caller or "", tree)
   if perr ~= "" then return gate.verdict_line("brief", false, perr) end
   -- The caller's own flags win outright; a builder with no direct flags
-  -- falls back to the exact invocation its --receipt already recorded at
-  -- worktree-preparation time. Neither present leaves it unresolved —
-  -- never a guessed product-checkout `bin/gitboard`.
+  -- falls back to its --receipt's own recorded invocation. Neither
+  -- present leaves it unresolved — never a guessed `bin/gitboard`.
   local gitboard_command, gitboard_cwd = gb_command, gb_cwd
   if gitboard_command == "" and kind == "builder" then
     gitboard_command = prep["gitboard-command"] or ""
@@ -391,18 +396,15 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   local root = prep.session == nil and product_root() or ""
   if root ~= "" then
     values["PRODUCT_ROOT"] = root
-    -- `<WORKTREE>`: `worktree ID` (run after `take ID`) already made
-    -- the builder's checkout at exactly this path, so a builder brief
-    -- fills it only once that worktree exists on disk — the same
-    -- "unfilled until the board can answer it" rule every other
-    -- placeholder follows. A review fills it only when the selected
-    -- template contains the placeholder.
-    local id8 = it.id:sub(1, 8)
-    local wt = fs.join(fs.dirname(root), "wt", id8)
-    if kind == "builder" and fs.is_dir(wt) then
+  end
+  -- `<WORKTREE>`: fills once `worktree ID` (or `--review`) has made the
+  -- checkout on disk — unfilled until then, like any other placeholder
+  -- the board cannot yet answer. `REVIEW_SCRIPT` carries no `<WORKTREE>`.
+  if kind == "builder" or (kind == "review"
+    and template:find("<WORKTREE>", 1, true) ~= nil) then
+    local wt = worktree_path(s, it)
+    if wt ~= "" and fs.is_dir(wt) then
       values["WORKTREE"] = wt
-    elseif kind == "review" and template:find("<WORKTREE>", 1, true) ~= nil then
-      values["WORKTREE"] = fs.join(fs.dirname(root), "wt", "review-" .. id8)
     end
   end
   if kind == "builder" then

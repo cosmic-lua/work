@@ -12,9 +12,11 @@
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
 ---
---- `<WORKTREE>` in `REVIEW` is `_work.brief`'s own
---- `<root>/../wt/review-<id8>`, filled for the reviewer-created fresh
---- checkout. `REVIEW_SCRIPT` is checkout-free: its mutation step uses
+--- `<WORKTREE>` in `REVIEW` is the review checkout `worktree ID --review`
+--- makes — the `wt` directory beside the mapped product checkout, then the
+--- claim's own `work/<handle>/<claim-root-short>` branch — filled only
+--- once that directory exists. `REVIEW_SCRIPT` is checkout-free: its
+--- mutation step uses
 --- `git show <head>:<path>` into the scratchpad, and its verdict block
 --- reads the diff from `<PRODUCT_ROOT>` without a `<WORKTREE>`
 --- placeholder. The shared checkout note still points at `bin/cosmic

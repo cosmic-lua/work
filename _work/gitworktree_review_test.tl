@@ -194,8 +194,7 @@ local function test_worktree_review_refuses_with_no_pr()
   local it = check.must(store.load(s, leaf))
   it.reviewer = SESSION
   assert(storewrite.save(s, it, "fixture: review claim, no pr"))
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(checkout), "wt", "review-" .. id8)
+  local expect = fs.join(fs.dirname(checkout), "wt")
   assert(worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, true, false) ~= 0,
     "an item with no PR recorded is refused")
   assert(not fs.is_dir(expect), "no worktree directory was created")
@@ -211,8 +210,7 @@ local function test_worktree_review_refuses_when_unclaimed()
   it.claim = SESSION
   it.pr = 3
   assert(storewrite.save(s, it, "fixture: build claim only, no review claim"))
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(checkout), "wt", "review-" .. id8)
+  local expect = fs.join(fs.dirname(checkout), "wt")
   local code = worktree.cmd_worktree(s, leaf, SESSION, checkout, {}, true, false)
   assert(code ~= 0,
     "a legacy holder field alone is not a valid Git-backed claim")

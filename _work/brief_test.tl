@@ -252,10 +252,12 @@ end
 
 -- `PRODUCT_ROOT` is `GITBOARD_DIR`'s parent's parent — the checkout root
 -- `bin/gitboard` itself execs from, since it exports `GITBOARD_DIR` as
--- `<root>/o/board` before handing off to the pinned binary. It still
--- resolves the reviewer's own fresh worktree guess; it no longer
--- supplies the GitBoard invocation itself — that is `<GITBOARD_CMD>`,
--- unresolved here since no caller command was given.
+-- `<root>/o/board` before handing off to the pinned binary. This fixture
+-- configures no `gitboard.repository` mapping for "acme/widgets", so
+-- `<WORKTREE>` cannot be derived and survives — PRODUCT_ROOT resolving
+-- is independent of that. It no longer supplies the GitBoard invocation
+-- itself either — that is `<GITBOARD_CMD>`, unresolved here since no
+-- caller command was given.
 local function test_product_root_fills_from_gitboard_dir()
   local s = init_state_repo("brief-product-root")
   local _, leaf = root_with_leaf(s)
@@ -268,12 +270,11 @@ local function test_product_root_fills_from_gitboard_dir()
   if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
   else check.must(env.set("GITBOARD_DIR", prior)) end
   assert(code == 0, "the recorded commit unlocks the review brief")
-  local worktree = fs.join(fs.dirname(PRODUCT_ROOT), "wt", "review-" .. leaf:sub(1, 8))
-  assert(out:find(worktree, 1, true) ~= nil,
-    "PRODUCT_ROOT (from GITBOARD_DIR) still resolves the review's own fresh worktree: "
-    .. out)
-  assert(out:find("<WORKTREE>", 1, true) == nil,
-    "the placeholder is gone once GITBOARD_DIR answers it")
+  assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
+    "PRODUCT_ROOT (from GITBOARD_DIR) still fills: " .. out)
+  assert(out:find("<WORKTREE>", 1, true) ~= nil,
+    "no repository mapping is configured, so the worktree path cannot "
+    .. "be derived and the placeholder survives: " .. out)
   assert(out:find("bin/gitboard", 1, true) == nil,
     "still no guessed product-checkout bin/gitboard: " .. out)
   assert(out:find(gitinvocation.UNRESOLVED, 1, true) ~= nil,
