@@ -36,6 +36,20 @@ The checkout that holds the board worktree (`<BOARD_DIR>/..`) is the
 orchestrator's and is stale by construction; never read, grep or build
 in it. Your worktree is the only tree.
 
+The worktree is yours to work in, but not yours alone: while your turn
+is between tool calls the orchestrator may run commands in it, edit
+files, commit, and push — most often to finish a build you left waiting
+on a background command. Git history and file changes you did not make
+are therefore expected, not a broken environment: a merge of
+`origin/main`, a commit authored by someone other than you, a file
+changed since your last edit. Never investigate one as an environment
+bug, and never undo it — no `git reset --hard`, no `git revert`, no
+force-push. Read what is there with `git log` and `git status`, build on
+top of it, and name the commits that are not yours in your final report.
+Avoid needing any of this by never ending a turn with a long command
+still running in the background: poll it to completion inside the turn
+that started it.
+
 ## The item
 
 Board item id (full KSUID): `<ITEM_ID>` (handle <HANDLE>)
