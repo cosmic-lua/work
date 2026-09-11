@@ -1,4 +1,5 @@
 title: gitworktree.tl: bootstrap() and default_base() call the repo-mechanics resolver instead of hardcoded repo-name checks
 parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
 target: cosmic-lua/work
+claim_batch: b2089704d96a5ccdf5ab50ab1e2dc12a408e94df
 speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85
