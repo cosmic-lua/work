@@ -2,4 +2,7 @@ title: gitworktree.tl: bootstrap() and default_base() call the repo-mechanics re
 parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
 target: cosmic-lua/work
 claim_batch: b2089704d96a5ccdf5ab50ab1e2dc12a408e94df
+handover_head: b8f6398b1433b34349e2e9ce3b5c47f686aae540
+external_url: https://github.com/cosmic-lua/work/pull/120
+builders: 9a8e3dbf532b898a2b405b5c734ae91a
 speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85
