@@ -103,7 +103,19 @@ local function cmd_done(s: store.Store, id: string, reason: string,
       local canonical, verr = commit_evidence.verify_landing(root,
         it.claim_base or "", it.verdict_head or "", landed or "")
       if canonical == nil then
-        return gate.verdict_line("done", false, "REFUSED: " .. verr)
+        -- An audited repair retains the real landed commit the caller named
+        -- rather than discarding it: `--why` already recorded, above, why
+        -- this exact commit is trusted despite failing the automatic
+        -- ancestry/content check — never a provider's say-so, only a commit
+        -- this checkout can resolve.
+        if not force then
+          return gate.verdict_line("done", false, "REFUSED: " .. verr)
+        end
+        local resolved, rerr = commit_evidence.commit_id(root, landed or "")
+        if resolved == nil then
+          return gate.verdict_line("done", false, "REFUSED: " .. rerr)
+        end
+        canonical = resolved
       end
       it.landed_head = canonical
     end

@@ -271,7 +271,8 @@ local function main(...: string): integer
       d.parsed.values["repo-dir"] or "",
       d.parsed.switches["force"] or false,
       d.parsed.values["why"] or "",
-      d.parsed.switches["execute"] or false)
+      d.parsed.switches["execute"] or false,
+      d.parsed.switches["fetch-base"] or false)
   end
   if d.command == "fsck" then
     return fsck.cmd_fsck(s)

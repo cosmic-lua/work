@@ -134,6 +134,61 @@ local function test_a_different_landing_is_refused()
   assert(got == nil and err:find("neither contains", 1, true) ~= nil, err)
 end
 
+--- The isolated history a stale local target ref produces: claim base A,
+--- then the target advances (unrelated to this item) to B before the item's
+--- own branch ever forks from it, the item commits C on top of B, and the
+--- target advances again (still unrelated) to D before C is squashed onto
+--- D. Neither unrelated advance ever touches the item's own files.
+local function stale_claim_history(name: string):
+  string, string, string, string, string
+  local root = fs.join(tmpdir, "commit-evidence-stale-" .. name)
+  assert(fs.remove_all(root))
+  assert(fs.make_dirs(root))
+  git(root, {"init", "-q"})
+  git(root, {"checkout", "-q", "-b", "main"})
+  local claim_base = commit_file(root, "main.txt", "base\n", "base")
+  commit_file(root, "unrelated.txt", "one\n", "unrelated advance one")
+  local fork = git(root, {"rev-parse", "HEAD"})
+
+  git(root, {"checkout", "-q", "-b", "item", fork})
+  local accepted = commit_file(root, "item.txt", "item work\n", "item change")
+
+  git(root, {"checkout", "-q", "main"})
+  local later = commit_file(root, "unrelated.txt", "one\ntwo\n",
+    "unrelated advance two")
+
+  local diff_run = check.must(child.run(
+      {"git", "diff", "--binary", fork, accepted, "--"}, {cwd = root}))
+  assert(diff_run.ok, "git diff failed: " .. diff_run.stderr)
+  local applied = check.must(child.run({"git", "apply", "--index"},
+      {cwd = root, stdin = diff_run.stdout}))
+  assert(applied.ok, "git apply failed: " .. applied.stderr)
+  git(root, {"commit", "-q", "-m", "squash landing"})
+  local squash = git(root, {"rev-parse", "HEAD"})
+
+  git(root, {"reset", "-q", "--hard", later})
+  assert(fs.write(fs.join(root, "item.txt"), "item work, changed one byte\n"))
+  git(root, {"add", "item.txt"})
+  git(root, {"commit", "-q", "-m", "squash landing, one byte off"})
+  local squash_changed = git(root, {"rev-parse", "HEAD"})
+
+  return root, claim_base, accepted, squash, squash_changed
+end
+
+local function test_stale_claim_base_never_charges_an_unrelated_target_advance()
+  local root, claim_base, accepted, squash = stale_claim_history("accept")
+  local got, err = evidence.verify_landing(root, claim_base, accepted, squash)
+  assert(got == squash,
+    "an intervening, unrelated target advance must not poison a real "
+    .. "squash: " .. tostring(err))
+end
+
+local function test_stale_claim_base_squash_missing_an_item_byte_is_refused()
+  local root, claim_base, accepted, _, changed = stale_claim_history("refuse")
+  local got, err = evidence.verify_landing(root, claim_base, accepted, changed)
+  assert(got == nil and err:find("neither contains", 1, true) ~= nil, err)
+end
+
 local function test_patch_fallback_requires_a_first_parent()
   local root, base, accepted = product("root")
   local orphan = fs.join(tmpdir, "commit-evidence-orphan")
