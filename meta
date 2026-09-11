@@ -2,3 +2,6 @@ title: tl.generate collapses consecutive unary '-' into a '--' comment, corrupti
 parent: 3Ivx3L2BvBlyYdy3UgmnBguvGsY
 target: cosmic-lua/cosmic
 claim_batch: 1b296495b35269fbda99904ea79673fe446dda90
+handover_head: 2b32b6d0e6df6d6257a051b427eecc96bc760dcf
+external_url: https://github.com/cosmic-lua/cosmic/pull/1835
+builders: 724d9a2509e9ca5095ff6ac8cdadf320
