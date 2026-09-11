@@ -151,11 +151,22 @@ local function rejection(path: string, err: string)
   print(("runtime rejected %q: %s"):format(path, err))
 end
 
-local function publish(root: string, pin: Pin, text: string): string
-  local dir = fs.join(root, "o/bootstrap")
-  local derr = directory(root, dir)
-  if derr ~= "" then return derr end
-  local destination = fs.join(dir, "cosmic.ape")
+--- Every bootstrap path a supported target repository's own build graph
+--- may declare as an input, materialized with identical verified bytes.
+--- `cosmic.ape` is the cache-lookup form `prepare` itself reads back;
+--- `cosmic` is the un-suffixed path a Cosmic-kind target's committed
+--- trust root (`bin/cosmic`) and its own `_build/coldbuild_test.tl`
+--- read declaration name directly — publishing only the former leaves
+--- that target's build graph refusing before it starts.
+local BOOTSTRAP_NAMES < const > = {"cosmic.ape", "cosmic"}
+
+--- One target: reuse a matching pre-existing file, refuse to overwrite
+--- a mismatched one (it is left for `rejection` to report, never
+--- clobbered), and otherwise stage-then-link so a concurrent publisher
+--- never sees a partial file. Never overwrites; loses no more than one
+--- read to a genuine concurrent race for the same target.
+local function publish_one(root: string, dir: string, name: string, pin: Pin, text: string): string
+  local destination = fs.join(dir, name)
   local invalid = output_refusal(root, destination, false)
   if invalid ~= "" then return invalid end
   if fs.is_present(destination) then
@@ -178,6 +189,21 @@ local function publish(root: string, pin: Pin, text: string): string
     if lerr:sub(1, #exists) ~= exists then return lerr end
     local winner, werr = verified(destination, pin.digest)
     if winner == nil then rejection(destination, werr) end
+  end
+  return ""
+end
+
+--- Publish the same verified bytes at every name in `BOOTSTRAP_NAMES`,
+--- one target at a time so a failure on the first never leaves the
+--- second half-published. Creation, adoption, and review preparation
+--- all reach this through the one call in `prepare` below.
+local function publish(root: string, pin: Pin, text: string): string
+  local dir = fs.join(root, "o/bootstrap")
+  local derr = directory(root, dir)
+  if derr ~= "" then return derr end
+  for _, name in ipairs(BOOTSTRAP_NAMES) do
+    local err = publish_one(root, dir, name, pin, text)
+    if err ~= "" then return err end
   end
   return ""
 end

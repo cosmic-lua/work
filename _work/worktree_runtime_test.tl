@@ -168,6 +168,10 @@ local function test_publication_vanished_unreadable_and_other_errors_preserve_de
         local destination, temporary = fs.join(c.root, "o/bootstrap/cosmic.ape"), ""
         local link, remove, open = fs.link, fs.remove, fd.open
         fs.link = function(old: string, new: string): boolean, string
+          -- Two bootstrap targets now publish in sequence; only the first
+          -- (this test's own `destination`) is under test here — the
+          -- second's real, unmocked link must proceed normally.
+          if new ~= destination then return link(old, new) end
           temporary = old
           if kind == "other" then return false, "injected EPERM" end
           if kind == "vanished" or kind == "unreadable" then
