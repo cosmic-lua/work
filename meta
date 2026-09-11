@@ -3,5 +3,6 @@ parent: 3HyRcW05wBip6Wqcz145bUQBTyj
 target: cosmic-lua/cosmic
 claim_batch: 671cc8818ed068a94c766932d825334bd5574ccf
 handover_head: 2535650bcaa651b051f525c4389e4705cb287f23
+external_url: https://github.com/cosmic-lua/cosmic/pull/1833
 builders: 13adca796a8db5cb6dda8fef09dd97ec
 speccers: 13adca796a8db5cb6dda8fef09dd97ec
