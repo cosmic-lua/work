@@ -160,8 +160,8 @@ end
 
 local function test_mutation_step_names_the_one_file_shape()
   assert(REVIEW:find(
-      "run the ONE test file that guards it (`<TEST_CMD> "
-      .. "<file>`), not the suite", 1, true) ~= nil,
+      "run the ONE test file that guards it (<TEST_CMD_PHRASE>), "
+      .. "not the suite", 1, true) ~= nil,
     "the mutation paragraph must send a reviewer to the diff's own "
     .. "test file, not the suite")
 end
@@ -223,7 +223,7 @@ local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
   for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
     assert(tmpl:find(
         "That checkout has no `o/3p` cache yet — run "
-        .. "<BOOTSTRAP_CMD> before you run any test.", 1, true) ~= nil,
+        .. "<BOOTSTRAP_PHRASE>", 1, true) ~= nil,
       "the checkout note must send a reviewer to the resolved bootstrap "
       .. "plan before running any test: " .. tmpl)
   end

@@ -200,12 +200,23 @@ local function test_unresolvable_repo_falls_back_to_the_literal_text()
   local rcode, rout = brief_and_capture(s, "review", leaf)
   assert(rcode == 0, rout)
   local flat_rout = flat(rout)
+  -- Quoted verbatim from `_work/brieftext_review.tl` at base commit
+  -- `1a31ae33` (before `_work.briefcommands` existed) — not the collapsed
+  -- single-command wording `_work.briefcommands` renders once a repo
+  -- resolves, which would pass this guard even if the fallback drifted.
   assert(flat_rout:find(
-      "run the ONE test file that guards it (`bin/cosmic --make test <file>`)",
-      1, true) ~= nil, rout)
+      "run the ONE test file that guards it "
+      .. "(`bin/cosmic --make test <file>` in cosmic, "
+      .. "`bin/cosmic --make test _work/<file>` in work), not the suite",
+      1, true) ~= nil,
+    "the two-branch (cosmic, work) test-file sentence must survive "
+    .. "unresolved exactly as base commit 1a31ae33 wrote it: " .. rout)
   assert(flat_rout:find(
-      "run `bin/cosmic --make fetch` and `bin/cosmic --make build` before "
-      .. "you run any test", 1, true) ~= nil,
-    "the fresh-checkout bootstrap sentence survives unresolved, exactly "
-    .. "as the same fetch-then-build fact today's literal text stated: " .. rout)
+      "That checkout has no `o/3p` cache yet — run "
+      .. "`bin/cosmic --make fetch` before its first test, and "
+      .. "`--make build` once if you run any test.",
+      1, true) ~= nil,
+    "the fresh-checkout bootstrap sentence must survive unresolved "
+    .. "exactly as base commit 1a31ae33 wrote it, fetch-then-build "
+    .. "phrasing included, not the resolved-kind paraphrase: " .. rout)
 end

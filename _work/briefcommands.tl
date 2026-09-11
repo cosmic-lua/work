@@ -1,7 +1,8 @@
 --- Resolved repo-mechanics commands, formatted for `_work.brief` to fill
 --- `_work.brieftext`'s `BUILDER` and `_work.brieftext_review`'s
---- `REVIEW`/`REVIEW_SCRIPT` `<TYPE_CHECK_CMD>`, `<TEST_CMD>`, `<GATE_CMD>`,
---- and `<BOOTSTRAP_CMD>` placeholders — the resolved `check-file`,
+--- `REVIEW`/`REVIEW_SCRIPT` `<TYPE_CHECK_CMD>`, `<TEST_CMD>`,
+--- `<TEST_CMD_PHRASE>`, `<GATE_CMD>`, and `<BOOTSTRAP_CMD>`/
+--- `<BOOTSTRAP_PHRASE>` placeholders — the resolved `check-file`,
 --- `test-file`, `gate`, and `bootstrap` commands `_work.repoprofile`
 --- already builds, regardless of whether they came from the `cosmic`
 --- convention or a `make` kind's own targets. When the resolver cannot
@@ -12,12 +13,20 @@
 --- `cosmic-lua/cosmic` and, until its Makefile advertises the four
 --- targets, `cosmic-lua/cosmopolitan`.
 ---
---- `<BOOTSTRAP_CMD>` reads differently by caller: a builder mid-session
---- only ever needs to redo the build step (`--check types` resolves a
---- moved sibling against the LAST BUILD's snapshot), never a re-fetch,
---- so its value is the resolved bootstrap plan's own last step; a fresh
---- review checkout has no `o/3p` cache at all, so its value is the whole
---- plan, every step in order.
+--- `<BOOTSTRAP_CMD>`/`<BOOTSTRAP_PHRASE>` read differently by caller: a
+--- builder mid-session only ever needs to redo the build step
+--- (`--check types` resolves a moved sibling against the LAST BUILD's
+--- snapshot), never a re-fetch, so `BOOTSTRAP_CMD` is the resolved
+--- bootstrap plan's own last step alone; a fresh review checkout has no
+--- `o/3p` cache at all, so `BOOTSTRAP_PHRASE` is the whole plan, every
+--- step in order, plus its own trailing "before you run any test"
+--- prose — the two are separate keys, not one value read two ways,
+--- because the fallback sentences they carry do not share a shape.
+--- `<TEST_CMD_PHRASE>` is likewise a full backtick-quoted clause (the
+--- test-file command plus its own `<file>`, or, unresolved, the
+--- original two-branch "in cosmic, ... in work" sentence) for a
+--- template spot that cannot just wrap a bare `TEST_CMD` in its own
+--- backticks.
 local repoprofile = require("_work.repoprofile")
 
 local SENTINEL < const > = "\0FILE\0"
@@ -63,39 +72,52 @@ end
 local FALLBACK_TYPE_CHECK < const > = "bin/cosmic --check types"
 local FALLBACK_TEST < const > = "bin/cosmic --make test"
 local FALLBACK_GATE < const > =
-"`bin/cosmic --make ci` for cosmic; `make -j$(nproc) o//tool/lua/test` for cosmopolitan"
+"`bin/cosmic --make ci` for cosmic;\n   `make -j$(nproc) o//tool/lua/test` for cosmopolitan"
+local FALLBACK_TEST_PHRASE < const > =
+"`bin/cosmic --make test <file>` in cosmic,\n`bin/cosmic --make test _work/<file>` in work"
 local FALLBACK_BUILDER_BOOTSTRAP < const > = "--make build"
-local FALLBACK_REVIEW_BOOTSTRAP < const > =
-"`bin/cosmic --make fetch` and `bin/cosmic --make build`"
+local FALLBACK_REVIEW_BOOTSTRAP_PHRASE < const > =
+"`bin/cosmic --make fetch` before its first test, and `--make build` once if\nyou run any test."
 
---- Resolve the four commands for one item's repo checkout.
+--- Resolve the commands for one item's repo checkout.
 --- @param checkout string The item's local repo checkout, "" when unresolved
---- @param kind string "builder" or "review" — which `<BOOTSTRAP_CMD>`
---- phrasing to render
---- @return {string: string} TYPE_CHECK_CMD, TEST_CMD, GATE_CMD, BOOTSTRAP_CMD
+--- @param kind string "builder" or "review" — which of `<BOOTSTRAP_CMD>`
+--- (builder: the plan's last step alone) or `<BOOTSTRAP_PHRASE>` (review:
+--- the whole plan, plus its own trailing prose) to render
+--- @return {string: string} TYPE_CHECK_CMD, TEST_CMD, GATE_CMD,
+--- TEST_CMD_PHRASE, and either BOOTSTRAP_CMD (builder) or BOOTSTRAP_PHRASE
+--- (review)
 local function commands(checkout: string, kind: string): {string: string}
   local prof = repoprofile.resolve(checkout)
   if prof.kind == "absent" then
-    return {
+    local out: {string: string} = {
       TYPE_CHECK_CMD = FALLBACK_TYPE_CHECK,
       TEST_CMD = FALLBACK_TEST,
       GATE_CMD = FALLBACK_GATE,
-      BOOTSTRAP_CMD = kind == "review" and FALLBACK_REVIEW_BOOTSTRAP
-      or FALLBACK_BUILDER_BOOTSTRAP,
+      TEST_CMD_PHRASE = FALLBACK_TEST_PHRASE,
     }
+    if kind == "review" then
+      out.BOOTSTRAP_PHRASE = FALLBACK_REVIEW_BOOTSTRAP_PHRASE
+    else
+      out.BOOTSTRAP_CMD = FALLBACK_BUILDER_BOOTSTRAP
+    end
+    return out
   end
-  local bootstrap = ""
-  if kind == "review" then
-    bootstrap = bootstrap_plan(prof.bootstrap)
-  elseif #prof.bootstrap > 0 then
-    bootstrap = joined(prof.bootstrap[#prof.bootstrap])
-  end
-  return {
+  local test_cmd = base_command(prof.test_file)
+  local out: {string: string} = {
     TYPE_CHECK_CMD = base_command(prof.check_file),
-    TEST_CMD = base_command(prof.test_file),
+    TEST_CMD = test_cmd,
     GATE_CMD = "`" .. joined(prof.gate) .. "`",
-    BOOTSTRAP_CMD = bootstrap,
+    TEST_CMD_PHRASE = "`" .. test_cmd .. " <file>`",
   }
+  if kind == "review" then
+    out.BOOTSTRAP_PHRASE = bootstrap_plan(prof.bootstrap) .. " before you run any test."
+  elseif #prof.bootstrap > 0 then
+    out.BOOTSTRAP_CMD = joined(prof.bootstrap[#prof.bootstrap])
+  else
+    out.BOOTSTRAP_CMD = ""
+  end
+  return out
 end
 
 local record briefcommands
