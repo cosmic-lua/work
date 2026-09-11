@@ -64,7 +64,7 @@ end
 
 local function test_step_three_prefers_a_per_file_check_between_edits()
   assert(BUILDER:find(
-      "Between edits, `bin/cosmic --check types <file>` on the files "
+      "Between edits, `<TYPE_CHECK_CMD> <file>` on the files "
       .. "you touched; run the full gate once, before the push.",
       1, true) ~= nil,
     "step 3 must prefer a per-file check between edits and reserve "
@@ -160,9 +160,8 @@ end
 
 local function test_mutation_step_names_the_one_file_shape()
   assert(REVIEW:find(
-      "run the ONE test file that guards it (`bin/cosmic --make test "
-      .. "<file>` in cosmic, `bin/cosmic --make test _work/<file>` in "
-      .. "work), not the suite", 1, true) ~= nil,
+      "run the ONE test file that guards it (`<TEST_CMD> "
+      .. "<file>`), not the suite", 1, true) ~= nil,
     "the mutation paragraph must send a reviewer to the diff's own "
     .. "test file, not the suite")
 end
@@ -183,12 +182,12 @@ end
 local function test_step_three_orders_coverage_after_the_last_test_edit()
   assert(BUILDER:find(
       "Run `--make coverage` after your last test edit, not before — "
-      .. "a new test moves a row's `total`; run `--make build` once "
+      .. "a new test moves a row's `total`; run `<BOOTSTRAP_CMD>` once "
       .. "before `--check types` on a file whose sibling you moved.",
       1, true) ~= nil,
     "step 3 must say to run --make coverage after the last test edit, "
-    .. "not before, and --make build once before --check types on a "
-    .. "file whose sibling moved")
+    .. "not before, and the resolved bootstrap command once before "
+    .. "--check types on a file whose sibling moved")
 end
 
 -- The numbered-script review's mutation move is checkout-free — a
@@ -223,11 +222,10 @@ end
 local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
   for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
     assert(tmpl:find(
-        "That checkout has no `o/3p` cache yet — run `bin/cosmic "
-        .. "--make fetch` before its first test, and `--make build` "
-        .. "once if you run any test.", 1, true) ~= nil,
-      "the checkout note must send a reviewer to --make fetch (and "
-      .. "--make build) before running any test: " .. tmpl)
+        "That checkout has no `o/3p` cache yet — run "
+        .. "<BOOTSTRAP_CMD> before you run any test.", 1, true) ~= nil,
+      "the checkout note must send a reviewer to the resolved bootstrap "
+      .. "plan before running any test: " .. tmpl)
   end
 end
 
