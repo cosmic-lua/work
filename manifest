@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch abcb3802e8527ac530ca9d901193099e
+caller b52dc24962d45efd7fa6969b58b80f10
+remote origin
+action drop
+created 1789098421
+publish-by 0
+reason claim base captured before repo field was set; reclaiming for a correct product base
+
+3J0pD1ABL7Gb1R3buf3L9DYo3wE 2074d27d2ef40c57d17dee3dfb96bcfed9e779de drop - 17696d4849ec65d9b7f15a6afe4ffcf9c28e139c 151bd0d1788ba3132b167fc805686b025e15558a 1789098297 1789098297 1789105497
