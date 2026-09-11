@@ -1,7 +1,7 @@
 title: brieftext.tl/brieftext_review.tl: fill build/gate/type-check/test commands from the resolved repo kind instead of naming them inline by repo
 parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
 target: cosmic-lua/work
-claim_batch: 12de519057abf7c74f2546073908c847d820e21c
+claim_batch: 27b989593b071fbb512454153e51c9646e60c020
 handover_head: d00cb0017bbf301f889ed469b2ab89c1b3cdf565
 external_url: https://github.com/cosmic-lua/work/pull/121
 builders: 6a3229ccaf8c84bcd2be8900e17ee2e2
