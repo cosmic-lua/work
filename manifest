@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 5a08fab13c778352eb9442f691cfaa8e
+caller 4203cefd7c684e2b63a489db08d3208d
+remote origin
+action drop
+created 1789098176
+publish-by 0
+reason not bar-ready, needs refinement (missing Change section)
+
+3JAGmjOywAuItnoRZ84a5D4wbSS 3ecef304eda9839092cef34d6e30c2049a8f8e0f drop - 0560d4e210059591ef2a0813d89f3912b2b83568 e12a1d9d2c20230efd842444119200b8bfcd039c 1789097974 1789097974 1789105174
