@@ -1,3 +1,4 @@
 title: tl.generate collapses consecutive unary '-' into a '--' comment, corrupting Teal->Lua output
 parent: 3Ivx3L2BvBlyYdy3UgmnBguvGsY
 target: cosmic-lua/cosmic
+claim_batch: 1b296495b35269fbda99904ea79673fe446dda90
