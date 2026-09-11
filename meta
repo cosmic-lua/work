@@ -1,7 +1,7 @@
 title: tl.generate collapses consecutive unary '-' into a '--' comment, corrupting Teal->Lua output
 parent: 3Ivx3L2BvBlyYdy3UgmnBguvGsY
 target: cosmic-lua/cosmic
-claim_batch: 31ee21d34b14b878209a7350f36ab26c1f4782e4
+claim_batch: 4df7db775ebbda39c2f0292476000c37e85fa5c5
 handover_head: 2b32b6d0e6df6d6257a051b427eecc96bc760dcf
 external_url: https://github.com/cosmic-lua/cosmic/pull/1835
 builders: 724d9a2509e9ca5095ff6ac8cdadf320
