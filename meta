@@ -1,3 +1,4 @@
 title: tl_patch: record-field narrowing survives its own invalidation on assignment, rejecting a valid write against the declared type
 parent: 3J0trvIOax3gZLaAC9Pm1fALUmS
 target: cosmic-lua/cosmic
+claim_batch: 45a0af5fb9eed0c8ab6930ed165d5107ecc4b64f
