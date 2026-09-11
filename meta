@@ -1,4 +1,5 @@
 title: brieftext.tl/brieftext_review.tl: fill build/gate/type-check/test commands from the resolved repo kind instead of naming them inline by repo
 parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
 target: cosmic-lua/work
+claim_batch: a4a7242f1cd36105d492ed6db56cdbed3e2599e0
 speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85
