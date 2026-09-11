@@ -371,7 +371,7 @@ local function test_worktree_refuses_when_unclaimed()
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
   local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(checkout), "wt", id8)
+  local expect = fs.join(fs.dirname(checkout), "wt")
   local old_print = _G.print
   local lines: {string} = {}
   _G.print = function(...: any)

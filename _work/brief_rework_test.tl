@@ -5,11 +5,17 @@
 -- cap; every other brief kind and the fresh-pull path stay there. The
 -- `<WORKTREE>` fill tests live here for the same reason: room.
 
+local check = require("cosmic.check")
+local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
+local claim = require("_work.claim")
+local claimbatch = require("_work.claimbatch")
 local fixture = require("_work.fixture")
+local gitclaim = require("_work.gitclaim")
 local item = require("_work.item")
+local prepared = require("_work.prepared")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -70,19 +76,70 @@ end
 local BASE < const > = ("a"):rep(40)
 local HEAD < const > = ("b"):rep(40)
 
--- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
--- read time (`_work.claimprojection`), never from the item's own history,
--- so the real claim comes from `fixture.claim_item` rather than a direct
--- field assignment.
-local function handover_item(s: store.Store, leaf: string)
-  give_spec(s, leaf)
-  fixture.claim_item(s, leaf, "session-a", BASE)
+--- One git command in `root`, failing loudly — fixture setup. Mirrors
+--- `_work/brief_review_script_test.tl`'s own local `git` helper.
+--- @param root string The checkout to run in
+--- @param args {string} The git argv, without the leading "git"
+--- @return string Trimmed stdout
+local function git(root: string, args: {string}): string
+  local argv: {string} = {"git", "-c", "user.email=test@example.com",
+    "-c", "user.name=test"}
+  for _, value in ipairs(args) do argv[#argv + 1] = value end
+  local r = check.must(child.run(argv, {cwd = root}))
+  assert(r.ok, r.stderr)
+  return (r.stdout:gsub("%s+$", ""))
+end
+
+--- A real local product checkout mapped to "acme/widgets", with a real
+--- claim batch prepared and promoted for `session-a` — the shape
+--- `_work.brief`'s own `worktree_path` needs to derive `<WORKTREE>`: a
+--- `gitboard.repository` mapping and a claim batch it can read state
+--- from. Mirrors `_work/brief_review_script_test.tl`'s own
+--- `handover_diff`.
+--- @param s store.Store The store
+--- @param leaf string The item id
+--- @return string The product checkout's absolute path
+local function claimed_item(s: store.Store, leaf: string): string
+  local checkout = fs.join(os.getenv("TEST_TMPDIR") or "/tmp",
+    "brief-rework-product-" .. leaf:sub(1, 8))
+  assert(fs.remove_all(checkout) and fs.make_dirs(checkout))
+  git(checkout, {"init", "-q"})
+  assert(fs.write(fs.join(checkout, "README"), "base\n"))
+  git(checkout, {"add", "README"})
+  git(checkout, {"commit", "-q", "-m", "base"})
+  local base = git(checkout, {"rev-parse", "HEAD"})
+  fixture.git(s.root, {"config", "--local", "--add", "gitboard.repository",
+      "acme/widgets=" .. checkout})
+  local target = gitclaim.target_item_ref(leaf)
+  local claimed = gitclaim.prepare_batch({{
+        root = s.root, id = leaf, source_ref = target, target_ref = target,
+        remote = "origin", batch = "brief-rework-" .. leaf:sub(1, 8),
+        caller = "session-a", action = "take", product_base = base,
+        force = false, why = "", now = os.time(),
+      }})
+  assert(claimed.prepared ~= nil,
+    claimed.refused[leaf] or claimed.refused.batch)
+  assert(prepared.promote_local(s.root, claimed.prepared.transaction))
   local it = assert(store.load(s, leaf))
   it.repo = "acme/widgets"
+  assert(storewrite.save(s, it, "fixture: map repo for worktree derivation"))
+  return checkout
+end
+
+-- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
+-- read time (`_work.claimprojection`), never from the item's own history,
+-- so the real claim comes from `claimed_item` rather than a direct field
+-- assignment.
+--- @return string The product checkout `claimed_item` made
+local function handover_item(s: store.Store, leaf: string): string
+  give_spec(s, leaf)
+  local checkout = claimed_item(s, leaf)
+  local it = assert(store.load(s, leaf))
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12))))
+  return checkout
 end
 
 -- A review needs distance from the builder: drop the standing build claim
@@ -172,8 +229,10 @@ local function test_builder_brief_fills_worktree_once_it_exists()
   local s = init_state_repo("brief-wt-builder")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
-  local id8 = leaf:sub(1, 8)
-  local wt = fs.join(fs.dirname(WT_ROOT), "wt", id8)
+  local checkout = claimed_item(s, leaf)
+  local it = assert(store.load(s, leaf))
+  local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
+  local wt = claim.worktree(checkout, claim.branch(leaf, st.root))
   assert(fs.make_dirs(wt))
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "builder", leaf)
@@ -205,23 +264,45 @@ local function test_builder_brief_leaves_worktree_unfilled_before_worktree_id_ru
     end)
 end
 
--- A review brief names its OWN worktree path unconditionally: the
--- reviewer creates it fresh, so there is nothing on disk to check
--- for, unlike a builder's already-made checkout.
-local function test_review_brief_names_its_own_worktree_path_unconditionally()
+-- A review brief's `<WORKTREE>` fills once `worktree ID --review` has
+-- actually made the checkout on disk — the same "unfilled until the
+-- board can answer it" rule a builder's own case above follows.
+local function test_review_brief_fills_worktree_once_it_exists()
   local s = init_state_repo("brief-wt-review")
   local _, leaf = root_with_leaf(s)
-  handover_item(s, leaf)
+  local checkout = handover_item(s, leaf)
   reclaim_for_review(s, leaf)
-  local id8 = leaf:sub(1, 8)
-  local expect = fs.join(fs.dirname(WT_ROOT), "wt", "review-" .. id8)
+  local it = assert(store.load(s, leaf))
+  local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
+  local expect = claim.worktree(checkout, claim.branch(leaf, st.root))
+  assert(fs.make_dirs(expect))
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "review", leaf)
       assert(code == 0, "a PR-bearing item still earns its review brief")
       assert(out:find(expect, 1, true) ~= nil,
-        "the review brief names its own fresh-checkout path: " .. out)
+        "the review brief names its own worktree path once it exists: " .. out)
       assert(out:find("<WORKTREE>", 1, true) == nil,
         "the placeholder is gone: " .. out)
+      return true
+    end)
+end
+
+-- Before `worktree ID --review` runs, the path does not exist yet, so
+-- the placeholder survives — the same pair a builder's own case above
+-- makes.
+local function test_review_brief_leaves_worktree_unfilled_before_worktree_id_runs()
+  local s = init_state_repo("brief-wt-review-missing")
+  local _, leaf = root_with_leaf(s)
+  handover_item(s, leaf)
+  reclaim_for_review(s, leaf)
+  with_product_root(function(): boolean
+      local code, out = brief_and_capture(s, "review", leaf)
+      assert(code == 0)
+      assert(out:find("<WORKTREE>", 1, true) ~= nil,
+        "no worktree on disk yet, so the placeholder survives: " .. out)
+      local verdict_line = out:match("[^\n]*$")
+      assert(verdict_line:find("WORKTREE", 1, true) ~= nil,
+        "the verdict line names it as still owed: " .. verdict_line)
       return true
     end)
 end
@@ -240,12 +321,18 @@ local function test_review_brief_has_no_provider_round_context()
     "no provider review history is reconstructed: " .. out)
 end
 
+-- The closing "nothing left to fill" line is only true once `<WORKTREE>`
+-- has an answer too — the trap this rewrite must not fall back into:
+-- with no worktree on disk, `<WORKTREE>` would survive and flip this
+-- test's own final-line assertion.
 local function test_review_brief_preserves_literal_template_tokens_in_spec()
   local s = init_state_repo("brief-literal-spec")
   local _, leaf = root_with_leaf(s)
-  handover_item(s, leaf)
+  local checkout = handover_item(s, leaf)
   reclaim_for_review(s, leaf)
   local it = assert(store.load(s, leaf))
+  local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
+  assert(fs.make_dirs(claim.worktree(checkout, claim.branch(leaf, st.root))))
   local spec = "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
   .. "## Non-goals\nNothing else.\n"
   assert(storewrite.save(s, it, "spec literal template tokens", spec))

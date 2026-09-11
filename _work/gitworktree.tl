@@ -247,7 +247,7 @@ local function cmd_worktree_review(s: store.Store, it: item.Item,
   local checkout, maperr = repository_map.resolve(s.root, repo, root_override or "")
   if checkout == nil then return gate.verdict_line("worktree", false, maperr) end
   local branch = claim.branch(it.id, st.root)
-  local path = fs.join(fs.dirname(checkout), "wt", branch)
+  local path = claim.worktree(checkout, branch)
   if fs.is_dir(path) or fs.is_file(path) then
     return gate.verdict_line("worktree", false,
       ("%s already exists — never reused"):format(path))
@@ -337,7 +337,7 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
   local checkout, maperr = repository_map.resolve(s.root, repo, root_override or "")
   if checkout == nil then return gate.verdict_line("worktree", false, maperr) end
   local branch = claim.branch(id, st.root)
-  local path = fs.join(fs.dirname(checkout), "wt", branch)
+  local path = claim.worktree(checkout, branch)
   if adopt == nil then
     if fs.is_dir(path) or fs.is_file(path) then
       return gate.verdict_line("worktree", false,
