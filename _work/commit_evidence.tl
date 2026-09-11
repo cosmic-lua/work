@@ -56,6 +56,21 @@ local function is_ancestor(root: string, ancestor: string,
   return false, ("git merge-base failed: %s"):format(r.stderr)
 end
 
+--- The best common ancestor of two commits — `git merge-base`. "" with no
+--- error when the two share no history at all.
+--- @param root string The local product repository
+--- @param a string First commit
+--- @param b string Second commit
+--- @return string The common ancestor, "" when none exists
+--- @return string Error message
+local function merge_base(root: string, a: string, b: string): string, string
+  local r, err = git(root, {"merge-base", a, b})
+  if r == nil then return "", err end
+  if r.ok then return (r.stdout:gsub("%s+$", "")), "" end
+  if r.code == 1 then return "", "" end
+  return "", ("git merge-base failed: %s"):format(r.stderr)
+end
+
 --- Verify the commit recorded at handover can have been built from the base
 --- captured by the claim. Returns canonical ids so callers always record
 --- full object names, even when the command line used unambiguous prefixes.
@@ -127,10 +142,20 @@ end
 
 --- Verify that a locally present landed commit represents the accepted
 --- commit. History-preserving merges pass by ancestry. Squash or rebased
---- landing falls back to exact patch equivalence between the entire
---- claimed change and a bounded first-parent suffix ending at the landed
+--- landing falls back to exact patch equivalence between the item's own
+--- authored change and a bounded first-parent suffix ending at the landed
 --- commit. The suffix search is what admits a multi-commit rebase rather
 --- than checking only a one-commit squash.
+---
+--- The claimed base can be stale: the target branch may have advanced,
+--- unrelated to this item, between claim and this exact history (a checkout
+--- whose local branch never fast-forwarded past an origin advance takes this
+--- shape). The item's own authored patch is measured from the fork with
+--- `landed` itself — the newest commit both share — never from a claim base
+--- that may sit further back than that fork, so an intervening advance is
+--- never charged to this item's accepted patch. The fork must still descend
+--- from the claim base, so a landed commit sharing no claimed history is
+--- refused rather than silently accepted.
 ---
 --- The caller must fetch the landed history first. Gitboard neither fetches
 --- it nor asks a provider whether an external change merged.
@@ -167,7 +192,19 @@ local function verify_landing(root: string, claim_base: string,
     return nil, ("landed commit %s has no first parent for patch verification")
     :format(landed_full)
   end
-  local wanted, werr = exact_patch(root, base_full, accepted_full)
+  local fork, ferr = merge_base(root, accepted_full, landed_full)
+  if ferr ~= "" then return nil, ferr end
+  if fork == "" then
+    return nil, ("accepted commit %s and landed commit %s share no history")
+    :format(accepted_full, landed_full)
+  end
+  local from_claim, ianc_err = is_ancestor(root, base_full, fork)
+  if ianc_err ~= "" then return nil, ianc_err end
+  if not from_claim then
+    return nil, ("landed commit %s forks from %s, which does not descend "
+      .. "from claim base %s"):format(landed_full, fork, base_full)
+  end
+  local wanted, werr = exact_patch(root, fork, accepted_full)
   if wanted == nil then return nil, werr end
   for n = 2, #chain do
     local got, gerr = exact_patch(root, chain[n], landed_full)

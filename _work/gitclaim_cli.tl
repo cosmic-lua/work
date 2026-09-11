@@ -48,15 +48,111 @@ local function default_base(repo: string, base: string): string
   return "main"
 end
 
+--- The target branch's configured remote-tracking ref (`git for-each-ref
+--- --format=%(upstream)`), "" when the branch tracks nothing. Reading the
+--- branch's own tracking configuration, rather than assuming a remote name,
+--- is what lets this compare against whichever remote the checkout actually
+--- follows.
+local function tracking_ref(root: string, base: string): string | nil, string
+  local r, err = child.run({"git", "for-each-ref", "--format=%(upstream)",
+      "refs/heads/" .. base}, {cwd = root})
+  if r == nil then return nil, err end
+  if not r.ok then
+    return nil, ("cannot read tracking configuration for %s: %s")
+    :format(base, r.stderr)
+  end
+  return (r.stdout:gsub("%s+$", "")), ""
+end
+
+--- Whether `local_sha` is a strict ancestor of `tracking`'s current value —
+--- the shape a checkout whose local target branch never fast-forwarded past
+--- an upstream advance takes. Returns "" (nothing wrong) when the branch
+--- tracks nothing, the tracking ref is not itself fetched yet, or the two
+--- already agree; a non-"" candidate value names what the tracking ref
+--- currently resolves to, for the caller to act on.
+local function stale_target(root: string, base: string,
+    local_sha: string): string, string
+  local tracking, terr = tracking_ref(root, base)
+  if tracking == nil then return "", terr end
+  if tracking == "" then return "", "" end
+  local remote_sha, _rerr = rev_commit(root, tracking)
+  if remote_sha == nil then return "", "" end
+  if remote_sha == local_sha then return "", "" end
+  local r, err = child.run({"git", "merge-base", "--is-ancestor", local_sha,
+      remote_sha}, {cwd = root})
+  if r == nil then return "", err end
+  if not r.ok and r.code ~= 1 then
+    return "", ("git merge-base failed: %s"):format(r.stderr)
+  end
+  if not r.ok then return "", "" end -- diverged or ahead: not this guard's case
+  return remote_sha, ""
+end
+
+--- Fetch the branch's configured remote and fast-forward the local branch to
+--- match, only ever moving it to a value the fetch itself proves current.
+--- Requires the branch's tracking configuration to name a remote (an
+--- explicit `--repo-dir`/mapping override with no such configuration cannot
+--- be resolved this way).
+local function fetch_forward(root: string, base: string, local_sha: string,
+    expected: string): string | nil, string
+  local remote_r, err = child.run({"git", "config", "--local", "--get",
+      "branch." .. base .. ".remote"}, {cwd = root})
+  if remote_r == nil then return nil, err end
+  if not remote_r.ok then
+    return nil, ("%s has no configured remote to fetch"):format(base)
+  end
+  local remote = remote_r.stdout:gsub("%s+$", "")
+  local fetched = child.run({"git", "fetch", remote}, {cwd = root})
+  if fetched == nil or not fetched.ok then
+    return nil, ("git fetch %s failed: %s"):format(remote,
+      fetched ~= nil and fetched.stderr or "could not run git")
+  end
+  local tracking, terr = tracking_ref(root, base)
+  if tracking == nil or tracking == "" then
+    return nil, terr ~= "" and terr or ("%s lost its tracking configuration"):format(base)
+  end
+  local remote_sha, rerr = rev_commit(root, tracking)
+  if remote_sha == nil then return nil, rerr end
+  local ahead_r, aerr = child.run({"git", "merge-base", "--is-ancestor",
+      expected, remote_sha}, {cwd = root})
+  if ahead_r == nil then return nil, aerr end
+  if not ahead_r.ok then
+    return nil, ("%s's tracking ref %s no longer descends from the fetched %s")
+    :format(base, tracking, expected)
+  end
+  local updated = child.run({"git", "update-ref", "refs/heads/" .. base,
+      remote_sha, local_sha}, {cwd = root})
+  if updated == nil or not updated.ok then
+    return nil, ("git update-ref could not fast-forward %s: %s"):format(base,
+      updated ~= nil and updated.stderr or "could not run git")
+  end
+  return remote_sha, ""
+end
+
 --- Product base recorded by an acquisition. Repo-less work uses the board
 --- item commit itself; ordinary work uses an already-fetched product base.
+--- A local target branch behind its own configured remote-tracking ref is
+--- never captured silently: it is refused with the exact commands that
+--- resolve it, unless `fetch_base` explicitly authorizes running them here.
 local function product_base(s: store.Store, it: item.Item, source_ref: string,
-    repo_dir: string): string | nil, string
+    repo_dir: string, fetch_base: boolean): string | nil, string
   if (it.repo or "") == "" then return refs.read_ref(s.root, source_ref) end
   local root, err = repository_map.resolve(s.root, it.repo, repo_dir)
   if root == nil then return nil, err end
   local base = default_base(it.repo, it.base or "")
-  return rev_commit(root, "refs/heads/" .. base)
+  local local_sha, lerr = rev_commit(root, "refs/heads/" .. base)
+  if local_sha == nil then return nil, lerr end
+  local candidate, serr = stale_target(root, base, local_sha)
+  if serr ~= "" then return nil, serr end
+  if candidate == "" then return local_sha, "" end
+  if not fetch_base then
+    return nil, ("local %s (%s) is behind its tracking ref (%s) — run "
+      .. "`git -C %s fetch` then `git -C %s update-ref refs/heads/%s %s`, "
+      .. "or re-run claim with --fetch-base to do it here"):format(
+      base, local_sha:sub(1, 12), candidate:sub(1, 12), root, root, base,
+      candidate)
+  end
+  return fetch_forward(root, base, local_sha, candidate)
 end
 
 --- `session new` deliberately prints only the minted value, so command
@@ -75,7 +171,7 @@ end
 --- disjoint batches still coordinate only through their own item refs.
 local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
     explicit_session: string, remote: string, repo_dir: string,
-    force: boolean, why: string, execute: boolean): integer
+    force: boolean, why: string, execute: boolean, fetch_base?: boolean): integer
   local verb = action == "renew" and "renew"
   or action == "drop" and "drop" or "claim"
   local result_label = action == "renew" and "RENEWED"
@@ -132,7 +228,8 @@ local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
       local target = gitclaim.target_item_ref(id, use_ended)
       local base = ""
       if action == "take" then
-        local found, berr = product_base(s, it, source, repo_dir)
+        local found, berr = product_base(s, it, source, repo_dir,
+          fetch_base or false)
         if found == nil then early[id] = berr else base = found end
       end
       if early[id] == nil then
@@ -252,7 +349,7 @@ local record gitclaim_cli
   cmd_session: function(action: string): integer
   cmd_claim: function(s: store.Store, ids: {string}, action: gitclaim.Action,
   explicit_session: string, remote: string, repo_dir: string,
-  force: boolean, why: string, execute: boolean): integer
+  force: boolean, why: string, execute: boolean, fetch_base?: boolean): integer
 end
 
 local M: gitclaim_cli = {
