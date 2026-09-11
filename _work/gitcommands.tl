@@ -71,6 +71,10 @@ local CSPEC: flags.CommandSpec = {
             help = "Git remote named in rendered/executed push instructions"},
           {long = "repo-dir", arg = "DIR", help = "local product repository "
             .. "override (one-item claims only); otherwise use repository mappings"},
+          {long = "fetch-base", help = "when the product repository's local "
+            .. "target branch is behind its own configured remote-tracking "
+            .. "ref, fetch that remote and fast-forward the branch before "
+            .. "capturing the claim base; otherwise such a claim refuses"},
           {long = "execute", help = "explicitly run the exact rendered Git push "
             .. "and fetch argv using caller-configured authentication"}}}},
     {name = "renew", summary = "prepare one atomic set of fresh two-hour leases",

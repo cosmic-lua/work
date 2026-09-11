@@ -138,5 +138,45 @@ local function test_commit_only_flow()
     "repair")
   assert(repaired, rerr)
 end
-
 test_commit_only_flow()
+
+--- `--force --landed` is an audited repair, never a silent bypass: an
+--- unverified landed commit still refuses without it, and force must
+--- retain the exact commit the caller explicitly vouches for rather than
+--- requiring `--landed` to be dropped to complete at all.
+local function test_force_landed_retains_a_verified_but_unmatching_commit()
+  local product_root, base, head = product()
+  local s = fixture.init_state_repo("commit-flow-force-landed")
+  local _, leaf = fixture.root_with_leaf(s)
+  fixture.give_spec(s, leaf)
+  local it = check.must(store.load(s, leaf))
+  it.repo = "acme/widgets"
+  assert(storewrite.save(s, it, "set product repository"))
+  claim_action(s, leaf, "run-a", "take", base)
+  it = check.must(store.load(s, leaf))
+  assert(gittake.take_handover(s, it, "run-a", head, "", product_root) == 0)
+  claim_action(s, leaf, "run-a", "drop", "")
+  claim_action(s, leaf, "run-b", "take", base)
+  assert(gitverdict.cmd_verdict_commit(s, leaf, "accept", head, "run-b",
+      false, "", product_root) == 0)
+
+  -- A commit that shares only the claim base with the accepted change —
+  -- automatic ancestry/content verification must refuse it outright.
+  git(product_root, {"checkout", "-q", "-b", "elsewhere", base})
+  assert(fs.write(fs.join(product_root, "file"), "not the accepted change\n"))
+  git(product_root, {"commit", "-q", "-am", "unrelated landing"})
+  local mismatched = git(product_root, {"rev-parse", "HEAD"})
+
+  assert(gitdone.cmd_done(s, leaf, "completed", false, "", "", mismatched,
+      product_root, "run-b") ~= 0,
+    "an unverified landed commit must never land without --force")
+
+  assert(gitdone.cmd_done(s, leaf, "completed", true,
+      "manually confirmed equivalent outside gitboard", "", mismatched,
+      product_root, "run-b") == 0,
+    "an audited --force --landed repair must retain the exact commit named")
+  local completed = check.must(store.load(s, leaf))
+  assert(completed.landed_head == mismatched,
+    "force must record the real landed commit, never discard it")
+end
+test_force_landed_retains_a_verified_but_unmatching_commit()
