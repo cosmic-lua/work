@@ -1,7 +1,7 @@
 title: fuzz diagnostics 2: bounded versioned child checkpoint codec
 parent: 3JEbB0OZPybwVA3bylZ7ZdIXhPV
 target: cosmic-lua/cosmic
-claim_batch: fb16f618a1d11906787740f8b41bbe12dc815792
+claim_batch: 22dfcd2198863690f9b7a395d99233e089c7c128
 handover_head: 6b31abf648dd0e3e576445392419e25d7dd40b26
 external_url: https://github.com/cosmic-lua/cosmic/pull/1841
 builders: 14cb90e0acf2e4581861ffb5a5343d65
