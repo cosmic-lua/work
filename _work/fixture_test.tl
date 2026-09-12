@@ -74,6 +74,25 @@ local function test_worktree_add_fails_immediately_on_an_unrelated_message()
   assert(attempts == 1, "expected exactly one attempt, got " .. attempts .. " attempts")
 end
 
+local function test_worktree_add_gives_up_after_exhausting_the_retries()
+  local attempts = 0
+  local ok, err = pcall(stubbed,
+    function(full: {string}, _opts?: child.Options): child.Result | nil, string
+      if is_worktree_add(full) then
+        attempts = attempts + 1
+        return fail_result(LOCKED_STDERR)
+      end
+      return ok_result()
+    end, function()
+      fixture.git(fixture.tmpdir, {"worktree", "add", "-q", "--detach", "/tmp/target", "HEAD"})
+    end)
+  assert(not ok, "the locked race must not retry forever or be swallowed")
+  assert(tostring(err):find("locked", 1, true) ~= nil, tostring(err))
+  assert(tostring(err):find("git worktree add", 1, true) ~= nil, tostring(err))
+  assert(attempts == 3, "expected the initial attempt plus both retries, got " ..
+    attempts .. " attempts")
+end
+
 local function test_other_git_subcommands_are_never_retried()
   local attempts = 0
   local ok, err = pcall(stubbed,
