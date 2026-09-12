@@ -230,3 +230,59 @@ local function test_verdict_line_ignores_placeholders_quoted_in_the_spec()
   assert(rout:find("nothing left to fill", 1, true) ~= nil,
     "every real placeholder answered, so the verdict line names none: " .. rout)
 end
+
+local SPLICE_SPEC < const > = [[
+## Change
+Reproduces a repro command verbatim, as ordinary prose: `bin/gitboard
+brief builder <ID>`. A stray Go-template shape mentioned in the same
+breath: `{{.field}}`. A rework paragraph slot's own name, quoted the
+same way an older board sentence once did: `<BOUNCE_CONTEXT>`.
+## Non-goals
+Not that.
+]]
+
+--- The item's OWN spec text quotes `<ID>`, `<BOUNCE_CONTEXT>`, and the
+--- unrelated `{{.field}}` shape as ordinary prose — the exact tokens a
+--- stale-pin run once misreported as survivors once this spec's text
+--- was spliced into `<SPEC>`/`<CURRENT_SPEC>` before the scan ran.
+--- `<ID>` is never a placeholder any template declares; `{{.field}}`
+--- never matches the `<UPPER_SNAKE>` fill grammar at all; BUILDER
+--- declares `<BOUNCE_CONTEXT>` only for a genuine rework (unset here,
+--- on a fresh pull, so it stays a real, separate survivor — not this
+--- item's concern) while REVIEW never declares it at all. Splicing
+--- this spec into either template must never make any of the three
+--- read as a still-owed fill.
+local function test_verdict_line_ignores_tokens_spliced_from_the_spec()
+  local s = init_state_repo("brief-review-script-splice")
+  local _, leaf = root_with_leaf(s)
+  local path = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "splice-spec.md")
+  assert(fs.write(path, SPLICE_SPEC))
+  assert(gitspec.cmd_spec(s, leaf, path) == 0, "spec should be accepted")
+
+  local code, out = brief_and_capture_kind(s, "builder", leaf)
+  assert(code == 0, "a spliced spec still earns its builder brief: " .. out)
+  assert(out:find("<ID>", 1, true) ~= nil and out:find("{{.field}}", 1, true) ~= nil,
+    "the spec's own quoted tokens ride the builder body verbatim: " .. out)
+  local vline = out:match("[^\n]*$")
+  assert(vline:find("<ID>", 1, true) == nil,
+    "spec-spliced <ID> is never reported as a builder survivor: " .. vline)
+  assert(vline:find("<WORKTREE>", 1, true) ~= nil,
+    "a genuine survivor still names itself: " .. vline)
+
+  handover_diff(s, leaf, "splice", "proof.txt", 1)
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
+  local rcode, rout = brief_and_capture_kind(s, "review", leaf)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
+  assert(rcode == 0, "the exact handover unlocks the review brief: " .. rout)
+  assert(rout:find("<ID>", 1, true) ~= nil and rout:find("<BOUNCE_CONTEXT>", 1, true) ~= nil
+    and rout:find("{{.field}}", 1, true) ~= nil,
+    "the spec's own quoted tokens still ride the fully-filled review body: " .. rout)
+  local rvline = rout:match("[^\n]*$")
+  assert(rvline:find("<ID>", 1, true) == nil
+    and rvline:find("<BOUNCE_CONTEXT>", 1, true) == nil,
+    "spec-spliced tokens are never reported as review survivors: " .. rvline)
+  assert(rvline:find("nothing left to fill", 1, true) ~= nil,
+    "every real placeholder answered, so the review verdict line names none: " .. rvline)
+end
