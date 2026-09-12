@@ -1,5 +1,5 @@
 --- The `show ID` verb: one item rendered whole — fields, derived
---- state, rank, spec, history, and the same problem list
+--- state, rank, spec, outcome, history, and the same problem list
 --- `take` enforces as its spec bar, so what would refuse a pull is
 --- visible on the read that precedes it. Its own module rather than a
 --- third report inside `_work.gitview`, which sits against the repo's
@@ -13,6 +13,7 @@ local cache = require("_work.cache")
 local find = require("_work.find")
 local gate = require("_work.gitgate")
 local gitready = require("_work.gitready")
+local gitreadlog = require("_work.gitreadlog")
 local index = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -168,12 +169,17 @@ end
 --- @param ci_state string | nil Retired compatibility argument; ignored
 --- @param ci_head string | nil Retired compatibility argument; ignored
 --- @param ci_age_s integer | nil Retired compatibility argument; ignored
+--- @param outcome string | nil The retrospective the item's own commits
+--- carry (`_work.gitreadlog.outcome_body`), "" or nil for none — last
+--- in the list because the three arguments before it are retired and
+--- every existing caller already passes them positionally
 --- @return {string} The lines to print
 --- @return string The verdict detail
 local function show_report(it: item.Item, role: string, rank_line: string,
     state: string, body: string, events: {publish.Event}, problems: {string},
     children_lines: {string}, overlaps?: {string}, headroom?: {string},
-    _ci_state?: string, _ci_head?: string, _ci_age_s?: integer): {string}, string
+    _ci_state?: string, _ci_head?: string, _ci_age_s?: integer,
+    outcome?: string): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
       it.id)}
   out[#out + 1] = ("role: %s"):format(role)
@@ -280,6 +286,14 @@ local function show_report(it: item.Item, role: string, rank_line: string,
     out[#out + 1] = "--- spec ---"
     out[#out + 1] = (body:gsub("\n$", ""))
   end
+  -- The retrospective, under its own marker beside the spec: the spec
+  -- says what the item is for, this says what came of it. Absent
+  -- entirely when the item's own commits carry no prose, which is
+  -- every commit the board carries today.
+  if (outcome or "") ~= "" then
+    out[#out + 1] = "--- outcome ---"
+    out[#out + 1] = ((outcome or ""):gsub("\n$", ""))
+  end
   for _, e in ipairs(events) do
     out[#out + 1] = ("  %s %s %s"):format(e.at, e.sha, e.subject)
   end
@@ -345,6 +359,27 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
   local events, herr = publish.history(s, id)
   if events == nil then
     return verdict_line("show", false, herr)
+  end
+  -- The item's own retrospective, read from the same ref: the body of
+  -- the commit that set its resolution, or of its latest handover
+  -- while it is open. Only an item that has actually handed over or
+  -- resolved can carry one, so a todo item spends no process here —
+  -- and, like the history above, this is a deliberate commit-message
+  -- read no batch of trees and blobs could serve.
+  local outcome = ""
+  local resolved = (it.resolution or "") ~= ""
+  if resolved or (it.handover_head or "") ~= "" or (it.result or "") ~= "" then
+    local ref = s.leased_ref[id]
+    local candidates: {string} = {"refs/heads/items/" .. id,
+      "refs/heads/ended/" .. id}
+    if ref ~= nil then
+      candidates = {ref}
+    end
+    local entries, eerr = gitreadlog.read_history(s.root, candidates)
+    if entries == nil then
+      return verdict_line("show", false, eerr)
+    end
+    outcome = gitreadlog.outcome_body(entries, resolved)
   end
   local problems: {string} = {}
   local overlaps: {string} = {}
@@ -414,7 +449,7 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     end
   end
   local lines, verdict = show_report(it, role, rank_line, state, body, events,
-    problems, children_lines, overlaps, headroom)
+    problems, children_lines, overlaps, headroom, nil, nil, nil, outcome)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -430,7 +465,7 @@ local record gitshow
   state: string, body: string,
   events: {publish.Event}, problems: {string}, children_lines: {string},
   overlaps?: {string}, headroom?: {string}, ci_state?: string, ci_head?: string,
-  ci_age_s?: integer): {string}, string
+  ci_age_s?: integer, outcome?: string): {string}, string
   cmd_show: function(s: store.Store, id: string, raw?: boolean): integer
 end
 

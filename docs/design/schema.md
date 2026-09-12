@@ -152,9 +152,18 @@ is serialized.
 Every board mutation is already a commit on the item's ref, carrying a
 committer date, an author, a subject naming what happened, and the
 state after. The subjects are verb-and-operands — `spec <id>`,
-`take <id> by <id>`, `verdict <id> accept by <id>` — and the message
-**body is empty**: only 265 of 2414 spec commits carry any explanatory
-text, and those are the ones where `--force --why` required a reason.
+`take <id> by <id>`, `verdict <id> accept by <id>` — and the body
+**carries no narrative**: only 265 of 2414 spec commits carry any
+explanatory text, and those are the ones where `--force --why` required
+a reason.
+
+The body is never literally empty, which matters to anything reading
+one. Every commit gets an `Op: <verb>` trailer (`_work/gitobj.tl`,
+`_work/fastimport.tl`) and a claim bridge gets `Claim-Batch: <sha>`
+above it, so a reader that takes `%b` at face value prints `Op: spec`
+under every subject. A log entry is the prose left when those trailers
+are removed — the keys the tool itself writes, listed in one place in
+`_work/gitreadlog.tl`, and only a paragraph made entirely of them.
 
 The narrative had nowhere to go, so it was written into the tree. A log
 entry is a commit message body. Most entries already coincide with a

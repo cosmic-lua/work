@@ -16,6 +16,7 @@ local gate = require("_work.gitgate")
 local claimcli = require("_work.gitclaim_cli")
 local gitread = require("_work.gitread")
 local gitdone = require("_work.gitdone")
+local gitlog = require("_work.gitlog")
 local draftcli = require("_work.gitdraft_cli")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
@@ -355,6 +356,9 @@ local function main(...: string): integer
   if id == nil then
     io.stderr:write(tostring(rerr) .. "\n")
     return 1
+  end
+  if d.command == "log" then
+    return gitlog.cmd_log(s, id, d.parsed.switches["oneline"] or false)
   end
   if d.command == "attach" then
     local parent, perr = resolve_id(s, d.parsed.args[2] or "")

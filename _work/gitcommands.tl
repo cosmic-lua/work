@@ -330,6 +330,18 @@ local CSPEC: flags.CommandSpec = {
             help = "how many todo rows to show (0 = all; default 8); "
             .. "no effect with an ID"},
           {long = "raw", help = "print an ID's spec sidecar byte-exactly"}}}},
+    {name = "log", summary = "one item's own commit history: every entry its "
+      .. "mutations recorded",
+      spec = {usage = "ID [options]",
+        summary = "one item's own commit history, newest first.\n\n"
+        .. "Each entry prints when it happened, who made it, and the "
+        .. "mutation's subject,\nfollowed by that commit's message body "
+        .. "indented — the retrospective record: what\nwas measured, what "
+        .. "was found, what happened along the way. A commit carrying no "
+        .. "body\nprints its subject alone. --oneline keeps the subjects "
+        .. "and drops every body.",
+        flags = {dir_flag(),
+          {long = "oneline", help = "subjects only, one line per entry"}}}},
     {name = "publish", summary = "render or execute one prepared unit's atomic push",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
         summary = "render one prepared transaction, claim batch, or draft as one "
