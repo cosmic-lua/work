@@ -1,3 +1,4 @@
 title: JSON performance: direct ASCII string decoding with exact fallback compatibility
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic@main
+speccers: 0a07557090a289565c2352904bb7a8b4
