@@ -2,4 +2,6 @@ title: D46 — the HTTP server engine is a cosmo.http binding over net/http; the
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
 handover_head: 7109da4061dc3e1bc697b91df24829548c7ec083
+verdict: accept
+verdict_head: 7109da4061dc3e1bc697b91df24829548c7ec083
 builders: fab67b097486f18956a8b703877b2caa
