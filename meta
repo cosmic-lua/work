@@ -2,3 +2,5 @@ title: cosmic.http core: listen, serve one connection at a time with keep-alive,
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
 claim_batch: 3efb48ae83f801f90f6765c3000d69824ab9af1b
+handover_head: 115a04791909694af201fddded4a8d7b57f5fda2
+builders: db20b9a292094709f7dc3b5fbf57e19b
