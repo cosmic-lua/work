@@ -89,7 +89,9 @@ point at the spec, so findings were written into the spec.
 
 `meta` gains `touches`, `access` and `depends_on`, space-joined exactly
 as `order`, `builders` and `speccers` already are; `target` unpacks into
-`repo` and `base`; `key`, `result` and `verdict_spec` are gone.
+`repo` and `base`; `key` and `verdict_spec` are gone. `result` stays, and
+its payload moves: a board commit sha rather than a digest of the spec
+blob.
 
 `touches` is the files the change is expected to touch, **declared by
 the refiner rather than scraped from prose.** It is what
@@ -162,7 +164,15 @@ ID` is `git log` on the ref.
 The item's **outcome** is the body of the commit that resolved it, or
 of the latest handover commit while it is open. That makes the
 deliverable a commit in both cases — a product commit for a diff, a
-board commit for research — so `result` has nothing left to hold.
+board commit for research. The two do not collapse into one field,
+because which repository the commit lives in is part of the fact:
+`_work/brief.tl` and `_work/gitdone.tl` both resolve `handover_head`
+inside the product checkout. So `handover_head` keeps the product
+commit and `result` keeps the board one — re-typed from a spec digest,
+not removed. It is also the only thing that distinguishes "applied,
+awaiting a verdict" from "builder mid-flight": `_work/gittake.tl` says
+so, and both states are otherwise claimed, PR-less, with builders on
+record.
 Findings become immutable: a correction is a new entry, which is how
 the corpus already works (`## correction — 2026-08-28` headings appear
 in the churn data).
@@ -239,5 +249,5 @@ until the verb exists to carry it.
 4. **The migration.** Classify and rewrite every ref, one atomic push,
    bump the marker.
 5. **Retire what is now dead.** The format-4 reader, `spec.revision`
-   and its two callers, `result`, `verdict_spec`, `key`, the four path
+   and its two callers, `verdict_spec`, `key`, the four path
    parsers, and `gitshow`'s unreachable verdict-moved branch.
