@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 4079f1bc1f1b3327c6603633a92533de
+caller 08dd8c8e94dcf66461c0b2c7f687d18e
+remote origin
+action drop
+created 1789247461
+publish-by 0
+reason seed-dependent shrink fixture requires a test-only correction
+
+3JEbACQ6Hl4DBhSFRuFhpiMhXJI f53933f479a9580cb5d3b4e792404f7859a75906 drop - 1ab5ada869be8f8119a11fe4881045677c9a96a5 6c49acab6ebe9b57b7539495e545bd5daafc45b9 1789245467 1789245467 1789252667
