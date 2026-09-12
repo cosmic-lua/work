@@ -13,7 +13,7 @@ by the orchestrator).
 ## Implementation
 
 Read parent `## Fixed implementation contract` and `## Verification
-specification`. Use `_make/deps_test.tl:23` (`local function fixture`)
+specification`. Use `_make/deps_test.tl:22` (`local function fixture`)
 as the filesystem setup pattern. Cover exact order, self exclusion,
 cycles/diamonds, duplicate imports, external modules, declaration/runtime
 twins, result array independence, and every cache identity transition.
