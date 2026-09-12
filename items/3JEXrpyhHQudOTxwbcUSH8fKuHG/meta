@@ -1,0 +1,3 @@
+title: ghwrite.enable_auto_merge: fall back to the CCR REST route when GitHub's GraphQL mutation is refused with the Claude Code session 403
+parent: 3J1McPs5zvrKSLKuKOCf6jEUJBu
+target: cosmic-lua/work
