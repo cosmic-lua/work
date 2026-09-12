@@ -1,77 +1,79 @@
 ## Evidence
 
-`gitboard show` reports a spec-bar `absent:` line for a path that is
-present. Two distinct cases, both reproducible today:
+`_work.repository_map` resolves an item's repository to the WRONG local
+checkout, and two consumers report confidently wrong things as a result.
+Reproduced against a session where the map is configured correctly:
 
-**A present file reported absent.** `«tGkR_31q4»`'s `## Change` names
-`_work/ghwrite_test.tl`. The repo map resolves the item's repo to a real
-checkout, and the file is there:
-
-    $ git config --local --get-all gitboard.repository   # in /home/user/work
+    $ git -C /home/user/work config --local --get-all gitboard.repository
     cosmic-lua/work=/home/user/work
+    cosmic-lua/cosmic=/home/user/cosmic
+
+**Consumer 1 — the spec bar reports a present path as absent.**
+`«tGkR_31q4»`'s `## Change` names `_work/ghwrite_test.tl`; its `repo` is
+`cosmic-lua/work`:
+
     $ ls -la /home/user/work/_work/ghwrite_test.tl
     -rw-r--r-- 1 root root 17876 ... /home/user/work/_work/ghwrite_test.tl
     $ gitboard show tGkR_31q4 --dir /home/user/work | grep '^absent'
     absent: `_work/ghwrite_test.tl` does not exist in the tree
 
-The file is also present at every ref that matters — the item's own
-recorded `claim base` (`614ce976`), `origin/main`, and that checkout's
-`HEAD` — so no reading of "the tree" makes the line true.
+The file is present at the item's recorded `claim base`, at `origin/main`,
+and in that checkout's working tree — no reading of "the tree" makes the
+line true. `«ugaS_0KMn»` draws the same line for `_work/ghland.tl`.
 
-**The check reads a working tree, not the item's repo at a commit.**
-`«ugaS_0KMn»` draws `absent: _work/ghland.tl does not exist in the tree`.
-There the file genuinely is missing from `/home/user/work`'s working
-tree, and genuinely present at `origin/main`:
+**Consumer 2 — the review brief sends the reviewer to another
+repository.** `gitboard brief review tGkR_31q4` (item repo
+`cosmic-lua/work`) renders:
 
-    $ git -C /home/user/work cat-file -e origin/main:_work/ghland.tl && echo PRESENT
-    PRESENT
-    $ ls /home/user/work/_work/ghland.tl
-    ls: cannot access ...: No such file or directory
+    Read the diff with `git fetch origin <branch>` and `git show
+    <head>:<path>` in the product checkout at `/home/user/cosmic`
 
-That checkout sits on an unrelated branch. Every builder brief already
-says the board checkout "is the orchestrator's and is stale by
-construction" — so resolving a spec's paths against its *working tree* is
-reading exactly the tree the tool tells agents not to trust.
+and every verdict line it prints carries `--repo-dir /home/user/cosmic`.
+That is `cosmic-lua/cosmic`'s tree. It has no `_work/` directory at all,
+so a reviewer following the brief literally cannot find one file of the
+diff. Caught by hand this session; a reviewer who trusted it would have
+burned a round discovering the tree was wrong.
 
-`«46lA_bIVt»` and `«BM00_etFW»` print no headroom line at all under the
-same invocation, so the behaviour is not uniformly on or off either.
-
-The cost is that the line is noise: an orchestrator pulling an item must
-verify each `absent:` by hand before deciding whether the spec is stale
-(done twice this session, ~4 tool calls each), and a line that is wrong
-this often stops being read — which is worse, because a genuinely stale
-spec path is exactly what the bar exists to catch.
+**Both point at the same resolution.** `/home/user/cosmic` is where the
+`bin/gitboard` trust root that ran the command lives — not the checkout
+the map names for `cosmic-lua/work`. Every observed wrong answer is that
+directory, and `_work/ghwrite_test.tl` and `_work/ghland.tl` are both
+genuinely missing from it, which is exactly what the `absent:` lines say.
+The answer does not change with the process's cwd (`/home/user/work` and
+`/home/user/cosmic` give the same output), so it is not a cwd fallback —
+the lookup itself is returning the running tool's own checkout.
 
 `«66ad_YWIV»` ("spec bar resolves paths against item's repo, not running
-checkout") fixed the resolution to go through the repo map. This is the
-next layer: what it resolves *to*.
+checkout") fixed this for one call site. Two more have it, one of them a
+brief that directs a fresh-context agent at the wrong repository.
 
 ## Change
 
-Make the headroom path check resolve against the item's repository at a
-known commit rather than against whatever a checkout's working tree
-happens to hold — the item's recorded `claim base` when it has one, else
-the repo's default branch tip — so the answer does not depend on which
-branch an unrelated checkout is parked on.
+Find why `_work.repository_map`'s lookup returns the running tool's
+checkout for an item whose repo is mapped elsewhere, and fix it at the
+lookup so every caller gets the same corrected answer. Confirm both
+symptoms above go away, and say in the PR body which call sites were
+affected — a fix that only repairs `show` leaves the brief defect live.
 
-Then find and fix the case A false positive: a path present in the
-resolved checkout at every ref, still reported absent. Narrow it to the
-actual cause (token extraction, path joining, or the presence probe)
-before changing anything, and say in the PR body which it was — the two
-cases above may or may not share a root.
+Resolve the spec bar's path check against the item's repository at a
+known commit — its recorded `claim base` when it has one, else the
+repo's default-branch tip — rather than against a working tree, so the
+answer stops depending on which branch a checkout is parked on.
 
-Add cases covering both: a path present at the resolved commit but absent
-from a checkout's working tree must NOT be reported absent, and a path
-genuinely absent at that commit must still be reported. The two are close
-enough that a fix keyed on the wrong side would pass one alone.
+Add cases: an item whose repo maps to a checkout other than the running
+one resolves to the mapped checkout; a path present at the resolved
+commit but absent from a checkout's working tree is NOT reported absent;
+a path genuinely absent at that commit still is; and a review brief for
+an item in a non-running repository names that repository's checkout in
+both its prose and its `--repo-dir` lines.
 
 ## Non-goals
 
-Not changing which sections of a spec contribute paths, not changing the
-`tight:`/`not checked` wording, and not touching `_work.repository_map`'s
-lookup — `«66ad_YWIV»` settled that. Not making the check reach the
-network: it resolves through a local checkout of the item's repo, or it
-reports `not checked` as it does today when there is none.
+Not changing the `gitboard.repository` config format, not changing which
+sections of a spec contribute paths, and not changing the
+`tight:`/`not checked` wording. Not making any check reach the network:
+it resolves through a local checkout of the item's repo, or reports
+`not checked` as it does today when there is none.
 
 ## Access
 
