@@ -356,6 +356,8 @@ local record gitverbs
   cmd_done: function(s: store.Store, id: string, reason: string,
   force: boolean, why: string, by?: string): integer
   cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
+  cmd_log_add: function(s: store.Store, id: string, file: string,
+  session?: string): integer
 end
 
 local M: gitverbs = {
@@ -363,6 +365,7 @@ local M: gitverbs = {
   cmd_drop = cmd_drop,
   cmd_done = gitdone.cmd_done,
   cmd_log = gitlog.cmd_log,
+  cmd_log_add = gitlog.cmd_log_add,
 }
 
 return M
