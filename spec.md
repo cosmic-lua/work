@@ -141,3 +141,10 @@ and both fallbacks improve. No workload, threshold, or check was changed.
 its exact-head required [CI run34679328728](https://github.com/cosmic-lua/cosmopolitan/actions/runs/34679328728),
 including MODE=cov. Independent final review and normal protected landing
 follow; the final child still verifies the actual released package.
+
+Final independent review accepted ac5d2d8cf7ae14bf6ffce30f255c495fee597964,
+including byte equality of all 809 embedded Cosmic payload members.
+PR394 landed through the protected queue at
+780f45055acd52401de6c95c16365338690e19e7 on 2026-09-12T13:29:32Z.
+[Merge-group CI34696132469](https://github.com/cosmic-lua/cosmopolitan/actions/runs/34696132469)
+passed all architecture, sandbox and coverage checks. This chunk is complete.
