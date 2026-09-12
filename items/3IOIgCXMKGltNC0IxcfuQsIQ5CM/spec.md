@@ -339,3 +339,16 @@ local ok, err = pcall(run)
 for _, pid in ipairs(servers) do unix.kill(pid, unix.SIGKILL); unix.wait(pid) end
 if not ok then error(err) end
 ```
+
+## Board implementation chain
+
+Execute in this order. Each listed item is a prerequisite child of the next; the final pin item is a direct child of this parent.
+
+- [hlhrRG1x — fetch reuse 1: isolate destination routes and enforce private-network policy](https://github.com/cosmic-lua/work/blob/items/3JDCnB2id26IPFLpGCShlhrRG1x/spec.md) — cosmic-lua/cosmopolitan
+- [MA2JaSeT — fetch reuse 2: exact response framing before socket reuse](https://github.com/cosmic-lua/work/blob/items/3JDCnENOYc2Kke9YHL4MA2JaSeT/spec.md) — cosmic-lua/cosmopolitan
+- [qgBsLCPk — fetch reuse 3: native socket ownership and bounded idle pools](https://github.com/cosmic-lua/work/blob/items/3JDCn7ge6dM5PMSR0nUqgBsLCPk/spec.md) — cosmic-lua/cosmopolitan
+- [M6ZHvV4I — fetch reuse 4: heap-owned buffered TLS transport without pooling](https://github.com/cosmic-lua/work/blob/items/3JDCmvGvZMN5A3NPa05M6ZHvV4I/spec.md) — cosmic-lua/cosmopolitan
+- [DQC6jvNm — fetch reuse 4a: deterministic verified-TLS test server and release fixture](https://github.com/cosmic-lua/work/blob/items/3JDCmyZ6DlNf2AFJcgwDQC6jvNm/spec.md) — cosmic-lua/cosmopolitan
+- [ID4t9ZBs — fetch reuse 5: typed HTTP opt-in and sequential-session benchmarks](https://github.com/cosmic-lua/work/blob/items/3JDCmq6oGkHblP9rEIOID4t9ZBs/spec.md) — cosmic-lua/cosmic
+- [WYVNUEqp — fetch reuse 6: verified TLS reuse with safe fork lifecycle](https://github.com/cosmic-lua/work/blob/items/3JDCmp2fsNzKpICm4uVWYVNUEqp/spec.md) — cosmic-lua/cosmopolitan
+- [vxLkKlcz — fetch reuse 7: final runtime pin and end-to-end performance verification](https://github.com/cosmic-lua/work/blob/items/3JDCmmdSj5lMSoSr0F0vxLkKlcz/spec.md) — cosmic-lua/cosmic
