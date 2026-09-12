@@ -1,7 +1,7 @@
 title: gitboard help bar: require a grep-able anchor alongside every file:line citation of quoted text, not just function/string placements
 parent: 3JCpItcvxOg5HcbG5EBwu7PPn2N
 target: cosmic-lua/work
-claim_batch: 91cb8ce3c62b30b662a71093108f9fb3c2aff51e
+claim_batch: 8d8be810cbb5c45d25cb54365b8e4a3ce41b101a
 handover_head: 55ec46c4526ad1b164873a283497326510e6d832
 external_url: https://github.com/cosmic-lua/work/pull/125
 builders: 24b4319791e7f70a52c45f3cd97d3f50
