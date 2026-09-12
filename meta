@@ -2,3 +2,6 @@ title: gitboard: an explicit, non-ambient opt-in to enable _work/api.tl's provid
 parent: 3J1McPs5zvrKSLKuKOCf6jEUJBu
 target: cosmic-lua/work
 claim_batch: e2cfd4b32e5d18910a014f79c1ff2775d5fbf827
+handover_head: ed72b6847c16a550e54ba1ba805be77ba3b97631
+external_url: https://github.com/cosmic-lua/work/pull/139
+builders: b9efa5ef735735dd5372636b80ae8090
