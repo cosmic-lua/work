@@ -1,3 +1,6 @@
 title: fuzz diagnostics 1: trustworthy process results and no invented crash input
 parent: 3JEbBnGekbSn7HzmwX8AIK2Q8tc
 target: cosmic-lua/cosmic
+handover_head: 6e3593acb0c67857359a87e28556d2b86667dc1c
+external_url: https://github.com/cosmic-lua/cosmic/pull/1838
+builders: aee7275512f1846e3fe61ff2eebd5114
