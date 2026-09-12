@@ -147,12 +147,13 @@ end
 
 --- Rework context contains only facts the board actually owns: the
 --- verdict kind and commit id, never review prose reconstructed by gitboard.
-local function bounce_context(it: item.Item, branch?: string): string
+--- `branch` "" leaves `<BRANCH>` in the spliced text for the outer fill
+--- to answer or leave alone — never a guessed identifier.
+local function bounce_context(it: item.Item, branch: string): string
   if (it.verdict or "") ~= "request changes" then return "" end
-  return fill(brieftext.REWORK, {
-      JUDGED_HEAD = it.verdict_head or "",
-      BRANCH = branch or it.id:sub(1, 8),
-    })
+  local values: {string: string} = {JUDGED_HEAD = it.verdict_head or ""}
+  if branch ~= "" then values.BRANCH = branch end
+  return fill(brieftext.REWORK, values)
 end
 
 --- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`. The first
@@ -186,22 +187,38 @@ local function product_root(): string
   return ""
 end
 
---- The checkout `worktree ID` makes for this item's claim: the same
---- `<checkout>/../wt/<branch>` path `_work.gitworktree` builds, from the
---- same repository map and claim batch. "" when the item has no claim
---- batch, its batch no longer holds a claim, or no local checkout is
---- mapped for its repo.
+--- The claim's actual branch: the same `work/<handle>/<claim>` string
+--- `worktree` creates and `gitboard-worktree`'s own verdict line
+--- prints. Fixed once the claim exists — `claim.branch` depends only
+--- on the item id and the claim batch's root commit, never on whether
+--- `worktree ID` has made the directory yet, so this never touches the
+--- filesystem (contrast `worktree_path` below). "" when the item has
+--- no claim batch or its batch no longer holds a claim.
 --- @param s store.Store The store
 --- @param it item.Item The item under brief
---- @return string The worktree path, "" when it cannot be derived
-local function worktree_path(s: store.Store, it: item.Item): string
+--- @return string The branch, "" when it cannot be derived
+local function claim_branch(s: store.Store, it: item.Item): string
   local pointer = it.claim_batch or ""
   if pointer == "" then return "" end
   local st, _serr = claimbatch.read_state(s.root, pointer, it.id)
   if st == nil then return "" end
+  return claim.branch(it.id, st.root)
+end
+
+--- The checkout `worktree ID` makes for this item's claim: the same
+--- `<checkout>/../wt/<branch>` path `_work.gitworktree` builds, from
+--- `claim_branch` above and the same repository map. "" when the
+--- branch cannot be derived, or no local checkout is mapped for its
+--- repo.
+--- @param s store.Store The store
+--- @param it item.Item The item under brief
+--- @return string The worktree path, "" when it cannot be derived
+local function worktree_path(s: store.Store, it: item.Item): string
+  local br = claim_branch(s, it)
+  if br == "" then return "" end
   local checkout, _cerr = repository_map.resolve(s.root, it.repo or "", "")
   if checkout == nil then return "" end
-  return claim.worktree(checkout, claim.branch(it.id, st.root))
+  return claim.worktree(checkout, br)
 end
 
 --- brief: print one role's prompt for an item, filled from the board.
@@ -306,7 +323,6 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     ITEM_ID = it.id,
     HANDLE = tail.handle(it.id),
     TITLE = it.title,
-    BRANCH = prep.branch or it.id:sub(1, 8),
     WORKTREE = prep.worktree,
     SPEC = spec,
     CURRENT_SPEC = spec ~= "" and spec or "(the item has no spec sidecar)",
@@ -335,7 +351,15 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     end
   end
   if kind == "builder" then
-    local bc = bounce_context(it, prep.branch)
+    -- `<BRANCH>`: the claim's own branch, never the item id's leading
+    -- characters — those are a plausible-looking KSUID prefix, not a
+    -- ref anything resolves. Unfilled, like `<WORKTREE>`, until a claim
+    -- exists to derive it from.
+    local br = prep.branch or claim_branch(s, it)
+    if br ~= "" then
+      values["BRANCH"] = br
+    end
+    local bc = bounce_context(it, br)
     if bc ~= "" then
       values["BOUNCE_CONTEXT"] = bc
     end
