@@ -79,6 +79,79 @@ local function test_acceptance_is_not_judged()
     .. table.concat(gaps, ", "))
 end
 
+-- A sweep-shaped Change (`--apply`) with no pasted dry-run evidence
+-- anywhere in the spec is refused, naming the missing paste.
+local function test_sweep_apply_without_pasted_evidence_is_a_gap()
+  local gaps = spec.ready_gaps(
+    "## Change\nRun `--rewrite '$F:^test_()' '' --apply` over 12 files.\n")
+  assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
+  assert(gaps[1]:find("no pasted dry-run", 1, true) ~= nil,
+    "gap should name the missing paste: " .. gaps[1])
+end
+
+-- The same, for `--fix` rather than `--apply` — the sentence covers
+-- any sweep tool, not only cosmic's own --rewrite.
+local function test_sweep_fix_without_pasted_evidence_is_a_gap()
+  local gaps = spec.ready_gaps("## Change\nRun `eslint --fix` over the tree.\n")
+  assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
+  assert(gaps[1]:find("no pasted dry-run", 1, true) ~= nil,
+    "gap should name the missing paste: " .. gaps[1])
+end
+
+-- A pasted `applied`/`refused` line, fenced anywhere in the spec,
+-- clears the gap — it need not sit inside `## Change` itself.
+local function test_sweep_apply_with_pasted_applied_line_is_ready()
+  local body = [[
+## Change
+Run `--rewrite '$F:^test_()' '' --apply` over 12 files.
+
+## Evidence
+Dry run: `rewrite: 12 applied, 0 refused in 12 file(s)`
+]]
+  local gaps = spec.ready_gaps(body)
+  assert(#gaps == 0, "pasted applied line should clear the gap: "
+    .. table.concat(gaps, ", "))
+end
+
+-- A pasted refusal is evidence too — the sweep ran and refused, which
+-- is still the command's own output, not only its --find count.
+local function test_sweep_apply_with_pasted_refusal_is_ready()
+  local body = [[
+## Change
+Run `--rewrite '$F:^test_()' '' --apply` over 12 files.
+
+## Evidence
+`rewrite: refused: testdata/ excluded by the project model`
+]]
+  local gaps = spec.ready_gaps(body)
+  assert(#gaps == 0, "a pasted refusal should clear the gap: "
+    .. table.concat(gaps, ", "))
+end
+
+-- Prose that merely mentions "applied" outside a code span is not a
+-- paste of the command's own output.
+local function test_sweep_apply_with_prose_mention_still_gaps()
+  local body = "## Change\nRun `--apply` once applied it should show 0.\n"
+  local gaps = spec.ready_gaps(body)
+  assert(#gaps == 1, "an unfenced mention of \"applied\" is not evidence: "
+    .. table.concat(gaps, ", "))
+end
+
+-- A Change with no sweep flag at all is unaffected — the gap only
+-- fires when the Change itself names --apply or --fix.
+local function test_non_sweep_change_has_no_sweep_gap()
+  local gaps = spec.ready_gaps("## Change\nAdd the verb.\n")
+  assert(#gaps == 0, "a non-sweep Change should not gap: "
+    .. table.concat(gaps, ", "))
+end
+
+-- A word like `--fixture` is not the `--fix` flag; the frontier check
+-- must not false-positive on it.
+local function test_sweep_word_boundary_on_fix()
+  local gaps = spec.ready_gaps("## Change\nAdd a new --fixture flag.\n")
+  assert(#gaps == 0, "--fixture is not --fix: " .. table.concat(gaps, ", "))
+end
+
 -- A revision is the git blob sha `spec.md` itself would carry: same
 -- text, same revision; any edit, a different one; and no sidecar at
 -- all is a stable constant.
