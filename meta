@@ -1,3 +1,4 @@
 title: gitboard's own test suite: profile the 140 s coverage stage and cut it under a minute
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
+claim_batch: 8ad5c15bb0ac3c51926e9306d7f0c847be07c074
