@@ -19,15 +19,21 @@
 --- the same Change section: not whether another item also names a
 --- path, but whether the token names a real file at all, and if so
 --- whether that file has room left under the 500-line cap `--check
---- lint` enforces. A `## Change` naming a path this tree does not
---- have is a spec bug a spec bar cannot mechanically refuse (the bar's
---- "measured, not inferred" rule covers counts and behaviour, not path
---- existence), so it is a warning, never a refusal — the same
---- `--force`-free bar every other line in `overlap.lines` already is —
---- surfaced on `show` so a refiner sees a wrong path, or a builder or
---- refiner sees a file already tight against the cap, before either
---- pays for it live, mid-implementation, the way `wc -l` and `--check
---- lint` otherwise would.
+--- lint` enforces. Unlike `paths_named`, a repo-relative token here
+--- resolves against a caller-supplied checkout of the item's OWN
+--- `repo`, never this process's working directory — an item can be
+--- `show`n from any checkout, including one for a different repo
+--- entirely, and `paths_named`'s cwd-relative convention would read
+--- every one of that OTHER repo's real files as absent. A `## Change`
+--- naming a path its own repo's checkout does not have is a spec bug a
+--- spec bar cannot mechanically refuse (the bar's "measured, not
+--- inferred" rule covers counts and behaviour, not path existence), so
+--- it is a warning, never a refusal — the same `--force`-free bar every
+--- other line in `overlap.lines` already is — surfaced on `show` so a
+--- refiner sees a wrong path, or a builder or refiner sees a file
+--- already tight against the cap, before either pays for it live,
+--- mid-implementation, the way `wc -l` and `--check lint` otherwise
+--- would.
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local tail = require("_work.tail")
@@ -149,33 +155,52 @@ end
 --- One line per path-shaped token in `body`'s Change section that
 --- needs a refiner's or builder's attention before a pull, in
 --- `raw_paths_named` order: `absent: ...` for a token that names no
---- real file anywhere under this process's own tree (`o/` included —
---- a spec naming a build output must name the one the build actually
---- makes), `unreadable: ...` for a present path `fs.read` still cannot
---- open (a directory, say), and `tight: ...` for a present, readable
---- path already within `WARN_MARGIN` lines of `FILE_CAP`. A path this
---- process's own tree cannot reach at all — an item naming a file in
---- another repo entirely (`cosmic-lua/cosmic`, say) while this process
---- runs from `cosmic-lua/work` — reads as absent the same way a
---- genuine typo would: this process has no other tree to tell the two
---- apart with, and a refiner seeing the line either confirms the path
---- or points the builder at the right repo before either pays for the
---- gap live.
+--- real file in the tree it resolves against (`o/` included — a spec
+--- naming a build output must name the one the build actually makes),
+--- `unreadable: ...` for a present path `fs.read` still cannot open (a
+--- directory, say), and `tight: ...` for a present, readable path
+--- already within `WARN_MARGIN` lines of `FILE_CAP`. An absolute token
+--- resolves against the filesystem root regardless of `checkout` —
+--- nothing about it depends on which repo the item names. A
+--- repo-relative token (the ordinary spelling: `_work/gitshow.tl`, not
+--- `/abs/.../_work/gitshow.tl`) resolves against `checkout`, a local
+--- checkout of the item's OWN `repo` — never against this process's
+--- own working directory, which may belong to a different repo
+--- entirely (`show`ing an item whose `repo` is `cosmic-lua/work` while
+--- this process runs from a `cosmic-lua/cosmic` checkout, say): that
+--- mismatch is exactly what used to read a real file as `absent`,
+--- indistinguishable from a genuine typo. A relative token this
+--- process has no checkout to resolve at all — `checkout` is "" —
+--- reads `not checked: ...` instead of guessing either way.
 --- @param body string An item's spec sidecar body
+--- @param checkout string A local checkout of the item's own `repo`
+--- (`_work.repository_map.resolve` — the same lookup `gitboard
+--- worktree` already uses to find a repo's checkout), "" when none is
+--- set up here
+--- @param repo string The item's repo identity, named in the `not
+--- checked` fallback; "" reads as "its repo"
 --- @return {string} The lines, possibly empty
-local function headroom_lines(body: string): {string}
+local function headroom_lines(body: string, checkout: string,
+    repo: string): {string}
   local out: {string} = {}
-  for _, path in ipairs(raw_paths_named(body)) do
-    if not fs.is_present(path) then
-      out[#out + 1] = ("absent: `%s` does not exist in the tree"):format(path)
+  local repo_label = repo ~= "" and repo or "its repo"
+  for _, token in ipairs(raw_paths_named(body)) do
+    if not fs.is_absolute(token) and checkout == "" then
+      out[#out + 1] = ("not checked: `%s` (no checkout of %s here)")
+      :format(token, repo_label)
     else
-      local n, rerr = line_count(path)
-      if n == nil then
-        out[#out + 1] = ("unreadable: `%s`: %s"):format(path, rerr)
-      elseif FILE_CAP - n <= WARN_MARGIN then
-        out[#out + 1] = ("tight: `%s` is %d/%d lines, %d left before the cap —"
-          .. " plan a repacking or split before pulling"):format(
-          path, n, FILE_CAP, FILE_CAP - n)
+      local path = fs.is_absolute(token) and token or fs.join(checkout, token)
+      if not fs.is_present(path) then
+        out[#out + 1] = ("absent: `%s` does not exist in the tree"):format(token)
+      else
+        local n, rerr = line_count(path)
+        if n == nil then
+          out[#out + 1] = ("unreadable: `%s`: %s"):format(token, rerr)
+        elseif FILE_CAP - n <= WARN_MARGIN then
+          out[#out + 1] = ("tight: `%s` is %d/%d lines, %d left before the cap —"
+            .. " plan a repacking or split before pulling"):format(
+            token, n, FILE_CAP, FILE_CAP - n)
+        end
       end
     end
   end
@@ -332,7 +357,8 @@ local record overlap
   collisions: function(id: string, bodies: {string: string}): {Collision}
   lines: function(id: string, bodies: {string: string}): {string}
   inline: function(id: string, bodies: {string: string}): string
-  headroom_lines: function(body: string): {string}
+  headroom_lines: function(body: string, checkout: string,
+  repo: string): {string}
   ready_when: function(body: string): string | nil
 end
 

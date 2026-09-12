@@ -5,6 +5,7 @@
 -- orchestrator would otherwise only find by reading every candidate's
 -- spec by hand and comparing them.
 
+local check = require("cosmic.check")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
@@ -13,6 +14,7 @@ local index = require("_work.index")
 local overlap = require("_work.overlap")
 local show = require("_work.gitshow")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 
 local init_state_repo = fixture.init_state_repo
@@ -173,12 +175,14 @@ end
 
 -- `headroom_lines` warns right at the margin: a file with exactly
 -- `WARN_MARGIN` lines of headroom left (480/500) is already tight
--- enough to flag.
+-- enough to flag. The path is absolute, so it resolves the same way
+-- regardless of `checkout` — this test passes `fixture.tmpdir` anyway,
+-- the way a real caller always has SOME checkout in hand.
 local function test_headroom_lines_warns_at_the_margin()
   local path = fs.join(fixture.tmpdir, "overlap-headroom-480.tl")
   write_n_lines(path, 480)
   local body = ("## Change\nTouch `%s`.\n"):format(path)
-  local lines = overlap.headroom_lines(body)
+  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1]:find("`" .. path .. "` is 480/500 lines, 20 left", 1, true),
     lines[1])
@@ -190,20 +194,34 @@ local function test_headroom_lines_silent_with_room_to_spare()
   local path = fs.join(fixture.tmpdir, "overlap-headroom-479.tl")
   write_n_lines(path, 479)
   local body = ("## Change\nTouch `%s`.\n"):format(path)
-  local lines = overlap.headroom_lines(body)
+  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets")
   assert(#lines == 0, table.concat(lines, "; "))
 end
 
--- A Change section naming a path this process's own tree does not
--- have (a product repo's file, read from the board's own checkout, or
--- a plain typo) is exactly the gap a spec bar cannot mechanically
--- refuse — `headroom_lines` now names it rather than staying silent.
+-- A Change section naming a path its own repo's checkout does not have
+-- (a plain typo, or a stale path from a rewritten plan) is exactly the
+-- gap a spec bar cannot mechanically refuse — `headroom_lines` names it
+-- rather than staying silent, once a checkout to check it against is
+-- available.
 local function test_headroom_lines_flags_an_absent_path()
   local body = "## Change\nTouch `some/other/repo/big_file.tl`.\n"
-  local lines = overlap.headroom_lines(body)
+  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1] == "absent: `some/other/repo/big_file.tl`"
     .. " does not exist in the tree", lines[1])
+end
+
+-- No checkout of the item's own repo is available here at all (`show`
+-- run from a checkout of a DIFFERENT repo, with no local mapping
+-- configured for this one) — a relative token reads `not checked`,
+-- never `absent`: this process has no tree to resolve it against
+-- either way, and guessing wrong is worse than saying so.
+local function test_headroom_lines_not_checked_without_a_checkout()
+  local body = "## Change\nTouch `_work/gitshow.tl`.\n"
+  local lines = overlap.headroom_lines(body, "", "acme/other")
+  assert(#lines == 1, table.concat(lines, "; "))
+  assert(lines[1] == "not checked: `_work/gitshow.tl`"
+    .. " (no checkout of acme/other here)", lines[1])
 end
 
 -- `fs.is_present` passes a directory (`paths_named` keeps it), but
@@ -214,17 +232,17 @@ local function test_headroom_lines_flags_an_unreadable_present_path()
   local path = fs.join(fixture.tmpdir, "overlap-headroom.tl")
   assert(fs.make_dirs(path))
   local body = ("## Change\nTouch `%s`.\n"):format(path)
-  local lines = overlap.headroom_lines(body)
+  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1]:find("unreadable: `" .. path .. "`: ", 1, true), lines[1])
 end
 
--- Every path-shaped Change-section token that names no real file is
--- named `absent: ...` — including one under `o/`, the build output
--- directory a builder loses time to when a spec names a path the
--- build does not actually make (cosmic#1752's `o/embed/cosmic/.docs/`
--- vs. the path the build made instead). A present path is named by
--- neither.
+-- Every path-shaped Change-section token that names no real file in
+-- `checkout` is named `absent: ...` — including one under `o/`, the
+-- build output directory a builder loses time to when a spec names a
+-- path the build does not actually make (cosmic#1752's
+-- `o/embed/cosmic/.docs/` vs. the path the build made instead). A
+-- present path is named by neither.
 local function test_headroom_lines_names_absent_paths_including_under_o()
   local present = fs.join(fixture.tmpdir, "overlap-present.tl")
   write_n_lines(present, 5)
@@ -233,7 +251,7 @@ local function test_headroom_lines_names_absent_paths_including_under_o()
   local body = ("## Change\nTouch `%s`, `%s`, and `%s`.\n"):format(
     present, absent, absent_o)
 
-  local lines = overlap.headroom_lines(body)
+  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets")
   assert(#lines == 2, table.concat(lines, "; "))
   assert(lines[1] == ("absent: `%s` does not exist in the tree"):format(absent),
     lines[1])
@@ -300,4 +318,30 @@ local function test_show_surfaces_a_tight_change_section_path()
   local _, out = show_and_capture(s, first)
   assert(out:find("tight: `" .. path .. "` is 480/500", 1, true),
     "the tight file is named: " .. out)
+end
+
+-- The gap this item fixes: an item's `repo` names a checkout OTHER
+-- than the one this test process happens to run from, mapped through
+-- the ordinary `gitboard.repository` config, and its spec names a
+-- relative path that exists only in that other checkout. `show` must
+-- not read it as `absent` — the false positive a real "this board's
+-- own repo, read from a product checkout" `show` used to print for
+-- `_work/gitshow.tl` before this change.
+local function test_show_resolves_a_relative_path_against_the_items_own_repo()
+  local s = init_state_repo("otherrepo")
+  local _root, first = root_with_leaf(s)
+  local other_root = fs.join(fixture.tmpdir, "overlap-other-repo")
+  assert(fs.remove_all(other_root) and fs.make_dirs(fs.join(other_root, "src")))
+  fixture.git(other_root, {"init", "-q"})
+  write_n_lines(fs.join(other_root, "src/only_here.tl"), 5)
+  fixture.git(s.root, {"config", "--local", "--add", "gitboard.repository",
+      "acme/other=" .. other_root})
+  local it = check.must(store.load(s, first))
+  it.repo = "acme/other"
+  assert(storewrite.save(s, it, "set repo"))
+  write_spec(s, first, "## Change\nTouch `src/only_here.tl`.\n")
+
+  local _, out = show_and_capture(s, first)
+  assert(not out:find("absent:", 1, true),
+    "a file present in the item's own repo is not absent: " .. out)
 end
