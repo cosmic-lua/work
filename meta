@@ -1,3 +1,3 @@
-title: _make/deps.closure: after #1829's fix, still ~10% slower per-file than the pre-#1828 baseline
+title: build performance: avoid whole-project scans for sparse dependency closures
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+target: cosmic-lua/cosmic@main
