@@ -89,12 +89,9 @@ local function test_step_one_offers_a_split_seam_before_an_unconditional_stop()
     .. "seam is obvious or the split is itself too big a judgment call")
 end
 
--- The old wording asserted cosmic's own 500-line cap as if it were a
--- gitboard invariant. A fixture repo whose own convention states a
--- different number (Acme's `AGENTS.md` here caps files at 300 lines,
--- not 500) proves the reworded step 1 no longer bakes in any specific
--- repo's cap: it names no number at all, and instead points a builder
--- at whatever the target repo's own `AGENTS.md` (or equivalent) states.
+-- A fixture repo capping files at 300 lines, not cosmic's 500, proves
+-- step 1 bakes in no specific repo's number and points a builder at
+-- whatever the target repo's own `AGENTS.md` (or equivalent) states.
 local function test_step_one_defers_to_the_repos_own_file_length_convention()
   local ACME_AGENTS_MD < const > = [[
 # AGENTS.md
@@ -403,12 +400,9 @@ local function test_where_to_work_warns_the_worktree_is_shared()
     .. "the worktree the builder did not make")
 end
 
--- The bounce that motivated this guidance found a real bug but let the
--- rework builder pick its own repair, which crossed a pinned-checker
--- boundary and cost a second review round. A request-changes verdict
--- must instead name the tempting unsafe fix and the invariant it
--- risks, so the rework builder bounces on an unclear envelope rather
--- than widening scope to find one.
+-- A request-changes verdict names the tempting unsafe fix and the
+-- invariant it risks, so the rework builder bounces on an unclear
+-- correction envelope rather than widening scope to find one.
 local function test_request_changes_names_five_labeled_facts()
   for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
     assert(tmpl:find(
