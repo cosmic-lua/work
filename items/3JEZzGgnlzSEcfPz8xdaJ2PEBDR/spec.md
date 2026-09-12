@@ -10,11 +10,6 @@ ones, so an app never string-builds either header.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
-
-That is the core child merged; today the command reports the path as
-missing.
-
 Decoding exists: `cosmic/url.tl:63` `local function parse_query(query:
 string): {string: {string}}` over `cosmo.ParseParams` (`:64`), which is
 exactly the urlencoded-body grammar. Nothing parses a `Cookie` header
@@ -29,6 +24,11 @@ cosmic/fetch/init.tl:70:  --- arrival order. Use for repeatable headers like Set
 (Re-run at pull; a second hit means a sibling landed one — reuse it.)
 
 ## Change
+
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 - `cosmic/http/request.tl`:
   - `form(self): {string: {string}} | nil, string` — when
