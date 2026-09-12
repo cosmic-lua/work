@@ -3,6 +3,7 @@
 --- commit it judged. The only durable evidence is that commit id.
 local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
+local ghland = require("_work.ghland")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
@@ -28,9 +29,21 @@ end
 --- builder/speccer unless an audited repair says otherwise. Review acquisition
 --- is therefore explicit: builder handover, builder drop, reviewer claim.
 --- Verdict never releases the reviewer's claim.
+---
+--- An accept records first and only then attempts a landing, and only
+--- when the caller has activated provider transport (`_work.ghland`).
+--- Landing is off by default: with no activation, or no pull request
+--- recorded on the item, nothing is written anywhere but the board and
+--- the caller lands the work itself, exactly as before. A landing that
+--- is attempted and fails is reported on the verdict line; it never
+--- refuses the verb, which would throw away a judgment that is already
+--- true.
+--- @param send ghland.Transport | nil What an activated landing performs
+--- its requests with (defaults to `cosmic.fetch.fetch`); a test passes a
+--- capture instead
 local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
     head: string, session: string, force: boolean, why: string,
-    repo_dir: string): integer
+    repo_dir: string, send?: ghland.Transport): integer
   local forced = gate.force_refusal(force, why)
   if forced then
     return gate.verdict_line("verdict", false, "REFUSED: " .. forced)
@@ -105,9 +118,13 @@ local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
       canonical:sub(1, 12), by, gate.forced_suffix(force, why)),
     "verdict", nil, session, false, force, why)
   if not ok then return gate.verdict_line("verdict", false, err) end
+  local landed = ""
+  if kind == "accept" then
+    landed = ghland.note(ghland.land(s, it, canonical, send))
+  end
   return gate.verdict_line("verdict", true,
-    ("%s on %s at %s: recorded"):format(
-      kind, id:sub(1, 8), canonical:sub(1, 12)))
+    ("%s on %s at %s: recorded%s"):format(
+      kind, id:sub(1, 8), canonical:sub(1, 12), landed))
 end
 
 --- One-release compatibility surface for pre-v3 callers. It performs no
@@ -123,7 +140,7 @@ end
 local record gitverdict
   cmd_verdict_commit: function(s: store.Store, id: string, kind: string,
   head: string, session: string, force: boolean, why: string,
-  repo_dir: string): integer
+  repo_dir: string, send?: ghland.Transport): integer
   cmd_verdict: function(s: store.Store, id: string, kind: string,
   pr: integer, head: string, session?: string, force?: boolean,
   why?: string, body_file?: string, no_land?: boolean): integer

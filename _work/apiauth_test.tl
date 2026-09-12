@@ -127,10 +127,12 @@ local function test_activate_wires_a_transport_carrying_the_named_token()
         url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
     end)
   local res, cerr = api.call("GET", "/user", "")
-  api.transport = before
+  local restored = apiauth.deactivate()
   restore_env("GITBOARD_TEST_FAKE_VAR", prior_token)
   restore_env(apiauth.ACTIVATION_ENV, prior_name)
   assert(ok, "got: " .. err)
+  assert(restored and api.transport == before,
+    "the activation is undone by its counterpart, not left installed")
   assert(res ~= nil, "got: " .. tostring(cerr))
   assert(res.status == 200, "got: " .. tostring(res.status))
   assert(seen_url == "https://api.github.com/user", "got: " .. seen_url)
@@ -156,4 +158,55 @@ local function test_an_ambient_credential_alone_activates_nothing()
     "got: " .. err)
   assert(api.transport == before, "the codec's transport must be untouched")
   assert(still_refuses(), "an ambient token got itself installed")
+end
+
+-- The token lives in the closure and nowhere else, which means the
+-- request goes out on a COPY: the options table the caller still holds
+-- must not carry the credential once the call returns, and its own
+-- headers must survive into the request untouched.
+local function test_the_transport_never_writes_the_token_into_the_caller_s_table()
+  local opts: fetch.Options = {method = "GET",
+    headers = {["accept"] = "application/vnd.github+json"}}
+  local seen: fetch.Options = nil
+  local send = apiauth.transport_for("fake-token-value",
+    function(url: string, sent: fetch.Options):
+      fetch.Response | nil, fetch.Error
+      seen = sent
+      return {status = 200, headers = {}, raw_headers = {}, body = "{}",
+        url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end)
+  local _res, _err = send("https://api.github.com/user", opts)
+  assert(seen.headers["authorization"] == "Bearer fake-token-value",
+    "the request carries the credential: " .. tostring(seen.headers["authorization"]))
+  assert(seen.method == "GET", "every other field of the call is untouched")
+  assert(opts.headers["authorization"] == nil,
+    "the credential was written into the caller's own table")
+  assert(opts.headers["accept"] == "application/vnd.github+json",
+    "the caller's own headers survive into the request")
+end
+
+-- Activation is scoped, not a mode the rest of the process inherits:
+-- its counterpart puts back the transport that was there before, so a
+-- caller that wanted one live step leaves the codec refusing again.
+local function test_deactivate_puts_back_the_transport_activation_replaced()
+  assert(not apiauth.deactivate(), "nothing installed, nothing to undo")
+  local before = api.transport
+  local prior_name = stub_env(apiauth.ACTIVATION_ENV, "GITBOARD_TEST_FAKE_VAR")
+  local prior_token = stub_env("GITBOARD_TEST_FAKE_VAR", "fake-token-value")
+  local ok, err = apiauth.activate(nil,
+    function(url: string, _opts: fetch.Options):
+      fetch.Response | nil, fetch.Error
+      return {status = 200, headers = {}, raw_headers = {}, body = "{}",
+        url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end)
+  local live = api.transport ~= before
+  local restored = apiauth.deactivate()
+  restore_env("GITBOARD_TEST_FAKE_VAR", prior_token)
+  restore_env(apiauth.ACTIVATION_ENV, prior_name)
+  assert(ok, "got: " .. err)
+  assert(live, "activate installs over the refusal")
+  assert(restored, "deactivate reports the transport it removed")
+  assert(api.transport == before, "the codec must be back to what it was")
+  assert(still_refuses(), "a scoped activation outlived its caller")
+  assert(not apiauth.deactivate(), "undoing twice undoes nothing extra")
 end
