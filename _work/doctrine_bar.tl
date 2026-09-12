@@ -45,7 +45,14 @@ a flag lists its three wiring files by name — `_work/gitcommands.tl`
 finds them unnamed reads the whole dispatcher to decide whether it
 may touch them. A Change over N sites states the PATTERN that
 selects them and the count `cosmic --find PATTERN [PATH...]` printed
-— never a list of file:line pairs a builder re-derives. When the
+— never a list of file:line pairs a builder re-derives. A Change
+whose acceptance is a sweep — a `--rewrite … --apply`, a `--fix`,
+any command whose output is the diff — pastes that command's own
+output from a dry run at spec time: the `applied`/`refused` line, or
+the refusal, not only the `--find` count that named its sites. A
+paste of `0 applied` or a refusal is itself proof the spec is not
+ready — the sweep found nothing to change, or would not run at all.
+When the
 change sits near a frozen contract (a C boundary, error strings
 and return shapes, verdict-line formats), name the wall — there,
 or in an optional `## Non-goals` section. Walls are stated where

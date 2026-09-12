@@ -185,6 +185,23 @@ local function test_bar_requires_the_pattern_and_its_find_count()
     "the bar topic states the PATTERN and its --find count, unconditionally")
 end
 
+local function test_bar_requires_a_sweeps_own_pasted_dry_run_output()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find(
+      "A Change\nwhose acceptance is a sweep — a `--rewrite … --apply`, a `--fix`,\n"
+      .. "any command whose output is the diff — pastes that command's own\n"
+      .. "output from a dry run at spec time: the `applied`/`refused` line, or\n"
+      .. "the refusal, not only the `--find` count that named its sites.",
+      1, true) ~= nil,
+    "the bar topic requires a sweep Change to paste its own dry-run output")
+  assert(page:find(
+      "A\npaste of `0 applied` or a refusal is itself proof the spec is not\n"
+      .. "ready — the sweep found nothing to change, or would not run at all.",
+      1, true) ~= nil,
+    "the bar topic treats a 0-applied or refused paste as not ready")
+end
+
 local function test_build_mirrors_the_ready_when_convention()
   local page = doctrine.page("build")
   assert(page ~= nil, "the build topic renders")

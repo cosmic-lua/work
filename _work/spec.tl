@@ -55,6 +55,48 @@ local function sections(body: string): {string: string}
   return out
 end
 
+--- The code spans in `text` — inline `` `...` `` runs and fenced
+--- ```...``` blocks — the only place a sweep's own pasted dry-run
+--- output can honestly live: prose that merely mentions "applied" is
+--- not evidence, a pasted command's own output is.
+--- @param text string Any spec text
+--- @return {string} Each span's inner text, in order
+local function code_spans(text: string): {string}
+  local out: {string} = {}
+  for fence in text:gmatch("```(.-)```") do
+    out[#out + 1] = fence
+  end
+  local without_fences = (text:gsub("```.-```", ""))
+  for inline in without_fences:gmatch("`([^`\n]+)`") do
+    out[#out + 1] = inline
+  end
+  return out
+end
+
+--- The gap a sweep-shaped Change leaves when its spec pastes no
+--- dry-run evidence: `## Change` naming `--apply` or `--fix` needs a
+--- fenced `rewrite:` or `applied` line somewhere in the spec — the
+--- command's own dry-run output (the `applied`/`refused` line, or the
+--- refusal), not only the `--find` count that named its sites. A
+--- spec whose sweep command was never run at spec time is the wrong
+--- turn this exists to catch.
+--- @param body string The spec sidecar's markdown
+--- @return {string} Zero or one gap
+local function sweep_gaps(body: string): {string}
+  local change = sections(body)["change"] or ""
+  if not (change:find("%-%-apply%f[%A]") or change:find("%-%-fix%f[%A]")) then
+    return {}
+  end
+  for _, span in ipairs(code_spans(body)) do
+    if span:find("rewrite:", 1, true) or span:find("applied", 1, true) then
+      return {}
+    end
+  end
+  return {"Change names a sweep (--apply/--fix) with no pasted dry-run "
+    .. "output — paste the command's own `rewrite:`/`applied` (or "
+    .. "refusal) line, not only the --find count"}
+end
+
 --- Spec-bar lint: the gaps that keep a body from being buildable,
 --- each as one readable line. A heading counts as filled only when at
 --- least one non-blank line follows it before the next heading, so a
@@ -68,6 +110,9 @@ local function ready_gaps(body: string): {string}
     if not (filled[name:lower()] or ""):match("%S") then
       gaps[#gaps + 1] = ("%s is missing or empty"):format(name)
     end
+  end
+  for _, gap in ipairs(sweep_gaps(body)) do
+    gaps[#gaps + 1] = gap
   end
   return gaps
 end
