@@ -2,3 +2,5 @@ title: cosmo.http: bind net/http's request parser, unchunker and content-type ta
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmopolitan
 claim_batch: 8c72c87f8bba033a1b54ca64e063ad3144865136
+handover_head: 2c8624afb84e7f9c06575cf82fcc22ec26c75870
+builders: 3dd915b5bd41ab084e60fcb4fbbf5bd4
