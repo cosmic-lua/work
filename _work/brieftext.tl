@@ -79,8 +79,10 @@ and nothing less:
    stop over it alone); a fact that breaks the Change's shape is a
    real blocker: STOP and report it (see below). Before the first
    edit, `wc -l` every file the Change names. A file at or within a
-   few lines of the 500-line cap is not an automatic STOP: if it has
-   an obvious, low-risk split seam (a self-contained group of test
+   few lines of the repo's own file-length cap — check its `AGENTS.md`
+   (or equivalent) for the number, the same convention gitboard
+   already defers to everywhere else — is not an automatic STOP: if
+   it has an obvious, low-risk split seam (a self-contained group of test
    cases, a section already separated by a comment header) and the
    spec's Non-goals don't forbid touching the file's shape, split it
    and land the new coverage in the new sibling file — name the split
