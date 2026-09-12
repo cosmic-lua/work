@@ -11,8 +11,10 @@ an SSE endpoint a five-line handler.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints the path (the core child has
-merged) — today `ls: cannot access 'cosmic/http/init.tl'`.
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 The serializer half of SSE already ships: `cosmic/sse.tl:1-9` "format()
 is the serializing half, so a cosmic program can serve SSE without
