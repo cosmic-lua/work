@@ -1,7 +1,7 @@
 title: api.error_of: a GitHub error surfaces the body's message and first errors[].message, so a refused --open names its cause
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
-claim_batch: d5a9c26dbe883877e0b0e6cbcc3d7f7f94d09856
+claim_batch: 313c23a04267a41445c57b00b48a81357376bd87
 handover_head: 9378c757308be0627b7fe5a5e4511e131df25311
 external_url: https://github.com/cosmic-lua/work/pull/135
 builders: 83e8b96f785982cf7bff176aaaaef25a
