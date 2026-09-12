@@ -1,3 +1,4 @@
 title: build performance: avoid whole-project scans for sparse dependency closures
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic@main
+speccers: 3bb2ba3c1525c631533246b5dd02f53c
