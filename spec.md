@@ -75,3 +75,41 @@ which prints `table`; on the pinned release today it errors with
 
 - cosmic-lua/cosmic: read+write.
 - cosmic-lua/cosmopolitan: read-only (the release's asset and tag).
+
+## Outcome: perf compare deviation (accepted by user 2026-09-12)
+
+Step 4's own bar ("no regression outside the noise floor") is NOT met:
+full-suite `_perf/gate.tl compare` against the previous pin
+(`2026.09.12-780f45055` -> `2026.09.12-5e791ba4e`) flags 3 JSON decode
+scenarios as `regression` (post its automatic retry + A/A triage):
+
+```
+json_decode_ascii_long           26.05 µs ->     44.95 µs    +72.5%  regression
+json_decode_ascii_escaped        60.40 µs ->     71.50 µs    +18.4%  regression
+json_decode_ascii_utf8           23.41 µs ->     25.63 µs     +9.5%  regression
+53 scenarios: 3 regression, 0 faster, 50 ok, 0 noise, 0 new, 0 missing, 0 error
+perf-compare: FAIL
+```
+
+Confirmed real (not code-layout noise from the suite context) via
+isolated interleaved re-measurement per `skills/optimize/measurement.md`:
+2 passes per binary, back to back, no overlap between binaries on any
+pass, identical alloc footprint both sides. The diff between the two
+pins is exactly one commit — the `cosmo.http` binding PR (#395),
+touching only `tool/net/lhttp.c`/`.h` — no JSON-touching code.
+
+Filed as its own tracked finding rather than blocking this item:
+«hqvg_Yl6d» ([3JFLK9TUmNUs3zCBzzmhqvgYl6d]), landing repo
+cosmic-lua/cosmopolitan. Leading hypothesis there: the previous pin
+(`780f45055`) itself landed a freshly-added, marginal, hand-tuned JSON
+ASCII fast path (`tool/net/ljson.c:323`, item «a6Gm_olvM») hours before
+`cosmo.http`; that shape of code (small hot loop, no SIMD, explicitly
+optimized to a measured single-digit-percent edge) is exactly what's
+most sensitive to icache/branch-prediction layout shifts from unrelated
+binary growth — consistent with the observed magnitude ordering
+(`ascii_long`, most fast-path-dominated, regressed most; `ascii_utf8`,
+which falls through to the unchanged fallback soonest, regressed least).
+
+User decision (2026-09-12): land this pin bump with the regression
+documented rather than block on it; the follow-up investigation is
+«hqvg_Yl6d»'s to carry, independent of this item's own completion.
