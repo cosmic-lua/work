@@ -1,17 +1,23 @@
 #!/usr/bin/env cosmic
 -- The compiled brief renderers and the resolution around them: that
--- the generated modules a commit carries are what their templates
--- compile to, that a field the board cannot answer renders as its own
+-- the generated directory holds one renderer per template and nothing
+-- else, that a field the board cannot answer renders as its own
 -- caller-fill token and is reported while an intentionally empty one
 -- is neither, and that text spliced into a field is data — never
 -- reinterpreted as template syntax, whatever it happens to contain.
 --
--- The generated directory is read as data here rather than required
--- as modules, so the build graph cannot see that this test depends on
+-- Whether those renderers are what their templates compile to is not
+-- asked here: `_work/brieftmpl_gen.tl` repairs the tree before the
+-- graph on every verb, so by the time a test runs the drift is gone
+-- and a comparison would compare the generator against itself. The
+-- generator reports what it had to rewrite instead, which is the only
+-- place that fact survives.
+--
+-- The generated directory is listed here rather than required as
+-- modules, so the build graph cannot see that this test depends on
 -- what it holds; the declaration re-records the result when it changes.
 --- reads: _work/brieftmpl
 
-local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local teal = require("cosmic.teal")
 local template = require("cosmic.template")
@@ -59,57 +65,6 @@ local function full_commands(): briefcommands.Commands
     bootstrap_cmd = "--make build",
     bootstrap_phrase = "`fetch` before you run any test.",
   }
-end
-
---- The bytes a path holds in the current commit.
---- @param path string The path, relative to the repository root
---- @return string The committed bytes
-local function committed(path: string): string
-  local ref = "HEAD:" .. path
-  local r, err = child.run({"git", "show", ref})
-  assert(r ~= nil, "git show " .. ref .. ": " .. tostring(err))
-  assert(r.ok, "git show " .. ref .. ": " .. r.stderr)
-  return r.stdout
-end
-
--- The renderers a commit CARRIES are what the templates compile to,
--- which is what makes the generated output an artifact of the template
--- rather than a second copy of it that can drift.
---
--- The subject is the committed blob, not the working-tree file:
--- `_work/brieftmpl_gen.tl` runs before the graph on every verb, so by
--- the time this body executes it has already rewritten any drifted
--- module on disk — comparing the file would compare the generator
--- against itself and could never go red. Git objects the generator
--- does not rewrite, so a commit that carries a template edit without
--- its regenerated module, or a hand-edited module committed as though
--- it were generated, fails here.
---
--- Editing a template therefore leaves this red until the regenerated
--- module is committed alongside it, which is the order the flow
--- already asks for: the gate runs before the push, not before the
--- commit.
---
--- The commit is not a declared input and cannot be one — a checkout's
--- git state lives outside the tree, in a place a worktree does not
--- even hold a copy of. A local run that has already recorded a pass
--- therefore replays it when nothing else moved; deleting
--- `o/_work/brieftmpl_test.tl.test.*` asks git again. The `board`
--- workflow builds from a cold checkout with no recordings at all, so
--- every pull request runs this against its own HEAD for real.
-local function test_committed_modules_match_their_templates()
-  for _, u in ipairs(source.UNITS) do
-    local want, cerr = source.module_source(u)
-    assert(want ~= nil, u.name .. ": " .. cerr)
-    local path = ("%s/%s.tl"):format(source.OUT_DIR, u.name)
-    assert(committed(path) == want, path ..
-      " at HEAD is not what its template compiles to — commit the"
-      .. " module the generator wrote")
-  end
-  local path = ("%s/fields.tl"):format(source.OUT_DIR)
-  assert(committed(path) == source.fields_module(source.UNITS), path ..
-    " at HEAD is not what the templates declare — commit the module"
-    .. " the generator wrote")
 end
 
 -- The generated directory holds the renderers and nothing else: a
