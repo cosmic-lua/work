@@ -332,6 +332,7 @@ local function test_show_resolves_a_relative_path_against_the_items_own_repo()
   local _root, first = root_with_leaf(s)
   local other_root = fs.join(fixture.tmpdir, "overlap-other-repo")
   assert(fs.remove_all(other_root) and fs.make_dirs(fs.join(other_root, "src")))
+  fixture.git(other_root, {"init", "-q"})
   write_n_lines(fs.join(other_root, "src/only_here.tl"), 5)
   fixture.git(s.root, {"config", "--local", "--add", "gitboard.repository",
       "acme/other=" .. other_root})
