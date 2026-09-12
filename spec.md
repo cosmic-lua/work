@@ -205,3 +205,28 @@ baserun's exact argv for subsequent fresh subject processes
 while validating roots/hashes and preserving all workloads/samples,
 A/B order and separate files. This is an unimplemented future runner
 suggestion, not a changed acceptance procedure for the results above.
+
+## Landed artifact verification
+
+PR1837 merged through the normal protected queue at2026-09-12T15:17:42Z,
+landed commit a327ff32760ec15bbde7514c1cd7ed34647ae8d7. Local cosmic/main
+fast-forwarded to that exact commit. `git diff --exit-code` proves the
+entire landed source tree equals the independently accepted7dfa1dd0 tree.
+The verified new version/archive digest are present on main.
+
+Root downloaded `cosmic-smoke` from integration run34701499547 and compared
+it byte-for-byte to the successful experiment's `cosmic-new-package`:
+identical, SHA25626b019456bfd33bfa8e5624fd957353e8db7411a67a4a23836d5ff9ce1d7a313.
+Thus the measured candidate is the actual integration artifact, not merely
+a source-equivalent hypothetical rebuild. Root ran that artifact through
+`sh` on macOS arm64 from the cosmopolitan root with the frozen corpus:
+`cosmic tool/lua/test_ljson_ascii.lua --emit`, then compared every record
+against the old package's corpus. Exit0,36,895 equal records, SHA256e61139f1
+(full digest above). Running the same artifact with json-gc-stress.lua also
+exits0:128 iterations,8 retained values. This directly verifies the parent
+outcome at the assembled product boundary after integration. Evidence is
+local json-evidence/integration-artifact-34701499547/verification.txt.
+
+Protected integration run34701499547 completed all5 jobs successfully:
+CI, build, reproducibility, macOS and Windows smoke. All final gates and
+parent-level artifact checks pass; the complete pin chunk is finished.
