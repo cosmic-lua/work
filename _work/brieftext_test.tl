@@ -41,14 +41,16 @@ end
 
 local function test_step_one_offers_a_split_seam_before_an_unconditional_stop()
   assert(BUILDER:find(
-      "A file at or within a few lines of the 500-line cap is not an "
-      .. "automatic STOP: if it has an obvious, low-risk split seam "
-      .. "(a self-contained group of test cases, a section already "
-      .. "separated by a comment header) and the spec's Non-goals "
-      .. "don't forbid touching the file's shape, split it and land "
-      .. "the new coverage in the new sibling file — name the split "
-      .. "explicitly in the PR body as a deviation from the literal "
-      .. "file list.", 1, true) ~= nil,
+      "A file at or within a few lines of the repo's own file-length "
+      .. "cap — check its `AGENTS.md` (or equivalent) for the number, "
+      .. "the same convention gitboard already defers to everywhere "
+      .. "else — is not an automatic STOP: if it has an obvious, "
+      .. "low-risk split seam (a self-contained group of test cases, "
+      .. "a section already separated by a comment header) and the "
+      .. "spec's Non-goals don't forbid touching the file's shape, "
+      .. "split it and land the new coverage in the new sibling file "
+      .. "— name the split explicitly in the PR body as a deviation "
+      .. "from the literal file list.", 1, true) ~= nil,
     "step 1 must offer a low-risk split-seam path — new coverage in a "
     .. "sibling file, named as a deviation in the PR body — before an "
     .. "unconditional STOP")
@@ -60,6 +62,34 @@ local function test_step_one_offers_a_split_seam_before_an_unconditional_stop()
       1, true) ~= nil,
     "step 1 must still STOP, reporting the count, when no safe split "
     .. "seam is obvious or the split is itself too big a judgment call")
+end
+
+-- The old wording asserted cosmic's own 500-line cap as if it were a
+-- gitboard invariant. A fixture repo whose own convention states a
+-- different number (Acme's `AGENTS.md` here caps files at 300 lines,
+-- not 500) proves the reworded step 1 no longer bakes in any specific
+-- repo's cap: it names no number at all, and instead points a builder
+-- at whatever the target repo's own `AGENTS.md` (or equivalent) states.
+local function test_step_one_defers_to_the_repos_own_file_length_convention()
+  local ACME_AGENTS_MD < const > = [[
+# AGENTS.md
+
+- file length: <=300 lines, no exceptions, enforced by `make lint`
+]]
+  assert(ACME_AGENTS_MD:find("300", 1, true) ~= nil
+    and ACME_AGENTS_MD:find("500", 1, true) == nil,
+    "the fixture repo must state a cap other than cosmic's 500")
+
+  assert(BUILDER:find("500", 1, true) == nil,
+    "step 1 must not hardcode any specific repo's line-count number, "
+    .. "cosmic's 500 included — Acme's fixture states 300 instead")
+  assert(BUILDER:find(
+      "check its `AGENTS.md` (or equivalent) for the number, "
+      .. "the same convention gitboard already defers to everywhere "
+      .. "else", 1, true) ~= nil,
+    "step 1 must defer to the repo's own AGENTS.md (or equivalent) "
+    .. "for the file-length cap, the same way every other repo "
+    .. "convention is already treated")
 end
 
 local function test_step_three_prefers_a_per_file_check_between_edits()
