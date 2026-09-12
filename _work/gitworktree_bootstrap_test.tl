@@ -4,6 +4,9 @@
 -- downloads or a real host toolchain — a `make`-kind fixture's Makefile
 -- exists only for `_work.repoprofile` to read its literal header, and
 -- `child.run` is mocked shut wherever a case only needs the resolved argv.
+-- The failure/signal/success matrix cases split into
+-- `_work/gitworktree_bootstrap_failure_test.tl` so those heavier fault
+-- matrices run in their own process alongside this file's cases.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -142,106 +145,6 @@ local function assert_created_failure(c: Case, code: integer, out: string)
   assert(out:find("checkout created at " .. c.path .. "; preparation failed:",
       1, true) ~= nil, out)
   assert(out:find("(bootstrap:", 1, true) == nil, "no successful final verdict: " .. out)
-end
-
-local function test_bootstrap_failures_propagate_in_both_modes_and_roles()
-  for _, review in ipairs({false, true}) do
-    for _, verbose in ipairs({false, true}) do
-      for _, spawn in ipairs({false, true}) do
-        isolated(function()
-            local name = "failure-" .. tostring(review) .. tostring(verbose) .. tostring(spawn)
-            local c = fresh(name, "cosmic", "echo probe-out\necho probe-err >&2\nexit 17\n")
-            local board = check.must(store.git_ok(c.s, {"show-ref"})).stdout
-            local original = child.run
-            local seen = false
-            child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
-              if argv[1] == "bin/cosmic" then
-                seen = true
-                assert(opts ~= nil and opts.cwd == c.path)
-                assert((opts.stdout == "inherit") == verbose)
-                assert((opts.stderr == "inherit") == verbose)
-                if spawn then return nil, "probe spawn failure" end
-              end
-              return original(argv, opts)
-            end
-            local code, out = capture(c, review, verbose, {"refs/heads/supplied"})
-            child.run = original
-            assert(seen, "bootstrap was attempted")
-            assert_created_failure(c, code, out)
-            assert(out:find(spawn and "probe spawn failure" or "exit 17", 1, true) ~= nil, out)
-            if not verbose and not spawn then
-              assert(out:find("probe-out", 1, true) ~= nil and out:find("probe-err", 1, true) ~= nil, out)
-            end
-            assert(fs.is_dir(c.path), "failed checkout is retained")
-            assert(git_output(c.path, {"rev-parse", "HEAD"}) == (review and c.head or c.base))
-            assert(git_output(c.root, {"rev-parse", "refs/heads/" .. c.branch}) ~= "")
-            local ref = check.must(child.run({"git", "show-ref", "--verify", "--quiet",
-                  "refs/spike/supplied"}, {cwd = c.root}))
-            assert(not ref.ok, "failed bootstrap must not copy prepared refs")
-            assert(check.must(store.git_ok(c.s, {"show-ref"})).stdout == board)
-            assert(store.close(c.s))
-          end)
-      end
-    end
-  end
-end
-
-local function test_signal_termination_reports_failure_in_both_modes_and_roles()
-  for _, review in ipairs({false, true}) do
-    for _, verbose in ipairs({false, true}) do
-      isolated(function()
-          local c = fresh("signal-" .. tostring(review) .. tostring(verbose), "cosmic",
-            "echo signal-out\necho signal-err >&2\nkill -TERM $$\n")
-          local board = check.must(store.git_ok(c.s, {"show-ref"})).stdout
-          local original = child.run
-          local seen = false
-          child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
-            if argv[1] == "bin/cosmic" then
-              seen = true
-              assert(opts ~= nil and opts.cwd == c.path)
-              assert((opts.stdout == "inherit") == verbose)
-              assert((opts.stderr == "inherit") == verbose)
-            end
-            return original(argv, opts)
-          end
-          local code, out = capture(c, review, verbose, {"refs/heads/supplied"})
-          assert(seen, "bootstrap was attempted")
-          assert_created_failure(c, code, out)
-          assert(out:find("bin/cosmic --make fetch failed (signal 15)", 1, true) ~= nil, out)
-          if not verbose then
-            assert(out:find("signal-out", 1, true) ~= nil and out:find("signal-err", 1, true) ~= nil, out)
-          end
-          assert(fs.is_dir(c.path), "signal-terminated checkout is retained")
-          assert(git_output(c.path, {"rev-parse", "HEAD"}) == (review and c.head or c.base))
-          assert(git_output(c.root, {"rev-parse", "refs/heads/" .. c.branch}) ~= "")
-          local ref = check.must(child.run({"git", "show-ref", "--verify", "--quiet",
-                "refs/spike/supplied"}, {cwd = c.root}))
-          assert(not ref.ok, "signal termination must not copy prepared refs")
-          assert(check.must(store.git_ok(c.s, {"show-ref"})).stdout == board)
-          assert(store.close(c.s))
-        end)
-    end
-  end
-end
-
-local function test_success_preserves_exact_heads_and_inherited_identity()
-  for _, review in ipairs({false, true}) do
-    isolated(function()
-        local c = fresh("success-" .. tostring(review), "cosmic", "echo 'build: PASS (fixture)'\n")
-        local config = check.must(fs.read(fs.join(c.root, ".git/config")))
-        local code, out = capture(c, review, false, {"refs/heads/supplied"})
-        assert(code == 0 and out:find("bootstrap: cosmic (fetch + build)", 1, true) ~= nil, out)
-        assert(git_output(c.path, {"rev-parse", "HEAD"}) == (review and c.head or c.base))
-        assert(git_output(c.path, {"rev-parse", "refs/spike/supplied"}) == c.head)
-        for _, key in ipairs({"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"}) do
-          assert(git_output(c.path, {"var", key}):find("Bootstrap Fixture <bootstrap@example.test>",
-              1, true) ~= nil, "the checkout inherits repository-local identity")
-        end
-        assert(check.must(fs.read(fs.join(c.root, ".git/config"))) == config)
-        assert(out:find("bootstrap@example.test", 1, true) == nil, "do not print identity values")
-        assert(store.close(c.s))
-      end)
-  end
 end
 
 local function test_missing_created_directory_is_not_success()

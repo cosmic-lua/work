@@ -1,4 +1,9 @@
 #!/usr/bin/env cosmic
+-- Adoption's success paths, its claim/authority checks, and unsupported
+-- targets. `_work/worktree_adopt_refusal_test.tl` carries the checkout
+-- refusal, manual/review, real-alias, and submodule cases — split out
+-- so the ~47 independent `fresh()` fixture repositories both files
+-- build together run across two processes instead of one.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -14,7 +19,6 @@ local graph = require("_work.gitgraph")
 local receipt = require("_work.preparation_receipt")
 local refsmod = require("_work.refs")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
 local SESSION < const > = "11111111111111111111111111111111"
 local SCRIPT < const > = [[#!/bin/sh
@@ -197,53 +201,6 @@ local function test_failed_build_or_receipt_write_retains_checkout_for_explicit_
   end
 end
 
-local function test_every_adoption_checkout_refusal_preserves_refs_config_and_receipt()
-  for _, fault in ipairs({"nested", "alias", "dirty", "index", "head", "branch", "detached", "registration",
-      "common", "author", "committer", "pin", "missing", "status-error"}) do
-    fresh("refuse-" .. fault, function(c: Case)
-        good(c)
-        local path, original = c.path, child.run
-        if fault == "nested" then path = fs.join(c.path, "bin")
-        elseif fault == "alias" then path = c.path .. "/."
-        elseif fault == "dirty" or fault == "index" then
-          assert(fs.write(fs.join(c.path, "README"), "dirty"))
-          if fault == "index" then fixture.git(c.path, {"add", "README"}) end
-        elseif fault == "head" then fixture.git(c.path, {"commit", "--allow-empty", "-qm", "moved"})
-        elseif fault == "branch" then fixture.git(c.path, {"checkout", "-qb", "wrong-branch"})
-        elseif fault == "detached" then fixture.git(c.path, {"checkout", "-q", "--detach"})
-        elseif fault == "author" or fault == "committer" then
-          fixture.git(c.path, {"config", "user.name", ""})
-          fixture.git(c.path, {"config", "user.email", ""})
-          if fault == "committer" then
-            assert(env.set("GIT_AUTHOR_NAME", "Author")); assert(env.set("GIT_AUTHOR_EMAIL", "a@example.test"))
-          end
-        elseif fault == "pin" then assert(fs.write(fs.join(c.path, "bin/cosmic.pin"), "changed"))
-        elseif fault == "missing" then path = c.path .. "-missing"
-        end
-        local before, config, old = value(c.s.root, "show-ref"), check.must(fs.read(fs.join(c.source, ".git/config"))),
-        check.must(fs.read(c.file))
-        child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
-          assert(argv[1] == "git", fault .. ": refusal must precede runtime execution")
-          assert(not (argv[2] == "worktree" and argv[3] == "add"), "adoption never creates")
-          if fault == "status-error" and argv[2] == "status" then
-            return {ok = false, code = -1, signal = 15, stdout = "", stderr = ""}, ""
-          end
-          if fault == "registration" and argv[2] == "worktree" and argv[3] == "list" then
-            return {ok = true, code = 0, stdout = "", stderr = ""}, ""
-          end
-          if fault == "common" and opts ~= nil and opts.cwd == c.path and argv[4] == "--git-common-dir" then
-            return {ok = true, code = 0, stdout = "/unrelated/.git\n", stderr = ""}, ""
-          end
-          return original(argv, opts)
-        end
-        local code, out = run(c, path)
-        assert(code ~= 0 and out:find("checkout retained", 1, true), fault .. ": " .. out)
-        assert(check.must(fs.read(c.file)) == old)
-        assert(value(c.s.root, "show-ref") == before and check.must(fs.read(fs.join(c.source, ".git/config"))) == config)
-      end)
-  end
-end
-
 local function test_final_live_claim_expiry_reacquisition_and_confirmed_renewal()
   for _, action in ipairs({"expired", "reacquired", "renewed"}) do
     fresh("claim-" .. action, function(c: Case)
@@ -278,28 +235,6 @@ local function test_final_live_claim_expiry_reacquisition_and_confirmed_renewal(
           local r = check.must(original({"git", "show-ref", "--verify", "--quiet", "refs/spike/supplied"}, {cwd = c.path}))
           assert(not r.ok, "final live authority precedes prepared-ref writes")
         end
-      end)
-  end
-end
-
-local function test_manual_canonical_checkout_and_source_head_difference_are_supported()
-  fresh("manual", function(c: Case)
-      fixture.git(c.source, {"commit", "--allow-empty", "-qm", "source ahead"})
-      fixture.git(c.source, {"worktree", "add", "-q", "-b", c.branch, c.path, c.base})
-      good(c, true)
-      assert(value(c.path, "rev-parse", "HEAD") == c.base)
-    end)
-end
-
-local function test_review_cache_preparation_and_verbosity_modes()
-  for _, verbose in ipairs({false, true}) do
-    fresh("review-" .. tostring(verbose), function(c: Case)
-        local it = check.must(store.load(c.s, c.id))
-        it.handover_head = c.base
-        assert(storewrite.save(c.s, it, "fixture handover"))
-        local code, out = run(c, nil, false, {}, verbose, true)
-        assert(code == 0 and out:find("review at", 1, true), out)
-        assert(not fs.is_present(c.file))
       end)
   end
 end
@@ -370,24 +305,6 @@ local function test_live_authority_refuses_draft_overlay_wrong_holder_expiry_and
   end
 end
 
-local function test_real_unrelated_repository_and_symlink_cannot_adopt_canonical_spelling()
-  for _, link in ipairs({false, true}) do
-    fresh("real-alias-" .. tostring(link), function(c: Case)
-        good(c)
-        assert(fs.move(c.path, c.path .. "-original"))
-        if link then assert(fs.symlink(c.path .. "-original", c.path))
-        else
-          fixture.git(c.s.root, {"clone", "-q", c.source, c.path})
-          fixture.git(c.path, {"checkout", "-q", "-b", c.branch, c.base})
-        end
-        local code, out = run(c, c.path)
-        assert(code ~= 0, out)
-        if link then assert(out:find("exact Git toplevel", 1, true) or out:find("symlink", 1, true), out)
-        else assert(out:find("common directory mismatch", 1, true), out) end
-      end)
-  end
-end
-
 local function test_options_unsupported_targets_and_legacy_compatibility()
   for _, kind in ipairs({"legacy", "absent", "make", "cosmopolitan"}) do
     fresh("compat-" .. kind, function(c: Case)
@@ -413,30 +330,5 @@ local function test_options_unsupported_targets_and_legacy_compatibility()
       assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", "0"))
       assert(run(c, c.path) ~= 0 and run(c, nil, true) ~= 0)
       good(c)
-    end)
-end
-
-local function test_tracked_submodule_dirt_is_not_hidden_by_omitting_untracked_files()
-  fresh("submodule", function(c: Case)
-      local module = fs.join(c.s.root, "module-source")
-      assert(fs.make_dirs(module))
-      fixture.git(module, {"init", "-q"})
-      assert(fs.write(fs.join(module, "tracked"), "clean"))
-      fixture.git(module, {"add", "."}); fixture.git(module, {"commit", "-qm", "module"})
-      fixture.git(c.source, {"-c", "protocol.file.allow=always", "submodule", "add", "-q", module, "sub"})
-      fixture.git(c.source, {"commit", "-qm", "add submodule"})
-      c.base = value(c.source, "rev-parse", "HEAD")
-      fixture.drop_claim(c.s, c.id, SESSION, "fixture new base")
-      fixture.claim_item(c.s, c.id, SESSION, c.base)
-      local st = check.must(receipt.confirmed(c.s, check.must(store.load(c.s, c.id)), SESSION))
-      c.branch = claim.branch(c.id, st.root)
-      c.path = fs.join(c.s.root, "wt", c.branch)
-      good(c)
-      fixture.git(c.path, {"-c", "protocol.file.allow=always", "submodule", "update", "--init", "-q"})
-      assert(fs.write(fs.join(c.path, "sub/tracked"), "dirty module"))
-      local old = check.must(fs.read(c.file))
-      local code, out = run(c, c.path)
-      assert(code ~= 0 and out:find("including submodules", 1, true), out)
-      assert(check.must(fs.read(c.file)) == old)
     end)
 end

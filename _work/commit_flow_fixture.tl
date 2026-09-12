@@ -32,11 +32,29 @@ local function git(root: string, args: {string}, stdin?: string): string
   return (r.stdout:gsub("%s+$", ""))
 end
 
-local function product(name: string): Product
-  local root = fs.join(fixture.tmpdir, "commit-flow-" .. name)
+-- `product`'s branch layout (five branches, half a dozen commits) never
+-- varies between calls — build it once per process at a fixed
+-- location and `fs.copy_tree` it for every later call instead of
+-- re-running the whole git sequence. The returned shas are read off
+-- the template build and stay valid for every copy, since a copy's
+-- git history is byte-identical to what it was copied from.
+local template_root: string | nil = nil
+local template_product: Product | nil = nil
+
+local function build_product(root: string): Product
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
   git(root, {"init", "-q"})
+  -- Every `git commit` below runs `run_auto_maintenance()`, which spawns
+  -- `git maintenance run --auto --quiet` (confirmed via `GIT_TRACE=1`) —
+  -- harmless on its own, but this repo is a TEMPLATE copied by every
+  -- later `product()` call, and a maintenance run can leave a transient
+  -- `.git/objects/maintenance.lock` that `fs.copy_tree`'s walk can lose
+  -- a race against (the file exists when the directory is listed, gone
+  -- by the time it is stat'd). Disabling it here, before the first
+  -- commit, means no such process is ever spawned against this
+  -- directory at all.
+  git(root, {"config", "maintenance.auto", "false"})
   git(root, {"checkout", "-q", "-b", "main"})
   assert(fs.write(fs.join(root, "base.txt"), "base\n"))
   git(root, {"add", "base.txt"})
@@ -72,6 +90,22 @@ local function product(name: string): Product
   local unrelated = git(root, {"rev-parse", "HEAD"})
   return {root = root, base = base, head = head, next_head = next_head,
     squash = squash, mismatch = mismatch, unrelated = unrelated}
+end
+
+local function product(name: string): Product
+  if template_product == nil then
+    template_root = fs.join(fixture.tmpdir, "commit-flow-template")
+    template_product = build_product(template_root)
+  end
+  local root_dir = template_root
+  local tp = template_product
+  if root_dir == nil or tp == nil then error("unreachable: template just built", 0) end
+  local root = fs.join(fixture.tmpdir, "commit-flow-" .. name)
+  assert(fs.remove_all(root))
+  assert(fs.copy_tree(root_dir, root))
+  return {root = root, base = tp.base, head = tp.head,
+    next_head = tp.next_head, squash = tp.squash,
+    mismatch = tp.mismatch, unrelated = tp.unrelated}
 end
 
 local function fresh(name: string): store.Store, string, Product
