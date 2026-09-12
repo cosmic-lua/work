@@ -1,0 +1,3 @@
+title: child_spawn_true benchmark hardcodes /bin/true, absent on macOS
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
