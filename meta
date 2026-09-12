@@ -1,6 +1,6 @@
 title: D46 — the HTTP server engine is a cosmo.http binding over net/http; the surface is cosmic.http; htmx is a guide, not a coupling
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
-claim_batch: 5e20e29d808b4fdac8c344a8f7f8e1cd1d648cb1
+claim_batch: a3ba93f058eadf8c6025ec6daa28d1d6295e7a9e
 handover_head: 7109da4061dc3e1bc697b91df24829548c7ec083
 builders: fab67b097486f18956a8b703877b2caa
