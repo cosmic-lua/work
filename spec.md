@@ -74,3 +74,10 @@ stale). Not a rewrite of every affected item's spec PROSE (many still say
 repair is the actionable fix; a builder's own step-1 re-measurement
 against the real tree is what the standard build brief already requires
 and catches any remaining stale wording.
+
+## Access
+
+cosmic-lua/cosmic, read and write on a branch (the `board` branch this
+item deletes or annotates lives here).
+cosmic-lua/work, read only (cloning it as the comparison side in
+Evidence; no write there).
