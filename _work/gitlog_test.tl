@@ -1,16 +1,21 @@
 #!/usr/bin/env cosmic
 -- The history reader and the `log ID` verb: what an item's own commits
--- carry, and what a session reads when it asks for them. The prose an
--- entry shows is the retrospective record, so the words are the
--- contract — asserted on the pure report and on the reader over a real
--- board, not on captured stdout alone.
+-- carry, what a session reads when it asks for them, and what
+-- `log ID --add FILE` puts there. The prose an entry shows is the
+-- retrospective record, so the words are the contract — asserted on
+-- the pure report and on the reader over a real board, not on captured
+-- stdout alone. The append's own contract is that it moves NOTHING:
+-- its commit's tree is the tree its parent already carried, which is
+-- asserted here against git and then through `fsck`'s re-encode audit.
 
+local cachedb = require("_work.cachedb")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitboard = require("_work.gitboard")
+local gitfsck = require("_work.gitfsck")
 local gitlog = require("_work.gitlog")
 local gitreadlog = require("_work.gitreadlog")
 local item = require("_work.item")
@@ -275,4 +280,183 @@ local function test_log_verb_prints_an_items_history()
     "--oneline drops bodies: " .. oneline)
   assert(oneline:find("head:bbbbbbbbbbbb", 1, true) ~= nil,
     "and keeps subjects: " .. oneline)
+end
+
+--- A minted-shaped session id: 32 lowercase hex, what
+--- `_work.claimsession.is_id` accepts and `--session` therefore needs.
+local SESSION < const > = ("a"):rep(32)
+
+--- `git rev-parse SPEC` in the store, failing loudly.
+--- @param s store.Store The store
+--- @param spec string A rev spec
+--- @return string The 40-hex object id
+local function rev(s: store.Store, spec: string): string
+  local r = check.must(child.run({"git", "rev-parse", spec}, {cwd = s.root}))
+  assert(r.ok, spec .. ": " .. r.stderr)
+  return (r.stdout:gsub("%s+$", ""))
+end
+
+--- Write one entry file under the test's own temp directory.
+--- @param name string A file name
+--- @param text string The entry's prose
+--- @return string The path written
+local function entry_file(name: string, text: string): string
+  local path = fs.join(tmpdir, name)
+  assert(fs.write(path, text))
+  return path
+end
+
+-- The whole of the append's contract in one pass: the commit lands on
+-- the item's own ref, its parent is the tip the append was made
+-- against, its TREE is byte-identical to that parent's (nothing about
+-- the item moved), its subject is the `note <id8> by <session>` grammar
+-- every other subject shares, and the prose comes back out through the
+-- reader with the tool's own trailer gone.
+local function test_log_add_appends_an_entry_and_moves_no_tree()
+  local s = init_state_repo("log-add")
+  local _root, leaf = fixture.root_with_leaf(s)
+  local _it = check.must(store.load(s, leaf))
+  local before = s.leased_sha[leaf]
+  local ref = s.leased_ref[leaf]
+  local before_tree = rev(s, before .. "^{tree}")
+  assert(store.close(s))
+  local prose = "measured 3x on the json path\n\nthe second paragraph"
+  local code, printed = gitboard_and_capture("log", tail.handle(leaf),
+    "--add", entry_file("log-add-entry.md", prose .. "\n"),
+    "--session", SESSION, "--dir", s.root)
+  assert(code == 0, printed)
+  assert(printed:find("gitboard-log: " .. tail.handle(leaf)
+      .. " gained an entry (3 lines)", 1, true) ~= nil,
+    "the verdict line counts the prose's lines: " .. printed)
+  local after = rev(s, ref)
+  assert(after ~= before, "the ref moved: " .. after)
+  assert(rev(s, after .. "^") == before,
+    "the entry's parent is the tip it was appended to")
+  assert(rev(s, after .. "^{tree}") == before_tree,
+    ("tree-identical: %s vs %s"):format(rev(s, after .. "^{tree}"), before_tree))
+  local entries = check.must(gitreadlog.read_history(s.root, {ref}))
+  local last = entries[#entries]
+  assert(last.subject == ("note %s by %s"):format(leaf:sub(1, 8), SESSION),
+    last.subject)
+  assert(last.body == prose, ("the prose, trailer dropped: %q"):format(last.body))
+  assert(last.author == SESSION .. " <" .. SESSION .. "@board>", last.author)
+  -- And the verb that exists to show it does.
+  local read_code, shown = gitboard_and_capture("log", tail.handle(leaf),
+    "--dir", s.root)
+  assert(read_code == 0, shown)
+  assert(shown:find("measured 3x on the json path", 1, true) ~= nil, shown)
+  assert(shown:find("Op: note", 1, true) == nil,
+    "the tool's trailer is not prose: " .. shown)
+end
+
+-- The append patches the board cache rather than leaving it behind.
+-- It moves the item's ref, so the board's ref digest moves too, and an
+-- unpatched cache would make the NEXT whole-board read pay for a full
+-- rebuild — the cost the patch path exists to avoid. The statement that
+-- the cache is still usable is exactly `cache.open`'s own reuse
+-- condition: the digest the file recorded still equals the board's
+-- current one. `fsck` cannot make this statement — it reads through
+-- `store.read`, which rebuilds on a mismatch, so it would agree with
+-- the refs either way.
+local function test_log_add_leaves_the_cache_current()
+  local s = init_state_repo("log-add-cache")
+  local _root, leaf = fixture.root_with_leaf(s)
+  assert(store.close(s))
+  local path = cachedb.path_of(s.root)
+  assert(fs.is_file(path), "the board reads above built a cache file: " .. path)
+  local code, printed = gitboard_and_capture("log", tail.handle(leaf),
+    "--add", entry_file("log-add-cache-entry.md", "what the measurement said"),
+    "--session", SESSION, "--dir", s.root)
+  assert(code == 0, printed)
+  local after = rev(s, "refs/heads/items/" .. leaf)
+  local fresh = check.must(cachedb.fresh_digest(s.root))
+  local db = check.must(cachedb.open_conn(path))
+  local recorded = cachedb.meta_get(db, "refs_digest")
+  local row = db:query_one("SELECT tip FROM items WHERE id = ?", {leaf})
+  local _cok, _cerr = db:close()
+  assert(recorded == fresh,
+    ("the append left the cache current, so the next open reuses it rather "
+      .. "than rebuilding: recorded %s, board %s"):format(tostring(recorded), fresh))
+  assert(row ~= nil, "the item still has a cached row")
+  local tip = row.tip as string -- cast: from any (sqlite row)
+  assert(tip == after,
+    ("the cached lease tip is the entry's own commit: %s vs %s"):format(tip, after))
+end
+
+-- The audit that would catch a moved tree, run over a board carrying
+-- an entry: `fsck` re-encodes every item's tree from its own decoded
+-- fields and compares the sha against the tip it was read from, so a
+-- tree-identical commit is a shape it accepts by construction.
+local function test_log_add_round_trips_through_fsck()
+  local s = init_state_repo("log-add-fsck")
+  local _root, leaf = fixture.root_with_leaf(s)
+  assert(store.close(s))
+  local code, printed = gitboard_and_capture("log", tail.handle(leaf),
+    "--add", entry_file("log-add-fsck-entry.md", "what the measurement said"),
+    "--session", SESSION, "--dir", s.root)
+  assert(code == 0, printed)
+  local audited = check.must(store.open(s.root))
+  local fsck_code = gitfsck.cmd_fsck(audited)
+  assert(store.close(audited))
+  assert(fsck_code == 0, ("fsck refused a board carrying an entry: %d")
+    :format(fsck_code))
+end
+
+-- An entry is immutable: a correction is another entry, so a second
+-- append leaves the first exactly where it was and adds one commit.
+local function test_log_add_corrects_by_appending_rather_than_editing()
+  local s = init_state_repo("log-add-again")
+  local _root, leaf = fixture.root_with_leaf(s)
+  local ref = "refs/heads/items/" .. leaf
+  assert(store.close(s))
+  local first = entry_file("log-add-first.md", "measured 3x")
+  local second = entry_file("log-add-second.md", "correction: measured 4x")
+  for _, path in ipairs({first, second}) do
+    local code, printed = gitboard_and_capture("log", tail.handle(leaf),
+      "--add", path, "--session", SESSION, "--dir", s.root)
+    assert(code == 0, printed)
+  end
+  local entries = check.must(gitreadlog.read_history(s.root, {ref}))
+  local notes: {Entry} = {}
+  for _, e in ipairs(entries) do
+    if e.subject:match("^note ") ~= nil then
+      notes[#notes + 1] = e
+    end
+  end
+  assert(#notes == 2, ("two entries, neither replacing the other: %d")
+    :format(#notes))
+  assert(notes[1].body == "measured 3x", notes[1].body)
+  assert(notes[2].body == "correction: measured 4x", notes[2].body)
+end
+
+-- An entry is prose. A file with none records nothing, and one that
+-- cannot be read is not an entry at all: both refuse before any commit
+-- is written, leaving the ref exactly where it was.
+local function test_log_add_refuses_an_entry_with_no_prose()
+  local s = init_state_repo("log-add-empty")
+  local _root, leaf = fixture.root_with_leaf(s)
+  local ref = "refs/heads/items/" .. leaf
+  assert(store.close(s))
+  local before = rev(s, ref)
+  local blank = entry_file("log-add-blank.md", "\n   \n\n")
+  local code, printed = gitboard_and_capture("log", tail.handle(leaf),
+    "--add", blank, "--session", SESSION, "--dir", s.root)
+  assert(code == 1, printed)
+  assert(printed:find("holds no prose", 1, true) ~= nil, printed)
+  local missing_code, missing = gitboard_and_capture("log", tail.handle(leaf),
+    "--add", fs.join(tmpdir, "log-add-absent.md"), "--session", SESSION,
+    "--dir", s.root)
+  assert(missing_code == 1, missing)
+  assert(rev(s, ref) == before, "neither refusal wrote a commit")
+end
+
+-- The subject grammar, pure: the session rides behind ` by ` the way
+-- `take <id8> by <session>` writes it, and a call with no session
+-- resolved drops the clause rather than writing an empty one.
+local function test_entry_subject_names_the_item_and_the_session()
+  local id = "3JF2BzbPqcStpdrAC7JtrIGklI2"
+  assert(gitlog.entry_subject(id, SESSION)
+    == "note 3JF2BzbP by " .. SESSION, gitlog.entry_subject(id, SESSION))
+  assert(gitlog.entry_subject(id, "") == "note 3JF2BzbP",
+    gitlog.entry_subject(id, ""))
 end

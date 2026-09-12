@@ -18,6 +18,18 @@
 --- was assembled. `from` is omitted only for a brand-new item, whose
 --- first commit must have no parent.
 ---
+--- A commit whose `ops` are EMPTY is the TREE-IDENTICAL shape: `from`
+--- carries the parent's whole tree forward and no `M`/`D` follows it,
+--- so the commit adds a message to a ref's history and moves nothing
+--- at all. `refs/heads/board/seq`'s bounded-mutation bump has always
+--- taken that shape, on a ref whose tree nothing reads; `log ID --add`
+--- (`_work.gitlog`) takes it on an ITEM's ref, where the tree is read
+--- by everything. It round-trips: `fsck`'s re-encode audit rebuilds
+--- each item's tree from its own decoded fields and compares that sha
+--- against the tip it was read from, so a tree that did not move
+--- satisfies it by construction, and the derived cache rows the same
+--- audit diffs are rebuilt by the next read's own digest guard.
+---
 --- fast-import refuses a non-fast-forward `commit <ref>` (a `from`
 --- that does not match the ref's actual current tip) by silently NOT
 --- moving the ref and warning on stderr — never a non-zero exit,

@@ -1,16 +1,33 @@
---- The `log ID` verb: one item's own commit history, newest first.
+--- The `log ID` verb: one item's own commit history, newest first,
+--- and `log ID --add FILE`, the one way to put something INTO it.
 --- Every retrospective fact an item carries — what was measured, what
 --- was found, what happened along the way — lives in the message
 --- bodies on its ref, and this is the verb that shows them; the item's
 --- tree carries only its current state, which `show ID` renders.
 ---
---- Like every read verb, the report is PURE over already-read state
---- and the `cmd_` half owns the store reads: what a session reads is
---- the contract, and a report that returns its lines can be asserted
---- on without capturing stdout.
+--- The read half is PURE over already-read state, like every read
+--- verb, and its `cmd_` half owns the store reads: what a session
+--- reads is the contract, and a report that returns its lines can be
+--- asserted on without capturing stdout.
+---
+--- The append half is the only write here, and it moves nothing: its
+--- commit's tree is IDENTICAL to its parent's, so an observation about
+--- an item no longer has to wait for a mutation to ride along with.
+--- That shape is why it writes its own stream (`_work.fastimport`)
+--- instead of going through `_work.storewrite.save`, whose per-path
+--- diff finds nothing to write and reports the no-op.
+local cache = require("_work.cache")
+local fastimport = require("_work.fastimport")
+local format = require("_work.format")
+local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
+local gitdraft = require("_work.gitdraft")
 local gitreadlog = require("_work.gitreadlog")
+local publish = require("_work.publish")
+local refs = require("_work.refs")
 local store = require("_work.store")
+local storeinit = require("_work.storeinit")
+local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 
 local type Entry = gitreadlog.Entry
@@ -20,6 +37,13 @@ local verdict_line = gate.verdict_line
 --- How far a body line is indented under its own subject line: enough
 --- that a wrapped prose paragraph never reads as another entry.
 local INDENT < const > = "    "
+
+--- The tool's own git identity: the committer on an entry's commit,
+--- and its author too when no session named itself — the same pair
+--- `_work.gitwrite` stamps on every item commit, and `_work.format`
+--- and `_work.storeinit` on the board refs they write.
+local TOOL_NAME < const > = "Claude"
+local TOOL_EMAIL < const > = "noreply@anthropic.com"
 
 --- One entry's own heading: when it happened, who made it, and what it
 --- was. UTC `Z`-form, the same timestamp shape `show ID`'s `opened:`
@@ -85,16 +109,167 @@ local function cmd_log(s: store.Store, id: string, oneline?: boolean): integer
       #entries == 1 and "entry" or "entries"))
 end
 
+--- One entry's commit subject: the verb, the item's id as every other
+--- subject abbreviates it, and the session that observed it — `note
+--- <id8> by <session>`, the same clause `take <id8> by <session>`
+--- already writes, so `_work.events`' subject reader and `log ID`'s own
+--- render need nothing new taught to either. With no session resolved
+--- the ` by` clause is dropped rather than written empty, the way
+--- `new <id8> <title>` and `spec <id8>` carry no session at all.
+--- @param id string The item's full id
+--- @param session string The session, "" when none was resolved
+--- @return string The subject line
+local function entry_subject(id: string, session: string): string
+  if (session or "") == "" then
+    return ("note %s"):format(id:sub(1, 8))
+  end
+  return ("note %s by %s"):format(id:sub(1, 8), session)
+end
+
+--- Append one entry to an item's history: a commit on the item's own
+--- ref carrying `file`'s prose as its message body and NOTHING else —
+--- no field, no sidecar, no ranked child — so its tree is identical to
+--- the tree its parent already carries. An entry is IMMUTABLE: there
+--- is no edit and no delete, and a correction is another entry.
+---
+--- The board cache is patched exactly as every other write patches it
+--- (`_work.cache.guard` before, `after_save` after), for the reason
+--- that path exists at all: an append moves the item's ref, so the
+--- board's ref digest moves with it, and a cache left behind makes the
+--- NEXT whole-board read pay for a full rebuild — measured at 20x on
+--- the live board, which would make the cheap way to record an
+--- observation the most expensive mutation there is. What is patched
+--- is only the two things that actually moved — the item's write lease
+--- and one `events` row for the new commit — never the entry's prose,
+--- which is read from the ref like every other message body. The
+--- patch's own guard makes this unable to fail: a digest that moved
+--- under us, or no cache file at all, is silently skipped and the next
+--- read rebuilds as it would have anyway.
+--- @param s store.Store The store
+--- @param id string The item id, already resolved by the dispatcher
+--- @param file string Path to the file holding the entry's prose
+--- @param session string | nil The session to attribute the entry to
+--- @return integer Exit code
+local function cmd_log_add(s: store.Store, id: string, file: string,
+    session?: string): integer
+  local body, rerr = fs.read(file)
+  if body == nil then
+    return verdict_line("log", false, rerr)
+  end
+  local prose = (body:gsub("%s+$", ""))
+  if prose == "" then
+    return verdict_line("log", false,
+      ("REFUSED: %s holds no prose — an entry is an observation, and an "
+        .. "empty one records nothing"):format(file))
+  end
+  local worktree = storeinit.linked_worktree_refusal(s.root)
+  if worktree ~= nil then
+    return verdict_line("log", false, worktree)
+  end
+  local current, ferr = format.require_current(s.root)
+  if not current then
+    return verdict_line("log", false, ferr)
+  end
+  -- `store.load` proves the id names a real ref and leaves the lease
+  -- behind: the ref this entry lands on, and the tip its commit has to
+  -- fast-forward from. The item itself is what the cache patch below
+  -- writes its row from, with no git read of its own.
+  local it, lerr = store.load(s, id)
+  if it == nil then
+    return verdict_line("log", false, lerr)
+  end
+  local ref, tip = s.leased_ref[id], s.leased_sha[id]
+  if ref == nil or tip == nil or tip == refs.ZERO_SHA then
+    return verdict_line("log", false,
+      ("%s carries no observed tip to append to"):format(tail.handle(id)))
+  end
+  local author_name, author_email = TOOL_NAME, TOOL_EMAIL
+  if (session or "") ~= "" then
+    author_name, author_email = session, session .. "@board"
+  end
+  local subject = entry_subject(id, session or "")
+  local now = fastimport.git_date_now()
+  -- The epoch second the commit itself carries, so the lease and the
+  -- `events` row the patch records name the same instant git does.
+  local written_at = math.tointeger(tonumber(now:match("^(%d+)"))) or os.time()
+  -- Read the cache's state BEFORE anything moves: that is the proof it
+  -- was current immediately beforehand, which is what makes patching
+  -- one item safe rather than trusting a maybe-stale file. `store.load`
+  -- never opened the cache, so `s.board_digest` is "" here and the
+  -- guard takes a fresh digest of its own.
+  local before_digest = cache.guard(s.root, s.board_digest)
+  -- No path ops at all: `from` carries the parent's whole tree
+  -- forward, which is the whole of what makes the commit
+  -- tree-identical.
+  local ok, werr = fastimport.run(s.root, {{
+        ref = ref, from = tip, author_name = author_name,
+        author_email = author_email, author_date = now,
+        committer_name = TOOL_NAME, committer_email = TOOL_EMAIL,
+        committer_date = now, message = subject .. "\n\n" .. prose,
+        op = "note", ops = {},
+      }})
+  if not ok then
+    return verdict_line("log", false, werr)
+  end
+  -- fast-import refuses a non-fast-forward `from` silently — no ref
+  -- moved, no non-zero exit — so "the ref did not move off the tip we
+  -- observed" is read back here as the compare-and-swap failure it is,
+  -- exactly the way `_work.gitwrite` reads its own back.
+  local moved, merr = refs.read_ref(s.root, ref)
+  if moved == nil then
+    return verdict_line("log", false, merr)
+  end
+  if moved == tip or moved == refs.ZERO_SHA then
+    return verdict_line("log", false,
+      ("fast-import did not fast-forward %s — refused (unexpected local "
+        .. "state)"):format(ref))
+  end
+  storewrite.add_pending(s, {ref = ref, old = tip})
+  -- `written` names the one id that gained a commit, which is what
+  -- earns it the lease change and the `events` row; the item's fields
+  -- are patched from `it` exactly as observed, and nil for the spec
+  -- body leaves its indexed prose alone. A remote-backed save is only
+  -- PREPARED at this point, so patching would publish unconfirmed
+  -- state; a draft patches once its own staging has landed instead.
+  local written: {string: string} = {[id] = moved}
+  if refs.board_mode(s.root) == "local" and gitdraft.active(s.root) == nil then
+    cache.after_save(s.root, before_digest, {it}, nil, subject, written, written_at)
+  end
+  local _cok, _cerr = store.close(s)
+  local published, detail = publish.publish(s)
+  if not published then
+    return verdict_line("log", false, detail)
+  end
+  if gitdraft.active(s.root) ~= nil then
+    cache.after_save(s.root, before_digest, {it}, nil, subject, written, written_at)
+  end
+  if (detail or "") ~= "" then
+    print(detail)
+  end
+  local n = 1
+  for _ in prose:gmatch("\n") do
+    n = n + 1
+  end
+  return verdict_line("log", true,
+    ("%s gained an entry (%d %s)"):format(tail.handle(id), n,
+      n == 1 and "line" or "lines"))
+end
+
 local record gitlog
   heading: function(e: Entry): string
   log_report: function(entries: {Entry}, oneline?: boolean): {string}
+  entry_subject: function(id: string, session: string): string
   cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
+  cmd_log_add: function(s: store.Store, id: string, file: string,
+  session?: string): integer
 end
 
 local M: gitlog = {
   heading = heading,
   log_report = log_report,
+  entry_subject = entry_subject,
   cmd_log = cmd_log,
+  cmd_log_add = cmd_log_add,
 }
 
 return M
