@@ -58,3 +58,53 @@ unprobed C question.
 ## Risk
 Medium — new C surface + security-sensitive path. Ambition
 medium-high, contingent on the guard-invariant decision.
+
+## Fresh scouting and design disposition — 2026-09-11
+
+No bulk extractor was implemented or selected for immediate decomposition.
+Source cosmic b0ab4e8fe2bb798296e68e96ae640f82c8c03c5f and cosmopolitan
+ e748d6a1e40e6419a48f16a9626c287014bdb6b5 still have the Lua extraction loop
+and shared guard. cosmic/embed/extract.tl now delegates to cosmic.zip.extract,
+so any future fast path belongs there, not in a separate embed extractor.
+
+On macOS arm64, a 120-directory / 600-small-file archive made with cosmic.zip
+was read by the pinned runtime 2026-09-10-851d5ec, cosmos
+2026.09.06-e748d6a1e (SHA256
+10f66af3cfe6b55e3f97c058ddff5e6b0ba3faf6eef8c2462cb7372895e4e1c2).
+Seven samples, monotonic wall time, medians per operation:
+
+- list + shared guard + fs.join/dirname + mode mask, no writes: 0.569 ms
+  (50 operations/sample; range 0.568–0.572 ms).
+- list + reader:read of all files with CRC checks: 0.498 ms
+  (20 operations/sample; range 0.495–0.508 ms).
+- zip.extract to a different fresh destination each sample: 31.516 ms
+  (one operation/sample; range 31.436–34.944 ms).
+- zip.extract overwriting a pre-extracted destination: 23.038 ms
+  (3 operations/sample; range 22.692–28.119 ms).
+
+These are small-file diagnostics on this filesystem, NOT the full
+embed_extract_tree harness, and NOT a C A/B. They do not demonstrate
+15–30% headroom from moving Lua dispatch into C; filesystem work dominates
+this fixture. Chmod cannot simply disappear: current extraction applies
+exact permission bits after umask-filtered creation and overwrites existing
+files. Keep the older zlib rejection, but do not spend a new C surface on
+the old optimistic estimate without a measured mechanism that survives
+those semantics. This item remains open as a hypothesis; no speedup or
+not-planned resolution is asserted.
+
+A compatibility probe created a.txt='first' mode0600 and b.txt='last!'
+mode0755, then patched both ZIP filename occurrences b.txt -> a.txt without
+changing lengths. Observed reader:read('a.txt')='first'; extracted a.txt
+also contains 'first', but final mode is0755. This follows list's archive
+order, FindEntry's first-member lookup and the final per-entry chmod.
+A C walk by central-directory offset must not silently switch to last
+member bytes. Future tests must freeze this behavior or split a deliberate
+compatibility change. Also retain complete name/size validation BEFORE
+creating destdir, the sole fs.is_unsafe_entry_name predicate, current
+symlink/overwrite behavior, and existing failure/partial-output semantics.
+No new claim of symlink containment is made by the current lexical guard.
+
+Performance refinement selected W2CS_hqfO instead: source-backed probing
+there exposes repeated whole-project projection scans with a smaller
+behavior-preserving implementation surface. This note records why ZIP
+was not chosen; it does not close, reorder or replace this hypothesis.
