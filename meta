@@ -1,7 +1,7 @@
 title: JSON ASCII 3: bounded direct-string fast path with unchanged fallback
 parent: 3JDHcRko4zUF2e7DYHBp8Ct8YDi
 target: cosmic-lua/cosmopolitan@master
-claim_batch: 89e1a6769538c826993ce2254662abca33a1e54e
+claim_batch: 726da5e75f1da6ecb8354137a35bfd20858e7a25
 handover_head: ac5d2d8cf7ae14bf6ffce30f255c495fee597964
 external_url: https://github.com/cosmic-lua/cosmopolitan/commit/ac5d2d8cf7ae14bf6ffce30f255c495fee597964
 builders: c74787c5dbd5dea33daec6ea6b138af8
