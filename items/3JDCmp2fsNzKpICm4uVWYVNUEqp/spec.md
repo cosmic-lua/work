@@ -54,3 +54,11 @@ same cosmic payload/harness and explicit runtime hashes. Full compare must pass
 and TLS session must show a noise-qualified gain under optimize's rules. Record
 actual outputs before shipping. If no gain, retain earlier correctness repairs
 but reject this optimization rather than relax any test or default.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
