@@ -204,6 +204,40 @@ local function test_build_stream_for_a_known_item()
     .. "\n--- want ---\n" .. expected)
 end
 
+-- The TREE-IDENTICAL shape, pinned byte for byte: a `from` naming the
+-- parent and NOT ONE path op after it, which is what leaves the
+-- commit's tree exactly the tree its parent already carries. This is
+-- what `log ID --add` writes on an item's ref, and what
+-- `refs/heads/board/seq`'s bump has always written; a stray `M` or `D`
+-- creeping in here would move a tree the append promises never to
+-- touch, and `_work/gitlog_test.tl` proves the round trip through
+-- `fsck`'s re-encode audit on a real board.
+local function test_build_stream_tree_identical_commit_carries_no_path_ops()
+  local plan: fastimport.CommitPlan = {
+    ref = "refs/heads/items/known01", from = "aaaa000011112222333344445555666677778888",
+    author_name = "session-a", author_email = "session-a@board",
+    author_date = "1700000000 +0000", committer_name = "Claude",
+    committer_email = "noreply@anthropic.com", committer_date = "1700000000 +0000",
+    message = "note known01 by session-a\n\nmeasured 3x on the json path",
+    op = "note", ops = {},
+  }
+  local stream = fastimport.build_stream({plan})
+  local expected = table.concat({
+      "commit refs/heads/items/known01\n",
+      "author session-a <session-a@board> 1700000000 +0000\n",
+      "committer Claude <noreply@anthropic.com> 1700000000 +0000\n",
+      "data 66\n",
+      "note known01 by session-a\n\nmeasured 3x on the json path\n\nOp: note\n",
+      "\n",
+      "from aaaa000011112222333344445555666677778888\n",
+      "done\n",
+    })
+  assert(stream == expected, "stream text drifted:\n--- got ---\n" .. stream
+    .. "\n--- want ---\n" .. expected)
+  assert(stream:find("\nM ", 1, true) == nil and stream:find("\nD ", 1, true) == nil,
+    "a tree-identical commit carries no path op at all: " .. stream)
+end
+
 -- No `mark` line at all when a commit's plan carries none — the
 -- ordinary save path never needs one, only `_work.import`'s replayed
 -- chains do.

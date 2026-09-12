@@ -358,7 +358,14 @@ local function main(...: string): integer
     return 1
   end
   if d.command == "log" then
-    return gitlog.cmd_log(s, id, d.parsed.switches["oneline"] or false)
+    local add = d.parsed.values["add"]
+    if add == nil then
+      return gitlog.cmd_log(s, id, d.parsed.switches["oneline"] or false)
+    end
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then return gate.verdict_line("log", false, "REFUSED: " .. werr) end
+    return gitlog.cmd_log_add(s, id, add, who)
   end
   if d.command == "attach" then
     local parent, perr = resolve_id(s, d.parsed.args[2] or "")

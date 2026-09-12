@@ -339,9 +339,18 @@ local CSPEC: flags.CommandSpec = {
         .. "indented — the retrospective record: what\nwas measured, what "
         .. "was found, what happened along the way. A commit carrying no "
         .. "body\nprints its subject alone. --oneline keeps the subjects "
-        .. "and drops every body.",
+        .. "and drops every body.\n\n"
+        .. "--add FILE appends FILE as one entry, and is the only way in: "
+        .. "the commit it\nwrites carries the prose and nothing else — no "
+        .. "field, no spec, no rank moves — so an\nobservation needs no "
+        .. "other mutation to ride along with. An entry is immutable; a\n"
+        .. "correction is another entry.",
         flags = {dir_flag(),
-          {long = "oneline", help = "subjects only, one line per entry"}}}},
+          {long = "oneline", help = "subjects only, one line per entry"},
+          {long = "add", arg = "FILE",
+            help = "append FILE as one entry, leaving the item unchanged"},
+          {long = "session", arg = "ID", help = "minted identity the entry "
+            .. "is attributed to; default $GITBOARD_SESSION"}}}},
     {name = "publish", summary = "render or execute one prepared unit's atomic push",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
         summary = "render one prepared transaction, claim batch, or draft as one "
