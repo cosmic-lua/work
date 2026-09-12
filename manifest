@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch f6a41ed9628e79af34ae8f7e7dd38a53
+caller cad214630dc15d1cc4bc7939626b387c
+remote origin
+action drop
+created 1789239786
+publish-by 0
+reason Accepted parent now has a CI correction child from exact-head workflow evidence
+
+3JEbB0OZPybwVA3bylZ7ZdIXhPV d1b1f432daec1004e04f4b5d5b5299dc56a4840a drop - 2d1f8a7c3929cfef870ac3bf32f3ecb27c51b651 78f0aa35f417494f8f17b4ab0ee2bf66208f0930 1789238685 1789238685 1789245885
