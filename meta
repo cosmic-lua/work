@@ -6,4 +6,6 @@ handover_head: 8031bbaf0edc9062b7be5a9e924218483073ec1b
 external_url: https://github.com/cosmic-lua/work/pull/146
 verdict: accept
 verdict_head: 8031bbaf0edc9062b7be5a9e924218483073ec1b
+landed_head: 6e9fd5b81e5734bb2f917eb7292425fd8dbe871d
+resolution: completed
 builders: fd4946fe324ba9ccee8ea1c05cea61c7
