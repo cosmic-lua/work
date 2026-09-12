@@ -39,6 +39,7 @@ local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
+local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -255,8 +256,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     gitboard_command = prep["gitboard-command"] or ""
     gitboard_cwd = prep["gitboard-cwd"] or ""
   end
-  local spec = store.read_spec(s, id)
-  if spec == "" and kind ~= "decompose" then
+  local spec_body = spec.document(store.read_spec(s, id))
+  if spec_body == "" and kind ~= "decompose" then
     return gate.verdict_line("brief", false,
       ("%s has no spec sidecar — a %s brief carries the spec verbatim, "
         .. "so refine it first"):format(id:sub(1, 8), kind))
@@ -301,8 +302,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     handle = tail.handle(it.id),
     title = it.title,
     worktree = prep.worktree,
-    spec = spec,
-    current_spec = spec ~= "" and spec or "(the item has no spec sidecar)",
+    spec = spec_body,
+    current_spec = spec_body ~= "" and spec_body
+    or "(the item has no spec sidecar)",
     board_dir = fs.absolute_path(s.root),
     review_session = label,
     round_context = "",
@@ -369,7 +371,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   local measured = false
   if tree ~= "" and (kind == "builder" or kind == "review") then
-    local section, merr = briefmeasure.measure(spec, tree)
+    local section, merr = briefmeasure.measure(spec_body, tree)
     if section == nil then
       return gate.verdict_line("brief", false,
         ("could not measure --tree '%s': %s"):format(tree, merr))

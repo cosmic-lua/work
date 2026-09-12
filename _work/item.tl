@@ -80,12 +80,15 @@ local record Item
   reviewer: string
   --- The PR under review; 0 when none.
   pr: integer
-  --- The research handover: the spec sidecar's revision
-  --- (`_work.spec.revision`) as it stood when `take --result` handed
-  --- the item over for a verdict; "" when none. The one deliverable
-  --- is a diff OR board state, so `pr` and `result` never both stand,
-  --- and a handover records work, so `result` never stands with no
-  --- `builders`. `verdict` refuses when the sidecar has moved past it.
+  --- The research handover: the BOARD commit the applied
+  --- recommendation sits on — the item ref's tip as it stood when
+  --- `take --result` handed the item over for a verdict; "" when none.
+  --- The one deliverable is a diff OR board state, so `pr` and
+  --- `result` never both stand, and a handover records work, so
+  --- `result` never stands with no `builders`. A value written before
+  --- format 5 is a 40-hex digest of the spec blob instead, resolving
+  --- to no board commit at all; nothing resolves this field as an
+  --- object either way, and the next handover re-types it.
   result: string
   --- Standing review verdict: "" | "accept" | "request changes".
   --- A reject stands nowhere: it clears the claim and the PR, so the
@@ -96,13 +99,6 @@ local record Item
   --- Product commit recorded when accepted work is completed. Empty on an
   --- open item and on non-completed resolutions.
   landed_head: string | nil
-  --- The spec revision the verdict judged (`_work.spec.revision` of
-  --- the sidecar as it stood). A review judges a diff AND the spec it
-  --- is measured against, so the head alone cannot say whether a
-  --- second look has anything new to see. "" on an item verdicted
-  --- before the field existed — unknown, which is not the same as
-  --- unchanged, and nothing may be concluded from it.
-  verdict_spec: string
   --- Why a finished item ended: "completed" | "not-planned"; "" while
   --- open. A non-empty resolution IS what "done" means.
   resolution: string
@@ -143,7 +139,6 @@ local SPEC < const > = shape.record({
     verdict = shape.optional(shape.string),
     verdict_head = shape.optional(shape.string),
     landed_head = shape.optional(shape.string),
-    verdict_spec = shape.optional(shape.string),
     resolution = shape.optional(shape.string),
   })
 
@@ -172,7 +167,6 @@ local record Raw
   verdict: string | nil
   verdict_head: string | nil
   landed_head: string | nil
-  verdict_spec: string | nil
   resolution: string | nil
 end
 
@@ -409,7 +403,6 @@ local function decode(t: {string: any}): Item | nil, string
     verdict = raw.verdict or "",
     verdict_head = raw.verdict_head or "",
     landed_head = raw.landed_head or "",
-    verdict_spec = raw.verdict_spec or "",
     resolution = raw.resolution or "",
   }
   local bad = problems(it)
@@ -458,7 +451,6 @@ local function encode(it: Item): {string: any}
   if (it.verdict or "") ~= "" then t.verdict = it.verdict end
   if (it.verdict_head or "") ~= "" then t.verdict_head = it.verdict_head end
   if (it.landed_head or "") ~= "" then t.landed_head = it.landed_head end
-  if (it.verdict_spec or "") ~= "" then t.verdict_spec = it.verdict_spec end
   if (it.resolution or "") ~= "" then t.resolution = it.resolution end
   return t
 end

@@ -11,14 +11,27 @@
 local check = require("cosmic.check")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
-local gitspec = require("_work.gitspec")
+local itemtree = require("_work.itemtree")
+local specmod = require("_work.spec")
+local storewrite = require("_work.storewrite")
 local graph = require("_work.gitgraph")
 local owner = require("_work.gitowner")
+local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
 
-local ACCESS_SPEC < const > = fixture.READY_SPEC
-.. "## Access\n- whilp/cosmopolitan (the fork the diff deliberately targets)\n"
+--- A cross-owner declaration as it actually reaches the owner rule as
+--- of format 5: inside the Change blob, which is the shape an
+--- unmigrated format-4 `spec.md` reads back as. `## Access` is no
+--- longer a section a WRITE may carry — `spec.split` refuses it, naming
+--- the field that replaces it (`_work/spec_test.tl`) — so the rule is
+--- exercised against the data that carries the declaration rather than
+--- through the verb that no longer accepts one.
+local ACCESS_PROSE < const >: itemtree.Spec = {
+  change = "Do exactly this.\n\n## Access\n"
+  .. "- whilp/cosmopolitan (the fork the diff deliberately targets)\n",
+  non_goals = "Not that.\n",
+}
 
 --- A board that reads its origin as `cosmic-lua/cosmic`, with one
 --- placed root to file under.
@@ -96,12 +109,12 @@ local function test_new_refuses_a_foreign_owner_repo()
   fixture.caller_publish(s)
 end
 
--- A `--spec-file` naming the slug under `## Access` is the escape at
--- file time: the item lands with the foreign repo, and its spec says why.
+-- Prose naming the slug under `## Access` is the escape at file time:
+-- the item lands with the foreign repo, and its spec says why.
 local function test_new_accepts_a_foreign_owner_the_spec_declares()
   local s, root = github_board("new-declared")
   local before = ids(s)
-  assert(graph.cmd_new(s, "a fork-side slice", root, ACCESS_SPEC,
+  assert(graph.cmd_new(s, "a fork-side slice", root, ACCESS_PROSE,
       "whilp/cosmopolitan") == 0, "a declared cross-owner repo lands")
   fixture.caller_publish(s)
   local filed: string = nil
@@ -125,9 +138,17 @@ local function test_set_refuses_a_foreign_owner_repo_until_declared()
       :format(leaf:sub(1, 8)), 1, true),
     "the verdict names the repair: " .. out)
   assert(check.must(store.load(s, leaf)).repo == "", "and nothing was written")
+  -- `## Access` is no longer a section a write may carry, so the
+  -- declaration is put where the rule reads it — the shape an
+  -- unmigrated `spec.md` reads back as — rather than through `spec`,
+  -- which refuses it by name.
   local path = fs.join(fixture.tmpdir, "write-set-access.md")
-  assert(fs.write(path, ACCESS_SPEC))
-  assert(gitspec.cmd_spec(s, leaf, path) == 0)
+  assert(fs.write(path, specmod.document(ACCESS_PROSE)))
+  local refused, rerr = specmod.split("## Change\nx\n\n## Access\n- a/b\n")
+  assert(refused == nil and rerr:find("declared field", 1, true) ~= nil, rerr)
+  local target = check.must(store.load(s, leaf))
+  assert(storewrite.save(s, target, "fixture: declared access", ACCESS_PROSE))
+  assert(publish.publish(s))
   fixture.caller_publish(s)
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0,
     "declared under the item's own spec, the field is accepted")

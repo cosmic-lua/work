@@ -173,9 +173,14 @@ local function test_parse_meta_totality()
   check.truthy(ok, message)
 end
 
-local META_KEYS < const >: {string} = {"title", "parent", "target", "key",
-  "claim", "reviewer", "pr", "result", "verdict", "verdict_head",
-  "verdict_spec", "resolution", "builders", "speccers"}
+--- The keys a drawn `meta` map may carry. Not `_work.itemtree`'s own
+--- `META_KEYS`: the point is the tolerant READ, so it deliberately keeps
+--- the format-4 keys `target` (which `to_item` still unpacks when
+--- neither `repo` nor `base` is present) and `verdict_spec` (which
+--- nothing reads any more) alongside the ones written today.
+local META_KEYS < const >: {string} = {"title", "parent", "target", "repo",
+  "base", "key", "claim", "reviewer", "pr", "result", "verdict",
+  "verdict_head", "verdict_spec", "resolution", "builders", "speccers"}
 
 --- Draw an id: usually a fresh ksuid, sometimes deliberately not one
 --- (empty, garbage) — an edge kind's own ids carry raw strings from the
@@ -321,7 +326,7 @@ local function test_meta_round_trip()
           base = base, key = "", order = {},
           claim = "", builders = {}, speccers = {},
           reviewer = "", pr = math.tointeger(tonumber(pr_text)) or 0,
-          result = "", verdict = "", verdict_head = "", verdict_spec = "",
+          result = "", verdict = "", verdict_head = "",
           resolution = "",
         }
         local bad = item.problems(it)

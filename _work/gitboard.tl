@@ -13,6 +13,8 @@ local commands = require("_work.gitcommands")
 local doctrine = require("_work.doctrine")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
+local itemtree = require("_work.itemtree")
+local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
 local gitread = require("_work.gitread")
 local gitdone = require("_work.gitdone")
@@ -334,7 +336,10 @@ local function main(...: string): integer
       io.stderr:write(baerr .. "\n")
       return 1
     end
-    local spec: string = nil
+    -- The dispatcher owns the FILE and `cmd_new` owns the record: the
+    -- tree holds two blobs, so a whole markdown document is split here,
+    -- once, and a document the grammar refuses never reaches the mint.
+    local prose: itemtree.Spec = nil
     local spec_file = d.parsed.values["spec-file"]
     if spec_file ~= nil then
       local body, rerr = fs.read(spec_file)
@@ -342,12 +347,16 @@ local function main(...: string): integer
         io.stderr:write(tostring(rerr) .. "\n")
         return 1
       end
-      spec = body
+      local split, sperr = spec.split(body)
+      if split == nil then
+        return gate.verdict_line("new", false, "REFUSED: " .. sperr)
+      end
+      prose = split
     end
     local who, werr = claimcli.resolve_optional_caller(
       d.parsed.values["session"] or "")
     if who == nil then return gate.verdict_line("new", false, "REFUSED: " .. werr) end
-    return graph.cmd_new(s, title, parent, spec, d.parsed.values["repo"] or "",
+    return graph.cmd_new(s, title, parent, prose, d.parsed.values["repo"] or "",
       d.parsed.switches["force"], d.parsed.values["why"] or "", before, after,
       who)
   end

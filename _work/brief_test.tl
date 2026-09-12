@@ -53,7 +53,7 @@ local function research_handover(s: store.Store, id: string)
   local it = check.must(store.load(s, id))
   it.claim = "session-a"
   assert(item.record_involvement(it.builders, "session-a"))
-  it.result = specmod.revision(store.read_spec(s, id))
+  it.result = specmod.revision(specmod.document(store.read_spec(s, id)))
   assert(storewrite.save(s, it,
       ("take %s by session-a result:%s"):format(
         id:sub(1, 8), it.result:sub(1, 7))))

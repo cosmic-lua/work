@@ -50,7 +50,7 @@ local function test_a_hand_moved_ref_forces_a_rebuild()
   it.title = "changed behind the tool's back"
   -- `true`: the tree must actually exist for `commit_tree` below to
   -- build on it.
-  local tree_sha = check.must(itemtree.build_tree(s.root, it, "", true))
+  local tree_sha = check.must(itemtree.build_tree(s.root, it, nil, true))
   local commit_sha = check.must(gitobj.commit_tree(s.root, {
         tree = tree_sha, parents = {old_sha}, message = "hand edit",
         author_name = "test", author_email = "test@example.com",

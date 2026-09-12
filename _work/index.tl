@@ -85,11 +85,11 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
     local landed = try(db, [[
       INSERT INTO items(id, title, parent, repo, base, key, claim, claim_base, claim_batch,
         handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
-        landed_head, verdict_spec, resolution,
+        landed_head, resolution,
         ref, tip, touched_at)
       VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :claim_base, :claim_batch,
         :handover_head, :external_url, :reviewer, :pr, :result, :verdict,
-        :verdict_head, :landed_head, :verdict_spec, :resolution,
+        :verdict_head, :landed_head, :resolution,
         :ref, :tip, :touched_at)
     ]], {
         id = it.id, title = it.title, parent = it.parent or "",
@@ -100,7 +100,6 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
         reviewer = it.reviewer or "",
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",
         verdict_head = it.verdict_head or "", landed_head = it.landed_head or "",
-        verdict_spec = it.verdict_spec or "",
         resolution = it.resolution or "",
         ref = lease.ref, tip = lease.tip, touched_at = lease.touched_at,
       }, nil, problems, it.id)

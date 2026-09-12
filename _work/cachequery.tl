@@ -185,7 +185,7 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   local rows, err = c.db:query([[
     SELECT id, title, parent, repo, base, key, claim, claim_base, claim_batch,
       handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
-      landed_head, verdict_spec, resolution
+      landed_head, resolution
     FROM items ORDER BY id
   ]])
   if rows == nil then
@@ -215,7 +215,6 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       verdict = row.verdict as string, -- cast: from any (sqlite row)
       verdict_head = row.verdict_head as string, -- cast: from any (sqlite row)
       landed_head = row.landed_head as string, -- cast: from any (sqlite row)
-      verdict_spec = row.verdict_spec as string, -- cast: from any (sqlite row)
       resolution = row.resolution as string, -- cast: from any (sqlite row)
     }
   end

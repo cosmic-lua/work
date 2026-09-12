@@ -22,6 +22,7 @@
 --- what a review judges: the diff is the other half, and a rework
 --- that answers a bounce by rewriting the spec moves this half alone.
 local hash = require("cosmic.hash")
+local itemtree = require("_work.itemtree")
 
 --- The headings a spec must carry.
 local READY_SECTIONS < const >: {string} = {
@@ -207,8 +208,164 @@ local function revision(body: string): string
   return hash.digest_hex("sha1", ("blob %d\0%s"):format(#body, body))
 end
 
+--- The markdown document one `itemtree.Spec` renders to: `## Change`,
+--- then `## Non-goals` when the walls are stated. A field that is ""
+--- contributes no heading at all, so a spec with no prose renders to
+--- "" — which is what every caller that still asks "does this item
+--- have a spec" tests against.
+---
+--- This is a RENDERING, for the consumers that read a whole body: the
+--- bar, the path extractors, full-text search, and `show --raw`'s own
+--- output, which is the text an author edits and hands back to
+--- `spec ID FILE`. `split` below is its inverse.
+--- @param sp itemtree.Spec The two blobs
+--- @return string The markdown document, "" when neither field carries prose
+local function document(sp: itemtree.Spec): string
+  local parts: {string} = {}
+  local change = (sp.change or ""):gsub("\n+$", "")
+  local non_goals = (sp.non_goals or ""):gsub("\n+$", "")
+  if change ~= "" then
+    parts[#parts + 1] = "## Change\n\n" .. change .. "\n"
+  end
+  if non_goals ~= "" then
+    if #parts > 0 then
+      parts[#parts + 1] = "\n"
+    end
+    parts[#parts + 1] = "## Non-goals\n\n" .. non_goals .. "\n"
+  end
+  return table.concat(parts)
+end
+
+--- The lines of one section, as the blob stores them: leading and
+--- trailing blank lines dropped, a single trailing newline when
+--- anything is left, "" when nothing is. So `split(document(sp))`
+--- gives `sp` back for a canonical record, and `document(split(x))`
+--- normalizes any conforming `x` to that canonical form.
+--- @param lines {string} The section's raw lines, in order
+--- @return string The blob text
+local function section_blob(lines: {string}): string
+  local first = 1
+  local last = #lines
+  while first <= last and not lines[first]:match("%S") do
+    first = first + 1
+  end
+  while last >= first and not lines[last]:match("%S") do
+    last = last - 1
+  end
+  if first > last then
+    return ""
+  end
+  local out: {string} = {}
+  for i = first, last do
+    out[#out + 1] = lines[i] .. "\n"
+  end
+  return table.concat(out)
+end
+
+--- Where the fact a retired spec section used to carry now lives —
+--- the second half of `split`'s refusal, one line per case. `access`
+--- and `ready when` name the field that replaced them; everything else
+--- was retrospective, and a measurement or a narrative is a log entry.
+--- The two field refusals deliberately name NO verb: the flags that
+--- declare them are their own change, and a refusal naming a flag this
+--- build does not have is worse than one naming only the fact.
+--- @param heading string The heading's own text, as written
+--- @return string The refusal
+local function retired_section(heading: string): string
+  local lowered = heading:lower()
+  if lowered == "access" then
+    return "access is a declared field now, not a spec section"
+  end
+  if lowered == "ready when" then
+    return "a precondition is a dependency, not a section"
+  end
+  return ("%s is not a spec section — a measurement or a narrative is a log "
+    .. "entry: gitboard log ID --add FILE"):format(heading)
+end
+
+--- Split one markdown document into the two blobs the `spec/` subtree
+--- holds — the inverse of `document` above, and the ONE text-to-record
+--- seam every writer that holds a whole file goes through.
+---
+--- Its own scanner rather than `sections`, for two reasons that are
+--- properties of `sections`, not of markdown: `sections` ends a
+--- section at a thematic break, and neither scanner used to be
+--- fence-aware. `sections` is the spec bar over every live sidecar on
+--- the board, so tightening it is its own change measured against that
+--- corpus; this reads only what this build writes, and is strict from
+--- the start:
+---
+---   * fence-aware — a line inside a ``` fence is content, never a
+---     heading, so a spec quoting `## Change` inside a pasted
+---     command's output is ordinary prose;
+---   * level-aware — a section opens at a heading whose lower-cased
+---     text is `change` or `non-goals`, at whatever level the file
+---     spells it, and runs until the next heading with no more `#`
+---     than the opener, so a Change with `###` subsections keeps all
+---     of it. A level-1 opener is the exception `sections` makes for
+---     the same reason: a lone `#` is a document TITLE, so nothing
+---     nests inside it and the next heading of any level closes it;
+---   * thematic breaks are content — a `---` line is a table rule or
+---     a separator, and ends nothing.
+---
+--- Anything else CARRYING CONTENT is refused rather than dropped: a
+--- heading that opens a section of its own, is neither of the two, and
+--- has a non-blank line under it, and non-blank text ahead of the
+--- first heading. A hollow leftover heading loses no fact and is
+--- dropped. Without the refusal the retired vocabulary simply
+--- reappears in whichever blob happens to be open, which is the whole
+--- point of there being no escape hatch.
+--- @param body string One markdown file's text
+--- @return itemtree.Spec | nil The two blobs
+--- @return string The refusal, naming the offending heading
+local function split(body: string): itemtree.Spec | nil, string
+  local change: {string} = {}
+  local non_goals: {string} = {}
+  -- The open section's own buffer, nil ahead of the first heading and
+  -- for a section this build does not keep — whose first non-blank
+  -- line is the refusal, so `other` names which heading to cite.
+  local current: {string} = nil
+  local other = ""
+  local level = 0
+  local fenced = false
+  for line in (body .. "\n"):gmatch("([^\n]*)\n") do
+    local is_fence = line:match("^%s*```+") ~= nil
+    local hashes, text = line:match("^(#+)%s+(.-)%s*$")
+    if is_fence then
+      fenced = not fenced
+      if current ~= nil then
+        current[#current + 1] = line
+      end
+    elseif not fenced and text ~= nil
+    and (current == nil and other == "" or level == 1 or #hashes <= level) then
+      local lowered = text:lower()
+      current, other = nil, ""
+      if lowered == "change" then
+        current = change
+      elseif lowered == "non-goals" then
+        current = non_goals
+      else
+        other = text
+      end
+      level = #hashes
+    elseif current ~= nil then
+      current[#current + 1] = line
+    elseif line:match("%S") then
+      if other ~= "" then
+        return nil, retired_section(other)
+      end
+      return nil, ("text before the first heading is not a spec section — a "
+        .. "measurement or a narrative is a log entry: gitboard log ID "
+        .. "--add FILE")
+    end
+  end
+  return {change = section_blob(change), non_goals = section_blob(non_goals)}, ""
+end
+
 local record spec
   READY_SECTIONS: {string}
+  document: function(sp: itemtree.Spec): string
+  split: function(body: string): itemtree.Spec | nil, string
   sections: function(body: string): {string: string}
   ready_gaps: function(body: string): {string}
   reached_repos: function(body: string): {string}
@@ -218,6 +375,8 @@ end
 
 local M: spec = {
   READY_SECTIONS = READY_SECTIONS,
+  document = document,
+  split = split,
   sections = sections,
   ready_gaps = ready_gaps,
   reached_repos = reached_repos,

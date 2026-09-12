@@ -14,6 +14,7 @@
 local item = require("_work.item")
 local format = require("_work.format")
 local gitwrite = require("_work.gitwrite")
+local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storeinit = require("_work.storeinit")
@@ -76,14 +77,14 @@ end
 --- @param s store.Store The store
 --- @param it item.Item The item
 --- @param message string Commit subject, shared by every commit this call makes
---- @param spec string Replacement spec markdown for `it`; nil leaves its sidecar
---- exactly as observed
+--- @param spec itemtree.Spec Replacement prose for `it`; nil leaves its
+--- `spec/` subtree exactly as observed
 --- @param also {item.Item} Further items to write in the same mutation
 --- @return boolean True on success — a no-op mutation succeeds too
 --- @return string "" on an ordinary success; on a no-op, the `store.is_noop`-testable
 --- "nothing to record: ..." message; the failure detail otherwise
 local function save(s: store.Store, it: item.Item, message: string,
-    spec?: string, also?: {item.Item}): boolean, string
+    spec?: itemtree.Spec, also?: {item.Item}): boolean, string
   local refusal = storeinit.linked_worktree_refusal(s.root)
   if refusal ~= nil then
     return false, refusal
@@ -102,7 +103,7 @@ local function save(s: store.Store, it: item.Item, message: string,
       return false, err
     end
   end
-  local function read_current_spec(id: string): string
+  local function read_current_spec(id: string): itemtree.Spec
     return store.read_spec(s, id)
   end
   local outcome, oerr = gitwrite.save_batch({
@@ -150,8 +151,8 @@ local record storewrite
   set_op: function(s: store.Store, op: string)
   set_bounded: function(s: store.Store, bounded: boolean)
   add_pending: function(s: store.Store, p: refs.PushSpec)
-  save: function(s: store.Store, it: item.Item, message: string, spec?: string,
-  also?: {item.Item}): boolean, string
+  save: function(s: store.Store, it: item.Item, message: string,
+  spec?: itemtree.Spec, also?: {item.Item}): boolean, string
 end
 
 local M: storewrite = {

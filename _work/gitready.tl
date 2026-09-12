@@ -115,7 +115,7 @@ local function ready_problems(s: store.Store, it: item.Item,
       .. "(`gitboard rank <outcome>`), or attach it under an item that "
       .. "already is"):format(it.id:sub(1, 8))
   end
-  local spec_body = body or store.read_spec(s, it.id)
+  local spec_body = body or spec.document(store.read_spec(s, it.id))
   for _, gap in ipairs(flow.ready_gaps(spec_body)) do
     out[#out + 1] = ("spec: %s"):format(gap)
   end

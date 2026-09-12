@@ -19,9 +19,11 @@ local claimgate = require("_work.gitclaimgate")
 local gitdraft = require("_work.gitdraft")
 local index = require("_work.index")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local refs = require("_work.refs")
+local spec = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -77,24 +79,37 @@ end
 --- it is erasing. The base is the missing half — the text the caller
 --- read, compared against the text that is there.
 ---
---- One rule covers both calls, because an item with no sidecar reads
---- back "" and that is what a call with no `--base` compares against:
---- the FIRST write of a spec needs no flag, and every later one does.
---- @param current string The sidecar as it stands
+--- One rule covers both calls, because an item with no prose reads
+--- back empty and that is what a call with no `--base` compares
+--- against: the FIRST write of a spec needs no flag, and every later
+--- one does.
+---
+--- The comparison is on RECORDS, not text: the base file is split the
+--- same way the replacement is, so an author whose heading spelling or
+--- blank lines differ from `document`'s canonical render is not told
+--- their base is stale over a difference the tree cannot hold. A base
+--- file that does not split at all is refused as such, naming the
+--- heading — the same refusal the write itself would earn.
+--- @param current itemtree.Spec The prose as it stands
 --- @param base string The base file's path, "" when none was given
 --- @param id string The item's full id, for the message and the path
 --- @return string | nil The refusal
-local function base_refusal(current: string, base: string,
+local function base_refusal(current: itemtree.Spec, base: string,
     id: string): string | nil
-  local claimed = ""
+  local claimed: itemtree.Spec = {change = "", non_goals = ""}
   if base ~= "" then
     local base_text, rerr = fs.read(base)
     if base_text == nil then
       return ("REFUSED: --base %s is unreadable: %s"):format(base, rerr)
     end
-    claimed = base_text
+    local split, serr = spec.split(base_text)
+    if split == nil then
+      return ("REFUSED: --base %s is not a spec: %s"):format(base, serr)
+    end
+    claimed = split
   end
-  if claimed == current then
+  if claimed.change == current.change
+  and claimed.non_goals == current.non_goals then
     return nil
   end
   local id8 = id:sub(1, 8)
@@ -313,7 +328,7 @@ end
 --- bounded mutations cannot both land.
 --- @param s store.Store The store
 --- @param it item.Item The mutated item
---- @param body string Replacement spec markdown, or nil to leave the sidecar alone
+--- @param body itemtree.Spec Replacement prose, or nil to leave the `spec/` subtree alone
 --- @param message string Commit subject
 --- @param verb string The verb name, recorded as the `Op:` trailer
 --- @param also {item.Item} Further items the same mutation writes
@@ -321,7 +336,7 @@ end
 --- @param bounded boolean | nil Whether this is a BOUNDED mutation
 --- @return boolean True once committed (and pushed, given a remote), or a no-op
 --- @return string Error; `store.LOST_RACE` for a lost race, `store.is_noop` for a no-op
-local function commit_and_publish(s: store.Store, it: item.Item, body: string,
+local function commit_and_publish(s: store.Store, it: item.Item, body: itemtree.Spec,
     message: string, verb: string, also?: {item.Item}, session?: string,
     bounded?: boolean, force?: boolean, why?: string): boolean, string
   local protected: {item.Item} = {it}
@@ -348,6 +363,13 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   -- tell which of `it`/`also` actually landed a new commit (a diff
   -- can find nothing to write for one of them), which is the only way
   -- to know without `_work.storewrite`/`_work.gitwrite` surfacing it.
+  -- `cache.after_save` below reindexes `items[1]`'s searchable text,
+  -- one string per item, so the prose is rendered to the document it
+  -- renders to; nil stays nil, meaning this save moved no prose.
+  local indexed: string | nil = nil
+  if body ~= nil then
+    indexed = spec.document(body)
+  end
   local before_shas: {string: string} = {[it.id] = s.leased_sha[it.id]}
   for _, x in ipairs(also or {}) do
     before_shas[x.id] = s.leased_sha[x.id]
@@ -374,7 +396,7 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   -- Remote saves are only prepared; patching would expose unconfirmed data.
   -- Local simulation has completed its CAS and may patch immediately.
   if refs.board_mode(s.root) == "local" and gitdraft.active(s.root) == nil then
-    cache.after_save(s.root, before_digest, items, body, message, written,
+    cache.after_save(s.root, before_digest, items, indexed, message, written,
       s.written_at)
   end
   -- A local cache's digest may just have moved, while this connection's
@@ -387,7 +409,7 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: string,
   local _cok, _cerr = store.close(s)
   local published, detail = publish.publish(s)
   if published and gitdraft.active(s.root) ~= nil then
-    cache.after_save(s.root, before_digest, items, body, message, written,
+    cache.after_save(s.root, before_digest, items, indexed, message, written,
       s.written_at)
   end
   if published and (detail or "") ~= "" then print(detail) end
@@ -435,7 +457,7 @@ local record gitgate
   verdict_line: function(verb: string, ok: boolean, detail: string): integer
   force_refusal: function(force: boolean, why: string): string
   forced_suffix: function(force: boolean, why: string): string
-  base_refusal: function(current: string, base: string, id: string): string
+  base_refusal: function(current: itemtree.Spec, base: string, id: string): string
   spec_refusal: function(c: Index, it: item.Item, session: string): string, string
   stale_ages: function(s: store.Store): health.StaleAges | nil, string
   distance_refusal: function(it: item.Item, session: string): string
@@ -443,7 +465,7 @@ local record gitgate
   {item.Item} | nil, string
   review_debt_refusal: function(c: Index, items: {item.Item}, session: string,
   taking: item.Item): string, string
-  commit_and_publish: function(s: store.Store, it: item.Item, body: string,
+  commit_and_publish: function(s: store.Store, it: item.Item, body: itemtree.Spec,
   message: string, verb: string, also?: {item.Item}, session?: string,
   bounded?: boolean, force?: boolean, why?: string): boolean, string
   containered: function(c: Index, parent: item.Item): {item.Item} | nil, string

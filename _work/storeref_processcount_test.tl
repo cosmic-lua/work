@@ -183,7 +183,7 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
     for i = 1, n do
       local it = make_item()
       assert(storewrite.save(s, it, ("seed %d"):format(i),
-          ("spec body for item %d"):format(i)))
+          {change = ("spec body for item %d\n"):format(i), non_goals = ""}))
     end
   end
 
@@ -246,14 +246,15 @@ local function test_show_one_item_process_count_is_constant_as_siblings_grow()
   assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
 
   local target = make_item()
-  assert(storewrite.save(s, target, "seed target", "## Change\ndo the thing\n"))
+  assert(storewrite.save(s, target, "seed target",
+      {change = "do the thing\n", non_goals = ""}))
 
   --- Add `n` further open siblings, each with its own spec.
   local function seed_siblings(n: integer)
     for i = 1, n do
       local it = make_item()
       assert(storewrite.save(s, it, ("seed sibling %d"):format(i),
-          ("## Change\nsibling change %d\n"):format(i)))
+          {change = ("sibling change %d\n"):format(i), non_goals = ""}))
     end
   end
 

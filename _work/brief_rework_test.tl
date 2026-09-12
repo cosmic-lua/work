@@ -5,6 +5,7 @@
 -- cap; every other brief kind and the fresh-pull path stay there. The
 -- `<WORKTREE>` fill tests live here for the same reason: room.
 
+local specmod = require("_work.spec")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -333,9 +334,11 @@ local function test_review_brief_preserves_literal_template_tokens_in_spec()
   local it = assert(store.load(s, leaf))
   local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
   assert(fs.make_dirs(claim.worktree(checkout, claim.branch(leaf, st.root))))
-  local spec = "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
-  .. "## Non-goals\nNothing else.\n"
-  assert(storewrite.save(s, it, "spec literal template tokens", spec))
+  local prose = check.must(specmod.split(
+      "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
+      .. "## Non-goals\nNothing else.\n"))
+  local spec = specmod.document(prose)
+  assert(storewrite.save(s, it, "spec literal template tokens", prose))
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "review", leaf)
       assert(code == 0, "a commit handover still earns its review brief")

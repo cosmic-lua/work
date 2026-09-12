@@ -5,6 +5,7 @@
 -- pasted template is the failure mode this exists to catch. There is
 -- no Acceptance section to lint: the CI gate is the one acceptance,
 -- so the bar has nothing to say about how an item proves itself.
+local check = require("cosmic.check")
 local child = require("cosmic.child")
 local spec = require("_work.spec")
 
@@ -285,4 +286,99 @@ See jart/cosmopolitan for prior art.
   local undeclared = spec.declared_repos("## Change\njart/cosmopolitan\n")
   assert(not undeclared["jart/cosmopolitan"],
     "a mention outside Access is not a declaration")
+end
+
+-- `document` and `split` are inverses on conforming input: a canonical
+-- record round-trips through the text byte for byte, and any
+-- conforming text normalizes to that canonical form.
+local function test_document_and_split_are_inverses()
+  local sp = {change = "Add the verb.\n", non_goals = "No contract changes.\n"}
+  local rendered = spec.document(sp)
+  assert(rendered == "## Change\n\nAdd the verb.\n\n"
+    .. "## Non-goals\n\nNo contract changes.\n", rendered)
+  local back = check.must(spec.split(rendered))
+  assert(back.change == sp.change and back.non_goals == sp.non_goals,
+    ("round trip moved: %q / %q"):format(back.change, back.non_goals))
+  -- Non-canonical spacing and heading case normalize rather than
+  -- reporting a difference, which is why `spec ID FILE` compares
+  -- records and never text.
+  local loose = check.must(spec.split("#  change\n\n\nAdd the verb.\n\n\n"
+      .. "###### NON-GOALS\nNo contract changes."))
+  assert(loose.change == sp.change and loose.non_goals == sp.non_goals,
+    ("loose input did not normalize: %q / %q"):format(loose.change,
+      loose.non_goals))
+end
+
+-- An empty record renders to "", which is what every caller that asks
+-- "does this item have a spec at all" tests against.
+local function test_document_of_no_prose_is_empty()
+  assert(spec.document({change = "", non_goals = ""}) == "")
+  assert(spec.document({change = "", non_goals = "Only walls.\n"})
+    == "## Non-goals\n\nOnly walls.\n")
+  local empty = check.must(spec.split(""))
+  assert(empty.change == "" and empty.non_goals == "")
+end
+
+-- A deeper heading inside a section is content, so a Change with
+-- `###` subsections keeps all of it — and a thematic break ends
+-- nothing, unlike `sections`.
+local function test_split_keeps_subsections_and_thematic_breaks()
+  local sp = check.must(spec.split([[
+## Change
+Do it.
+
+### Files
+| a | b |
+| --- | --- |
+| 1 | 2 |
+
+## Non-goals
+Nothing else.
+]]))
+  assert(sp.change:find("### Files", 1, true) ~= nil, sp.change)
+  assert(sp.change:find("| --- | --- |", 1, true) ~= nil, sp.change)
+  assert(sp.non_goals == "Nothing else.\n", sp.non_goals)
+end
+
+-- A heading inside a fence is content: a spec that pastes a command's
+-- own output quoting `## Change` is ordinary prose, not a section.
+local function test_split_is_fence_aware()
+  local sp = check.must(spec.split([[
+## Change
+Do it.
+
+```
+$ grep -c '^## Change' /tmp/specs
+## Evidence
+1046
+```
+]]))
+  assert(sp.change:find("## Evidence", 1, true) ~= nil,
+    "a fenced heading is content: " .. sp.change)
+  assert(sp.non_goals == "", sp.non_goals)
+end
+
+-- A retired section carrying content is refused rather than dropped,
+-- and the refusal names where the fact now lives. A hollow leftover
+-- heading loses no fact and is dropped.
+local function test_split_refuses_a_retired_section_that_carries_content()
+  local sp, err = spec.split("## Change\nDo it.\n\n## Access\n- a/b\n")
+  assert(sp == nil and err == "access is a declared field now, not a spec "
+    .. "section", tostring(err))
+  local _ready, rerr = spec.split("## Change\nDo it.\n\n## Ready when\nx is done\n")
+  assert(_ready == nil
+    and rerr == "a precondition is a dependency, not a section", rerr)
+  local _ev, everr = spec.split("## Change\nDo it.\n\n## Evidence\n1046 items\n")
+  assert(_ev == nil and everr:find("Evidence is not a spec section", 1, true) ~= nil
+    and everr:find("gitboard log ID --add FILE", 1, true) ~= nil, everr)
+  local hollow = check.must(spec.split("## Change\nDo it.\n\n## Evidence\n\n"))
+  assert(hollow.change == "Do it.\n", hollow.change)
+end
+
+-- Non-blank text ahead of the first heading is refused too: a
+-- preamble is a narrative, and a narrative is a log entry.
+local function test_split_refuses_a_preamble()
+  local sp, err = spec.split("Some framing.\n\n## Change\nDo it.\n")
+  assert(sp == nil and err:find("before the first heading", 1, true) ~= nil, tostring(err))
+  assert(check.must(spec.split("\n\n## Change\nDo it.\n")).change == "Do it.\n")
 end

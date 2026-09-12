@@ -53,12 +53,13 @@ local function test_remote_reads_use_the_configured_non_origin_namespace()
   check.must(store.close(s))
 end
 
---- A sibling successor of `parent`, carrying a changed title and spec.
+--- A sibling successor of `parent`, carrying a changed title and prose.
 local function variant(root: string, original: item.Item, parent: string,
-    title: string, spec: string): string
+    title: string, change: string): string
   local changed = check.must(store.snapshot_item(original))
   changed.title = title
-  local tree = check.must(itemtree.build_tree(root, changed, spec, true))
+  local tree = check.must(itemtree.build_tree(root, changed,
+      {change = change, non_goals = ""}, true))
   return check.must(gitobj.commit_tree(root, {
         tree = tree, parents = {parent}, message = title,
         author_name = "test", author_email = "test@example.com",
@@ -125,7 +126,7 @@ local function test_remote_reads_ignore_local_heads_and_all_staging_refs()
   local listed = check.must(store.list(s))
   assert(title_of(listed, id) == "confirmed remote head")
   assert(title_of(listed, staged_id) == "", "staging-only item was indexed")
-  assert(store.read_spec(s, id) == "remote spec\n",
+  assert(store.read_spec(s, id).change == "remote spec\n",
     "spec reads must dereference the remote-tracking ref too")
 
   local c = check.must(cache.open(seeded.root))
@@ -144,7 +145,7 @@ local function test_remote_reads_ignore_local_heads_and_all_staging_refs()
   local local_store = check.must(store.open(seeded.root))
   local local_items = check.must(store.list(local_store))
   assert(title_of(local_items, id) == "stale local head")
-  assert(store.read_spec(local_store, id) == "local spec\n")
+  assert(store.read_spec(local_store, id).change == "local spec\n")
   assert(title_of(local_items, staged_id) == "",
     "staging refs are not canonical in local mode either")
   check.must(store.close(local_store))

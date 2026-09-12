@@ -217,36 +217,22 @@ local function show_report(it: item.Item, role: string, rank_line: string,
     out[#out + 1] = ("external: %s (navigation only)"):format(
       it.external_url or "")
   end
-  -- A research handover's deliverable is the spec at a revision, so
-  -- the digest prints where a diff's PR number would: the seven hex
-  -- the log line and a verdict's `--head` carry.
+  -- A research handover's deliverable is a board commit, so its short
+  -- sha prints where a diff's PR number would: the seven hex the log
+  -- line and a verdict's `--head` carry.
   if it.result ~= "" then
     out[#out + 1] = ("result: %s"):format(it.result:sub(1, 7))
   end
   if it.verdict ~= "" then
-    -- A verdict judges a head AND the spec that head is measured
-    -- against, so the head alone cannot answer the question a
-    -- re-reviewer asks here: is there anything new to see? A rework
-    -- that answers a bounce on the spec moves the sidecar and no
-    -- commit, and reading an unmoved head as "nothing happened" is
-    -- exactly the mistake. An unrecorded revision says nothing rather
-    -- than guessing: the line then reads as it always did.
-    local moved = ""
-    if (it.verdict_spec or "") ~= "" then
-      moved = ", spec unchanged since"
-      if spec.revision(body) ~= it.verdict_spec then
-        moved = ", spec changed since"
-      end
-    end
     -- A handover's verdict carries no head — `verdict` leaves it ""
-    -- for a PR-less item — so the line cites the recorded digest
+    -- for a PR-less item — so the line cites the recorded board commit
     -- where a diff's verdict cites the head it judged.
     if it.result ~= "" then
-      out[#out + 1] = ("verdict: %s (result %s%s)"):format(it.verdict,
-        it.result:sub(1, 7), moved)
+      out[#out + 1] = ("verdict: %s (result %s)"):format(it.verdict,
+        it.result:sub(1, 7))
     else
-      out[#out + 1] = ("verdict: %s (head %s%s)"):format(it.verdict,
-        it.verdict_head, moved)
+      out[#out + 1] = ("verdict: %s (head %s)"):format(it.verdict,
+        it.verdict_head)
     end
   end
   if it.resolution ~= "" then
@@ -319,7 +305,7 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     return verdict_line("show", false, lerr)
   end
   if raw then
-    local body = store.read_spec(s, id)
+    local body = spec.document(store.read_spec(s, id))
     local written, werr = io.stdout:write(body)
     if written == nil then
       io.stderr:write(("gitboard-show: could not write raw spec: %s\n")
@@ -401,7 +387,12 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     for _, oid in ipairs(others) do
       ids[#ids + 1] = oid
     end
-    local bodies = store.read_specs(s, ids)
+    -- `_work.overlap` and `gitready.ready_problems` both read a whole
+    -- document, so the two blobs are rendered back to one per item.
+    local bodies: {string: string} = {}
+    for oid, sp in pairs(store.read_specs(s, ids)) do
+      bodies[oid] = spec.document(sp)
+    end
     body = bodies[it.id] or ""
     problems = gitready.ready_problems(s, it, body)
     -- `_work.find`'s fuzzy title/spec ranking, over the SAME cache
@@ -423,7 +414,7 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     headroom = overlap.headroom_lines(body, checkout or "", it.repo or "",
       it.claim_base or "")
   else
-    body = store.read_spec(s, id)
+    body = spec.document(store.read_spec(s, id))
   end
   local role, rerr = read.role(c, it.id)
   if role == nil then

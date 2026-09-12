@@ -40,8 +40,11 @@ assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
 
 local READY_SPEC < const > = [[
 ## Change
+
 Do exactly this.
+
 ## Non-goals
+
 Not that.
 ]]
 

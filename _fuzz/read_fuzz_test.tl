@@ -119,7 +119,7 @@ local function adversarial_item(src: source.Recorder, pool: {string},
     id = id, title = "x", parent = parent, repo = "", base = "", key = key,
     order = id_list(src, pool),
     claim = claim, builders = {}, speccers = {}, reviewer = "", pr = pr,
-    result = "", verdict = verdict, verdict_head = "", verdict_spec = "",
+    result = "", verdict = verdict, verdict_head = "",
     resolution = "",
   }
 end
@@ -217,7 +217,7 @@ local function decode_graph(blob: string): Graph | nil, string
         key = key, order = order,
         claim = claim, builders = {}, speccers = {},
         reviewer = "", pr = pr, result = "", verdict = verdict,
-        verdict_head = "", verdict_spec = "", resolution = "",
+        verdict_head = "", resolution = "",
       }
     end
   end

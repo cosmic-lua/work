@@ -7,7 +7,10 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
+local gitspec = require("_work.gitspec")
 local gittake = require("_work.gittake")
+local item = require("_work.item")
+local specmod = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -107,4 +110,71 @@ local function test_rework_handover_replaces_the_commit_not_the_claim()
     and got.verdict_head == "", "a new commit consumes the prior send-back")
   assert(got.claim == BUILDER, "rework keeps the same explicit lease")
   assert(#got.builders == 1, "re-handover does not duplicate involvement")
+end
+
+-- The research handover records a BOARD commit, not a digest of the
+-- spec blob: the item ref's tip as it stood, which must resolve as a
+-- commit in the board repository itself.
+local function test_result_records_the_item_refs_tip_as_a_board_commit()
+  local s = fixture.init_state_repo("gittake-result-tip")
+  local _parent, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  fixture.claim_item(s, id, BUILDER)
+  local all = check.must(store.list(s))
+  local it = check.must(store.load(s, id))
+  local tip = s.leased_sha[id]
+  assert(#all > 0 and (tip or "") ~= "", "the fixture leased a tip")
+  assert(item.record_involvement(it.builders, BUILDER))
+  assert(gittake.take_result(s, it, BUILDER, 0) == 0)
+  local got = check.must(store.load(s, id))
+  assert(got.result == tip,
+    ("result must be the tip as it stood: %s vs %s"):format(got.result, tip))
+  local kind = check.must(child.run({"git", "cat-file", "-t", got.result},
+      {cwd = s.root}))
+  assert(kind.ok and kind.stdout:match("^commit"),
+    "and it must resolve as a commit in the board: " .. kind.stdout .. kind.stderr)
+  -- A digest of the spec blob would not: the old payload was a hash of
+  -- bytes, which names no object at all.
+  assert(#got.result == 40 and got.result ~= specmod.revision(
+      specmod.document(store.read_spec(s, id))),
+    "a spec-blob digest is not what is recorded any more")
+end
+
+-- A second `take --result` with the spec untouched is the recorded
+-- no-op; one made after a `spec` write is not, because the predicate is
+-- "has the spec moved since the recorded handover" — computed from the
+-- objects at the recorded commit, since tip-equality cannot express it
+-- (after the first handover the tip IS the handover commit).
+local function test_a_repeated_result_handover_is_a_noop_until_the_spec_moves()
+  local s = fixture.init_state_repo("gittake-result-noop")
+  local _parent, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  fixture.claim_item(s, id, BUILDER)
+  check.must(store.list(s))
+  local it = check.must(store.load(s, id))
+  assert(item.record_involvement(it.builders, BUILDER))
+  assert(gittake.take_result(s, it, BUILDER, 0) == 0)
+  local first = check.must(store.load(s, id)).result
+  check.must(store.list(s))
+  local seen = ""
+  local old_print = _G.print
+  _G.print = function(msg: any) seen = tostring(msg) end
+  local code = gittake.take_result(s, check.must(store.load(s, id)), BUILDER, 0)
+  _G.print = old_print
+  assert(code == 0 and seen:find("already records this spec's handover", 1, true),
+    "an unmoved spec is the recorded no-op: " .. seen)
+  assert(check.must(store.load(s, id)).result == first,
+    "and the recorded commit did not move")
+
+  local base = fs.join(tmpdir, "gittake-result-base.md")
+  assert(fs.write(base, specmod.document(store.read_spec(s, id))))
+  local path = fs.join(tmpdir, "gittake-result-rewrite.md")
+  assert(fs.write(path, "## Change\n\nRewritten after the handover.\n"))
+  assert(gitspec.cmd_spec(s, id, path, base, BUILDER, true, "test rewrite") == 0)
+  fixture.caller_publish(s)
+  check.must(store.list(s))
+  assert(gittake.take_result(s, check.must(store.load(s, id)), BUILDER, 0) == 0)
+  local moved = check.must(store.load(s, id)).result
+  assert(moved ~= first and moved ~= "",
+    ("a moved spec re-records the handover: %s vs %s"):format(moved, first))
 end

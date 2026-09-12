@@ -17,6 +17,7 @@ local gitready = require("_work.gitready")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local prepared = require("_work.prepared")
@@ -28,6 +29,12 @@ local storewrite = require("_work.storewrite")
 
 local init_shared = fixture.init_shared
 local init_state_repo = fixture.init_state_repo
+
+--- The prose the mutations below carry, so the write path under test is
+--- the one a real `spec`/`new` takes rather than a spec-less one.
+local SPEC_TOUCH < const >: itemtree.Spec = {
+  change = "a spec touch\n", non_goals = "",
+}
 
 local counter = 0
 
@@ -68,7 +75,7 @@ local function test_a_lost_race_drops_the_mutation_and_refuses()
   fixture.caller_publish(a)
 
   local mine = make_item()
-  local ok, err = gate.commit_and_publish(b, mine, "a spec touch",
+  local ok, err = gate.commit_and_publish(b, mine, SPEC_TOUCH,
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(ok, "the stale mutation may be prepared locally: " .. tostring(err))
   local pending = check.must(prepared.list(b.root))
@@ -99,7 +106,7 @@ local function test_the_rerun_publishes_against_the_merged_state()
   fixture.caller_publish(a)
 
   local mine = make_item()
-  local ok, err = gate.commit_and_publish(b, mine, "a spec touch",
+  local ok, err = gate.commit_and_publish(b, mine, SPEC_TOUCH,
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(ok, "the stale mutation prepares: " .. tostring(err))
   local pending = check.must(prepared.list(b.root))
@@ -115,7 +122,7 @@ local function test_the_rerun_publishes_against_the_merged_state()
   assert(check.must(refs.read_ref(b.root, outcomes[1].quarantine_ref))
     == pending[1].manifest, "the diagnosed transaction remains inspectable")
   check.must(store.list(b))
-  local again, aerr = gate.commit_and_publish(b, mine, "a spec touch",
+  local again, aerr = gate.commit_and_publish(b, mine, SPEC_TOUCH,
     ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
   assert(again, "the re-run prepares against merged state: " .. tostring(aerr))
   fixture.caller_publish(b)
@@ -285,8 +292,18 @@ local function test_distance_refusal_covers_builders_and_speccers()
     "an unnamed session is never involved")
 end
 
-local ACCESS_SPEC < const > = fixture.READY_SPEC
-.. "## Access\n- whilp/cosmopolitan (the fork the diff deliberately targets)\n"
+--- A cross-owner declaration as it actually reaches the owner rule as
+--- of format 5: inside the Change blob, which is the shape an
+--- unmigrated format-4 `spec.md` reads back as. `## Access` is no
+--- longer a section a WRITE may carry — `spec.split` refuses it, naming
+--- the field that replaces it (`_work/spec_test.tl`) — so the rule is
+--- exercised against the data that carries the declaration rather than
+--- through the verb that no longer accepts one.
+local ACCESS_PROSE < const >: itemtree.Spec = {
+  change = "Do exactly this.\n\n## Access\n"
+  .. "- whilp/cosmopolitan (the fork the diff deliberately targets)\n",
+  non_goals = "Not that.\n",
+}
 
 --- A spec sidecar with the given body, through the spec verb.
 local function write_spec(s: store.Store, id: string, name: string,
@@ -294,6 +311,13 @@ local function write_spec(s: store.Store, id: string, name: string,
   local path = fs.join(fixture.tmpdir, ("owner-%s.md"):format(name))
   assert(fs.write(path, body))
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
+  fixture.caller_publish(s)
+end
+
+--- The same, straight into the tree: for prose no verb will accept.
+local function save_spec(s: store.Store, id: string, prose: itemtree.Spec)
+  local it = check.must(store.load(s, id))
+  assert(storewrite.save(s, it, "fixture: prose written past the verb", prose))
   fixture.caller_publish(s)
 end
 
@@ -340,10 +364,11 @@ local function test_a_same_owner_repo_passes_the_bar()
   fixture.claim_item(s, leaf, "session-a")
 end
 
--- The deliberate cross-owner case: the spec names the slug under
--- `## Access`, and the field is accepted as stated.
+-- The deliberate cross-owner case: the item's own prose names the
+-- slug under `## Access`, and the field is accepted as stated.
 local function test_a_foreign_owner_declared_under_access_passes_the_bar()
-  local s, leaf = foreign_leaf("declared", ACCESS_SPEC)
+  local s, leaf = foreign_leaf("declared", fixture.READY_SPEC)
+  save_spec(s, leaf, ACCESS_PROSE)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared cross-owner repo is no problem: "
     .. table.concat(problems, "; "))

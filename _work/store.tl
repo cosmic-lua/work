@@ -23,6 +23,8 @@ local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local gitdedupe = require("_work.gitdedupe")
 local gitread = require("_work.gitread")
+local gitreadspec = require("_work.gitreadspec")
+local itemtree = require("_work.itemtree")
 local item = require("_work.item")
 local refs = require("_work.refs")
 local storeinit = require("_work.storeinit")
@@ -202,27 +204,28 @@ local function resolve(s: Store, prefix: string): string | nil, string
   return matches[1]
 end
 
---- An item's spec sidecar, "" when it has none.
+--- An item's spec prose, both fields "" when it has none.
 --- @param s Store The store
 --- @param id string Item id
---- @return string The spec markdown, possibly empty
-local function read_spec(s: Store, id: string): string
+--- @return itemtree.Spec The prose, both fields "" when it has none
+local function read_spec(s: Store, id: string): itemtree.Spec
   local ref = s.leased_ref[id]
   if ref ~= nil then
-    return gitread.read_spec(s.root, {ref})
+    return gitreadspec.read_spec(s.root, {ref})
   end
-  return gitread.read_spec(s.root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
+  return gitreadspec.read_spec(s.root,
+    {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
 end
 
---- Every named item's spec sidecar in one batch, "" for one with
---- none — the whole-board counterpart to `read_spec`; used for a
+--- Every named item's spec prose in one batch, both fields "" for one
+--- with none — the whole-board counterpart to `read_spec`; used for a
 --- readiness pass over many items instead of one process each. Reads
 --- against `s.leased_sha`, so call `list` (or `load` each id) first.
 --- @param s Store The store
 --- @param ids {string} Item ids to read, in any order
---- @return {string: string} Spec markdown by id, possibly empty
-local function read_specs(s: Store, ids: {string}): {string: string}
-  return gitread.read_specs(s.root, s.leased_sha, ids)
+--- @return {string: itemtree.Spec} Prose by id, both fields "" when absent
+local function read_specs(s: Store, ids: {string}): {string: itemtree.Spec}
+  return gitreadspec.read_specs(s.root, s.leased_sha, ids)
 end
 
 --- An independent copy of `it`, sharing no table with it — `encode`
@@ -439,8 +442,8 @@ local record store
   open: function(root: string): Store | nil, string
   load: function(s: Store, id: string): item.Item | nil, string
   resolve: function(s: Store, prefix: string): string | nil, string
-  read_spec: function(s: Store, id: string): string
-  read_specs: function(s: Store, ids: {string}): {string: string}
+  read_spec: function(s: Store, id: string): itemtree.Spec
+  read_specs: function(s: Store, ids: {string}): {string: itemtree.Spec}
   snapshot_item: function(it: item.Item): item.Item | nil
   list: function(s: Store): {item.Item} | nil, string
   read: function(s: Store): cache.Cache | nil, string

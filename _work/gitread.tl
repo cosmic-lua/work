@@ -2,7 +2,6 @@
 --- half-landed moves are resolved consistently and reported for repair.
 --- Canonical namespace selection belongs to `_work.refs`.
 local cachedb = require("_work.cachedb")
-local child = require("cosmic.child")
 local claimprojection = require("_work.claimprojection")
 local format = require("_work.format")
 local gitbatch = require("_work.gitbatch")
@@ -245,11 +244,18 @@ end
 --- rather than in every reader: a board on a layout this tool cannot
 --- trust is refused before anything else it read alongside it is
 --- believed.
+--- `allow_old_format` lets the one-time migration read the one
+--- immediately previous layout a normal `format.refusal` rejects. The
+--- bypass applies ONLY when `format.migratable` says the marker is the
+--- supported predecessor, never to a missing marker or an unknown
+--- future version, both of which stay refused exactly as before. Every
+--- other caller omits it.
 --- @param root string The repository root
+--- @param allow_old_format boolean | nil True to read past a one-hop refusal
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
-local function list(root: string): Board | nil, string
+local function list(root: string, allow_old_format?: boolean): Board | nil, string
   local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
   if found == nil then
     return nil, ferr
@@ -318,7 +324,9 @@ local function list(root: string): Board | nil, string
   local format_content = gitboardstate.read(board_refs, batch)
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
-    return gitbatch.session_fail(sess, frefusal)
+    if not (allow_old_format and format.migratable(format_content)) then
+      return gitbatch.session_fail(sess, frefusal)
+    end
   end
   local kinds_by_id: {string: {string: string}} = {}
   local kind_queries: {string} = {}
@@ -376,74 +384,6 @@ local function list(root: string): Board | nil, string
     duplicates = duplicates, refs_digest = refs_digest}
 end
 
---- An item's spec sidecar, "" when absent, tried against every candidate
---- ref in order — `_work.store` passes the observed ref alone when known,
---- or both `refs/heads/items/<id>` and `refs/heads/ended/<id>` otherwise.
---- @param root string The repository root
---- @param candidates {string} Ref names to try, in order
---- @return string The spec markdown, possibly empty
-local function read_spec(root: string, candidates: {string}): string
-  for _, ref in ipairs(candidates) do
-    -- `refs.for_each_ref` deliberately presents canonical entries
-    -- under their transport-neutral `refs/heads/*` names: those are
-    -- the names a later write publishes to, not necessarily the refs
-    -- a remote-backed checkout reads. Map a board ref back through the
-    -- configured mode before dereferencing it. A raw object id (used
-    -- by claim preparation) is already unambiguous and passes through
-    -- unchanged.
-    local object = ref
-    if ref:match("^refs/heads/") ~= nil then
-      local canonical = refs.canonical_ref(root, ref)
-      if canonical ~= nil then
-        object = canonical
-      end
-    end
-    local r = child.run({"git", "cat-file", "-p", object .. ":spec.md"}, {cwd = root})
-    if r ~= nil and r.ok then
-      return r.stdout
-    end
-  end
-  return ""
-end
-
---- Every named item's spec sidecar in one batch, "" for an id that
---- has none or whose tip is unknown — the whole-board counterpart to
---- `read_spec`, so a readiness pass over every item costs one more
---- `cat-file --batch` instead of one process per item.
---- @param root string The repository root
---- @param shas_by_id {string: string} Each item's tip sha, from `list`
---- @param ids {string} Item ids to read, in any order
---- @return {string: string} Spec markdown by id, possibly empty
-local function read_specs(root: string, shas_by_id: {string: string},
-    ids: {string}): {string: string}
-  local result: {string: string} = {}
-  local queries: {string} = {}
-  local query_of: {string: string} = {}
-  for _, id in ipairs(ids) do
-    result[id] = ""
-    local sha = shas_by_id[id]
-    if sha ~= nil then
-      local q = sha .. ":spec.md"
-      queries[#queries + 1] = q
-      query_of[id] = q
-    end
-  end
-  local batch = gitobj.cat_file_batch(root, queries)
-  if batch == nil then
-    return result
-  end
-  for _, id in ipairs(ids) do
-    local q = query_of[id]
-    if q ~= nil then
-      local entry = batch[q]
-      if entry ~= nil then
-        result[id] = entry.content
-      end
-    end
-  end
-  return result
-end
-
 local record gitread
   type Loaded = Loaded
   type Board = Board
@@ -452,10 +392,7 @@ local record gitread
   lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
   known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
-  list: function(root: string): Board | nil, string
-  read_spec: function(root: string, candidates: {string}): string
-  read_specs: function(root: string, shas_by_id: {string: string},
-  ids: {string}): {string: string}
+  list: function(root: string, allow_old_format?: boolean): Board | nil, string
   -- Exported only for `_work.gitreadmany.load_many` to reuse without
   -- duplicating this module's own read-path primitives.
   edge_kinds: function(edges_content: string): {string: string}
@@ -473,8 +410,6 @@ local M: gitread = {
   lease_decode = lease_decode,
   load = load_item,
   list = list,
-  read_spec = read_spec,
-  read_specs = read_specs,
   edge_kinds = edge_kinds,
   content_blob_shas = content_blob_shas,
   build_item = build_item,

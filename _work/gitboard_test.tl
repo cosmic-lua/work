@@ -15,6 +15,8 @@ local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local gitboard = require("_work.gitboard")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
+local specmod = require("_work.spec")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -67,25 +69,27 @@ local function gitboard_raw_capture(s: store.Store, id: string): integer, string
   return result, assert(fs.read(path))
 end
 
--- Raw output is the exact sidecar, including its unusual-but-valid edge
--- cases. It emits no verdict, header, history, or synthetic newline.
+-- Raw output is exactly what the two blobs render to, including their
+-- unusual-but-valid content. It emits no verdict, header, history, or
+-- synthetic newline, and an item with no prose at all prints nothing.
 local function test_show_raw_round_trips_the_sidecar_byte_exactly()
   local s = init_state_repo("show-raw-byte-exact")
-  local bodies = {
+  local changes = {
     "line with a trailing newline\n",
     "line without a trailing newline",
     "",
     "literal ${template-looking} text\n",
   }
-  for n, body in ipairs(bodies) do
+  for n, change in ipairs(changes) do
     local id = file_item(s, "raw sidecar " .. tostring(n), "")
     local it = check.must(store.load(s, id))
-    assert(storewrite.save(s, it, "raw fixture", body))
+    local prose: itemtree.Spec = {change = change, non_goals = ""}
+    assert(storewrite.save(s, it, "raw fixture", prose))
     fixture.caller_publish(s)
     local code, output = gitboard_raw_capture(s, id)
     assert(code == 0, "raw show should succeed: " .. output)
-    assert(output == body,
-      "raw show must preserve body " .. tostring(n) .. ": " .. output)
+    assert(output == specmod.document(prose),
+      "raw show must render blob " .. tostring(n) .. " exactly: " .. output)
   end
 end
 
@@ -93,8 +97,9 @@ end
 -- reusable base file, rather than the human report that adds formatting.
 local function test_stale_spec_refusal_names_the_raw_show_command()
   local base = fs.join(tmpdir, "stale-raw-show-base")
-  assert(fs.write(base, "old"))
-  local msg = check.must(gate.base_refusal("current", base, "12345678"))
+  assert(fs.write(base, "## Change\n\nold\n"))
+  local msg = check.must(gate.base_refusal(
+      {change = "current\n", non_goals = ""}, base, "12345678"))
   assert(msg:find("`gitboard show 12345678 --raw`", 1, true) ~= nil,
     "the refusal should name byte-exact output: " .. msg)
   assert(msg:find("`gitboard show 12345678`", 1, true) == nil,
@@ -107,9 +112,10 @@ end
 local function test_raw_show_output_round_trips_through_spec_base_cas()
   local s = init_state_repo("show-raw-spec-cas")
   local id = file_item(s, "raw CAS item", "")
-  local original = "## Change\noriginal\n"
+  local original = "## Change\n\noriginal\n"
   local it = check.must(store.load(s, id))
-  assert(storewrite.save(s, it, "raw CAS fixture", original))
+  assert(storewrite.save(s, it, "raw CAS fixture",
+      {change = "original\n", non_goals = ""}))
   fixture.caller_publish(s)
 
   local code, base_text = gitboard_raw_capture(s, id)
@@ -122,10 +128,10 @@ local function test_raw_show_output_round_trips_through_spec_base_cas()
   assert(fs.write(same, base_text))
   assert(gitboard.main("spec", id, same, "--base", base, "--dir", s.root) == 0,
     "the raw base accepts an unchanged spec write")
-  assert(fs.write(intervening, "## Change\noriginaL\n"))
+  assert(fs.write(intervening, "## Change\n\noriginaL\n"))
   assert(gitboard.main("spec", id, intervening, "--base", base,
       "--dir", s.root) == 0, "the raw base permits the intervening write")
-  assert(fs.write(edit, "## Change\nmy edit\n"))
+  assert(fs.write(edit, "## Change\n\nmy edit\n"))
   local stale_code, stale_output = gitboard_and_capture("spec", id, edit,
     "--base", base, "--dir", s.root)
   assert(stale_code ~= 0, "the one-byte intervening change makes base stale")

@@ -16,6 +16,7 @@ local freshness = require("_work.freshness")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local literal = require("cosmic.literal")
 local product = require("_work.product")
@@ -104,13 +105,12 @@ end
 --- anything more specific belongs in the PR the repair produces, not
 --- in a template minted once per red lane.
 --- @param lane string Workflow filename
---- @return string The spec sidecar's markdown
-local function repair_spec(lane: string): string
-  return ("## Change\n"
-    .. "The scheduled workflow `.github/workflows/%s` is red. Read the "
-    .. "latest failing run's log (Actions UI or `gh run view --log-failed`), "
-    .. "diagnose the failure, and fix it on a PR like any other item.\n")
-  :format(lane)
+--- @return itemtree.Spec The minted prose
+local function repair_spec(lane: string): itemtree.Spec
+  return {change = ("The scheduled workflow `.github/workflows/%s` is red. "
+      .. "Read the latest failing run's log (Actions UI or `gh run view "
+      .. "--log-failed`), diagnose the failure, and fix it on a PR like any "
+      .. "other item.\n"):format(lane), non_goals = ""}
 end
 
 --- One lane's last completed run, read live. Any failure — no token,
@@ -246,7 +246,7 @@ local function file_repair(s: store.Store, lane: string): boolean, string
     id = ksuid.new(), title = title, parent = LANE_PARENT, repo = "",
     order = {}, claim = "",
     builders = {}, reviewer = "", pr = 0, verdict = "", verdict_head = "",
-    verdict_spec = "", resolution = "", key = lane,
+    resolution = "", key = lane,
   }
   local bad = item.problems(it)
   if #bad > 0 then

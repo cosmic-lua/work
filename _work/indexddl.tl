@@ -48,7 +48,6 @@ CREATE TABLE items (
   verdict TEXT NOT NULL DEFAULT '' CHECK(verdict IN ('', 'accept', 'request changes')),
   verdict_head TEXT NOT NULL DEFAULT '',
   landed_head TEXT NOT NULL DEFAULT '',
-  verdict_spec TEXT NOT NULL DEFAULT '',
   resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned')),
   -- The write lease: the branch this item lives on
   -- (`refs/heads/items/<id>` or `refs/heads/ended/<id>`), the commit sha

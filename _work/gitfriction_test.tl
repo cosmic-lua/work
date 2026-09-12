@@ -6,6 +6,7 @@
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
+local specmod = require("_work.spec")
 local store = require("_work.store")
 
 local function test_friction_item_accepts_the_spec_the_caller_supplies()
@@ -13,14 +14,16 @@ local function test_friction_item_accepts_the_spec_the_caller_supplies()
   local before = check.must(store.list(s))
   local before_ids: {string: boolean} = {}
   for _, it in ipairs(before) do before_ids[it.id] = true end
-  local body = [[
-## Workflow
-The prepared transaction took more calls than expected.
-
-## Language level
-The record type made the intended boundary unclear.
-]]
-  assert(graph.cmd_new(s, "friction: offline claim pass", "", body, "") == 0,
+  -- Ordinary caller-authored prose, in the grammar the tree holds: a
+  -- retrospective heading is refused by `spec.split` now (see
+  -- `_work/spec_test.tl`), so the friction narrative is a log entry and
+  -- what the item declares is what to do about it.
+  local prose = check.must(specmod.split([[
+## Change
+The prepared transaction took more calls than expected, and the record
+type made the intended boundary unclear. Cut both.
+]]))
+  assert(graph.cmd_new(s, "friction: offline claim pass", "", prose, "") == 0,
     "a friction item needs no claim-derived roll call")
   local after = check.must(store.list(s))
   assert(#after == #before + 1)
@@ -32,7 +35,7 @@ The record type made the intended boundary unclear.
   local filed = check.must(store.load(s, check.must(filed_id)))
   assert(filed.title == "friction: offline claim pass")
   local saved = store.read_spec(s, filed.id)
-  assert(saved:find("## Workflow", 1, true)
-    and saved:find("## Language level", 1, true),
+  assert(saved.change:find("prepared transaction", 1, true)
+    and saved.change:find("intended boundary", 1, true),
     "friction evidence remains ordinary caller-authored spec prose")
 end
