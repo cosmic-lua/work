@@ -14,6 +14,7 @@ local cache = require("_work.cache")
 local ciobs = require("_work.ciobs")
 local gate = require("_work.gitgate")
 local gitdone = require("_work.gitdone")
+local gitlog = require("_work.gitlog")
 local gitready = require("_work.gitready")
 local gittake = require("_work.gittake")
 local health = require("_work.health")
@@ -23,7 +24,10 @@ local store = require("_work.store")
 
 -- `init` lives in `_work.gitboard` now — a two-line `store.init_repo`
 -- wrapper nothing else needed, moved to keep this file under its cap.
--- `sync` lives in `_work.gitsync` now, for the same reason.
+-- `sync` lives in `_work.gitsync` now, for the same reason. `log` is
+-- `_work.gitlog`, re-exported below beside `done`: a read verb wants
+-- none of the gates here, and its render is its own file for the same
+-- cap.
 
 --- take: claim an item, record its handover, or claim its review —
 --- which one is derived from the item's own facts, never declared.
@@ -351,12 +355,14 @@ local record gitverbs
   why: string, force: boolean): integer
   cmd_done: function(s: store.Store, id: string, reason: string,
   force: boolean, why: string, by?: string): integer
+  cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
 end
 
 local M: gitverbs = {
   cmd_take = cmd_take,
   cmd_drop = cmd_drop,
   cmd_done = gitdone.cmd_done,
+  cmd_log = gitlog.cmd_log,
 }
 
 return M
