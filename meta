@@ -1,7 +1,7 @@
 title: fuzz diagnostics 3: record actual child inputs in one bounded crash rerun
 parent: 3JEbACQ6Hl4DBhSFRuFhpiMhXJI
 target: cosmic-lua/cosmic
-claim_batch: 78f0aa35f417494f8f17b4ab0ee2bf66208f0930
+claim_batch: 67614e1a11cb072046be5636f2bffb5b8e281b2d
 handover_head: a16a539de34b34a41f8605ac6340bf0fe301f591
 verdict: accept
 verdict_head: a16a539de34b34a41f8605ac6340bf0fe301f591
