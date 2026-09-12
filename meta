@@ -1,7 +1,7 @@
 title: gitboard brief: a placeholder-shaped token quoted in the ITEM'S OWN spec prose survives as a false-positive survivor once spliced into the body — WyFa_GL3c's fix didn't cover this injection path
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: 0a53a9f32e803bfe4ba656585b790f671545c855
+claim_batch: 16a53e6b7ce2003f110d3519e1d87c9dae99d8c5
 handover_head: 49258833277a2349402ade2b49ce9eb6cef5690f
 external_url: https://github.com/cosmic-lua/work/pull/134
 builders: 63038851a39dce671b92e15e9aceaf78
