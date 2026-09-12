@@ -2,3 +2,6 @@ title: ghland: restore the already-merged landing guard, and pin pull_of's parse
 parent: 3J1McPs5zvrKSLKuKOCf6jEUJBu
 target: cosmic-lua/work
 claim_batch: 891dab8f3dff5f79ac52c28a1e07bfbbea185470
+handover_head: 8031bbaf0edc9062b7be5a9e924218483073ec1b
+external_url: https://github.com/cosmic-lua/work/pull/146
+builders: fd4946fe324ba9ccee8ea1c05cea61c7
