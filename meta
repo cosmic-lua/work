@@ -1,0 +1,3 @@
+title: _perf/bench/http_server_bench.tl: a served-requests scenario so cosmic.http has a baseline before its loop shape changes
+parent: 3JEZx1R26VPmXtTlh60E0IQYMun
+target: cosmic-lua/cosmic
