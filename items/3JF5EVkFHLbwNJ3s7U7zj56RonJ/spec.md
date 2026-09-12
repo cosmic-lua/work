@@ -6,82 +6,29 @@ Depends on `02-tree-and-fields`: that item lands the format-5 tree, the
 `touches`/`access`/`depends_on` fields and `itemtree.Spec`, and this one is the
 first thing that writes and reads them through a verb.
 
-### `spec ID FILE` splits one markdown file into the two blobs
+### `spec ID FILE`'s split is NOT here — it moved to `02-tree-and-fields`
 
-`_work/spec.tl` gains `split`, the inverse of `02-tree-and-fields`' `document`:
+An earlier draft of this item specified `spec.split` in full, and an earlier
+draft of `02-tree-and-fields` deferred it here. Both were wrong, and a builder
+stopped on the contradiction rather than working around it: `02` re-types
+`build_tree` and `gate.commit_and_publish` to take an `itemtree.Spec`, so the
+text-to-record seam has to exist in `02` or its three document-holding writers
+(`cmd_spec`, `cmd_new`, `repair_spec`) have nowhere to put what they hold. The
+whole `split` specification — the fence-aware scanner, the accept and refuse
+rules, the corpus heading counts — is in `02-tree-and-fields` now, unchanged
+except that `sections`' level-blindness is already fixed.
 
-```
---- @param body string One markdown file's text
---- @return itemtree.Spec | nil The two blobs
---- @return string The refusal, naming the offending heading
-local function split(body: string): itemtree.Spec | nil, string
-```
+**What this item still owes the split: two refusal messages.** `split` ships in
+`02` naming FACTS rather than verbs that do not exist yet. Once `depend` and
+`set --access` land here, append them:
 
-It does NOT reuse `sections` (`_work/spec.tl:42`,
-`local function sections(body: string): {string: string}`). That scanner is
-level-blind and thematic-break-sensitive, which is two of the three
-disagreements D47 measured, and reusing it here would truncate a `## Change`
-at its first `###` subheading and refuse the subheading as an unknown section.
-`split` is its own scanner, three rules:
+- `access is a declared field now, not a spec section` gains
+  `: gitboard set ID --access OWNER/NAME`
+- `a precondition is a dependency, not a section` gains
+  `: gitboard depend ID ON ID`
 
-- **fence-aware.** A line inside a ``` fence is content, never a heading — a
-  spec that quotes `## Change` inside a pasted command's output is ordinary.
-- **level-aware.** A section starts at a heading whose lower-cased text is
-  `change` or `non-goals`, at whatever level the file spells it, and runs until
-  the next heading at the SAME or a shallower level (no more `#` than the
-  opener). A deeper heading inside it is content, so a Change with `###`
-  subsections keeps all of it.
-- **thematic breaks are content.** A `---` line does not end a section; a table
-  rule or a separator inside a Change stays in the Change.
-
-It returns `change` and `non_goals` from those two sections and REFUSES,
-rather than dropping, anything else carrying content: a section-level heading
-whose text is neither, and non-blank text before the first heading. The refusal
-names the heading and where the fact now lives, one line per case:
-
-- `## Access` → `access is a declared field now: gitboard set ID --access OWNER/NAME`
-- `## Evidence`, `## Goal`, `## Acceptance`, `## Enablement`, `## Ready when`
-  and anything else → `<heading> is not a spec section — a measurement or a
-  narrative is a log entry, and a dependency is `gitboard depend`
-
-This is the mechanism behind D47's "there is no escape hatch": without the
-refusal the retired vocabulary simply reappears. The headings it will refuse are
-the ones the corpus actually carries, measured over the 1371 item refs' spec
-blobs:
-
-```
-$ cd o/board && git for-each-ref --format='%(refname)' \
-    'refs/remotes/origin/items/*' 'refs/remotes/origin/ended/*' \
-    | sed 's|$|:spec.md|' | git cat-file --batch > /tmp/specs
-$ for h in "## Change" "## Non-goals" "## Evidence" "## Access" "## Goal" \
-    "## Acceptance" "## Enablement" "## Ready when"; do \
-    printf '%-16s %s\n' "$h" "$(grep -c "^$h *$" /tmp/specs)"; done
-## Change        1046
-## Non-goals     1026
-## Evidence       802
-## Access         186
-## Goal           479
-## Acceptance     423
-## Enablement     304
-## Ready when      47
-```
-
-`_work/gitspec.tl` (146 lines) uses it. `cmd_spec` (`_work/gitspec.tl:78`,
-`local function cmd_spec(s: store.Store, id: string, file: string,`) reads FILE
-at `:103` (`local body, rerr = fs.read(file)`), then calls `spec.split(body)`
-and returns `gate.verdict_line("spec", false, serr)` on a refusal. The
-compare-and-swap base at `:107`-`:111` compares against
-`spec.document(store.read_spec(s, id))` — one text against one text, the same
-`gate.base_refusal(current, base or "", id)` call unchanged. The unchanged-spec
-short-circuit at `:112` (`if body == current then`) compares the two `Spec`
-records field by field. `diffstat` (`:50`) is fed the two documents, so its
-`(+%d/-%d lines)` verdict at `:133` keeps meaning what it did.
-
-`_work/gitgraph.tl`'s `cmd_new` (`_work/gitgraph.tl:127`,
-`local function cmd_new(s: store.Store, title: string, parent: string,`) takes
-`spec: itemtree.Spec | nil` in place of the body string, and the `--spec-file`
-read in the dispatcher (`_work/gitboard.tl:337`, `local spec_file = d.parsed.values["spec-file"]`)
-splits the file the same way, printing the same refusal.
+`_work/spec_test.tl`'s refusal cases move with the messages. Nothing else about
+`split` changes here.
 
 ### `depend ID ON` and `undepend ID ON`
 
@@ -228,8 +175,9 @@ that topic:
 ### Tests and the ratchet
 
 New `_work/gitdepend_test.tl` covering each refusal, the no-op, and a two-hop
-cycle; `_work/spec_test.tl` for `split`'s accept and refuse cases, one per
-refused heading in the measured list above; `_work/gitspec_test.tl`,
+cycle; `_work/spec_test.tl` for the two refusal messages this item appends to
+`split` (Access and Ready-when gaining the verb names) — `split`'s own accept
+and refuse cases land with `split`, in `02-tree-and-fields`; `_work/gitspec_test.tl`,
 `_work/action_queue_test.tl` (the skip and the `none` reason),
 `_work/gitgate_test.tl` (its `ready_problems` cases at `:325`, `:337` and
 `:347`), `_work/gitgraph_test.tl` and `_work/doctrine_test.tl` for the rest. `_work/gitboard_test.tl` covers the two new dispatch branches, and
@@ -260,7 +208,9 @@ expectations beyond the two verbs appearing. Add `.cosmic-coverage` rows for
 
 ## Access
 
-- cosmic-lua/cosmic — `docs/decisions/d47-dependency-is-its-own-relation.md`
+- cosmic-lua/cosmic — `docs/decisions/d48-dependency-is-its-own-relation.md`
   (the relation, the refusals, and the no-effect-on-rank rule this implements)
-  and `docs/decisions/d46-spec-declares-intent-only.md` (the two prose blobs and
-  the no-escape-hatch rule the `split` refusal enforces).
+  and `docs/decisions/d47-spec-declares-intent-only.md` (the two prose blobs and
+  the no-escape-hatch rule the `split` refusal enforces). Both were numbered one
+  lower in an earlier draft of this spec, before an unrelated D46 landed on main
+  and pushed them up.
