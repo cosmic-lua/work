@@ -66,3 +66,11 @@ for non-imported fixture files. Run the entire perf harness on the unchanged
 local C runtime with this exact cosmic payload, keeping baseline and A/A outputs
 under o/perf. Record real checks/results, not a promised percentage. The final
 TLS C comparison must use this same harness/payload on both sides.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
