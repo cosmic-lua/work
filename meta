@@ -6,4 +6,6 @@ handover_head: ac5d2d8cf7ae14bf6ffce30f255c495fee597964
 external_url: https://github.com/cosmic-lua/cosmopolitan/commit/ac5d2d8cf7ae14bf6ffce30f255c495fee597964
 verdict: accept
 verdict_head: ac5d2d8cf7ae14bf6ffce30f255c495fee597964
+landed_head: 780f45055acd52401de6c95c16365338690e19e7
+resolution: completed
 builders: c74787c5dbd5dea33daec6ea6b138af8
