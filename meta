@@ -1,3 +1,4 @@
 title: cosmic.http core: listen, serve one connection at a time with keep-alive, a typed Request/Response over cosmo.http and cosmic.net
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
+claim_batch: 3efb48ae83f801f90f6765c3000d69824ab9af1b
