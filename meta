@@ -1,3 +1,4 @@
 title: zip extract: per-file Lua dispatch and syscalls, not zlib churn — C-side bulk extract, guard invariant decides
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 target: cosmic-lua/cosmic
+speccers: 3bb2ba3c1525c631533246b5dd02f53c
