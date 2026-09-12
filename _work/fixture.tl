@@ -56,31 +56,53 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
+-- `init_state_repo` is by far the hottest fixture call in this test
+-- process (every verb test starts from one) and `git init` plus
+-- `store.init_repo`'s board-item commit are the same handful of git
+-- processes every single time, on an otherwise-empty directory. Build
+-- that starting state once per process and `fs.copy_tree` it for every
+-- later call instead of re-running `git init`/`store.init_repo` — the
+-- template is a plain directory tree with no absolute-path state (a
+-- freshly `git init`ed, remote-less repo), so copying it is exactly as
+-- good as reinitializing.
+local state_template: string | nil = nil
+
+local function build_state_template(): string
+  local root = fs.join(tmpdir, "verbs-template")
+  assert(fs.remove_all(root))
+  assert(fs.make_dirs(root))
+  git(root, {"init", "-q"})
+  assert(refs.set_board_mode(root, "local"))
+  assert(store.init_repo(root))
+  return root
+end
+
 --- A fresh explicitly local-only state repo: `store.init_repo` (a bare git init
 --- plus the `refs/heads/board/format` marker every board now carries),
 --- nothing filed yet — every item lives as a ref, so there is nothing
 --- else to seed. Tests must not inherit mode from topology: local mode
 --- is a supported simulation/migration surface, not merely "no origin".
 local function init_state_repo(name: string): store.Store
+  if state_template == nil then
+    state_template = build_state_template()
+  end
   local root = fs.join(tmpdir, "verbs-" .. name)
   assert(fs.remove_all(root))
-  assert(fs.make_dirs(root))
-  git(root, {"init", "-q"})
-  assert(refs.set_board_mode(root, "local"))
-  assert(store.init_repo(root))
+  assert(fs.copy_tree(state_template, root))
   return check.must(store.open(root))
 end
 
---- A bare "remote" with nothing filed yet, plus two remote-mode clones.
---- Initialization itself deliberately performs no transport. The fixture
---- therefore acts as its caller: clone one initializes in explicit local
---- mode, pushes the seed board and format refs, then switches to remote
---- mode and fetches them into the canonical remote-tracking namespace.
---- Clone two fetches those refs before initialization, proving it observes
---- the one existing board rather than minting a second one. No production
---- path gains implicit network behavior from this test scaffolding.
-local function init_shared(name: string): store.Store, store.Store
-  local base = fs.join(tmpdir, "verbs-shared-" .. name)
+-- `init_shared`'s bare-plus-two-clones setup pays a bare init, two
+-- clones, two pushes/fetches and two `store.init_repo` calls (one of
+-- them minting the board item) EVERY time, for a starting shape that
+-- never varies. Build it once per process and copy the whole `base`
+-- tree for later calls; only the two clones' `origin` URLs need
+-- rewriting afterward, since they point at the template's own
+-- `remote.git` by absolute path.
+local shared_template: string | nil = nil
+
+local function build_shared_template(): string
+  local base = fs.join(tmpdir, "verbs-shared-template")
   assert(fs.remove_all(base))
   assert(fs.make_dirs(base))
   local bare = fs.join(base, "remote.git")
@@ -96,7 +118,6 @@ local function init_shared(name: string): store.Store, store.Store
       "refs/heads/board/*:refs/heads/board/*"})
   assert(refs.set_board_mode(dir1, "remote"))
   assert(refs.fetch_prune(dir1))
-  local s1 = check.must(store.open(dir1))
 
   local dir2 = fs.join(base, "clone2")
   git(base, {"clone", "-q", bare, dir2})
@@ -105,6 +126,29 @@ local function init_shared(name: string): store.Store, store.Store
   assert(refs.ensure_refspecs(dir2))
   assert(refs.fetch_prune(dir2))
   assert(store.init_repo(dir2))
+  return base
+end
+
+--- A bare "remote" with nothing filed yet, plus two remote-mode clones.
+--- Initialization itself deliberately performs no transport. The fixture
+--- therefore acts as its caller: clone one initializes in explicit local
+--- mode, pushes the seed board and format refs, then switches to remote
+--- mode and fetches them into the canonical remote-tracking namespace.
+--- Clone two fetches those refs before initialization, proving it observes
+--- the one existing board rather than minting a second one. No production
+--- path gains implicit network behavior from this test scaffolding.
+local function init_shared(name: string): store.Store, store.Store
+  if shared_template == nil then
+    shared_template = build_shared_template()
+  end
+  local base = fs.join(tmpdir, "verbs-shared-" .. name)
+  assert(fs.remove_all(base))
+  assert(fs.copy_tree(shared_template, base))
+  local bare = fs.join(base, "remote.git")
+  local dir1, dir2 = fs.join(base, "clone1"), fs.join(base, "clone2")
+  git(dir1, {"remote", "set-url", "origin", bare})
+  git(dir2, {"remote", "set-url", "origin", bare})
+  local s1 = check.must(store.open(dir1))
   local s2 = check.must(store.open(dir2))
   return s1, s2
 end

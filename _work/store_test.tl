@@ -36,14 +36,21 @@ assert(fs.write(hermetic_config, ""))
 assert(env.set("GIT_CONFIG_GLOBAL", hermetic_config))
 assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
 
---- A fresh local-only state repo: `store.init_repo` (a bare git init
---- plus the `refs/heads/board/format` marker) — every item is a ref, so
---- there is nothing else to seed.
+-- `store.init_repo` runs a handful of git processes (init, the board
+-- commit) that never vary between calls — build the result once per
+-- process and copy it, instead of paying that cost on every case.
+local template: string | nil = nil
+
 local function init_state_repo(name: string): string
+  if template == nil then
+    template = fs.join(tmpdir, "store-template")
+    assert(fs.remove_all(template))
+    assert(fs.make_dirs(template))
+    assert(store.init_repo(template))
+  end
   local root = fs.join(tmpdir, "store-" .. name)
   assert(fs.remove_all(root))
-  assert(fs.make_dirs(root))
-  assert(store.init_repo(root))
+  assert(fs.copy_tree(template, root))
   return root
 end
 

@@ -46,32 +46,42 @@ local function git(cwd: string, argv: {string})
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
+-- `store.init_repo` runs a handful of git processes (init, the board
+-- commit) that never vary between calls — build the result once per
+-- process and copy it, instead of paying that cost on every case.
+local state_template: string | nil = nil
+
 --- A fresh local-only state repo: `store.init_repo` (a bare git init
 --- plus the `refs/heads/board/format` marker) — every item is a ref, so
 --- there is nothing else to seed.
 local function init_state_repo(name: string): string
+  if state_template == nil then
+    state_template = fs.join(tmpdir, "storewrite-template")
+    assert(fs.remove_all(state_template))
+    assert(fs.make_dirs(state_template))
+    assert(store.init_repo(state_template))
+  end
   local root = fs.join(tmpdir, "storewrite-" .. name)
   assert(fs.remove_all(root))
-  assert(fs.make_dirs(root))
-  assert(store.init_repo(root))
+  assert(fs.copy_tree(state_template, root))
   return root
 end
 
---- A bare "remote" with nothing filed yet, plus n clones, each with
---- the mirror refspecs `store.init_repo` writes once it sees their
---- `origin`. The bare side finalizes objects by rename in ITS OWN
---- config: a file:// push spawns receive-pack with the pusher's `-c`
---- env scrubbed (git's local transport clears GIT_CONFIG_PARAMETERS),
---- and link-based finalization fails with EXDEV on the overlay mounts
---- CI containers run tests on.
-local function init_shared(name: string, clones: integer): string, {string}
-  local base = fs.join(tmpdir, "storewrite-shared-" .. name)
+-- Building the bare-plus-clones shape from scratch pays a bare init, one
+-- clone (plus a fetch and a push) per requested clone, and one
+-- `store.init_repo` each — the same sequence every time for a given
+-- clone count. Cache one built template per count and `fs.copy_tree`
+-- it per call, rewriting each clone's `origin` afterward since it
+-- names the template's own `remote.git` by absolute path.
+local shared_templates: {integer: string} = {}
+
+local function build_shared_template(clones: integer): string
+  local base = fs.join(tmpdir, "storewrite-shared-template-" .. clones)
   assert(fs.remove_all(base))
   assert(fs.make_dirs(base))
   local bare = fs.join(base, "remote.git")
   git(base, {"init", "-q", "--bare", bare})
   git(bare, {"config", "core.createObject", "rename"})
-  local out: {string} = {}
   for i = 1, clones do
     local dir = fs.join(base, ("clone%d"):format(i))
     git(base, {"clone", "-q", bare, dir})
@@ -94,6 +104,29 @@ local function init_shared(name: string, clones: integer): string, {string}
           "refs/heads/board/*:refs/heads/board/*"})
       assert(refs.fetch_prune(dir))
     end
+  end
+  return base
+end
+
+--- A bare "remote" with nothing filed yet, plus n clones, each with
+--- the mirror refspecs `store.init_repo` writes once it sees their
+--- `origin`. The bare side finalizes objects by rename in ITS OWN
+--- config: a file:// push spawns receive-pack with the pusher's `-c`
+--- env scrubbed (git's local transport clears GIT_CONFIG_PARAMETERS),
+--- and link-based finalization fails with EXDEV on the overlay mounts
+--- CI containers run tests on.
+local function init_shared(name: string, clones: integer): string, {string}
+  if shared_templates[clones] == nil then
+    shared_templates[clones] = build_shared_template(clones)
+  end
+  local base = fs.join(tmpdir, "storewrite-shared-" .. name)
+  assert(fs.remove_all(base))
+  assert(fs.copy_tree(shared_templates[clones], base))
+  local bare = fs.join(base, "remote.git")
+  local out: {string} = {}
+  for i = 1, clones do
+    local dir = fs.join(base, ("clone%d"):format(i))
+    git(dir, {"remote", "set-url", "origin", bare})
     out[#out + 1] = dir
   end
   return bare, out
