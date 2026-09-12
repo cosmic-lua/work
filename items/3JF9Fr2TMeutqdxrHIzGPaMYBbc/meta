@@ -1,0 +1,3 @@
+title: apiauth.activate: preflight the credential so a dead transport fails at activation, not as a 401 on every later call
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/work
