@@ -20,8 +20,9 @@ shape, never just length or a single sampled element.
 
 - json_decode_ascii_long: a quoted 64KiB deterministic repeating printable
   ASCII alphabet excluding quote/backslash; include raw DEL in the pattern.
-- json_decode_ascii_short: an array of 256 distinct strings, lengths cycling
-  0..31, with exact expected order and contents. This tests common short
+- json_decode_ascii_short: an array of 256 strings, lengths cycling
+  0..31, with all nonempty strings distinct (the eight empty strings
+  necessarily repeat), and exact expected order and contents. This tests common short
   strings and avoids an all-identical-string interning-only workload.
 - json_decode_ascii_escaped: array of 64 strings, each 1024 ASCII prefix
   bytes followed by escaped newline, quote and backslash and a short suffix;
