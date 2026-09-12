@@ -1,0 +1,3 @@
+title: Decide: cosmic.http's concurrency model — fork-per-connection as redbean, a thread pool of lua_States, or a poll loop (research item)
+parent: 3JEZx1R26VPmXtTlh60E0IQYMun
+target: cosmic-lua/cosmic
