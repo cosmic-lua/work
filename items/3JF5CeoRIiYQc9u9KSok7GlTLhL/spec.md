@@ -12,21 +12,32 @@ digest — seven hex either way, so no format string moves — and `show` keeps 
 `result:` line, losing only the `spec unchanged since` suffix that
 `verdict_spec` fed.
 
-The board is on format 4 and carries 1371 item refs, 1353 of them with a
-`spec.md` blob:
+The board is on format 4. Every ref count in this spec MOVES — the board grows
+by the hour — so each is stated with the date it was taken, and the command
+that took it is the authority. Re-run it rather than trusting the number; a
+count that has drifted is not a failed premise, but a count whose ORDER of
+magnitude or whose zero has changed is.
+
+Measured 2026-09-12 22:20Z — 1398 item refs, 1380 of them with a `spec.md`
+blob:
 
 ```
 $ cd o/board   # a clone of cosmic-lua/work
 $ git for-each-ref --format='%(refname)' \
     'refs/remotes/origin/items/*' 'refs/remotes/origin/ended/*' | wc -l
-1371
+1398
 $ git cat-file -p refs/remotes/origin/board/format:format
 4
 $ git for-each-ref --format='%(refname)' 'refs/remotes/origin/items/*' \
     'refs/remotes/origin/ended/*' | sed 's|$|:spec.md|' \
     | git cat-file --batch-check | grep -c blob
-1353
+1380
 ```
+
+Every LINE NUMBER in this spec may also have drifted: the citations were taken
+at one commit and the tree has moved since. Each is paired with the symbol name
+or the line's own text, and THAT is the anchor — locate by the symbol, treat a
+line number that disagrees as stale rather than as a missing premise.
 
 ### `_work/itemtree.tl` (429 lines) — the one place the tree shape is written
 
@@ -97,9 +108,13 @@ changes to match:
   three blocks of the same shape for `touches`, `access` and `depends_on` —
   `table.concat(list, " ")`, the line omitted when the list is empty.
 
-Delete `format_target` (`_work/itemtree.tl:53`,
-`local function format_target(repo: string, base: string): string`) — nothing
-writes a `target` line any more. KEEP `parse_target`
+KEEP `format_target` (`_work/itemtree.tl:53`,
+`local function format_target(repo: string, base: string): string`) even though
+nothing writes a `target` line after this lands. It is held by a MAINTAINED
+property test — `_fuzz/itemtree_fuzz_test.tl`'s `test_target_round_trip` calls
+it as `parse_target`'s documented inverse — and deleting one half of a
+round-trip property fails `--check types` on that file. Both halves retire
+together in `06-retire`, with the property. KEEP `parse_target`
 (`_work/itemtree.tl:72`, `local function parse_target(target: string)`): it is
 the format-4 read the migration consumes, and `06-retire` deletes it.
 
@@ -338,7 +353,7 @@ drop the field, and `_work/gitshow.tl:229`
 carry a `result:` line keep it, because the field survives:
 
 ```
-$ M="git cat-file --batch"   # over the same 1371 refs as above
+$ M="git cat-file --batch"   # over the same refs as above, 2026-09-12 22:20Z
 $ git for-each-ref --format='%(refname)' 'refs/remotes/origin/items/*' \
     'refs/remotes/origin/ended/*' | sed 's|$|:meta|' | $M > /tmp/allmeta
 $ for k in key result verdict_spec target; do \
@@ -346,8 +361,13 @@ $ for k in key result verdict_spec target; do \
 key            0
 result         19
 verdict_spec   473
-target         1251
+target         1278
 ```
+
+`key` at ZERO is the load-bearing one: it is why `key` stays in `META_KEYS`
+here and `06-retire` removes it, while `verdict_spec` at 473 has to go now or
+its removal costs a second rewrite of the refs. If `key` is no longer zero when
+you re-measure, that reasoning has changed and this is a finding to report.
 
 Between them those two changes take `_work/spec.tl`'s `revision` down to zero
 callers, for two different reasons — `_work/gitshow.tl:231` goes with the field
@@ -392,6 +412,11 @@ between this item's release (`04-release-and-pin`) and the migration run;
 that window is stated in both of those specs and is the reason they are
 adjacent.
 
+### `_work/gitspec.tl` (146 lines) and `_work/gitspec_test.tl` (371)
+
+Named here because the earlier draft omitted them and they are where the write
+side is decided; the work is specified under **The write side** below.
+
 ### `_work/gitread.tl` (484 lines) — the read side
 
 `list` (`:252`, `local function list(root: string): Board | nil, string`)
@@ -414,7 +439,7 @@ absent — the format-4 read, deleted by `06-retire`. `read_specs` (`:417`)
 returns `{string: itemtree.Spec}` and asks two queries per id where `:426`
 (`local q = sha .. ":spec.md"`) asks one, with the same fallback.
 
-### `_work/spec.tl` (209 lines) — one rendering, so text consumers do not fork
+### `_work/spec.tl` (228 lines) — one rendering and its inverse
 
 Add, exported:
 
@@ -427,9 +452,39 @@ local function document(sp: itemtree.Spec): string
 It emits `## Change\n\n<change>\n` and, when `non_goals` is non-empty,
 `\n## Non-goals\n\n<non_goals>\n`. This is a RENDERING for the consumers that
 still read a body during the staging window — the bar, the path extractors,
-full-text search, `show`'s spec block. It is not a storage format: nothing
-parses it back except the `spec` verb's own splitter in `03-verbs`, and
-`06-retire` deletes each caller as its reader stops needing text.
+full-text search, `show`'s spec block — and `06-retire` deletes each caller as
+its reader stops needing text.
+
+Add its INVERSE beside it, exported, because three writers hold a whole
+markdown document and the tree now holds two blobs:
+
+```
+--- @param document string A spec markdown document
+--- @return itemtree.Spec | nil The two fields, nil when the document does not
+--- conform
+--- @return string Refusal message
+local function split(document: string): itemtree.Spec | nil, string
+```
+
+It reads `sections(document)` — this module's own scanner, level-aware since
+`spec.sections: close a section by heading LEVEL, not by any heading` — and
+takes `change` and `non-goals`. It REFUSES rather than dropping, with two
+messages:
+
+- no non-empty `change` → the bar's own words, so a writer fails the same way
+  `ready_gaps` reports it: `Change is missing or empty`.
+- any heading other than `change` and `non-goals` → name every offending
+  heading in the message and point at `log ID --add FILE`, which exists as of
+  `gitboard log ID --add FILE: append an entry without mutating the item`.
+  This is D47's *"There is no escape hatch. Content that is not prospective
+  intent is a log entry"* made a refusal instead of a convention, and it is the
+  one place the schema is enforced on a human writing a spec by hand.
+
+`split` and `document` are inverses on conforming input, and THAT is what the
+write side stands on: `document(split(x))` normalizes `x`, and
+`split(document(sp))` returns `sp`. Neither is a byte-identity on
+non-canonical input, which is why the comparisons below move from text to
+records.
 
 Every current text consumer becomes `spec.document(...)` at one line each:
 `_work/gitfsck.tl:357` (`local specs = store.read_specs(s, ids)`),
@@ -466,10 +521,53 @@ path when its field is empty, each emitted only when that field differs from
 `old_spec`'s. A format-4 item's `spec.md` is removed by the same mechanism
 when a write replaces its spec: emit `{path = "spec.md", content = nil}`
 whenever `spec_replacement` is given. `gate.commit_and_publish`
-(`_work/gitgate.tl:324`, `local function commit_and_publish(s: store.Store, it: item.Item, body: string,`)
-takes the record in its `body` position; its one nil-passing caller
-(`_work/gitgraph.tl:106`, the comment `to leave the tree with no `spec.md` at all`)
-keeps passing nil and has its comment updated.
+(`_work/gitgate.tl`, `local function commit_and_publish(s: store.Store, it: item.Item, body: string,`)
+takes the record in its `body` position. Most of its callers pass nil and are
+untouched; `cmd_new`'s doc comment (`_work/gitgraph.tl`, *"`spec` is nil to
+leave the tree with no `spec.md` at all"*) is prose, not a call site, and gains
+a mention of the `spec/` subtree.
+
+**Three production callers pass a non-nil whole markdown document, and each
+needs `spec.split` here.** This is the write side of the two-blob split and it
+cannot be deferred: `build_tree` emits `spec/change.md` and `spec/non-goals.md`
+from a record, so whatever a writer holds has to become a record before it gets
+there.
+
+- **`_work/gitspec.tl`'s `cmd_spec`** — `spec ID FILE`'s file, read whole by
+  `fs.read` and passed straight down. It is the sharp case, because all THREE
+  of its behaviours compare the caller's text against the stored text: the
+  compare-and-swap (`gate.base_refusal(current, base, id)`), the
+  `body == current` no-op (*"spec is unchanged — nothing written"*), and
+  `diffstat(current, body)`'s `(+N/-M lines)` report. Every one of them moves
+  from TEXT to RECORDS: split the file once, refuse on `split`'s refusal, then
+  compare `split(body)` against `store.read_spec(s, id)` field by field. A
+  text comparison would break the moment an author's heading spelling differs
+  from `document`'s canonical render — `## change` lowercase, an extra blank
+  line — reporting a spurious stale base or a spurious write. Comparing
+  records compares MEANING, which is what the verb was always asking.
+  `_work/gitspec_test.tl`'s round-trip cases (an identical body writes nothing;
+  an identical body with a new speccer writes nothing; a stale base is refused;
+  the holder's own rewrite lands) are the proof the round trip still closes, and
+  they must pass unchanged in intent — a case that stops asserting a closed
+  round trip has been weakened, not updated. `gate.base_refusal`'s own message
+  tells the user to get the text from `gitboard show ID --raw`, which this spec
+  already converts to `spec.document(...)`, so the documented loop stays: `show
+  --raw` renders, the author edits, `split` reads it back.
+- **`_work/gitgraph.tl`'s `cmd_new`** — `new --spec-file FILE`, read whole in
+  `_work/gitboard.tl`. Split at the same seam; `new` refuses on a refusal
+  rather than filing an item whose spec the bar will reject. Its `spec`
+  parameter re-types to `itemtree.Spec | nil`, and `_work/gitboard.tl` does the
+  reading and splitting so the dispatcher owns the file and `cmd_new` owns the
+  record.
+- **`_work/lanes.tl`'s `repair_spec`** — emits `"## Change\n…"` itself. It
+  returns an `itemtree.Spec` directly instead, so no document is rendered only
+  to be parsed back. That is strictly simpler than splitting its own output.
+
+`_work/gitgate_test.tl` passes a `"a spec touch"` string literal at three call
+sites; each becomes a record literal.
+
+Nothing else parses a document back. The splitter is the ONE text-to-record
+seam, and `03-verbs` inherits no part of it.
 
 ### The derived cache must carry the three lists, or `rank` erases them
 
@@ -559,7 +657,30 @@ records the item ref's tip sha (not a digest — assert it resolves as a commit 
 the board), and a second `take --result` with the spec untouched is the recorded
 no-op while one after a `spec` write is not. Its one existing `result` assertion
 (`:70`, `assert(got.pr == 0 and got.result == "",`) stands: `take --head` still
-clears the field. Hand-edit the `.cosmic-coverage` rows the change moves
+clears the field. **Files the earlier draft's list missed, every one of which fails
+`--check types` once `verdict_spec` leaves `record Item` or a signature moves.**
+They are not optional follow-ups; they are part of this change:
+`_work/gitspec.tl` and `_work/gitspec_test.tl` (the round trip above),
+`_work/gitgraph.tl`'s `cmd_new` and its caller in `_work/gitboard.tl`,
+`_work/lanes.tl`'s `repair_spec`, `_work/gitgate_test.tl`'s three string
+literals, `_fuzz/itemtree_fuzz_test.tl` (the `format_target` property, its own
+`META_KEYS` copy carrying `target` and `verdict_spec`, and a `verdict_spec = ""`
+item literal), `_fuzz/read_fuzz_test.tl`'s two `verdict_spec = ""` literals,
+`_work/gitverdict_test.tl`'s `assert((it.verdict_spec or "") == "", …)`, and
+`_work/cachequery_items_test.tl`, whose field-by-field assertion is the cache
+round-trip audit for exactly the hydration trap below — it drops its
+`verdict_spec` comparison and GAINS one per declared field, or the three new
+fields go unaudited there.
+
+Before writing code, re-derive these lists with the greps that produced them
+(`commit_and_publish`, `read_spec`, `verdict_spec`, `format_target`) rather than
+trusting this enumeration. The earlier draft's central claim — that
+`commit_and_publish` had one nil-passing caller — was wrong, and one
+`grep -rn 'commit_and_publish'` shows the four non-nil-body callers in its first
+screen. If a grep turns up a reader this list still misses, that is a finding
+worth reporting, not a gap to fill silently.
+
+Hand-edit the `.cosmic-coverage` rows the change moves
 — `_work/itemtree.tl` (`{["covered"] = 207, ["total"] = 224}`),
 `_work/item.tl`, `_work/format.tl` — rather than running
 `--make coverage --baseline`, which rewrites the whole floor from one machine
@@ -567,10 +688,17 @@ clears the field. Hand-edit the `.cosmic-coverage` rows the change moves
 
 ### Size, and where to cut it if you want to
 
-This is oversized and is being filed that way deliberately. The review measured
-it at roughly 550 changed lines, and it names 46 files
-(`grep -o '_work/[a-z_0-9]*\.tl' <this spec> | sort -u | wc -l` → 46, 11 of them
-tests). If you would rather land it in two, the seam is **the format-5 tree
+This is oversized and is being filed that way deliberately, and the write-side
+correction above makes it bigger still — `spec.split`, `cmd_spec`'s
+record-based comparison, `cmd_new`, `repair_spec` and their tests are work the
+earlier draft did not count. Re-measure the file count with the grep below
+rather than trusting a number this paragraph states.
+
+**Landing this in two is not just permitted, it is preferred.** Two commits in
+one pull request, in this order, so a reviewer can read the shape change without
+the field additions interleaved. If either half alone overruns what one review
+can hold, say so and stop — a third item filed beats a PR nobody can check. The
+seam is **the format-5 tree
 shape** on one side — the `spec/` subtree, `target` unpacked into `repo`/`base`,
 `verdict_spec` out, `result` re-typed, the marker and its refusal, `gitread`'s
 `allow_old_format` bypass and two-blob reads, `spec.document` and its consumers,
@@ -589,9 +717,17 @@ its one pass.
 
 ## Non-goals
 
-- No verb gains, loses or changes an option here. `depend`, `undepend`, the
-  `depends_on` gate on `next`/`take`, and `spec ID FILE`'s split are
-  `03-verbs`.
+- No verb gains or loses an OPTION here. `depend`, `undepend`, the
+  `depends_on` gate on `next`/`take`, and `fsck`'s derived dependency report are
+  `03-verbs`. **`spec ID FILE`'s split is NOT deferred** — an earlier draft of
+  this spec said it was, and that made the item unbuildable: three writers
+  (`cmd_spec`, `cmd_new`, `repair_spec`) hold a whole document and `build_tree`
+  takes a record, so the text-to-record seam has to exist the moment the tree
+  holds two blobs. `spec.split` lands here, with it the change to what
+  `cmd_spec` COMPARES (records, not text). That is a change to a verb's
+  behaviour, not to its surface: `spec ID FILE` takes the same file, prints the
+  same verdict shapes, and gains one refusal — a document carrying a heading
+  that is neither Change nor Non-goals.
 - The board's own marker ref is NOT bumped here. `refs/heads/board/format`
   still reads `4` after this lands; `05-migration` moves it, in the same
   atomic push as the rewritten refs.
