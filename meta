@@ -1,3 +1,4 @@
 title: spec-bar absent: reports a present path as missing — the check reads a stale working tree
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
+claim_batch: 045ce548007d0d2010a85fcf8a5208d16134db1d
