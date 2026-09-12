@@ -20,11 +20,15 @@
 --- path, but whether the token names a real file at all, and if so
 --- whether that file has room left under the 500-line cap `--check
 --- lint` enforces. Unlike `paths_named`, a repo-relative token here
---- resolves against a caller-supplied checkout of the item's OWN
---- `repo`, never this process's working directory — an item can be
+--- resolves at a KNOWN COMMIT of the item's OWN `repo` — the item's
+--- recorded claim base, else that repository's default-branch tip — in
+--- a caller-supplied checkout of it, never this process's working
+--- directory and never any checkout's working tree: an item can be
 --- `show`n from any checkout, including one for a different repo
 --- entirely, and `paths_named`'s cwd-relative convention would read
---- every one of that OTHER repo's real files as absent. A `## Change`
+--- every one of that OTHER repo's real files as absent, while a
+--- working-tree read would answer differently depending on which branch
+--- the checkout happens to be parked on. A `## Change`
 --- naming a path its own repo's checkout does not have is a spec bug a
 --- spec bar cannot mechanically refuse (the bar's "measured, not
 --- inferred" rule covers counts and behaviour, not path existence), so
@@ -36,6 +40,7 @@
 --- would.
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local repoprofile = require("_work.repoprofile")
 local tail = require("_work.tail")
 
 --- The file-length lint's own ceiling ([D39] in `cosmic-lua/cosmic`:
@@ -152,26 +157,139 @@ local function line_count(path: string): integer | nil, string
   return n, ""
 end
 
---- One line per path-shaped token in `body`'s Change section that
---- needs a refiner's or builder's attention before a pull, in
---- `raw_paths_named` order: `absent: ...` for a token that names no
---- real file in the tree it resolves against (`o/` included — a spec
---- naming a build output must name the one the build actually makes),
---- `unreadable: ...` for a present path `fs.read` still cannot open (a
---- directory, say), and `tight: ...` for a present, readable path
---- already within `WARN_MARGIN` lines of `FILE_CAP`. An absolute token
---- resolves against the filesystem root regardless of `checkout` —
---- nothing about it depends on which repo the item names. A
+--- The commit a repo-relative Change-section token is read at: the
+--- item's recorded claim base when `checkout` holds that commit, else
+--- the tip of the repository's default branch — the branch
+--- `origin/HEAD` names when the checkout caches one, else the identity's
+--- own convention (`master` for cosmopolitan, `main` for everything
+--- else) — tried as the remote-tracking ref first and the local branch
+--- second. No working tree is read and no remote is queried, so a
+--- checkout parked on another branch or carrying uncommitted edits
+--- answers the same question the same way.
+--- @param checkout string A local checkout of the item's own `repo`, ""
+--- when none is set up here
+--- @param repo string The item's repo identity (`owner/name`)
+--- @param base string The item's recorded claim base, "" when it has none
+--- @return string The resolved commit id, "" when no candidate names a
+--- commit in `checkout`
+local function commit_at(checkout: string, repo: string, base: string): string
+  if checkout == "" then
+    return ""
+  end
+  local branch = repoprofile.default_base(checkout)
+  if branch == "" then
+    branch = repo:find("cosmopolitan", 1, true) ~= nil and "master" or "main"
+  end
+  local candidates: {string} = {
+    "refs/remotes/origin/" .. branch, "refs/heads/" .. branch,
+  }
+  if base ~= "" then
+    table.insert(candidates, 1, base)
+  end
+  for _, rev in ipairs(candidates) do
+    local r = child.run({"git", "rev-parse", "--verify", "--quiet",
+        rev .. "^{commit}"}, {cwd = checkout})
+    if r ~= nil and r.ok then
+      local id = (r.stdout:gsub("%s+$", ""))
+      if id ~= "" then
+        return id
+      end
+    end
+  end
+  return ""
+end
+
+--- `token`'s line count at `rev`, read out of `checkout`'s object
+--- database rather than its working tree, the same `wc -l` measure
+--- `line_count` takes on disk. nil with "" when `rev` carries no such
+--- path at all; nil with a reason when the path is there but is not a
+--- file (a directory, a submodule), which reads as `unreadable:` the
+--- way an unreadable present path does.
+--- @param checkout string A local checkout of the item's own `repo`
+--- @param rev string The commit to read at
+--- @param token string A repo-relative path
+--- @return integer | nil The newline count, nil when missing or unreadable
+--- @return string Why it is unreadable, "" when it is simply absent
+local function blob_lines(checkout: string, rev: string,
+    token: string): integer | nil, string
+  local object = rev .. ":" .. token
+  local kind = child.run({"git", "cat-file", "-t", object}, {cwd = checkout})
+  if kind == nil or not kind.ok then
+    return nil, ""
+  end
+  local what = (kind.stdout:gsub("%s+$", ""))
+  if what ~= "blob" then
+    return nil, ("%s at the resolved commit, not a file"):format(what)
+  end
+  local blob = child.run({"git", "cat-file", "blob", object}, {cwd = checkout})
+  if blob == nil then
+    return nil, "cannot read the object"
+  end
+  if not blob.ok then
+    return nil, (blob.stderr:gsub("%s+$", ""))
+  end
+  local n = 0
+  for _ in blob.stdout:gmatch("\n") do
+    n = n + 1
+  end
+  return n, ""
+end
+
+--- The one line a path-shaped Change-section token earns, "" when it
+--- earns none: `absent: ...` for a token naming no real file where it
+--- resolves (`o/` included — a spec naming a build output must name the
+--- one the build actually makes), `unreadable: ...` for a path that is
+--- there but cannot be read as text (a directory, say), and `tight: ...`
+--- for a readable path already within `WARN_MARGIN` lines of `FILE_CAP`.
+---
+--- An absolute token resolves against the filesystem root: nothing about
+--- it depends on which repo the item names, or on any commit. A
 --- repo-relative token (the ordinary spelling: `_work/gitshow.tl`, not
---- `/abs/.../_work/gitshow.tl`) resolves against `checkout`, a local
---- checkout of the item's OWN `repo` — never against this process's
---- own working directory, which may belong to a different repo
---- entirely (`show`ing an item whose `repo` is `cosmic-lua/work` while
---- this process runs from a `cosmic-lua/cosmic` checkout, say): that
---- mismatch is exactly what used to read a real file as `absent`,
---- indistinguishable from a genuine typo. A relative token this
---- process has no checkout to resolve at all — `checkout` is "" —
---- reads `not checked: ...` instead of guessing either way.
+--- `/abs/.../_work/gitshow.tl`) resolves at `rev` in `checkout` — never
+--- against this process's own working directory, which may belong to a
+--- different repo entirely, and never against a working tree, whose
+--- answer moves with whichever branch someone left the checkout on. A
+--- relative token with no commit to resolve against reads `not
+--- checked: ...` instead of guessing either way.
+--- @param token string A path-shaped token from the Change section
+--- @param checkout string A local checkout of the item's own `repo`
+--- @param rev string `commit_at`'s resolved commit, "" when there is none
+--- @param repo_label string The repo identity named in `not checked`
+--- @return string The line, "" when the token earns none
+local function headroom_line(token: string, checkout: string, rev: string,
+    repo_label: string): string
+  local absent = ("absent: `%s` does not exist in the tree"):format(token)
+  local n: integer | nil = nil
+  local rerr = ""
+  if fs.is_absolute(token) then
+    if not fs.is_present(token) then
+      return absent
+    end
+    n, rerr = line_count(token)
+  elseif rev == "" then
+    return ("not checked: `%s` (no checkout of %s here)")
+    :format(token, repo_label)
+  else
+    n, rerr = blob_lines(checkout, rev, token)
+    if n == nil and rerr == "" then
+      return absent
+    end
+  end
+  if n == nil then
+    return ("unreadable: `%s`: %s"):format(token, rerr)
+  end
+  if FILE_CAP - n > WARN_MARGIN then
+    return ""
+  end
+  return ("tight: `%s` is %d/%d lines, %d left before the cap —"
+    .. " plan a repacking or split before pulling"):format(
+    token, n, FILE_CAP, FILE_CAP - n)
+end
+
+--- One line per path-shaped token in `body`'s Change section that needs
+--- a refiner's or builder's attention before a pull, in
+--- `raw_paths_named` order — `headroom_line`'s own rules, over the
+--- commit `commit_at` resolves once for the whole section.
 --- @param body string An item's spec sidecar body
 --- @param checkout string A local checkout of the item's own `repo`
 --- (`_work.repository_map.resolve` — the same lookup `gitboard
@@ -179,29 +297,19 @@ end
 --- set up here
 --- @param repo string The item's repo identity, named in the `not
 --- checked` fallback; "" reads as "its repo"
+--- @param base string The item's recorded claim base, "" when it has
+--- none — the commit relative tokens are read at, ahead of the
+--- repository's default-branch tip
 --- @return {string} The lines, possibly empty
-local function headroom_lines(body: string, checkout: string,
-    repo: string): {string}
+local function headroom_lines(body: string, checkout: string, repo: string,
+    base: string): {string}
   local out: {string} = {}
   local repo_label = repo ~= "" and repo or "its repo"
+  local rev = commit_at(checkout, repo, base)
   for _, token in ipairs(raw_paths_named(body)) do
-    if not fs.is_absolute(token) and checkout == "" then
-      out[#out + 1] = ("not checked: `%s` (no checkout of %s here)")
-      :format(token, repo_label)
-    else
-      local path = fs.is_absolute(token) and token or fs.join(checkout, token)
-      if not fs.is_present(path) then
-        out[#out + 1] = ("absent: `%s` does not exist in the tree"):format(token)
-      else
-        local n, rerr = line_count(path)
-        if n == nil then
-          out[#out + 1] = ("unreadable: `%s`: %s"):format(token, rerr)
-        elseif FILE_CAP - n <= WARN_MARGIN then
-          out[#out + 1] = ("tight: `%s` is %d/%d lines, %d left before the cap —"
-            .. " plan a repacking or split before pulling"):format(
-            token, n, FILE_CAP, FILE_CAP - n)
-        end
-      end
+    local line = headroom_line(token, checkout, rev, repo_label)
+    if line ~= "" then
+      out[#out + 1] = line
     end
   end
   return out
@@ -357,8 +465,8 @@ local record overlap
   collisions: function(id: string, bodies: {string: string}): {Collision}
   lines: function(id: string, bodies: {string: string}): {string}
   inline: function(id: string, bodies: {string: string}): string
-  headroom_lines: function(body: string, checkout: string,
-  repo: string): {string}
+  headroom_lines: function(body: string, checkout: string, repo: string,
+  base: string): {string}
   ready_when: function(body: string): string | nil
 end
 
