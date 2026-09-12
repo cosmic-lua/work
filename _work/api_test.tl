@@ -163,3 +163,26 @@ local function test_error_of_omits_reset_time_off_403_429()
   local msg = api.error_of("GET", "/x", res)
   assert(msg:find("resets", 1, true) == nil, "got: " .. msg)
 end
+
+-- A 422's "message" alone only ever says "Validation Failed" — the
+-- actual cause lives in the first validation error, so a refused
+-- `--open` names it instead of leaving the caller to guess.
+local function test_error_of_names_the_first_validation_error()
+  local res: api.ApiResult = {status = 422,
+    value = {message = "Validation Failed",
+      errors = {{message = "No commits between main and x"}}},
+    headers = {}, remaining = nil, reset = nil}
+  local msg = api.error_of("POST", "/repos/x/y/pulls", res)
+  assert(msg:find("No commits between main and x", 1, true) ~= nil,
+    "got: " .. msg)
+end
+
+-- A non-JSON body decodes to nil, so there is no "message" or
+-- "errors" to read — the error stays the plain status line it always
+-- was.
+local function test_error_of_is_the_plain_status_line_off_a_non_json_body()
+  local res: api.ApiResult = {status = 500, value = nil, headers = {},
+    remaining = nil, reset = nil}
+  local msg = api.error_of("GET", "/x", res)
+  assert(msg == "GET /x: HTTP 500", "got: " .. msg)
+end

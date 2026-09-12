@@ -308,9 +308,12 @@ local function api(method: string, path: string, root: string,
 end
 
 --- Render a non-2xx exchange as an error message, using GitHub's own
---- "message" field when it sent one; a 403 or 429 that carried a
---- reset time names it, so a refusal says when the quota comes back
---- rather than just that it is gone.
+--- "message" field when it sent one, plus the first `errors[].message`
+--- when the body carries a validation-errors array — GitHub's 422s put
+--- the actual cause there ("No commits between main and X") while
+--- "message" alone only ever says "Validation Failed"; a 403 or 429
+--- that carried a reset time names it, so a refusal says when the
+--- quota comes back rather than just that it is gone.
 --- @param method string HTTP method
 --- @param path string Request path
 --- @param res ApiResult The exchange
@@ -320,6 +323,13 @@ local function api_error(method: string, path: string, res: ApiResult): string
   local v = res.value
   if v is {string: any} then
     detail = ": " .. tostring(v["message"])
+    local errs = v["errors"]
+    if errs is {any} and #errs > 0 then
+      local first = errs[1]
+      if first is {string: any} and first["message"] ~= nil then
+        detail = detail .. ": " .. tostring(first["message"])
+      end
+    end
   end
   if (res.status == 403 or res.status == 429) and res.reset ~= nil then
     detail = detail .. (" (rate limit resets %s)"):format(
