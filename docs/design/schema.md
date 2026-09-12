@@ -89,7 +89,9 @@ point at the spec, so findings were written into the spec.
 
 `meta` gains `touches`, `access` and `depends_on`, space-joined exactly
 as `order`, `builders` and `speccers` already are; `target` unpacks into
-`repo` and `base`; `key`, `result` and `verdict_spec` are gone.
+`repo` and `base`; `key` and `verdict_spec` are gone. `result` stays, and
+its payload moves: a board commit sha rather than a digest of the spec
+blob.
 
 `touches` is the files the change is expected to touch, **declared by
 the refiner rather than scraped from prose.** It is what
@@ -104,10 +106,17 @@ one clause per repository, so a list of slugs loses nothing.
 
 Both live in `meta` rather than under `spec/` because ownership is
 enforced by which verb writes a field, not by tree position — `verdict`
-is written only by `verdict`, `pr` only by `take` — and because
-collision detection then costs no read at all: `store.list` already
-loads every item's `meta`, so the batched whole-board spec read
-disappears from `show` and `next`.
+is written only by `verdict`, `pr` only by `take`. Collision detection
+then reads a declared list instead of parsing every open item's prose,
+which is the win; it is not a free read, and the mechanism is worth
+stating because it is a trap. A whole-board read goes through the
+derived SQLite cache, never git `meta`: `_work/store.tl` holds a
+`cache.Cache`, and `_work/cachequery.tl` rebuilds an `item.Item` from
+columns, hydrating `builders` and `speccers` from their own tables. A
+field with no column and no hydration is therefore **zeroed** the next
+time any verb saves an item it read from `store.list` — `_work/gitrank.tl`
+reads from it and saves. So each declared field lands with its column,
+its hydration and its migration in one change, or not at all.
 
 There is no `acceptance` field. Done is the repo's gate passing; a
 behaviour worth guaranteeing permanently is a test or ratchet in the
@@ -155,7 +164,15 @@ ID` is `git log` on the ref.
 The item's **outcome** is the body of the commit that resolved it, or
 of the latest handover commit while it is open. That makes the
 deliverable a commit in both cases — a product commit for a diff, a
-board commit for research — so `result` has nothing left to hold.
+board commit for research. The two do not collapse into one field,
+because which repository the commit lives in is part of the fact:
+`_work/brief.tl` and `_work/gitdone.tl` both resolve `handover_head`
+inside the product checkout. So `handover_head` keeps the product
+commit and `result` keeps the board one — re-typed from a spec digest,
+not removed. It is also the only thing that distinguishes "applied,
+awaiting a verdict" from "builder mid-flight": `_work/gittake.tl` says
+so, and both states are otherwise claimed, PR-less, with builders on
+record.
 Findings become immutable: a correction is a new entry, which is how
 the corpus already works (`## correction — 2026-08-28` headings appear
 in the churn data).
@@ -232,5 +249,5 @@ until the verb exists to carry it.
 4. **The migration.** Classify and rewrite every ref, one atomic push,
    bump the marker.
 5. **Retire what is now dead.** The format-4 reader, `spec.revision`
-   and its two callers, `result`, `verdict_spec`, `key`, the four path
+   and its two callers, `verdict_spec`, `key`, the four path
    parsers, and `gitshow`'s unreachable verdict-moved branch.

@@ -170,9 +170,11 @@ unranked child still pulls, just after its ranked siblings.
    but the shape holds: refresh them in place
    (`spec ID FILE --base BASE`) and proceed. A fresh fact that
    breaks the shape or reopens a decision: file the question as a
-   CHILD of this item (`new --parent <ID>`), then drop the claim —
-   the item is a container until the child resolves, and the
-   child's `done` frees it with no further verb (`help order`). A
+   sibling and record it as this item's dependency (`new`, then
+   `depend <ID> --on <NEW>`), then drop the claim — this item is not
+   pullable until that dependency resolves, and its `done` frees it
+   with no further verb. The item keeps its own rank and stays
+   workable rather than becoming a container. A
    bounce is a good outcome — the bar failing loudly instead of a
    silent wrong guess — and answering the question may well be your
    own next action; do that from the spec and the tree, not from
@@ -251,9 +253,10 @@ Three verdicts. Each names the exact commit with `verdict ID KIND --head SHA`.
 the board; the claimant reworks and hands over a new commit. `reject` — the
 approach is wrong: abandon any external review,
 record what was learned, clear the claim. A reject that reopens a
-decision files the question as a child of the item, then drops the
-claim: the item is a container until the child resolves, and the
-child's `done` frees it with no further verb (`help order`).
+decision files the question as its own item and records it as the
+stuck item's dependency, then drops the claim: the stuck item is not
+pullable until that dependency resolves, and its `done` frees it with
+no further verb.
 Rejection is cheap by design; wrong work merged is expensive.
 Research agents return recommendations; the caller applies them in the product
 repository and hands over its exact commit through `take ID --head SHA`.
