@@ -10,11 +10,6 @@ file. The same handler over a filesystem directory serves a dev tree.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/router.tl` prints `cosmic/http/router.tl`.
-
-That is the router child merged (its `*rest` patterns are how a static
-handler is mounted); today the command reports the path as missing.
-
 Traversal safety is bound already: `cosmo.IsAcceptablePath`
 (`tool/net/definitions.lua:3023`) — "checks if path is acceptable ...
 `.` or `..`" per the redbean docs. The content-type table is the
@@ -24,6 +19,11 @@ already (the doc index does: `cosmic/doc/mentions.tl:12` `GUIDES_DIR =
 "/zip/docs/guides"`).
 
 ## Change
+
+Ready when: `ls cosmic/http/router.tl` prints `cosmic/http/router.tl`.
+
+That is the router child merged (its `*rest` patterns are how a static
+handler is mounted); today the command reports the path as missing.
 
 New file `cosmic/http/static.tl` (module `cosmic.http.static`):
 
