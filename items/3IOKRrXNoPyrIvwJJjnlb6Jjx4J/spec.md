@@ -16,3 +16,13 @@ before/after instrument for the keep-alive hypothesis. Same
 conventions as the existing modules: forked loopback child,
 functional checks that fail on wrong bytes, scenarios registered so
 _perf/run.tl sweeps them.
+
+
+## Scope coordination — 2026-09-12
+
+The sequential HTTP/TLS session instruments and verified TLS fixture are now
+specified in fetch reuse child ID4t_9ZBs (3JDCmq6oGkHblP9rEIOID4t9ZBs), under
+uQsI_Q5CM. That dependency chain owns implementation of this subset. Reuse its
+landed fixtures/scenarios; do not implement them independently in parallel.
+This item retains the distinct small/bulk POST-upload scenario work. Nothing
+in this note claims the instruments are implemented or the old hypothesis proven.
