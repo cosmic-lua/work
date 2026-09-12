@@ -1,0 +1,3 @@
+title: _types/gentype_render.tl: convert_type checks the array-suffix pattern before the union pattern, silently dropping a union's non-array alternatives (A|B[] renders as bare {B}, not A | {B})
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
