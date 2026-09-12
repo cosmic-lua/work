@@ -183,3 +183,25 @@ all correctness evidence, and the unchanged gate's HTTP noise controls.
 Across4 pairs the measured time reductions were large JSON25.2–30.1%,
 long ASCII86.2–86.4%, short ASCII48.8–55.2%, escaped72.9–73.3%, UTF-863.8–64.8%.
 No concrete findings. Product worktree restored clean at the accepted head.
+
+Experiment inspection after the user questioned the delay: a separate
+read-only Sol diagnostic measured the focused A/B section at471.35s,
+from the preceding rebuild PASS to B4 report creation. About123.1s lies
+between visible make-root banners and report writes; at least75.85s is
+scenario timing cadence (including the first row's minimum samples),
+with about80s of harness work an estimate. The remaining approximately348s
+is eight repeatable41–45s silent gaps before the make-root banners; a
+42.37s gap also precedes the standalone rebuild. These gaps are outside
+JSON sampling, but exact attribution within startup/orchestration is an
+inference because command-entry timing was not captured.
+
+Each arm repeats `--make run _perf/baserun.tl`; the make path prepares the
+tree before baserun spawns the selected subject (_make/init.tl:183,
+_make/runverb.tl:169, _perf/baserun.tl:94,159). Future runner work should
+label and timestamp every phase/arm and record process wall/CPU time.
+A possible optimization is preparing the scoped manifest once and using
+baserun's exact argv for subsequent fresh subject processes
+(`BIN --modules MANIFEST o/_perf/run.lua ...`, _perf/baserun.tl:120),
+while validating roots/hashes and preserving all workloads/samples,
+A/B order and separate files. This is an unimplemented future runner
+suggestion, not a changed acceptance procedure for the results above.
