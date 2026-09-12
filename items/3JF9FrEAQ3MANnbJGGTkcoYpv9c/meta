@@ -3,4 +3,6 @@ parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmopolitan
 handover_head: 6f940ead816a491e776b0e2403254d075bcf59e3
 external_url: https://github.com/cosmic-lua/cosmopolitan/pull/396
+verdict: accept
+verdict_head: 6f940ead816a491e776b0e2403254d075bcf59e3
 builders: 0c1ecc82e6e54bcb8715e77e1a2583b9
