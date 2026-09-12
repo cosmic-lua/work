@@ -10,8 +10,10 @@ and fills `req.params`.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints the path (the core child has
-merged) — today `ls: cannot access 'cosmic/http/init.tl'`.
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 The core child defines `type Handler = function(req: Request, res:
 Response)` and `Request.path` (percent-decoded via `cosmic.url.parse`,
