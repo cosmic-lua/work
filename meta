@@ -1,0 +1,3 @@
+title: review brief computes a two-dot range from a non-merge-base commit, so a forward-merged branch reviews reverse diffs
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/work
