@@ -34,6 +34,29 @@ local function test_builder_requires_a_committed_migration_and_caller_report()
     "the builder must commit migrated rows, report the bridge, or stop for refinement")
 end
 
+local function test_step_one_requires_reproducing_behavioral_claims()
+  assert(BUILDER:find("Re-run any measured commands the spec names",
+      1, true) ~= nil,
+    "step 1 must still tell a builder to re-run the spec's measured commands")
+  assert(BUILDER:find(
+      "When the spec's Evidence asserts a BEHAVIOR (\"X refuses Y\", "
+      .. "\"Z is unreachable\", \"the check fires when...\") rather than "
+      .. "a static fact (a line count, a file's existence), reproduce "
+      .. "that behavior against the current tree before writing any "
+      .. "code — call the function, run the script, exercise the path "
+      .. "the claim describes, not just re-running `wc -l`/`grep -c` on "
+      .. "the cited lines.", 1, true) ~= nil,
+    "step 1 must require reproducing a described BEHAVIOR against the "
+    .. "tree, not just re-running measured line counts")
+  assert(BUILDER:find(
+      "A premise that doesn't reproduce is the same class of blocker "
+      .. "as a Change that can't fit under the file cap: STOP, report "
+      .. "exactly what you tried and what happened instead, and do not "
+      .. "build against the unverified claim.", 1, true) ~= nil,
+    "step 1 must treat an unreproduced behavioral premise as a "
+    .. "STOP-worthy blocker, same as a file-cap STOP")
+end
+
 local function test_step_one_measures_headroom_before_the_first_edit()
   assert(BUILDER:find(
       "Before the first edit, `wc -l` every file the Change names.",

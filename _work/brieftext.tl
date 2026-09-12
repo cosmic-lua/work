@@ -77,8 +77,17 @@ and nothing less:
 1. Re-run any measured commands the spec names, against the current
    tree — a moved number is fine (refresh your understanding, don't
    stop over it alone); a fact that breaks the Change's shape is a
-   real blocker: STOP and report it (see below). Before the first
-   edit, `wc -l` every file the Change names. A file at or within a
+   real blocker: STOP and report it (see below). When the spec's
+   Evidence asserts a BEHAVIOR ("X refuses Y", "Z is unreachable",
+   "the check fires when...") rather than a static fact (a line count,
+   a file's existence), reproduce that behavior against the current
+   tree before writing any code — call the function, run the script,
+   exercise the path the claim describes, not just re-running
+   `wc -l`/`grep -c` on the cited lines. A premise that doesn't
+   reproduce is the same class of blocker as a Change that can't fit
+   under the file cap: STOP, report exactly what you tried and what
+   happened instead, and do not build against the unverified claim.
+   Before the first edit, `wc -l` every file the Change names. A file at or within a
    few lines of the repo's own file-length cap — check its `AGENTS.md`
    (or equivalent) for the number, the same convention gitboard
    already defers to everywhere else — is not an automatic STOP: if
