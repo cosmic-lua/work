@@ -12,11 +12,15 @@
 --- run inherits.
 ---
 --- The sequence is the one gitboard performed before landing became
---- the caller's job: squash-merge the judged head, and on a refusal
---- that means "not directly mergeable right now" (branch protection,
---- a merge queue, a not-yet-mergeable state) arm auto-merge instead,
---- which lands the same accept once the repo's own requirements
---- clear. Nothing here can fail the verdict: the judgment is already
+--- the caller's job: read the request, squash-merge the judged head,
+--- and on a refusal that means "not directly mergeable right now"
+--- (branch protection, a merge queue, a not-yet-mergeable state) arm
+--- auto-merge instead, which lands the same accept once the repo's
+--- own requirements clear. The read comes first because a request
+--- that is already merged, or closed with nothing merged, has no
+--- merge to send — and a `PUT` sent anyway comes back as a failure
+--- the verdict line would report as work still to land by hand.
+--- Nothing here can fail the verdict: the judgment is already
 --- recorded when this runs, and a failed landing is reported on the
 --- verdict line, never returned as a refusal.
 local apiauth = require("_work.apiauth")
@@ -39,10 +43,15 @@ local type Transport = apiauth.Transport
 local record Landing
   --- Whether a provider write was sent.
   attempted: boolean
-  --- The merge commit GitHub reported; "" unless it merged directly.
+  --- The merge commit; "" unless the request is merged. It is this
+  --- landing's own merge when `attempted`, and the merge that had
+  --- already happened when `already_merged`.
   merged: string
   --- Auto-merge armed instead of a direct merge.
   armed: boolean
+  --- The request was already merged when it was read, so this landing
+  --- had nothing left to do. Not a failure: the work has landed.
+  already_merged: boolean
   --- The landing failure, "" when none.
   error: string
 end
@@ -51,7 +60,8 @@ end
 --- and "no transport activated", which read identically to a caller.
 --- @return Landing An untouched result
 local function untouched(): Landing
-  return {attempted = false, merged = "", armed = false, error = ""}
+  return {attempted = false, merged = "", armed = false,
+    already_merged = false, error = ""}
 end
 
 --- The pull request an item's recorded navigation URL names. That URL
@@ -127,7 +137,42 @@ local function target_of(s: store.Store, it: item.Item, url_repo: string):
   return slugged, ""
 end
 
+--- What the request's own state settles before any merge is sent, or
+--- nil when the landing has to go ahead and find out.
+---
+--- An accept asserts the work is fit to land, and two states make the
+--- merge `PUT` pointless before it is sent. A request already merged —
+--- by hand, by a merge queue, by an auto-merge armed earlier — has had
+--- its landing; sending the merge anyway earns the refusal GitHub
+--- words as "not mergeable", which reads on the verdict line as a
+--- failed landing to redo by hand, about work that is already in the
+--- base branch. A request closed with nothing merged has no landing
+--- that could succeed at all — `review.blocks_accept`'s own refusal,
+--- reported verbatim so the line names the repair rather than a merge
+--- to retry.
+--- @param p review.Pull The request, read before anything is sent
+--- @return Landing | nil What its state settles, nil to go ahead
+local function settled(p: review.Pull): Landing | nil
+  if p.merged then
+    return {attempted = false, merged = p.merge_sha or "", armed = false,
+      already_merged = true, error = ""}
+  end
+  local blocked = review.blocks_accept(p)
+  if blocked then
+    return {attempted = false, merged = "", armed = false,
+      already_merged = false, error = blocked}
+  end
+  return nil
+end
+
 --- The landing itself, with a transport already installed.
+---
+--- The request is read once, before anything is written. The states
+--- that settle a landing without a merge have to be known before the
+--- merge goes out, and the arming path needs the same snapshot anyway
+--- — the node id it addresses the mutation by, and the head it
+--- refuses to arm over — so one read serves both and no landing makes
+--- two.
 --- @param s store.Store The store
 --- @param repo string owner/name
 --- @param number integer The pull request number
@@ -135,41 +180,47 @@ end
 --- @return Landing What the attempt did
 local function attempt(s: store.Store, repo: string, number: integer,
     head: string): Landing
-  local merged, msg = ghwrite.merge_pull(s, repo, number, head)
-  if merged then
-    return {attempted = true, merged = msg, armed = false, error = ""}
-  end
-  if not is_held_back(msg) then
-    return {attempted = true, merged = "", armed = false, error = msg}
-  end
-  -- Auto-merge is a GraphQL mutation addressing the request by node
-  -- id, which the REST merge refusal does not carry — so the fallback
-  -- costs one read of the request it is about to arm.
   local p, perr = gh.pull(s, number, repo)
   if p == nil then
+    return {attempted = false, merged = "", armed = false,
+      already_merged = false,
+      error = ("reading the request to land it: %s"):format(perr)}
+  end
+  local decided = settled(p)
+  if decided ~= nil then
+    return decided
+  end
+  local merged, msg = ghwrite.merge_pull(s, repo, number, head)
+  if merged then
+    return {attempted = true, merged = msg, armed = false,
+      already_merged = false, error = ""}
+  end
+  if not is_held_back(msg) then
     return {attempted = true, merged = "", armed = false,
-      error = ("%s; then reading the request to arm auto-merge: %s")
-      :format(msg, perr)}
+      already_merged = false, error = msg}
   end
   -- Arming is head-blind on both routes: the GraphQL mutation addresses
   -- the request by node id alone, and its REST fallback carries no sha
   -- either, so auto-merge lands whatever head is current once the
   -- repo's requirements clear. A 405 does not establish that the head
-  -- still matches the one the merge was guarded with, and the read just
-  -- performed for the node id already carries the current head — so a
-  -- head that has moved past the accept is reported exactly as a 409 is,
-  -- and nothing is armed over a commit no reviewer read.
+  -- still matches the one the merge was guarded with, and the snapshot
+  -- read before the merge already carries the head that would land —
+  -- so a head that has moved past the accept is reported exactly as a
+  -- 409 is, and nothing is armed over a commit no reviewer read.
   if review.head_moved(p, head) then
     return {attempted = true, merged = "", armed = false,
+      already_merged = false,
       error = ("%s; the accept judged %s and the request's head is now %s, "
         .. "so auto-merge was not armed"):format(msg, head:sub(1, 7),
         (p.head_sha or ""):sub(1, 7))}
   end
   local armed, aerr = ghwrite.enable_auto_merge(s, repo, number, p.node_id)
   if not armed then
-    return {attempted = true, merged = "", armed = false, error = aerr}
+    return {attempted = true, merged = "", armed = false,
+      already_merged = false, error = aerr}
   end
-  return {attempted = true, merged = "", armed = true, error = ""}
+  return {attempted = true, merged = "", armed = true,
+    already_merged = false, error = ""}
 end
 
 --- Land an accept that has already been recorded. Does nothing at all
@@ -207,7 +258,8 @@ local function land(s: store.Store, it: item.Item, head: string,
   local ok, raised = pcall(function()
       local repo, terr = target_of(s, it, url_repo)
       if repo == "" then
-        result = {attempted = false, merged = "", armed = false, error = terr}
+        result = {attempted = false, merged = "", armed = false,
+          already_merged = false, error = terr}
         return
       end
       result = attempt(s, repo, number, head)
@@ -215,6 +267,7 @@ local function land(s: store.Store, it: item.Item, head: string,
   local _restored = apiauth.deactivate()
   if not ok then
     return {attempted = true, merged = "", armed = false,
+      already_merged = false,
       error = ("the landing raised: %s"):format(tostring(raised))}
   end
   return result
@@ -225,13 +278,23 @@ end
 --- accept still prints exactly the line it always did. A failure names
 --- itself and hands the work back rather than pretending the merge is
 --- in motion — including a landing refused before any request went
---- out, which is a failure the caller must see and not a silence. The
+--- out, which is a failure the caller must see and not a silence. A
+--- request that was already merged is the one "nothing was sent" that
+--- still has something to say, and what it says is that the work
+--- landed — never that the caller should go and land it by hand. The
 --- verdict stands either way.
 --- @param l Landing What `land` reported
 --- @return string The suffix, "" when there is nothing to say
 local function note(l: Landing): string
   if l.error ~= "" then
     return (" — landing failed (%s), land it by hand"):format(l.error)
+  end
+  if l.already_merged then
+    local which = ""
+    if l.merged ~= "" then
+      which = (" %s"):format(l.merged:sub(1, 12))
+    end
+    return (" — already merged%s, nothing to land"):format(which)
   end
   if not l.attempted then
     return ""
