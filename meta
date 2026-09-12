@@ -4,4 +4,6 @@ target: cosmic-lua/cosmopolitan@master
 claim_batch: 9a9e3e265ab35611e0d4fdf946edd3965e79a2ad
 handover_head: 15a96f053ff1d4f3cb425fe2366af896b6e12472
 external_url: https://github.com/cosmic-lua/cosmopolitan/pull/393
+verdict: request changes
+verdict_head: 15a96f053ff1d4f3cb425fe2366af896b6e12472
 builders: a93b528f451f0a64220f4a5846dc2afc
