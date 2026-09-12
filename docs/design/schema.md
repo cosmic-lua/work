@@ -207,8 +207,9 @@ through `git log`. Acceptance is dropped; it remains in history.
 
 ## The order these land in
 
-Each is a child of the one after it, so the chain reads bottom-up the
-way D45 ranks prerequisites.
+They are ranked siblings under one container, each depending on the one
+before it — the `depends_on` relation item 2 builds, recorded in prose
+until the verb exists to carry it.
 
 1. **Doctrine and briefs agree.** Every template teaches the bar the
    gate enforces: `## Change`, with `## Non-goals` where a wall is at
