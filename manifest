@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch d7269d3b28dfbd78cf7d2b9becdcc2a3
+caller 63038851a39dce671b92e15e9aceaf78
+remote origin
+action drop
+created 1789221030
+publish-by 0
+reason builder handed over commit 49258833, ready for fresh review
+
+3J0yvjuyr3jLzJtQPMuKfl8Jtao 7cdf65602d96b4ea2445ed81d4f8c31e1fc6a4b8 drop - 8aa4dc4c11ccd917541d0e1d71c2a7ac6994b5c9 0a53a9f32e803bfe4ba656585b790f671545c855 1789220265 1789220265 1789227465
