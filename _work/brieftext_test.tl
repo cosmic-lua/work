@@ -64,7 +64,7 @@ end
 
 local function test_step_three_prefers_a_per_file_check_between_edits()
   assert(BUILDER:find(
-      "Between edits, `<TYPE_CHECK_CMD> <file>` on the files "
+      "Between edits, <TYPE_CHECK_CMD> on the files "
       .. "you touched; run the full gate once, before the push.",
       1, true) ~= nil,
     "step 3 must prefer a per-file check between edits and reserve "

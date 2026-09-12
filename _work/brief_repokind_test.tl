@@ -155,13 +155,22 @@ local function test_builder_fills_make_kind_targets()
   local code, out = brief_and_capture(s, "builder", leaf)
   assert(code == 0, out)
   local flat_out = flat(out)
+  -- `make`'s file argument is the `FILE=<file>` variable convention
+  -- `_work.repoprofile`'s own `check_file`/`test_file` build, not a
+  -- positional argument like `cosmic`'s — verified runnable by hand
+  -- against a real Makefile carrying these targets (`make -f Makefile
+  -- check-file FILE=foo.tl` runs the target; the bare-positional form
+  -- this test asserted before this fix does not: "No rule to make
+  -- target 'foo.tl'").
   assert(flat_out:find(
-      "Between edits, `make -f Makefile check-file <file>`", 1, true) ~= nil,
-    "a make-kind repo's own check-file target fills TYPE_CHECK_CMD: " .. out)
+      "Between edits, `make -f Makefile check-file FILE=<file>`", 1, true) ~= nil,
+    "a make-kind repo's own check-file target fills TYPE_CHECK_CMD "
+    .. "with its FILE= convention, not a bare positional argument: " .. out)
   assert(flat_out:find(
-      "test file (`make -f Makefile test-file _build/<name>_test.tl`)",
+      "test file (`make -f Makefile test-file FILE=_build/<name>_test.tl`)",
       1, true) ~= nil,
-    "a make-kind repo's own test-file target fills TEST_CMD: " .. out)
+    "a make-kind repo's own test-file target fills TEST_CMD "
+    .. "with its FILE= convention, not a bare positional argument: " .. out)
   assert(flat_out:find("confirm it is green (`make -f Makefile gate`)", 1, true) ~= nil,
     "a make-kind repo's own gate target fills GATE_CMD: " .. out)
   assert(flat_out:find("run `make -f Makefile bootstrap` once before", 1, true) ~= nil,

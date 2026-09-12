@@ -22,14 +22,17 @@
 --- step in order, plus its own trailing "before you run any test"
 --- prose — the two are separate keys, not one value read two ways,
 --- because the fallback sentences they carry do not share a shape.
---- `<TEST_CMD_PHRASE>` is likewise a full backtick-quoted clause (the
---- test-file command plus its own `<file>`, or, unresolved, the
---- original two-branch "in cosmic, ... in work" sentence) for a
---- template spot that cannot just wrap a bare `TEST_CMD` in its own
---- backticks.
+--- `<TYPE_CHECK_CMD>`, `<TEST_CMD>`, and `<TEST_CMD_PHRASE>` are each a
+--- full backtick-quoted command with its own file argument already
+--- filled in (a positional argument for `cosmic`, a `FILE=<file>`
+--- make-variable token for `make`) — never a bare command for a
+--- template to append a file suffix to itself, which is exact only for
+--- `cosmic`'s positional convention and silently wrong for `make`'s.
+--- `<TEST_CMD_PHRASE>` differs from `<TEST_CMD>` only in which file
+--- text is filled in: the generic `<file>` placeholder, or, unresolved,
+--- the original two-branch "in cosmic, ... in work" sentence — a
+--- template spot that names no worked example path of its own.
 local repoprofile = require("_work.repoprofile")
-
-local SENTINEL < const > = "\0FILE\0"
 
 --- Render `argv` as one displayable command line.
 --- @param argv {string} The command and its arguments
@@ -38,24 +41,25 @@ local function joined(argv: {string}): string
   return table.concat(argv, " ")
 end
 
---- The base command a `check_file`/`test_file` builder returns, its
---- trailing file-shaped token dropped so a template can append its own
---- `<file>` in prose. The sentinel can only appear inside that trailing
---- token — a direct file argument, or `make`'s `FILE=<file>` token — so
---- dropping every token containing it is exact for both shapes
---- `_work.repoprofile` builds.
+--- The full `check_file`/`test_file` command with `file` filled in,
+--- exactly as `_work.repoprofile` builds it for the resolved kind — a
+--- trailing positional argument for `cosmic`, a `FILE=<file>`
+--- make-variable token for `make`. `file` is prose read by a builder or
+--- reviewer, never executed, so passing the literal placeholder text
+--- (`"<file>"`, or a worked example path) straight through renders the
+--- real, runnable shape for either kind with no separate suffix a
+--- template would have to append itself — appending one unconditionally
+--- was exact only for `cosmic`'s positional convention and silently
+--- broke `make`'s `FILE=` one.
 --- @param build function(file: string): {string} `check_file` or `test_file`
---- @return string The command with no file argument, "" if the builder
---- returns nothing (an unadvertised `make` capability)
-local function base_command(build: function(file: string): {string}): string
-  local argv = build(SENTINEL)
-  local out: {string} = {}
-  for _, token in ipairs(argv) do
-    if token:find(SENTINEL, 1, true) == nil then
-      out[#out + 1] = token
-    end
-  end
-  return joined(out)
+--- @param file string The file text to fill in — a placeholder or an
+--- example path, always literal prose
+--- @return string The command backtick-quoted, "" if the builder returns
+--- nothing (an unadvertised `make` capability)
+local function full_command(build: function(file: string): {string}, file: string): string
+  local argv = build(file)
+  if #argv == 0 then return "" end
+  return "`" .. joined(argv) .. "`"
 end
 
 --- Every bootstrap step, in order, each its own backtick-quoted command.
@@ -69,8 +73,12 @@ local function bootstrap_plan(steps: {{string}}): string
   return table.concat(parts, " and ")
 end
 
-local FALLBACK_TYPE_CHECK < const > = "bin/cosmic --check types"
-local FALLBACK_TEST < const > = "bin/cosmic --make test"
+--- The worked example path the "between edits" ratchet-fix paragraph
+--- names, in both the resolved `TEST_CMD` and its unresolved fallback.
+local EXAMPLE_TEST_FILE < const > = "_build/<name>_test.tl"
+
+local FALLBACK_TYPE_CHECK < const > = "`bin/cosmic --check types <file>`"
+local FALLBACK_TEST < const > = "`bin/cosmic --make test " .. EXAMPLE_TEST_FILE .. "`"
 local FALLBACK_GATE < const > =
 "`bin/cosmic --make ci` for cosmic;\n   `make -j$(nproc) o//tool/lua/test` for cosmopolitan"
 local FALLBACK_TEST_PHRASE < const > =
@@ -103,12 +111,11 @@ local function commands(checkout: string, kind: string): {string: string}
     end
     return out
   end
-  local test_cmd = base_command(prof.test_file)
   local out: {string: string} = {
-    TYPE_CHECK_CMD = base_command(prof.check_file),
-    TEST_CMD = test_cmd,
+    TYPE_CHECK_CMD = full_command(prof.check_file, "<file>"),
+    TEST_CMD = full_command(prof.test_file, EXAMPLE_TEST_FILE),
     GATE_CMD = "`" .. joined(prof.gate) .. "`",
-    TEST_CMD_PHRASE = "`" .. test_cmd .. " <file>`",
+    TEST_CMD_PHRASE = full_command(prof.test_file, "<file>"),
   }
   if kind == "review" then
     out.BOOTSTRAP_PHRASE = bootstrap_plan(prof.bootstrap) .. " before you run any test."

@@ -99,12 +99,12 @@ and nothing less:
    name the first-run or one-off bridge, if any, in your final report
    for the caller's PR body. If the plan is absent, STOP and request
    refinement before editing the tracking file.
-3. Between edits, `<TYPE_CHECK_CMD> <file>` on the files you
+3. Between edits, <TYPE_CHECK_CMD> on the files you
    touched; run the full gate once, before the push. When the gate
    fails on a `_build/*_test.tl` ratchet (casts, nil-returns,
    cast-sites, coverage rows, doc paths), the failure line names its
    own fix — run that regen or make that edit, then re-run only that
-   test file (`<TEST_CMD> _build/<name>_test.tl`), and go
+   test file (<TEST_CMD>), and go
    back to the full gate only when every ratchet you tripped is green
    on its own. A new public `cosmic.<name>` module trips three more:
    `_build/public_surface_baseline.tl` (`--make run
