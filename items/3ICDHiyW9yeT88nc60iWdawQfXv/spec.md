@@ -87,6 +87,12 @@ what the property itself accepts. Decode requires exact length, magic, numeric
 ranges, known phase/stage, and expected seed/iters; reject trailing bytes,
 truncation and length overflow. Read at most header+cap+1 bytes through fd,
 then reject excess; do not allocate from an untrusted advertised length.
+Open with fd.O_RDONLY|fd.O_NONBLOCK|fd.O_NOFOLLOW, then fs.stat_fd(h:fd())
+must report is_file() before reading. Reject a FIFO/device/directory/link
+without waiting, closing the handle on all branches. This closes the gap
+between bounded byte count and bounded opening/reading of a replaced path.
+Measured at implementation intake: a mkfifo fixture opened with these flags
+printed `opened without waiting; is_file=false` on the pinned Mac runtime.
 Use pcall around pack/unpack, no load, JSON or literal evaluator. Return
 explicit records with valid/error fields, not nil-shaped success tuples.
 
