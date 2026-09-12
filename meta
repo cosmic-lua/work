@@ -2,3 +2,6 @@ title: ghwrite_test: drop the vestigial GITHUB_TOKEN stubbing — the codec stop
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim_batch: 9b85b28619c901dacc1f643b966b0511ca7e3588
+handover_head: e3bca1946c95fa72081c446cf9c225fc7bd077ef
+external_url: https://github.com/cosmic-lua/work/pull/147
+builders: 46e3ea03c5be254817acaab1f4921b5a
