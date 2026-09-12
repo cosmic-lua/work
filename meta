@@ -1,7 +1,7 @@
 title: JSON ASCII 4: pin the verified release and validate packaged performance
 parent: 3IK8GTDoI0tvxb6dv8FEv3fN6gu
 target: cosmic-lua/cosmic@main
-claim_batch: 04970ec894aed6afd33a69ba06de8f67f9652d5e
+claim_batch: 30f46787845a4a37964ed2a0eb622c843f3ffad1
 handover_head: 7dfa1dd07901d6411c896a017a245e2a9230c0d7
 external_url: https://github.com/cosmic-lua/cosmic/pull/1837
 builders: b774fa47640e27bf65930c0ddba7a667
