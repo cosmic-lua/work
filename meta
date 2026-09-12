@@ -1,7 +1,7 @@
 title: builder brief: reproduce a spec's behavioral claims against the tree before building, not just re-run measured line counts
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: becb9047970d12a62bbf848fc3cf490f6265a746
+claim_batch: a46cf9ccdb7499553855da363a3f8b5a7dd75d4c
 handover_head: d67fd608801422625e8ed3197db3e1f8fe3d8029
 external_url: https://github.com/cosmic-lua/work/pull/133
 builders: 614720df3aea834a4ae87eae0f77d320
