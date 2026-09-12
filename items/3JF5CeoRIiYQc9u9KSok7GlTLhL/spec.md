@@ -455,35 +455,94 @@ still read a body during the staging window — the bar, the path extractors,
 full-text search, `show`'s spec block — and `06-retire` deletes each caller as
 its reader stops needing text.
 
-Add its INVERSE beside it, exported, because three writers hold a whole
-markdown document and the tree now holds two blobs:
+Add its INVERSE beside it, because three writers hold a whole markdown
+document and the tree now holds two blobs. `split` moved here from `03-verbs`,
+which specified it in full and could not have built it: `build_tree` takes a
+record as of this item, so the text-to-record seam has to exist as of this item
+too.
+
+`_work/spec.tl` gains `split`, the inverse of `document` above:
 
 ```
---- @param document string A spec markdown document
---- @return itemtree.Spec | nil The two fields, nil when the document does not
---- conform
---- @return string Refusal message
-local function split(document: string): itemtree.Spec | nil, string
+--- @param body string One markdown file's text
+--- @return itemtree.Spec | nil The two blobs
+--- @return string The refusal, naming the offending heading
+local function split(body: string): itemtree.Spec | nil, string
 ```
 
-It reads `sections(document)` — this module's own scanner, level-aware since
-`spec.sections: close a section by heading LEVEL, not by any heading` — and
-takes `change` and `non-goals`. It REFUSES rather than dropping, with two
-messages:
+It does NOT reuse `sections` (`local function sections(body: string): {string: string}`),
+and the reason is now HALF of what an earlier draft of this said. That draft
+called `sections` both level-blind and thematic-break-sensitive; the
+level-blindness is fixed — `spec.sections: close a section by heading LEVEL,
+not by any heading` landed it, so `sections` already keeps a `###` subsection
+inside its `## Change`. What remains is real and is why `split` still needs its
+own scanner: `sections` ends a section at a thematic break, and neither scanner
+is fence-aware.
 
-- no non-empty `change` → the bar's own words, so a writer fails the same way
-  `ready_gaps` reports it: `Change is missing or empty`.
-- any heading other than `change` and `non-goals` → name every offending
-  heading in the message and point at `log ID --add FILE`, which exists as of
-  `gitboard log ID --add FILE: append an entry without mutating the item`.
-  This is D47's *"There is no escape hatch. Content that is not prospective
-  intent is a log entry"* made a refusal instead of a convention, and it is the
-  one place the schema is enforced on a human writing a spec by hand.
+**Do not fix those two in `sections` as a side effect of this item.** That
+function is the spec bar over ~1380 live sidecars, and the level fix had to be
+measured against every one of them to find that the obvious rule newly refused
+37 specs. A fence or thematic-break change to `sections` is its own item with
+its own corpus measurement. `split` reads only what this item writes, so it is
+free to be stricter from the start.
+
+`split` is its own scanner, three rules:
+
+- **fence-aware.** A line inside a ``` fence is content, never a heading — a
+  spec that quotes `## Change` inside a pasted command's output is ordinary.
+- **level-aware.** A section starts at a heading whose lower-cased text is
+  `change` or `non-goals`, at whatever level the file spells it, and runs until
+  the next heading at the SAME or a shallower level (no more `#` than the
+  opener). A deeper heading inside it is content, so a Change with `###`
+  subsections keeps all of it.
+- **thematic breaks are content.** A `---` line does not end a section; a table
+  rule or a separator inside a Change stays in the Change.
+
+It returns `change` and `non_goals` from those two sections and REFUSES,
+rather than dropping, anything else carrying content: a section-level heading
+whose text is neither, and non-blank text before the first heading. The refusal
+names the heading and where the fact now lives, one line per case:
+
+- `## Access` → `access is a declared field now, not a spec section`. It does
+  NOT name a verb: `set --access` arrives in `03-verbs`, and a refusal that
+  names a flag the build does not have is worse than one that names the fact.
+  `03-verbs` adds the flag to this message when it adds the flag.
+- `## Evidence`, `## Goal`, `## Acceptance`, `## Enablement` and anything else
+  → `<heading> is not a spec section — a measurement or a narrative is a log
+  entry: gitboard log ID --add FILE`. That verb EXISTS (`gitboard log ID --add
+  FILE: append an entry without mutating the item`, merged), so this half of the
+  message is live the moment this lands.
+- `## Ready when` → `a precondition is a dependency, not a section`. Same
+  staging as Access: `03-verbs` appends `gitboard depend ID ON ID` once the verb
+  is there.
+
+This is the mechanism behind D47's "there is no escape hatch": without the
+refusal the retired vocabulary simply reappears. The headings it will refuse are
+the ones the corpus actually carries, measured 2026-09-12 over the board's spec
+blobs — re-run it, the counts move:
+
+```
+$ cd o/board && git for-each-ref --format='%(refname)' \
+    'refs/remotes/origin/items/*' 'refs/remotes/origin/ended/*' \
+    | sed 's|$|:spec.md|' | git cat-file --batch > /tmp/specs
+$ for h in "## Change" "## Non-goals" "## Evidence" "## Access" "## Goal" \
+    "## Acceptance" "## Enablement" "## Ready when"; do \
+    printf '%-16s %s\n' "$h" "$(grep -c "^$h *$" /tmp/specs)"; done
+## Change        1046
+## Non-goals     1026
+## Evidence       802
+## Access         186
+## Goal           479
+## Acceptance     423
+## Enablement     304
+## Ready when      47
+```
+
 
 `split` and `document` are inverses on conforming input, and THAT is what the
-write side stands on: `document(split(x))` normalizes `x`, and
+write side below stands on: `document(split(x))` normalizes `x`, and
 `split(document(sp))` returns `sp`. Neither is a byte-identity on
-non-canonical input, which is why the comparisons below move from text to
+non-canonical input, which is why `cmd_spec`'s comparisons move from text to
 records.
 
 Every current text consumer becomes `spec.document(...)` at one line each:
