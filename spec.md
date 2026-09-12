@@ -65,3 +65,11 @@ everything. Run Linux Lua gate and fixture target; verify the release commands
 build both architectures and native smoke on macOS/Windows uses the fat fixture.
 Do not claim a release exists until it has actually been published by its normal
 workflow. No pooling/default/runtime-protocol behavior changes in this PR.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
