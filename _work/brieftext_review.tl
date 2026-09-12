@@ -161,6 +161,15 @@ accept does not merge or complete the item; after landing, the caller runs
 The verdict you recorded (or why you could not), the mutation-test
 you ran and its result, and any concrete findings quoted with
 file:line. Keep it factual and concise.
+
+A request-changes verdict names five labeled facts, not a fix: the
+exact reproducer; the smallest permitted correction boundary; the
+tempting unsafe repair, when one is visible; the adjacent invariant
+that repair could violate; and the focused regression plus every
+named boundary guard the corrected head must rerun. Do not design
+the correction: when no safe envelope is established, name the
+uncertainty and let the rework builder bounce rather than widening
+scope to find one.
 ]]
 
 local REVIEW_SCRIPT < const > = [[
@@ -244,6 +253,15 @@ accept does not merge or complete the item; after landing, the caller runs
 The verdict you recorded (or why you could not), the mutation-test
 you ran and its result, and any concrete findings quoted with
 file:line. Keep it factual and concise.
+
+A request-changes verdict names five labeled facts, not a fix: the
+exact reproducer; the smallest permitted correction boundary; the
+tempting unsafe repair, when one is visible; the adjacent invariant
+that repair could violate; and the focused regression plus every
+named boundary guard the corrected head must rerun. Do not design
+the correction: when no safe envelope is established, name the
+uncertainty and let the rework builder bounce rather than widening
+scope to find one.
 ]]
 
 local record brieftext_review
