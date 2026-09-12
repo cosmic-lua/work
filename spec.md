@@ -44,3 +44,11 @@ buffered requests. Fault injection is native-test-only, not a shipped Lua API.
 
 Run the binding gate, redbean build and debug/sanitizer lifetime tests available
 in the repo. Do not edit definitions.lua because no public contract changes yet.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
