@@ -2,9 +2,7 @@ title: brieftext.tl/brieftext_review.tl: fill build/gate/type-check/test command
 parent: 3J0mNHSEcn1EhZBhLKKAP774XCs
 target: cosmic-lua/work
 claim_batch: 308619c08fe545f7c38463111dcf9797b37b4fd0
-handover_head: e9ceb7ba86eff4e2e95ee799a3c03d482f3b4c48
+handover_head: b937b25821fc44eb502345b96b7a9ecce6ab2783
 external_url: https://github.com/cosmic-lua/work/pull/121
-verdict: request changes
-verdict_head: e9ceb7ba86eff4e2e95ee799a3c03d482f3b4c48
-builders: 6a3229ccaf8c84bcd2be8900e17ee2e2 e6786ff1e19d8ca4647b5ba162eaeef6
+builders: 6a3229ccaf8c84bcd2be8900e17ee2e2 e6786ff1e19d8ca4647b5ba162eaeef6 c1bb98e4cfba741eb11269a8319ce713
 speccers: 064385b4-2555-4a26-b8ac-b5bdfe7edf85
