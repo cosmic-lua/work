@@ -1,7 +1,7 @@
 title: GitBoard briefs: migrate off custom placeholder substitution onto cosmic.template's typed renderers
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: cc0bfb1a2da45f70966e7e0f09c88f9d5bdc92e9
+claim_batch: 75f4603d958a728c192111381db805f92cd513f2
 handover_head: 4c5edb1eda0b9e3b7b8b7255d9d6efd33bdbf9bb
 external_url: https://github.com/cosmic-lua/work/pull/151
 builders: 65f918243ef70b94aef39a7e1ac444df
