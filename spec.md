@@ -16,7 +16,7 @@ algorithm, identity requirements, and acceptance bar.
 
 ## Implementation
 
-Use `_perf/bench/startup_bench.tl:47` (`local function spawn_capture`)
+Use `_perf/bench/startup_bench.tl:41` (`local function spawn_capture`)
 and `_perf/bench/binary.tl:11` (`local function find_bin`) as precedents.
 Declare `--- reads: _perf/bench/testdata/deps_driver.lua`; copy the driver
 into the temporary scenario directory in setup, outside its project root.
