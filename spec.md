@@ -12,7 +12,7 @@ new runtime APIs required.
 
 ## Implementation
 
-At `_make/deps.tl:111` (`local cached_proj`), retain the existing identity
+At `_make/deps.tl:121` (`local cached_proj`), retain the existing identity
 key and replace cached_graph's payload with a PRIVATE snapshot record
 holding graph plus `{string: integer}` positions. At `to_graph`'s current
 build loop populate both from the same `ipairs(proj.files)` enumeration.
@@ -31,7 +31,12 @@ root, modify imports.forget, or promise in-place snapshot invalidation.
 
 Keep this to the projection hypothesis, likely <=150 changed production
 lines. Leave cosmic.graph, graph facts formatting, grants, source/built
-path conversion, and public APIs unchanged. Dense fallback is mandatory;
+path conversion, and public APIs unchanged. Add focused regression
+assertions to `_make/build_incremental_test.tl` for the transitive,
+unrelated and declaration edits in the parent contract, reusing existing
+fixtures rather than a new integration framework. Add exact facts/grant
+checks to the first child's test file if existing graph tests do not
+already cover them. Dense fallback is mandatory;
 do not remove it based on the real repo's mostly sparse graph.
 
 ## Acceptance
