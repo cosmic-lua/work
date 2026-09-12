@@ -11,11 +11,6 @@ an SSE endpoint a five-line handler.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
-
-That is the core child merged; today the command reports the path as
-missing.
-
 The serializer half of SSE already ships: `cosmic/sse.tl:1-9` "format()
 is the serializing half, so a cosmic program can serve SSE without
 hand-writing the wire framing"; `cosmic/sse.tl:175` `local function
@@ -28,6 +23,11 @@ what this child replaces.
 loop around it.
 
 ## Change
+
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 - `cosmic/http/request.tl`: `body()` handles `Transfer-Encoding:
   chunked` — feed `recv` chunks to one `unchunker` until `is_done()`,
