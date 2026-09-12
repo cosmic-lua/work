@@ -112,6 +112,18 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
         try(db, "INSERT OR IGNORE INTO speccers(item, session, seq) VALUES (?, ?, ?)",
           {it.id, name, seq}, nil, problems, it.id)
       end
+      for seq, path in ipairs(it.touches or {}) do
+        try(db, "INSERT OR IGNORE INTO touches(item, path, seq) VALUES (?, ?, ?)",
+          {it.id, path, seq}, nil, problems, it.id)
+      end
+      for seq, repo in ipairs(it.access or {}) do
+        try(db, "INSERT OR IGNORE INTO access(item, repo, seq) VALUES (?, ?, ?)",
+          {it.id, repo, seq}, nil, problems, it.id)
+      end
+      for seq, target in ipairs(it.depends_on or {}) do
+        try(db, "INSERT OR IGNORE INTO depends_on(item, target, seq) VALUES (?, ?, ?)",
+          {it.id, target, seq}, nil, problems, it.id)
+      end
       -- `it.order`'s own array index IS the stored 1-based position —
       -- a stale entry (naming something no longer a child of `it`)
       -- lands verbatim, exactly as the module header describes;
@@ -275,6 +287,9 @@ local function delete_item(db: sqlite.Database, id: string): boolean, string
   for _, sql in ipairs({
       "DELETE FROM builders WHERE item = ?",
       "DELETE FROM speccers WHERE item = ?",
+      "DELETE FROM touches WHERE item = ?",
+      "DELETE FROM access WHERE item = ?",
+      "DELETE FROM depends_on WHERE item = ?",
       "DELETE FROM ranks WHERE parent = ?",
       "DELETE FROM items WHERE id = ?",
     }) do

@@ -209,6 +209,9 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       external_url = row.external_url as string, -- cast: from any (sqlite row)
       builders = {},
       speccers = {},
+      touches = {},
+      access = {},
+      depends_on = {},
       reviewer = row.reviewer as string, -- cast: from any (sqlite row)
       pr = math.tointeger(row.pr as number) or 0, -- cast: from any (sqlite row)
       result = row.result as string, -- cast: from any (sqlite row)
@@ -253,6 +256,36 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   local sierr = speccer_rows:err()
   if sierr then
     return nil, sierr
+  end
+
+  -- The three declared list fields, each from its own table in the same
+  -- shape `builders` and `speccers` are read just above. This hydration
+  -- IS what keeps `rank` — which takes the item it saves out of
+  -- `store.list` — from writing a declared field back empty.
+  local declared: {string: {string: {string}}} = {}
+  for _, it in pairs(by_id) do
+    declared[it.id] = {touches = it.touches, access = it.access,
+      depends_on = it.depends_on}
+  end
+  for _, q in ipairs({{"touches", "path"}, {"access", "repo"},
+      {"depends_on", "target"}}) do
+    local drows, dqerr = c.db:query(("SELECT item, %s AS value FROM %s "
+        .. "ORDER BY item, seq"):format(q[2], q[1]))
+    if drows == nil then
+      return nil, dqerr
+    end
+    for row in drows do
+      local id = row.item as string -- cast: from any (sqlite row)
+      local lists = declared[id]
+      if lists ~= nil then
+        local list = lists[q[1]]
+        list[#list + 1] = row.value as string -- cast: from any (sqlite row)
+      end
+    end
+    local dierr = drows:err()
+    if dierr then
+      return nil, dierr
+    end
   end
 
   -- Every item's own ranked-children list, `ranks` rows at `parent =

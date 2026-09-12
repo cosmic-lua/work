@@ -67,6 +67,9 @@ local function full_item(): item.Item
         claim_batch = ("ef"):rep(20),
         builders = "session-a session-b",
         speccers = "session-c",
+        touches = "_work/itemtree.tl _work/item.tl",
+        access = "cosmic-lua/cosmic jart/cosmopolitan",
+        depends_on = child1 .. " " .. child2,
         reviewer = "session-d",
         pr = 42,
         verdict = "request changes",
@@ -103,6 +106,40 @@ local function test_meta_round_trips_every_scalar_field()
   assert(parsed.verdict_head == it.verdict_head)
   assert(parsed.builders == table.concat(it.builders, " "))
   assert(parsed.speccers == table.concat(it.speccers, " "))
+  -- The three declared list fields ride as space-joined lines exactly as
+  -- `builders`/`speccers` do, and an empty one writes no line at all.
+  assert(parsed.touches == table.concat(it.touches, " "))
+  assert(parsed.access == table.concat(it.access, " "))
+  assert(parsed.depends_on == table.concat(it.depends_on, " "))
+  local bare = check.must(item.decode({id = fresh_id(), title = "bare"}))
+  local none = itemtree.encode_meta(bare)
+  for _, field in ipairs({"touches", "access", "depends_on"}) do
+    assert(not none:find(field, 1, true),
+      ("an empty %s writes no line: %s"):format(field, none))
+  end
+end
+
+-- The declared lists round-trip through the tree in declared ORDER —
+-- they are lists, not sets, and `to_item`'s `%S+` loop is the same read
+-- `builders` gets.
+local function test_declared_lists_round_trip_in_order()
+  local it = full_item()
+  local parsed = itemtree.parse_meta(itemtree.encode_meta(it))
+  local back = itemtree.to_item(it.id, parsed, false, it.order, {})
+  for i, path in ipairs(it.touches) do
+    assert(back.touches[i] == path,
+      ("touches[%d]: %s vs %s"):format(i, back.touches[i], path))
+  end
+  assert(#back.touches == #it.touches, "touches length")
+  for i, slug in ipairs(it.access) do
+    assert(back.access[i] == slug, ("access[%d]: %s"):format(i, back.access[i]))
+  end
+  assert(#back.access == #it.access, "access length")
+  for i, dep in ipairs(it.depends_on) do
+    assert(back.depends_on[i] == dep,
+      ("depends_on[%d]: %s"):format(i, back.depends_on[i]))
+  end
+  assert(#back.depends_on == #it.depends_on, "depends_on length")
 end
 
 -- Zero values are OMITTED, not written as empty: an item with nothing

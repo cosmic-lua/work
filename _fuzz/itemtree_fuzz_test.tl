@@ -180,7 +180,8 @@ end
 --- nothing reads any more) alongside the ones written today.
 local META_KEYS < const >: {string} = {"title", "parent", "target", "repo",
   "base", "key", "claim", "reviewer", "pr", "result", "verdict",
-  "verdict_head", "verdict_spec", "resolution", "builders", "speccers"}
+  "verdict_head", "verdict_spec", "resolution", "builders", "speccers",
+  "touches", "access", "depends_on"}
 
 --- Draw an id: usually a fresh ksuid, sometimes deliberately not one
 --- (empty, garbage) — an edge kind's own ids carry raw strings from the

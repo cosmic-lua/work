@@ -85,6 +85,33 @@ CREATE TABLE speccers (
   PRIMARY KEY(item, seq)
 ) STRICT, WITHOUT ROWID;
 
+-- The three declared list fields, one row per entry in the same shape
+-- `builders`/`speccers` carry — `(item, <value>, seq)`, `seq` the
+-- 1-based index in the declared list. A whole-board read rebuilds each
+-- `item.Item` from these columns (`_work.cachequery`), so a field
+-- without its own table here is written back EMPTY by the next verb
+-- that saves an item it read from `store.list`.
+CREATE TABLE touches (
+  item TEXT REFERENCES items(id),
+  path TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY(item, seq)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE access (
+  item TEXT REFERENCES items(id),
+  repo TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY(item, seq)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE depends_on (
+  item TEXT REFERENCES items(id),
+  target TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY(item, seq)
+) STRICT, WITHOUT ROWID;
+
 CREATE UNIQUE INDEX one_open_item_per_key
   ON items(key) WHERE key <> '' AND resolution = '';
 

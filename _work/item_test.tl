@@ -264,6 +264,61 @@ local function test_speccers_round_trip()
     .. table.concat(flagged.decode_problems or {}, "; "))
 end
 
+-- The three declared list fields ride exactly as `builders` does — one
+-- space-joined string, omitted when empty, split back into a list in
+-- declared order. This codec is not dead legacy: `store.snapshot_item`'s
+-- deep copy is `encode` then `decode`, and it is the baseline
+-- `_work.fastimport`'s `diff_item` compares against, so a list field
+-- missing from it would make every save re-emit a `meta` op.
+local function test_declared_lists_round_trip_through_the_codec()
+  local t = base()
+  t.parent = PARENT
+  t.touches = "_work/itemtree.tl _work/item.tl"
+  t.access = "cosmic-lua/cosmic"
+  t.depends_on = PARENT
+  local it = check.must(item.decode(t))
+  assert(#it.touches == 2 and it.touches[1] == "_work/itemtree.tl"
+    and it.touches[2] == "_work/item.tl",
+    "touches decodes in declared order: " .. table.concat(it.touches, ","))
+  assert(#it.access == 1 and it.access[1] == "cosmic-lua/cosmic")
+  assert(#it.depends_on == 1 and it.depends_on[1] == PARENT)
+  local back = item.encode(it)
+  assert(back.touches == "_work/itemtree.tl _work/item.tl", "touches encodes back")
+  assert(back.access == "cosmic-lua/cosmic", "access encodes back")
+  assert(back.depends_on == PARENT, "depends_on encodes back")
+
+  it.touches, it.access, it.depends_on = {}, {}, {}
+  local empty = item.encode(it)
+  assert(empty.touches == nil and empty.access == nil
+    and empty.depends_on == nil, "an empty list is not written")
+end
+
+-- `problems` judges one item's own dependency list and nothing wider: a
+-- self-dependency and a repeat are content problems here, while a CYCLE
+-- spans two items and is neither this function's to find nor its to
+-- report.
+local function test_depends_on_refuses_itself_and_a_repeat()
+  local t = base()
+  t.parent = PARENT
+  t.depends_on = ID
+  local itself = check.must(item.decode(t))
+  assert(has_problem(itself, "an item cannot depend on itself"),
+    "a self-dependency decodes flagged: "
+    .. table.concat(itself.decode_problems or {}, "; "))
+
+  t.depends_on = PARENT .. " " .. PARENT
+  local repeated = check.must(item.decode(t))
+  assert(has_problem(repeated, "depends_on repeats"),
+    "a repeated dependency decodes flagged: "
+    .. table.concat(repeated.decode_problems or {}, "; "))
+
+  t.depends_on = PARENT
+  local fine = check.must(item.decode(t))
+  assert(#item.problems(fine) == 0,
+    "one dependency on another item is no problem: "
+    .. table.concat(item.problems(fine), "; "))
+end
+
 -- decode validates through cosmic.shape now: a wrong-typed field is a
 -- refusal with a dotted path, not a silent coercion to zero.
 local function test_a_wrong_typed_field_is_refused()

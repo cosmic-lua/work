@@ -213,8 +213,8 @@ end
 --- `_work.index_rank`'s and `_work.readddl`'s maintained `rank_path`
 --- and `role`, `_work.find`'s search table, and `_work.cache`'s own two.
 local CACHE_TABLES < const >: {string} = {
-  "items", "ranks", "builders", "speccers", "rank_path", "role", "search",
-  "cache_meta", "lanes",
+  "items", "ranks", "builders", "speccers", "touches", "access", "depends_on",
+  "rank_path", "role", "search", "cache_meta", "lanes",
 }
 
 --- Compare `s`'s LIVE, incrementally maintained cache file against a
@@ -294,6 +294,32 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
       "rank"))
   fixture.caller_publish(a)
   assert_cache_matches_cold_rebuild(a, "after an order change")
+
+  -- 4) DECLARED LISTS: `touches`/`access`/`depends_on` rows, each in its
+  -- own side table. Declared once and then REdeclared, because an
+  -- incremental patch is delete-then-reinsert and the tables are keyed
+  -- on `(item, seq)`: a `DELETE` the patch fails to make leaves the prior
+  -- entry sitting at that seq, and `INSERT OR IGNORE` then silently keeps
+  -- it. Only the second write exposes that, so both are made here.
+  check.must(store.list(a))
+  local declared_it = check.must(store.load(a, other_leaf))
+  declared_it.touches = {"_work/a.tl", "_work/b.tl"}
+  declared_it.access = {"cosmic-lua/cosmic", "jart/cosmopolitan"}
+  declared_it.depends_on = {root_a}
+  assert(gate.commit_and_publish(a, declared_it, nil, "declare the lists",
+      "set"))
+  fixture.caller_publish(a)
+  assert_cache_matches_cold_rebuild(a, "after declaring the lists")
+
+  check.must(store.list(a))
+  local redeclared_it = check.must(store.load(a, other_leaf))
+  redeclared_it.touches = {"_work/c.tl"}
+  redeclared_it.access = {"cosmic-lua/work"}
+  redeclared_it.depends_on = {}
+  assert(gate.commit_and_publish(a, redeclared_it, nil, "redeclare the lists",
+      "set"))
+  fixture.caller_publish(a)
+  assert_cache_matches_cold_rebuild(a, "after redeclaring the lists")
 
   -- B syncs onto everything A just did, then makes a save of its own.
   fixture.caller_fetch(b)

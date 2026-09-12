@@ -38,7 +38,7 @@ local META_KEYS < const >: {string} = {
   "title", "parent", "repo", "base", "key", "claim_batch",
   "handover_head", "external_url", "reviewer", "pr", "result", "verdict",
   "verdict_head", "landed_head", "resolution",
-  "builders", "speccers",
+  "builders", "speccers", "touches", "access", "depends_on",
 }
 
 --- An item's spec prose, the two blobs the `spec/` subtree holds: what
@@ -160,6 +160,15 @@ local function encode_meta(it: item.Item): string
   if #(it.speccers or {}) > 0 then
     parts[#parts + 1] = "speccers: " .. table.concat(it.speccers, " ") .. "\n"
   end
+  if #(it.touches or {}) > 0 then
+    parts[#parts + 1] = "touches: " .. table.concat(it.touches, " ") .. "\n"
+  end
+  if #(it.access or {}) > 0 then
+    parts[#parts + 1] = "access: " .. table.concat(it.access, " ") .. "\n"
+  end
+  if #(it.depends_on or {}) > 0 then
+    parts[#parts + 1] = "depends_on: " .. table.concat(it.depends_on, " ") .. "\n"
+  end
   return table.concat(parts)
 end
 
@@ -226,6 +235,9 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     external_url = meta.external_url or "",
     builders = {},
     speccers = {},
+    touches = {},
+    access = {},
+    depends_on = {},
     reviewer = meta.reviewer or "",
     pr = math.tointeger(tonumber(meta.pr or "0")) or 0,
     result = meta.result or "",
@@ -239,6 +251,15 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
   end
   for name in (meta.speccers or ""):gmatch("%S+") do
     it.speccers[#it.speccers + 1] = name
+  end
+  for path in (meta.touches or ""):gmatch("%S+") do
+    it.touches[#it.touches + 1] = path
+  end
+  for slug in (meta.access or ""):gmatch("%S+") do
+    it.access[#it.access + 1] = slug
+  end
+  for dep in (meta.depends_on or ""):gmatch("%S+") do
+    it.depends_on[#it.depends_on + 1] = dep
   end
   local bad = item.problems(it)
   if target_err ~= "" then
