@@ -10,11 +10,6 @@ and fills `req.params`.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
-
-That is the core child merged; today the command reports the path as
-missing.
-
 The core child defines `type Handler = function(req: Request, res:
 Response)` and `Request.path` (percent-decoded via `cosmic.url.parse`,
 `cosmic/url.tl:125`) — the router matches on that. `Request` gets a
@@ -22,6 +17,11 @@ Response)` and `Request.path` (percent-decoded via `cosmic.url.parse`,
 went through a router.
 
 ## Change
+
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 New file `cosmic/http/router.tl` (module `cosmic.http.router`):
 
