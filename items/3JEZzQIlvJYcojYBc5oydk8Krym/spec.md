@@ -65,6 +65,11 @@ prints 0.
    field checked in the POST handler (the pattern, six lines); running
    it (`cosmic --make build && ./o/bin/todo`); the header reference —
    one table mapping each `cosmic.htmx` function to its `HX-*` header.
+   `docs/guides/htmx.md` is a `.md` under `--make lint`'s walk:
+   `--make lint`'s `doc-citation` rule refuses an inline `` `path:line`
+   `` citation in committed markdown (docs/guides/lint.md) — quote a
+   fixture file as a FENCED citation (a `-- path:line` comment as the
+   code block's first line) rather than a bare inline pin.
 3. `docs/guides/index.md`: append the guide's line.
 4. Gate: `bin/cosmic --make ci` ends `ci: PASS`, which now builds and
    drives the fixture.
