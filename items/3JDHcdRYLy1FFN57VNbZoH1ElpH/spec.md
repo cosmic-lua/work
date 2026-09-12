@@ -51,3 +51,37 @@ corpus fingerprints with runtime SHA/source SHA and exact command. The
 baseline test run must pass before the C fast path is attempted. Aim for
 <=350 changed lines across test, shared corpus/driver and BUILD.mk; use
 small helpers rather than growing the existing test file indefinitely.
+
+## Implemented and verified — 2026-09-12
+
+Landed in [cosmopolitan PR #393](https://github.com/cosmic-lua/cosmopolitan/pull/393)
+at `6c32f7a07cb7272300b2e06e06ac9db85360e024`; independent review accepted
+the exact handover `49163af8e61961de865902f529e53bc0347bf670`.
+The final change is 255 inserted lines across the new test, corpus and
+explicit BUILD.mk enrollment. Existing tests and parser are unchanged.
+
+PR run 34675442333 and merge-group run 34675803453 passed the Linux
+x86-64 binding gate, aarch64/fat build and MODE=cov gate. Separate clean
+Linux preflight 34676272246 passed the exact `make -j$(nproc)
+o//tool/lua/test` aggregate and rel runtime build. Its coverage verdict:
+69 tests traced, 4 existing shrink-only skips, 354/543 binding functions
+covered; `test_coverage: PASS`. The new ASCII test was traced normally.
+
+The 36,895 emitted records match byte-for-byte across repeated runs and
+the Linux rel / pinned macOS runtimes. Corpus SHA256:
+`e61139f10a9dbced988b9cd6721959a585db24d3e2d2efc18b5d60512d496048`.
+Run from the C repository root: `RUNTIME tool/lua/test_ljson_ascii.lua --emit`.
+Pinned macOS Cosmic SHA256 is
+`10f66af3cfe6b55e3f97c058ddff5e6b0ba3faf6eef8c2462cb7372895e4e1c2`;
+preflight Linux rel lua SHA256 is
+`b28cb5dd07ea5d831d549dfb0301b095ce514c76f817ff68ed2cabeed0eca092`.
+Exact build identity, commands and records are retained in the linked
+[preflight artifacts](https://github.com/cosmic-lua/cosmic/actions/runs/34676272246)
+and local `json-evidence/contract` / `json-evidence/preflight` artifacts.
+
+Review caught low-bit LCG sampling that selected insertion every time.
+The fixed generator exercises insert/delete/substitute/truncate
+2,482/2,486/2,548/2,484 times. A permanent bounded diversity assertion
+fails when the original low-bit selection is restored. Full corpus
+generation stays in `--emit`; the normal assertion suite traces about
+156,000 calls, below the unchanged 8,000,000-call per-test cap.
