@@ -11,8 +11,7 @@ change, UTF-8 repair, or changes to the old fallback's ASCII loop.
 Four dependency-ordered children cover compatibility tests, checked
 performance scenarios, the C fast path, and the released cosmic pin plus
 independent end-to-end verification. All four chunks are implemented and
-validated. The tests, benchmarks and C fast path have landed; the accepted
-runtime pin awaits the normal protected merge. The measured implementation
+validated and have landed through their normal protected merges. The measured implementation
 record below supersedes the original scouting estimate.
 
 Implementation order (each earlier item is a prerequisite child of the next):
@@ -271,7 +270,8 @@ The entire four-chunk implementation is complete and independently accepted:
 3. Bounded C fast path [cosmopolitan PR394](https://github.com/cosmic-lua/cosmopolitan/pull/394),
    landed780f45055acd52401de6c95c16365338690e19e7.
 4. Actual released runtime pin [cosmic PR1837](https://github.com/cosmic-lua/cosmic/pull/1837),
-   accepted7dfa1dd07901d6411c896a017a245e2a9230c0d7; landing pending.
+   accepted7dfa1dd07901d6411c896a017a245e2a9230c0d7,
+   landeda327ff32760ec15bbde7514c1cd7ed34647ae8d7.
 
 The C diff uses the fixed bounded scalar algorithm above and leaves the
 fallback loop unchanged. All four external call sites, stack ownership,
@@ -323,3 +323,27 @@ correctness passed; the runner collector was fixed and the complete final
 experiment reran. Temporary validation branches were removed after local
 artifacts and commits were retained. No runner infrastructure enters either
 product. Final landing and parent-level merged-artifact verification follow.
+
+## Final parent-level outcome verification
+
+All four implementation PRs have landed. Final pin PR1837 merged at
+2026-09-12T15:17:42Z as a327ff32760ec15bbde7514c1cd7ed34647ae8d7;
+local cosmic/main is that exact commit. Root verified the entire landed
+tree equals the accepted7dfa1dd0 tree and main pins the proven new release.
+The integration build's downloaded Cosmic artifact is byte-identical to
+the candidate in the successful full packaged performance experiment,
+SHA25626b019456bfd33bfa8e5624fd957353e8db7411a67a4a23836d5ff9ce1d7a313.
+
+Root directly executed this actual integrated Cosmic artifact on macOS
+arm64 through the36,895-record frozen corpus and compared every record
+to the old package oracle: zero mismatches, exit0, SHA256e61139f1 (full
+hash above). The same artifact passes the dynamic GC ownership probe,
+128 iterations/8 retained values, exit0. This checks the delivered runtime
+rather than only relying on child completion states. Raw parent-level
+proof is local json-evidence/integration-artifact-34701499547; full measured
+performance and correctness proof remains in experiment34698381287 and
+child p8Ct_8YDi. No implementation chunk remains outstanding.
+
+Final protected integration run34701499547 passes all5 jobs, including
+reproducibility and both platform smoke checks. The complete optimization
+meets the stated outcome with no unresolved acceptance gate.
