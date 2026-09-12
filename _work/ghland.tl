@@ -23,6 +23,7 @@ local apiauth = require("_work.apiauth")
 local gh = require("_work.gh")
 local ghwrite = require("_work.ghwrite")
 local item = require("_work.item")
+local review = require("_work.review")
 local store = require("_work.store")
 
 --- What performs an activated landing's requests: `cosmic.fetch.fetch`'s
@@ -88,6 +89,10 @@ end
 --- unreviewed head to land — the one outcome the sha guard exists to
 --- prevent. A moved head is a reported landing failure the caller
 --- resolves by hand.
+---
+--- A 405 is not the opposite claim: "not mergeable right now" says
+--- nothing about whether the head still matches the guarded sha, so
+--- the arming path checks that itself before it sends anything.
 --- @param msg string The rendered merge failure
 --- @return boolean True when arming auto-merge is the right next step
 local function is_held_back(msg: string): boolean
@@ -145,6 +150,20 @@ local function attempt(s: store.Store, repo: string, number: integer,
     return {attempted = true, merged = "", armed = false,
       error = ("%s; then reading the request to arm auto-merge: %s")
       :format(msg, perr)}
+  end
+  -- Arming is head-blind on both routes: the GraphQL mutation addresses
+  -- the request by node id alone, and its REST fallback carries no sha
+  -- either, so auto-merge lands whatever head is current once the
+  -- repo's requirements clear. A 405 does not establish that the head
+  -- still matches the one the merge was guarded with, and the read just
+  -- performed for the node id already carries the current head — so a
+  -- head that has moved past the accept is reported exactly as a 409 is,
+  -- and nothing is armed over a commit no reviewer read.
+  if review.head_moved(p, head) then
+    return {attempted = true, merged = "", armed = false,
+      error = ("%s; the accept judged %s and the request's head is now %s, "
+        .. "so auto-merge was not armed"):format(msg, head:sub(1, 7),
+        (p.head_sha or ""):sub(1, 7))}
   end
   local armed, aerr = ghwrite.enable_auto_merge(s, repo, number, p.node_id)
   if not armed then
