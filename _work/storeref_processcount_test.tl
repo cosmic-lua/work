@@ -25,6 +25,16 @@ assert(fs.write(hermetic_config, ""))
 assert(env.set("GIT_CONFIG_GLOBAL", hermetic_config))
 assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
 
+local function git(cwd: string, argv: {string})
+  local full: {string} = {"git", "-c", "user.email=test@example.com",
+    "-c", "user.name=test", "-c", "core.createObject=rename"}
+  for _, a in ipairs(argv) do
+    full[#full + 1] = a
+  end
+  local r = check.must(child.run(full, {cwd = cwd}))
+  assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
+end
+
 -- `store.init_repo` runs a handful of git processes (init, the board
 -- commit) that never vary between calls — build the result once per
 -- process and copy it, instead of paying that cost on every case.
@@ -36,6 +46,17 @@ local function init_state_repo(name: string): string
     state_template = fs.join(tmpdir, "storeref-processcount-template")
     assert(fs.remove_all(state_template))
     assert(fs.make_dirs(state_template))
+    -- Pre-`init` and disable `maintenance.auto` so `store.init_repo`
+    -- (which sees `.git` already there and skips its own `git init`)
+    -- never has a chance to run with it enabled. Its board commit is
+    -- plumbing (`gitobj.commit_tree`), which never triggers git's own
+    -- `run_auto_maintenance()`, so this template is not exposed today
+    -- — disabled anyway, at zero cost, since a maintenance run's
+    -- transient `.git/objects/maintenance.lock` is a race `fs.copy_tree`
+    -- can lose on every later call. `_work/commit_flow_fixture.tl` has
+    -- the confirmed version of this fix.
+    git(state_template, {"init", "-q"})
+    git(state_template, {"config", "maintenance.auto", "false"})
     assert(store.init_repo(state_template))
   end
   local root = fs.join(tmpdir, "storeref-processcount-" .. name)
