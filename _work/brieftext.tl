@@ -12,6 +12,14 @@
 ---
 --- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
 --- angle brackets is prose and must not match that shape.
+---
+--- `BUILDER`'s `<TYPE_CHECK_CMD>`, `<TEST_CMD>`, `<GATE_CMD>`, and
+--- `<BOOTSTRAP_CMD>` are the item's resolved repo-mechanics commands
+--- (`_work.repoprofile` via `_work.briefcommands`), never a repo name
+--- named inline here — `<BOOTSTRAP_CMD>` in this template is the
+--- resolved bootstrap plan's own last step (a rebuild after moving a
+--- sibling, never a re-fetch); `_work.brieftext_review`'s copy is the
+--- whole plan instead, for a fresh checkout with no cache yet.
 
 local BUILDER_PREPARATION < const > = [[It is already bootstrapped: `o/` is warm, the pins are fetched. Do not
 fetch or build before your first edit; `--check types` the files you
@@ -91,12 +99,12 @@ and nothing less:
    name the first-run or one-off bridge, if any, in your final report
    for the caller's PR body. If the plan is absent, STOP and request
    refinement before editing the tracking file.
-3. Between edits, `bin/cosmic --check types <file>` on the files you
+3. Between edits, <TYPE_CHECK_CMD> on the files you
    touched; run the full gate once, before the push. When the gate
    fails on a `_build/*_test.tl` ratchet (casts, nil-returns,
    cast-sites, coverage rows, doc paths), the failure line names its
    own fix — run that regen or make that edit, then re-run only that
-   test file (`bin/cosmic --make test _build/<name>_test.tl`), and go
+   test file (<TEST_CMD>), and go
    back to the full gate only when every ratchet you tripped is green
    on its own. A new public `cosmic.<name>` module trips three more:
    `_build/public_surface_baseline.tl` (`--make run
@@ -105,12 +113,11 @@ and nothing less:
    `_build/doc_returns_test` (one `@return` tag per declared slot on
    every function it exports). A ratchet row you add is part of the
    diff, not scope creep: say so in the PR body. Run the repo's gate
-   locally and confirm it is green (`bin/cosmic --make ci` for cosmic;
-   `make -j$(nproc) o//tool/lua/test` for cosmopolitan). This run is
+   locally and confirm it is green (<GATE_CMD>). This run is
    for you, to catch a red head before it burns a review round; it is
    never pasted into the PR. Run `--make coverage` after your last
    test edit, not before — a new test moves a row's `total`; run
-   `--make build` once before `--check types` on a file whose sibling
+   `<BOOTSTRAP_CMD>` once before `--check types` on a file whose sibling
    you moved.
 4. If the spec carries an `## Acceptance` section: it is the
    refiner's own worked proof, not a second gate you owe beyond the

@@ -19,8 +19,16 @@
 --- mutation step uses
 --- `git show <head>:<path>` into the scratchpad, and its verdict block
 --- reads the diff from `<PRODUCT_ROOT>` without a `<WORKTREE>`
---- placeholder. The shared checkout note still points at `bin/cosmic
---- --make fetch` before a review test runs.
+--- placeholder. The shared checkout note still points at
+--- `<BOOTSTRAP_PHRASE>` (`_work.brief` fills it from the item's
+--- resolved repo kind via `_work.briefcommands` — the fresh-checkout
+--- bootstrap plan in full, never just its last step, plus its own
+--- trailing "before you run any test" prose) before a review test
+--- runs; `<TEST_CMD_PHRASE>` in the mutation-test line is that same
+--- module's resolved test-file command, backtick-quoted with its own
+--- `<file>`. Both fall back to the exact literal sentence these
+--- templates carried before `_work.briefcommands` existed when the
+--- resolver cannot place the item's repo.
 ---
 --- `<PRODUCT_ROOT>` is the reviewer's own local product checkout — where the
 --- diff is read and, in `REVIEW_SCRIPT`, the `--repo-dir` the caller passes;
@@ -110,8 +118,7 @@ fine.
 
 Mutation-test at least one guard the change adds or relies on: break
 what it guards, confirm the diff's own test catches it — run the ONE
-test file that guards it (`bin/cosmic --make test <file>` in cosmic,
-`bin/cosmic --make test _work/<file>` in work), not the suite —
+test file that guards it (<TEST_CMD_PHRASE>), not the suite —
 restore it exactly. A real break changes the outcome the test reads,
 never just the text around it: replace a matched needle with
 unrelated text rather than extending it, flip a boolean rather than
@@ -128,8 +135,7 @@ in it. Your worktree is the only tree.
 credential lookup, check read, merge, or provider write. The caller owns
 those operations. This review is claimed under session `<REVIEW_SESSION>` —
 you MUST use that exact string. That checkout has no `o/3p` cache yet — run
-`bin/cosmic --make fetch` before its first test, and `--make build` once if
-you run any test.
+<BOOTSTRAP_PHRASE>
 
 GitBoard invocation for this review: `<GITBOARD_CMD>` — the exact
 loader and absolute executable the caller runs board commands through.
@@ -212,8 +218,7 @@ those operations. Read the diff with `git fetch origin <branch>` and `git
 show <head>:<path>` in the product checkout at `<PRODUCT_ROOT>`; you create
 no worktree. This review is claimed under session `<REVIEW_SESSION>` — you
 MUST use that exact string. That checkout has no `o/3p` cache yet — run
-`bin/cosmic --make fetch` before its first test, and `--make build` once if
-you run any test.
+<BOOTSTRAP_PHRASE>
 
 GitBoard invocation for this review: `<GITBOARD_CMD>` — the exact
 loader and absolute executable the caller runs board commands through.
