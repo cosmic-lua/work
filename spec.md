@@ -50,3 +50,11 @@ Add `tool/lua/test_fetch_pool_framing.lua` with raw loopback responses:
 Run binding gate and redbean build as in step 1. Mutation-check close-token and
 encoded-versus-decoded consumption guards. Keep protocol assertions as permanent
 tests. No changes to net/http's shared parser or C success/failure arities.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
