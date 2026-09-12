@@ -58,3 +58,11 @@ regression fail. No public binding/type/ratchet signature changes in this PR.
 ## Non-goals
 
 No TLS pooling, parser rewrite, stream changes, hidden retries or default change.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
