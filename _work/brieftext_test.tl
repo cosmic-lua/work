@@ -328,3 +328,35 @@ local function test_where_to_work_warns_the_worktree_is_shared()
     "Where to work must forbid investigating or undoing a change in "
     .. "the worktree the builder did not make")
 end
+
+-- The bounce that motivated this guidance found a real bug but let the
+-- rework builder pick its own repair, which crossed a pinned-checker
+-- boundary and cost a second review round. A request-changes verdict
+-- must instead name the tempting unsafe fix and the invariant it
+-- risks, so the rework builder bounces on an unclear envelope rather
+-- than widening scope to find one.
+local function test_request_changes_names_five_labeled_facts()
+  for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
+    assert(tmpl:find(
+        "A request-changes verdict names five labeled facts, not a "
+        .. "fix: the exact reproducer; the smallest permitted "
+        .. "correction boundary; the tempting unsafe repair, when "
+        .. "one is visible; the adjacent invariant that repair could "
+        .. "violate; and the focused regression plus every named "
+        .. "boundary guard the corrected head must rerun.", 1, true)
+      ~= nil,
+      "request-changes guidance must name all five labeled facts: " .. tmpl)
+  end
+end
+
+local function test_request_changes_forbids_designing_the_correction()
+  for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
+    assert(tmpl:find(
+        "Do not design the correction: when no safe envelope is "
+        .. "established, name the uncertainty and let the rework "
+        .. "builder bounce rather than widening scope to find one.",
+        1, true) ~= nil,
+      "request-changes guidance must forbid designing the correction "
+      .. "and instead tell the reviewer to name the uncertainty: " .. tmpl)
+  end
+end
