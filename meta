@@ -2,3 +2,6 @@ title: spec-bar absent: reports a present path as missing — the check reads a 
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
 claim_batch: 045ce548007d0d2010a85fcf8a5208d16134db1d
+handover_head: 444df543051828e9f331b7d51908304f54309b64
+external_url: https://github.com/cosmic-lua/work/pull/149
+builders: 50473393884193a23169a75bd4a0b029
