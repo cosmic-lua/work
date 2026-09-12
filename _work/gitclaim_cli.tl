@@ -4,6 +4,7 @@
 --- explicit execution uses ordinary Git with caller-owned authentication.
 local child = require("cosmic.child")
 local claimsession = require("_work.claimsession")
+local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
 local gitclaim = require("_work.gitclaim")
 local gitdraft = require("_work.gitdraft")
@@ -129,11 +130,39 @@ local function fetch_forward(root: string, base: string, local_sha: string,
   return remote_sha, ""
 end
 
+--- Refusal text when `base` cannot reach `handover` — the shape a review
+--- claim takes once the local product repository has moved on, unrelated to
+--- this item, since the handover was recorded. "" when `handover` is "" (no
+--- recorded handover to protect) or `base` already reaches it.
+--- `worktree ID --review` cannot resolve this: it requires an active claim
+--- on ID, and the claim this message is refusing is exactly what would
+--- supply one — naming it here would send the caller in a circle. The
+--- remedy that actually works is repositioning `branch_name` — the LOCAL
+--- PRODUCT REPO's own branch that `claim` reads `base` from — to (or
+--- behind) the recorded handover, then retrying `claim` against that same
+--- repo.
+local function handover_ancestry_refusal(root: string, id: string,
+    branch_name: string, base: string, handover: string): string
+  if handover == "" then return "" end
+  local lineage, _lerr = commit_evidence.verify_lineage(root, base, handover)
+  if lineage ~= nil then return "" end
+  return ("%s already has a commit handover (%s) that local %s (%s) cannot "
+    .. "reach — a fresh review claim must not silently capture an unrelated "
+    .. "base; reposition %s in %s to (or behind) the handover "
+    .. "(e.g. `git -C %s update-ref refs/heads/%s %s`), then retry "
+    .. "`claim --repo-dir %s`")
+  :format(id:sub(1, 8), handover, base, base:sub(1, 12), branch_name, root,
+    root, branch_name, handover, root)
+end
+
 --- Product base recorded by an acquisition. Repo-less work uses the board
 --- item commit itself; ordinary work uses an already-fetched product base.
 --- A local target branch behind its own configured remote-tracking ref is
 --- never captured silently: it is refused with the exact commands that
 --- resolve it, unless `fetch_base` explicitly authorizes running them here.
+--- An item already carrying a recorded handover additionally requires the
+--- resolved base to still reach it, so a review claim never recaptures a
+--- base the handover cannot descend from (see `handover_ancestry_refusal`).
 local function product_base(s: store.Store, it: item.Item, source_ref: string,
     repo_dir: string, fetch_base: boolean): string | nil, string
   if (it.repo or "") == "" then return refs.read_ref(s.root, source_ref) end
@@ -144,15 +173,23 @@ local function product_base(s: store.Store, it: item.Item, source_ref: string,
   if local_sha == nil then return nil, lerr end
   local candidate, serr = stale_target(root, base, local_sha)
   if serr ~= "" then return nil, serr end
-  if candidate == "" then return local_sha, "" end
-  if not fetch_base then
-    return nil, ("local %s (%s) is behind its tracking ref (%s) — run "
-      .. "`git -C %s fetch` then `git -C %s update-ref refs/heads/%s %s`, "
-      .. "or re-run claim with --fetch-base to do it here"):format(
-      base, local_sha:sub(1, 12), candidate:sub(1, 12), root, root, base,
-      candidate)
+  local resolved = local_sha
+  if candidate ~= "" then
+    if not fetch_base then
+      return nil, ("local %s (%s) is behind its tracking ref (%s) — run "
+        .. "`git -C %s fetch` then `git -C %s update-ref refs/heads/%s %s`, "
+        .. "or re-run claim with --fetch-base to do it here"):format(
+        base, local_sha:sub(1, 12), candidate:sub(1, 12), root, root, base,
+        candidate)
+    end
+    local forwarded, ferr = fetch_forward(root, base, local_sha, candidate)
+    if forwarded == nil then return nil, ferr end
+    resolved = forwarded
   end
-  return fetch_forward(root, base, local_sha, candidate)
+  local refusal = handover_ancestry_refusal(root, it.id, base, resolved,
+    it.handover_head or "")
+  if refusal ~= "" then return nil, refusal end
+  return resolved, ""
 end
 
 --- `session new` deliberately prints only the minted value, so command
