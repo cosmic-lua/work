@@ -1,7 +1,7 @@
 title: review gate: semantic review starts after green exact-head CI
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 target: cosmic-lua/work
-claim_batch: 7e16227c8abc7e13d6f4e80c329f7a1fb6986510
+claim_batch: 76ecdd0e3f3adbecc6ffe8f4f3eb3adf995da035
 handover_head: b574f22d601b72cac4c9eae2795b8652c34e6f86
 external_url: https://github.com/cosmic-lua/work/pull/131
 builders: cda0ca49f09db2b2859c8070fec7313c
