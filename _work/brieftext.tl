@@ -271,14 +271,19 @@ more and nothing less:
 3. For every finding the spec says gets filed as its own item ("file
    one capture per binding", a raise-candidate, and similar): do not
    file it. Draft it in full instead — title, a complete spec body
-   meeting the ready bar (`## Goal`/`## Evidence`/`## Change`/
-   `## Non-goals`/`## Acceptance`, each with the evidence it names),
-   the parent it attaches under, and any rank against a sibling —
-   precise enough that the orchestrator can run `gitboard
-   new`/`attach`/`rank` from it verbatim, with no judgment call of
-   its own left to make.
+   meeting the ready bar (`## Change`, every tree-fact it names
+   measured with the command that produced it, plus `## Non-goals`
+   where a wall is at stake and `## Access` where the spec's own text
+   reaches a repository other than the item's own), the parent it
+   attaches under, and any rank against a sibling — precise enough
+   that the orchestrator can run `gitboard new`/`attach`/`rank` from
+   it verbatim, with no judgment call of its own left to make. No
+   `## Goal` — goal context is the parent chain — and no
+   `## Acceptance`: the repo's own gate passing is the one definition
+   of done every item shares, and a bound worth keeping permanently
+   is a test in the diff.
 4. Compose this item's own spec update — e.g. the summary table the
-   spec's `## Acceptance` names — as the exact replacement text,
+   spec's `## Change` asks for — as the exact replacement text,
    ready for `gitboard spec <ITEM_ID> <file> --base <the current
    spec above>`. Write the FULL new spec (every existing section
    plus your addition), never a diff or a fragment.
@@ -347,15 +352,17 @@ Current spec (verbatim — also your compare-and-swap base):
 ---
 
 Rewrite the item's `## Change` (and `## Non-goals` if a wall is at
-stake) so a competent, literal-minded session — nothing beyond the
-spec and the repo's AGENTS.md — could not get it wrong. Run
-`bin/gitboard help bar` for the full bar; the short form: every
-tree-fact measured during THIS refinement with the command that
-produced it (a behavioural claim needs the command AND its pasted
-output), bounds land as tests in the diff-to-be, size for one PR one
-session holds in its head, and an "and" between independent changes
-means cut it into siblings. Do NOT write an `## Acceptance`
-checklist a builder must reproduce.
+stake, `## Access` if the spec's own text reaches a repository other
+than the item's own) so a competent, literal-minded session —
+nothing beyond the spec and the repo's AGENTS.md — could not get it
+wrong. Run `bin/gitboard help bar` for the full bar; the short form:
+every tree-fact measured during THIS refinement with the command
+that produced it (a behavioural claim needs the command AND its
+pasted output), bounds land as tests in the diff-to-be, size for one
+PR one session holds in its head, and an "and" between independent
+changes means cut it into siblings. Do NOT write a `## Goal` section
+— goal context is the parent chain — and do NOT write an
+`## Acceptance` checklist a builder must reproduce.
 
 Write the new spec to a file holding ONLY the spec, then:
 

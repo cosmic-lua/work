@@ -87,9 +87,9 @@ point at the spec, so findings were written into the spec.
         non-goals.md  prose: the walls
       order           ranked children
 
-`meta` gains `touches` and `access`, space-joined exactly as `order`,
-`builders` and `speccers` already are; `target` unpacks into `repo` and
-`base`; `key`, `result` and `verdict_spec` are gone.
+`meta` gains `touches`, `access` and `depends_on`, space-joined exactly
+as `order`, `builders` and `speccers` already are; `target` unpacks into
+`repo` and `base`; `key`, `result` and `verdict_spec` are gone.
 
 `touches` is the files the change is expected to touch, **declared by
 the refiner rather than scraped from prose.** It is what
@@ -160,22 +160,36 @@ Findings become immutable: a correction is a new entry, which is how
 the corpus already works (`## correction — 2026-08-28` headings appear
 in the churn data).
 
-## Dependencies are parentage
+## Dependencies are their own relation
 
-An item waiting on another is D45's case, and D45 settled it: a
-prerequisite is a child of the item that waits on it, and a waiter with
-an open child is a container, which `next` never offers. No edge, no
-field.
+An item carries `depends_on`, a set of zero or more item ids. It gates
+whether the item is pullable — `next` does not offer it and `take`
+refuses it, naming the dependency — and it has **no effect on rank**,
+which stays a position in the parent's list. Parentage says where in the
+queue; dependency says whether this may start. A waiter stays workable
+rather than becoming a container, so it keeps its place and reappears
+the moment its last dependency resolves.
 
-Classifying the 21 distinct `Ready when:` preconditions ever written:
-16 are "a sibling item is done", and several name the sibling in the
-same sentence before writing a shell command to detect it anyway. One
-is a calendar fact. Four are a release carrying a done item, and then a
-pin naming that release — which is work, and so is an item: the pin bump
-is a child of whatever needs it.
+Stored as a space-joined `meta` line beside `order`, `builders` and
+`speccers`, so readiness costs no read beyond the `meta` every
+whole-board verb already loads. A cycle is refused by the mutation that
+would create it and reported by `fsck`, bounded by the depth limit the
+rank and flow walks already share.
+
+Why a relation and not parentage: of the 21 distinct `Ready when:`
+preconditions ever written, 16 are "a sibling item is done", several
+naming the sibling and then writing a shell command to detect it because
+there was nothing to point at. Across the board 30 items express a
+dependency in prose against 31 distinct things depended on, and **5 of
+those 31 are waited on by more than one item** — a shape parentage
+cannot hold, since an item has one parent.
+
+A precondition that is an external fact — a release carrying a merged
+item, a pin naming that release — is itself work, so it is an item, and
+every item waiting on it depends on that one item.
 
 `fsck` gains one derived report: an item whose `change` names `«id»` as
-blocking where that id is not its child.
+blocking where that id is not in its `depends_on`.
 
 ## Migration
 
@@ -196,18 +210,21 @@ through `git log`. Acceptance is dropped; it remains in history.
 Each is a child of the one after it, so the chain reads bottom-up the
 way D45 ranks prerequisites.
 
-1. **Doctrine and briefs agree.** `_work/doctrine_bar.tl` and both
-   `_work/brieftext.tl` templates state one bar — Change and Non-goals
-   — and nothing else. Today they contradict each other inside one
-   file: line 274 teaches
-   `## Goal`/`## Evidence`/`## Change`/`## Non-goals`/`## Acceptance`
-   and line 357 says *"Do NOT write an `## Acceptance` checklist"*,
-   while the gate reads `READY_SECTIONS = {"Change"}`. No format
-   change; lands first so the corpus stops drifting while the rest is
-   built.
+1. **Doctrine and briefs agree.** Every template teaches the bar the
+   gate enforces: `## Change`, with `## Non-goals` where a wall is at
+   stake and `## Access` where the spec's text reaches another
+   repository. Before this, the research and refine briefs
+   contradicted each other inside one file — one taught a five-section
+   bar including `## Goal` and `## Acceptance`, the other forbade
+   `## Acceptance` — and both contradicted `READY_SECTIONS =
+   {"Change"}`. Landed here, ahead of any format change, so the corpus
+   stops drifting while the rest is built. `## Evidence` is untouched:
+   the measured-evidence requirement stays, and its move to history
+   waits on the mechanism item 2 builds.
 2. **The format-5 reader and writer.** The `spec/` tree, the new `meta`
-   keys, `target` unpacked, `fsck` extended to the new shape, format 4
-   still readable.
+   keys (`touches`, `access`, `depends_on`, `target` unpacked), the
+   `depend`/`undepend` verbs and their cycle check, `fsck` extended to
+   the new shape, format 4 still readable.
 3. **Release and pin bump.** `bin/gitboard.pin` names a release
    carrying (2), because no clone can operate a format-5 board until
    its pinned build understands one.
