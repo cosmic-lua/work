@@ -45,16 +45,13 @@ Do exactly this.
 Not that.
 ]]
 
--- `git worktree add` has twice failed on GitHub Actions against a
--- freshly created repository with `could not open
+-- `git worktree add` can fail with `could not open
 -- '.git/worktrees/<name>/locked' for writing: No such file or
--- directory` (cosmic-lua/work PR #124 and #125, both on an
--- otherwise-unrelated diff, both green on an immediate re-run) — an
--- ENOENT racing git's own creation of `<gitdir>/worktrees/<name>/`
--- before it opens the lock file inside it. Never seen locally, and
--- never for any other git subcommand or `worktree add` failure text,
--- so retrying the identical argv a couple of times clears the race
--- without masking a real failure.
+-- directory` — an ENOENT racing git's own creation of
+-- `<gitdir>/worktrees/<name>/` before it opens the lock file inside
+-- it. Never seen locally, and never for any other git subcommand or
+-- `worktree add` failure text, so retrying the identical argv a
+-- couple of times clears the race without masking a real failure.
 local WORKTREE_LOCKED_PATTERN < const > =
 "worktrees/[^/']+/locked' for writing: No such file or directory"
 local WORKTREE_ADD_RETRIES < const > = 2
