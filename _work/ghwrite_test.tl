@@ -111,7 +111,7 @@ local function test_enable_auto_merge_posts_the_expected_mutation()
       body = '{"data":{"enablePullRequestAutoMerge":{"clientMutationId":null}}}',
       url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
   end
-  local ok, err = ghwrite.enable_auto_merge({root = ""}, "PR_kwABC")
+  local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
   api.transport = original
   restore_token(prior)
   assert(ok, "got: " .. tostring(err))
@@ -137,12 +137,73 @@ local function test_enable_auto_merge_reports_a_graphql_error()
       body = '{"errors":[{"message":"Pull request is in clean status"}]}',
       url = _url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
   end
-  local ok, err = ghwrite.enable_auto_merge({root = ""}, "PR_kwABC")
+  local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
   api.transport = original
   restore_token(prior)
   assert(not ok, "a GraphQL errors array is a failure")
   assert(err:find("Pull request is in clean status", 1, true) ~= nil,
     "got: " .. err)
+end
+
+-- A 403 whose body matches the Claude Code session's own GraphQL
+-- refusal falls back to the CCR REST route (`PUT
+-- .../pulls/{n}/ccr/auto_merge`) with the same squash method, and
+-- succeeds when that route reports auto-merge enabled — the shape
+-- verified live on a disposable PR under `f6jE_UJBu`.
+local function test_enable_auto_merge_falls_back_to_ccr_route_on_the_claude_code_403()
+  local call_count = 0
+  local first_url = ""
+  local second_url = ""
+  local second: fetch.Options = nil
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
+    call_count = call_count + 1
+    if call_count == 1 then
+      first_url = url
+      return {status = 403, headers = {}, raw_headers = {},
+        body = '{"message":"GitHub GraphQL is not available from Claude Code '
+        .. 'sessions; use the REST API instead."}',
+        url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+    end
+    second_url, second = url, opts
+    return {status = 200, headers = {}, raw_headers = {},
+      body = '{"enabled":true,"merge_method":"squash"}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
+  api.transport = original
+  restore_token(prior)
+  assert(ok, "got: " .. tostring(err))
+  assert(call_count == 2, "the graphql attempt then the CCR retry: got " .. call_count)
+  assert(first_url:find("/graphql", 1, true) ~= nil, first_url)
+  assert(second.method == "PUT", tostring(second.method))
+  assert(second_url:find("/repos/acme/widgets/pulls/7/ccr/auto_merge", 1, true) ~= nil,
+    second_url)
+  local decoded = json.decode(second.body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(decoded["merge_method"] == "squash", "the CCR retry names the squash method")
+end
+
+-- A 403 that does NOT match the Claude Code session's own refusal
+-- shape (a bad token, a missing scope, a repo permission — any other
+-- real reason GitHub answers 403) never attempts the CCR fallback:
+-- that 403 is a different failure a caller needs to see honestly.
+local function test_enable_auto_merge_does_not_fall_back_on_an_unrelated_403()
+  local calls = 0
+  local original = api.transport
+  local prior = stub_token()
+  api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
+    calls = calls + 1
+    return {status = 403, headers = {}, raw_headers = {},
+      body = '{"message":"API rate limit exceeded for installation"}',
+      url = url} as fetch.Response, nil -- cast: a fabricated response, not a real Fetch return
+  end
+  local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
+  api.transport = original
+  restore_token(prior)
+  assert(not ok, "an unrelated 403 is a failure, not a fallback trigger")
+  assert(calls == 1, "no CCR retry for an unrelated 403: got " .. calls)
+  assert(err:find("API rate limit exceeded", 1, true) ~= nil, "got: " .. err)
 end
 
 -- `post_review` POSTs a formal REQUEST_CHANGES review pinned to the
