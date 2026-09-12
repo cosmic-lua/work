@@ -96,7 +96,11 @@ fine.
 
 1. Confirm you are reading exactly `<HEAD_SHA>`. If the caller supplies
    external checks, confirm they name that SHA; red or running means stop and
-   record nothing. Never infer check state from the board.
+   record nothing. Never infer check state from the board. The caller spawns
+   this review only once mechanical checks are green on this exact head (or,
+   when CI was unavailable by the item's own design, once the caller ran the
+   spec-named guards locally instead) — trust that gate; your job is the
+   fresh semantic read and mutation below, not re-verifying CI.
 2. The diff is the Change — everything present, nothing extra. List
    the changed files and confirm each is inside the spec's stated
    scope. Anything outside it is scope creep — quote it, even when
