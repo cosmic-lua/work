@@ -49,16 +49,66 @@ local function merge_pull(s: store.Store, repo: string, number: integer,
   return true, merge_sha
 end
 
+-- The distinguishing substring of the Anthropic-operated proxy's
+-- refusal of GraphQL from a Claude Code session — distinct from any
+-- other 403 (a bad token, a missing scope, a repo permission), none
+-- of which this fallback should mask.
+local CLAUDE_SESSION_GRAPHQL_REFUSAL < const > =
+"GraphQL is not available from Claude Code sessions"
+
+--- Arm auto-merge via the CCR REST route
+--- (`PUT /repos/{owner}/{repo}/pulls/{n}/ccr/auto_merge`), the fallback
+--- `enable_auto_merge` retries with when the GraphQL mutation itself is
+--- unavailable rather than merely refused by the repo or the request.
+--- @param s store.Store The store
+--- @param repo string owner/name
+--- @param number integer The PR number
+--- @return boolean True once GitHub reports auto-merge enabled
+--- @return string Error message on failure
+local function ccr_enable_auto_merge(s: store.Store, repo: string,
+    number: integer): boolean, string
+  local path = ("/repos/%s/pulls/%d/ccr/auto_merge"):format(repo, number)
+  local payload, jerr = json.encode({merge_method = "squash"})
+  if payload == nil then
+    return false, "encoding the auto-merge request: " .. tostring(jerr)
+  end
+  local res, err = api.call("PUT", path, s.root, payload)
+  if res == nil then
+    return false, err
+  end
+  if not api.is_success(res.status) then
+    return false, api.error_of("PUT", path, res)
+  end
+  local v = res.value
+  if v is {string: any} and v["enabled"] == true then
+    return true, ""
+  end
+  return false, ("PUT %s: response did not report auto-merge enabled"):format(path)
+end
+
 --- Arm auto-merge on a pull request GitHub refused to merge directly
 --- (branch protection, a merge queue, a not-yet-mergeable state): the
 --- accept still stands, and the merge completes once the repo's own
 --- requirements clear.
+---
+--- Attempts the `enablePullRequestAutoMerge` GraphQL mutation first —
+--- this stays correct in any environment where GraphQL is available
+--- (a plain CI runner with an unrestricted PAT, for instance). When
+--- that call is refused with a 403 whose body matches the Claude Code
+--- proxy's own refusal (`CLAUDE_SESSION_GRAPHQL_REFUSAL`), GraphQL
+--- itself is unavailable rather than merely declined, so this retries
+--- via the CCR REST route instead. A 403 that does NOT match — a bad
+--- token, a missing scope, a repo permission — is a different, real
+--- refusal a caller needs to see, so it is surfaced as-is, never
+--- retried.
 --- @param s store.Store The store
+--- @param repo string owner/name
+--- @param number integer The PR number
 --- @param node_id string The pull request's GraphQL node id
 --- @return boolean True once GitHub accepts the mutation
 --- @return string Error message on failure
-local function enable_auto_merge(s: store.Store, node_id: string):
-  boolean, string
+local function enable_auto_merge(s: store.Store, repo: string,
+    number: integer, node_id: string): boolean, string
   local query = "mutation($id: ID!) { enablePullRequestAutoMerge("
   .. "input: {pullRequestId: $id, mergeMethod: SQUASH}) "
   .. "{ clientMutationId } }"
@@ -86,6 +136,12 @@ local function enable_auto_merge(s: store.Store, node_id: string):
     end
   end
   if not api.is_success(res.status) then
+    if res.status == 403 and v is {string: any} then
+      local msg = tostring(v["message"] or "")
+      if msg:find(CLAUDE_SESSION_GRAPHQL_REFUSAL, 1, true) ~= nil then
+        return ccr_enable_auto_merge(s, repo, number)
+      end
+    end
     return false, api.error_of("POST", "/graphql", res)
   end
   return true, ""
@@ -199,7 +255,8 @@ end
 local record ghwrite
   merge_pull: function(s: store.Store, repo: string, number: integer,
   sha: string): boolean, string
-  enable_auto_merge: function(s: store.Store, node_id: string): boolean, string
+  enable_auto_merge: function(s: store.Store, repo: string, number: integer,
+  node_id: string): boolean, string
   post_review: function(s: store.Store, repo: string, number: integer,
   sha: string, body: string, kind: string, author_login: string): boolean, string
   close_pull: function(s: store.Store, repo: string, number: integer):
