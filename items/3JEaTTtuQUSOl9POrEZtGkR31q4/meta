@@ -1,0 +1,3 @@
+title: ghwrite_test: drop the vestigial GITHUB_TOKEN stubbing — the codec stopped reading it in ae840934
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+target: cosmic-lua/work
