@@ -2,3 +2,6 @@ title: gitboard help bar: require a grep-able anchor alongside every file:line c
 parent: 3JCpItcvxOg5HcbG5EBwu7PPn2N
 target: cosmic-lua/work
 claim_batch: 971441e16813778c296f6cb66c14f366f176a2b9
+handover_head: 55ec46c4526ad1b164873a283497326510e6d832
+external_url: https://github.com/cosmic-lua/work/pull/125
+builders: 24b4319791e7f70a52c45f3cd97d3f50
