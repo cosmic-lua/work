@@ -187,6 +187,30 @@ rebuilding it from scratch.
 The board deliberately stores no review prose: its evidence is only the
 judged commit id. Apply the findings supplied by the caller, commit the
 repair on `<BRANCH>`, and report the new commit id for a new handover.
+
+Every correction produces a NEW candidate head, and a new head
+invalidates every prior verification: `<JUDGED_HEAD>`'s cold-build,
+gate, or guard result is evidence about `<JUDGED_HEAD>`, not about
+whatever you commit next. Never carry one forward with a claim like
+"the prior cold-build remains green" once the head has moved, however
+small or unrelated the correction looks.
+
+Before handover:
+
+1. add or identify the focused regression that pins the reported
+   finding — the new head must fail without your fix and pass with it;
+2. diff the rejected head against the new head (`git diff <JUDGED_HEAD>
+   <new head>`) and name, in your final report, the boundaries the
+   correction crosses — a signature another file calls, a pre-install
+   boundary module, a tracking file's shape — not just the finding
+   restated;
+3. rerun every acceptance/guard command the item spec names explicitly,
+   even when the correction looks unrelated to what that command
+   checks.
+
+This is not a license to rerun `--make ci` (or the target repo's own
+gate) on every rework: keep reaching for the one focused guard a
+finding names or implies, same as any other builder turn.
 ]]
 
 local RESEARCH < const > = [[

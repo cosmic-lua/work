@@ -19,6 +19,7 @@ local function flat(s: string): string
 end
 
 local BUILDER < const > = flat(brieftext.BUILDER)
+local REWORK < const > = flat(brieftext.REWORK)
 local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 
@@ -271,6 +272,46 @@ end
 -- The orchestrator recovers a stalled build by working directly in the
 -- builder's own worktree, so a builder that meets foreign history there
 -- must neither investigate it as a broken environment nor undo it.
+-- The correction the rework builder hands back is a NEW head; the
+-- judged commit's own verification does not transfer to it.
+local function test_rework_states_a_new_head_invalidates_prior_evidence()
+  assert(REWORK:find(
+      "Every correction produces a NEW candidate head, and a new head "
+      .. "invalidates every prior verification:", 1, true) ~= nil,
+    "the rework brief must state that every correction creates a new "
+    .. "head and invalidates prior verification evidence")
+  assert(REWORK:find(
+      "Never carry one forward with a claim like "
+      .. "\"the prior cold-build remains green\" once the head has "
+      .. "moved,", 1, true) ~= nil,
+    "the rework brief must forbid carrying forward a stale claim like "
+    .. "\"the prior cold-build remains green\" for a new head")
+end
+
+local function test_rework_requires_a_diff_against_the_judged_head()
+  assert(REWORK:find(
+      "diff the rejected head against the new head (`git diff "
+      .. "<JUDGED_HEAD> <new head>`) and name, in your final report, "
+      .. "the boundaries the correction crosses", 1, true) ~= nil,
+    "the rework brief must require diffing the rejected head against "
+    .. "the new head and naming the boundaries the correction crosses")
+end
+
+local function test_rework_requires_the_spec_named_guards_rerun()
+  assert(REWORK:find(
+      "rerun every acceptance/guard command the item spec names "
+      .. "explicitly, even when the correction looks unrelated to "
+      .. "what that command checks.", 1, true) ~= nil,
+    "the rework brief must require rerunning every spec-named "
+    .. "acceptance/guard command, even one that looks unrelated")
+  assert(REWORK:find(
+      "This is not a license to rerun `--make ci` (or the target "
+      .. "repo's own gate) on every rework: keep reaching for the one "
+      .. "focused guard", 1, true) ~= nil,
+    "the rework brief must still prefer a focused guard over a "
+    .. "repeated broad gate")
+end
+
 local function test_where_to_work_warns_the_worktree_is_shared()
   assert(BUILDER:find(
       "The worktree is yours to work in, but not yours alone: while "
