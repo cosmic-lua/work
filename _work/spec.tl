@@ -34,20 +34,37 @@ local ACCESS < const > = "access"
 --- The lines gathered under each heading in `body`, keyed by the
 --- lower-cased heading text — the section-scanning `ready_gaps` and
 --- `declared_repos` both stand on. A heading counts at any level
---- ("## Change", "# change"), matched case-insensitively; a thematic
---- break (---) ends any section, so a footer appended below a break
---- belongs to no heading.
+--- ("## Change", "# change"), matched case-insensitively, and closes
+--- the open section only when its own level is less than or equal to
+--- that section's: a DEEPER heading is content, so its own line and
+--- everything under it belong to the section it sits under, and a
+--- `### Files` inside `## Change` never opens a section of its own.
+---
+--- A level-1 heading is the exception, because a sidecar is
+--- `##`-sectioned: a lone `#` is the document's TITLE, not a
+--- container. It opens a readable section like any other heading — a
+--- spec that writes `# Change` is read — but nothing nests inside it,
+--- so the next heading of any level closes it and `## Change` under
+--- `# Item title` is the Change section rather than prose inside the
+--- title. Without that floor a titled sidecar reads as having no
+--- Change at all.
+---
+--- A thematic break (---) ends any section whatever its level, so a
+--- footer appended below a break belongs to no heading.
 --- @param body string The spec sidecar's markdown
 --- @return {string: string} Heading text -> its non-blank lines, joined with "\n"
 local function sections(body: string): {string: string}
   local out: {string: string} = {}
   local current: string = nil
+  local level = 0
   for line in (body .. "\n"):gmatch("([^\n]*)\n") do
-    local text = line:match("^#+%s+(.-)%s*$")
-    if text then
+    local hashes, text = line:match("^(#+)%s+(.-)%s*$")
+    if text and (current == nil or level == 1 or #hashes <= level) then
       current = text:lower()
+      level = #hashes
     elseif line:match("^%s*%-%-%-+%s*$") then
       current = nil
+      level = 0
     elseif current and line:match("%S") then
       out[current] = (out[current] or "") .. line .. "\n"
     end
@@ -192,6 +209,7 @@ end
 
 local record spec
   READY_SECTIONS: {string}
+  sections: function(body: string): {string: string}
   ready_gaps: function(body: string): {string}
   reached_repos: function(body: string): {string}
   declared_repos: function(body: string): {string: boolean}
@@ -200,6 +218,7 @@ end
 
 local M: spec = {
   READY_SECTIONS = READY_SECTIONS,
+  sections = sections,
   ready_gaps = ready_gaps,
   reached_repos = reached_repos,
   declared_repos = declared_repos,

@@ -106,6 +106,22 @@ local function test_paths_named_stops_at_a_thematic_break()
     table.concat(paths, ", "))
 end
 
+-- A `###` subheading inside `## Change` is part of Change, not a
+-- section of its own (`_work.spec.sections`'s level rule), so a path
+-- it names is a collision the board can see — the reading this module
+-- otherwise lost on every spec that groups its Change by subheading.
+local function test_paths_named_reads_a_change_subheading()
+  local body = table.concat({
+      "## Change", "Rework the scanner.", "",
+      "### `_work/brief.tl`", "", "Also touch `_work/gitverbs.tl`.", "",
+      "## Non-goals", "Nothing in `_work/gh.tl`.",
+    }, "\n")
+  local paths = overlap.paths_named(body)
+  assert(#paths == 2, table.concat(paths, ", "))
+  assert(paths[1] == "_work/brief.tl" and paths[2] == "_work/gitverbs.tl",
+    table.concat(paths, ", "))
+end
+
 -- Two open items whose `## Change` sections both name `_work/brief.tl`
 -- collide, and `show` says so on each side; a third naming an
 -- unrelated real path collides with neither.

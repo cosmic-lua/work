@@ -41,6 +41,7 @@
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local repoprofile = require("_work.repoprofile")
+local spec = require("_work.spec")
 local tail = require("_work.tail")
 
 --- The file-length lint's own ceiling ([D39] in `cosmic-lua/cosmic`:
@@ -79,26 +80,16 @@ local function looks_like_path(token: string): boolean
 end
 
 --- The non-blank lines under `spec_text`'s `## Change` heading (any
---- level, matched case-insensitively), joined — the same
---- heading-scanning `_work.spec.sections` runs for the spec bar,
---- narrowed to the one heading this module reads: a thematic break
---- (`---`) ends the section the way it ends any other.
+--- level, matched case-insensitively), joined — `_work.spec.sections`
+--- narrowed to the one heading this module reads, so the section this
+--- sees is byte-for-byte the section the spec bar sees. A subheading
+--- inside Change is content, not a new section, so a path named under
+--- a `### Files` is read here too; a thematic break (`---`) ends the
+--- section the way it ends any other.
 --- @param spec_text string An item's spec sidecar body
 --- @return string The Change section's lines, "" when it has none
 local function change_section(spec_text: string): string
-  local current: string = nil
-  local out = ""
-  for line in (spec_text .. "\n"):gmatch("([^\n]*)\n") do
-    local text = line:match("^#+%s+(.-)%s*$")
-    if text then
-      current = text:lower()
-    elseif line:match("^%s*%-%-%-+%s*$") then
-      current = nil
-    elseif current == "change" and line:match("%S") then
-      out = out .. line .. "\n"
-    end
-  end
-  return out
+  return spec.sections(spec_text)["change"] or ""
 end
 
 --- Every backtick-quoted, path-looking token in `spec_text`'s `##
