@@ -45,14 +45,40 @@ Do exactly this.
 Not that.
 ]]
 
---- Run one git command in `cwd`, failing loudly — fixture setup.
+-- `git worktree add` has twice failed on GitHub Actions against a
+-- freshly created repository with `could not open
+-- '.git/worktrees/<name>/locked' for writing: No such file or
+-- directory` (cosmic-lua/work PR #124 and #125, both on an
+-- otherwise-unrelated diff, both green on an immediate re-run) — an
+-- ENOENT racing git's own creation of `<gitdir>/worktrees/<name>/`
+-- before it opens the lock file inside it. Never seen locally, and
+-- never for any other git subcommand or `worktree add` failure text,
+-- so retrying the identical argv a couple of times clears the race
+-- without masking a real failure.
+local WORKTREE_LOCKED_PATTERN < const > =
+"worktrees/[^/']+/locked' for writing: No such file or directory"
+local WORKTREE_ADD_RETRIES < const > = 2
+
+--- Run one git command in `cwd`, failing loudly — fixture setup. A
+--- `git worktree add` that fails with the transient
+--- `.git/worktrees/<name>/locked` race is retried, with the identical
+--- argv, up to `WORKTREE_ADD_RETRIES` times; any other failure — from
+--- `worktree add` or any other subcommand — fails on the first
+--- attempt exactly as before.
 local function git(cwd: string, argv: {string})
   local full: {string} = {"git", "-c", "user.email=test@example.com",
     "-c", "user.name=test", "-c", "core.createObject=rename"}
   for _, a in ipairs(argv) do
     full[#full + 1] = a
   end
+  local is_worktree_add = argv[1] == "worktree" and argv[2] == "add"
+  local retries = is_worktree_add and WORKTREE_ADD_RETRIES or 0
   local r = check.must(child.run(full, {cwd = cwd}))
+  while not r.ok and retries > 0
+  and r.stderr:find(WORKTREE_LOCKED_PATTERN, 1, false) ~= nil do
+    retries = retries - 1
+    r = check.must(child.run(full, {cwd = cwd}))
+  end
   assert(r.ok, "git " .. table.concat(argv, " ") .. " failed: " .. r.stderr)
 end
 
