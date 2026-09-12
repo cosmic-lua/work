@@ -10,8 +10,10 @@ change, UTF-8 repair, or changes to the old fallback's ASCII loop.
 
 Four dependency-ordered children cover compatibility tests, checked
 performance scenarios, the C fast path, and the released cosmic pin plus
-independent end-to-end verification. This is a design, not an implemented
-optimization. The item keeps its existing priority under G6.
+independent end-to-end verification. All four chunks are implemented and
+validated. The tests, benchmarks and C fast path have landed; the accepted
+runtime pin awaits the normal protected merge. The measured implementation
+record below supersedes the original scouting estimate.
 
 Implementation order (each earlier item is a prerequisite child of the next):
 
@@ -257,3 +259,67 @@ for _,n in ipairs({0,8,64,1024,65536}) do
   print(string.format('ascii bytes=%d median=%.3fus range=%.3f..%.3f',n,samples[3],samples[1],samples[5]))
 end
 ```
+
+## Implemented outcome and independent verification
+
+The entire four-chunk implementation is complete and independently accepted:
+
+1. Compatibility matrix/corpus [cosmopolitan PR393](https://github.com/cosmic-lua/cosmopolitan/pull/393),
+   landed6c32f7a07cb7272300b2e06e06ac9db85360e024.
+2. Checked JSON benchmarks [cosmic PR1836](https://github.com/cosmic-lua/cosmic/pull/1836),
+   landedc9cdb84211b00239dfc88d3331fe2785d33800a0.
+3. Bounded C fast path [cosmopolitan PR394](https://github.com/cosmic-lua/cosmopolitan/pull/394),
+   landed780f45055acd52401de6c95c16365338690e19e7.
+4. Actual released runtime pin [cosmic PR1837](https://github.com/cosmic-lua/cosmic/pull/1837),
+   accepted7dfa1dd07901d6411c896a017a245e2a9230c0d7; landing pending.
+
+The C diff uses the fixed bounded scalar algorithm above and leaves the
+fallback loop unchanged. All four external call sites, stack ownership,
+return pointer and initialized-buffer cleanup were independently reviewed.
+Both clean C binding suites and rel builds pass. Baseline/candidate/UBSan
+corpora match exactly; GC ownership stress passes. A compiled p+1→p mutant
+fails the new compatibility assertion, then exact restoration/rebuild passes.
+The controlled same-mode local C experiment passes the full performance gate:
+long-ASCII time-73.4%, large JSON-26.1%, short ASCII-42.5%, both fallbacks improve.
+Its source identities, commands, flags, binary hashes and full evidence are
+recorded in child a6Gm_olvM, including successful runs34678285918/34679751184.
+
+The real release2026.09.12-780f45055 is proven by successful exact-source
+[release run34696571862](https://github.com/cosmic-lua/cosmopolitan/actions/runs/34696571862),
+not by a tag target alone. Independently downloaded cosmos.zip SHA256 is
+15e2703e0c6893299f0468a16bb9e9b4e13d87c492053013b0dc3daaa9003ea1;
+raw Lua SHA256 e757d78685b3549a3a061ebda49d20855e3c2979fbd4e62e321a6f438d6884f3.
+The final pin changes only version+digest; definitions/public declarations
+are unchanged. Independent real wrong-digest fetch mutations fail and
+restored exact pins pass.
+
+Root ran the entire packaged outcome through
+[successful experiment34698381287](https://github.com/cosmic-lua/cosmic/actions/runs/34698381287),
+using the actual old pinned release2026.09.06-e748d6a1e and actual new
+release beneath the same Cosmic7dfa1dd0 source and byte-identical payload.
+An independent fresh-context reviewer checked both the results and the
+measurement controls. All36,895 raw-runtime corpus records compare equal,
+SHA256 e61139f10a9dbced988b9cd6721959a585db24d3e2d2efc18b5d60512d496048;
+both GC probes pass128 iterations/8 retained values, on Linux and macOS.
+Candidate full Linux CI passes3,549 tests,318 coverage files and5 stages.
+All3 JSON fuzz properties pass50,000 iterations each, seed34698381287.
+The required CI/build/repro/macOS/Windows PR gates all pass too.
+
+Four adjacent actual-package A/B pairs show long-ASCII decode time reduced
+86.2–86.4% (about169us→23us), large JSON25.2–30.1%, short ASCII48.8–55.2%,
+escaped fallback72.9–73.3%, and UTF-8 fallback63.8–64.8%. The initial full
+53-scenario readings and spreads are recorded unchanged in child p8Ct_8YDi.
+The full gate exits0 with `perf-compare: PASS`:0 regressions,7 faster,46 ok.
+It preserves initial HTTP timing flags until baseline retries and an extra
+same-candidate control establish noise. All original/retry/median/self-check
+files are retained separately; no test, scenario or threshold was weakened.
+These are measured packaged results, distinct from the controlled local-C
+measurements and the superseded5–10% historical hypothesis.
+
+The experiment took30m17s and remained active: about11m30s builds/correctness,
+8m39s rebuild+4JSONpairs,5m22s fullinitialcomparison and4m38s noisecontrols.
+A prior run failed only collecting a temporary test directory after all
+correctness passed; the runner collector was fixed and the complete final
+experiment reran. Temporary validation branches were removed after local
+artifacts and commits were retained. No runner infrastructure enters either
+product. Final landing and parent-level merged-artifact verification follow.
