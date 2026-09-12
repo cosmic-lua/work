@@ -1,0 +1,3 @@
+title: cosmic.http.static: serve a directory or the artifact's own /zip payload, content type from cosmo.http.find_content_type
+parent: 3JEZx1R26VPmXtTlh60E0IQYMun
+target: cosmic-lua/cosmic
