@@ -332,8 +332,9 @@ local function test_worktree_refuses_when_repository_is_unmapped()
   assert(code ~= 0, "an unmapped repository is refused")
 end
 
--- A `cosmopolitan` repo with no `base` set branches off `master`, not
--- `main` — `_work.brief`'s own `<BASE_BRANCH>` rule.
+-- A `cosmopolitan` repo with no `base` set and no readable `origin/HEAD`
+-- branches off `master`, not `main` — the repo-name fallback in
+-- `_work.gitworktree`'s own `default_base`.
 local function test_worktree_defaults_cosmopolitan_repo_to_master()
   local base = fs.join(tmpdir, "wt-verb-cosmobase")
   assert(fs.remove_all(base))
