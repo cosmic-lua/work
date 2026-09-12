@@ -1,6 +1,6 @@
 title: _types/gentype_parse.tl: @field type parsing truncates a generic type at its internal comma, unlike @param's already-correct handling
 parent: 3JEZz4tbj12EXM857GiHPFMHEPg
 target: cosmic-lua/cosmic
-claim_batch: a5902b6bbfd2251a5bdeacc315c3dda4a349a0f3
+claim_batch: f0a815fe8479cc80509891a3ce7752e311e7276e
 handover_head: 7a99f8137341b41ff82d0b1363b8ee02f134c20c
 builders: 1a4c08874a7ad5845eb17f47b862b995
