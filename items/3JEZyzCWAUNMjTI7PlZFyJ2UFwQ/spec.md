@@ -11,14 +11,6 @@ signature is what that decision must not change.
 
 ## Evidence
 
-Ready when: `grep -c '"http"' _types/gentype.tl` prints `1`.
-
-That is the pin-bump child landed (it adds `"http"` to the MODULES list
-in the same PR as the pin); today the command prints 0. A puller
-confirms the runtime half with `bin/cosmic --make build && o/bin/cosmic
--e 'print(type(require("cosmo.http")))'`, which prints `table` once the
-built binary sits on the new cosmos.
-
 No module exists:
 
 ```
@@ -51,6 +43,14 @@ Sizing: `cosmic/net/init.tl` and `socket.tl` are each 478 lines (`wc -l`)
 — the 500-line cap is real; this module is a directory from day one.
 
 ## Change
+
+Ready when: `grep -c '"http"' _types/gentype.tl` prints `1`.
+
+That is the pin-bump child landed (it adds `"http"` to the MODULES list
+in the same PR as the pin); today the command prints 0. A puller
+confirms the runtime half with `bin/cosmic --make build && o/bin/cosmic
+-e 'print(type(require("cosmo.http")))'`, which prints `table` once the
+built binary sits on the new cosmos.
 
 New directory module `cosmic/http/`:
 
