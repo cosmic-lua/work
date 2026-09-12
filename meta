@@ -1,3 +1,4 @@
 title: cosmo.http: bind net/http's request parser, unchunker and content-type table as a cosmo.http submodule (tool/net/lhttp.c)
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmopolitan
+claim_batch: 8c72c87f8bba033a1b54ca64e063ad3144865136
