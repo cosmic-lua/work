@@ -1,7 +1,7 @@
 title: fuzz: crash bisection misleads — impure gens reconstruct wrong inputs and a timed-out probe reads as no-crash
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
 target: cosmic-lua/cosmic
-claim_batch: 8613aa58f0119a4d3dba29c4c9b8d6b438abe153
+claim_batch: 7ef4e60e041d98f0e5aa275060979ab9ba20ef76
 handover_head: 553522132915a1b7d4c84b8f36250bfecfb4e0de
 external_url: https://github.com/cosmic-lua/cosmic/pull/1845
 builders: a3927fe61f6e5262531c366a45772270
