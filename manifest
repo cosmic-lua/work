@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch c50b05616b710a41cc11c6bfaed90e49
+caller 7b883d309388e78280ae00f3bdfb3771
+remote origin
+action drop
+created 1789192773
+publish-by 0
+reason Completed test chunk landed; release the final reviewer lease
+
+3JDHcdRYLy1FFN57VNbZoH1ElpH df6f571164049fa0da7a87b126154189b7be9a80 drop - e748d6a1e40e6419a48f16a9626c287014bdb6b5 300264a43c97992d6926977cc48877b910819d7c 1789190620 1789190620 1789197820
