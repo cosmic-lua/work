@@ -321,8 +321,20 @@ checkout or push rights to this board repository:
   release the claim (`drop ID --why`, a worker-side reason) so the
   item is pullable again. Still running: leave it. Then the PRs are
   yours to watch — the agents are gone.
-- Reviews fan out like builds: one fresh subagent per handed-over commit awaiting
-  a verdict, each claimed first with its own minted session — `brief
+- Gate a review on its own SHA before spawning one. A normal code handover
+  reviews only once mechanical checks are green on the exact handed-over
+  commit: push, open, or update its pull request; confirm the PR head
+  equals the handover SHA; then wait for the repository's required checks
+  to finish. If CI is unavailable by the item's own explicit design, run
+  the spec-named mechanical guards locally instead and label that fallback
+  in the review brief you hand the reviewer. Red or running checks are not
+  semantic-review work: repair the head or wait, never spawn a review
+  around it. A corrected head re-enters this same gate before its own
+  review. Gitboard neither queries nor records CI state — this check, like
+  every other provider fact, is caller-owned.
+- Reviews fan out like builds, once gated: one fresh subagent per
+  handed-over commit awaiting a verdict, each claimed first with its own
+  minted session — `brief
   review ID` then fills that claim into the body it hands the agent, all in
   the background. What the review needs is distance from the BUILDER —
   a window that never held the build — and a verdict that is one
@@ -340,9 +352,9 @@ of starts:
 
 1. Run caller-owned fetches, `refresh`, then reconcile the previous wave.
 2. Merge whatever carries an accept.
-3. Claim and spawn a review for every item awaiting a verdict —
-   one fresh subagent each, in the background, a distinct minted
-   review session for each. They count against N first.
+3. Claim and spawn a review for every item whose handed-over SHA has
+   cleared the gate above — one fresh subagent each, in the background,
+   a distinct minted review session for each. They count against N first.
 4. Fill the rest of the wave with builds: claim then spawn in the
    background, up to the smallest of N and what is actually
    disjoint. Zero agents is a legitimate pass.

@@ -8,6 +8,7 @@
 
 local brieftext = require("_work.brieftext")
 local brieftext_review = require("_work.brieftext_review")
+local doctrine = require("_work.doctrine")
 
 --- `s` with every run of whitespace (including the template's own
 --- line wraps) collapsed to one space, so a sentence pinned here reads
@@ -176,6 +177,56 @@ local function test_step_one_bars_a_reviewer_from_rerunning_ci()
       .. "red or running means stop and record nothing. Never infer check "
       .. "state from the board.", 1, true) ~= nil,
     "step 1 keeps external check inspection caller-owned and SHA-bound")
+end
+
+local function test_step_one_trusts_the_pre_spawn_ci_gate()
+  assert(REVIEW:find(
+      "The caller spawns this review only once mechanical checks are "
+      .. "green on this exact head (or, when CI was unavailable by the "
+      .. "item's own design, once the caller ran the spec-named guards "
+      .. "locally instead) — trust that gate; your job is the fresh "
+      .. "semantic read and mutation below, not re-verifying CI.", 1, true)
+    ~= nil,
+    "step 1 must tell the reviewer the pre-spawn CI gate already ran, "
+    .. "with the local-guard fallback named, and that semantic review "
+    .. "and mutation are still the reviewer's own job")
+end
+
+local function test_orchestrate_gates_a_review_before_spawning_one()
+  local orchestrate = flat(assert(doctrine.page("orchestrate")))
+  assert(orchestrate:find(
+      "A normal code handover reviews only once mechanical checks are "
+      .. "green on the exact handed-over commit: push, open, or update "
+      .. "its pull request; confirm the PR head equals the handover "
+      .. "SHA; then wait for the repository's required checks to "
+      .. "finish.", 1, true) ~= nil,
+    "the orchestrate page must require a green PR head before spawning "
+    .. "a review: " .. orchestrate)
+  assert(orchestrate:find(
+      "If CI is unavailable by the item's own explicit design, run "
+      .. "the spec-named mechanical guards locally instead and label "
+      .. "that fallback in the review brief you hand the reviewer.",
+      1, true) ~= nil,
+    "the orchestrate page must name the local-guard fallback and "
+    .. "require labeling it in the review brief")
+  assert(orchestrate:find(
+      "Red or running checks are not semantic-review work: repair the "
+      .. "head or wait, never spawn a review around it. A corrected "
+      .. "head re-enters this same gate before its own review.", 1, true)
+    ~= nil,
+    "the orchestrate page must forbid spawning around a red or "
+    .. "running check and require a corrected head to re-enter the gate")
+  assert(orchestrate:find(
+      "Gitboard neither queries nor records CI state — this check, "
+      .. "like every other provider fact, is caller-owned.", 1, true)
+    ~= nil,
+    "the orchestrate page must preserve Gitboard's rule that it "
+    .. "neither queries nor records CI state itself")
+  assert(orchestrate:find(
+      "Claim and spawn a review for every item whose handed-over SHA "
+      .. "has cleared the gate above", 1, true) ~= nil,
+    "the numbered pass must send step 3 through the gate before "
+    .. "spawning a review")
 end
 
 local function test_step_two_reruns_find_against_the_handover()
