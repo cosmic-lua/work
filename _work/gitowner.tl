@@ -1,12 +1,21 @@
 --- The owner rule an item's `repo` field meets: the repository a diff
 --- lands in must share the board's own GitHub owner, or the spec must
---- name it under `## Access`. A claiming session is granted the
+--- declare it as read access. A claiming session is granted the
 --- board's repositories and nothing this board can see beyond them,
 --- so a `repo` under a foreign owner — a personal fork's name left
 --- over from when the evidence was gathered, most often — strands the
 --- claim before it starts. The owner is the proxy the board CAN
---- check; the `## Access` declaration is the deliberate cross-owner
---- case, stated where the reader of the spec will see it.
+--- check; the access declaration is the deliberate cross-owner case.
+---
+--- That declaration is MID-MOVE, and this comment is the window's
+--- record. It was a `## Access` section, and this rule still reads
+--- one — every unmigrated `spec.md` reads back as prose carrying it,
+--- which is most of the board. But `_work.spec`'s `split` refuses the
+--- section on a WRITE now, because format 5 makes access a declared
+--- field, and the flag that sets that field is its own change. So
+--- there is a window in which a newly written spec cannot declare
+--- access at all, and the refusal below names only the FACT — not the
+--- section a write refuses, and not a flag this build does not have.
 ---
 --- One rule, applied at both ends: `ready_problems` asks it of every
 --- item before a take (stale data already on the board), and `new
@@ -33,14 +42,14 @@ end
 
 --- The problem a `repo` earns under the owner rule, or nil when it
 --- passes: unset, sharing the board's owner (case-insensitively, as
---- GitHub compares), named under the spec's `## Access`, or asked on
+--- GitHub compares), named as the spec's read access, or asked on
 --- a board with no owner to compare against. The problem names the
 --- field, the value, and the repair: `gitboard set ID --repo` when
 --- the item is already filed, the `--repo` flag itself when `new` is
 --- about to file it (`id` is "").
 --- @param s store.Store The store
 --- @param repo string The item's repo field, "" when unset
---- @param body string The spec the rule reads `## Access` from
+--- @param body string The spec the rule reads the access declaration from
 --- @param id string The item's full id, "" for an item not yet filed
 --- @return string | nil The problem
 local function repo_problem(s: store.Store, repo: string, body: string,
@@ -65,8 +74,9 @@ local function repo_problem(s: store.Store, repo: string, body: string,
   end
   return ("repo: %s is under %s, not this board's owner %s — a claiming "
     .. "session is granted the board's repositories, so the field most "
-    .. "likely names a fork the session cannot reach; %s, or name %s "
-    .. "under \"## Access\" when the cross-owner target is deliberate")
+    .. "likely names a fork the session cannot reach; %s, or declare %s "
+    .. "as the item's read access when the cross-owner target is "
+    .. "deliberate")
   :format(repo, repo_owner, owner, repair, repo)
 end
 

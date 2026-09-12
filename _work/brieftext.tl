@@ -280,8 +280,10 @@ more and nothing less:
    file it. Draft it in full instead — title, a complete spec body
    meeting the ready bar (`## Change`, every tree-fact it names
    measured with the command that produced it, plus `## Non-goals`
-   where a wall is at stake and `## Access` where the spec's own text
-   reaches a repository other than the item's own), the parent it
+   where a wall is at stake — and NO other section: a write refuses
+   one, and a repository the spec's own text reaches is a declared
+   fact on the item, reported by the ready bar rather than written as
+   prose), the parent it
    attaches under, and any rank against a sibling — precise enough
    that the orchestrator can run `gitboard new`/`attach`/`rank` from
    it verbatim, with no judgment call of its own left to make. No
@@ -359,8 +361,9 @@ Current spec (verbatim — also your compare-and-swap base):
 ---
 
 Rewrite the item's `## Change` (and `## Non-goals` if a wall is at
-stake, `## Access` if the spec's own text reaches a repository other
-than the item's own) so a competent, literal-minded session —
+stake — those two and nothing else; a write refuses any other
+section, and a repository the spec reaches is a declared fact on the
+item, not prose) so a competent, literal-minded session —
 nothing beyond the spec and the repo's AGENTS.md — could not get it
 wrong. Run `bin/gitboard help bar` for the full bar; the short form:
 every tree-fact measured during THIS refinement with the command

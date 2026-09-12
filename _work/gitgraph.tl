@@ -119,7 +119,7 @@ end
 --- creates one)
 --- @param spec itemtree.Spec | nil Prose to write, or nil to write none
 --- @param repo string The item's repo field; nil becomes "". Refused
---- under a foreign owner unless `spec` names it under `## Access`
+--- under a foreign owner unless `spec` declares it as read access
 --- @param force boolean | nil Override a claimed-parent write gate
 --- @param why string | nil Why --force was needed
 --- @param before string | nil Place it immediately before this sibling
@@ -180,7 +180,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   -- The owner rule binds at the write, so a foreign `repo` never
   -- enters the board: the spec being filed alongside is where an
-  -- `## Access` escape would be read from.
+  -- the access declaration would be read from.
   local declared = ""
   if prose ~= nil then
     declared = spec.document(prose)
