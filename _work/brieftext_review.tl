@@ -32,8 +32,11 @@
 ---
 --- `<PRODUCT_ROOT>` is the reviewer's own local product checkout — where the
 --- diff is read and, in `REVIEW_SCRIPT`, the `--repo-dir` the caller passes;
---- `_work.brief` derives it from the `GITBOARD_DIR` it was run under (its
---- parent's parent). It is never the invocation gitboard itself runs
+--- `_work.brief` resolves it from the ITEM's own repository through the
+--- `gitboard.repository` map, so it names the tree the diff's files live
+--- in even when gitboard itself was run from a checkout of another
+--- repository, and falls back to that checkout only when the item's repo
+--- is not mapped here. It is never the invocation gitboard itself runs
 --- through: that is `<GITBOARD_CMD>`, the caller's own exact loader-plus-
 --- executable prefix (`_work.brief` fills it from a builder's `--receipt`
 --- or from `--gitboard-command`/`--gitboard-cwd` given directly to this

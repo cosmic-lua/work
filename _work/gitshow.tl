@@ -381,9 +381,12 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     -- The item's OWN repo, resolved to a local checkout the same way
     -- `gitboard worktree` already does — never this process's own
     -- working directory, which may hold a checkout of a different
-    -- repo entirely (see `_work.overlap.headroom_lines`).
+    -- repo entirely — and read at the item's claim base, or that
+    -- repo's default-branch tip, rather than at whatever the checkout's
+    -- working tree currently holds (see `_work.overlap.headroom_lines`).
     local checkout, _checkerr = repository_map.resolve(s.root, it.repo or "", "")
-    headroom = overlap.headroom_lines(body, checkout or "", it.repo or "")
+    headroom = overlap.headroom_lines(body, checkout or "", it.repo or "",
+      it.claim_base or "")
   else
     body = store.read_spec(s, id)
   end

@@ -100,9 +100,16 @@ local function git(root: string, args: {string}): string
   return (r.stdout:gsub("%s+$", ""))
 end
 
---- Make a local product change and record its two exact commits on the item.
+--- Make a local product change and record its two exact commits on the
+--- item, mapping `acme/widgets` to the checkout the change was made in.
+--- @param s store.Store The store
+--- @param id string The item handed over
+--- @param name string A per-test suffix, so no two tests share a path
+--- @param path string The file the change touches
+--- @param lines integer How many lines the change adds
+--- @return string The product checkout the change lives in
 local function handover_diff(s: store.Store, id: string, name: string,
-    path: string, lines: integer)
+    path: string, lines: integer): string
   local root = fs.join(os.getenv("TEST_TMPDIR") or "/tmp",
     "brief-review-product-" .. name)
   assert(fs.remove_all(root) and fs.make_dirs(root))
@@ -139,6 +146,7 @@ local function handover_diff(s: store.Store, id: string, name: string,
   -- re-claim as the reviewer before a review brief will fill one.
   fixture.drop_claim(s, id, "session-a", "handed over")
   fixture.claim_item(s, id, "session-b", base)
+  return root
 end
 
 -- The selection rule is the spec's own, checked at both ends: a
@@ -285,4 +293,29 @@ local function test_verdict_line_ignores_tokens_spliced_from_the_spec()
     "spec-spliced tokens are never reported as review survivors: " .. rvline)
   assert(rvline:find("nothing left to fill", 1, true) ~= nil,
     "every real placeholder answered, so the review verdict line names none: " .. rvline)
+end
+
+-- `<PRODUCT_ROOT>` is a checkout of the ITEM's own repository, resolved
+-- through the `gitboard.repository` map — never the checkout the
+-- running gitboard itself lives in, which for an item in another
+-- repository holds none of the diff's files and cannot verify its head.
+-- The fixture makes the two differ the way a real session does: a
+-- `GITBOARD_DIR` under one root, an item mapped to another.
+local function test_review_names_the_items_own_repository_checkout()
+  local s = init_state_repo("brief-review-script-repo-dir")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  local product = handover_diff(s, leaf, "repo-dir", "3p/cosmos/cosmos_pin.tl", 2)
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", fs.join(PRODUCT_ROOT, "o/board")))
+  local code, out = brief_and_capture(s, leaf)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
+  assert(code == 0, "the recorded commit unlocks the review brief: " .. out)
+  assert(out:find("product checkout at `" .. product .. "`", 1, true) ~= nil,
+    "the prose sends the reviewer to the item's own checkout: " .. out)
+  assert(out:find("--repo-dir " .. product, 1, true) ~= nil,
+    "and every verdict line records against it: " .. out)
+  assert(out:find(PRODUCT_ROOT, 1, true) == nil,
+    "the running gitboard's own checkout is never named: " .. out)
 end

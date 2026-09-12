@@ -156,7 +156,9 @@ local function bounce_context(it: item.Item, branch: string): string
   return fill(brieftext.REWORK, values)
 end
 
---- `<PRODUCT_ROOT>`: the checkout holding `bin/gitboard`. The first
+--- The checkout holding `bin/gitboard` — what `<PRODUCT_ROOT>` means to
+--- a refine or decompose brief, whose every use of it is `cd
+--- <PRODUCT_ROOT>` to run that trust root. The first
 --- attempt is `GITBOARD_DIR`'s parent's parent, right and cheap for the
 --- cold-start bootstrap that sets `GITBOARD_DIR` to `<root>/o/board`; it
 --- is wrong for the sibling-reuse bootstrap (`GITBOARD_DIR` a sibling
@@ -185,6 +187,24 @@ local function product_root(): string
     cur = parent
   end
   return ""
+end
+
+--- `<PRODUCT_ROOT>` for a review: the checkout of the ITEM's own
+--- repository, resolved through the ordinary `gitboard.repository` map.
+--- A review reads the diff there and passes it as `--repo-dir`, and both
+--- are about the repository the change was written for — not necessarily
+--- the one the running `bin/gitboard` was invoked from, which is a tree
+--- the diff's files need not exist in at all. Falls back to that
+--- checkout when the item's repo has no local mapping.
+--- @param s store.Store The store
+--- @param it item.Item The item under brief
+--- @return string The checkout's absolute path, "" if unknown
+local function review_product_root(s: store.Store, it: item.Item): string
+  local checkout, _cerr = repository_map.resolve(s.root, it.repo or "", "")
+  if checkout ~= nil then
+    return checkout
+  end
+  return product_root()
 end
 
 --- The claim's actual branch: the same `work/<handle>/<claim>` string
@@ -336,7 +356,10 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     or (("Commit: `%s`"):format(head_sha)),
     GITBOARD_CMD = gitinvocation.prefix(gitboard_command, gitboard_cwd),
   }
-  local root = prep.session == nil and product_root() or ""
+  local root = ""
+  if prep.session == nil then
+    root = kind == "review" and review_product_root(s, it) or product_root()
+  end
   if root ~= "" then
     values["PRODUCT_ROOT"] = root
   end
