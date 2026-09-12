@@ -17,7 +17,10 @@ raw payload and validation from the parent. Stored input cap is1MiB; normalize
 a larger checking snapshot to phase4 with draws0/input empty, preserving
 iteration/stage. Never silently truncate bytes. Encode must reject invalid
 metadata too. read uses fd.open + bounded reads of at most46+1048576+1 bytes,
-closes the descriptor on success/error, and rejects one extra byte; do not
+opens with fd.O_RDONLY|fd.O_NONBLOCK|fd.O_NOFOLLOW and checks
+fs.stat_fd(h:fd()):is_file() before reading (narrow the fallible stat result).
+Reject non-regular paths; close the descriptor on success/error and reject
+one extra byte; do not
 fs.read an arbitrarily large file. write delegates to fs.write atomic=true,
 mode0600, handles pack/filesystem errors as values. In a fresh directory the
 last complete snapshot is authoritative; no old record from another run can
@@ -28,7 +31,13 @@ Permanent tests: binary string containing every byte0..255, empty input,
 primary/shrink/verify stages, each phase, exactly-cap and cap+1 strings,
 signed seed boundaries, missing file, invalid magic/enum/counts/iteration,
 wrong seed/iters, short header/body, declared length larger/smaller than body,
-trailing bytes, and disk file cap+one. Invalid/non-check phase never returns
+trailing bytes, disk file cap+one, a directory, symlink, and a FIFO with no
+writer. The FIFO case must return invalid promptly rather than hang in open;
+run it in a supervised child with a generous bound and assert a normal exit,
+not a timeout. `fd.O_NONBLOCK` and `fd.O_NOFOLLOW` are exported at fd.tl:282/285;
+fs.stat_fd is declared at fs/init.tl:104. A pinned-runtime mkfifo probe at
+intake printed `opened without waiting; is_file=false` with those flags.
+Invalid/non-check phase never returns
 an attributable input. Assert packsize=46 rather than duplicating a guessed
 offset. Use one valid fixture to mutate header fields via pack, not hand
 offsets in every test. Atomic write/read round-trip must preserve NUL bytes.
