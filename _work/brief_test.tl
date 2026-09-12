@@ -10,6 +10,8 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
+local claim = require("_work.claim")
+local claimbatch = require("_work.claimbatch")
 local fixture = require("_work.fixture")
 local gitinvocation = require("_work.gitinvocation")
 local gitspec = require("_work.gitspec")
@@ -111,6 +113,18 @@ local function flat_text(text: string): string
   return (text:gsub("%s+", " "))
 end
 
+--- The claim's own `work/<handle>/<claim>` branch — the same string
+--- `_work.brief`'s `claim_branch` derives — read back independently so
+--- the assertion does not just echo the code under test.
+--- @param s store.Store The board
+--- @param id string The claimed item's id
+--- @return string The branch `worktree ID` would create
+local function branch_of(s: store.Store, id: string): string
+  local it = check.must(store.load(s, id))
+  local st = check.must(claimbatch.read_state(s.root, it.claim_batch or "", id))
+  return claim.branch(id, st.root)
+end
+
 local function test_tree_measurement_appends_to_builder_and_review()
   local s = init_state_repo("brief-tree")
   local _, leaf = root_with_leaf(s)
@@ -182,14 +196,42 @@ local function test_builder_brief_carries_the_item_and_names_the_rest()
   assert(out:find(tail.handle(leaf), 1, true) ~= nil, "so does the handle")
   assert(out:find("Do exactly this.", 1, true) ~= nil,
     "the spec sidecar rides verbatim")
-  assert(out:find(leaf:sub(1, 8), 1, true) ~= nil,
-    "the item branch is the id's first 8 characters")
   assert(out:find("<WORKTREE>", 1, true) ~= nil
-    and out:find("<BOUNCE_CONTEXT>", 1, true) ~= nil,
-    "what the board cannot answer survives the fill")
+    and out:find("<BOUNCE_CONTEXT>", 1, true) ~= nil
+    and out:find("<BRANCH>", 1, true) ~= nil,
+    "an unclaimed item has no branch to derive either, so it too "
+    .. "survives the fill rather than naming a guessed identifier: " .. out)
   assert(out:find("fill <", 1, true) ~= nil
-    and out:find("<WORKTREE>", #out - 400, true) ~= nil,
+    and out:find("<WORKTREE>", #out - 400, true) ~= nil
+    and out:find("<BRANCH>", #out - 400, true) ~= nil,
     "the verdict line names the survivors: " .. out:sub(#out - 200))
+end
+
+--- The bug this guards: a builder brief once named the item id's
+--- leading characters as "the branch" — a plausible-looking KSUID
+--- prefix that is not a ref anything resolves, since the real branch
+--- (`work/<handle>/<claim>`) is only known once the item is claimed.
+--- Matched out of the exact sentence, not just found anywhere in the
+--- body — the full id (and so its own leading characters) legitimately
+--- appears elsewhere, in `<ITEM_ID>`.
+local function test_claimed_builder_brief_names_the_real_branch()
+  local s = init_state_repo("brief-builder-branch")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  fixture.claim_item(s, leaf, "session-a", BASE)
+  local expected = branch_of(s, leaf)
+  local code, out = brief_and_capture(s, "builder", leaf)
+  assert(code == 0, "a claimed, specced item earns its builder brief")
+  local rendered = out:match("It is on branch `([^`]+)`")
+  assert(rendered ~= nil, "the brief states the branch it is on: " .. out)
+  assert(rendered:match("^work/[^/]+/[^/]+$") ~= nil,
+    "the branch is work/<handle>/<claim> shaped: " .. tostring(rendered))
+  assert(rendered == expected,
+    "the brief names the claim's actual branch: " .. tostring(rendered))
+  assert(rendered ~= leaf:sub(1, 8),
+    "the branch is never the item id's leading characters: " .. tostring(rendered))
+  assert(out:find("<BRANCH>", 1, true) == nil,
+    "the branch placeholder is filled once the item is claimed")
 end
 
 local function test_research_brief_recommends_rather_than_writes()
