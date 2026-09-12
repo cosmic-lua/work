@@ -90,4 +90,6 @@ sessions onto the board.
 
 ## Access
 
-cosmic-lua/cosmic, read and write on a branch; no other repository.
+cosmic-lua/cosmic, read and write on a branch.
+cosmic-lua/work, read only (citing `_work/gitcommands.tl`/`_work/gitboard.tl`
+and PR #90 as evidence for `sync`'s deprecation; no write there).
