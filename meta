@@ -6,4 +6,6 @@ handover_head: 49163af8e61961de865902f529e53bc0347bf670
 external_url: https://github.com/cosmic-lua/cosmopolitan/pull/393
 verdict: accept
 verdict_head: 49163af8e61961de865902f529e53bc0347bf670
+landed_head: 6c32f7a07cb7272300b2e06e06ac9db85360e024
+resolution: completed
 builders: a93b528f451f0a64220f4a5846dc2afc 36ad14e7c9e6ddfa1b02ae9e0c86515b
