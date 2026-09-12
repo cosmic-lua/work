@@ -2,3 +2,6 @@ title: _work/fixture.tl: trim forensic detail from the retry comment, add exhaus
 parent: 3JDBCTTNJZkV4GkF0Xovb592hYc
 target: cosmic-lua/work
 claim_batch: f099f3782e6d993b63d6205339ac0a297093957b
+handover_head: 29038c39fdbb015c80756ece432ffbe2a84df2b0
+external_url: https://github.com/cosmic-lua/work/pull/128
+builders: f543b267c2673b06c52c1eae0dbc1be7
