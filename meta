@@ -1,7 +1,7 @@
 title: gitboard claim: refuse a review-claim whose base can't reach the item's recorded handover, instead of silently accepting an unrelated one
 parent: 3JAROpZ65vbA3WbubksQIyTgwRr
 target: cosmic-lua/work
-claim_batch: 086611c5f6bc120f942e57267feb15f812a43a28
+claim_batch: ac044a3e69748b729ece886c3c6377fda1d3f395
 handover_head: 88eca55745204d11fc365a84663f7ee648cf2ac6
 external_url: https://github.com/cosmic-lua/work/pull/124
 builders: e17b509f10f85547eac48ac1f80adaf2 fd957e2ff8eff5fb799bd25540818f7f
