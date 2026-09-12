@@ -87,5 +87,7 @@ designed; the bug is purely in what `values` is populated with.
 
 ## Access
 
-cosmic-lua/work, read and write on a branch; no other repository.
+cosmic-lua/work, read and write on a branch.
+cosmic-lua/cosmic, read only (citing issue #1809 as related context
+in "Current refinement"; no write there).
 
