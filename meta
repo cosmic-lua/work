@@ -1,7 +1,7 @@
 title: JSON ASCII 1: compatibility matrix and deterministic differential corpus
 parent: 3JDHcYe1whiQnoUvqfAEw74nBaa
 target: cosmic-lua/cosmopolitan@master
-claim_batch: 489058128eeaeeff469fa1e5e66ccec1b4dba17b
+claim_batch: 870fa3dda13682303491a542a72430d1a582456f
 handover_head: 15a96f053ff1d4f3cb425fe2366af896b6e12472
 external_url: https://github.com/cosmic-lua/cosmopolitan/pull/393
 builders: a93b528f451f0a64220f4a5846dc2afc
