@@ -1,3 +1,3 @@
 title: the test runner prints the same record line whether it ran or replayed, so a mutation test cannot tell a real pass from a cached one
-parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
 target: cosmic-lua/cosmic
