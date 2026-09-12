@@ -12,11 +12,6 @@ render), typed.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
-
-That is the core child merged; today the command reports the path as
-missing.
-
 The htmx wire contract this module covers, from the htmx reference
 (https://htmx.org/reference/#request_headers and
 `#response_headers`) — request: `HX-Request`, `HX-Boosted`,
@@ -34,6 +29,11 @@ for the URL-carrying headers, and the core child's `Request.headers`
 (lowercase names) and `Response:set_header`/`:html`.
 
 ## Change
+
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 New file `cosmic/htmx.tl` (H1: "htmx helpers: read the HX-* request
 headers, set the HX-* response headers, and reply with a fragment or a
