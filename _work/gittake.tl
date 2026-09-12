@@ -79,6 +79,15 @@ local function take_handover(s: store.Store, it: item.Item, session: string,
     ("take %s by %s head:%s"):format(id8, session, canonical:sub(1, 12)),
     "take", nil, session)
   if not ok then return gate.verdict_line("take", false, err) end
+  -- A same-head metadata-only edit (a URL attached, say) leaves the standing
+  -- acceptance in force above: say so, rather than the generic "awaiting
+  -- review" this same write path prints for every other handover, which
+  -- would contradict the exact-head acceptance `show` and a repeat verdict
+  -- both still honor.
+  if accepted then
+    return gate.verdict_line("take", true,
+      ("%s is accepted (same head; external URL updated)"):format(id8))
+  end
   return gate.verdict_line("take", true,
     ("%s hands over %s — awaiting review"):format(id8, canonical:sub(1, 12)))
 end
