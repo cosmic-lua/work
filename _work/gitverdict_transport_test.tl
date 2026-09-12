@@ -130,26 +130,40 @@ local MERGE < const > = "PUT /repos/acme/widgets/pulls/7/merge"
 local READ < const > = "GET /repos/acme/widgets/pulls/7"
 local MUTATE < const > = "POST /graphql"
 
+--- The request as GitHub reports one a landing may go ahead with:
+--- open, nothing merged, at the head named. Every landing reads the
+--- request before it writes anything, so a case that expects a merge
+--- to go out has to answer this read first.
+--- @param head string The head sha GitHub reports
+--- @return string The fabricated response body
+local function open_at(head: string): string
+  return ('{"node_id":"PR_node_7","number":7,"state":"open",'
+    .. '"merged":false,"head":{"sha":"%s"}}'):format(head)
+end
+
 -- The whole sequence when GitHub merges immediately: the verdict is
--- recorded, the merge is guarded by the judged head, it rides the
--- activated transport's bearer credential, and the line names the
--- merge commit.
+-- recorded, the request is read before anything is written, the merge
+-- is guarded by the judged head, it rides the activated transport's
+-- bearer credential, and the line names the merge commit.
 local function test_an_activated_accept_merges_the_judged_head()
   local s, id, p = review_ready("verdict-land-merge")
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
+      [READ] = {status = 200, body = open_at(p.head)},
       [MERGE] = {status = 200, body = '{"sha":"feedface1234","merged":true}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
   local it = check.must(store.load(s, id))
   assert(it.verdict == "accept" and it.verdict_head == p.head,
     "the judgment is recorded before anything is sent")
-  assert(#sent == 1, ("one request, got %d"):format(#sent))
-  assert(sent[1].method == "PUT" and sent[1].url:find(
-      "/repos/acme/widgets/pulls/7/merge", 1, true) ~= nil, sent[1].url)
-  assert(sent[1].authorization == "Bearer fake-token-value",
-    "got: " .. sent[1].authorization)
-  local payload = json.decode(sent[1].body) as {string: any} -- cast: a decoded JSON object, known by construction
+  assert(#sent == 2, ("the read and the merge, got %d"):format(#sent))
+  assert(sent[1].method == "GET" and sent[1].url:find(
+      "/repos/acme/widgets/pulls/7", 1, true) ~= nil, sent[1].url)
+  assert(sent[2].method == "PUT" and sent[2].url:find(
+      "/repos/acme/widgets/pulls/7/merge", 1, true) ~= nil, sent[2].url)
+  assert(sent[2].authorization == "Bearer fake-token-value",
+    "got: " .. sent[2].authorization)
+  local payload = json.decode(sent[2].body) as {string: any} -- cast: a decoded JSON object, known by construction
   assert(payload["sha"] == p.head, "the merge is guarded by the judged head")
   assert(payload["merge_method"] == "squash", tostring(payload["merge_method"]))
   assert(line:find("merged feedface1234", 1, true) ~= nil, line)
@@ -163,30 +177,30 @@ local function test_the_landing_leaves_the_process_refusing_again()
   local s, id, p = review_ready("verdict-land-scoped")
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
+      [READ] = {status = 200, body = open_at(p.head)},
       [MERGE] = {status = 200, body = '{"sha":"feedface1234"}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
-  assert(#sent == 1, "the landing went out")
+  assert(#sent == 2, "the landing went out")
   local res, err = api.call("GET", "/user", "")
   assert(res == nil and err:find("external to gitboard", 1, true) ~= nil,
     "a scoped activation outlived the verb: " .. tostring(err))
 end
 
 -- A 405 is "not directly mergeable right now" (branch protection, a
--- merge queue), not a failure: the accept still stands, so the
--- fallback reads the request for its node id and arms auto-merge.
+-- merge queue), not a failure: the accept still stands, so auto-merge
+-- is armed over the node id the pre-merge read already carries.
 local function test_a_refused_merge_arms_auto_merge()
   local s, id, p = review_ready("verdict-land-auto")
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
       [MERGE] = {status = 405, body = '{"message":"Pull Request is not mergeable"}'},
-      [READ] = {status = 200, body = ('{"node_id":"PR_node_7","number":7,'
-          .. '"head":{"sha":"%s"}}'):format(p.head)},
+      [READ] = {status = 200, body = open_at(p.head)},
       [MUTATE] = {status = 200, body = '{"data":{"enablePullRequestAutoMerge":{}}}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
   assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
-  assert(#sent == 3, ("merge, read, mutate; got %d"):format(#sent))
+  assert(#sent == 3, ("read, merge, mutate; got %d"):format(#sent))
   assert(sent[3].method == "POST" and sent[3].url:find("/graphql", 1, true) ~= nil,
     sent[3].url)
   local payload = json.decode(sent[3].body) as {string: any} -- cast: a decoded JSON object, known by construction
@@ -205,8 +219,7 @@ local function test_auto_merge_refusing_surfaces_the_error()
   local rc, line = accept(s, id, p, {
       [MERGE] = {status = 405,
         body = '{"message":"Required status check is expected"}'},
-      [READ] = {status = 200, body = ('{"node_id":"PR_node_7","number":7,'
-          .. '"head":{"sha":"%s"}}'):format(p.head)},
+      [READ] = {status = 200, body = open_at(p.head)},
       [MUTATE] = {status = 200,
         body = '{"errors":[{"message":"Auto-merge is not allowed"}]}'},
     }, sent)
@@ -225,10 +238,12 @@ local function test_a_real_merge_failure_is_not_retried()
   local s, id, p = review_ready("verdict-land-forbidden")
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
+      [READ] = {status = 200, body = open_at(p.head)},
       [MERGE] = {status = 403, body = '{"message":"Resource not accessible"}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
-  assert(#sent == 1, ("a 403 is not a fallback; got %d requests"):format(#sent))
+  assert(#sent == 2,
+    ("a 403 is not a fallback; got %d requests"):format(#sent))
   assert(line:find("landing failed", 1, true) ~= nil, line)
   assert(line:find("HTTP 403", 1, true) ~= nil, line)
 end
@@ -298,13 +313,13 @@ local function test_a_moved_head_is_reported_not_armed()
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
       [MERGE] = {status = 409, body = '{"message":"Head branch was modified"}'},
-      [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7}'},
+      [READ] = {status = 200, body = open_at(p.head)},
       [MUTATE] = {status = 200,
         body = '{"data":{"enablePullRequestAutoMerge":{}}}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
   assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
-  assert(#sent == 1,
+  assert(#sent == 2,
     ("a moved head sends the merge and stops; got %d requests"):format(#sent))
   assert(line:find("auto-merge armed", 1, true) == nil,
     "a moved head must never be armed to land: " .. line)
@@ -342,27 +357,26 @@ end
 -- arming routes are head-blind — the GraphQL mutation addresses the
 -- request by node id and its REST fallback carries no sha — so arming
 -- over a head that has moved would schedule an unreviewed commit to
--- land whenever the checks clear. The read the fallback already
--- performs for the node id settles it: the mismatch is reported and no
--- mutation goes out.
+-- land whenever the checks clear. The snapshot read before the merge
+-- settles it: the mismatch is reported and no mutation goes out.
 local function test_a_405_on_a_moved_head_arms_nothing()
   local s, id, p = review_ready("verdict-land-405-moved")
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
       [MERGE] = {status = 405,
         body = '{"message":"Pull Request is not mergeable"}'},
-      [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7,'
-        .. '"head":{"sha":"0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad"}}'},
+      [READ] = {status = 200,
+        body = open_at("0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad")},
       [MUTATE] = {status = 200,
         body = '{"data":{"enablePullRequestAutoMerge":{}}}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
   assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
   assert(#sent == 2,
-    ("the merge and the read, and nothing armed; got %d requests")
+    ("the read and the merge, and nothing armed; got %d requests")
     :format(#sent))
-  assert(sent[2].method == "GET" and sent[2].url:find(
-      "/repos/acme/widgets/pulls/7", 1, true) ~= nil, sent[2].url)
+  assert(sent[1].method == "GET" and sent[1].url:find(
+      "/repos/acme/widgets/pulls/7", 1, true) ~= nil, sent[1].url)
   assert(line:find("auto-merge armed", 1, true) == nil,
     "an unreviewed head must never be armed to land: " .. line)
   assert(line:find("landing failed", 1, true) ~= nil, line)
@@ -370,4 +384,54 @@ local function test_a_405_on_a_moved_head_arms_nothing()
     "the head that would land is named: " .. line)
   assert(line:find("auto-merge was not armed", 1, true) ~= nil, line)
   assert(line:find("land it by hand", 1, true) ~= nil, line)
+end
+
+-- A request that is already merged has had its landing: a queue took
+-- it, an auto-merge armed by an earlier accept completed, or someone
+-- merged it by hand between the review and the verdict. The merge PUT
+-- GitHub would refuse is never sent, and the line says the work
+-- landed rather than handing back a failure to redo by hand.
+local function test_an_already_merged_request_is_not_landed_again()
+  local s, id, p = review_ready("verdict-land-already")
+  local sent: {Sent} = {}
+  local rc, line = accept(s, id, p, {
+      [READ] = {status = 200, body = ('{"node_id":"PR_node_7","number":7,'
+          .. '"state":"closed","merged":true,'
+          .. '"merge_commit_sha":"5eed1eaf9900","head":{"sha":"%s"}}')
+        :format(p.head)},
+      [MERGE] = {status = 405,
+        body = '{"message":"Pull Request is not mergeable"}'},
+    }, sent)
+  assert(rc == 0, "got: " .. line)
+  assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
+  assert(#sent == 1,
+    ("the read settles it; got %d requests"):format(#sent))
+  assert(sent[1].method == "GET", sent[1].method)
+  assert(line:find("already merged 5eed1eaf9900", 1, true) ~= nil, line)
+  assert(line:find("landing failed", 1, true) == nil,
+    "merged work must never read as a failed landing: " .. line)
+  assert(line:find("land it by hand", 1, true) == nil, line)
+end
+
+-- A request closed with nothing merged has no landing that could
+-- succeed: there is no diff to merge and no PUT that would produce
+-- one. It is still a failure the caller must see — but the reason
+-- names the repair, and no merge is attempted to find it out.
+local function test_a_closed_unmerged_request_is_not_landed()
+  local s, id, p = review_ready("verdict-land-closed")
+  local sent: {Sent} = {}
+  local rc, line = accept(s, id, p, {
+      [READ] = {status = 200, body = ('{"node_id":"PR_node_7","number":7,'
+          .. '"state":"closed","merged":false,"head":{"sha":"%s"}}')
+        :format(p.head)},
+      [MERGE] = {status = 200, body = '{"sha":"feedface1234","merged":true}'},
+    }, sent)
+  assert(rc == 0, "a refused landing never costs the verdict: " .. line)
+  assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
+  assert(#sent == 1,
+    ("a closed request is never merged; got %d requests"):format(#sent))
+  assert(line:find("landing failed", 1, true) ~= nil, line)
+  assert(line:find("closed and unmerged", 1, true) ~= nil, line)
+  assert(line:find("merged feedface1234", 1, true) == nil,
+    "nothing may report a merge that was never sent: " .. line)
 end
