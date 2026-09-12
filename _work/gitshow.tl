@@ -19,6 +19,7 @@ local ksuid = require("_work.ksuid")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
 local read = require("_work.read")
+local repository_map = require("_work.repository_map")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -269,7 +270,9 @@ local function show_report(it: item.Item, role: string, rank_line: string,
   -- A Change-section path already tight against the 500-line cap is a
   -- warning, not a `bar:` refusal — a refiner or builder plans a
   -- repacking or split before pulling instead of hitting the cap live,
-  -- mid-implementation (see `_work.overlap.headroom_lines`).
+  -- mid-implementation; a relative path resolves against the item's
+  -- OWN repo, not this process's cwd (see
+  -- `_work.overlap.headroom_lines`).
   for _, line in ipairs(headroom or {}) do
     out[#out + 1] = line
   end
@@ -375,7 +378,12 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     -- query's own limit (see `find.similar`'s own doc comment).
     local hits, _simerr = find.similar(c, it.title, it.id)
     overlaps = overlap_and_similar_lines(overlap.collisions(it.id, bodies), hits or {})
-    headroom = overlap.headroom_lines(body)
+    -- The item's OWN repo, resolved to a local checkout the same way
+    -- `gitboard worktree` already does — never this process's own
+    -- working directory, which may hold a checkout of a different
+    -- repo entirely (see `_work.overlap.headroom_lines`).
+    local checkout, _checkerr = repository_map.resolve(s.root, it.repo or "", "")
+    headroom = overlap.headroom_lines(body, checkout or "", it.repo or "")
   else
     body = store.read_spec(s, id)
   end
