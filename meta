@@ -2,3 +2,5 @@ title: fuzz diagnostics 4: adversarial integration and full verification
 parent: 3ICDHiyW9yeT88nc60iWdawQfXv
 target: cosmic-lua/cosmic
 claim_batch: 47dcb98b555d5616f079b9c1f7779c412641b5d5
+handover_head: f0c95bdaa99b5455eba47772b780542a9726257c
+builders: 4fbe3632bea29ee01508e8646e9bc942
