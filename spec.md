@@ -352,3 +352,11 @@ Execute in this order. Each listed item is a prerequisite child of the next; the
 - [ID4t9ZBs — fetch reuse 5: typed HTTP opt-in and sequential-session benchmarks](https://github.com/cosmic-lua/work/blob/items/3JDCmq6oGkHblP9rEIOID4t9ZBs/spec.md) — cosmic-lua/cosmic
 - [WYVNUEqp — fetch reuse 6: verified TLS reuse with safe fork lifecycle](https://github.com/cosmic-lua/work/blob/items/3JDCmp2fsNzKpICm4uVWYVNUEqp/spec.md) — cosmic-lua/cosmopolitan
 - [vxLkKlcz — fetch reuse 7: final runtime pin and end-to-end performance verification](https://github.com/cosmic-lua/work/blob/items/3JDCmmdSj5lMSoSr0F0vxLkKlcz/spec.md) — cosmic-lua/cosmic
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
