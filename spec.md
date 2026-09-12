@@ -26,13 +26,13 @@ a suite version bump, not an append. The task shape is
 `_eval/tasks/child-tcp.md` (a brief, then `## Acceptance facts` — each a
 command-checkable fact, with S-traps named).
 
+## Change
+
 Ready when: `ls docs/guides/htmx.md` prints `docs/guides/htmx.md`.
 
 That is the guide child merged; an eval task before the guide exists
 measures the gap the guide is meant to close, which is a different
 experiment. Today the command reports the path as missing.
-
-## Change
 
 Owner's decisions; this item prepares them and lands whichever the
 owner takes:
