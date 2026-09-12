@@ -10,8 +10,10 @@ ones, so an app never string-builds either header.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints the path (the core child has
-merged) — today `ls: cannot access 'cosmic/http/init.tl'`.
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 Decoding exists: `cosmic/url.tl:63` `local function parse_query(query:
 string): {string: {string}}` over `cosmo.ParseParams` (`:64`), which is
