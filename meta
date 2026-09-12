@@ -2,3 +2,5 @@ title: gitboard log ID: read an item's own commit history, and show its outcome
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
 claim_batch: 2fc4dd03868e2eb3d904bb28a246bbb60b2d6d69
+handover_head: c5eb284aec6c0b730c605e5c16ccad30cde35271
+builders: f25448afaaebdb8632a2ef192e974369
