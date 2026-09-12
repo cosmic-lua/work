@@ -1,7 +1,7 @@
 title: gitboard's own test suite: profile the 140 s coverage stage and cut it under a minute
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 target: cosmic-lua/work@main
-claim_batch: abd6c676b1839fe7daf69247b3d96b8ded818f2e
+claim_batch: 951d3a5d3d966d97309cf2b9afae22665af2f357
 handover_head: da0d75d322deb2ae957bb6f2d6c852b15bd9d509
 external_url: https://github.com/cosmic-lua/work/pull/123
 builders: 0eacbea7e32e593ff447bec50e108736 ce9694be4706ee17728d81022ac2dac4
