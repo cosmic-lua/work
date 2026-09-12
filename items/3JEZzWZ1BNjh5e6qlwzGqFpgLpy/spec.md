@@ -12,9 +12,11 @@ and on a product decision nobody has made.
 
 ## Evidence
 
-Ready when: `ls _perf/bench/http_server_bench.tl` prints the path (the
-baseline child has merged) — a concurrency decision without a
-single-connection baseline cannot be compared.
+Ready when: `ls _perf/bench/http_server_bench.tl` prints `_perf/bench/http_server_bench.tl`.
+
+That is the baseline child merged; a concurrency decision without a
+single-connection baseline cannot be compared. Today the command
+reports the path as missing.
 
 The three serious shapes, and the facts a record must carry for each:
 
