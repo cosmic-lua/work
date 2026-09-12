@@ -3,4 +3,6 @@ parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmopolitan
 claim_batch: f3ae9d16854b00ec8595c10ddc5829464b3799f3
 handover_head: 2c8624afb84e7f9c06575cf82fcc22ec26c75870
+verdict: request changes
+verdict_head: 2c8624afb84e7f9c06575cf82fcc22ec26c75870
 builders: 3dd915b5bd41ab084e60fcb4fbbf5bd4
