@@ -42,13 +42,17 @@ previous pin (cosmopolitan AGENTS.md "Releases and the cosmic pin").
 
 ## Change
 
-Ready when: `curl -sI https://github.com/cosmic-lua/cosmopolitan/releases/latest | grep -i '^location:'`
-names a tag newer than `2026.09.12-780f45055` whose release was built
-from a master containing `tool/net/lhttp.c` (the cosmo.http child's
-merge). A puller confirms with the tag's `cosmos.zip`: unzip it and run
-`./lua -e 'print(require("cosmo.http").parser)'` — it prints
-`function: 0x...`; on the pinned release today the same command errors
-with `module 'cosmo.http' not found`.
+Ready when: `curl -s -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/cosmic-lua/cosmopolitan/master/tool/net/lhttp.c` prints `200`.
+
+That is the cosmo.http child merged to master; every push to master
+publishes a release (cosmopolitan AGENTS.md, "Releases and the cosmic
+pin"), so the tag to pin is the first one after that merge on
+https://github.com/cosmic-lua/cosmopolitan/releases. Today the command
+prints 404 (measured 2026-09-12; the same check against `lzip.c`
+prints 200). The puller confirms the asset before pinning: unzip its
+`cosmos.zip` and run `./lua -e 'print(type(require("cosmo.http")))'`,
+which prints `table`; on the pinned release today it errors with
+`module 'cosmo.http' not found`.
 
 1. `3p/cosmos/cosmos_pin.tl`: `version` to that tag, `sha` to the
    SHA-256 of that tag's `cosmos.zip` (verified: `sha256sum` of the
