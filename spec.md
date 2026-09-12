@@ -10,11 +10,6 @@ that carries the module.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
-
-That is the core child merged; today the command reports the path as
-missing.
-
 The harness already has the client-side shape: `_perf/bench/http_bench.tl:1-2`
 "HTTP client scenarios against a loopback server. A forked child serves
 fixed HTTP/1.1 responses" with its helpers in `_perf/bench/server.tl`
@@ -24,6 +19,11 @@ inverse: the server under test is `cosmic.http`, the client is the
 fixed cost.
 
 ## Change
+
+Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
+
+That is the core child merged; today the command reports the path as
+missing.
 
 - New `_perf/bench/http_server_bench.tl`: fork a child that runs
   `cosmic.http` `serve` with a router of one `GET /item/:id` route
