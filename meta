@@ -1,7 +1,7 @@
 title: cosmo.Fetch ignores HTTPS_PROXY — an https request silently bypasses the proxy and fails as a credential error
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmopolitan
-claim_batch: 30383014717ccfcea4c0dee0c0368a3ddd886d7a
+claim_batch: 05fb76ebafa04e588c1d19c4334f445ab2149a64
 handover_head: 6f940ead816a491e776b0e2403254d075bcf59e3
 external_url: https://github.com/cosmic-lua/cosmopolitan/pull/396
 builders: 0c1ecc82e6e54bcb8715e77e1a2583b9
