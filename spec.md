@@ -60,7 +60,13 @@ Deliverables, no product code:
    `skills/decide/SKILL.md`: the three options each with the reason it
    lost or won, the measured numbers, and the consequence for
    `Handler` (unchanged) and for what a handler may assume about
-   shared state.
+   shared state. This item's own Evidence section above cites the
+   tree by inline `` `path:line` `` — do not carry those spans
+   verbatim into the record: `--make lint`'s `doc-citation` rule
+   refuses an inline citation in committed markdown (docs/guides/lint.md,
+   "in a live document the form is refused outright"). Name the
+   symbol in prose (`` `tool/net/redbean.c`'s `HandleMessages` ``) or
+   requote as a fenced `-- path:line` citation instead.
 3. File the build items under this container as children of this item's
    parent, ranked after it, file-disjoint where possible; for a fork or
    thread model the cosmopolitan-side binding is its own item with the
