@@ -12,6 +12,14 @@ an executable benchmark, the optimization, and independent verification.
 The original unranked capture is attached last under G6, without moving any
 existing work ahead of another item.
 
+Implementation sequence (each earlier row is a prerequisite child of
+the following row):
+
+1. [Exact contract tests](https://github.com/cosmic-lua/work/blob/items/3JDEbBj5PhIk52zynuPOzrSRJBu/spec.md)
+2. [Checked benchmarks](https://github.com/cosmic-lua/work/blob/items/3JDEb7AbODYUb9xm5gwRojFmibe/spec.md)
+3. [Sparse projection](https://github.com/cosmic-lua/work/blob/items/3JDEb1FFGt6Kw92rokUyHQYgJGD/spec.md)
+4. [Independent verification](https://github.com/cosmic-lua/work/blob/items/3JDEav2cqkdwFEIHSsKcPq9FvtC/spec.md)
+
 ## Access
 
 Implementation: cosmic-lua/cosmic, branch main. Board/evidence:
@@ -21,8 +29,8 @@ the relevant child specification to implementation agents.
 ## Evidence and choice
 
 Source snapshot: cosmic b0ab4e8fe2bb798296e68e96ae640f82c8c03c5f.
-`_make/deps.tl:111` (`cached_proj`) caches graph construction by the identity
-pair `(proj, by_import)`. At `:180` (`local reached = graph.reach`), every
+`_make/deps.tl:121` (`cached_proj`) caches graph construction by the identity
+pair `(proj, by_import)`. At `:167` (`local reached = graph.reach`), every
 closure then scans `proj.files` to produce its answer in project order.
 `cosmic/graph.tl:37` (`local function reach`) already visits only reachable
 edges. `_make/project.tl:349` (`local function scan`) clears the import memo
@@ -182,3 +190,77 @@ sweep) to f8149470 (949 files, ~0.522 s). It recorded #1829's repair of
 the much larger #1828 regression and identified per-call projection as
 remaining work. These numbers are historical scouting across different
 trees, not the baseline or acceptance threshold for this design.
+
+## Reproduction appendix
+
+Tree evidence commands from a workspace holding the cosmic checkout:
+
+```
+rg -n 'local cached_proj|local reached = graph.reach' cosmic/_make/deps.tl
+# 121:local cached_proj ...
+# 167:  local reached = graph.reach(to_graph(proj, by_import), file.path)
+wc -l cosmic/_make/deps.tl cosmic/_make/deps_test.tl cosmic/_make/build_incremental_test.tl
+# 230 / 189 / 321 lines respectively
+```
+
+The implementation has 270 lines of headroom at this snapshot; the new
+private record and projection do not require moving a public surface.
+New test/benchmark files need normal source discovery, runner registration,
+reads declarations and existing CI checks, not a new coverage-floor row.
+
+The following is the executed diagnostic script. Save as deps_probe.lua
+beside the cosmic checkout and run `sh cosmic/o/bootstrap/cosmic deps_probe.lua`
+with the hashed runtime above; a different runtime is a new measurement.
+It reads current source and does not implement an optimized variant.
+
+```lua
+local fs=require('cosmic.fs')
+local tl=require('tl')
+local unix=require('cosmo.unix')
+local root=assert(unix.getcwd())..'/cosmic'
+for _,name in ipairs({'_make.deps','_make.project','_make.imports','_make.types','cosmic.graph'}) do
+  package.loaded[name]=nil
+  package.preload[name]=function()
+    local src=assert(fs.read(root..'/'..name:gsub('%.','/')..'.tl'))
+    local lua,err=tl.gen(src)
+    assert(lua,tostring(err))
+    return assert(load(lua,'@tree:'..name))()
+  end
+end
+local project=require('_make.project')
+local deps=require('_make.deps')
+local p=assert(project.scan(root))
+local idx=deps.index(p)
+local function run(label)
+  local n=0
+  local start=os.clock()
+  for _,f in ipairs(p.files) do n=n+#deps.closure(p,f,idx) end
+  print(string.format('%s files=%d reached=%d cpu_ms=%.3f',label,#p.files,n,(os.clock()-start)*1000))
+end
+run('first all-file sweep (includes graph construction and import reads)')
+for i=1,7 do run('warm sweep '..i) end
+local graph=require('cosmic.graph')
+local g={}
+for _,f in ipairs(p.files) do
+  local edges={}
+  for _,d in ipairs(deps.direct(p.root,f,idx)) do edges[#edges+1]=d.path end
+  g[f.path]=edges
+end
+local counts={}
+local start=os.clock()
+for _,f in ipairs(p.files) do
+  local reached=graph.reach(g,f.path)
+  local n=0
+  for name in pairs(reached) do if name~=f.path then n=n+1 end end
+  counts[#counts+1]=n
+end
+print(string.format('reach + count all: cpu_ms=%.3f',(os.clock()-start)*1000))
+table.sort(counts)
+print('closure sizes median='..counts[math.floor(#counts/2)]..' p90='..counts[math.floor(#counts*.9)]..' max='..counts[#counts])
+```
+
+The benchmark child-loader premise was also executed against that runtime:
+`require('_make.project').scan` and `require('_make.deps').closure` both
+reported `function` from a plain Lua script without preload overrides.
+Confirm those functions and actual embedded source identity in both future
+built artifacts; availability alone does not prove the correct version.
