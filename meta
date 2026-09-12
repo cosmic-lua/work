@@ -1,0 +1,3 @@
+title: FetchStream's proxy resolution has no test, and a superseded test prints http_proxy's value into CI logs
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmopolitan
