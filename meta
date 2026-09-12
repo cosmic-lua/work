@@ -1,7 +1,7 @@
 title: JSON ASCII 2: checked long, short, escaped and UTF-8 benchmarks
 parent: 3JDHcUarYJewnEbR6YEa6GmolvM
 target: cosmic-lua/cosmic@main
-claim_batch: 987acdaf88f828309e14ea1f3822468fc261392e
+claim_batch: 6e5e2097eceb23ad70177643a335c8389bec8fec
 handover_head: 3b022027e1a69b6274a10fe13b866fdeecad5df3
 external_url: https://github.com/cosmic-lua/cosmic/pull/1836
 verdict: accept
