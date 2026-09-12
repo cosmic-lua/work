@@ -45,6 +45,16 @@ local function build_product(root: string): Product
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
   git(root, {"init", "-q"})
+  -- Every `git commit` below runs `run_auto_maintenance()`, which spawns
+  -- `git maintenance run --auto --quiet` (confirmed via `GIT_TRACE=1`) —
+  -- harmless on its own, but this repo is a TEMPLATE copied by every
+  -- later `product()` call, and a maintenance run can leave a transient
+  -- `.git/objects/maintenance.lock` that `fs.copy_tree`'s walk can lose
+  -- a race against (the file exists when the directory is listed, gone
+  -- by the time it is stat'd). Disabling it here, before the first
+  -- commit, means no such process is ever spawned against this
+  -- directory at all.
+  git(root, {"config", "maintenance.auto", "false"})
   git(root, {"checkout", "-q", "-b", "main"})
   assert(fs.write(fs.join(root, "base.txt"), "base\n"))
   git(root, {"add", "base.txt"})

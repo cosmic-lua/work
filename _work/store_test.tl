@@ -10,6 +10,7 @@
 -- to seed fixtures.
 
 local check = require("cosmic.check")
+local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
@@ -41,11 +42,30 @@ assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
 -- process and copy it, instead of paying that cost on every case.
 local template: string | nil = nil
 
+--- An empty directory as a plain git repo with `maintenance.auto`
+--- disabled, so `store.init_repo` (called right after) sees `.git`
+--- already there and skips its own `git init`. That board commit is
+--- plumbing (`gitobj.commit_tree`/`refs.update_ref`), which never runs
+--- git's own `run_auto_maintenance()` — only porcelain commands do —
+--- so this repo is not exposed today. Disabled anyway, at zero cost,
+--- since this repo becomes a TEMPLATE copied by every later call, and
+--- the point is to close the door on any future write-path change
+--- reopening the race `fs.copy_tree` can lose against a maintenance
+--- run's transient `.git/objects/maintenance.lock` — the confirmed
+--- version of this fix is `_work/commit_flow_fixture.tl`'s.
+local function git_init_quiesced(dir: string)
+  local r = check.must(child.run({"git", "init", "-q"}, {cwd = dir}))
+  assert(r.ok, "git init failed: " .. r.stderr)
+  local c = check.must(child.run({"git", "config", "maintenance.auto", "false"}, {cwd = dir}))
+  assert(c.ok, "git config failed: " .. c.stderr)
+end
+
 local function init_state_repo(name: string): string
   if template == nil then
     template = fs.join(tmpdir, "store-template")
     assert(fs.remove_all(template))
     assert(fs.make_dirs(template))
+    git_init_quiesced(template)
     assert(store.init_repo(template))
   end
   local root = fs.join(tmpdir, "store-" .. name)

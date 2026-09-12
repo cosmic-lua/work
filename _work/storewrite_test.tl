@@ -59,6 +59,17 @@ local function init_state_repo(name: string): string
     state_template = fs.join(tmpdir, "storewrite-template")
     assert(fs.remove_all(state_template))
     assert(fs.make_dirs(state_template))
+    -- Pre-`init` and disable `maintenance.auto` so `store.init_repo`
+    -- (which sees `.git` already there and skips its own `git init`)
+    -- never has a chance to run with it enabled. Its board commit is
+    -- plumbing (`gitobj.commit_tree`), which never triggers git's own
+    -- `run_auto_maintenance()`, so this template is not exposed today
+    -- — disabled anyway, at zero cost, since a maintenance run's
+    -- transient `.git/objects/maintenance.lock` is a race `fs.copy_tree`
+    -- can lose on every later call. `_work/commit_flow_fixture.tl` has
+    -- the confirmed version of this fix.
+    git(state_template, {"init", "-q"})
+    git(state_template, {"config", "maintenance.auto", "false"})
     assert(store.init_repo(state_template))
   end
   local root = fs.join(tmpdir, "storewrite-" .. name)
@@ -82,10 +93,16 @@ local function build_shared_template(clones: integer): string
   local bare = fs.join(base, "remote.git")
   git(base, {"init", "-q", "--bare", bare})
   git(bare, {"config", "core.createObject", "rename"})
+  -- Every push below runs server-side `git gc --auto --quiet` via
+  -- receive-pack unless this is set (confirmed via `GIT_TRACE=1`) — the
+  -- same transient-lock race a porcelain commit's `maintenance.auto`
+  -- causes, just the legacy `gc.auto` mechanism, from the receiving end.
+  git(bare, {"config", "receive.autogc", "false"})
   for i = 1, clones do
     local dir = fs.join(base, ("clone%d"):format(i))
     git(base, {"clone", "-q", bare, dir})
     git(dir, {"config", "core.createObject", "rename"})
+    git(dir, {"config", "maintenance.auto", "false"})
     if i > 1 then
       -- The first clone's own `init_repo` mints the board (and
       -- best-effort pushes it); fetch it down before this clone's own

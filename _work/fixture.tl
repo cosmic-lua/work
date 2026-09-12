@@ -72,6 +72,16 @@ local function build_state_template(): string
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
   git(root, {"init", "-q"})
+  -- `store.init_repo` writes its board commit through plumbing
+  -- (`gitobj.commit_tree`/`refs.update_ref`), which never runs git's
+  -- own `run_auto_maintenance()` — only porcelain commands do — so
+  -- this template is not exposed today. Disabled anyway, at zero cost,
+  -- so a future change to that write path (or to this fixture) cannot
+  -- reopen the race `fs.copy_tree` can lose against a maintenance run's
+  -- transient `.git/objects/maintenance.lock` (see `build_shared_template`
+  -- below, and `_work/commit_flow_fixture.tl`, for where this is a
+  -- confirmed, not merely defensive, fix).
+  git(root, {"config", "maintenance.auto", "false"})
   assert(refs.set_board_mode(root, "local"))
   assert(store.init_repo(root))
   return root
@@ -108,9 +118,17 @@ local function build_shared_template(): string
   local bare = fs.join(base, "remote.git")
   git(base, {"init", "-q", "--bare", bare})
   git(bare, {"config", "core.createObject", "rename"})
+  -- `git push`'s receive-pack runs server-side `git gc --auto --quiet`
+  -- after every push into this bare repo (confirmed via `GIT_TRACE=1`)
+  -- — the same transient-lock race as a porcelain commit's
+  -- `maintenance.auto`, just the legacy `gc.auto` mechanism instead,
+  -- triggered from the OTHER end of the push below. Disabled before
+  -- the first push lands.
+  git(bare, {"config", "receive.autogc", "false"})
   local dir1 = fs.join(base, "clone1")
   git(base, {"clone", "-q", bare, dir1})
   git(dir1, {"config", "core.createObject", "rename"})
+  git(dir1, {"config", "maintenance.auto", "false"})
   assert(refs.set_board_mode(dir1, "local"))
   assert(store.init_repo(dir1))
   git(dir1, {"push", "--atomic", "origin",
@@ -122,6 +140,7 @@ local function build_shared_template(): string
   local dir2 = fs.join(base, "clone2")
   git(base, {"clone", "-q", bare, dir2})
   git(dir2, {"config", "core.createObject", "rename"})
+  git(dir2, {"config", "maintenance.auto", "false"})
   assert(refs.set_board_mode(dir2, "remote"))
   assert(refs.ensure_refspecs(dir2))
   assert(refs.fetch_prune(dir2))
