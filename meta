@@ -2,7 +2,5 @@ title: cosmo.http: bind net/http's request parser, unchunker and content-type ta
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmopolitan
 claim_batch: 9417ba55c41da8714f1650e7e77e032b1260047f
-handover_head: 13622be7e47b004176b0e9a53b1aa474f6ffa846
-verdict: request changes
-verdict_head: 13622be7e47b004176b0e9a53b1aa474f6ffa846
-builders: 3dd915b5bd41ab084e60fcb4fbbf5bd4 0a883b90080e7a97fd89405b9d04dff7
+handover_head: 6441dc3bd1ceb2b0d592750053ca96e59c250b03
+builders: 3dd915b5bd41ab084e60fcb4fbbf5bd4 0a883b90080e7a97fd89405b9d04dff7 46856de8cb359bf10886d007b7128dde
