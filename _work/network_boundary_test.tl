@@ -79,8 +79,12 @@ local ACTIVATES < const > = ('require("_work.%s")'):format("apiauth")
 
 local function guarded_sources(): {string}
   local paths: {string} = {}
-  local work = fs.find("_work", {glob = "*.tl", recursive = false,
-      sorted = true})
+  -- Recursive on purpose. `_work` has no subdirectories today, but the
+  -- module root is the repository root, so a later `_work/<sub>/x.tl`
+  -- would ship in the binary as `_work.<sub>.x` like any other source
+  -- — and a top-level-only walk would leave it unguarded without
+  -- anything here saying so.
+  local work = fs.find("_work", {glob = "*.tl", sorted = true})
   assert(work ~= nil, "listing _work")
   local commands = fs.find("cmd", {glob = "*.tl", sorted = true})
   assert(commands ~= nil, "listing cmd")

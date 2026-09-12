@@ -41,14 +41,19 @@ local record Sent
 end
 
 --- An item handed over with a pull request URL and claimed for review.
+--- `flow.fresh` sets the item's repository to `acme/widgets`, which is
+--- the repository `PULL_URL` names; a case that passes another URL is
+--- deliberately handing over one that disagrees with the item.
 --- @param name string The fixture name
+--- @param url string | nil The handover URL (defaults to `PULL_URL`)
 --- @return store.Store The board
 --- @return string The item id
 --- @return flow.Product The product repository
-local function review_ready(name: string): store.Store, string, flow.Product
+local function review_ready(name: string, url?: string):
+  store.Store, string, flow.Product
   local s, id, p = flow.fresh(name)
   assert(flow.claim(s, id, flow.BUILDER, p) == 0)
-  assert(flow.handover(s, id, flow.BUILDER, p, p.head, PULL_URL) == 0)
+  assert(flow.handover(s, id, flow.BUILDER, p, p.head, url or PULL_URL) == 0)
   assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
   assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
   return s, id, p
@@ -197,7 +202,8 @@ local function test_auto_merge_refusing_surfaces_the_error()
   local s, id, p = review_ready("verdict-land-refused")
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
-      [MERGE] = {status = 409, body = '{"message":"Head branch was modified"}'},
+      [MERGE] = {status = 405,
+        body = '{"message":"Required status check is expected"}'},
       [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7}'},
       [MUTATE] = {status = 200,
         body = '{"errors":[{"message":"Auto-merge is not allowed"}]}'},
@@ -277,4 +283,54 @@ local function test_request_changes_never_lands()
   restore()
   assert(rc == 0, "a request-changes verdict records")
   assert(#sent == 0, "only an accept has a landing to perform")
+end
+
+-- A 409 is GitHub reporting that the branch's head no longer matches
+-- the sha `merge_pull` guarded the request with: the commit that was
+-- judged is not the commit that would land. Auto-merge carries no head
+-- guard at all, so arming it here would schedule the UNREVIEWED head
+-- to land — a failure the caller has to resolve by hand, never a state
+-- to wait out.
+local function test_a_moved_head_is_reported_not_armed()
+  local s, id, p = review_ready("verdict-land-moved")
+  local sent: {Sent} = {}
+  local rc, line = accept(s, id, p, {
+      [MERGE] = {status = 409, body = '{"message":"Head branch was modified"}'},
+      [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7}'},
+      [MUTATE] = {status = 200,
+        body = '{"data":{"enablePullRequestAutoMerge":{}}}'},
+    }, sent)
+  assert(rc == 0, "got: " .. line)
+  assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
+  assert(#sent == 1,
+    ("a moved head sends the merge and stops; got %d requests"):format(#sent))
+  assert(line:find("auto-merge armed", 1, true) == nil,
+    "a moved head must never be armed to land: " .. line)
+  assert(line:find("landing failed", 1, true) ~= nil, line)
+  assert(line:find("HTTP 409", 1, true) ~= nil, line)
+  assert(line:find("land it by hand", 1, true) ~= nil, line)
+end
+
+-- The item's `repo` is what says where a landing may write. The
+-- recorded URL is free-form text whoever held the claim typed at
+-- handover and nothing reconciles it with the item when it is written,
+-- so a URL at a different repository must land nothing rather than
+-- aim the squash somewhere the Access line never named.
+local function test_a_url_at_another_repository_lands_nothing()
+  local s, id, p = review_ready("verdict-land-elsewhere",
+    "https://github.com/other-org/other-repo/pull/7")
+  local sent: {Sent} = {}
+  local rc, line = accept(s, id, p, {
+      [MERGE] = {status = 200, body = '{"sha":"feedface1234","merged":true}'},
+      ["PUT /repos/other-org/other-repo/pulls/7/merge"] =
+      {status = 200, body = '{"sha":"feedface1234","merged":true}'},
+    }, sent)
+  assert(rc == 0, "a refused landing never costs the verdict: " .. line)
+  assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
+  assert(#sent == 0,
+    ("a disagreeing URL writes nowhere; got %d requests"):format(#sent))
+  assert(line:find("landing failed", 1, true) ~= nil, line)
+  assert(line:find("other-org/other-repo", 1, true) ~= nil, line)
+  assert(line:find("acme/widgets", 1, true) ~= nil, line)
+  assert(line:find("merged", 1, true) == nil, line)
 end

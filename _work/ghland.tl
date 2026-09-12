@@ -32,9 +32,11 @@ local type Transport = apiauth.Transport
 
 --- What one landing attempt did. `attempted` false is the ordinary
 --- case — no pull request recorded, or no transport activated — and
---- means nothing at all was sent.
+--- means nothing at all was sent. It can also carry an `error`: a
+--- landing refused before the first request went out reports why
+--- without claiming a write happened.
 local record Landing
-  --- Whether a provider write was attempted.
+  --- Whether a provider write was sent.
   attempted: boolean
   --- The merge commit GitHub reported; "" unless it merged directly.
   merged: string
@@ -52,9 +54,13 @@ local function untouched(): Landing
 end
 
 --- The pull request an item's recorded navigation URL names. That URL
---- is the only place the data model holds a pull request, so it is
---- what a landing acts on; an item carrying no URL, or one pointing
---- somewhere this codec cannot write, simply has nothing to land.
+--- is the only place the data model holds a pull request NUMBER, so it
+--- is what says which request a landing acts on; an item carrying no
+--- URL, or one pointing somewhere this codec cannot write, simply has
+--- nothing to land. The owner/name it also carries is not authority to
+--- write there — the URL is free-form text whoever held the claim
+--- typed at handover, and `target_of` reconciles it with the item's
+--- own validated repository before anything is sent.
 --- @param external_url string The item's recorded navigation URL
 --- @return string owner/name, "" when the URL names no GitHub pull request
 --- @return integer The pull request number, 0 when there is none
@@ -69,15 +75,51 @@ end
 
 --- Whether a refused merge means "not directly mergeable right now"
 --- rather than a real failure. GitHub answers 405 when its own
---- requirements hold the merge back and 409 when the head disagrees
---- with the sha the request was guarded by; both are exactly what
---- auto-merge exists to wait out. `merge_pull` carries the status
---- verbatim in its message for this test.
+--- requirements hold the merge back — branch protection, a merge
+--- queue, a not-yet-mergeable state — which is exactly what auto-merge
+--- exists to wait out. `merge_pull` carries the status verbatim in its
+--- message for this test.
+---
+--- A 409 is deliberately NOT held back. `merge_pull` guards the request
+--- with the judged head, and GitHub answers 409 precisely when the
+--- branch's current head disagrees with it: the commit that was
+--- reviewed is no longer the commit that would land. Auto-merge takes
+--- no head guard at all, so arming it there would schedule the
+--- unreviewed head to land — the one outcome the sha guard exists to
+--- prevent. A moved head is a reported landing failure the caller
+--- resolves by hand.
 --- @param msg string The rendered merge failure
 --- @return boolean True when arming auto-merge is the right next step
 local function is_held_back(msg: string): boolean
   return msg:find("HTTP 405", 1, true) ~= nil
-  or msg:find("HTTP 409", 1, true) ~= nil
+end
+
+--- Where an activated landing may write, or why it may not. An item's
+--- `repo` is the validated `owner/name` the Access line names (and, for
+--- an item that names none, the board's own configured remote) —
+--- `gh.slug` is what every other provider read resolves through. The
+--- recorded navigation URL is not that: it is free-form text whoever
+--- held the claim typed at handover, and nothing reconciles the two
+--- when it is written. A merge aimed by the URL alone would send a
+--- squash `PUT` at whatever repository that text happens to name while
+--- the verdict line reported a successful landing, so a URL that
+--- disagrees with the item lands nothing at all.
+--- @param s store.Store The store
+--- @param it item.Item The item whose accept is being landed
+--- @param url_repo string owner/name read off the recorded URL
+--- @return string The repository to write to, "" when there is none
+--- @return string Why there is none, "" when there is one
+local function target_of(s: store.Store, it: item.Item, url_repo: string):
+  string, string
+  local slugged, serr = gh.slug(s, it.repo)
+  if slugged == nil then
+    return "", serr
+  end
+  if slugged ~= url_repo then
+    return "", ("the recorded pull request is at %s, but the item's "
+      .. "repository is %s"):format(url_repo, slugged)
+  end
+  return slugged, ""
 end
 
 --- The landing itself, with a transport already installed.
@@ -113,7 +155,8 @@ end
 
 --- Land an accept that has already been recorded. Does nothing at all
 --- unless the item names a pull request AND the caller has activated
---- provider transport; the activation is undone before this returns.
+--- provider transport; the activation is undone before this returns,
+--- on every path out of the attempt.
 --- @param s store.Store The store
 --- @param it item.Item The item whose accept was just recorded
 --- @param head string The judged commit
@@ -123,35 +166,56 @@ end
 --- @return Landing What the landing did, if anything
 local function land(s: store.Store, it: item.Item, head: string,
     send?: Transport): Landing
-  local repo, number = pull_of(it.external_url or "")
-  if repo == "" or number == 0 then
+  local url_repo, number = pull_of(it.external_url or "")
+  if url_repo == "" or number == 0 then
     return untouched()
   end
   -- The refusal is deliberately dropped: not opting in is the default,
   -- not a fault, and the caller who did not ask for provider transport
-  -- has nothing to read about it on a verdict line.
+  -- has nothing to read about it on a verdict line. Resolving the
+  -- target comes after it for the same reason — an unactivated accept
+  -- writes nothing and says nothing, whatever its URL holds.
   local live, _why = apiauth.activate(nil, send)
   if not live then
     return untouched()
   end
-  local result = attempt(s, repo, number, head)
+  local result = untouched()
+  -- A throw anywhere in the sequence would otherwise skip `deactivate`
+  -- and leave the whole process holding the live transport this verb
+  -- installed for one step — exactly what scoping it exists to
+  -- prevent. Nothing called below throws today; the invariant rests on
+  -- this call rather than on that staying true.
+  local ok, raised = pcall(function()
+      local repo, terr = target_of(s, it, url_repo)
+      if repo == "" then
+        result = {attempted = false, merged = "", armed = false, error = terr}
+        return
+      end
+      result = attempt(s, repo, number, head)
+    end)
   local _restored = apiauth.deactivate()
+  if not ok then
+    return {attempted = true, merged = "", armed = false,
+      error = ("the landing raised: %s"):format(tostring(raised))}
+  end
   return result
 end
 
---- What a landing adds to the verdict line. Empty when nothing was
---- attempted, which is why an unactivated accept still prints exactly
---- the line it always did. A failure names itself and hands the work
---- back rather than pretending the merge is in motion; the verdict
---- stands either way.
+--- What a landing adds to the verdict line. Empty when there was
+--- nothing to land and nothing to report, which is why an unactivated
+--- accept still prints exactly the line it always did. A failure names
+--- itself and hands the work back rather than pretending the merge is
+--- in motion — including a landing refused before any request went
+--- out, which is a failure the caller must see and not a silence. The
+--- verdict stands either way.
 --- @param l Landing What `land` reported
 --- @return string The suffix, "" when there is nothing to say
 local function note(l: Landing): string
-  if not l.attempted then
-    return ""
-  end
   if l.error ~= "" then
     return (" — landing failed (%s), land it by hand"):format(l.error)
+  end
+  if not l.attempted then
+    return ""
   end
   if l.merged ~= "" then
     return (" — merged %s"):format(l.merged:sub(1, 12))
