@@ -51,3 +51,11 @@ Mutation-check duplicate close/retained-idle ownership with fd reuse sentinels.
 Gate: Linux binding tests plus redbean build, then repeat fault/GC cases under
 the repository's available sanitizer/debug mode. Do not claim sanitizer coverage
 without its actual verdict. No public option or error-enum additions.
+
+## Access
+
+Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
+cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
+read cosmic-lua/work for the parent design and prerequisite evidence, supplied
+by the orchestrator in the builder brief. The implementation PR targets only
+the repository assigned to this item; agents do not mutate the board.
