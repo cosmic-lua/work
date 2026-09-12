@@ -1,7 +1,7 @@
 title: cosmos pin bump carrying cosmo.http, and http in gentype's MODULES so cosmo/http.d.tl is generated
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
-claim_batch: 73275e84ceb4fac689affd5c4557d518fab3e8da
+claim_batch: 90f589b46e1d838b61ea939d4d1d0bd04d87e147
 handover_head: 46b6a6190bd250c7c9c42577147f6825b8b076fb
 external_url: https://github.com/cosmic-lua/cosmic/pull/1847
 builders: cef13b9580d913977c115cc0f68ec97a
