@@ -1,0 +1,10 @@
+gitboard-claim-batch-v1
+batch 670829cf21c0c6c8b0bc32d8b8ac1d0a
+caller 768e5033d21da9a7f862d98377582bef
+remote origin
+action drop
+created 1789242776
+publish-by 0
+reason blocked mid-build on a real gentype @field parsing bug (not this item's scope); filed as child kUVd_PbBu, item is now a container until it resolves
+
+3JEZz4tbj12EXM857GiHPFMHEPg 49e58eeac39de149f9af6cea2d6ede981734232c drop - 4854db0403c841c88f11caed361c38a75357c5b6 6ed567f426a4608b6cb27f87e57825d21a0b5da5 1789241728 1789241728 1789248928
