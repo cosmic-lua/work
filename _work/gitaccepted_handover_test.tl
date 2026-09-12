@@ -92,12 +92,53 @@ local function test_same_accepted_head_and_url_update_preserve_verdict()
   local s, id, p = accepted("accepted-same-head")
   assert(call(s, "take", id, "--head", p.head, "--repo-dir", p.root,
       "--session", flow.REVIEWER) == 0)
-  assert(call(s, "take", id, "--head", p.head, "--repo-dir", p.root,
-      "--url", "https://example.test/review/2", "--session", flow.REVIEWER) == 0)
+  local code, out = call(s, "take", id, "--head", p.head, "--repo-dir", p.root,
+    "--url", "https://example.test/review/2", "--session", flow.REVIEWER)
+  assert(code == 0, out)
+  assert(out:find("is accepted (same head; external URL updated)", 1, true),
+    "a same-head metadata-only take reports the acceptance it preserves: " .. out)
+  assert(not out:find("awaiting review", 1, true),
+    "the durable acceptance must not be contradicted by the verdict line: " .. out)
   s = reopen(s)
   local it = check.must(store.load(s, id))
   assert(it.verdict == "accept" and it.verdict_head == p.head)
   assert(it.external_url == "https://example.test/review/2")
+  assert(store.close(s))
+end
+
+local function test_unreviewed_same_head_url_attachment_still_awaits_review()
+  local s, id, p = flow.fresh("unreviewed-same-head")
+  assert(flow.claim(s, id, flow.BUILDER, p) == 0)
+  assert(call(s, "take", id, "--head", p.head, "--repo-dir", p.root,
+      "--session", flow.BUILDER) == 0)
+  local code, out = call(s, "take", id, "--head", p.head, "--repo-dir", p.root,
+    "--url", "https://example.test/change/9", "--session", flow.BUILDER)
+  assert(code == 0, out)
+  assert(out:find("awaiting review", 1, true),
+    "an unreviewed handover has no acceptance to preserve: " .. out)
+  assert(not out:find("is accepted", 1, true), out)
+  s = reopen(s)
+  local it = check.must(store.load(s, id))
+  assert(it.verdict == "" and it.external_url == "https://example.test/change/9")
+  assert(store.close(s))
+end
+
+local function test_new_head_after_acceptance_still_supersedes_it()
+  local s, id, p = accepted("new-head-after-accept")
+  assert(flow.claim(s, id, flow.REVIEWER, p, "drop") == 0)
+  assert(flow.claim(s, id, flow.BUILDER, p) == 0)
+  local code, out = call(s, "take", id, "--head", p.next_head,
+    "--repo-dir", p.root, "--session", flow.BUILDER)
+  assert(code == 0, out)
+  assert(out:find("awaiting review", 1, true),
+    "a genuinely new head clears the stale acceptance rather than reporting it: "
+    .. out)
+  assert(not out:find("is accepted", 1, true), out)
+  s = reopen(s)
+  local it = check.must(store.load(s, id))
+  assert(it.verdict == "" and it.verdict_head == ""
+    and it.handover_head == p.next_head,
+    "a new head must continue to clear/supersede acceptance")
   assert(store.close(s))
 end
 
