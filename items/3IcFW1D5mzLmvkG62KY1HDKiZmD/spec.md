@@ -8,3 +8,9 @@ change: one-line owner swap to cosmic-lua/cosmopolitan in that URL
 constant, carried by the next build-touching PR on that repo (or its
 own tiny PR if none comes soon); verify the new URL serves the pinned
 COSMOCC_VERSION asset before merging.
+
+## Access
+
+cosmic-lua/cosmopolitan, read and write on a branch.
+whilp/cosmopolitan named only as the stale URL string being replaced;
+no access to that repository is needed or taken.
