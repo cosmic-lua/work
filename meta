@@ -1,7 +1,7 @@
 title: _work/fixture.tl git(): bounded retry for git worktree add's locked-file ENOENT race
 parent: 3JDBCTTNJZkV4GkF0Xovb592hYc
 target: cosmic-lua/work
-claim_batch: c3b89023afefa77c1a8ff0a16116503f105da908
+claim_batch: f1952c6eb343cd78af8dbdab350f1466bd5933fc
 handover_head: b01f519e15f8a5b7fe7d49e56470b379b2b9e251
 external_url: https://github.com/cosmic-lua/work/pull/127
 builders: 2f1a5ddd232f8b0c993079980afa6ad0
