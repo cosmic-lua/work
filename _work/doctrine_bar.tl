@@ -25,7 +25,20 @@ and put the alternative in `## Non-goals` or nowhere. A Change
 that names a function or a string quotes the `grep -n` hit that
 places it, and a state or enum literal quotes the vocabulary the
 schema or record declares — a location read from memory is the
-wrong turn that feels obviously right. A Change that adds a verb or
+wrong turn that feels obviously right. The same rule covers any
+bare file:line citation of quoted source text, wherever it sits —
+an `## Evidence` paragraph citing a fact as much as `## Change`
+naming a function: pair the line number with a short,
+still-`grep`-able literal string from that exact line, a
+distinctive substring of the quote itself is enough, no new tooling
+and no new section. A sibling item landing between refinement and
+pull moves line numbers but rarely rewrites the line itself, so the
+string still finds what the number alone would strand. Before:
+`_work/example.tl:54-56` beside the quoted sentence. After: the
+same quote plus `grep -n "the quoted phrase" _work/example.tl` —
+the number may go stale, the grep hit does not. A citation with a
+number but no anchor string is under the bar the same way an
+unmeasured claim already is. A Change that adds a verb or
 a flag lists its three wiring files by name — `_work/gitcommands.tl`
 (the declaration), `_work/gitboard.tl` (the argv dispatch branch),
 `_work/gitverbs.tl` (the `cmd_<verb>` entry) — because a builder that
