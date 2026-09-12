@@ -1,0 +1,3 @@
+title: fence: a build nested four levels deep fails with `No rule to make target`, three levels is fine
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
+target: cosmic-lua/cosmic
