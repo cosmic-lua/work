@@ -1,3 +1,3 @@
 title: fetch reuse 6: verified TLS reuse with safe fork lifecycle
 parent: 3JDCmmdSj5lMSoSr0F0vxLkKlcz
-target: cosmic-lua/cosmopolitan
+target: cosmic-lua/cosmopolitan@master
