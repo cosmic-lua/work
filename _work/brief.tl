@@ -3,11 +3,16 @@
 --- can answer already filled: id, handle, title, spec sidecar verbatim,
 --- repo/base/item branch, the exact product commit, this checkout's own
 --- path. Templates are `_work.brieftext` and `_work.brieftext_review`;
---- `review` picks between full and mechanical exact-head reviews. The
---- fill grammar is `<UPPER_SNAKE>`, and a placeholder the board cannot
---- answer (a worktree path, a bounce paragraph) survives the fill — the
---- closing verdict line names each survivor, so the caller's whole job
---- is those and pasting the body verbatim.
+--- `review` picks between full and mechanical exact-head reviews.
+--- Each template is compiled at build time into a typed renderer
+--- (`_work.brieftmpl`, from `_work/brieftmpl_gen.tl`) over a
+--- `_work.briefctx` record, so every field a template names is checked
+--- against that record rather than looked up by string. A field the
+--- board cannot answer (a worktree path, a bounce paragraph) renders
+--- as its own `<UPPER_SNAKE>` caller-fill token — `_work.briefcontext`
+--- resolves that and records it — and the closing verdict line names
+--- each survivor, so the caller's whole job is those and pasting the
+--- body verbatim.
 ---
 --- Every brief also names the session its subject is already claimed
 --- under (`it.claim`) on the closing verdict line — `gitboard session
@@ -20,12 +25,12 @@
 ---
 --- A read, not a mutation: nothing here writes the board.
 local briefcommands = require("_work.briefcommands")
+local briefcontext = require("_work.briefcontext")
 local briefmeasure = require("_work.briefmeasure")
 local brieftext = require("_work.brieftext")
 local gitinvocation = require("_work.gitinvocation")
 local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
-local brieftext_review = require("_work.brieftext_review")
 local child = require("cosmic.child")
 local claim = require("_work.claim")
 local claimbatch = require("_work.claimbatch")
@@ -37,66 +42,19 @@ local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
-local KINDS < const >: {string: string} = {
-  builder = brieftext.BUILDER,
-  research = brieftext.RESEARCH,
-  review = brieftext_review.REVIEW,
-  refine = brieftext.REFINE,
-  decompose = brieftext.DECOMPOSE,
+--- The kinds a brief can be asked for, as a set: which renderer each
+--- one reaches for is `cmd_brief`'s own dispatch, since the six
+--- templates take six different context records.
+local KINDS < const >: {string: boolean} = {
+  builder = true,
+  research = true,
+  review = true,
+  refine = true,
+  decompose = true,
 }
 
 --- The kind names, alphabetical, for refusals and help.
 local KIND_LIST < const > = "builder, decompose, refine, research, review"
-
---- Replace every `<UPPER_SNAKE>` placeholder that `values` answers;
---- one the map does not answer survives verbatim.
---- @param text string The template
---- @param values {string: string} Fill values by placeholder name
---- @return string The filled text
-local function fill(text: string, values: {string: string}): string
-  local out = text:gsub("<(%u[%u_]*)>", function(key: string): string | nil
-      return values[key]
-    end)
-  return out
-end
-
---- The `<UPPER_SNAKE>` placeholder-shaped tokens present in `text`,
---- first-seen order, each once. Used on a raw template (its declared
---- placeholders) and, in the test below, on an already-filled string.
---- @param text string The text to scan
---- @return {string} Placeholder names, possibly empty
-local function unfilled(text: string): {string}
-  local seen: {string: boolean} = {}
-  local out: {string} = {}
-  for key in text:gmatch("<(%u[%u_]*)>") do
-    if not seen[key] then
-      seen[key] = true
-      out[#out + 1] = ("<%s>"):format(key)
-    end
-  end
-  return out
-end
-
---- The `template`'s OWN declared placeholders that `values` leaves
---- unanswered — checked by looking `values` up directly, never by
---- scanning the filled body. A spec quoting a placeholder-shaped token
---- verbatim (`<N>`, `<ID>`, `<REVIEW_SESSION>` as example syntax or
---- old-name prose) rides inside `values["SPEC"]`'s own text; since only
---- names the template itself declares are ever candidates, such a token
---- can never be mistaken for one the caller still owes a fill.
---- @param template string The raw, unfilled template
---- @param values {string: string} The fill values actually used
---- @return {string} Placeholder names still unanswered, first-seen order
-local function survivors(template: string, values: {string: string}): {string}
-  local out: {string} = {}
-  for _, ph in ipairs(unfilled(template)) do
-    local key = ph:sub(2, #ph - 1)
-    if values[key] == nil then
-      out[#out + 1] = ph
-    end
-  end
-  return out
-end
 
 --- Whether a diff is small and mechanical enough to earn
 --- `brieftext_review.REVIEW_SCRIPT`'s numbered script instead of
@@ -147,13 +105,14 @@ end
 
 --- Rework context contains only facts the board actually owns: the
 --- verdict kind and commit id, never review prose reconstructed by gitboard.
---- `branch` "" leaves `<BRANCH>` in the spliced text for the outer fill
---- to answer or leave alone — never a guessed identifier.
+--- `branch` "" leaves `<BRANCH>` in the spliced text as the caller's to
+--- fill — never a guessed identifier.
+--- @param it item.Item The item under brief
+--- @param branch string The claim's branch, "" when none can be derived
+--- @return string The rework section, "" when the item is not in rework
 local function bounce_context(it: item.Item, branch: string): string
   if (it.verdict or "") ~= "request changes" then return "" end
-  local values: {string: string} = {JUDGED_HEAD = it.verdict_head or ""}
-  if branch ~= "" then values.BRANCH = branch end
-  return fill(brieftext.REWORK, values)
+  return briefcontext.rework(it.verdict_head or "", branch)
 end
 
 --- The checkout holding `bin/gitboard` — what `<PRODUCT_ROOT>` means to
@@ -241,10 +200,10 @@ local function worktree_path(s: store.Store, it: item.Item): string
   return claim.worktree(checkout, br)
 end
 
---- brief: print one role's prompt for an item, filled from the board.
+--- brief: print one role's prompt for an item, resolved from the board.
 --- The body prints first and the verdict line closes it (the `show`
---- shape), naming the placeholders left for the caller. `out`, when
---- given, writes the filled body to that file instead of printing
+--- shape), naming the caller-fill tokens left for the caller. `out`,
+--- when given, writes the body to that file instead of printing
 --- it — a channel that decodes escapes (a pasted `\uXXXX`, `\t`, a
 --- line-continuation backslash) corrupts a pasted prompt but cannot
 --- touch a file — and the verdict line names the path in place of
@@ -266,8 +225,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   tree = tree or ""
   gb_command = gb_command or ""
   gb_cwd = gb_cwd or ""
-  local template = KINDS[kind or ""]
-  if template == nil then
+  if not KINDS[kind or ""] then
     return gate.verdict_line("brief", false,
       ("unknown brief '%s' — one of: %s"):format(tostring(kind), KIND_LIST))
   end
@@ -306,6 +264,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   -- Every review judges an exact product handover, including research.
   -- Legacy result metadata cannot substitute for or override that commit.
   local head_sha = ""
+  local mechanical = false
   if kind == "review" then
     if (it.handover_head or "") == "" then
       if (it.result or "") ~= "" then
@@ -319,9 +278,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
           .. "a commit review judges"):format(id:sub(1, 8), id:sub(1, 8)))
     else
       head_sha = it.handover_head or ""
-      if local_mechanical_diff(s, it) then
-        template = brieftext_review.REVIEW_SCRIPT
-      end
+      mechanical = local_mechanical_diff(s, it)
     end
     -- A review names a live claim `verdict` will accept — never mints one.
     if (it.claim or "") == "" then
@@ -338,78 +295,78 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     end
   end
   local label = prep.session or it.claim or ""
-  local values: {string: string} = {
-    PREPARATION = prep.session ~= nil and receipt.context(prep) or brieftext.BUILDER_PREPARATION,
-    ITEM_ID = it.id,
-    HANDLE = tail.handle(it.id),
-    TITLE = it.title,
-    WORKTREE = prep.worktree,
-    SPEC = spec,
-    CURRENT_SPEC = spec ~= "" and spec or "(the item has no spec sidecar)",
-    BOARD_DIR = fs.absolute_path(s.root),
-    REVIEW_SESSION = label,
-    ROUND_CONTEXT = "",
-    CLAIM_BASE = prep["product-base"] or it.claim_base or "",
-    CHANGE_SOURCE = (it.external_url or "") ~= ""
+  local facts: briefcontext.Facts = {
+    preparation = prep.session ~= nil and receipt.context(prep) or brieftext.BUILDER_PREPARATION,
+    item_id = it.id,
+    handle = tail.handle(it.id),
+    title = it.title,
+    worktree = prep.worktree,
+    spec = spec,
+    current_spec = spec ~= "" and spec or "(the item has no spec sidecar)",
+    board_dir = fs.absolute_path(s.root),
+    review_session = label,
+    round_context = "",
+    claim_base = prep["product-base"] or it.claim_base or "",
+    change_source = (it.external_url or "") ~= ""
     and (("Commit: `%s`\nExternal link (navigation only): %s")
       :format(head_sha, it.external_url or ""))
     or (("Commit: `%s`"):format(head_sha)),
-    GITBOARD_CMD = gitinvocation.prefix(gitboard_command, gitboard_cwd),
+    gitboard_cmd = gitinvocation.prefix(gitboard_command, gitboard_cwd),
   }
-  local root = ""
   if prep.session == nil then
-    root = kind == "review" and review_product_root(s, it) or product_root()
+    local root = kind == "review" and review_product_root(s, it) or product_root()
+    if root ~= "" then
+      facts.product_root = root
+    end
   end
-  if root ~= "" then
-    values["PRODUCT_ROOT"] = root
-  end
-  -- `<WORKTREE>`: fills once `worktree ID` (or `--review`) has made the
-  -- checkout on disk — unfilled until then, like any other placeholder
-  -- the board cannot yet answer. `REVIEW_SCRIPT` carries no `<WORKTREE>`.
-  if kind == "builder" or (kind == "review"
-    and template:find("<WORKTREE>", 1, true) ~= nil) then
+  -- `<WORKTREE>`: resolves once `worktree ID` (or `--review`) has made
+  -- the checkout on disk — unresolved until then, like any other field
+  -- the board cannot yet answer. `REVIEW_SCRIPT` declares no worktree.
+  if kind == "builder" or (kind == "review" and not mechanical) then
     local wt = worktree_path(s, it)
     if wt ~= "" and fs.is_dir(wt) then
-      values["WORKTREE"] = wt
+      facts.worktree = wt
     end
   end
   if kind == "builder" then
     -- `<BRANCH>`: the claim's own branch, never the item id's leading
     -- characters — those are a plausible-looking KSUID prefix, not a
-    -- ref anything resolves. Unfilled, like `<WORKTREE>`, until a claim
-    -- exists to derive it from.
+    -- ref anything resolves. Unresolved, like `<WORKTREE>`, until a
+    -- claim exists to derive it from.
     local br = prep.branch or claim_branch(s, it)
     if br ~= "" then
-      values["BRANCH"] = br
+      facts.branch = br
     end
     local bc = bounce_context(it, br)
     if bc ~= "" then
-      values["BOUNCE_CONTEXT"] = bc
+      facts.bounce_context = bc
     end
   end
-  local repo = it.repo or ""
-  if repo ~= "" then
-    values["REPO"] = repo
-    if (it.base or "") ~= "" then
-      values["BASE_BRANCH"] = it.base
-    elseif repo:find("cosmopolitan", 1, true) ~= nil then
-      values["BASE_BRANCH"] = "master"
-    else
-      values["BASE_BRANCH"] = "main"
-    end
-  elseif (it.base or "") ~= "" then
-    values["BASE_BRANCH"] = it.base
+  if (it.repo or "") ~= "" then
+    facts.repo = it.repo
   end
   if head_sha ~= "" then
-    values["HEAD_SHA"] = head_sha
+    facts.head_sha = head_sha
   end
+  local body: string = ""
+  local left: {string} = {}
   if kind == "builder" or kind == "review" then
     local checkout, _cerr = repository_map.resolve(s.root, it.repo or "", "")
-    for key, value in pairs(briefcommands.commands(checkout or "", kind)) do
-      values[key] = value
+    local cmds = briefcommands.commands(checkout or "", kind)
+    if kind == "builder" then
+      body, left = briefcontext.builder(facts, cmds)
+    elseif mechanical then
+      body, left = briefcontext.review_script(facts, cmds)
+    else
+      body, left = briefcontext.review(facts, cmds)
     end
+  elseif kind == "research" then
+    body, left = briefcontext.research(facts)
+  elseif kind == "refine" then
+    body, left = briefcontext.refine(facts)
+  else
+    body, left = briefcontext.decompose(facts)
   end
-  local body = fill(template, values)
   local measured = false
   if tree ~= "" and (kind == "builder" or kind == "review") then
     local section, merr = briefmeasure.measure(spec, tree)
@@ -421,7 +378,6 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     measured = true
   end
   body = body .. "\n\n" .. brieftext_friction.ASK
-  local left = survivors(template, values)
   -- An unclaimed item's brief (builder, research, refine, decompose) has
   -- no session to name, so it carries no clause and no minted stand-in.
   local session_phrase = prep.session ~= nil and "prepared session" or "claimed under session"
@@ -462,16 +418,12 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
 end
 
 local record brief
-  fill: function(text: string, values: {string: string}): string
-  unfilled: function(text: string): {string}
   cmd_brief: function(s: store.Store, kind: string, id: string, out?: string,
   tree?: string, receipt_file?: string, caller?: string,
   gb_command?: string, gb_cwd?: string): integer
 end
 
 local M: brief = {
-  fill = fill,
-  unfilled = unfilled,
   cmd_brief = cmd_brief,
 }
 

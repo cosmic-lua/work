@@ -4,41 +4,45 @@
 --- changed lines) with a fixed four-move script instead,
 --- research uses the same exact-head review. Split out
 --- of `_work.brieftext` so that module has headroom for its
---- non-review templates to grow; the fill grammar, the placeholder
---- rules, and the filling itself are unchanged — `brief` still does
---- the filling and the PR-shape selection between `REVIEW` and
+--- non-review templates to grow; the grammar, the context records,
+--- and the rendering itself are unchanged — `brief` still resolves
+--- the context and picks the PR shape between `REVIEW` and
 --- `REVIEW_SCRIPT`, this module only holds the templates' text.
 ---
---- Pure data. The fill grammar is `<UPPER_SNAKE>`; anything else in
---- angle brackets is prose and must not match that shape.
+--- Pure data: template SOURCE, in `cosmic.template`'s grammar.
+--- `_work/brieftmpl_gen.tl` compiles each one into a typed renderer
+--- under `_work/brieftmpl/` against `_work.briefctx`'s records, so an
+--- interpolation naming a field no record declares fails the build.
+--- Text outside `{{ }}` is literal — a spec spliced into `{{.spec}}`
+--- is data and is never reinterpreted as template syntax.
 ---
---- `<WORKTREE>` in `REVIEW` is the review checkout `worktree ID --review`
+--- `{{.worktree}}` in `REVIEW` is the review checkout `worktree ID --review`
 --- makes — the `wt` directory beside the mapped product checkout, then the
 --- claim's own `work/<handle>/<claim-root-short>` branch — filled only
 --- once that directory exists. `REVIEW_SCRIPT` is checkout-free: its
 --- mutation step uses
 --- `git show <head>:<path>` into the scratchpad, and its verdict block
---- reads the diff from `<PRODUCT_ROOT>` without a `<WORKTREE>`
---- placeholder. The shared checkout note still points at
---- `<BOOTSTRAP_PHRASE>` (`_work.brief` fills it from the item's
+--- reads the diff from `{{.product_root}}` without a `{{.worktree}}`
+--- field at all. The shared checkout note still points at
+--- `{{.bootstrap_phrase}}` (`_work.brief` resolves it from the item's
 --- resolved repo kind via `_work.briefcommands` — the fresh-checkout
 --- bootstrap plan in full, never just its last step, plus its own
 --- trailing "before you run any test" prose) before a review test
---- runs; `<TEST_CMD_PHRASE>` in the mutation-test line is that same
+--- runs; `{{.test_cmd_phrase}}` in the mutation-test line is that same
 --- module's resolved test-file command, backtick-quoted with its own
 --- `<file>`. Both fall back to the exact literal sentence these
 --- templates carried before `_work.briefcommands` existed when the
 --- resolver cannot place the item's repo.
 ---
---- `<PRODUCT_ROOT>` is the reviewer's own local product checkout — where the
+--- `{{.product_root}}` is the reviewer's own local product checkout — where the
 --- diff is read and, in `REVIEW_SCRIPT`, the `--repo-dir` the caller passes;
 --- `_work.brief` resolves it from the ITEM's own repository through the
 --- `gitboard.repository` map, so it names the tree the diff's files live
 --- in even when gitboard itself was run from a checkout of another
 --- repository, and falls back to that checkout only when the item's repo
 --- is not mapped here. It is never the invocation gitboard itself runs
---- through: that is `<GITBOARD_CMD>`, the caller's own exact loader-plus-
---- executable prefix (`_work.brief` fills it from a builder's `--receipt`
+--- through: that is `{{.gitboard_cmd}}`, the caller's own exact loader-plus-
+--- executable prefix (`_work.brief` resolves it from a builder's `--receipt`
 --- or from `--gitboard-command`/`--gitboard-cwd` given directly to this
 --- brief), rendered once and reused before every verb below. Unresolved —
 --- no caller command supplied — renders as an explicit sentinel, never a
@@ -46,58 +50,58 @@
 --- product-checkout network bootstrap. Verdict records the exact
 --- handed-over commit and performs no provider or authenticated operation.
 ---
---- `<ROUND_CONTEXT>` (`REVIEW` only, between the spec block and "How
---- to review") is `_work.brief`'s fill for a SECOND (or later) review
---- round: the prior request-changes verdict's judged head, the PR's
+--- `{{.round_context}}` (`REVIEW` only, between the spec block and "How
+--- to review") is where a SECOND (or later) review round's own context
+--- goes: the prior request-changes verdict's judged head, the PR's
 --- current head, the round count, and that round's own formal review
---- body, spliced from `ROUND` below — always the same "" a fresh, not
---- yet reworked item's `<BOUNCE_CONTEXT>` fills, but rendered as an
---- actual empty string rather than left as literal placeholder text,
---- since nothing ever hand-fills this one the way an orchestrator
---- might hand-fill a bounce paragraph.
+--- body, rendered from `ROUND` below and spliced in. `_work.brief`
+--- resolves it as the same intentionally EMPTY string a fresh, not yet
+--- reworked item's `{{.bounce_context}}` gets — an empty value, never
+--- an unresolved one, since nothing ever hand-fills this the way an
+--- orchestrator might hand-fill a bounce paragraph.
 
 local ROUND < const > = [[
-## Round <ROUND_NUMBER> context — this is a rework, not a fresh review
+## Round {{.round_number}} context — this is a rework, not a fresh review
 
-Round <ROUND_NUMBER> requested changes on head `<JUDGED_HEAD>`; the
-PR's head has since moved to `<CURRENT_HEAD>`. That round's review,
+Round {{.round_number}} requested changes on head `{{.judged_head}}`; the
+PR's head has since moved to `{{.current_head}}`. That round's review,
 verbatim:
 
-> <ROUND_FINDING>
+> {{.round_finding}}
 
 Confirm each finding above is closed — repeat its own reproduction —
 then judge the whole diff; what round 1 accepted is settled.
 ]]
 
 local REVIEW < const > = [[
-You are a fresh-context code reviewer for `<REPO>`. You have never
+You are a fresh-context code reviewer for `{{.repo}}`. You have never
 seen this change before — that is deliberate: the review must come
 from a distance from the builder. Everything you need is below.
 
 ## What you're reviewing
 
-Board item id: `<ITEM_ID>` (handle <HANDLE>)
-Title: <TITLE>
-<CHANGE_SOURCE>
+Board item id: `{{.item_id}}` (handle {{.handle}})
+Title: {{.title}}
+{{.change_source}}
 
 The caller has made this exact commit available in your local checkout.
-Review `<CLAIM_BASE>..<HEAD_SHA>`; never substitute a branch tip or provider
+Review `{{.claim_base}}..{{.head_sha}}`; never substitute a branch tip or provider
 state for either commit. The spec below is authoritative. External checks,
 when used, must be inspected by the caller on this exact SHA.
 
 ## The spec this PR is supposed to satisfy (verbatim)
 
 ---
-<SPEC>
+{{.spec}}
 ---
 
-<ROUND_CONTEXT>
+{{.round_context}}
 ## How to review — the posture is ADVERSARIAL
 
 Your job is to try to make this diff fail, not to confirm it looks
 fine.
 
-1. Confirm you are reading exactly `<HEAD_SHA>`. If the caller supplies
+1. Confirm you are reading exactly `{{.head_sha}}`. If the caller supplies
    external checks, confirm they name that SHA; red or running means stop and
    record nothing. Never infer check state from the board. The caller spawns
    this review only once mechanical checks are green on this exact head (or,
@@ -125,14 +129,14 @@ fine.
 
 Mutation-test at least one guard the change adds or relies on: break
 what it guards, confirm the diff's own test catches it — run the ONE
-test file that guards it (<TEST_CMD_PHRASE>), not the suite —
+test file that guards it ({{.test_cmd_phrase}}), not the suite —
 restore it exactly. A real break changes the outcome the test reads,
 never just the text around it: replace a matched needle with
 unrelated text rather than extending it, flip a boolean rather than
 renaming it, and if the test stays green the guard is decoration.
-Do this from your own fresh checkout at `<WORKTREE>` — never reuse
+Do this from your own fresh checkout at `{{.worktree}}` — never reuse
 another agent's worktree.
-The checkout that holds the board worktree (`<BOARD_DIR>/..`) is the
+The checkout that holds the board worktree (`{{.board_dir}}/..`) is the
 orchestrator's and is stale by construction; never read, grep or build
 in it. Your worktree is the only tree.
 
@@ -140,28 +144,28 @@ in it. Your worktree is the only tree.
 
 `verdict` verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
-those operations. This review is claimed under session `<REVIEW_SESSION>` —
+those operations. This review is claimed under session `{{.review_session}}` —
 you MUST use that exact string. That checkout has no `o/3p` cache yet — run
-<BOOTSTRAP_PHRASE>
+{{.bootstrap_phrase}}
 
-GitBoard invocation for this review: `<GITBOARD_CMD>` — the exact
+GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
 loader and absolute executable the caller runs board commands through.
 Use it verbatim as the prefix below; never guess a product-checkout
 substitute of your own, and never bootstrap one yourself.
 
 ```
-<GITBOARD_CMD> verdict <ITEM_ID> accept \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
-<GITBOARD_CMD> verdict <ITEM_ID> request-changes \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
-<GITBOARD_CMD> verdict <ITEM_ID> reject \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <WORKTREE>
+{{.gitboard_cmd}} verdict {{.item_id}} accept \
+  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
+{{.gitboard_cmd}} verdict {{.item_id}} request-changes \
+  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
+{{.gitboard_cmd}} verdict {{.item_id}} reject \
+  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
 ```
 
 Run exactly the one line matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`<GITBOARD_CMD> done <ITEM_ID> --landed SHA`.
+`{{.gitboard_cmd}} done {{.item_id}} --landed SHA`.
 
 ## Final report
 
@@ -180,28 +184,28 @@ scope to find one.
 ]]
 
 local REVIEW_SCRIPT < const > = [[
-You are a fresh-context code reviewer for `<REPO>`. You have never
+You are a fresh-context code reviewer for `{{.repo}}`. You have never
 seen this change before — that is deliberate: the review must come
 from a distance from the builder. Everything you need is below.
 
 ## What you're reviewing
 
-Board item id: `<ITEM_ID>` (handle <HANDLE>)
-Title: <TITLE>
-<CHANGE_SOURCE>
+Board item id: `{{.item_id}}` (handle {{.handle}})
+Title: {{.title}}
+{{.change_source}}
 
 The caller has made this exact commit available in your local checkout.
-The checkout that holds the board worktree (`<BOARD_DIR>/..`) is the
+The checkout that holds the board worktree (`{{.board_dir}}/..`) is the
 orchestrator's and is stale by construction; never read, grep or build
 in it. Your worktree is the only tree.
-Review `<CLAIM_BASE>..<HEAD_SHA>`; never substitute a branch tip or provider
+Review `{{.claim_base}}..{{.head_sha}}`; never substitute a branch tip or provider
 state for either commit. The spec below is authoritative. External checks,
 when used, must be inspected by the caller on this exact SHA.
 
 ## The spec this PR is supposed to satisfy (verbatim)
 
 ---
-<SPEC>
+{{.spec}}
 ---
 
 ## How to review — a numbered script
@@ -209,7 +213,7 @@ when used, must be inspected by the caller on this exact SHA.
 This diff is mechanical: no changed `.tl` file outside `*_test.tl`,
 or fewer than 20 changed lines in total. Four fixed moves, in order:
 
-1. Confirm you are reading exactly `<HEAD_SHA>`. If the caller supplies
+1. Confirm you are reading exactly `{{.head_sha}}`. If the caller supplies
    external checks, confirm they name that SHA; red or running means stop and
    record nothing. Never infer check state from the board.
 2. Verify the one measured fact the spec names, against the diff's
@@ -231,29 +235,29 @@ never in a worktree, and confirm the refusal.
 `verdict` verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
 those operations. Read the diff with `git fetch origin <branch>` and `git
-show <head>:<path>` in the product checkout at `<PRODUCT_ROOT>`; you create
-no worktree. This review is claimed under session `<REVIEW_SESSION>` — you
+show <head>:<path>` in the product checkout at `{{.product_root}}`; you create
+no worktree. This review is claimed under session `{{.review_session}}` — you
 MUST use that exact string. That checkout has no `o/3p` cache yet — run
-<BOOTSTRAP_PHRASE>
+{{.bootstrap_phrase}}
 
-GitBoard invocation for this review: `<GITBOARD_CMD>` — the exact
+GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
 loader and absolute executable the caller runs board commands through.
 Use it verbatim as the prefix below; never guess a product-checkout
 substitute of your own, and never bootstrap one yourself.
 
 ```
-<GITBOARD_CMD> verdict <ITEM_ID> accept \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
-<GITBOARD_CMD> verdict <ITEM_ID> request-changes \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
-<GITBOARD_CMD> verdict <ITEM_ID> reject \
-  --head <HEAD_SHA> --session <REVIEW_SESSION> --repo-dir <PRODUCT_ROOT>
+{{.gitboard_cmd}} verdict {{.item_id}} accept \
+  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.product_root}}
+{{.gitboard_cmd}} verdict {{.item_id}} request-changes \
+  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.product_root}}
+{{.gitboard_cmd}} verdict {{.item_id}} reject \
+  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.product_root}}
 ```
 
 Run exactly the one line matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`<GITBOARD_CMD> done <ITEM_ID> --landed SHA`.
+`{{.gitboard_cmd}} done {{.item_id}} --landed SHA`.
 
 ## Final report
 

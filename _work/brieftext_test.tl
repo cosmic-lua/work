@@ -116,7 +116,7 @@ end
 
 local function test_step_three_prefers_a_per_file_check_between_edits()
   assert(BUILDER:find(
-      "Between edits, <TYPE_CHECK_CMD> on the files "
+      "Between edits, {{.type_check_cmd}} on the files "
       .. "you touched; run the full gate once, before the push.",
       1, true) ~= nil,
     "step 3 must prefer a per-file check between edits and reserve "
@@ -142,7 +142,7 @@ end
 local function test_the_builder_hands_over_a_commit_id()
   assert(BUILDER:find("create_pull_request", 1, true) == nil,
     "the builder brief must not send a builder to a provider API")
-  assert(BUILDER:find("<GITBOARD_CMD> take <ITEM_ID> --head SHA [--url URL]",
+  assert(BUILDER:find("{{.gitboard_cmd}} take {{.item_id}} --head SHA [--url URL]",
       1, true) ~= nil,
     "the builder reports the commit-only handover command, prefixed with "
     .. "the caller's own exact GitBoard invocation")
@@ -156,11 +156,11 @@ local function test_the_review_brief_records_only_the_commit()
     and REVIEW:find("enable auto-merge", 1, true) == nil,
     "the review brief must not instruct a reviewer to enable auto-merge "
     .. "itself")
-  assert(REVIEW:find("<GITBOARD_CMD> verdict <ITEM_ID> accept", 1, true) ~= nil,
+  assert(REVIEW:find("{{.gitboard_cmd}} verdict {{.item_id}} accept", 1, true) ~= nil,
     "the accept line runs the caller's own GitBoard invocation, not a "
     .. "guessed bin/gitboard")
   assert(REVIEW:find(
-      "<GITBOARD_CMD> verdict <ITEM_ID> request-changes", 1, true)
+      "{{.gitboard_cmd}} verdict {{.item_id}} request-changes", 1, true)
     ~= nil, "request-changes records the same commit id")
   assert(REVIEW:find("--body FILE", 1, true) == nil
     and REVIEW:find("--pr", 1, true) == nil,
@@ -262,7 +262,7 @@ end
 
 local function test_mutation_step_names_the_one_file_shape()
   assert(REVIEW:find(
-      "run the ONE test file that guards it (<TEST_CMD_PHRASE>), "
+      "run the ONE test file that guards it ({{.test_cmd_phrase}}), "
       .. "not the suite", 1, true) ~= nil,
     "the mutation paragraph must send a reviewer to the diff's own "
     .. "test file, not the suite")
@@ -284,7 +284,7 @@ end
 local function test_step_three_orders_coverage_after_the_last_test_edit()
   assert(BUILDER:find(
       "Run `--make coverage` after your last test edit, not before — "
-      .. "a new test moves a row's `total`; run `<BOOTSTRAP_CMD>` once "
+      .. "a new test moves a row's `total`; run `{{.bootstrap_cmd}}` once "
       .. "before `--check types` on a file whose sibling you moved.",
       1, true) ~= nil,
     "step 3 must say to run --make coverage after the last test edit, "
@@ -306,14 +306,14 @@ end
 local function test_the_review_script_verdict_is_checkout_free()
   assert(REVIEW_SCRIPT:find("own checkout", 1, true) == nil,
     "the script verdict must not send a reviewer to an own checkout")
-  assert(REVIEW_SCRIPT:find("<WORKTREE>", 1, true) == nil,
+  assert(REVIEW_SCRIPT:find("{{.worktree}}", 1, true) == nil,
     "the script template must not contain a worktree placeholder")
   assert(REVIEW_SCRIPT:find("git show", 1, true) ~= nil
     and REVIEW_SCRIPT:find("product checkout", 1, true) ~= nil,
     "the script verdict must name the product checkout and git show")
   assert(REVIEW:find("fresh checkout", 1, true) ~= nil,
     "the full review must retain its own checkout wording")
-  assert(REVIEW:find("<WORKTREE>", 1, true) ~= nil,
+  assert(REVIEW:find("{{.worktree}}", 1, true) ~= nil,
     "the full review must retain its worktree placeholder")
 end
 
@@ -325,7 +325,7 @@ local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
   for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
     assert(tmpl:find(
         "That checkout has no `o/3p` cache yet — run "
-        .. "<BOOTSTRAP_PHRASE>", 1, true) ~= nil,
+        .. "{{.bootstrap_phrase}}", 1, true) ~= nil,
       "the checkout note must send a reviewer to the resolved bootstrap "
       .. "plan before running any test: " .. tmpl)
   end
@@ -362,7 +362,7 @@ end
 local function test_rework_requires_a_diff_against_the_judged_head()
   assert(REWORK:find(
       "diff the rejected head against the new head (`git diff "
-      .. "<JUDGED_HEAD> <new head>`) and name, in your final report, "
+      .. "{{.judged_head}} <new head>`) and name, in your final report, "
       .. "the boundaries the correction crosses", 1, true) ~= nil,
     "the rework brief must require diffing the rejected head against "
     .. "the new head and naming the boundaries the correction crosses")
