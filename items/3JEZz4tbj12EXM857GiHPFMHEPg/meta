@@ -1,3 +1,4 @@
 title: cosmos pin bump carrying cosmo.http, and http in gentype's MODULES so cosmo/http.d.tl is generated
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
+speccers: cef13b9580d913977c115cc0f68ec97a
