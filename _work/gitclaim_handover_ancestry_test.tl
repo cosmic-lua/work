@@ -87,19 +87,29 @@ test_an_item_with_no_handover_is_unaffected()
 --- walked it end to end — this one does.
 local function test_the_suggested_recovery_actually_results_in_a_claim()
   local s, id, p = handed_over_and_released("handover-ancestry-recover")
-  -- Reproduce the exact refused state this item exists to guard against.
+  -- Reproduce the exact refused state this item exists to guard against,
+  -- with `main` itself checked out in the product repo — the realistic (in
+  -- fact default) state, not `build_product`'s own orphan-branch escape
+  -- hatch (it leaves `unrelated` checked out). `git branch -f` cannot move
+  -- a branch that is currently checked out, so a test that never checks out
+  -- `main` here would pass even if the refusal's suggested command failed
+  -- in the one case that actually matters.
   move_main(p.root, p.mismatch)
+  git(p.root, {"checkout", "-q", "main"})
   local refused_rc = flow.claim(s, id, flow.REVIEWER, p)
   assert(refused_rc ~= 0,
     "must reproduce the refusal before exercising its suggested recovery")
   assert((check.must(store.load(s, id)).claim or "") == "",
     "the refused attempt must not have left a claim to build the recovery on")
-  -- Follow the refusal's own suggested recovery, literally: reposition the
-  -- local product repo's branch to the recorded handover (a "behind" position
-  -- works the same way; this uses the handover commit itself), then retry
-  -- `claim --repo-dir` against that same repo — `flow.claim` always passes
-  -- `p.root` as `--repo-dir`.
-  move_main(p.root, p.head)
+  -- Follow the refusal's own suggested recovery, literally: `git update-ref
+  -- refs/heads/main <handover>` repositions the local product repo's branch
+  -- to the recorded handover directly, without touching the working tree,
+  -- so it succeeds even with `main` checked out — unlike `git branch -f`,
+  -- which git itself refuses in exactly this state ("cannot force update
+  -- the branch ... used by worktree"). Then retry `claim --repo-dir`
+  -- against that same repo — `flow.claim` always passes `p.root` as
+  -- `--repo-dir`.
+  git(p.root, {"update-ref", "refs/heads/main", p.head})
   local recovered_rc = flow.claim(s, id, flow.REVIEWER, p)
   assert(recovered_rc == 0,
     "the refusal's suggested recovery must actually result in a successful claim")

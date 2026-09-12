@@ -149,7 +149,7 @@ local function handover_ancestry_refusal(root: string, id: string,
   return ("%s already has a commit handover (%s) that local %s (%s) cannot "
     .. "reach — a fresh review claim must not silently capture an unrelated "
     .. "base; reposition %s in %s to (or behind) the handover "
-    .. "(e.g. `git -C %s branch -f %s %s`), then retry "
+    .. "(e.g. `git -C %s update-ref refs/heads/%s %s`), then retry "
     .. "`claim --repo-dir %s`")
   :format(id:sub(1, 8), handover, base, base:sub(1, 12), branch_name, root,
     root, branch_name, handover, root)
