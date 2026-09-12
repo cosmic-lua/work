@@ -134,19 +134,25 @@ end
 --- claim takes once the local product repository has moved on, unrelated to
 --- this item, since the handover was recorded. "" when `handover` is "" (no
 --- recorded handover to protect) or `base` already reaches it.
---- `worktree ID --review` already starts at the exact handed-over commit, so
---- it is named as the consistent local checkout rather than repeating the
---- ancestry error `verdict` would otherwise surface much later, unexplained.
+--- `worktree ID --review` cannot resolve this: it requires an active claim
+--- on ID, and the claim this message is refusing is exactly what would
+--- supply one — naming it here would send the caller in a circle. The
+--- remedy that actually works is repositioning `branch_name` — the LOCAL
+--- PRODUCT REPO's own branch that `claim` reads `base` from — to (or
+--- behind) the recorded handover, then retrying `claim` against that same
+--- repo.
 local function handover_ancestry_refusal(root: string, id: string,
-    base: string, handover: string): string
+    branch_name: string, base: string, handover: string): string
   if handover == "" then return "" end
   local lineage, _lerr = commit_evidence.verify_lineage(root, base, handover)
   if lineage ~= nil then return "" end
   return ("%s already has a commit handover (%s) that local %s (%s) cannot "
     .. "reach — a fresh review claim must not silently capture an unrelated "
-    .. "base; run `gitboard worktree %s --review` for a checkout that "
-    .. "starts at the exact handed-over commit, then claim from there")
-  :format(id:sub(1, 8), handover, base, base:sub(1, 12), id)
+    .. "base; reposition %s in %s to (or behind) the handover "
+    .. "(e.g. `git -C %s branch -f %s %s`), then retry "
+    .. "`claim --repo-dir %s`")
+  :format(id:sub(1, 8), handover, base, base:sub(1, 12), branch_name, root,
+    root, branch_name, handover, root)
 end
 
 --- Product base recorded by an acquisition. Repo-less work uses the board
@@ -180,7 +186,7 @@ local function product_base(s: store.Store, it: item.Item, source_ref: string,
     if forwarded == nil then return nil, ferr end
     resolved = forwarded
   end
-  local refusal = handover_ancestry_refusal(root, it.id, resolved,
+  local refusal = handover_ancestry_refusal(root, it.id, base, resolved,
     it.handover_head or "")
   if refusal ~= "" then return nil, refusal end
   return resolved, ""

@@ -77,3 +77,33 @@ local function test_an_item_with_no_handover_is_unaffected()
     "an item with no recorded handover has nothing for this guard to check")
 end
 test_an_item_with_no_handover_is_unaffected()
+
+--- The refusal's own suggested recovery, followed exactly, end to end: not
+--- `gitboard worktree ID --review` (which needs the very claim this refusal
+--- withheld, and so can never satisfy its own precondition), but
+--- repositioning the local product repo's own branch to (or behind) the
+--- recorded handover, then retrying claim against that same repo. A wrong
+--- suggested remedy could ship with green CI as long as no test actually
+--- walked it end to end — this one does.
+local function test_the_suggested_recovery_actually_results_in_a_claim()
+  local s, id, p = handed_over_and_released("handover-ancestry-recover")
+  -- Reproduce the exact refused state this item exists to guard against.
+  move_main(p.root, p.mismatch)
+  local refused_rc = flow.claim(s, id, flow.REVIEWER, p)
+  assert(refused_rc ~= 0,
+    "must reproduce the refusal before exercising its suggested recovery")
+  assert((check.must(store.load(s, id)).claim or "") == "",
+    "the refused attempt must not have left a claim to build the recovery on")
+  -- Follow the refusal's own suggested recovery, literally: reposition the
+  -- local product repo's branch to the recorded handover (a "behind" position
+  -- works the same way; this uses the handover commit itself), then retry
+  -- `claim --repo-dir` against that same repo — `flow.claim` always passes
+  -- `p.root` as `--repo-dir`.
+  move_main(p.root, p.head)
+  local recovered_rc = flow.claim(s, id, flow.REVIEWER, p)
+  assert(recovered_rc == 0,
+    "the refusal's suggested recovery must actually result in a successful claim")
+  assert(fact(s, id).product_base == p.head,
+    "the recovered claim must capture the repositioned base, not the earlier mismatch")
+end
+test_the_suggested_recovery_actually_results_in_a_claim()
