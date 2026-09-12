@@ -1,7 +1,7 @@
 title: take: a same-head URL update reports the acceptance it preserves
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/work
-claim_batch: e8c3a6dbae59e0ece75cfc8aacf7e3c79cbdad78
+claim_batch: e53a156b5e41c4ca76879f528ea1c1859d8b3c9f
 handover_head: e4189a464c851fc1fe5b83fb55134005df9ebba8
 external_url: https://github.com/cosmic-lua/work/pull/137
 builders: 634f9c19596d9e9e2668f7be8f000e7e
