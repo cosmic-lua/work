@@ -12,11 +12,6 @@ gate builds and drives.
 
 ## Evidence
 
-Ready when: `ls cosmic/htmx.tl cosmic/http/static.tl 2>/dev/null | wc -l` prints `2`.
-
-That is the htmx and static children both merged; today the command
-prints 0.
-
 Guides ship in the binary and are discovered by position:
 `cosmic/doc/mentions.tl:71-84` `guide_files()` lists every `*.md`
 under `/zip/docs/guides` except `index.md`, and `docs/guides/index.md:55`
@@ -37,6 +32,11 @@ never puts a vendored blob in the tree); whether `--make` should grow
 PR files if the generator shape reads as a workaround.
 
 ## Change
+
+Ready when: `ls cosmic/htmx.tl cosmic/http/static.tl 2>/dev/null | wc -l` prints `2`.
+
+That is the htmx and static children both merged; today the command
+prints 0.
 
 1. `_make/testdata/htmx/` — a fixture project, hello-world-sized per
    AGENTS.md ("one per behaviour"): `cmd/todo/main.tl` (listen on port
