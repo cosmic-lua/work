@@ -1,0 +1,3 @@
+title: cosmic.graph: would_cycle misses a cycle closed through a dangling target — the edge_refusal core admits what it exists to refuse
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+target: cosmic-lua/cosmic
