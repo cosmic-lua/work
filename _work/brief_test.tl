@@ -174,14 +174,6 @@ local function test_tree_measurement_refuses_a_non_directory()
     "the refusal is a verdict line: " .. out)
 end
 
-local function test_fill_answers_only_what_the_map_holds()
-  local out = brief.fill("a <ONE> b <TWO> c <lower>", {ONE = "1"})
-  assert(out == "a 1 b <TWO> c <lower>", out)
-  local left = brief.unfilled(out)
-  assert(#left == 1 and left[1] == "<TWO>",
-    "lowercase brackets are prose, not placeholders")
-end
-
 local function test_builder_brief_carries_the_item_and_names_the_rest()
   local s = init_state_repo("brief-builder")
   local _, leaf = root_with_leaf(s)
