@@ -1,3 +1,4 @@
 title: worktree_runtime_test.tl: git worktree add's locked-file ENOENT race recurred twice this session, costing a CI round each time
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 target: cosmic-lua/work
+resolution: completed
