@@ -47,15 +47,35 @@ Measured 2026-09-12 in a Claude Code Remote session, the opposite shape:
   reads, and persisted rate-limit-header tracking meant to let a caller back
   off before a refusal rather than after one. None of it runs outside its own
   unit tests today; `ghwrite.tl` is required only by `ghwrite_test.tl`.
+- Board item `3nAe_st3T` (completed, 2026-09-07) had already found the live
+  cause of the redesign's timing: `verdict accept`'s own landing attempt, on
+  the code as it existed THAT DAY, got a 403 SPECIFIC to the calling session
+  attempting GitHub's `enablePullRequestAutoMerge` GraphQL mutation, while a
+  different tool using the orchestrating session's own broader credentials
+  succeeded immediately every time. "Redesign gitboard around caller-owned
+  Git transport" landed less than 11 hours after that item completed.
+- Reproduced directly, 2026-09-12: a raw GraphQL call (even a trivial read)
+  returns HTTP 403 from an Anthropic-operated proxy: `"GitHub GraphQL is not
+  available from Claude Code sessions; use the REST API... For review
+  threads, auto-merge, and draft/ready-for-review use the CCR routes on
+  api.github.com: ... PUT or DELETE /repos/{owner}/{repo}/pulls/{n}/ccr/auto_merge
+  ..."`. Verified live and working end-to-end on a disposable PR
+  (`cosmic-lua/work#138`, opened, probed, closed without merging):
+  `POST .../ccr/ready_for_review` → `200 {"draft":false}`; `PUT
+  .../ccr/auto_merge` → `200 {"enabled":true,...}`; `DELETE .../ccr/auto_merge`
+  → `200 {"enabled":false}`; `GET .../ccr/review_threads` → `200 []`. A plain
+  REST merge attempt on the same PR got an ordinary GitHub 405 ("Changes must
+  be made through the merge queue") — ghwrite's own documented auto-merge
+  trigger, not a Claude-specific refusal. Plain REST (`merge_pull`,
+  `post_review`, `close_pull`) is unaffected by the GraphQL block; only
+  `enable_auto_merge` needs a fallback.
 
 Together the two environments show the boundary is not one-shape: an
 environment can withhold a token entirely (ChatGPT Work), or expose one that
 works but shares its quota with the connector/orchestrator layer already
-calling GitHub on gitboard's behalf (Claude Code Remote) — so "a token is
-present" is not by itself a reason to wire it in; the decision has to weigh
-call-shape savings (caching, sha-guards, one atomic write instead of two
-independently-agreeing call sites) against reopening a boundary that was
-deliberately closed, tested, and documented as must-never-regress.
+calling GitHub on gitboard's behalf, AND blocks GraphQL specifically while
+offering a documented REST substitute for exactly the one write that needs
+it (Claude Code Remote).
 
 The security constraint matters in both cases: a solution must not scrape,
 reveal, or copy connector/environment credentials into the shell, logs, or
@@ -64,35 +84,43 @@ delegation or brokered interaction if direct token inheritance is
 intentionally unavailable, and must never weaken `network_boundary_test.tl`'s
 existing guarantees for the default (no-token-supplied) path.
 
-## Change
+## Decision
 
-Produce a short decision record that:
+Enable gitboard's already-implemented provider transport for the Claude Code
+Remote shape specifically, through an explicit, non-ambient opt-in — never
+by changing any verb's default behavior, and never by weakening
+`network_boundary_test.tl`'s existing guarantees for a caller that does not
+opt in. ChatGPT Work (no token at all) gets no change: the caller keeps
+doing this work there, exactly as `1QjU_Fdth` already established. Any
+future environment gets evaluated the same way this one was — measure what
+credential and API shape it actually offers before assuming either "no
+token" or "token behaves like a normal PAT."
 
-1. Documents the supported authentication capabilities available to a local
-   `gitboard` process in EACH observed host environment (ChatGPT Work,
-   Claude Code Remote, and any others worth checking), not just one.
-2. Determines, per environment, whether a connector/token can safely broker
-   the exact GitHub reads and writes gitboard needs — and where one can,
-   whether doing so is actually worth it given a shared rate-limit identity —
-   or whether gitboard should emit a machine-readable action for the
-   orchestrator to execute and acknowledge instead.
-3. Specifies ownership and verification for `sync`, `take --open`, `verdict`,
-   and `done` when GitHub interaction crosses that boundary, for each
-   supported environment shape.
-4. Includes one end-to-end experiment per environment shape (a disposable
-   branch or mocked transport where no live token exists; a scoped,
-   non-persisted read where one does), without exposing credentials.
-5. Separates product/environment work from repository changes and files any
-   concrete implementation children in the correct place — explicitly
-   including whether `network_boundary_test.tl`'s assertions need a new,
-   narrowly-scoped exception for an explicit opt-in path, or whether they
-   stay exactly as they are and the answer is "caller keeps doing this work."
+Filed as three sibling `role: work` children of this decision, in dependency
+order:
+
+1. `BM00_etFW` — the opt-in transport-activation plumbing itself (no verb
+   behavior changes).
+2. `SH8f_KuHG` — `ghwrite.enable_auto_merge`'s CCR-route fallback for the
+   one write GraphQL cannot reach here (depends on 1 only for reachability;
+   the fallback logic is unit-testable today via the existing fake
+   transport).
+3. `IXiQ_JbjO` — wiring `verdict accept`'s landing sequence to use `ghwrite`
+   when the opt-in is active, restoring what `eWXR_dtJc`/`c77H_v0vS` already
+   proved correct before the redesign, strictly behind the new opt-in this
+   time (depends on 1 and 2).
+
+None of the three is a green light on its own: each still needs its own
+build, fresh-context review, and mutation-tested proof exactly like any
+other item on this board — this decision authorizes the DIRECTION, not a
+bypass of the process that would normally gate a change to a
+security-relevant boundary.
 
 ## Non-goals
 
 Do not request that connector or environment tokens be printed, logged, or
-injected into arbitrary processes. Do not add another GitHub client, and do
-not wire `_work/api.tl`'s production transport to any credential source,
-before this decision record establishes which boundary is supported and
-why — a token being technically usable in one environment is evidence for
-this decision, not a green light to bypass it.
+injected into arbitrary processes. Do not wire `_work/api.tl`'s production
+transport to any credential source, or change any verb's default behavior,
+outside the three filed children above — this decision is the authorization
+for that specific, scoped follow-through, not a blanket license to touch
+the boundary anywhere else.
