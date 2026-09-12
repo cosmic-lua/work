@@ -2,8 +2,6 @@ title: gitboard claim: refuse a review-claim whose base can't reach the item's r
 parent: 3JAROpZ65vbA3WbubksQIyTgwRr
 target: cosmic-lua/work
 claim_batch: 086611c5f6bc120f942e57267feb15f812a43a28
-handover_head: 944624306053f7969d606d9edf074e01b139c3b8
+handover_head: 88eca55745204d11fc365a84663f7ee648cf2ac6
 external_url: https://github.com/cosmic-lua/work/pull/124
-verdict: request changes
-verdict_head: 944624306053f7969d606d9edf074e01b139c3b8
-builders: e17b509f10f85547eac48ac1f80adaf2
+builders: e17b509f10f85547eac48ac1f80adaf2 fd957e2ff8eff5fb799bd25540818f7f
