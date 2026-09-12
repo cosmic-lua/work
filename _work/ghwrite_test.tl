@@ -3,39 +3,16 @@
 -- proven against `_work.api`'s transport seam rather than a real
 -- GitHub write — the same posture `gh_test.tl` takes with `open_pull`.
 
-local env = require("cosmic.env")
 local fetch = require("cosmic.fetch")
 local json = require("cosmic.json")
 
 local api = require("_work.api")
 local ghwrite = require("_work.ghwrite")
 
---- Point `GITHUB_TOKEN` at a fake value for the duration of a test —
---- `api.call` refuses to run with none set, and these tests never
---- spend a real one. Returns what to restore.
---- @return string | nil The prior value, nil when unset
-local function stub_token(): string | nil
-  local prior = env.get("GITHUB_TOKEN")
-  assert(env.set("GITHUB_TOKEN", "test-token"))
-  return prior
-end
-
---- Restore `GITHUB_TOKEN` to what `stub_token` found.
---- @param prior string | nil What `stub_token` returned
-local function restore_token(prior: string | nil)
-  if prior == nil then
-    local _ok, _err = env.unset("GITHUB_TOKEN")
-  else
-    assert(env.set("GITHUB_TOKEN", prior))
-  end
-end
-
 --- Stand `api.own_login` in for a fixed answer (or a read failure) for
---- the duration of `f`, restoring the real function afterward — the
---- same swap-and-restore pattern `stub_token`/`restore_token` use, but
---- on the whole function rather than an env var, since `own_login`
---- caches its own read for the process and a test must not depend on
---- what an earlier one left cached.
+--- the duration of `f`, restoring the real function afterward, since
+--- `own_login` caches its own read for the process and a test must not
+--- depend on what an earlier one left cached.
 --- @param login string | nil The login to hand back; nil for a read failure
 --- @param f function(): boolean The test body; returns true when done
 local function with_own_login(login: string | nil, f: function(): boolean)
@@ -60,7 +37,6 @@ local function test_merge_pull_puts_the_expected_request()
   local seen: fetch.Options = nil
   local seen_url = ""
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen_url, seen = url, opts
     return {status = 200, headers = {}, raw_headers = {},
@@ -69,7 +45,6 @@ local function test_merge_pull_puts_the_expected_request()
   end
   local ok, sha = ghwrite.merge_pull({root = ""}, "acme/widgets", 7, "abcd1234")
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(sha))
   assert(sha == "deadbeef", "got: " .. tostring(sha))
   assert(seen.method == "PUT", tostring(seen.method))
@@ -84,7 +59,6 @@ end
 -- to decide on the auto-merge fallback rather than guessing.
 local function test_merge_pull_409_is_a_failure_naming_the_status()
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
     return {status = 409, headers = {}, raw_headers = {},
       body = '{"message":"Head branch was modified"}', url = url}
@@ -92,7 +66,6 @@ local function test_merge_pull_409_is_a_failure_naming_the_status()
   end
   local ok, msg = ghwrite.merge_pull({root = ""}, "acme/widgets", 7, "abcd1234")
   api.transport = original
-  restore_token(prior)
   assert(not ok, "a 409 is not a success")
   assert(msg:find("HTTP 409", 1, true) ~= nil, "got: " .. msg)
 end
@@ -104,7 +77,6 @@ local function test_enable_auto_merge_posts_the_expected_mutation()
   local seen: fetch.Options = nil
   local seen_url = ""
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen_url, seen = url, opts
     return {status = 200, headers = {}, raw_headers = {},
@@ -113,7 +85,6 @@ local function test_enable_auto_merge_posts_the_expected_mutation()
   end
   local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   assert(seen.method == "POST", tostring(seen.method))
   assert(seen_url:find("/graphql", 1, true) ~= nil, seen_url)
@@ -131,7 +102,6 @@ end
 -- read the status would wrongly call this a success.
 local function test_enable_auto_merge_reports_a_graphql_error()
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(_url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
     return {status = 200, headers = {}, raw_headers = {},
       body = '{"errors":[{"message":"Pull request is in clean status"}]}',
@@ -139,7 +109,6 @@ local function test_enable_auto_merge_reports_a_graphql_error()
   end
   local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
   api.transport = original
-  restore_token(prior)
   assert(not ok, "a GraphQL errors array is a failure")
   assert(err:find("Pull request is in clean status", 1, true) ~= nil,
     "got: " .. err)
@@ -156,7 +125,6 @@ local function test_enable_auto_merge_falls_back_to_ccr_route_on_the_claude_code
   local second_url = ""
   local second: fetch.Options = nil
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     call_count = call_count + 1
     if call_count == 1 then
@@ -173,7 +141,6 @@ local function test_enable_auto_merge_falls_back_to_ccr_route_on_the_claude_code
   end
   local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   assert(call_count == 2, "the graphql attempt then the CCR retry: got " .. call_count)
   assert(first_url:find("/graphql", 1, true) ~= nil, first_url)
@@ -191,7 +158,6 @@ end
 local function test_enable_auto_merge_does_not_fall_back_on_an_unrelated_403()
   local calls = 0
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
     calls = calls + 1
     return {status = 403, headers = {}, raw_headers = {},
@@ -200,7 +166,6 @@ local function test_enable_auto_merge_does_not_fall_back_on_an_unrelated_403()
   end
   local ok, err = ghwrite.enable_auto_merge({root = ""}, "acme/widgets", 7, "PR_kwABC")
   api.transport = original
-  restore_token(prior)
   assert(not ok, "an unrelated 403 is a failure, not a fallback trigger")
   assert(calls == 1, "no CCR retry for an unrelated 403: got " .. calls)
   assert(err:find("API rate limit exceeded", 1, true) ~= nil, "got: " .. err)
@@ -213,7 +178,6 @@ local function test_post_review_posts_the_expected_request()
   local seen: fetch.Options = nil
   local seen_url = ""
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen_url, seen = url, opts
     return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
@@ -227,7 +191,6 @@ local function test_post_review_posts_the_expected_request()
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   assert(seen.method == "POST", tostring(seen.method))
   assert(seen_url:find("/repos/acme/widgets/pulls/7/reviews", 1, true) ~= nil,
@@ -248,7 +211,6 @@ end
 local function test_post_review_comments_on_the_tokens_own_pr()
   local seen: fetch.Options = nil
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen = opts
     return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
@@ -262,7 +224,6 @@ local function test_post_review_comments_on_the_tokens_own_pr()
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
   assert(decoded["event"] == "COMMENT", "got: " .. tostring(decoded["event"]))
@@ -276,7 +237,6 @@ end
 local function test_post_review_reject_marks_its_own_pr_comment()
   local seen: fetch.Options = nil
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen = opts
     return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
@@ -290,7 +250,6 @@ local function test_post_review_reject_marks_its_own_pr_comment()
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
   assert(decoded["event"] == "COMMENT", "got: " .. tostring(decoded["event"]))
@@ -304,7 +263,6 @@ end
 local function test_post_review_falls_back_when_own_login_read_fails()
   local seen: fetch.Options = nil
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen = opts
     return {status = 200, headers = {}, raw_headers = {}, body = '{"id":1}',
@@ -318,7 +276,6 @@ local function test_post_review_falls_back_when_own_login_read_fails()
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   local decoded = json.decode(seen.body) as {string: any} -- cast: a decoded JSON object, known by construction
   assert(decoded["event"] == "REQUEST_CHANGES",
@@ -336,7 +293,6 @@ local function test_post_review_retries_as_comment_on_a_422()
   local post_count = 0
   local seen: fetch.Options = nil
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     post_count = post_count + 1
     local decoded = json.decode(opts.body) as {string: any} -- cast: a decoded JSON object, known by construction
@@ -357,7 +313,6 @@ local function test_post_review_retries_as_comment_on_a_422()
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(info))
   assert(post_count == 2, "exactly one retry: got " .. post_count)
   assert(info == "comment-fallback", "reports which form posted: got " .. info)
@@ -373,7 +328,6 @@ end
 local function test_post_review_422_on_both_is_a_failure()
   local post_count = 0
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
     post_count = post_count + 1
     return {status = 422, headers = {}, raw_headers = {},
@@ -388,7 +342,6 @@ local function test_post_review_422_on_both_is_a_failure()
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(not ok, "a 422 on both attempts is a failure")
   assert(post_count == 2, "the retry still happens once: got " .. post_count)
   assert(err:find("HTTP 422", 1, true) ~= nil, "got: " .. err)
@@ -400,7 +353,6 @@ end
 local function test_post_review_422_on_an_already_comment_attempt_is_not_retried()
   local post_count = 0
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, _opts: fetch.Options): fetch.Response | nil, fetch.Error
     post_count = post_count + 1
     return {status = 422, headers = {}, raw_headers = {},
@@ -415,7 +367,6 @@ local function test_post_review_422_on_an_already_comment_attempt_is_not_retried
       return true
     end)
   api.transport = original
-  restore_token(prior)
   assert(not ok, "a 422 on an already-COMMENT attempt is a failure")
   assert(post_count == 1,
     "no retry when the first attempt was already COMMENT: got " .. post_count)
@@ -427,7 +378,6 @@ local function test_close_pull_patches_the_expected_request()
   local seen: fetch.Options = nil
   local seen_url = ""
   local original = api.transport
-  local prior = stub_token()
   api.transport = function(url: string, opts: fetch.Options): fetch.Response | nil, fetch.Error
     seen_url, seen = url, opts
     return {status = 200, headers = {}, raw_headers = {}, body = '{"state":"closed"}',
@@ -435,7 +385,6 @@ local function test_close_pull_patches_the_expected_request()
   end
   local ok, err = ghwrite.close_pull({root = ""}, "acme/widgets", 7)
   api.transport = original
-  restore_token(prior)
   assert(ok, "got: " .. tostring(err))
   assert(seen.method == "PATCH", tostring(seen.method))
   assert(seen_url:find("/repos/acme/widgets/pulls/7", 1, true) ~= nil, seen_url)
