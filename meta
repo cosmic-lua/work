@@ -2,3 +2,5 @@ title: ghwrite.enable_auto_merge: fall back to the CCR REST route when GitHub's 
 parent: 3J1McPs5zvrKSLKuKOCf6jEUJBu
 target: cosmic-lua/work
 claim_batch: 4f0006fa12ac975862d3d7f5066a1ae74b3f30ef
+handover_head: 23f01127d1c8292c2dde3785c1851b99b0977f11
+builders: 0dddcffc5c458bda1651b08fc5a06738
