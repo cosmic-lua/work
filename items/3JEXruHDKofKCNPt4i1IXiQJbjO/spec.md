@@ -39,6 +39,42 @@ active in the test's own fixture, for: an immediate merge succeeding, a
 merge refusal correctly falling back to auto-merge, and auto-merge itself
 refusing (surfacing the real error, never silently swallowing it).
 
+## Carried from `BM00_etFW`'s review
+
+`BM00_etFW` (the opt-in plumbing this item depends on) landed with three
+non-blocking findings its reviewer explicitly asked to fold in here, because
+this is the item that first wires activation into a verb:
+
+1. **The require-guard holds five planks, not the wall.**
+   `_work/network_boundary_test.tl`'s new assertion enumerates five files
+   (`api.tl`, `gittake.tl`, `gitworktree.tl`, `storeinit.tl`, `format.tl`)
+   that must not require `_work.apiauth` — but omits the two that matter
+   most: `cmd/gitboard/main.tl` (the binary's entry) and `_work/gitboard.tl`
+   (the dispatcher every verb loads). Either one requiring the opt-in and
+   calling `activate()` would hand every verb a live transport with no guard
+   tripping. Replace the enumeration with the exhaustive form — walk
+   `_work/*.tl` plus `cmd/**`, allow only `_work/apiauth_test.tl` and
+   whatever single call site this item deliberately adds.
+
+2. **`transport_for` writes the credential into the caller's table.**
+   `_work/apiauth.tl`'s installed transport does `opts.headers = headers`,
+   mutating the `opts` the caller passed, so the bearer token also lives
+   there after the call — contradicting that function's own doc claim that
+   the token "lives in this closure and nowhere else." Latent only today
+   (`_work/api.tl` passes an anonymous literal it immediately drops), but
+   this item makes a verb a real caller. Copy `opts` rather than mutating
+   it, or correct the comment to match what it does.
+
+3. **Activation is process-global and one-way.** `activate()` overwrites the
+   shared `api.transport` with no `deactivate` and no saved `no_transport`,
+   so once anything in the process activates, every later `api.call` in that
+   process is live. Acceptable while nothing called it; this item should
+   install for the scope it needs and restore afterward, or add the
+   `deactivate` counterpart and use it.
+
+These are requirements of this item, not optional polish: 1 and 3 are what
+keep the opt-in honest once a verb can actually trigger it.
+
 ## Non-goals
 
 Not changing `verdict`'s behavior for `request-changes`/`reject` — this is
