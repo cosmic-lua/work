@@ -180,7 +180,8 @@ local function test_a_refused_merge_arms_auto_merge()
   local sent: {Sent} = {}
   local rc, line = accept(s, id, p, {
       [MERGE] = {status = 405, body = '{"message":"Pull Request is not mergeable"}'},
-      [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7}'},
+      [READ] = {status = 200, body = ('{"node_id":"PR_node_7","number":7,'
+          .. '"head":{"sha":"%s"}}'):format(p.head)},
       [MUTATE] = {status = 200, body = '{"data":{"enablePullRequestAutoMerge":{}}}'},
     }, sent)
   assert(rc == 0, "got: " .. line)
@@ -204,7 +205,8 @@ local function test_auto_merge_refusing_surfaces_the_error()
   local rc, line = accept(s, id, p, {
       [MERGE] = {status = 405,
         body = '{"message":"Required status check is expected"}'},
-      [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7}'},
+      [READ] = {status = 200, body = ('{"node_id":"PR_node_7","number":7,'
+          .. '"head":{"sha":"%s"}}'):format(p.head)},
       [MUTATE] = {status = 200,
         body = '{"errors":[{"message":"Auto-merge is not allowed"}]}'},
     }, sent)
@@ -333,4 +335,39 @@ local function test_a_url_at_another_repository_lands_nothing()
   assert(line:find("other-org/other-repo", 1, true) ~= nil, line)
   assert(line:find("acme/widgets", 1, true) ~= nil, line)
   assert(line:find("merged", 1, true) == nil, line)
+end
+
+-- A 405 says the merge is not mergeable RIGHT NOW; it does not say the
+-- request's head is still the one the merge was guarded with. Both
+-- arming routes are head-blind — the GraphQL mutation addresses the
+-- request by node id and its REST fallback carries no sha — so arming
+-- over a head that has moved would schedule an unreviewed commit to
+-- land whenever the checks clear. The read the fallback already
+-- performs for the node id settles it: the mismatch is reported and no
+-- mutation goes out.
+local function test_a_405_on_a_moved_head_arms_nothing()
+  local s, id, p = review_ready("verdict-land-405-moved")
+  local sent: {Sent} = {}
+  local rc, line = accept(s, id, p, {
+      [MERGE] = {status = 405,
+        body = '{"message":"Pull Request is not mergeable"}'},
+      [READ] = {status = 200, body = '{"node_id":"PR_node_7","number":7,'
+        .. '"head":{"sha":"0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad"}}'},
+      [MUTATE] = {status = 200,
+        body = '{"data":{"enablePullRequestAutoMerge":{}}}'},
+    }, sent)
+  assert(rc == 0, "got: " .. line)
+  assert(check.must(store.load(s, id)).verdict == "accept", "the accept stands")
+  assert(#sent == 2,
+    ("the merge and the read, and nothing armed; got %d requests")
+    :format(#sent))
+  assert(sent[2].method == "GET" and sent[2].url:find(
+      "/repos/acme/widgets/pulls/7", 1, true) ~= nil, sent[2].url)
+  assert(line:find("auto-merge armed", 1, true) == nil,
+    "an unreviewed head must never be armed to land: " .. line)
+  assert(line:find("landing failed", 1, true) ~= nil, line)
+  assert(line:find("0bad0ba", 1, true) ~= nil,
+    "the head that would land is named: " .. line)
+  assert(line:find("auto-merge was not armed", 1, true) ~= nil, line)
+  assert(line:find("land it by hand", 1, true) ~= nil, line)
 end
