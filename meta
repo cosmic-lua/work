@@ -1,3 +1,4 @@
 title: cast-justify stopped seeing a justification on a multi-line cast, so a correct comment reads as unjustified
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
 target: cosmic-lua/cosmic
+claim_batch: 1794fe4d80d07b502a0829566687afc5fbbea917
