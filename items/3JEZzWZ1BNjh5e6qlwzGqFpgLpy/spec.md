@@ -12,12 +12,6 @@ and on a product decision nobody has made.
 
 ## Evidence
 
-Ready when: `ls _perf/bench/http_server_bench.tl` prints `_perf/bench/http_server_bench.tl`.
-
-That is the baseline child merged; a concurrency decision without a
-single-connection baseline cannot be compared. Today the command
-reports the path as missing.
-
 The three serious shapes, and the facts a record must carry for each:
 
 1. **fork-per-connection** — redbean's model (`tool/net/redbean.c`:
@@ -49,6 +43,12 @@ the server story into a corner" — the record must say which of the
 three those designs already fit.
 
 ## Change
+
+Ready when: `ls _perf/bench/http_server_bench.tl` prints `_perf/bench/http_server_bench.tl`.
+
+That is the baseline child merged; a concurrency decision without a
+single-connection baseline cannot be compared. Today the command
+reports the path as missing.
 
 Deliverables, no product code:
 
