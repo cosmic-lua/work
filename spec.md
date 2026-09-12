@@ -10,9 +10,10 @@ file. The same handler over a filesystem directory serves a dev tree.
 
 ## Evidence
 
-Ready when: `ls cosmic/http/router.tl` prints the path (the router child
-has merged — `*rest` patterns are how a static handler is mounted) —
-today `ls: cannot access 'cosmic/http/router.tl'`.
+Ready when: `ls cosmic/http/router.tl` prints `cosmic/http/router.tl`.
+
+That is the router child merged (its `*rest` patterns are how a static
+handler is mounted); today the command reports the path as missing.
 
 Traversal safety is bound already: `cosmo.IsAcceptablePath`
 (`tool/net/definitions.lua:3023`) — "checks if path is acceptable ...
