@@ -7,7 +7,12 @@
 --- the cache below. Production gitboard deliberately installs no live
 --- transport: provider interaction and authentication belong to its
 --- caller. The swappable transport remains as a unit-test seam while
---- these legacy provider-shaped calls are removed.
+--- these legacy provider-shaped calls are removed, and as the one
+--- place a caller that WANTS live calls in this process installs them
+--- — explicitly, through `_work.apiauth`, by naming the environment
+--- variable that holds its token. Nothing in this file loads that
+--- module or looks at the environment; loading the codec gets the
+--- refusal and only the refusal.
 ---
 --- The whole fleet shares one account's REST quota (5,000 calls/hour,
 --- across every token), so every call here spends it carefully: a GET
