@@ -1,0 +1,3 @@
+title: cosmic.http forms and cookies: req:form() for urlencoded bodies, req.cookies, and res:set_cookie with the secure defaults
+parent: 3JEZx1R26VPmXtTlh60E0IQYMun
+target: cosmic-lua/cosmic
