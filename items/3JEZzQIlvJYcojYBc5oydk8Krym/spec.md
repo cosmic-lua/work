@@ -12,8 +12,10 @@ gate builds and drives.
 
 ## Evidence
 
-Ready when: `ls cosmic/htmx.tl cosmic/http/static.tl` prints both paths
-(the htmx and static children have merged) — today both are missing.
+Ready when: `ls cosmic/htmx.tl cosmic/http/static.tl 2>/dev/null | wc -l` prints `2`.
+
+That is the htmx and static children both merged; today the command
+prints 0.
 
 Guides ship in the binary and are discovered by position:
 `cosmic/doc/mentions.tl:71-84` `guide_files()` lists every `*.md`
