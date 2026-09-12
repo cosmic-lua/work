@@ -1,3 +1,3 @@
 title: no_proxy: an empty lowercase value shadows NO_PROXY, and glob entries like *.svc.cluster.local are silently inert
-parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
 target: cosmic-lua/cosmopolitan
