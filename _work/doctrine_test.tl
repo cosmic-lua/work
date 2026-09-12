@@ -143,6 +143,30 @@ local function test_bar_requires_a_grep_hit_for_a_named_location()
     "the bar topic requires a grep -n hit for a named function or string")
 end
 
+local function test_bar_requires_an_anchor_string_for_any_file_line_citation()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  local flat = page:gsub("%s+", " ")
+  assert(flat:find(
+      "The same rule covers any bare file:line citation of quoted "
+      .. "source text, wherever it sits", 1, true) ~= nil,
+    "the bar topic extends the grep-hit requirement past function/string "
+    .. "placements to every file:line citation")
+  assert(flat:find(
+      "an `## Evidence` paragraph citing a fact as much as `## Change` "
+      .. "naming a function", 1, true) ~= nil,
+    "the bar topic names ## Evidence explicitly, not only ## Change")
+  assert(flat:find(
+      "Before: `_work/example.tl:54-56` beside the quoted sentence. "
+      .. "After: the same quote plus "
+      .. "`grep -n \"the quoted phrase\" _work/example.tl`", 1, true) ~= nil,
+    "the bar topic gives a before/after worked example")
+  assert(flat:find(
+      "A citation with a number but no anchor string is under the bar "
+      .. "the same way an unmeasured claim already is", 1, true) ~= nil,
+    "a number-only citation is under the bar like an unmeasured claim")
+end
+
 local function test_bar_requires_the_three_wiring_files_named()
   local page = doctrine.page("bar")
   assert(page ~= nil, "the bar topic renders")
