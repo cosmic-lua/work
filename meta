@@ -1,6 +1,6 @@
 title: verdict and done: accept a research handover's board commit as the judged head, the way brief review now renders it
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
-claim_batch: 1b3b96c1acb177ede034ce072f0d49eb052e6cb9
+claim_batch: bc2e8935dccbdec1f57f57df306286829746ec60
 handover_head: 640e696d327da42c7b4cdbe677dc85768849812a
 builders: 0062a25fe48ef11a9b2e79bc5b9e379f
