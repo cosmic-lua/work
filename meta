@@ -1,6 +1,7 @@
 title: casts: close 12 dynamic-value sites with an is guard where the site already names the type
 parent: 3IOuS3IEGiHpgmFRrgEsXcsXuEA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1393
 resolution: completed
 builders: 36ae82ba-a5e7-5a37-a920-eb3ccc30cc84
+touches: _cli/main_handlers.tl cosmic/init.tl cosmic/doc/query.tl _build/casts_baseline.tl cosmic/quicksand/box/init.tl cosmic/quicksand/box/run.tl _docs/publish_test.tl cosmic/searcher_test.tl _perf/perf_test.tl _perf/run.tl cosmic/fs/path_test.tl _perf/harness_test.tl _build/casts.tl
