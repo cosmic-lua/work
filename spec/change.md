@@ -1,5 +1,3 @@
-## Change
-
 `cosmic/fs/glob_test.tl` was excluded from runner-mode batch 3
 (3IU6AsZC, merged as #1558) because it tears its fixture down at top
 level. This item migrates it. Measured against origin/main 45f56e81,
@@ -87,24 +85,3 @@ it would not catch a teardown hidden inside a top-level `do ... end`,
 and none of the remaining batches' scopes contain one — batch 3's
 review re-derived that with a Lua-aware lexer over all 29 files in its
 scope.)
-
-## Non-goals
-
-No fixture restructuring: no per-case root, no setup/teardown helper
-pair, no `temp_dir` call. The cases keep their shared `root` and the
-case count stays 11. No assertion changes, renames, reflow or comment
-rewrites beyond the one stranded blank line named above. No change to
-any other file — `cosmic/fs/glob_test.tl` is the whole diff. No change
-to `cosmic/test.tl`, `_tool/seam.tl`, `_tool/discover.tl`, or the
-`call-after-define` lint.
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `bin/cosmic --make test cosmic/fs/glob_test.tl` reports 11 test
-  functions and 11 passing tests.
-- `git diff origin/main --numstat -- cosmic/fs/glob_test.tl` → `0` insertions,
-  `13` deletions, and the diff touches no other file.
-- `grep -c '^test_[A-Za-z0-9_]*()$' cosmic/fs/glob_test.tl` → `0`, and
-  `grep -c 'remove_all' cosmic/fs/glob_test.tl` → `0`.
-- `bin/cosmic --check fmt cosmic/fs/glob_test.tl` → `fmt: PASS (1 file)`.
