@@ -1,5 +1,3 @@
-## Change
-
 Agents iterate on this repository and on gitboard's by running the
 whole `bin/cosmic --make ci` after every edit — 2 to 4 minutes a turn,
 six to ten turns a slice across sixteen slices measured today —
