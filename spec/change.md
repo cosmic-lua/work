@@ -1,5 +1,3 @@
-## Change
-
 New `cosmic/ast/match.tl` (public, `cosmic.ast.match`), depending on
 `cosmic.ast.node`. Port from `docs/design/ast-rewrite/tlgrep.tl`
 (branch `claude/teal-search-replace-1xq19s`):
@@ -49,28 +47,3 @@ New `cosmic/ast/match.tl` (public, `cosmic.ast.match`), depending on
   open it and differs incidentally between pattern and target even on
   a genuine match (confirmed: an `if $C then $$$BODY() end` pattern
   matched nothing until `tk` was added to the generic ignore-list).
-
-## Non-goals
-
-No span/splice logic (depends on the walk item, kept separate), no
-project-wide file traversal (the CLI item's job), no type-aware
-matching (a real v2 needing `tl.check`'s typed env — out of scope for
-the syntax-only matcher this item builds; note it as a clearly separate
-future item if picked up later, don't fold it in here).
-
-## Acceptance
-
-Reproduce, as `cosmic/ast/match_test.tl` cases, the concrete patterns
-this session actually ran against real files and got real counts for
-(re-run each at pull time against the CURRENT tree and update the
-counts if they moved):
-- `os.execute($X)` against `_types/tlast.tl`: 1 match,
-  `os.execute(cmd)`.
-- `string.format($FMT, $$$REST)` against `cosmic/check.tl`: 5 matches
-  (variable arity: 2, 2, 1, 2, and 1 trailing args after the format
-  string).
-- `if $C then $$$BODY() end` against `cosmic/check.tl`: 25 matches
-  (every `if` with no `elseif`/`else`).
-- `cosmo.$F($$$ARGS)` against `_tool/doc/index.tl`: 2 matches
-  (`cosmo.Slurp(file_path)`, `cosmo.EncodeLua({modules = modules})`),
-  the identifier-position-capture regression case above.
