@@ -1,6 +1,7 @@
 title: quicksand proxy rules: parse_rule and match declare a non-nilable port and pass nil through it
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1333
 resolution: completed
 builders: claude-sched-2026-08-23T2036
+touches: cosmic/quicksand/proxy/rules.tl cosmic/quicksand/proxy/rules_test.tl
