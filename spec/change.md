@@ -1,0 +1,1 @@
+Add a `child.run` mocking seam usable by `_work` tests — either a swappable `_work.child.run` field (mirroring `api.transport`'s shape) or a small `_work/childstub.tl` helper — and one test exercising `take_open`'s full happy path (a fake remote that reports the branch exists, a fake `gh.open_pull` success) asserting the seeded `ci_checks` row's `state` and `head_sha`.
