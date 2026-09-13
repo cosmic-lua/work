@@ -1,3 +1,4 @@
 title: surface ratchet at name level, and the cosmic/_gone/ wrapper tree it requires of every name that leaves
 parent: 3ItbbRPhECbT8dedd3TMLM8HLpJ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _tool/surface.tl _build/public_surface_baseline.tl _build/public_surface_test.tl cosmic/_gone/string.tl cosmic/_gone/fs.tl cosmic/_gone/uuid.tl cosmic/_fields.tl _tool/coverage/newrows.tl

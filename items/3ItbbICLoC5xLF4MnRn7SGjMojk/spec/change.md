@@ -1,5 +1,3 @@
-## Change
-
 Ready when: the D10 amendment (`pmsp_heru`'s child) is merged —
 `git log --oneline -1 -- docs/decisions/d10-right-to-break.md` shows
 its commit — and `_tool/surface.tl` exists on main (sibling item).
@@ -92,11 +90,3 @@ Sweep: the existing `find-needle`/visibility lint already refuses a
 `require("cosmic._gone.x")` from outside `cosmic/`; confirm with a
 probe file under `_make/testdata/` during the PR and paste the
 refusal into the PR description.
-
-## Non-goals
-
-No verb reads the gone tree here; `--upgrade` does. No retirement
-rule for wrappers (see the container). AGENTS.md gains one bullet
-under conventions — "a public name leaves with its wrapper in
-`cosmic/_gone/`; the surface ratchet enforces it" — and nothing more;
-the grammar above lives in the gone tree's own header doc.
