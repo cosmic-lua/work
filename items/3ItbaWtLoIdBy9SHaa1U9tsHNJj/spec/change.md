@@ -1,5 +1,3 @@
-## Change
-
 Amend D10 (`docs/decisions/d10-right-to-break.md`) and the matching
 non-goal paragraph in `docs/goals.md`: the right to break stands, and
 every break now ships the code that recovers a consumer from it. This
@@ -93,12 +91,3 @@ Then, per the skill's mechanics: `bin/cosmic _docs/derive.tl` to
 rewrite the derived index row (today `| D10 | perpetual right to break
 | active | ...` at `docs/decisions/README.md:47`), and
 `bin/cosmic --make test _build/docs_test.tl` must pass.
-
-## Non-goals
-
-No wrapper, ratchet, or verb lands here; those are the children of the
-`cosmic --upgrade` container under G9, and the ratchet item is blocked
-on this record. The distributed-module scenario this root raises is
-not answered by this record: a module shipped between projects breaks
-its consumers on its own author's terms, and cosmic's wrappers cover
-`cosmic.*` only.
