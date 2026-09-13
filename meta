@@ -1,4 +1,4 @@
 title: gitboard: check refuses a draft PR, but scheduled sessions are required to open drafts
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
