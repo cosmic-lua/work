@@ -1,6 +1,7 @@
 title: cosmic: consume the exact contracts — pin bump, retire the join and clock asserts
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1395
 resolution: completed
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+touches: 3p/cosmos/cosmos_pin.tl cosmic/time.tl cosmic/fs/path.tl cosmic/time_test.tl cosmic/fs/path_test.tl
