@@ -1,5 +1,3 @@
-## Change
-
 Measured 2026-08-30: the id forms are documented only in
 `_work/gitboard.tl`'s module doc COMMENT (lines 13-15: KSUIDs, tail-8
 handle, prefix) — the printed `gitboard help` output (built from the
@@ -19,8 +17,3 @@ the id's FIRST 8 characters — a different string from the handle. Pin
 the new help text by substring in the existing help-output test seam
 (find it: `grep -rn 'help' _work/gitboard_test.tl`); mutation-verify
 the pin. Per-verb help is untouched.
-
-## Non-goals
-
-No SKILL.md changes (the skill defers verb docs to the tool). No
-change to what forms verbs accept. No renaming of branches or handles.
