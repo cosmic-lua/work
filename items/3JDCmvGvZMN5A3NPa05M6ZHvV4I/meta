@@ -1,3 +1,6 @@
 title: fetch reuse 4: heap-owned buffered TLS transport without pooling
 parent: 3JDCmq6oGkHblP9rEIOID4t9ZBs
-target: cosmic-lua/cosmopolitan@master
+repo: cosmic-lua/cosmopolitan
+base: master
+touches: tool/net/lfetch.c tool/net/fetchtransport.inc tool/lua/test_fetch_tls_lifetime.lua
+access: cosmic-lua/cosmic cosmic-lua/work
