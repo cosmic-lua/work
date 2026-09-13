@@ -1,5 +1,3 @@
-## Change
-
 `gitboard next` stops offering the merge of an accepted item whose
 blockers still bind, and names the hold when that is what stalls
 everything.
@@ -41,11 +39,3 @@ with nothing else on the board `next` returns `none` naming the
 held merge; ending the blocker (resolution set) makes the same item
 the `finish` offer again; a blocked item in `building` substate is
 still offered to its own session.
-
-## Non-goals
-
-Existing verdict-line formats unchanged; the new terminal reason is
-a new line, not an edit to one. `done` itself is untouched — this
-gates the OFFER, and `done`'s own merge verification stays the
-enforcement. No blocker check on the review or building rungs, and
-none on `take`'s finishing motions.
