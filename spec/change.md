@@ -1,5 +1,3 @@
-## Change
-
 Bring the board branch's tests to the shape AGENTS.md requires for
 new files ("write new files in runner mode, the legacy self-calling
 shape is on its way out", D29): delete every self-call line.
@@ -35,16 +33,3 @@ Land as one PR (a pure deletion of 335 lines across 34 files; sized
 under the ~400-line smell only because every hunk is identical and
 mechanical) or split by file groups if a reviewer asks — never a
 subset that leaves a file mixed.
-
-## Non-goals
-
-No change to the tests' bodies, order, or names; no new cases; no
-change to `_work/fixture.tl` or any non-test module. No pin change
-(that is the blocker item).
-
-## Acceptance
-
-- `cat _work/*_test.tl | grep -cE '^test_[A-Za-z0-9_]+\(\)$'` is 0.
-- `bin/cosmic --make ci` ends `ci: PASS` with the same test count the
-  gate reported before (`34 checks: 34 passed`) and per-case counts in
-  the runner's output (`(N test functions)` per file, 335 total).
