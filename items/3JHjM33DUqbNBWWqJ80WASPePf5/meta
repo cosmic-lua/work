@@ -1,0 +1,4 @@
+title: retire: the ref-per-item reader and writer, claim batches, the single-head transport, and every doc that describes them
+parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
+touches: _work/gitread.tl _work/gitwrite.tl _work/gitclaim.tl _work/refs.tl README.md docs/design/storage.md
+access: cosmic-lua/cosmic
