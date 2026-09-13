@@ -1,4 +1,6 @@
 title: docs/design/storage.md: one branch is the board — the design, its numbers, and the plan
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
+handover_head: 368860413c3af365782fe964784e191c7bb9cbf2
+builders: 829b71e40aa0bf2ed23e6d766161a7ef
 touches: docs/design/storage.md README.md
