@@ -1,6 +1,7 @@
 title: perf gate: a disagreeing baseline pair has no tiebreak, so no formula can separate a false red from a masked regression
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1498
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+touches: _perf/gate.tl _perf/gate_strike_test.tl _perf/tiebreak.tl _perf/tiebreak_test.tl _perf/compare.tl _perf/reproduce.tl _perf/reproduce_test.tl docs/decisions/README.md skills/decide/SKILL.md
