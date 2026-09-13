@@ -1,4 +1,5 @@
 title: landlock ABI drift alarm: a test fails when the kernel reports an ABI above the highest cosmic knows (KNOWN_ABI = 9)
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: cosmic/sandbox/landlock.tl cosmic/sandbox/landlock_test.tl
