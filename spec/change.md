@@ -1,5 +1,3 @@
-## Change
-
 Bump the board branch's `bin/cosmic.pin` to the release main already
 pins, and regenerate `.cosmic-coverage` with the new toolchain — the
 two land together because the gate cannot pass with either alone.
@@ -34,11 +32,3 @@ Then prove the toolchain: from that same cold state, run
 `bin/cosmic --make ci` and read `ci: PASS` — the pin decides which
 fence and checker the gates run under, so the whole gate under the
 new pin IS the acceptance.
-
-## Non-goals
-
-No `_work/**` changes ride along — if the new toolchain's gate
-refuses existing machinery CODE (any stage but the coverage-baseline
-format), that is a bounce naming what broke, not a fix-up in this
-diff. `.cosmic-coverage` is written only by `--make coverage
---baseline`, never by hand.
