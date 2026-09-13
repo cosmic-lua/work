@@ -1,5 +1,3 @@
-## Change
-
 Corrected after a build bounce (2026-08-30) that falsified the first
 spec's root cause with hard evidence — trust this version. The false
 green reproduces exactly as first measured (mutate `_make/clean.tl`,
@@ -41,9 +39,3 @@ precedents: `_build/coldbuild_test.tl`, `_perf/skew_test.tl`):
    annotated read, add that one assertion; if no seam fits, say so.
 
 Full `--make ci` PASS before pushing.
-
-## Non-goals
-
-No embed/cosmic.mk changes (the rule is correct). No `_make/deps.tl`
-closure-semantics changes. No binary-as-prerequisite (the d17 wall).
-No cache weakening.
