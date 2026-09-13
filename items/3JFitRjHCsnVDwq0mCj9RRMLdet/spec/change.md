@@ -1,5 +1,3 @@
-## Change
-
 `gitboard brief review ID` with no `--gitboard-command` emits the literal
 token `GITBOARD-INVOCATION-UNRESOLVED-ASK-THE-CALLER` as the prefix of
 every board command the brief prints, while the same brief instructs the
@@ -34,14 +32,3 @@ lands three hops away in a context that has been told not to fix it.
 `_work/brief_gitboard_cmd_test.tl` (4 cases) is where the invocation
 prefix is tested; add the refusal case there, and a case that a builder
 brief with a receipt still succeeds without the flag.
-
-## Non-goals
-
-Inferring the invocation from the environment. The brief's own reasoning
-for the flag — the caller's exact loader plus absolute executable is what
-a subagent should run, and only the caller knows it — stands. A refusal
-that names the flag is the fix; a guess is the thing the flag exists to
-prevent.
-
-Changing what a builder brief with `--receipt` does. That path already
-resolves correctly.
