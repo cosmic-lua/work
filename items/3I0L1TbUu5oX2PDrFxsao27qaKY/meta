@@ -1,4 +1,5 @@
 title: stats: --days must clip the numbers to the window it names
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: _work/stats.tl _work/stats_test.tl _work/model.tl _work/github.tl _build/casts_baseline.tl
