@@ -1,30 +1,3 @@
-# cosmic.http forms and cookies: `req:form()` for urlencoded bodies, `req.cookies`, and `res:set_cookie` with the secure defaults
-
-## Goal
-
-htmx submits forms: `hx-post` on a `<form>` sends
-`application/x-www-form-urlencoded` (its default `hx-encoding`), and a
-session is a cookie. Give `Request` a typed, decoded form and cookie
-jar, and `Response` a `Set-Cookie` writer whose defaults are the safe
-ones, so an app never string-builds either header.
-
-## Evidence
-
-Decoding exists: `cosmic/url.tl:63` `local function parse_query(query:
-string): {string: {string}}` over `cosmo.ParseParams` (`:64`), which is
-exactly the urlencoded-body grammar. Nothing parses a `Cookie` header
-or writes `Set-Cookie` anywhere in `cosmic/`:
-
-```
-$ grep -rn -i 'set-cookie\|cookie' cosmic/*.tl cosmic/*/*.tl | grep -v _test
-cosmic/fetch/init.tl:70:  --- arrival order. Use for repeatable headers like Set-Cookie.
-```
-
-— one doc-comment mention on the client side, no parser or writer.
-(Re-run at pull; a second hit means a sibling landed one — reuse it.)
-
-## Change
-
 Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
 
 That is the core child merged; today the command reports the path as
@@ -60,17 +33,3 @@ missing.
   refused; `clear_cookie`.
 - `cosmic/http/init_example.tl`: `Example_form` — POST a form through
   `serve_one`, echo one field.
-
-## Non-goals
-
-- `multipart/form-data`: its own item, named here so a puller does not
-  fold it in.
-- Signed/encrypted session cookies (needs the `cosmic.crypto` decision,
-  «Y45A_uF50»): out of scope; the guide shows a server-side session
-  table keyed by a `cosmic.rand` token instead.
-- CSRF tokens: an app-level pattern the guide shows; no server support
-  in this slice.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.
