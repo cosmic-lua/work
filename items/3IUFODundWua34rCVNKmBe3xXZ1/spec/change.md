@@ -1,11 +1,3 @@
-## Goal
-
-G8 — the flow system (this item's parent is the G8 container). A refinement a
-session commits is not silently replaced by a concurrent one, and every spec
-change is visible in the item's own trail.
-
-## Change
-
 Two behaviours, three source files and two test files, all on the `board`
 branch.
 
@@ -72,42 +64,3 @@ tested. Then add:
   `test_history_covers_the_spec_sidecar` — `store.save` an item, then `save` it
   again changing only the spec argument, and assert `store.history(s, id)`
   carries that sidecar-only commit.
-
-## Non-goals
-
-- No change to `store.touched_at`: claim staleness stays keyed on the item
-  file, and widening it is a separate question about what counts as working an
-  item.
-- No change to `_work/gitgraph.tl`'s `cmd_new`: a sidecar written at birth has
-  no base to compare against.
-- No `--force`/`--why` bypass on `spec`. The escape hatch is re-reading the
-  sidecar and passing it as the base, which is one command and leaves a
-  truthful base.
-- No new field on the item record and no edit to `_work/item.tl`: the trail is
-  git's, and the sidecar's own commits are what `show` was missing.
-- No change to the `gitboard-<verb>:` verdict-line format, to any other verb's
-  flags, or to `_work/flowstat.tl`'s whole-branch `store.history(s)` call.
-- No edit to `skills/work/SKILL.md`, `docs/goals.md` or anything else on
-  `main` — that is a different branch and a different pull request. This diff
-  is the `board` branch only.
-- No rewrite of the item sidecars whose prose names the bare `spec` command.
-
-## Acceptance
-
-- `bin/cosmic --make ci` from the `board` worktree ends `ci: PASS`.
-- `bin/cosmic --make test _work/gitverbs_test.tl _work/store_test.tl` passes,
-  including `test_spec_refuses_a_write_with_no_base`,
-  `test_spec_refuses_a_stale_base` and `test_history_covers_the_spec_sidecar`.
-- `wc -l _work/store.tl` is at most 500 (490 today); `wc -l _work/gitverbs.tl`
-  at most 500 (329 today); `wc -l _work/gitboard.tl` at most 500 (372 today);
-  `wc -l _work/gitverbs_test.tl` at most 500 (441 today).
-- `o/bin/gitboard help spec` lists `--base FILE`.
-- `o/bin/gitboard show 3IOCdZCA` prints the two `spec 3IOCdZCA` commits
-  `848b1a68` and `5cef0e2e` in its trail; today it prints neither, which is how
-  the incident this item records went unseen.
-
-## Enablement
-
-none needed — three source files and two test files on this branch, gated by
-`bin/cosmic --make ci` from the worktree exactly as CI gates it, with no
-blocker items and no dependency on anything landing first.
