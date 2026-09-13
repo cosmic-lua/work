@@ -1,5 +1,3 @@
-## Change
-
 Give `third_party/lua` the structure `third_party/sqlite3` already has — pristine
 upstream sources, a mechanical rewrite, and numbered patches — and land the
 5.4.6 → 5.4.9 bump as the first exercise of it.
@@ -108,11 +106,3 @@ deliberately: the current shape charges its cost at every bump forever, upstream
 running about two commits a month so waiting for them to do it is not a plan, and
 the restructure is offerable upstream as a PR on its own merits — the sqlite3 one
 established the pattern there.
-
-## Non-goals
-
-- **Not Lua 5.5.** Separate item. 5.4.9 is the terminal release of the line this
-  tree already targets, and the machinery built here is what makes 5.5 assessable.
-- **No behaviour change to the bindings.** Step 1 moves files; it does not change
-  what they do.
-- No attempt to upstream any of the semantic patches to lua.org.
