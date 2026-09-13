@@ -1,5 +1,3 @@
-## Change
-
 `brief: review a research handover's board commit instead of refusing
 it` (landed as cosmic-lua/work#158) makes `brief review` render a
 research review: the "what you're reviewing" section now carries the
@@ -42,13 +40,3 @@ and `_work/brieftmpl_source.tl` (the new unit), `_work/briefcontext.tl`
 `brieftmpl_test.tl` is the drift guard — and `_work/brief_research_test.tl`
 for the research rendering, asserting the diff-shaped sentences are
 absent from it and the measurement checks present.
-
-## Non-goals
-
-`verdict` accepting a research head. That is «vDqt_wEzX», which this
-item sits beside; a research review needs both the right instructions
-and a verb that records what it decides, and they are separable.
-
-Any change to the diff-shaped review a product handover receives. The
-existing text is the correct review for a diff and stays byte-for-byte;
-this item only stops handing it to a reviewer who has no diff.
