@@ -1,5 +1,3 @@
-## Change
-
 Ready when: `test -f _tool/surface_diff.tl -a -f _tool/surface_archive.tl && bin/cosmic -e 'local p=assert(require("cosmic.proc").interpreter()); local a=assert(require("cosmic.zip").open(p)); local s=assert(a:read(".tl/_cli/parse.tl")); assert(a:close()); print(s:match("\n%s+diff:%s+string%s*\n") and "READY" or "WAIT")'` prints `READY`.
 
 Add `_cli/diff.tl` and `_cli/diff_test.tl`; add the `--diff BINARY` flag to
@@ -23,8 +21,3 @@ self-binary comparison. Touch focused parser/startup tests only where needed.
 Keep the entire change between 220 and 320 lines across at most nine files;
 bounce if archive or comparison behavior must change. Run the cold-build test
 and full gate.
-
-## Non-goals
-
-No `_cli/upgrade.tl`, baseline/ratchet, gone wrappers, consumer scan, source or
-pin rewrite, network access, or unrelated CLI cleanup.
