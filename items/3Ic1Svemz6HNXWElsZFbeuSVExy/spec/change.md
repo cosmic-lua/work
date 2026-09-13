@@ -1,5 +1,3 @@
-## Change
-
 Measured 2026-08-30 via the effective-rules API
 (`GET /repos/cosmic-lua/cosmopolitan/rules/branches/master`): the
 branch carries a merge_queue rule (SQUASH, ALLGREEN, 60-minute check
@@ -16,9 +14,3 @@ trigger attaches to the candidate's own head). The fix self-tests:
 this PR's own merge candidate carries the trigger, so landing it
 through the queue IS the verification — a merge that completes proves
 the candidate ran `build`.
-
-## Non-goals
-
-No ruleset changes (operator's). No job or step changes. No
-concurrency changes. The `build` job is the workflow's only job, so
-the required set {build} is already complete once candidates run it.
