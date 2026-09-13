@@ -1,5 +1,3 @@
-## Change
-
 Ready when: `test -f _tool/surface_scan.tl && echo READY` prints `READY`.
 
 Add `_tool/surface.tl` and `_tool/surface_test.tl`, touching no other product
@@ -20,9 +18,3 @@ errors with their path. Synthetic-map tests freeze exact modules/entries,
 directory init normalization, shard folding, every exclusion, orphan shards,
 identical duplicates, and conflicting duplicates. Keep the combined change
 between 220 and 300 lines.
-
-## Non-goals
-
-No diff/render, archive access, CLI, public-export reachability, or changes to
-the documentation index/visibility implementation.
-
