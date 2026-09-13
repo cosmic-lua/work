@@ -1,10 +1,10 @@
 title: migrate to runner mode, batch 3/7: cosmic/{fs,child,format,flags,coverage,sandbox}
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1558
 verdict: accept
 verdict_head: ed329053dbcb7fbb6ca2e9303b0b7fa3fa3381c2
-verdict_spec: f03d851a80c93e892e43dfd29e0fec3f9f1de56d61a554e09afb37d64a8e827c
 resolution: completed
 builders: wave18-a-1788060000 wave18-a2-1788064500
 speccers: orchestrator-w18 wave18-a2-1788064500
+touches: cosmic/fs/glob_test.tl _build/cast_sites_test.tl docs/design/cast-sites.tsv cosmic/fs/find_close_test.tl cosmic/sandbox/init_test.tl
