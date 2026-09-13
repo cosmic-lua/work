@@ -1,6 +1,7 @@
 title: gitboard brief review: mint a round-numbered session label instead of always round 1's
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
 claim_batch: 0be971a0d3f26017f8c1d4fa4097894c12573201
 handover_head: 7ab951bed3bd1000d63693d280ae54c06cc8cecd
 external_url: https://github.com/cosmic-lua/work/pull/98
@@ -9,3 +10,4 @@ verdict_head: 7ab951bed3bd1000d63693d280ae54c06cc8cecd
 landed_head: 1dbd6fb7959576e5ab40f13b4d5d40bb4b5a58ed
 resolution: completed
 builders: 2f218b349cb20d25fc069510970f09cb
+touches: _work/brief_label.tl _work/brief.tl _work/brief_label_test.tl _work/brief_test.tl
