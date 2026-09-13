@@ -1,7 +1,9 @@
 title: migrate: rewrite every ref to format 5 in one atomic push
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 85c7e8ec86a0cf6e0a406f0f4b23b17fcc6fd644
 verdict: accept
 verdict_head: 85c7e8ec86a0cf6e0a406f0f4b23b17fcc6fd644
 builders: 429104d81b0428040528bbc030a9f9c1
+touches: /tmp/head.tsv spec/change.md spec/non-goals.md _work/gitmigrate.tl _work/spec.tl _work/gitmigrate_cli.tl _work/gitcommands.tl _work/gitboard.tl _work/gitverbs.tl _work/gitmigrate_test.tl _work/fixture.tl
+access: cosmic-lua/cosmic
