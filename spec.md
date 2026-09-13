@@ -29,6 +29,18 @@ author also happens to be changing the item's spec or state.
    is a new entry, which is how the corpus already worked when the
    sidecar carried this content (dated `## correction — …` headings
    appear in the spec churn).
+5. **The append is fenced by the claim, like every other item-ref
+   mutation.** `cmd_log_add` runs `gitclaimgate.mutation_refusal`
+   before it writes, so a session that does not hold the item's claim
+   is refused, and `log --add` carries `--force`/`--why` for the
+   audited override every other fenced verb has. This was settled
+   after a fresh-context review of the first landing (`request
+   changes` at `6ed6b8dac`): an unfenced append let any session write
+   a claimed ref, and because a note commit moves `items.touched_at`,
+   keep a dead claim out of the `stale` view forever — an ungated
+   `renew`. Fencing the ref closes both. `log` is also draftable and
+   its help carries the prepares-only block, since `--add` prepares a
+   mutation on a remote board.
 
 ## Non-goals
 
@@ -46,3 +58,10 @@ one.
 Writing an entry as part of `take`, `verdict` or `done`. Those already
 commit, and an entry that belongs to a state change rides that change's
 own message.
+
+Carving note commits out of `touched_at`. The holder's own notes
+advancing the freshness clock is correct — the holder is active — and
+the freshness digest is one `for-each-ref` that cannot see a subject;
+teaching it to would put a per-commit read on the whole-board path, and
+any carve-out would have to hold identically in the cache patch and the
+rebuild or `fsck` goes red. The fence makes the carve-out unnecessary.
