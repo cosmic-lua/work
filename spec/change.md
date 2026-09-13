@@ -1,12 +1,3 @@
-## Goal
-
-G3 — an honest type layer, no escape hatches. `cosmic/quicksand/proxy/rules.tl`
-declares a non-nilable port in five places and deliberately, documentedly puts
-`nil` in it, in both directions, inside the proxy's allowlist enforcement path.
-This makes the five declarations say what the code already does.
-
-## Change
-
 Widen five declarations in `cosmic/quicksand/proxy/rules.tl` to `integer | nil`,
 and add one test in `cosmic/quicksand/proxy/rules_test.tl` that pins the runtime
 behaviour a nil port already has. Nothing else moves — no function body changes,
@@ -75,60 +66,3 @@ cosmic/quicksand/proxy/rules_test.tl` prints `Type check passed` with the test
 added and `rules.tl` reverted), because Teal admits `nil` into every non-index
 position. So the test pins runtime behaviour; the declarations are pinned by the
 Acceptance grep below, which is why that grep is not optional.
-
-## Non-goals
-
-- No body changes. `parse_rule`, `validate_key`, `validate_rule`, `validate`,
-  `index`, `match` and `auth_header` keep their current logic exactly —
-  in particular `validate_key`'s fail-open guard (a malformed port must stay a
-  validation error, never a silent widening to "any port") is untouched.
-- No new nil handling in `cosmic/quicksand/proxy/serve.tl`. Its two `rules.match`
-  calls compile unchanged; do not add guards around them.
-- `cosmic/quicksand/proxy/http.tl` belongs to item `3I9Tko2h` (PR #1306), which
-  walls this file off in turn. The two are file-disjoint and land in either order.
-- `cosmic/url.tl` carries the same declaration shape and is NOT in scope:
-  `port: integer` at `:113` and `:233`, and `local port: integer = nil` at `:132`.
-  Leave all three alone; that is separate work, not this slice's.
-- No cast sites move, so `_build/casts_baseline.tl` must not change — if a
-  ratchet gate does complain, run exactly the regen command its failure message
-  prints and commit the result, never a gate weakened any other way.
-- No doc-comment rewrites beyond leaving the existing ones alone: `:28` and
-  `:43-45` already state the nil contract correctly.
-
-## Acceptance
-
-```
-bin/cosmic --make ci
-bin/cosmic --make test cosmic/quicksand/proxy/rules_test.tl
-grep -c 'port: integer)\|port: integer$\|: string, integer$' cosmic/quicksand/proxy/rules.tl
-grep -c 'integer | nil' cosmic/quicksand/proxy/rules.tl
-wc -l < cosmic/quicksand/proxy/rules.tl
-wc -l < cosmic/quicksand/proxy/rules_test.tl
-git status --short
-```
-
-- `bin/cosmic --make ci` ends `ci: PASS (5 stages)`, quoted in the PR description.
-- `bin/cosmic --make test cosmic/quicksand/proxy/rules_test.tl` ends
-  `test: PASS (1 file)` and reports **8 test functions** (7 today).
-- the first grep prints **0** (5 today): no un-widened port declaration survives.
-- the second grep prints **5** (0 today): each of the five is widened exactly once.
-- `wc -l < cosmic/quicksand/proxy/rules.tl` prints a number ≤ 500 (231 today,
-  unchanged expected).
-- `wc -l < cosmic/quicksand/proxy/rules_test.tl` prints a number ≤ 500
-  (133 today, ~142 expected).
-- `git status --short` lists exactly two modified files and no others:
-  `cosmic/quicksand/proxy/rules.tl` and `cosmic/quicksand/proxy/rules_test.tl`.
-
-## Enablement
-
-none needed — the five sites are enumerated by `file:line` with their exact
-current text and the exact replacement, the grep that relocates them is in
-Acceptance, the whole set was applied and gated green (`check: PASS (514 files)`,
-`lint: PASS (606 files)`) during this refinement pass with no caller touched, the
-complete caller set is enumerated, and the new test's three assertions were run
-against the widened signatures rather than reasoned about.
-
-The one wrong turn a literal session could take — adding the test and believing
-it proves the widening, because the `nil` literal type-checks under the current
-signature too — is measured and stated in `Change`, and walled by the first
-Acceptance grep, which fails if any of the five declarations is left alone.
