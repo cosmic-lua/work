@@ -1,15 +1,3 @@
-## Goal
-
-G3 — the cast epic's wave 6c. Wave 6's re-measure (item `3I7OygFC`,
-research) found 42 of the 82 `narrowing-gap` cast sites removable
-against main `aaf4af95`. Ten of them are one reason string and are
-wave 6b's; these are the other 32, spread over five sub-families. They
-are filed as one wave because they were all verified together in one
-worktree and every further split would fall below the epic's 8-site
-cluster floor.
-
-## Change
-
 Delete the cast and its `-- cast:` marker at each of the 27 plain
 sites below; make the one companion deletion and the four `is`-guard
 restructures noted after them, add the narrowing pin, and regenerate
@@ -207,62 +195,3 @@ Wave 6b landing also moves the tree total from 443 to 433, which is
 what makes this wave's Acceptance count 401 rather than 411. Refresh
 those two numbers at pull per the slice loop; both are detail drift,
 neither changes the shape.
-
-## Non-goals
-
-- wave 6b's ten `function shape` sites are not touched here.
-- the 40 still-blocked sites are not touched, and no code is reshaped
-  to make one of them pass. `cosmic/fetch/init.tl:220` carries TWO
-  casts on one line and exactly one of them can go — leave the line
-  alone; it is a blocked site, recorded as such in `3I7OygFC`.
-- no tl patch work (`3p/tl/tl_patch.tl`).
-- `_perf/bench/micro_bench.tl:191` is blocked as measured; a
-  `check.must` rewrite would remove it but that is a different change
-  and not this wave's.
-- no change to what any of the 32 sites' surrounding code DOES: every
-  one of the 27 plain deletions and the companion deletion is a pure
-  removal, and the four restructures swap a guard spelling and nothing
-  else. If a site does not check clean after its stated edit alone,
-  main has moved — bounce the item rather than reshaping the code.
-- the two new narrowing tests pin the checker's behaviour only; do not
-  add cases for other types (primitives, records and arrays are already
-  pinned by `test_early_exit_is_guard_narrows`).
-
-## Acceptance
-
-```
-bin/cosmic --make ci
-git grep -h -o -E -- '-- cast: [^(]*' -- '*.tl' | wc -l    # 411 (401 if 6b landed first; 443 today)
-bin/cosmic --make test cosmic/teal_narrowing_test.tl
-wc -l < cosmic/teal_narrowing_test.tl                      # ≤ 500 (143 today, ~188 expected)
-git status --short
-```
-
-- `bin/cosmic --make ci` ends `ci: PASS (5 stages)`, quoted in the PR
-  description.
-- `bin/cosmic --make test cosmic/teal_narrowing_test.tl` ends
-  `test: PASS (1 file)`, including both new functions.
-- `wc -l < cosmic/teal_narrowing_test.tl` prints a number ≤ 500.
-- the marker count falls from 443 to 411 (or from 433 to 401 if wave 6b
-  landed first).
-- `git status --short` lists exactly 24 modified files and no others:
-  the 22 named in the floor table above, plus
-  `cosmic/teal_narrowing_test.tl` and `_build/casts_baseline.tl`.
-
-## Enablement
-
-none needed — every site is enumerated by `file:line` with its current
-text and its marker position, all 32 were re-read against main
-`d71d7f15` during this refinement pass, every deletion is pre-verified
-alone and as a set, the four restructures are given as diffs, and the
-narrowing behaviour they depend on was measured in this pass with the
-snippets and verdicts recorded above rather than inferred from the
-earlier research.
-
-The one wrong turn a literal session could take — deleting a standalone
-`-- cast:` marker line without its cast, or the reverse — is walled by
-naming the eight standalone sites explicitly, and caught by `--make
-lint` (an unjustified cast) and `--make check` (an orphaned comment
-leaves an unused local or an unreferenced type). The second — regenerating
-the floor by hand and getting the shm.tl or the six deleted rows wrong —
-is walled by stating the regen command and the exact expected rows.
