@@ -1,12 +1,3 @@
-## Goal
-
-`cosmic.literal` accepts a `\z` that crosses a newline — legal Lua
-that `load` accepts, in the module whose contract is that its result
-equals what executing the source returns. `return {s = "a\z\n  b"}`
-reads as `{s = "ab"}` instead of refusing `unterminated string`.
-
-## Change
-
 Both readers, same breath (the capture's first option):
 
 1. cosmic (`cosmic/_literal_lex.tl`, short-string scan): on `\`, a
@@ -27,23 +18,3 @@ Both readers, same breath (the capture's first option):
    behind `\z` still refuse (outer scan). Upstream test updated in
    the same commit; lands as its own PR on the designated branch,
    consumed by a later cosmos pin bump.
-
-## Non-goals
-
-No other escape changes; no long-string changes; no lexer
-restructure. The C-side PR does not change any binding contract shape
-(DecodeLua's signature and error channel stand), so no
-definitions.lua change.
-
-## Acceptance
-
-cosmic: `--make ci` PASS; `literal.parse('return {s = "a\z\n b"}')`
-returns `{s = "ab"}` under both engines; line numbers after a
-spanning string are right (a refusal on the next line reports the
-right y). cosmopolitan: `make o//tool/lua/test` PASS with the
-updated case.
-
-## Enablement
-
-None for the cosmic half (fall-through makes it order-free). The C
-half rides the designated branch and the next cosmos pin bump.
