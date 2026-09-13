@@ -1,5 +1,6 @@
 title: drafts and log entries on format 6: a draft is a chain of transitions on refs/gitboard/drafts/<id>; log --add writes items/<id>/log/<ksuid>.md
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
+resolution: not-planned
 touches: _work/gitdraft.tl _work/gitlog.tl _work/gittake.tl
 depends_on: 3JHjLHb4AEmuUtvaGLSQvAIjfpL
