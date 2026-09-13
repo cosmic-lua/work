@@ -1,9 +1,10 @@
 title: verdict and done: accept a research handover's board commit as the judged head, the way brief review now renders it
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 640e696d327da42c7b4cdbe677dc85768849812a
 verdict: accept
 verdict_head: 640e696d327da42c7b4cdbe677dc85768849812a
 landed_head: 88700d79e7792bbe5a45f37612cdb562e2f19ce2
 resolution: completed
 builders: 0062a25fe48ef11a9b2e79bc5b9e379f
+touches: _work/gitverdict_test.tl _work/gitdone_test.tl
