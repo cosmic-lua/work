@@ -1,5 +1,6 @@
 title: scheduled deep-fuzz: the same properties at depth, on a cadence
 parent: 3HyEE7RJtMNPYTEwmXQpZzNfxtt
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1262
 resolution: completed
+touches: .github/workflows/fuzz.yml _build/workflows_test.tl _fuzz/compress_fuzz_test.tl _fuzz/json_fuzz_test.tl _fuzz/re_fuzz_test.tl _fuzz/tar_fuzz_test.tl _fuzz/url_fuzz_test.tl _build/fuzz_test.tl
