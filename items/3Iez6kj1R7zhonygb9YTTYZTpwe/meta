@@ -1,4 +1,5 @@
 title: _perf joins the dupes gate: five duplicated bench helpers behind two shared modules
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: _build/dupes.tl _perf/bench/server.tl _perf/bench/binary.tl _build/dupes_test.tl

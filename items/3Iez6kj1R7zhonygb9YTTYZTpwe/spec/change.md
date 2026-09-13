@@ -1,5 +1,3 @@
-## Change
-
 Extract the five duplicated bench helpers into two shared modules and add `_perf`
 to the dupes gate's scope.
 
@@ -58,9 +56,3 @@ else.
 
 The sibling item adding `cosmic` to the gate edits the same two lines in
 `_build/dupes.tl` and `_build/dupes_test.tl`. Whichever lands second rebases.
-
-## Non-goals
-
-- No change to what any scenario measures, to its functional checks, or to the
-  harness.
-- No new gate. This widens an existing one's scope.
