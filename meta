@@ -1,5 +1,4 @@
-title: publish --plan: the frozen connector plan for a format-6 commit — create_tree, create_commit, update_ref(force=false)
+title: publish --plan: the frozen connector plan for a state transaction — one tree/commit pair per transition, one update_ref(force=false)
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
-touches: _work/publish.tl _work/gitcommands.tl _work/gitboard.tl
 depends_on: 3JHjM33DUqbNBWWqJ80WASPePf5
