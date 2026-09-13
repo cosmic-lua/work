@@ -180,7 +180,7 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
   local pullable = 0
   local pullable_ids: {string: boolean} = {}
   for _, t in ipairs(todo) do
-    local pb = act.passes_bar(t.ranked, t.it.id, specs)
+    local pb = act.passes_bar(t.ranked, t.it.id, specs, by_id)
     pullable_ids[t.it.id] = pb
     if pb then
       pullable = pullable + 1

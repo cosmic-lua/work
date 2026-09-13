@@ -156,6 +156,32 @@ its siblings, an outcome against other outcomes the same way;
 arrives; an unranked outcome, and everything under it, is triage; an
 unranked child still pulls, just after its ranked siblings.
 ]]},
+  {name = "depends", title = "what makes an item startable",
+    body = [[
+`depends_on` is a set of zero or more item ids an item may not start
+before. It is a SEPARATE relation from rank: it says nothing about
+where in the queue an item sits (`help order`), only whether that
+position may be acted on yet.
+
+While any of them is still open, `next` skips the item and names the
+dependency holding it, and `take` refuses it. A blocker's `done` frees
+every waiter with no second verb: `depends_on` lives on the waiter, so
+only the waiter's ref moves when the edge is declared, and nothing has
+to be withdrawn once the blocker finishes.
+
+A waiter stays WORKABLE. It does not become a container and its rank
+does not move — a dependency is not parentage, and the two are recorded
+by different verbs for exactly that reason.
+
+In practice: `depend ID ON` records it, `undepend ID ON` withdraws it.
+A cycle is refused at the mutation that would close it, naming the path.
+
+A precondition that is an external fact — a release having shipped, a
+pin bumped, a lane gone green — is itself an item to depend on: file
+the item that makes the fact true, and depend on it. There is no
+separate criterion the tool evaluates, because a fact nobody owns is a
+fact nobody finishes.
+]]},
   {name = "bar", title = "the spec bar: what makes an item pullable",
     body = doctrine_bar.BODY},
   {name = "build", title = "building a claimed item",
@@ -171,10 +197,10 @@ unranked child still pulls, just after its ranked siblings.
    (`spec ID FILE --base BASE`) and proceed. A fresh fact that
    breaks the shape or reopens a decision: file the question as a
    sibling and record it as this item's dependency (`new`, then
-   `depend <ID> --on <NEW>`), then drop the claim — this item is not
+   `depend <ID> <NEW>`), then drop the claim — this item is not
    pullable until that dependency resolves, and its `done` frees it
-   with no further verb. The item keeps its own rank and stays
-   workable rather than becoming a container. A
+   with no further verb (`help depends`). The item keeps its own rank
+   and stays workable rather than becoming a container. A
    bounce is a good outcome — the bar failing loudly instead of a
    silent wrong guess — and answering the question may well be your
    own next action; do that from the spec and the tree, not from
@@ -254,9 +280,9 @@ the board; the claimant reworks and hands over a new commit. `reject` — the
 approach is wrong: abandon any external review,
 record what was learned, clear the claim. A reject that reopens a
 decision files the question as its own item and records it as the
-stuck item's dependency, then drops the claim: the stuck item is not
-pullable until that dependency resolves, and its `done` frees it with
-no further verb.
+stuck item's dependency (`depend <STUCK> <NEW>`), then drops the claim:
+the stuck item is not pullable until that dependency resolves, and its
+`done` frees it with no further verb (`help depends`).
 Rejection is cheap by design; wrong work merged is expensive.
 Research agents return recommendations; the caller applies them in the product
 repository and hands over its exact commit through `take ID --head SHA`.

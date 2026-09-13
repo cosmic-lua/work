@@ -7,15 +7,17 @@
 --- claim before it starts. The owner is the proxy the board CAN
 --- check; the access declaration is the deliberate cross-owner case.
 ---
---- That declaration is MID-MOVE, and this comment is the window's
---- record. It was a `## Access` section, and this rule still reads
---- one — every unmigrated `spec.md` reads back as prose carrying it,
---- which is most of the board. But `_work.spec`'s `split` refuses the
---- section on a WRITE now, because format 5 makes access a declared
---- field, and the flag that sets that field is its own change. So
---- there is a window in which a newly written spec cannot declare
---- access at all, and the refusal below names only the FACT — not the
---- section a write refuses, and not a flag this build does not have.
+--- That declaration is MID-MOVE, so this rule reads BOTH spellings
+--- and takes their union. It was a `## Access` section, and most of
+--- the board still is one — every unmigrated `spec.md` reads back as
+--- prose carrying it. Format 5 makes it the item's `access` field
+--- instead, `spec.split` refuses the section on a write, and
+--- `set --access` declares the field. Reading both is what makes the
+--- move safe in either direction: the union only ever recognizes MORE
+--- declarations, so no existing item loses its escape and no newly
+--- written one is left without one. Switching from prose to field
+--- (rather than adding) is `06-retire`'s, once the migration has
+--- populated the field on every ref.
 ---
 --- One rule, applied at both ends: `ready_problems` asks it of every
 --- item before a take (stale data already on the board), and `new
@@ -53,7 +55,7 @@ end
 --- @param id string The item's full id, "" for an item not yet filed
 --- @return string | nil The problem
 local function repo_problem(s: store.Store, repo: string, body: string,
-    id: string): string | nil
+    access: {string}, id: string): string | nil
   if (repo or "") == "" then
     return nil
   end
@@ -65,25 +67,33 @@ local function repo_problem(s: store.Store, repo: string, body: string,
   if repo_owner == nil or repo_owner:lower() == owner:lower() then
     return nil
   end
+  -- Either spelling declares it: the field, or the prose section an
+  -- unmigrated sidecar still carries.
+  for _, declared in ipairs(access or {}) do
+    if declared:lower() == repo:lower() then
+      return nil
+    end
+  end
   if spec.declared_repos(body or "")[repo:lower()] then
     return nil
   end
   local repair = ("pass --repo %s/%s"):format(owner, name)
+  local declare = ("pass --access %s"):format(repo)
   if (id or "") ~= "" then
     repair = ("`gitboard set %s --repo %s/%s`"):format(id:sub(1, 8), owner, name)
+    declare = ("`gitboard set %s --access %s`"):format(id:sub(1, 8), repo)
   end
   return ("repo: %s is under %s, not this board's owner %s — a claiming "
     .. "session is granted the board's repositories, so the field most "
-    .. "likely names a fork the session cannot reach; %s, or declare %s "
-    .. "as the item's read access when the cross-owner target is "
-    .. "deliberate")
-  :format(repo, repo_owner, owner, repair, repo)
+    .. "likely names a fork the session cannot reach; %s, or %s when the "
+    .. "cross-owner target is deliberate")
+  :format(repo, repo_owner, owner, repair, declare)
 end
 
 local record gitowner
   board_owner: function(s: store.Store): string | nil
   repo_problem: function(s: store.Store, repo: string, body: string,
-  id: string): string | nil
+  access: {string}, id: string): string | nil
 end
 
 local M: gitowner = {

@@ -1,7 +1,8 @@
 --- The spec bar's PR-handover half: whether a pull request is worth a
 --- reviewer's time (`handover_refusal`), the one-PR-one-item rule
 --- (`pr_collision_refusal`), the undeclared-read-access check
---- (`undeclared_repos`), and the full list of problems a `take`
+--- (`undeclared_repos`), the unresolved dependencies that keep an item
+--- from starting, and the full list of problems a `take`
 --- enforces (`ready_problems`). Split from `_work.gitgate`, which
 --- sits against the file cap; the identity, force and claim-lease
 --- refusals stay there.
@@ -11,6 +12,7 @@ local overlap = require("_work.overlap")
 local read = require("_work.read")
 local spec = require("_work.spec")
 local store = require("_work.store")
+local tail = require("_work.tail")
 
 --- Compatibility refusal for the removed provider-shaped PR handover.
 --- Gitboard's authoritative handover fact is now only a locally present
@@ -50,7 +52,8 @@ end
 
 --- The repositories a spec reaches (`spec.reached_repos`) that are
 --- neither the item's own `repo` field nor declared as its read
---- access (`spec.declared_repos`) — an undeclared source
+--- access, by either spelling — its `access` field or the
+--- `## Access` prose an unmigrated sidecar carries — an undeclared source
 --- strands a claim before it starts and a review just as surely,
 --- since neither session's grant is anything this board can see. The
 --- item's own `repo` is the one exemption that needs no declaring: it
@@ -59,7 +62,15 @@ end
 --- @param body string Its spec sidecar
 --- @return {string} Undeclared repo slugs, in first-seen order
 local function undeclared_repos(it: item.Item, body: string): {string}
+  -- Both spellings of the declaration, unioned: the item's `access`
+  -- field, and the `## Access` prose an unmigrated sidecar still
+  -- carries. `_work.gitowner.repo_problem` reads the same pair, for
+  -- the reason its header states — the union only ever recognizes MORE
+  -- declarations, so the move costs no item its escape.
   local declared = spec.declared_repos(body)
+  for _, repo in ipairs(it.access or {}) do
+    declared[repo:lower()] = true
+  end
   local own = (it.repo or ""):lower()
   local out: {string} = {}
   for _, repo in ipairs(spec.reached_repos(body)) do
@@ -114,6 +125,21 @@ local function ready_problems(s: store.Store, it: item.Item,
     out[#out + 1] = ("%s's outcome is unranked — rank the outcome first "
       .. "(`gitboard rank <outcome>`), or attach it under an item that "
       .. "already is"):format(it.id:sub(1, 8))
+  end
+  -- Every declared dependency that is not yet done, named: a blocked
+  -- item that simply failed to appear would read as a bug rather than
+  -- as a queue waiting on something. Each dependency is loaded on its
+  -- own rather than off a whole-board list, because `depends_on` is
+  -- empty on almost every item and this loop then costs nothing.
+  for _, dep in ipairs(it.depends_on or {}) do
+    local blocker, _derr = store.load(s, dep)
+    if blocker == nil then
+      out[#out + 1] = ("depends on %s (not on the board), which is not done "
+        .. "yet"):format(tail.handle(dep))
+    elseif item.is_open(blocker) then
+      out[#out + 1] = ("depends on %s (%s), which is not done yet"):format(
+        tail.handle(dep), blocker.title)
+    end
   end
   local spec_body = body or spec.document(store.read_spec(s, it.id))
   for _, gap in ipairs(flow.ready_gaps(spec_body)) do

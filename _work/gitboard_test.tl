@@ -196,13 +196,13 @@ local function test_help_documents_the_id_forms()
     "help should explain why work branches include the claim\ngot: " .. printed)
 end
 
--- The eight verbs that only stage a `commit_and_publish` transaction
+-- The ten verbs that only stage a `commit_and_publish` transaction
 -- say so in their own help, naming the follow-up that actually
 -- pushes; `claim` already carries --execute and its own authority
 -- wording, so the constant must not be sprayed onto it too.
 local function test_help_names_the_prepare_only_verbs()
-  for _, verb in ipairs({"new", "attach", "rank", "set", "spec", "take",
-      "verdict", "done"}) do
+  for _, verb in ipairs({"new", "attach", "rank", "set", "spec", "depend",
+      "undepend", "take", "verdict", "done"}) do
     local code, printed = gitboard_and_capture("help", verb)
     assert(code == 0, ("help %s should exit 0, got %d"):format(verb, code))
     assert(printed:find("only PREPARES", 1, true) ~= nil,
@@ -369,4 +369,53 @@ local function test_show_id_ignores_the_todo_flag()
   assert(plain_printed == flagged_printed,
     "show ID's output should be unchanged by --todo:\n" .. plain_printed
     .. "\n---\n" .. flagged_printed)
+end
+
+-- `depend`'s ON slot is the second id-taking argument position, so it
+-- resolves a rendered handle the same way `attach`'s PARENT does, and
+-- the dispatch reaches the verb body with two full ids.
+local function test_depend_resolves_a_handle_form_blocker()
+  local s = init_state_repo("depend-handle")
+  local root = file_item(s, "an outcome", "")
+  local waiter = file_item(s, "the waiter", root)
+  local blocker = file_item(s, "the blocker", root)
+  assert(gitboard.main("depend", tail.handle(waiter), tail.handle(blocker),
+      "--dir", s.root) == 0, "both slots should accept a handle")
+  local it = check.must(store.load(s, waiter))
+  assert(#(it.depends_on or {}) == 1 and it.depends_on[1] == blocker,
+    "and the edge actually landed: " .. table.concat(it.depends_on or {}, ","))
+  -- `undepend` rides the same branch and the same resolution.
+  assert(gitboard.main("undepend", tail.handle(waiter), tail.handle(blocker),
+      "--dir", s.root) == 0, "undepend takes the same two slots")
+  assert(#(check.must(store.load(s, waiter)).depends_on or {}) == 0,
+    "and withdrew it")
+end
+
+-- A handle in the ON slot that matches nothing is refused before the
+-- verb body sees it, the same way a bad PARENT is.
+local function test_depends_second_slot_refuses_an_unknown_handle()
+  local s = init_state_repo("depend-handle-miss")
+  local root = file_item(s, "an outcome", "")
+  local waiter = file_item(s, "the waiter", root)
+  assert(gitboard.main("depend", waiter, "«ZZZZ_ZZZZ»", "--dir", s.root) ~= 0,
+    "a handle naming nothing in the ON slot is refused")
+  assert(#(check.must(store.load(s, waiter)).depends_on or {}) == 0,
+    "and nothing was written")
+end
+
+-- `set`'s two list flags are declared repeatable, so each occurrence is
+-- one entry and the whole list reaches `cmd_set` — the same shape
+-- `worktree --ref` already has.
+local function test_set_collects_each_declared_list_flag_occurrence()
+  local s = init_state_repo("set-lists-dispatch")
+  local root = file_item(s, "an outcome", "")
+  local leaf = file_item(s, "a slice", root)
+  assert(gitboard.main("set", leaf, "--touches", "_work/a.tl",
+      "--touches", "_work/b.tl", "--access", "cosmic-lua/cosmic",
+      "--dir", s.root) == 0, "both flags should parse")
+  local it = check.must(store.load(s, leaf))
+  assert(#it.touches == 2 and it.touches[2] == "_work/b.tl",
+    "each --touches is one entry: " .. table.concat(it.touches, " "))
+  assert(#it.access == 1 and it.access[1] == "cosmic-lua/cosmic",
+    "and --access the same: " .. table.concat(it.access, " "))
 end

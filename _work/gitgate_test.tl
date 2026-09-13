@@ -13,6 +13,8 @@ local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local gitdepend = require("_work.gitdepend")
+local gitdone = require("_work.gitdone")
 local gitready = require("_work.gitready")
 local gitspec = require("_work.gitspec")
 local graph = require("_work.gitgraph")
@@ -26,6 +28,7 @@ local read = require("_work.read")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local tail = require("_work.tail")
 
 local init_shared = fixture.init_shared
 local init_state_repo = fixture.init_state_repo
@@ -388,4 +391,55 @@ local function test_a_board_with_no_origin_skips_the_owner_rule()
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "nothing to compare against: "
     .. table.concat(problems, "; "))
+end
+
+-- The dependency half of the same bar: an item waiting on something
+-- still open misses it, and the problem names which dependency holds
+-- it — a bare refusal would leave a reader guessing at a bug.
+local function test_an_unresolved_dependency_is_a_ready_problem()
+  local s = init_state_repo("depends-bar")
+  local root, leaf = fixture.root_with_leaf(s)
+  write_spec(s, leaf, "depends", fixture.READY_SPEC)
+  local blocker = fixture.file_item(s, "the question in the way", root)
+  assert(#gitready.ready_problems(s, check.must(store.load(s, leaf))) == 0,
+    "the leaf meets the bar before the edge is declared")
+  assert(gitdepend.cmd_depend(s, leaf, blocker) == 0, "the edge should land")
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
+  assert(#problems == 1, "exactly the one problem: "
+    .. table.concat(problems, "; "))
+  assert(problems[1]:find("is not done yet", 1, true) ~= nil
+    and problems[1]:find(tail.handle(blocker), 1, true) ~= nil
+    and problems[1]:find("the question in the way", 1, true) ~= nil,
+    "it names the handle and the title: " .. problems[1])
+end
+
+-- The blocker's `done` frees the waiter with no second verb: the field
+-- still names it, and the bar simply stops reporting it.
+local function test_a_finished_dependency_clears_the_ready_problem()
+  local s = init_state_repo("depends-freed")
+  local root, leaf = fixture.root_with_leaf(s)
+  write_spec(s, leaf, "freed", fixture.READY_SPEC)
+  local blocker = fixture.file_item(s, "the blocker", root)
+  assert(gitdepend.cmd_depend(s, leaf, blocker) == 0)
+  assert(gitdone.cmd_done(s, blocker, "completed", false, "") == 0,
+    "the blocker should finish")
+  local it = check.must(store.load(s, leaf))
+  assert(#(it.depends_on or {}) == 1, "the edge is still declared")
+  assert(#gitready.ready_problems(s, it) == 0,
+    "and a finished dependency holds nothing back")
+end
+
+-- A dependency naming no item at all is reported too, rather than read
+-- as resolved: an id pointing at nothing is a repair, not a green light.
+local function test_a_dependency_naming_no_item_is_a_ready_problem()
+  local s = init_state_repo("depends-absent")
+  local _root, leaf = fixture.root_with_leaf(s)
+  write_spec(s, leaf, "absent", fixture.READY_SPEC)
+  local it = check.must(store.load(s, leaf))
+  it.depends_on = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
+  assert(storewrite.save(s, it, "fixture: a dependency on nothing"))
+  fixture.caller_publish(s)
+  local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
+  assert(#problems == 1 and problems[1]:find("not on the board", 1, true) ~= nil,
+    "an id naming nothing is reported: " .. table.concat(problems, "; "))
 end

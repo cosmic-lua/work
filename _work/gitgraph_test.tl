@@ -290,3 +290,96 @@ local function test_set_refuses_every_flow_field_flag()
     "resolution untouched: " .. after.resolution)
   assert(after.key == before.key, "key untouched: " .. after.key)
 end
+
+-- `set` repairs the two declared lists the same way it repairs a
+-- scalar: each flag REPLACES its whole field, and the commit subject
+-- names which moved. `depends_on` is deliberately absent — it has its
+-- own verb, so the cycle check lives in one place.
+local function test_set_replaces_the_declared_lists()
+  local s = init_state_repo("set-lists")
+  local _, leaf = root_with_leaf(s)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "",
+      {"_work/action.tl", "_work/gitready.tl"}, {"cosmic-lua/cosmic"}) == 0,
+    "both lists should land")
+  local it = check.must(store.load(s, leaf))
+  assert(#it.touches == 2 and it.touches[1] == "_work/action.tl"
+    and it.touches[2] == "_work/gitready.tl",
+    "touches landed in order: " .. table.concat(it.touches, " "))
+  assert(#it.access == 1 and it.access[1] == "cosmic-lua/cosmic",
+    "access landed: " .. table.concat(it.access, " "))
+  local events = check.must(publish.history(s, leaf))
+  assert(events[1].subject:match("^set %w%w%w%w%w%w%w%w touches access$")
+    ~= nil, "the subject names both fields, canonically ordered: "
+    .. events[1].subject)
+
+  -- A second call REPLACES rather than appends: one mechanism, the same
+  -- one the scalar flags have.
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "",
+      {"_work/spec.tl"}) == 0)
+  local moved = check.must(store.load(s, leaf))
+  assert(#moved.touches == 1 and moved.touches[1] == "_work/spec.tl",
+    "the list was replaced, not extended: " .. table.concat(moved.touches, " "))
+  assert(#moved.access == 1, "and the untouched list stayed put")
+
+  -- An empty list is how the field is cleared.
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "", {}) == 0)
+  assert(#check.must(store.load(s, leaf)).touches == 0, "an empty list clears")
+end
+
+-- Either list alone satisfies the at-least-one-option rule: `set` has
+-- five fields now, not three.
+local function test_a_declared_list_alone_satisfies_set()
+  local s = init_state_repo("set-lists-alone")
+  local _, leaf = root_with_leaf(s)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "",
+      nil, {"cosmic-lua/work"}) == 0, "--access alone is enough")
+  assert(check.must(store.load(s, leaf)).access[1] == "cosmic-lua/work")
+end
+
+-- `access` names repositories, so it is held to the same owner/name
+-- shape `repo` is. `touches` is advisory — any single token passes —
+-- but an entry holding whitespace could never be read back as one
+-- entry off the space-joined `meta` line, so it is refused at the write.
+local function test_set_refuses_a_malformed_declared_entry()
+  local s = init_state_repo("set-lists-bad")
+  local _, leaf = root_with_leaf(s)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "",
+      nil, {"notaslug"}) ~= 0, "access wants owner/name")
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "",
+      {"two words"}) ~= 0, "a touches entry cannot hold a space")
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, false, "",
+      {""}) ~= 0, "nor be blank")
+  local it = check.must(store.load(s, leaf))
+  assert(#it.touches == 0 and #it.access == 0, "and nothing was written")
+end
+
+-- `new` files the two lists at birth, so an item can carry them from
+-- the moment it exists rather than needing a repair right after.
+local function test_new_files_the_declared_lists()
+  local s = init_state_repo("new-lists")
+  local root = file_item(s, "an outcome", "")
+  assert(graph.cmd_new(s, "a declared slice", root, nil, "", false, "",
+      "", "", "", {"_work/item.tl"}, {"cosmic-lua/cosmopolitan"}) == 0,
+    "new should accept both lists")
+  local filed: string = nil
+  for _, i in ipairs(check.must(store.list(s))) do
+    if i.title == "a declared slice" then filed = i.id end
+  end
+  assert(filed ~= nil, "the item was filed")
+  local it = check.must(store.load(s, filed))
+  assert(#it.touches == 1 and it.touches[1] == "_work/item.tl",
+    "touches landed: " .. table.concat(it.touches, " "))
+  assert(#it.access == 1 and it.access[1] == "cosmic-lua/cosmopolitan",
+    "access landed: " .. table.concat(it.access, " "))
+end
+
+-- The same validation binds at file time: a malformed entry never
+-- enters the board, rather than being repaired after the fact.
+local function test_new_refuses_a_malformed_declared_entry()
+  local s = init_state_repo("new-lists-bad")
+  local root = file_item(s, "an outcome", "")
+  local before = commits(s)
+  assert(graph.cmd_new(s, "a bad slice", root, nil, "", false, "",
+      "", "", "", nil, {"notaslug"}) ~= 0, "access wants owner/name")
+  assert(commits(s) == before, "and nothing was filed")
+end

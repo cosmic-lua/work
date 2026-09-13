@@ -159,3 +159,72 @@ local function test_no_queue_map_offers_the_finish_as_before()
   assert(a.kind == "finish" and a.item.id == accepted.id,
     "no queue map is not a refusal: " .. a.kind)
 end
+
+-- A todo item with an unresolved dependency is never offered as a
+-- pull: `depends_on` gates whether it may start, so offering it would
+-- hand back a candidate `take` itself refuses. The control is the same
+-- board with no edge declared, where the waiter — the older of the two,
+-- so the one age order reaches first — IS what comes back: the blocker
+-- coming back instead is the skip, not the queue's own ordering.
+local function test_a_blocked_todo_item_is_not_offered()
+  local frame: {Item} = {}
+  local root = placed_root(frame)
+  local waiter_id = fresh_id()
+  local blocker_id = fresh_id()
+  local control: {Item} = {frame[1], frame[2],
+    make({parent = root.id, id = waiter_id}),
+    make({parent = root.id, id = blocker_id})}
+  local first = next_action(control, ready_specs(control), "me")
+  assert(first.kind == "pull" and first.item.id == waiter_id,
+    "with no edge the queue reaches the waiter first: " .. first.kind
+    .. " " .. tostring(first.item and first.item.id))
+  local blocked: {Item} = {frame[1], frame[2],
+    make({parent = root.id, id = waiter_id, depends_on = blocker_id}),
+    make({parent = root.id, id = blocker_id})}
+  local a = next_action(blocked, ready_specs(blocked), "me")
+  assert(a.kind == "pull" and a.item.id == blocker_id,
+    "with it the waiter is skipped and the blocker offered: " .. a.kind
+    .. " " .. tostring(a.item and a.item.id))
+end
+
+-- Nothing left to offer: the dependency skip is COUNTED and NAMED
+-- rather than falling through to a generic "nothing here" — a session
+-- reading that needs to see which dependency holds the queue, or the
+-- absence looks like a bug. The count names only what it tallied, so
+-- the sibling with no dependency is never named beside it. The outcome
+-- is deliberately UNRANKED with two open children, the same shape
+-- `action_ci_test.tl` uses, so no intake rung fires instead.
+local function test_a_blocked_queue_reports_the_dependency_holding_it()
+  local board = make({})
+  local root = make({parent = board.id})
+  -- An id off the board entirely: an unresolved dependency exactly as an
+  -- open one is, and it adds no second row to the queue.
+  local absent = fresh_id()
+  local waiter = make({parent = root.id, depends_on = absent})
+  local unblocked = make({parent = root.id})
+  local items: {Item} = {board, root, waiter, unblocked}
+  local a = next_action(items, ready_specs(items), "me")
+  assert(a.kind == "none", "nothing is offered: " .. a.kind)
+  assert(a.reason:find("1 item(s) wait on a dependency", 1, true) ~= nil,
+    "the count reflects only what was tallied: " .. a.reason)
+  assert(a.reason:find(waiter.id:sub(1, 8), 1, true) ~= nil
+    and a.reason:find(absent:sub(1, 8), 1, true) ~= nil,
+    "the waiter and what holds it are both named: " .. a.reason)
+  assert(a.reason:find(unblocked.id:sub(1, 8), 1, true) == nil,
+    "an item no dependency holds is never named beside the count: "
+    .. a.reason)
+end
+
+-- A resolved dependency stops holding anything: the same item, whose
+-- blocker is done, is offered exactly as an undeclared one would be.
+local function test_a_done_dependency_stops_blocking()
+  local items: {Item} = {}
+  local root = placed_root(items)
+  local blocker = make({parent = root.id, resolution = "completed"})
+  local waiter = make({parent = root.id, depends_on = blocker.id})
+  items[#items + 1] = blocker
+  items[#items + 1] = waiter
+  local a = next_action(items, ready_specs(items), "me")
+  assert(a.kind == "pull" and a.item.id == waiter.id,
+    "a done dependency holds nothing back: " .. a.kind)
+end

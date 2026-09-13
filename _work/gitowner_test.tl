@@ -11,7 +11,9 @@
 local check = require("cosmic.check")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
+local item = require("_work.item")
 local itemtree = require("_work.itemtree")
+local ready = require("_work.gitready")
 local specmod = require("_work.spec")
 local storewrite = require("_work.storewrite")
 local graph = require("_work.gitgraph")
@@ -163,4 +165,65 @@ local function test_a_local_only_board_writes_any_repo()
   local root = fixture.file_item(s, "an outcome", "")
   assert(graph.cmd_new(s, "a slice", root, nil, "whilp/cosmopolitan") == 0,
     "no origin, no owner, no refusal")
+end
+
+-- The FIELD is the other spelling of the same declaration, and the
+-- rule takes the union: `set --access` grants the cross-owner repo
+-- with no prose at all. Without the union this is the window PR #154
+-- opened — the section refused on write, the field unread — where the
+-- refusal's own repair text names a command that does not work.
+local function test_the_access_field_grants_a_foreign_owner_repo()
+  local s, root = github_board("field-grant")
+  local leaf = fixture.file_item(s, "a slice", root)
+  local code, out = capture(function(): integer
+      return graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil)
+    end)
+  assert(code ~= 0, "undeclared, the cross-owner repo is refused: " .. out)
+  assert(out:find("--access whilp/cosmopolitan", 1, true),
+    "and the refusal names the declaring command: " .. out)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, nil, nil, nil,
+      {"whilp/cosmopolitan"}) == 0, "the field is declarable on its own")
+  fixture.caller_publish(s)
+  assert(#check.must(store.load(s, leaf)).access == 1,
+    "the access field, not touches, is what got set")
+  fixture.caller_publish(s)
+  assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0,
+    "declared as a field, with no prose, the repo is accepted")
+  fixture.caller_publish(s)
+  assert(check.must(store.load(s, leaf)).repo == "whilp/cosmopolitan")
+end
+
+-- Both in ONE call, which is what the refusal's repair text invites a
+-- caller to type. The `--repo` check runs before `--access` is
+-- applied, so it reads the EFFECTIVE list or refuses a call that
+-- declares exactly the access it needs.
+local function test_repo_and_access_land_in_one_call()
+  local s, root = github_board("field-one-call")
+  local leaf = fixture.file_item(s, "a slice", root)
+  assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil, nil, nil,
+      nil, nil, {"whilp/cosmopolitan"}) == 0,
+    "one call declaring the access it needs is not refused")
+  fixture.caller_publish(s)
+  local got = check.must(store.load(s, leaf))
+  assert(got.repo == "whilp/cosmopolitan", "the repo landed")
+  assert(#got.access == 1 and got.access[1] == "whilp/cosmopolitan",
+    "and so did the declaration")
+end
+
+-- The ready bar reads the same union, so an item whose spec REACHES a
+-- repository it declares only as a field is not reported undeclared.
+local function test_the_ready_bar_reads_the_access_field()
+  local reaching: itemtree.Spec = {
+    change = "Read `https://github.com/whilp/cosmopolitan/blob/main/x.c`.\n",
+    non_goals = "",
+  }
+  local it: item.Item = {id = "x", title = "t", repo = "cosmic-lua/work",
+    access = {}, touches = {}, depends_on = {}, builders = {}, speccers = {},
+    order = {}}
+  local body = specmod.document(reaching)
+  assert(#ready.undeclared_repos(it, body) == 1,
+    "undeclared, the reached repo is reported")
+  it.access = {"whilp/cosmopolitan"}
+  assert(#ready.undeclared_repos(it, body) == 0,
+    "declared as a field, it is not")
 end

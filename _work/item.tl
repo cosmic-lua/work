@@ -235,6 +235,24 @@ local function problems(it: Item): {string}
   if (it.base or "") ~= "" and not it.base:match("^[%w%-%._/]+$") then
     out[#out + 1] = ("base must be a branch name: %s"):format(it.base)
   end
+  -- The two declared lists ride a space-joined `meta` line, so an entry
+  -- holding whitespace could never be read back as one entry. `decode`
+  -- splits on runs of non-space and can never produce one; a verb
+  -- building an item in memory from flags can, which is where this
+  -- refuses. `access` is held to the same owner/name shape as `repo`,
+  -- because it names repositories the same way. `touches` is advisory
+  -- (nothing refuses on its CONTENT), so any single token passes.
+  for _, path in ipairs(it.touches or {}) do
+    if path:match("^%S+$") == nil then
+      out[#out + 1] = ("touches must be one path with no spaces: %q")
+      :format(path)
+    end
+  end
+  for _, slug in ipairs(it.access or {}) do
+    if not slug:match("^[%w%-%.]+/[%w%-%._]+$") then
+      out[#out + 1] = ("access must be owner/name: %s"):format(slug)
+    end
+  end
   local built_seen: {string: boolean} = {}
   for _, name in ipairs(it.builders or {}) do
     if built_seen[name] then

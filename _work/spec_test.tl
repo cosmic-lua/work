@@ -359,15 +359,17 @@ $ grep -c '^## Change' /tmp/specs
 end
 
 -- A retired section carrying content is refused rather than dropped,
--- and the refusal names where the fact now lives. A hollow leftover
+-- and the refusal names where the fact now lives AND the verb that puts
+-- it there, so the refusal is also the repair. A hollow leftover
 -- heading loses no fact and is dropped.
 local function test_split_refuses_a_retired_section_that_carries_content()
   local sp, err = spec.split("## Change\nDo it.\n\n## Access\n- a/b\n")
   assert(sp == nil and err == "access is a declared field now, not a spec "
-    .. "section", tostring(err))
+    .. "section: gitboard set ID --access OWNER/NAME", tostring(err))
   local _ready, rerr = spec.split("## Change\nDo it.\n\n## Ready when\nx is done\n")
   assert(_ready == nil
-    and rerr == "a precondition is a dependency, not a section", rerr)
+    and rerr == "a precondition is a dependency, not a section: "
+    .. "gitboard depend ID ON ID", rerr)
   local _ev, everr = spec.split("## Change\nDo it.\n\n## Evidence\n1046 items\n")
   assert(_ev == nil and everr:find("Evidence is not a spec section", 1, true) ~= nil
     and everr:find("gitboard log ID --add FILE", 1, true) ~= nil, everr)

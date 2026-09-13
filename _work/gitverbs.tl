@@ -13,6 +13,7 @@
 local cache = require("_work.cache")
 local ciobs = require("_work.ciobs")
 local gate = require("_work.gitgate")
+local gitdepend = require("_work.gitdepend")
 local gitdone = require("_work.gitdone")
 local gitlog = require("_work.gitlog")
 local gitready = require("_work.gitready")
@@ -358,6 +359,10 @@ local record gitverbs
   cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
   cmd_log_add: function(s: store.Store, id: string, file: string,
   session?: string): integer
+  cmd_depend: function(s: store.Store, id: string, on: string,
+  session?: string, force?: boolean, why?: string): integer
+  cmd_undepend: function(s: store.Store, id: string, on: string,
+  session?: string, force?: boolean, why?: string): integer
 end
 
 local M: gitverbs = {
@@ -366,6 +371,8 @@ local M: gitverbs = {
   cmd_done = gitdone.cmd_done,
   cmd_log = gitlog.cmd_log,
   cmd_log_add = gitlog.cmd_log_add,
+  cmd_depend = gitdepend.cmd_depend,
+  cmd_undepend = gitdepend.cmd_undepend,
 }
 
 return M
