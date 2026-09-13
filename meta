@@ -1,5 +1,6 @@
 title: sandbox: one Landlock ABI probe — unveil.available() and quicksand.probe_landlock() delegate to landlock.available() instead of re-probing
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1278
 resolution: completed
+touches: cosmic/sandbox/landlock.tl cosmic/sandbox/unveil.tl cosmic/quicksand/init.tl
