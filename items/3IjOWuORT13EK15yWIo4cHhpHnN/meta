@@ -1,4 +1,5 @@
 title: re.search: capture-groups slot doubles as the error string, same shape as Regex:search
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
 resolution: not-planned
+touches: tool/net/lre.c
