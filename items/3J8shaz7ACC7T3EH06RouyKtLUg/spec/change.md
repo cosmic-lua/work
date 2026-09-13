@@ -1,0 +1,3 @@
+Add a first-class way to run the standard scoped inner loop—format check, strict type check, lint, and named focused tests—through one exact-head convergence. Reuse the proved generated toolchain and graph within that invocation while retaining a separate terminal verdict for each gate and an overall nonzero exit if any gate fails.
+
+The interface may be a combined `--make` verb or a documented multi-gate form, but it must accept explicit touched/test paths, never expand silently to full CI, and invalidate reuse on any relevant source, pin, environment-stamp, generated input, or command-option change. Add timing/counting fixtures showing one convergence for four gates and a mutation proving stale reuse is rejected after a relevant input changes.
