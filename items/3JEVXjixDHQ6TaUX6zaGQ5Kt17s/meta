@@ -1,3 +1,5 @@
 title: cosmo.Fetch: expose a per-call CA/cert-bundle option (mbedtls_ssl_set_hs_ca_chain), verify-required default unchanged
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: tool/net/fetch.inc tool/net/lfetch.c tool/net/definitions.lua
+access: cosmic-lua/cosmic
