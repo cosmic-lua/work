@@ -1,26 +1,3 @@
-## Evidence
-
-`cosmic.uuid` (`cosmic/uuid.tl`) is the precedent shape for this: a
-thin Teal wrapper (`v4`/`v7`, 35 lines total) over C bindings
-(`cosmo.UuidV4`/`cosmo.UuidV7`) — UUID generation lives in
-cosmopolitan, not Lua. KSUID is deliberately the other way around at
-first: «jiP8_yJF8» ("cosmic.ksuid: a public K-Sortable Unique ID
-module, ported from _work/ksuid.tl") ships a pure-Teal implementation
-first, built only on `cosmic.rand`/`cosmic.time`, so the contract is
-proven by real use before any C ABI is frozen.
-
-The cost that motivates a C fast path once that contract holds:
-`_work/ksuid.tl`'s `encode` does base-256-to-base-62 by repeated long
-division over all 20 bytes, once per output digit, for 27 output
-digits (`~20*27` word operations per id in pure Lua); `time_of` does
-the equivalent base-62-to-base-256 reconstruction, one multiply-and-carry
-pass per input character. Cheap in isolation, but exactly the shape of
-work a hot loop (many ids minted per second — a ref-per-item store like
-gitboard's own, or any high-throughput inserter) pays repeatedly for no
-reason once the algorithm is settled.
-
-## Change
-
 Blocked until «jiP8_yJF8» lands and its contract (byte layout, alphabet,
 epoch, the four function signatures) is settled by real use.
 
@@ -46,10 +23,3 @@ epoch, the four function signatures) is settled by real use.
    — this is optimization work, gated the same way any perf change is
    (baseline, change, correctness gate, noise-aware compare) — and back
    it out if it is not a real win at typical id-minting rates.
-
-## Non-goals
-
-Changing `cosmic.ksuid`'s public API or byte layout from what «jiP8_yJF8»
-ships; the `cosmic.sqlite` exposure (a separate item, also blocked on
-«jiP8_yJF8», not on this one — it works against whichever `cosmic.ksuid`
-implementation exists at build time).
