@@ -1,0 +1,3 @@
+In Cosmic-kind worktree preparation, after verifying/staging the exact pinned runtime and before invoking the product build, materialize the same verified bytes at every supported bootstrap path required by the target repository contract, including `o/bootstrap/cosmic`. Publication must be atomic and no-overwrite-safe; a pre-existing mismatched file refuses, while matching verified bytes are reused. Creation, adoption, and review preparation share the same path.
+
+Add an isolated target fixture whose build refuses unless `o/bootstrap/cosmic` exists and matches the pin. Cover fresh cache miss, cache hit, adoption after a retained failure, and review preparation. Mutate the implementation to publish only `.ape`; the fixture must fail before claiming preparation success.
