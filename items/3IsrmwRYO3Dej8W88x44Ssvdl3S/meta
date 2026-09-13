@@ -1,3 +1,6 @@
 title: gitboard new: accept --base at file time instead of requiring a follow-up set
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
+touches: _work/gitgraph.tl _work/gitboard.tl _work/gitgraph_test.tl
+access: cosmic-lua/cosmic
