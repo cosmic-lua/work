@@ -1,5 +1,3 @@
-## Change
-
 Evidence: whilp/cosmic and whilp/cosmopolitan both transferred to the
 cosmic-lua organization on 2026-08-29 — every session checkout's
 `git remote -v` now names https://github.com/cosmic-lua/{cosmic,cosmopolitan},
@@ -39,14 +37,3 @@ not a rename):
 After the edit, `git grep -n 'whilp/'` over the tree must match ONLY
 issue-number citations of the form `whilp/cosmic#<digits>` (see
 Non-goals) — anything else remaining is a miss.
-
-## Non-goals
-
-Issue-number citations (`whilp/cosmic#967`, `#942`, `#1065` in
-3p/tl/tl_patch/*.tl and docs/decisions/d21-carried-tl-patch.md) stay:
-they are provenance naming where the issue lived when filed, and
-GitHub's transfer redirect keeps them clickable. skills/work/SKILL.md
-is already fixed by PR #1534 (item 3IbpI2YD) — not this diff.
-jart/cosmopolitan references are upstream and correct. The
-cosmopolitan repo's own tree (its AGENTS.md names whilp/cosmopolitan
-and whilp/cosmic) is a separate item carrying that repo.
