@@ -1,5 +1,3 @@
-## Change
-
 Ready when: `cosmic --diff` and the gone tree are on main (sibling
 items; `ls cosmic/_gone/ _cli/upgrade.tl`).
 
@@ -88,8 +86,3 @@ wording, and the three exit codes. Pin rewrite: a fixture
 `bin/cosmic.pin` and a stubbed stamp, asserting the two lines and the
 refusal on `unknown`. The sh verb: `_cli/fence_test.tl`'s pattern for
 running `bin/cosmic` with `COSMIC_FENCE=0` against a local file URL.
-
-## Non-goals
-
-No source rewriting (sibling). No release resolution inside the
-binary. No `--docs` integration of the gone tree.
