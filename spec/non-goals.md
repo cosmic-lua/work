@@ -1,0 +1,2 @@
+- No Makefile change.
+- No change to `test_slurp_ranges.lua` (already fixed, #363).
