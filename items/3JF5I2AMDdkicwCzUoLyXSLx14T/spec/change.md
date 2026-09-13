@@ -1,7 +1,15 @@
-Depends on `05-migration`: nothing here is dead until every ref is format 5 and
-every item carries the `touches` and `access` the parsers used to extract, so
-this item both switches the readers over to those fields and deletes what read
-prose instead.
+`05-migration` has run: `refs/heads/board/format` reads `5`, all 1425 refs
+sit on `migrate <handle> to format 5` commits, zero carry a `spec.md` blob or a
+`target:` line, and `fsck` reports `ok (1425 items)` (cosmic-lua/work#163, the
+run report in its comments). Every item carries the `touches` and `access` the
+parsers used to extract, so this item both switches the readers over to those
+fields and deletes what read prose instead. The migration was pushed in
+batches, which is why the module it deletes is larger than the one #163
+shipped: cosmic-lua/work#164 gave `migrate` idempotence, `--limit` and
+`--only`, and cosmic's D49
+(`docs/decisions/d49-board-rewrite-pushes-in-idempotent-batches.md`) records
+why and says the NEXT migration copies from this item's retire commit's
+parent, batching included — so the deletion here is what preserves it.
 
 Each deletion below is stated with what makes it dead. Two things the plan
 expected to delete here are ALREADY gone, and one is dead only because this item
@@ -60,11 +68,14 @@ Delete, all of it dead the moment `refs/heads/board/format` reads `5`:
   removal op `02-tree-and-fields` added to `diff_item`.
 - `_work/gitmigrate.tl`, `_work/gitmigrate_cli.tl` and `_work/gitmigrate_test.tl`
   in full, plus the `migrate` verb's three wiring files — `_work/gitcommands.tl`
-  (the `{name = "migrate", ...}` CSPEC entry), `_work/gitboard.tl` (the
-  `if d.command == "migrate" then` branch and the
-  `local migratecli = require("_work.gitmigrate_cli")` import) and
+  (the `{name = "migrate", ...}` CSPEC entry with its `--remote`, `--execute`,
+  `--limit` and `--only` flags), `_work/gitboard.tl` (the
+  `if d.command == "migrate" then` branch, its `--limit` whole-number refusal,
+  and the `local migratecli = require("_work.gitmigrate_cli")` import) and
   `_work/gitverbs.tl` (the `cmd_migrate` entry) — exactly the deletion
-  `git show 3423bac6 --stat` made for the previous one. `_work/spec.tl`'s
+  `git show 3423bac6 --stat` made for the previous one. The retire commit's
+  parent is the reference the next migration copies from (D49), so the PR
+  names that sha. `_work/spec.tl`'s
   `segments` and `_work/overlap.tl`'s `raw_paths_named`, exported in
   `05-migration` for that module alone, stop being exported — `segments` stays
   as the local scanner `split` is built on.
@@ -154,7 +165,7 @@ the two lines around it. With `ready_when` gone, `overlap.tl` and
 `_work/gitready.tl` no longer spawn a process during `next` or `take` —
 `_work/overlap.tl:37` (`local child = require("cosmic.child")`) goes too.
 
-### `spec.revision` and `key`
+### `spec.revision` and `sections`
 
 - `_work/spec.tl`: delete `revision` (`:189`,
   `local function revision(body: string): string`), its export, and
@@ -165,38 +176,6 @@ the two lines around it. With `ready_when` gone, `overlap.tl` and
   three callers are all gone, and `03-verbs`' `segments` is the one scanner
   left. This is the divergence D47 set out to delete: one heading with three
   readers becomes two blobs with none.
-- `key` leaves the schema last, because nothing on the board has ever carried
-  one — `grep -c '^key: '` over all 1371 metas prints `0`, so no ref needs
-  rewriting for this and it was deliberately left out of the format-5 cutover.
-  Its removal is a mechanism change, in this order: `_work/lanes.tl:234`
-  (`return item.is_open(it) and (it.key or "") == lane`) compares
-  `it.title == ("lane repair: %s is red"):format(lane)` — the one title
-  `file_repair` writes at `_work/lanes.tl:244`
-  (`local title = ("lane repair: %s is red"):format(lane)`) — and `:249` drops
-  `key = lane`;
-  `_work/gitgate.tl:280` (`if (taking.key or "") ~= "" then`) exempts a lane
-  repair by parentage instead, `if (taking.parent or "") == flow.LANE_PARENT then`,
-  with `LANE_PARENT` moved from `_work/lanes.tl:34` into `_work/flow.tl` (which
-  `_work/gitgate.tl:16` already imports, and which imports only `_work.spec`, so
-  no cycle closes); `_work/action.tl:277`
-  (`reason = ("lane repair: %s"):format(i.key),`) names `i.title`;
-  `_work/readddl.tl:95` (`WHEN w.key <> '' THEN 5`) derives the repair stage from
-  `w.parent = '<LANE_PARENT>'`; `_work/readddl.tl:243`
-  (`SELECT 'duplicate_key' AS kind, o.id AS id,`) and its join at `:247` are
-  deleted with the `duplicate_key` kind, and `_work.read.structure`'s callers
-  lose one kind — `_work/gitready.tl:96`
-  (`if row.id == it.id and (row.kind == "dangling_parent" or row.kind == "deep_chain") then`)
-  already names only two kinds and needs no edit; `_work/indexddl.tl:89`
-  (`CREATE UNIQUE INDEX one_open_item_per_key`) and the `key` column at `:39`
-  go, with `key_duplicates` (`_work/index.tl:171`) and its call at `:247`;
-  `_work/index.tl:86`, `_work/cachequery.tl:186` and `:203`, `_work/read.tl:250`
-  and `:275`, `_work/gitfsck.tl:53`'s `ITEM_COLUMNS`, the `record Item` field
-  (`_work/item.tl:29`, `  key: string`, living in `_work/itemtype.tl` after
-  `02-tree-and-fields` moved the record there) with `_work/item.tl`'s
-  `SPEC`/`Raw`/`decode`/`encode` entries, and
-  `_work/itemtree.tl`'s `META_KEYS` entry and `put("key", ...)` all drop it.
-  `_work/cachedb.tl:62` (`local SCHEMA_VERSION < const > = 8`, at `9` after
-  `02-tree-and-fields`) goes to `10`.
 
 ### `## Acceptance`'s last readers
 
@@ -225,33 +204,29 @@ Delete the cases that covered the deleted functions — `_work/overlap_test.tl`
 (`local function test_paths_named_reads_only_the_change_section()`), `:140` and
 `:310` and gains the same coverage over declared lists — and update
 `_work/spec_test.tl`, `_work/gitshow_test.tl`,
-`_work/gitview_test.tl`, `_work/lanes_test.tl`, `_work/gitgate_test.tl`,
-`_work/index_test.tl`, `_work/read_test.tl`, `_work/format_test.tl` and
-`_work/gitfsck_test.tl` (the two new reports). `_work/briefmeasure.tl` has no
+`_work/gitview_test.tl`, `_work/format_test.tl` and
+`_work/gitfsck_test.tl` (the two new reports); the `key` half updates
+`_work/lanes_test.tl`, `_work/gitgate_test.tl`, `_work/index_test.tl` and
+`_work/read_test.tl`. `_work/briefmeasure.tl` has no
 test file of its own today (`grep -rln briefmeasure _work/*_test.tl` matches
 nothing), and its new signature gets one. `README.md`'s `fsck` paragraph
-names `two open items sharing a key` and layout 4 as the live one: both move.
+names layout 4 as the live one and lines 96–99 still say the migration was
+retired a layout ago: both move (`two open items sharing a key` is the `key`
+half's).
 Hand-edit the `.cosmic-coverage` rows this changes — `_work/overlap.tl`
-(`{["covered"] = 141, ["total"] = 153}`), `_work/spec.tl`, `_work/format.tl`,
-`_work/item.tl`, `_work/itemtree.tl` — and delete the rows for the three files
+(`{["covered"] = 141, ["total"] = 153}` when filed; re-measure), `_work/spec.tl`,
+`_work/format.tl`, `_work/itemtree.tl` — and delete the rows for the files
 that no longer exist rather than running `--make coverage --baseline`.
 
-### Size, and where to cut it
+### The split
 
-This is oversized and is being filed that way deliberately. The review measured
-it at roughly 600 changed lines across 46 files
-(`grep -o '_work/[a-z_0-9]*\.tl' <this spec> | sort -u | wc -l` → 46, 11 of them
-tests) and called it genuinely two items. If you split it, cut here: **the dead
-code** on one side — the format-4 reader and the `migrate` verb, `spec.revision`,
-`sections`, the four path parsers with the readers that switch to `touches` and
-`access`, Ready-when and `_work/gitreadywhen.tl`, the `## Acceptance` passages,
-and the two new `fsck` reports — and **`key` and everything derived from it** on
-the other: lane-repair idempotency by title and parentage, `LANE_PARENT`'s move
-into `_work/flow.tl`, the repair stage in `_work/readddl.tl`, the
-`duplicate_key` report, `one_open_item_per_key`, and the column with its codec
-and cache entries. They overlap in exactly two files — `_work/itemtree.tl`
-(`META_KEYS` and `put`) and `_work/gitfsck.tl` (`ITEM_COLUMNS`, which the `key`
-half edits, plus the new reports, which the dead-code half adds). The
-`_work/cachedb.tl` bump to `10` travels with the `key` half alone, since the
-dead-code half changes no DDL. Either order works: neither half reads what the
-other deletes.
+This item was filed as one change of roughly 600 lines across 46 files and
+said so itself; it is now the DEAD-CODE half. The `key` half — lane-repair
+idempotency by title and parentage, `LANE_PARENT`'s move into `_work/flow.tl`,
+the repair stage in `_work/readddl.tl`, the `duplicate_key` report,
+`one_open_item_per_key`, the column with its codec and cache entries, and the
+`_work/cachedb.tl` bump to `10` — is its own item, ranked after this one. The
+two overlap in exactly two files, `_work/itemtree.tl` (`META_KEYS` and `put`)
+and `_work/gitfsck.tl` (`ITEM_COLUMNS`, which the `key` half edits, plus the two
+new reports, which this half adds); neither reads what the other deletes, so
+either order lands.
