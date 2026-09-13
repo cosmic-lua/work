@@ -435,7 +435,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   local measured = false
   if tree ~= "" and (kind == "builder" or kind == "review") then
-    local section, merr = briefmeasure.measure(spec_body, tree)
+    local section, merr = briefmeasure.measure(it.touches or {}, tree)
     if section == nil then
       return gate.verdict_line("brief", false,
         ("could not measure --tree '%s': %s"):format(tree, merr))
@@ -461,7 +461,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
         table.concat(left, ", "))
     end
     if measured then
-      tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
+      tail_note = tail_note .. ("; measured touches under %s"):format(tree)
     end
     tail_note = label == "" and (mint_note .. tail_note) or tail_note
     return gate.verdict_line("brief",
@@ -475,7 +475,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       table.concat(left, ", "))
   end
   if measured then
-    tail_note = tail_note .. ("; measured Change paths under %s"):format(tree)
+    tail_note = tail_note .. ("; measured touches under %s"):format(tree)
   end
   tail_note = label == "" and (mint_note .. tail_note) or tail_note
   return gate.verdict_line("brief",

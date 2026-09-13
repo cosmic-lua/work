@@ -5,6 +5,7 @@
 -- starve; decomposition of an undriven outcome comes last.
 
 local check = require("cosmic.check")
+local itemtree = require("_work.itemtree")
 local decision = require("_work.decision")
 local fixture = require("_work.fixture")
 local intake = require("_work.intake")
@@ -29,8 +30,8 @@ local function make(over: {string: any}): item.Item
   return check.must(item.decode(t))
 end
 
-local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
-.. "## Acceptance\n`ci`\n"
+local READY < const >: itemtree.Spec = {change = "Do this.\n",
+  non_goals = "Not that.\n"}
 
 --- Ask intake directly, over its own inputs.
 local function ask(items: {item.Item}, specs: intake.Specs): decision.Action, string

@@ -6,6 +6,7 @@
 -- always moves the board and drains it — are `converge_test.tl`.
 
 local check = require("cosmic.check")
+local itemtree = require("_work.itemtree")
 local act = require("_work.action")
 local fixture = require("_work.fixture")
 local health = require("_work.health")
@@ -65,8 +66,8 @@ local function placed_root(items: {Item}): Item
 end
 
 --- A spec map passing the bar for every id given.
-local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
-.. "## Acceptance\n`ci`\n"
+local READY < const >: itemtree.Spec = {change = "Do this.\n",
+  non_goals = "Not that.\n"}
 
 local function ready_specs(items: {Item}): act.Specs
   local out: act.Specs = {}
@@ -204,7 +205,7 @@ local function test_pull_skips_what_misses_the_bar()
   items[#items + 1] = unrefined
   items[#items + 1] = free
   local specs = ready_specs(items)
-  specs[unrefined.id] = "## Non-goals\nno Change decided yet\n"
+  specs[unrefined.id] = {change = "", non_goals = "no Change decided yet\n"}
   local a = next_action(items, specs, "me")
   assert(a.kind == "pull" and a.item.id == free.id,
     ("an unrefined item is skipped: %s %s"):format(a.kind,

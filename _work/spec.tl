@@ -1,10 +1,11 @@
---- The spec bar's grammar: the one heading a spec sidecar must
---- carry — what to build — and whether a given body carries it. Also
---- the read-access half of the bar: a repository the spec's own text
---- reaches (a `github.com` URL, wherever it sits) that is not the
---- item's own `repo` field must be named under a `## Access` heading,
---- so a claim or a review that cannot reach it bounces at the bar
---- instead of after a pull.
+--- The spec bar's grammar over the two blobs an item's `spec/`
+--- subtree holds (`_work.itemtree`'s `Spec`): whether the Change says
+--- anything at all, and whether a sweep-shaped Change pastes its own
+--- dry-run evidence. Also the read-access half of the bar's input:
+--- the repositories a spec's own text REACHES (a `github.com` URL,
+--- wherever it sits), which `_work.gitready.undeclared_repos` checks
+--- against the item's declared `access` field, so a claim or a review
+--- that cannot reach one bounces at the bar instead of after a pull.
 ---
 --- There is no Acceptance section, because acceptance is not
 --- per-item: the CI gate passing is the one definition of done every
@@ -14,64 +15,19 @@
 --- honestly: whether the Change decides enough is the puller's
 --- judgment (a wrong call comes back as a question the item gets
 --- blocked on, or as a release),
---- and optional prose sections ride along untouched. Whether a
---- declared repository is actually reachable is the same kind of
---- judgment — this only checks that the requirement is STATED.
+--- and the Non-goals blob rides along unjudged. Whether a declared
+--- repository is actually reachable is the same kind of judgment —
+--- `_work.gitready` only checks that the requirement is STATED.
 ---
---- It also names a spec's REVISION, because the sidecar is half of
---- what a review judges: the diff is the other half, and a rework
---- that answers a bounce by rewriting the spec moves this half alone.
-local hash = require("cosmic.hash")
+--- `document` and `split` are the two directions between the blobs
+--- and the one markdown file an author edits: the bar reads the
+--- record, never the rendering, so there is exactly one scanner
+--- (`segments`, under `split`) and it runs only on a write.
 local itemtree = require("_work.itemtree")
 
---- The headings a spec must carry.
-local READY_SECTIONS < const >: {string} = {
-  "Change",
-}
-
---- The heading a spec declares its out-of-self read access under.
-local ACCESS < const > = "access"
-
---- The lines gathered under each heading in `body`, keyed by the
---- lower-cased heading text — the section-scanning `ready_gaps` and
---- `declared_repos` both stand on. A heading counts at any level
---- ("## Change", "# change"), matched case-insensitively, and closes
---- the open section only when its own level is less than or equal to
---- that section's: a DEEPER heading is content, so its own line and
---- everything under it belong to the section it sits under, and a
---- `### Files` inside `## Change` never opens a section of its own.
----
---- A level-1 heading is the exception, because a sidecar is
---- `##`-sectioned: a lone `#` is the document's TITLE, not a
---- container. It opens a readable section like any other heading — a
---- spec that writes `# Change` is read — but nothing nests inside it,
---- so the next heading of any level closes it and `## Change` under
---- `# Item title` is the Change section rather than prose inside the
---- title. Without that floor a titled sidecar reads as having no
---- Change at all.
----
---- A thematic break (---) ends any section whatever its level, so a
---- footer appended below a break belongs to no heading.
---- @param body string The spec sidecar's markdown
---- @return {string: string} Heading text -> its non-blank lines, joined with "\n"
-local function sections(body: string): {string: string}
-  local out: {string: string} = {}
-  local current: string = nil
-  local level = 0
-  for line in (body .. "\n"):gmatch("([^\n]*)\n") do
-    local hashes, text = line:match("^(#+)%s+(.-)%s*$")
-    if text and (current == nil or level == 1 or #hashes <= level) then
-      current = text:lower()
-      level = #hashes
-    elseif line:match("^%s*%-%-%-+%s*$") then
-      current = nil
-      level = 0
-    elseif current and line:match("%S") then
-      out[current] = (out[current] or "") .. line .. "\n"
-    end
-  end
-  return out
-end
+--- The two blobs an item with no prose at all reads as — what a
+--- caller with no record to hand passes for one.
+local NO_PROSE < const >: itemtree.Spec = {change = "", non_goals = ""}
 
 --- The code spans in `text` — inline `` `...` `` runs and fenced
 --- ```...``` blocks — the only place a sweep's own pasted dry-run
@@ -92,22 +48,25 @@ local function code_spans(text: string): {string}
 end
 
 --- The gap a sweep-shaped Change leaves when its spec pastes no
---- dry-run evidence: `## Change` naming `--apply` or `--fix` needs a
---- fenced `rewrite:` or `applied` line somewhere in the spec — the
+--- dry-run evidence: a Change naming `--apply` or `--fix` needs a
+--- fenced `rewrite:` or `applied` line somewhere in either blob — the
 --- command's own dry-run output (the `applied`/`refused` line, or the
 --- refusal), not only the `--find` count that named its sites. A
 --- spec whose sweep command was never run at spec time is the wrong
---- turn this exists to catch.
---- @param body string The spec sidecar's markdown
+--- turn this exists to catch. The flag is read from the Change blob
+--- alone; the paste may sit in either.
+--- @param sp itemtree.Spec The two blobs
 --- @return {string} Zero or one gap
-local function sweep_gaps(body: string): {string}
-  local change = sections(body)["change"] or ""
+local function sweep_gaps(sp: itemtree.Spec): {string}
+  local change = sp.change or ""
   if not (change:find("%-%-apply%f[%A]") or change:find("%-%-fix%f[%A]")) then
     return {}
   end
-  for _, span in ipairs(code_spans(body)) do
-    if span:find("rewrite:", 1, true) or span:find("applied", 1, true) then
-      return {}
+  for _, blob in ipairs({change, sp.non_goals or ""}) do
+    for _, span in ipairs(code_spans(blob)) do
+      if span:find("rewrite:", 1, true) or span:find("applied", 1, true) then
+        return {}
+      end
     end
   end
   return {"Change names a sweep (--apply/--fix) with no pasted dry-run "
@@ -115,21 +74,20 @@ local function sweep_gaps(body: string): {string}
     .. "refusal) line, not only the --find count"}
 end
 
---- Spec-bar lint: the gaps that keep a body from being buildable,
---- each as one readable line. A heading counts as filled only when at
---- least one non-blank line follows it before the next heading, so a
---- pasted template with hollow sections still fails.
---- @param body string The spec sidecar's markdown
+--- Spec-bar lint: the gaps that keep a record from being buildable,
+--- each as one readable line. The Change blob counts as filled only
+--- when it carries at least one non-blank line, so a pasted template
+--- with a hollow Change still fails. No heading is scanned: the blob
+--- IS the section.
+--- @param sp itemtree.Spec | nil The two blobs; nil reads as no prose
 --- @return {string} Gap descriptions, possibly empty
-local function ready_gaps(body: string): {string}
-  local filled = sections(body)
+local function ready_gaps(sp: itemtree.Spec | nil): {string}
+  local prose = sp or NO_PROSE
   local gaps: {string} = {}
-  for _, name in ipairs(READY_SECTIONS) do
-    if not (filled[name:lower()] or ""):match("%S") then
-      gaps[#gaps + 1] = ("%s is missing or empty"):format(name)
-    end
+  if not (prose.change or ""):match("%S") then
+    gaps[#gaps + 1] = "Change is missing or empty"
   end
-  for _, gap in ipairs(sweep_gaps(body)) do
+  for _, gap in ipairs(sweep_gaps(prose)) do
     gaps[#gaps + 1] = gap
   end
   return gaps
@@ -139,7 +97,7 @@ end
 --- `https://github.com/owner/repo`, a bare `github.com/owner/repo`,
 --- or the SSH `git@github.com:owner/repo` — normalized to lowercase
 --- with a trailing `.git` or sentence-ending `.` stripped. The one
---- signal `reached_repos` and `declared_repos` both read: a URL is
+--- signal `reached_repos` reads: a URL is
 --- unambiguous, where a bare `owner/repo` token is indistinguishable
 --- from a module path (`cosmic/fs`) or a doc path (`docs/decisions`)
 --- and would false-positive on nearly every spec in this repo.
@@ -155,11 +113,10 @@ local function github_urls(text: string): {string}
 end
 
 --- The repositories a spec's OWN text reaches, wherever a
---- `github.com` URL sits in it — a command in `## Change`, a citation
---- in `## Evidence`, a fixture in `## Acceptance`. This is "reaches",
---- not "needs": the item's own `repo` and any self-mention are not
---- filtered out here, because that judgment needs the item — see
---- `_work.gitready.undeclared_repos`.
+--- `github.com` URL sits in it — a command in the Change, a wall in
+--- the Non-goals. This is "reaches", not "needs": the item's own
+--- `repo` and any self-mention are not filtered out here, because
+--- that judgment needs the item — see `_work.gitready.undeclared_repos`.
 --- @param body string The spec sidecar's markdown
 --- @return {string} Repo slugs, deduplicated, in first-seen order
 local function reached_repos(body: string): {string}
@@ -174,40 +131,6 @@ local function reached_repos(body: string): {string}
   return out
 end
 
---- The repositories a spec's `## Access` section names as read access
---- it needs, cheaply and loosely: a `github.com` URL there, or a bare
---- `owner/repo` mention — the section exists to be written once and
---- read, not parsed strictly, so a spurious extra entry costs nothing
---- (it can only make a real reference look MORE declared, never less).
---- @param body string The spec sidecar's markdown
---- @return {string: boolean} Declared repo slugs, lower-cased
-local function declared_repos(body: string): {string: boolean}
-  local text = sections(body)[ACCESS] or ""
-  local out: {string: boolean} = {}
-  for _, slug in ipairs(github_urls(text)) do
-    out[slug] = true
-  end
-  for owner, name in text:gmatch("([%w%-%.]+)/([%w%-%._]+)") do
-    out[(owner .. "/" .. (name:gsub("%.$", ""))):lower()] = true
-  end
-  return out
-end
-
---- The revision of a spec sidecar: the git blob sha `spec.md` itself
---- carries in the item's tree, computed here without touching git —
---- the same `sha1("blob " .. #body .. "\0" .. body)` `git hash-object`
---- would give the identical bytes, so a revision recorded here always
---- matches what `_work.store` actually wrote. Two readings of the same
---- text give the same revision, and any edit gives a different one; a
---- body of "" — an item with no sidecar — hashes to a stable constant,
---- which is the right answer rather than a case to special-case: an
---- item that has never had a spec has not changed one.
---- @param body string The spec sidecar's markdown, "" when it has none
---- @return string The revision, 40 lowercase hex characters
-local function revision(body: string): string
-  return hash.digest_hex("sha1", ("blob %d\0%s"):format(#body, body))
-end
-
 --- The markdown document one `itemtree.Spec` renders to: `## Change`,
 --- then `## Non-goals` when the walls are stated. A field that is ""
 --- contributes no heading at all, so a spec with no prose renders to
@@ -215,9 +138,9 @@ end
 --- have a spec" tests against.
 ---
 --- This is a RENDERING, for the consumers that read a whole body: the
---- bar, the path extractors, full-text search, and `show --raw`'s own
---- output, which is the text an author edits and hands back to
---- `spec ID FILE`. `split` below is its inverse.
+--- reach check, full-text search, and `show --raw`'s own output,
+--- which is the text an author edits and hands back to `spec ID
+--- FILE`. `split` below is its inverse.
 --- @param sp itemtree.Spec The two blobs
 --- @return string The markdown document, "" when neither field carries prose
 local function document(sp: itemtree.Spec): string
@@ -296,12 +219,7 @@ local record Segment
 end
 
 --- Every section of one markdown document, in source order — the one
---- scanner `split` below stands on, exported so the format migration
---- can read a whole sidecar with the same eyes and keep what `split`
---- refuses. Its rules are properties of what this build writes, not of
---- `sections` — which ends a section at a thematic break and was
---- never fence-aware, and is the spec bar over every live sidecar, so
---- tightening it is its own change measured against that corpus:
+--- scanner `split` below stands on, and the only one in the tree:
 ---
 ---   * fence-aware — a line inside a ``` fence is content, never a
 ---     heading, so a spec quoting `## Change` inside a pasted
@@ -309,9 +227,8 @@ end
 ---   * level-aware — a section opens at any heading and runs until
 ---     the next heading with no more `#` than the opener, so a Change
 ---     with `###` subsections keeps all of it. A level-1 opener is the
----     exception `sections` makes for the same reason: a lone `#` is a
----     document TITLE, so nothing nests inside it and the next heading
----     of any level closes it;
+---     exception: a lone `#` is a document TITLE, so nothing nests
+---     inside it and the next heading of any level closes it;
 ---   * thematic breaks are content — a `---` line is a table rule or
 ---     a separator, and ends nothing.
 --- @param body string One markdown file's text
@@ -384,28 +301,17 @@ local function split(body: string): itemtree.Spec | nil, string
 end
 
 local record spec
-  READY_SECTIONS: {string}
   document: function(sp: itemtree.Spec): string
-  type Segment = Segment
-  segments: function(body: string): {Segment}
   split: function(body: string): itemtree.Spec | nil, string
-  sections: function(body: string): {string: string}
-  ready_gaps: function(body: string): {string}
+  ready_gaps: function(sp: itemtree.Spec | nil): {string}
   reached_repos: function(body: string): {string}
-  declared_repos: function(body: string): {string: boolean}
-  revision: function(body: string): string
 end
 
 local M: spec = {
-  READY_SECTIONS = READY_SECTIONS,
   document = document,
-  segments = segments,
   split = split,
-  sections = sections,
   ready_gaps = ready_gaps,
   reached_repos = reached_repos,
-  declared_repos = declared_repos,
-  revision = revision,
 }
 
 return M

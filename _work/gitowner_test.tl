@@ -1,39 +1,22 @@
 #!/usr/bin/env cosmic
 -- The owner rule at the WRITE: `new --repo` and `set --repo` refuse a
 -- slug under a foreign owner before it lands, so stale data stops
--- entering the board, and accept it when the spec — the one being
--- filed, or the one the item already has — names it under
--- `## Access`. The same rule read back at the ready bar, for a value
--- written before it existed, is in `_work/gitgate_test.tl`; this is
--- the sibling `_work/gitgraph_test.tl`'s file cap sends the graph
--- verbs' half to.
+-- entering the board, and accept it when the item declares it as read
+-- access — `--access`, filed alongside or already on the item. The
+-- ready bar's own read of the field, for a value written before the
+-- rule existed, is in `_work/gitgate_test.tl`; this is the sibling
+-- `_work/gitgraph_test.tl`'s file cap sends the graph verbs' half to.
 
 local check = require("cosmic.check")
-local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local ready = require("_work.gitready")
 local specmod = require("_work.spec")
-local storewrite = require("_work.storewrite")
 local graph = require("_work.gitgraph")
 local owner = require("_work.gitowner")
-local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
-
---- A cross-owner declaration as it actually reaches the owner rule as
---- of format 5: inside the Change blob, which is the shape an
---- unmigrated format-4 `spec.md` reads back as. `## Access` is no
---- longer a section a WRITE may carry — `spec.split` refuses it, naming
---- the field that replaces it (`_work/spec_test.tl`) — so the rule is
---- exercised against the data that carries the declaration rather than
---- through the verb that no longer accepts one.
-local ACCESS_PROSE < const >: itemtree.Spec = {
-  change = "Do exactly this.\n\n## Access\n"
-  .. "- whilp/cosmopolitan (the fork the diff deliberately targets)\n",
-  non_goals = "Not that.\n",
-}
 
 --- A board that reads its origin as `cosmic-lua/cosmic`, with one
 --- placed root to file under.
@@ -111,13 +94,14 @@ local function test_new_refuses_a_foreign_owner_repo()
   fixture.caller_publish(s)
 end
 
--- Prose naming the slug under `## Access` is the escape at file time:
--- the item lands with the foreign repo, and its spec says why.
-local function test_new_accepts_a_foreign_owner_the_spec_declares()
+-- `--access` naming the slug is the escape at file time: the item
+-- lands with the foreign repo, and its declared list says why.
+local function test_new_accepts_a_foreign_owner_the_item_declares()
   local s, root = github_board("new-declared")
   local before = ids(s)
-  assert(graph.cmd_new(s, "a fork-side slice", root, ACCESS_PROSE,
-      "whilp/cosmopolitan") == 0, "a declared cross-owner repo lands")
+  assert(graph.cmd_new(s, "a fork-side slice", root, nil,
+      "whilp/cosmopolitan", nil, nil, nil, nil, nil, nil,
+      {"whilp/cosmopolitan"}) == 0, "a declared cross-owner repo lands")
   fixture.caller_publish(s)
   local filed: string = nil
   for id in pairs(ids(s)) do
@@ -127,8 +111,8 @@ local function test_new_accepts_a_foreign_owner_the_spec_declares()
     == "whilp/cosmopolitan", "with the field as given")
 end
 
--- `set --repo` asks the same rule of the item's CURRENT spec: refused
--- bare, accepted once the spec names the slug.
+-- `set --repo` asks the same rule of the item's CURRENT `access`:
+-- refused bare, with the repair named and nothing written.
 local function test_set_refuses_a_foreign_owner_repo_until_declared()
   local s, root = github_board("set")
   local leaf = fixture.file_item(s, "a slice", root)
@@ -140,22 +124,10 @@ local function test_set_refuses_a_foreign_owner_repo_until_declared()
       :format(leaf:sub(1, 8)), 1, true),
     "the verdict names the repair: " .. out)
   assert(check.must(store.load(s, leaf)).repo == "", "and nothing was written")
-  -- `## Access` is no longer a section a write may carry, so the
-  -- declaration is put where the rule reads it — the shape an
-  -- unmigrated `spec.md` reads back as — rather than through `spec`,
-  -- which refuses it by name.
-  local path = fs.join(fixture.tmpdir, "write-set-access.md")
-  assert(fs.write(path, specmod.document(ACCESS_PROSE)))
+  -- Prose is not a declaration: an `## Access` section is refused on
+  -- write by name, and one already inside a Change blob is not read.
   local refused, rerr = specmod.split("## Change\nx\n\n## Access\n- a/b\n")
   assert(refused == nil and rerr:find("declared field", 1, true) ~= nil, rerr)
-  local target = check.must(store.load(s, leaf))
-  assert(storewrite.save(s, target, "fixture: declared access", ACCESS_PROSE))
-  assert(publish.publish(s))
-  fixture.caller_publish(s)
-  assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0,
-    "declared under the item's own spec, the field is accepted")
-  fixture.caller_publish(s)
-  assert(check.must(store.load(s, leaf)).repo == "whilp/cosmopolitan")
 end
 
 -- Local-only boards have no owner and the write is never refused —

@@ -7,6 +7,7 @@
 -- `_work/gitshow_test.tl`; the one case that spans both, a repo mark
 -- rendered by two reports at once, stays here.
 
+local act = require("_work.action")
 local check = require("cosmic.check")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -71,11 +72,11 @@ local function board_items(): {item.Item}
 end
 
 --- A spec map where every open item passes the bar, so `pullable`
---- marks are about state rather than missing sections.
-local function full_specs(): {string: string}
-  local out: {string: string} = {}
+--- marks are about state rather than a missing Change.
+local function full_specs(): act.Specs
+  local out: act.Specs = {}
   for _, i in ipairs(board_items()) do
-    out[i.id] = fixture.READY_SPEC
+    out[i.id] = {change = "Do exactly this.\n", non_goals = "Not that.\n"}
   end
   return out
 end
@@ -85,12 +86,12 @@ end
 --- store, the same way `_work.fixture.make_index` serves any other
 --- report or decision test.
 --- @param items {item.Item} The board
---- @param specs act.Specs Sidecar body by id
+--- @param specs act.Specs Spec blobs by id
 --- @param ages health.Ages | nil Stale claim ages, by id
 --- @param lane_facts {string: string} | nil Lane state, nil when unsynced
 --- @return {string} The lines to print
 --- @return string The verdict detail
-local function status(items: {item.Item}, specs: {string: string},
+local function status(items: {item.Item}, specs: act.Specs,
     ages?: {string: integer}, lane_facts?: {string: string},
     todo_shown?: integer): {string}, string
   local c = fixture.make_index(items)
@@ -294,9 +295,9 @@ end
 
 --- `view.next_report`, over a fresh in-memory index built from `items`.
 --- @param items {item.Item} The board
---- @param specs {string: string} Sidecar body by id
+--- @param specs act.Specs Spec blobs by id
 --- @return string The action, its target, the rule behind it, and its guidance
-local function next_report(items: {item.Item}, specs: {string: string}): string
+local function next_report(items: {item.Item}, specs: act.Specs): string
   local c = fixture.make_index(items)
   local report, err = view.next_report(c, items, specs)
   assert(err == "", err)
@@ -319,23 +320,24 @@ local function test_next_names_one_action_and_its_rule()
     "the alternate names its kind, wrapped handle, and title: " .. report)
 end
 
--- An alternate whose Change section names the same file as another
+-- An alternate whose declared `touches` shares a file with another
 -- open item's carries `_work.overlap`'s annotation inline, so an
 -- orchestrator weighing the alternates sees the collision without a
--- `show` per candidate.
+-- `show` per candidate — off the item rows alone, no spec read.
 local SECOND < const > = fresh_id()
 
 local function test_next_alternate_carries_an_overlap_annotation()
   local items = board_items()
   items[#items + 1] = check.must(item.decode({id = SECOND,
-        title = "another fresh leaf", parent = GOAL}))
+        title = "another fresh leaf", parent = GOAL,
+        touches = "_work/brief.tl"}))
+  for _, i in ipairs(items) do
+    if i.id == FRESH then
+      i.touches = {"_work/brief.tl"}
+    end
+  end
   local specs = full_specs()
-  specs[FRESH] = table.concat({
-      "## Change", "Edit `_work/brief.tl` for the field.",
-    }, "\n")
-  specs[SECOND] = table.concat({
-      "## Change", "Also touch `_work/brief.tl`.",
-    }, "\n")
+  specs[SECOND] = specs[FRESH]
   local report = next_report(items, specs)
   assert(report:find("or: pull " .. tail.handle(FRESH)
       .. " a fresh leaf — overlaps: " .. tail.handle(SECOND)

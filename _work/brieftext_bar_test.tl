@@ -1,6 +1,6 @@
 #!/usr/bin/env cosmic
 -- What every template tells an author to WRITE, pinned against the bar
--- the gate enforces. `_work.spec`'s `READY_SECTIONS` admits `## Change`;
+-- the gate enforces. `_work.spec`'s bar asks for a Change;
 -- `## Non-goals` carries a wall and `## Access` the repositories a spec
 -- reaches beyond its item's own. A template naming `## Goal`,
 -- `## Acceptance` or `## Enablement` mints a section no reader honors,
@@ -44,13 +44,10 @@ local function test_research_drafts_a_capture_to_the_gates_own_bar()
   assert(RESEARCH:find("`## Access`", 1, true) == nil,
     "and is not sent to write a section a write refuses")
   assert(RESEARCH:find(
-      "No `## Goal` — goal context is the parent chain — and no "
-      .. "`## Acceptance`: the repo's own gate passing is the one "
-      .. "definition of done every item shares, and a bound worth "
-      .. "keeping permanently is a test in the diff.", 1, true) ~= nil,
-    "a drafted capture carries no Goal and no Acceptance section")
-  assert(RESEARCH:find("`## Acceptance` names", 1, true) == nil,
-    "this item's own spec update is not pointed at an Acceptance section")
+      "No `## Goal` — goal context is the parent chain.", 1, true) ~= nil,
+    "a drafted capture carries no Goal section")
+  assert(RESEARCH:find("## Acceptance", 1, true) == nil,
+    "and names no Acceptance section at all: nothing reads one")
 end
 
 local function test_refine_names_the_whole_bar_and_no_retired_section()
@@ -65,10 +62,10 @@ local function test_refine_names_the_whole_bar_and_no_retired_section()
     "and does not send a refiner to write a section a write refuses")
   assert(REFINE:find(
       "Do NOT write a `## Goal` section — goal context is the parent "
-      .. "chain — and do NOT write an `## Acceptance` checklist a "
-      .. "builder must reproduce.", 1, true) ~= nil,
-    "the refine brief forbids a Goal section and an Acceptance "
-    .. "checklist both")
+      .. "chain.", 1, true) ~= nil,
+    "the refine brief forbids a Goal section")
+  assert(REFINE:find("## Acceptance", 1, true) == nil,
+    "and names no Acceptance section at all: nothing reads one")
 end
 
 local function test_no_template_teaches_a_goal_or_enablement_section()
@@ -81,18 +78,10 @@ local function test_no_template_teaches_a_goal_or_enablement_section()
     assert(t:find("## Enablement", 1, true) == nil,
       "no template may name an Enablement section: " .. t)
   end
-  assert(DECOMPOSE:find("## Acceptance", 1, true) == nil,
-    "the decompose brief must not name an Acceptance section")
-end
-
--- The one place the section survives: read as worked proof, never
--- re-executed as a second gate.
-local function test_builder_reads_a_legacy_acceptance_without_rerunning_it()
-  assert(BUILDER:find(
-      "If the spec carries an `## Acceptance` section: it is the "
-      .. "refiner's own worked proof, not a second gate you owe "
-      .. "beyond the Change and a green gate. Never treat it as a "
-      .. "checklist to reproduce, and never paste its command output "
-      .. "into the PR body.", 1, true) ~= nil,
-    "a legacy Acceptance section is worked proof, never a checklist")
+  -- No spec blob carries the heading, so no template reads one.
+  for _, t in ipairs({BUILDER, REWORK, RESEARCH, REFINE, DECOMPOSE,
+      REVIEW, REVIEW_SCRIPT}) do
+    assert(t:find("## Acceptance", 1, true) == nil,
+      "no template may name an Acceptance section: " .. t)
+  end
 end

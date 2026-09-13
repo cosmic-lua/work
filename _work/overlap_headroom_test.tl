@@ -12,7 +12,7 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
-local gitspec = require("_work.gitspec")
+local graph = require("_work.gitgraph")
 local overlap = require("_work.overlap")
 local show = require("_work.gitshow")
 local store = require("_work.store")
@@ -21,15 +21,15 @@ local storewrite = require("_work.storewrite")
 local init_state_repo = fixture.init_state_repo
 local root_with_leaf = fixture.root_with_leaf
 
---- Set a custom spec sidecar meeting the ready bar, through the spec
---- verb, so a test can put a path in `## Change` for the bar to check.
+--- Declare `paths` as an item's `touches`, through the set verb, so a
+--- test can put a path on the item for the bar to check.
 --- @param s store.Store The store
---- @param id string The item whose spec is set
---- @param body string The spec markdown
-local function write_spec(s: store.Store, id: string, body: string)
-  local path = fs.join(fixture.tmpdir, "headroom-spec-" .. id .. ".md")
-  assert(fs.write(path, body))
-  assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
+--- @param id string The item whose list is set
+--- @param paths {string} The declared paths
+local function declare(s: store.Store, id: string, paths: {string})
+  assert(graph.cmd_set(s, id, nil, nil, nil, nil, nil, nil, paths) == 0,
+    "set --touches should be accepted")
+  fixture.caller_publish(s)
 end
 
 --- Write a file of exactly `n` lines, the way `wc -l` counts them: `n`
@@ -130,8 +130,7 @@ end
 local function test_headroom_lines_warns_at_the_margin()
   local path = fs.join(fixture.tmpdir, "overlap-headroom-480.tl")
   write_n_lines(path, 480)
-  local body = ("## Change\nTouch `%s`.\n"):format(path)
-  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets", "")
+  local lines = overlap.headroom_lines({path}, fixture.tmpdir, "acme/widgets", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1]:find("`" .. path .. "` is 480/500 lines, 20 left", 1, true),
     lines[1])
@@ -142,19 +141,18 @@ end
 local function test_headroom_lines_silent_with_room_to_spare()
   local path = fs.join(fixture.tmpdir, "overlap-headroom-479.tl")
   write_n_lines(path, 479)
-  local body = ("## Change\nTouch `%s`.\n"):format(path)
-  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets", "")
+  local lines = overlap.headroom_lines({path}, fixture.tmpdir, "acme/widgets", "")
   assert(#lines == 0, table.concat(lines, "; "))
 end
 
--- A Change section naming a path the item's own repository does not
--- carry at the resolved commit (a plain typo, or a stale path from a
--- rewritten plan) is exactly the gap a spec bar cannot mechanically
--- refuse — `headroom_lines` names it rather than staying silent.
+-- A declared path the item's own repository does not carry at the
+-- resolved commit (a plain typo, or a stale path from a rewritten
+-- plan) is exactly the gap a spec bar cannot mechanically refuse —
+-- `headroom_lines` names it rather than staying silent.
 local function test_headroom_lines_flags_an_absent_path()
   local root = seeded_repo("absent", {["src/present.tl"] = 5})
-  local body = "## Change\nTouch `some/other/repo/big_file.tl`.\n"
-  local lines = overlap.headroom_lines(body, root, "acme/widgets", "")
+  local lines = overlap.headroom_lines({"some/other/repo/big_file.tl"}, root,
+    "acme/widgets", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1] == "absent: `some/other/repo/big_file.tl`"
     .. " does not exist in the tree", lines[1])
@@ -166,8 +164,7 @@ end
 -- never `absent`: this process has no tree to resolve it against
 -- either way, and guessing wrong is worse than saying so.
 local function test_headroom_lines_not_checked_without_a_checkout()
-  local body = "## Change\nTouch `_work/gitshow.tl`.\n"
-  local lines = overlap.headroom_lines(body, "", "acme/other", "")
+  local lines = overlap.headroom_lines({"_work/gitshow.tl"}, "", "acme/other", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1] == "not checked: `_work/gitshow.tl`"
     .. " (no checkout of acme/other here)", lines[1])
@@ -179,26 +176,22 @@ end
 local function test_headroom_lines_flags_an_unreadable_present_path()
   local path = fs.join(fixture.tmpdir, "overlap-headroom.tl")
   assert(fs.make_dirs(path))
-  local body = ("## Change\nTouch `%s`.\n"):format(path)
-  local lines = overlap.headroom_lines(body, fixture.tmpdir, "acme/widgets", "")
+  local lines = overlap.headroom_lines({path}, fixture.tmpdir, "acme/widgets", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1]:find("unreadable: `" .. path .. "`: ", 1, true), lines[1])
 end
 
 -- A directory at the resolved commit reads the same way a directory on
--- disk does: present, but not a file anything can count lines in. A
--- token only reaches this branch when it has a path's shape, so the
--- directory here carries an extension the way `src/pkg.tl/` would.
+-- disk does: present, but not a file anything can count lines in.
 local function test_headroom_lines_flags_a_directory_at_the_commit()
   local root = seeded_repo("directory", {["src/pkg.tl/inner.txt"] = 5})
-  local lines = overlap.headroom_lines("## Change\nTouch `src/pkg.tl`.\n",
-    root, "acme/widgets", "")
+  local lines = overlap.headroom_lines({"src/pkg.tl"}, root, "acme/widgets", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1]:find("unreadable: `src/pkg.tl`: tree at the resolved commit",
       1, true), lines[1])
 end
 
--- Every path-shaped Change-section token that names no real file is
+-- Every declared path that names no real file is
 -- named `absent: ...` — including one under `o/`, the build output
 -- directory a builder loses time to when a spec names a path the build
 -- does not actually make (cosmic#1752's `o/embed/cosmic/.docs/` vs. the
@@ -209,10 +202,9 @@ local function test_headroom_lines_names_absent_paths_including_under_o()
   write_n_lines(present, 5)
   local absent = fs.join(fixture.tmpdir, "overlap-absent-nowhere.tl")
   local absent_o = "o/overlap-absent-nowhere-under-o.tl"
-  local body = ("## Change\nTouch `%s`, `%s`, and `%s`.\n"):format(
-    present, absent, absent_o)
 
-  local lines = overlap.headroom_lines(body, root, "acme/widgets", "")
+  local lines = overlap.headroom_lines({present, absent, absent_o}, root,
+    "acme/widgets", "")
   assert(#lines == 2, table.concat(lines, "; "))
   assert(lines[1] == ("absent: `%s` does not exist in the tree"):format(absent),
     lines[1])
@@ -232,8 +224,7 @@ end
 local function test_headroom_lines_reads_the_commit_not_the_working_tree()
   local root = seeded_repo("worktree-drift", {["src/tight.tl"] = 480})
   assert(fs.remove(fs.join(root, "src/tight.tl")))
-  local lines = overlap.headroom_lines("## Change\nTouch `src/tight.tl`.\n",
-    root, "acme/widgets", "")
+  local lines = overlap.headroom_lines({"src/tight.tl"}, root, "acme/widgets", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1]:find("tight: `src/tight.tl` is 480/500", 1, true), lines[1])
 end
@@ -245,8 +236,7 @@ end
 local function test_headroom_lines_absent_when_only_in_the_working_tree()
   local root = seeded_repo("uncommitted", {["src/present.tl"] = 5})
   write_n_lines(fs.join(root, "src/new.tl"), 5)
-  local lines = overlap.headroom_lines("## Change\nAdd `src/new.tl`.\n",
-    root, "acme/widgets", "")
+  local lines = overlap.headroom_lines({"src/new.tl"}, root, "acme/widgets", "")
   assert(#lines == 1, table.concat(lines, "; "))
   assert(lines[1] == "absent: `src/new.tl` does not exist in the tree",
     lines[1])
@@ -261,28 +251,28 @@ local function test_headroom_lines_prefers_the_recorded_claim_base()
   local root, base = seeded_repo("claim-base", {["src/tight.tl"] = 480})
   assert(fs.remove(fs.join(root, "src/tight.tl")))
   fixture.git(root, {"commit", "-q", "-am", "drop it"})
-  local body = "## Change\nTouch `src/tight.tl`.\n"
+  local touches = {"src/tight.tl"}
 
-  local at_base = overlap.headroom_lines(body, root, "acme/widgets", base)
+  local at_base = overlap.headroom_lines(touches, root, "acme/widgets", base)
   assert(#at_base == 1 and at_base[1]:find("tight: `src/tight.tl` is 480/500",
       1, true), table.concat(at_base, "; "))
 
-  local at_tip = overlap.headroom_lines(body, root, "acme/widgets", "")
+  local at_tip = overlap.headroom_lines(touches, root, "acme/widgets", "")
   assert(#at_tip == 1, table.concat(at_tip, "; "))
   assert(at_tip[1] == "absent: `src/tight.tl` does not exist in the tree",
     at_tip[1])
 end
 
--- `show` prints the same `tight:` line for a real item whose spec
--- names a file already within the margin — the warning a refiner or
--- builder sees before a pull, not after hitting the lint cap live.
-local function test_show_surfaces_a_tight_change_section_path()
+-- `show` prints the same `tight:` line for a real item whose declared
+-- `touches` names a file already within the margin — the warning a
+-- refiner or builder sees before a pull, not after hitting the lint
+-- cap live.
+local function test_show_surfaces_a_tight_declared_path()
   local s = init_state_repo("headroom")
   local _root, first = root_with_leaf(s)
   local path = fs.join(fixture.tmpdir, "overlap-headroom-show.tl")
   write_n_lines(path, 480)
-  local body = ("## Change\nTouch `%s`.\n"):format(path)
-  write_spec(s, first, body)
+  declare(s, first, {path})
 
   local _, out = show_and_capture(s, first)
   assert(out:find("tight: `" .. path .. "` is 480/500", 1, true),
@@ -291,8 +281,8 @@ end
 
 -- An item's `repo` names a checkout OTHER than the one this process
 -- runs from, mapped through the ordinary `gitboard.repository` config,
--- and its spec names a relative path that exists only in that other
--- checkout. `show` resolves through the map, so the path is not
+-- and its declared list names a relative path that exists only in that
+-- other checkout. `show` resolves through the map, so the path is not
 -- `absent` — the false positive a "this board's own repo, read from a
 -- product checkout" `show` would otherwise print for every file of it.
 local function test_show_resolves_a_relative_path_against_the_items_own_repo()
@@ -300,7 +290,7 @@ local function test_show_resolves_a_relative_path_against_the_items_own_repo()
   local _root, first = root_with_leaf(s)
   local other_root = seeded_repo("other", {["src/only_here.tl"] = 480})
   map_repo(s, first, "acme/other", other_root)
-  write_spec(s, first, "## Change\nTouch `src/only_here.tl`.\n")
+  declare(s, first, {"src/only_here.tl"})
 
   local _, out = show_and_capture(s, first)
   assert(not out:find("absent:", 1, true),

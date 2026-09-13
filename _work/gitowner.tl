@@ -1,32 +1,18 @@
 --- The owner rule an item's `repo` field meets: the repository a diff
---- lands in must share the board's own GitHub owner, or the spec must
---- declare it as read access. A claiming session is granted the
---- board's repositories and nothing this board can see beyond them,
---- so a `repo` under a foreign owner — a personal fork's name left
---- over from when the evidence was gathered, most often — strands the
---- claim before it starts. The owner is the proxy the board CAN
---- check; the access declaration is the deliberate cross-owner case.
+--- lands in must share the board's own GitHub owner, or the item must
+--- declare it as read access in its `access` field (`gitboard set ID
+--- --access`). A claiming session is granted the board's repositories
+--- and nothing this board can see beyond them, so a `repo` under a
+--- foreign owner — a personal fork's name left over from when the
+--- evidence was gathered, most often — strands the claim before it
+--- starts. The owner is the proxy the board CAN check; the access
+--- declaration is the deliberate cross-owner case.
 ---
---- That declaration is MID-MOVE, so this rule reads BOTH spellings
---- and takes their union. It was a `## Access` section, and most of
---- the board still is one — every unmigrated `spec.md` reads back as
---- prose carrying it. Format 5 makes it the item's `access` field
---- instead, `spec.split` refuses the section on a write, and
---- `set --access` declares the field. Reading both is what makes the
---- move safe in either direction: the union only ever recognizes MORE
---- declarations, so no existing item loses its escape and no newly
---- written one is left without one. Switching from prose to field
---- (rather than adding) is `06-retire`'s, once the migration has
---- populated the field on every ref.
----
---- One rule, applied at both ends: `ready_problems` asks it of every
---- item before a take (stale data already on the board), and `new
---- --repo` and `set --repo` ask it before the write lands (stale data
---- entering). A board whose origin does not resolve to a GitHub slug
---- has no owner to compare against and skips the rule — the same
---- local-only waiver the handover gate uses.
+--- Applied where a `repo` enters: `new --repo` and `set --repo` ask
+--- it before the write lands. A board whose origin does not resolve
+--- to a GitHub slug has no owner to compare against and skips the
+--- rule — the same local-only waiver the handover gate uses.
 local gitslug = require("_work.gitslug")
-local spec = require("_work.spec")
 local store = require("_work.store")
 
 --- The board's own GitHub owner — the owner half of `gitslug.slug`'s
@@ -44,18 +30,20 @@ end
 
 --- The problem a `repo` earns under the owner rule, or nil when it
 --- passes: unset, sharing the board's owner (case-insensitively, as
---- GitHub compares), named as the spec's read access, or asked on
---- a board with no owner to compare against. The problem names the
---- field, the value, and the repair: `gitboard set ID --repo` when
---- the item is already filed, the `--repo` flag itself when `new` is
---- about to file it (`id` is "").
+--- GitHub compares), declared in `access`, or asked on a board with
+--- no owner to compare against. The problem names the field, the
+--- value, and the repair: `gitboard set ID --repo` when the item is
+--- already filed, the `--repo` flag itself when `new` is about to
+--- file it (`id` is "") — and `--access` as the deliberate
+--- cross-owner spelling either way.
 --- @param s store.Store The store
 --- @param repo string The item's repo field, "" when unset
---- @param body string The spec the rule reads the access declaration from
+--- @param access {string} The item's declared read access, as it will
+--- stand once the write lands
 --- @param id string The item's full id, "" for an item not yet filed
 --- @return string | nil The problem
-local function repo_problem(s: store.Store, repo: string, body: string,
-    access: {string}, id: string): string | nil
+local function repo_problem(s: store.Store, repo: string, access: {string},
+    id: string): string | nil
   if (repo or "") == "" then
     return nil
   end
@@ -67,15 +55,10 @@ local function repo_problem(s: store.Store, repo: string, body: string,
   if repo_owner == nil or repo_owner:lower() == owner:lower() then
     return nil
   end
-  -- Either spelling declares it: the field, or the prose section an
-  -- unmigrated sidecar still carries.
   for _, declared in ipairs(access or {}) do
     if declared:lower() == repo:lower() then
       return nil
     end
-  end
-  if spec.declared_repos(body or "")[repo:lower()] then
-    return nil
   end
   local repair = ("pass --repo %s/%s"):format(owner, name)
   local declare = ("pass --access %s"):format(repo)
@@ -92,8 +75,8 @@ end
 
 local record gitowner
   board_owner: function(s: store.Store): string | nil
-  repo_problem: function(s: store.Store, repo: string, body: string,
-  access: {string}, id: string): string | nil
+  repo_problem: function(s: store.Store, repo: string, access: {string},
+  id: string): string | nil
 end
 
 local M: gitowner = {

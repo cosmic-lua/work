@@ -135,11 +135,7 @@ and nothing less:
    test edit, not before — a new test moves a row's `total`; run
    `{{.bootstrap_cmd}}` once before `--check types` on a file whose sibling
    you moved.
-4. If the spec carries an `## Acceptance` section: it is the
-   refiner's own worked proof, not a second gate you owe beyond the
-   Change and a green gate. Never treat it as a checklist to
-   reproduce, and never paste its command output into the PR body.
-5. Commit the real change before mutation-testing it, so a
+4. Commit the real change before mutation-testing it, so a
    checkout-restore used to undo the mutation cannot wipe it too.
    Mutation-test at least one guard the change adds or preserves:
    break what it guards, confirm the diff's own test catches it,
@@ -148,15 +144,15 @@ and nothing less:
    with unrelated text rather than extending it, flip a boolean
    rather than renaming it, and if the test stays green the guard is
    decoration.
-6. Commit with a clear, descriptive message. No model name or
+5. Commit with a clear, descriptive message. No model name or
    identifier in it.
-7. Commit the complete change. The caller owns every authenticated
+6. Commit the complete change. The caller owns every authenticated
    operation: do not push or open an external review unless it explicitly
    asks you to. Report the exact commit id so it can fetch/push it and run
    `{{.gitboard_cmd}} take {{.item_id}} --head SHA [--url URL]`.
-8. Never poll or subscribe to provider events. External checks and review
+7. Never poll or subscribe to provider events. External checks and review
    UI are the caller's to inspect; gitboard records only commit ids.
-9. Do NOT merge the change. Do NOT run any `gitboard` command — board
+8. Do NOT merge the change. Do NOT run any `gitboard` command — board
    state is the orchestrator's job.
 
 ## If you get stuck
@@ -287,10 +283,7 @@ more and nothing less:
    attaches under, and any rank against a sibling — precise enough
    that the orchestrator can run `gitboard new`/`attach`/`rank` from
    it verbatim, with no judgment call of its own left to make. No
-   `## Goal` — goal context is the parent chain — and no
-   `## Acceptance`: the repo's own gate passing is the one definition
-   of done every item shares, and a bound worth keeping permanently
-   is a test in the diff.
+   `## Goal` — goal context is the parent chain.
 4. Compose this item's own spec update — e.g. the summary table the
    spec's `## Change` asks for — as the exact replacement text,
    ready for `gitboard spec {{.item_id}} <file> --base <the current
@@ -371,8 +364,7 @@ that produced it (a behavioural claim needs the command AND its
 pasted output), bounds land as tests in the diff-to-be, size for one
 PR one session holds in its head, and an "and" between independent
 changes means cut it into siblings. Do NOT write a `## Goal` section
-— goal context is the parent chain — and do NOT write an
-`## Acceptance` checklist a builder must reproduce.
+— goal context is the parent chain.
 
 Write the new spec to a file holding ONLY the spec, then:
 

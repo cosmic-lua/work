@@ -1,23 +1,29 @@
 #!/usr/bin/env cosmic
--- The spec bar's grammar: the one heading a spec must carry, what
--- counts as carrying it, and that everything else rides along
--- unjudged. A heading with nothing under it is a gap, because a
--- pasted template is the failure mode this exists to catch. There is
--- no Acceptance section to lint: the CI gate is the one acceptance,
--- so the bar has nothing to say about how an item proves itself.
+-- The spec bar's grammar over the two blobs an item's `spec/` subtree
+-- holds: a Change with something in it, and a sweep-shaped Change
+-- with its own dry-run paste. Non-goals rides along unjudged. There
+-- is no heading to scan and no Acceptance section to lint: the blob
+-- IS the section, and the CI gate is the one acceptance, so the bar
+-- has nothing to say about how an item proves itself. `document` and
+-- `split`, the two directions between the blobs and the one markdown
+-- file an author edits, are pinned below.
 local check = require("cosmic.check")
-local child = require("cosmic.child")
+local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
 
---- A minimal bar-complete body for tests. Non-goals is optional
+--- A minimal bar-complete record for tests. Non-goals is optional
 --- prose: it rides along and the bar has nothing to say about it.
-local READY_BODY < const > = [[
-## Change
-Add the verb.
+local READY < const >: itemtree.Spec = {
+  change = "Add the verb.\n",
+  non_goals = "No contract changes.\n",
+}
 
-## Non-goals
-No contract changes.
-]]
+--- A record whose Change is `change` and whose Non-goals is empty.
+--- @param change string The Change blob
+--- @return itemtree.Spec
+local function with_change(change: string): itemtree.Spec
+  return {change = change, non_goals = ""}
+end
 
 -- Migration adequacy stays a caller judgment, not a filename/keyword grammar.
 local function test_tracking_file_mentions_do_not_add_a_machine_migration_grammar()
@@ -28,127 +34,48 @@ local function test_tracking_file_mentions_do_not_add_a_machine_migration_gramma
       "Correct one row in docs/design/cast-sites.tsv without changing its shape.",
       "Add one entry to _work/example_baseline.tl.",
     }) do
-    local gaps = spec.ready_gaps("## Change\n" .. change .. "\n")
+    local gaps = spec.ready_gaps(with_change(change .. "\n"))
     assert(#gaps == 0, "syntax-only bar must preserve this body: " .. change
       .. "; got " .. table.concat(gaps, ", "))
   end
 end
 
 local function test_ready_gaps_complete()
-  local gaps = spec.ready_gaps(READY_BODY)
+  local gaps = spec.ready_gaps(READY)
   assert(#gaps == 0, "unexpected gaps: " .. table.concat(gaps, ", "))
 end
 
 local function test_change_alone_suffices()
-  local gaps = spec.ready_gaps("## Change\nAdd it.\n")
+  local gaps = spec.ready_gaps(with_change("Add it.\n"))
   assert(#gaps == 0,
     "Change is the whole bar: " .. table.concat(gaps, ", "))
 end
 
+-- A record with no Change misses the bar whatever its Non-goals say,
+-- and so does no record at all — an item that has never had a spec.
 local function test_ready_gaps_missing()
-  local gaps = spec.ready_gaps("## Goal\nserve G8\n")
+  local gaps = spec.ready_gaps({change = "", non_goals = "serve G8\n"})
   assert(#gaps == 1, "expected 1 gap, got " .. tostring(#gaps))
   assert(gaps[1] == "Change is missing or empty",
     "got: " .. tostring(gaps[1]))
+  local none = spec.ready_gaps(nil)
+  assert(#none == 1 and none[1] == "Change is missing or empty",
+    "no prose at all: " .. table.concat(none, ", "))
 end
 
-local function test_ready_gaps_case_and_level()
-  local gaps = spec.ready_gaps("### CHANGE\nx\n")
-  assert(#gaps == 0, "case/level should not matter: " .. table.concat(gaps, ", "))
-end
-
--- A heading closes the open section only at its own level or
--- shallower, so a `###` subheading inside `## Change` is content: its
--- own line and the lines under it belong to Change, and it opens no
--- section of its own. A path a spec names under such a subheading is
--- therefore part of the Change every reader of the section sees.
-local function test_a_subheading_is_content_of_the_section_above_it()
-  local body = table.concat({
-      "## Change", "", "Rework the scanner.", "",
-      "### `_work/spec.tl`", "", "Record each section's heading level.", "",
-      "## Non-goals", "", "A fence-aware scanner.",
-    }, "\n")
-  local found = spec.sections(body)
-  local change = found["change"] or ""
-  assert(change:find("_work/spec.tl", 1, true) ~= nil,
-    "the subheading's own backticked path belongs to Change: " .. change)
-  assert(change:find("heading level", 1, true) ~= nil,
-    "and so do the lines under it: " .. change)
-  assert(found["`_work/spec.tl`"] == nil,
-    "no section is keyed by the subheading's text")
-end
-
--- A sidecar is `##`-sectioned, so a lone `#` is its TITLE, not a
--- container: `## Change` under `# Item title` is the Change section,
--- not prose inside the title. Without this floor the level rule above
--- reads a titled sidecar as carrying no Change at all, which refuses
--- a pull outright — a worse failure than the missed path it fixes.
-local function test_a_level_one_title_does_not_contain_the_sections()
-  local body = table.concat({
-      "# Friction: 2026-09-06 work9", "",
-      "## Change", "", "Edit `_work/spec.tl`.", "",
-      "## Non-goals", "", "Nothing else.",
-    }, "\n")
-  local found = spec.sections(body)
-  local change = found["change"] or ""
-  assert(change:find("_work/spec.tl", 1, true) ~= nil,
-    "Change under a title is the Change section: " .. change)
-  assert(found["non-goals"] == "Nothing else.\n",
-    "got: " .. tostring(found["non-goals"]))
-  local gaps = spec.ready_gaps(body)
-  assert(#gaps == 0, "a titled sidecar still meets the bar: "
-    .. table.concat(gaps, ", "))
-end
-
--- The floor makes a level-1 heading a non-container, never unreadable:
--- a spec that writes its Change with a single `#` is still read, the
--- way this module's grammar has always counted a heading at any level.
-local function test_a_level_one_heading_still_opens_a_section()
-  for _, body in ipairs({"# Change\nAdd it.\n", "# change\nAdd it.\n"}) do
-    local gaps = spec.ready_gaps(body)
-    assert(#gaps == 0, "a level-1 Change is a Change: " .. body .. " -> "
-      .. table.concat(gaps, ", "))
-  end
-end
-
--- Two sibling headings at the same level still separate: the level
--- rule closes a section on an equal heading, not only a shallower one.
-local function test_sibling_sections_at_one_level_still_separate()
-  local found = spec.sections(
-    "## Change\nEdit it.\n## Non-goals\nNothing else.\n")
-  assert(found["change"] == "Edit it.\n", "got: " .. tostring(found["change"]))
-  assert(found["non-goals"] == "Nothing else.\n",
-    "got: " .. tostring(found["non-goals"]))
-end
-
-local function test_ready_gaps_footer_is_not_content()
-  local gaps = spec.ready_gaps("## Change\n\n---\n_Generated by a footer_\n")
+-- A Change of nothing but whitespace is hollow — the pasted template
+-- with an empty section is the failure mode the bar exists to catch.
+local function test_ready_gaps_blank_change_counts()
+  local gaps = spec.ready_gaps(with_change("  \n\n\t\n"))
   assert(#gaps == 1 and gaps[1] == "Change is missing or empty",
-    "footer below --- should not fill a section: " .. table.concat(gaps, ", "))
-end
-
-local function test_ready_gaps_empty_section_counts()
-  local gaps = spec.ready_gaps("## Change\n\n## Acceptance\n`x`\n")
-  assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
-  assert(gaps[1] == "Change is missing or empty",
-    "hollow heading should count as a gap")
-end
-
--- An Acceptance section a legacy sidecar still carries is ordinary
--- optional prose: never required, never judged.
-local function test_acceptance_is_not_judged()
-  local gaps = spec.ready_gaps(
-    "## Change\nAdd the verb.\n## Acceptance\nworks correctly and is fast\n")
-  assert(#gaps == 0,
-    "a ride-along Acceptance is not the bar's business: "
-    .. table.concat(gaps, ", "))
+    "a blank Change is a gap: " .. table.concat(gaps, ", "))
 end
 
 -- A sweep-shaped Change (`--apply`) with no pasted dry-run evidence
--- anywhere in the spec is refused, naming the missing paste.
+-- in either blob is refused, naming the missing paste.
 local function test_sweep_apply_without_pasted_evidence_is_a_gap()
   local gaps = spec.ready_gaps(
-    "## Change\nRun `--rewrite '$F:^test_()' '' --apply` over 12 files.\n")
+    with_change("Run `--rewrite '$F:^test_()' '' --apply` over 12 files.\n"))
   assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
   assert(gaps[1]:find("no pasted dry-run", 1, true) ~= nil,
     "gap should name the missing paste: " .. gaps[1])
@@ -157,38 +84,52 @@ end
 -- The same, for `--fix` rather than `--apply` — the sentence covers
 -- any sweep tool, not only cosmic's own --rewrite.
 local function test_sweep_fix_without_pasted_evidence_is_a_gap()
-  local gaps = spec.ready_gaps("## Change\nRun `eslint --fix` over the tree.\n")
+  local gaps = spec.ready_gaps(with_change("Run `eslint --fix` over the tree.\n"))
   assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
   assert(gaps[1]:find("no pasted dry-run", 1, true) ~= nil,
     "gap should name the missing paste: " .. gaps[1])
 end
 
--- A pasted `applied`/`refused` line, fenced anywhere in the spec,
--- clears the gap — it need not sit inside `## Change` itself.
+-- A pasted `applied` line, fenced in the Change itself, clears the gap.
 local function test_sweep_apply_with_pasted_applied_line_is_ready()
-  local body = [[
-## Change
-Run `--rewrite '$F:^test_()' '' --apply` over 12 files.
-
-## Evidence
-Dry run: `rewrite: 12 applied, 0 refused in 12 file(s)`
-]]
-  local gaps = spec.ready_gaps(body)
+  local gaps = spec.ready_gaps(with_change(table.concat({
+          "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.", "",
+          "Dry run: `rewrite: 12 applied, 0 refused in 12 file(s)`", "",
+        }, "\n")))
   assert(#gaps == 0, "pasted applied line should clear the gap: "
+    .. table.concat(gaps, ", "))
+end
+
+-- The paste may sit in the OTHER blob: both are read for it, only the
+-- Change is read for the flag.
+local function test_sweep_paste_in_non_goals_is_ready()
+  local gaps = spec.ready_gaps({
+      change = "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.\n",
+      non_goals = "No second pass: `rewrite: 12 applied, 0 refused in 12 "
+      .. "file(s)` is the whole sweep.\n",
+    })
+  assert(#gaps == 0, "a paste in Non-goals clears the gap: "
+    .. table.concat(gaps, ", "))
+end
+
+-- A `--apply` that appears only in Non-goals is a wall, not a sweep:
+-- the flag is read from the Change alone.
+local function test_sweep_flag_in_non_goals_is_not_a_sweep()
+  local gaps = spec.ready_gaps({
+      change = "Add the verb.\n",
+      non_goals = "No `--apply` pass over the tree.\n",
+    })
+  assert(#gaps == 0, "a wall naming --apply is not a sweep: "
     .. table.concat(gaps, ", "))
 end
 
 -- A pasted refusal is evidence too — the sweep ran and refused, which
 -- is still the command's own output, not only its --find count.
 local function test_sweep_apply_with_pasted_refusal_is_ready()
-  local body = [[
-## Change
-Run `--rewrite '$F:^test_()' '' --apply` over 12 files.
-
-## Evidence
-`rewrite: refused: testdata/ excluded by the project model`
-]]
-  local gaps = spec.ready_gaps(body)
+  local gaps = spec.ready_gaps(with_change(table.concat({
+          "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.", "",
+          "`rewrite: refused: testdata/ excluded by the project model`", "",
+        }, "\n")))
   assert(#gaps == 0, "a pasted refusal should clear the gap: "
     .. table.concat(gaps, ", "))
 end
@@ -196,8 +137,8 @@ end
 -- Prose that merely mentions "applied" outside a code span is not a
 -- paste of the command's own output.
 local function test_sweep_apply_with_prose_mention_still_gaps()
-  local body = "## Change\nRun `--apply` once applied it should show 0.\n"
-  local gaps = spec.ready_gaps(body)
+  local gaps = spec.ready_gaps(
+    with_change("Run `--apply` once applied it should show 0.\n"))
   assert(#gaps == 1, "an unfenced mention of \"applied\" is not evidence: "
     .. table.concat(gaps, ", "))
 end
@@ -205,7 +146,7 @@ end
 -- A Change with no sweep flag at all is unaffected — the gap only
 -- fires when the Change itself names --apply or --fix.
 local function test_non_sweep_change_has_no_sweep_gap()
-  local gaps = spec.ready_gaps("## Change\nAdd the verb.\n")
+  local gaps = spec.ready_gaps(with_change("Add the verb.\n"))
   assert(#gaps == 0, "a non-sweep Change should not gap: "
     .. table.concat(gaps, ", "))
 end
@@ -213,49 +154,17 @@ end
 -- A word like `--fixture` is not the `--fix` flag; the frontier check
 -- must not false-positive on it.
 local function test_sweep_word_boundary_on_fix()
-  local gaps = spec.ready_gaps("## Change\nAdd a new --fixture flag.\n")
+  local gaps = spec.ready_gaps(with_change("Add a new --fixture flag.\n"))
   assert(#gaps == 0, "--fixture is not --fix: " .. table.concat(gaps, ", "))
 end
 
--- A revision is the git blob sha `spec.md` itself would carry: same
--- text, same revision; any edit, a different one; and no sidecar at
--- all is a stable constant.
-local function test_revision_is_a_content_digest()
-  local a = spec.revision(READY_BODY)
-  assert(a == spec.revision(READY_BODY), "two readings agree")
-  assert(#a == 40 and a:match("^[0-9a-f]+$"), "40 hex characters: " .. a)
-  assert(a ~= spec.revision(READY_BODY .. "moved\n"), "any edit moves it")
-  assert(spec.revision("") == spec.revision(""), "no sidecar is stable")
-end
-
--- The revision is not just A digest, it is the SAME sha
--- `git hash-object` gives that exact blob — `_work.store` writes
--- `spec.md` through `git hash-object -w --stdin`, so a caller
--- comparing against `spec.revision` has to be comparing against what
--- is actually in the tree.
-local function test_revision_matches_git_hash_object()
-  local body = READY_BODY
-  local r = child.run({"git", "hash-object", "--stdin"}, {stdin = body})
-  if r == nil or not r.ok then
-    -- No git on PATH in this environment: skip rather than fail a
-    -- test of git's own behavior on a machine that lacks git.
-    return
-  end
-  assert(spec.revision(body) == (r.stdout:gsub("%s+$", "")),
-    "spec.revision agrees with git hash-object: " .. spec.revision(body)
-    .. " vs " .. r.stdout)
-end
-
--- `reached_repos` reads a `github.com` URL wherever it sits, HTTPS or
--- SSH, deduplicated regardless of which section carries it.
+-- `reached_repos` reads a `github.com` URL wherever it sits in the
+-- rendered document, HTTPS or SSH, deduplicated across both blobs.
 local function test_reached_repos_finds_github_urls_anywhere()
-  local body = [[
-## Change
-git clone https://github.com/jart/cosmopolitan /tmp/upstream
-
-## Evidence
-git@github.com:jart/cosmopolitan.git also names it, again.
-]]
+  local body = spec.document({
+      change = "git clone https://github.com/jart/cosmopolitan /tmp/upstream\n",
+      non_goals = "git@github.com:jart/cosmopolitan.git also names it, again.\n",
+    })
   local repos = spec.reached_repos(body)
   assert(#repos == 1 and repos[1] == "jart/cosmopolitan",
     "expected one dedup'd slug, got: " .. table.concat(repos, ", "))
@@ -268,24 +177,6 @@ local function test_reached_repos_ignores_bare_paths()
   local repos = spec.reached_repos(
     "## Change\nEdit `cosmic/fs` per `docs/decisions`.\n")
   assert(#repos == 0, "bare paths are not repos: " .. table.concat(repos, ", "))
-end
-
--- `declared_repos` reads only the `## Access` section, by URL or by a
--- bare `owner/repo` mention — cheap because the section exists to be
--- written once and read, not parsed strictly.
-local function test_declared_repos_reads_only_access()
-  local body = [[
-## Change
-See jart/cosmopolitan for prior art.
-
-## Access
-- jart/cosmopolitan (read-only, upstream history)
-]]
-  local declared = spec.declared_repos(body)
-  assert(declared["jart/cosmopolitan"], "declared under Access")
-  local undeclared = spec.declared_repos("## Change\njart/cosmopolitan\n")
-  assert(not undeclared["jart/cosmopolitan"],
-    "a mention outside Access is not a declaration")
 end
 
 -- `document` and `split` are inverses on conforming input: a canonical

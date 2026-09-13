@@ -27,7 +27,7 @@ end
 -- `flow.ready_gaps` gets the exact same answer `_work/spec_test.tl`
 -- already pins in full.
 local function test_ready_gaps_is_specs_own()
-  assert(#flow.ready_gaps("") > 0, "an empty spec still misses the bar")
-  assert(#flow.ready_gaps("## Change\nDo this.\n## Non-goals\nNot that.\n") == 0,
-    "a spec with both required sections passes")
+  assert(#flow.ready_gaps(nil) > 0, "no spec at all still misses the bar")
+  assert(#flow.ready_gaps({change = "Do this.\n", non_goals = "Not that.\n"}) == 0,
+    "a spec with a Change passes")
 end

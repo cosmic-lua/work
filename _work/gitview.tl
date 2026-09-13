@@ -20,9 +20,7 @@ local act = require("_work.action")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
 local read = require("_work.read")
-local readywhen = require("_work.gitreadywhen")
 local sess = require("_work.session")
-local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -48,13 +46,16 @@ local function stale_ages(s: store.Store): health.StaleAges
   return health.from_rows(rows)
 end
 
---- Every spec sidecar, by item id, for the bar checks the reports
---- run. Read once per render, in one batch — `store.read_specs`, not
---- one `read_spec` per item — so a board-wide render stays a fixed
---- number of git processes as the item count grows.
+--- Every open item's spec blobs, by item id, for the bar checks the
+--- reports run. Read once per render, in one batch —
+--- `store.read_specs`, not one `read_spec` per item — so a board-wide
+--- render stays a fixed number of git processes as the item count
+--- grows. This is the one whole-board spec read `show` and `next`
+--- still make: the bar needs the prose; the overlap annotation no
+--- longer does.
 --- @param s store.Store The store
 --- @param all {item.Item} Every item
---- @return act.Specs Sidecar body by id
+--- @return act.Specs Spec blobs by id
 local function read_specs(s: store.Store, all: {item.Item}): act.Specs
   local ids: {string} = {}
   for _, i in ipairs(all) do
@@ -62,11 +63,21 @@ local function read_specs(s: store.Store, all: {item.Item}): act.Specs
       ids[#ids + 1] = i.id
     end
   end
-  -- `_work.action`'s `Specs` is one whole document per item, so the
-  -- two blobs the tree holds are rendered back to it here.
-  local out: act.Specs = {}
-  for id, sp in pairs(store.read_specs(s, ids)) do
-    out[id] = spec.document(sp)
+  return store.read_specs(s, ids)
+end
+
+--- Every open item's declared `touches`, by id — what
+--- `_work.overlap` reads for the collision annotation, built from the
+--- item rows `store.list` already returned rather than from any
+--- item's prose, so the annotation costs no spec read at all.
+--- @param all {item.Item} Every item
+--- @return {string: {string}} Declared paths by id, open items only
+local function touches_of(all: {item.Item}): {string: {string}}
+  local out: {string: {string}} = {}
+  for _, i in ipairs(all) do
+    if item.is_open(i) then
+      out[i.id] = i.touches or {}
+    end
   end
   return out
 end
@@ -111,7 +122,7 @@ end
 --- to be refused a take.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param all {item.Item} Every item
---- @param specs act.Specs Sidecar body by id
+--- @param specs act.Specs Spec blobs by id
 --- @param ages health.Ages Stale claim ages, by id
 --- @param lane_facts {string: string} | nil Lane state, nil when unsynced
 --- @param todo_shown integer | nil How many todo rows to render; 0 for
@@ -283,15 +294,16 @@ end
 --- Renders a decided action: what to do, to what, and under which
 --- rule, followed by what the kind MEANS (`_work.guidance`) and any
 --- alternates — so a session acts on the answer without going to read
---- prose elsewhere. An alternate that names an item whose Change
---- section names the same file as another open item's carries that
+--- prose elsewhere. An alternate that names an item whose declared
+--- `touches` shares a file with another open item's carries that
 --- collision inline, the same fact `show ID` would print on a
 --- separate line — an orchestrator weighing the alternates sees it
 --- without a `show` per candidate.
 --- @param action act.Action The decision
---- @param specs act.Specs Sidecar body by id, open items only
+--- @param touches {string: {string}} Declared paths by id, open items only
 --- @return string The action, its target, the rule behind it, and its guidance
-local function render_action(action: act.Action, specs: act.Specs): string
+local function render_action(action: act.Action,
+    touches: {string: {string}}): string
   local target = ""
   if action.item then
     target = " " .. tail.id_line(action.item)
@@ -305,7 +317,7 @@ local function render_action(action: act.Action, specs: act.Specs): string
   for _, alt in ipairs(action.alternates or {}) do
     if alt.item then
       local line = ("  or: %s %s"):format(alt.kind, tail.id_line(alt.item))
-      local ov = overlap.inline(alt.item.id, specs)
+      local ov = overlap.inline(alt.item.id, touches)
       if ov ~= "" then
         line = line .. " — " .. ov
       end
@@ -321,7 +333,7 @@ end
 --- which is the diagnosis a session reports.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param all {item.Item} Every item
---- @param specs act.Specs Sidecar body by id
+--- @param specs act.Specs Spec blobs by id
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Stale claim ages, by id
 --- @param review_ages health.Ages Stale review ages, by id
@@ -337,7 +349,7 @@ local function next_report(c: Index, all: {item.Item}, specs: act.Specs,
   if action == nil then
     return "", err
   end
-  return render_action(action, specs), ""
+  return render_action(action, touches_of(all)), ""
 end
 
 --- The reason named by an item's most recent board commit, when that
@@ -375,7 +387,7 @@ end
 --- @param s store.Store The store
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param all {item.Item} Every item
---- @param specs act.Specs Sidecar body by id
+--- @param specs act.Specs Spec blobs by id
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Stale claim ages, by id
 --- @param review_ages health.Ages Stale review ages, by id
@@ -390,8 +402,6 @@ local function next_report_live(s: store.Store, c: Index, all: {item.Item},
   if action == nil then
     return "", err
   end
-  local not_ready: string
-  not_ready, action = readywhen.skip_not_ready(action, specs)
   if action.kind == "pull" and action.item then
     local note = claim_bounce_note(s, action.item)
     if note == "" then
@@ -400,8 +410,7 @@ local function next_report_live(s: store.Store, c: Index, all: {item.Item},
     end
     action.reason = action.reason .. note
   end
-  local prefix = not_ready == "" and "" or (not_ready .. "\n")
-  return prefix .. render_action(action, specs), ""
+  return render_action(action, touches_of(all)), ""
 end
 
 local function cmd_next(s: store.Store, session?: string): integer

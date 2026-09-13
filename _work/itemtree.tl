@@ -8,10 +8,8 @@
 --- `meta` carries every scalar field as one `key: value` line, keys in
 --- the order below; a zero value — "", 0, an empty list — is OMITTED,
 --- so two items differing only in which fields are unset differ in
---- their tree too. `repo` and `base` are each their own line; a
---- format-4 tree wrote them collapsed into one `target` line
---- (`format_target`/`parse_target`), which `to_item` still reads when
---- neither own line is present. `order` is not a meta line either: one blob, child
+--- their tree too. `repo` and `base` are each their own line.
+--- `order` is not a meta line: one blob, child
 --- ids one per line with a trailing newline, present only when this
 --- item has ranked at least one child (`encode_order`/`parse_order` —
 --- the same shape the board's own item carries for its own outcomes,
@@ -49,52 +47,6 @@ local META_KEYS < const >: {string} = {
 local record Spec
   change: string
   non_goals: string
-end
-
---- Combine `repo`/`base` into one `target` line's value: `owner/name`
---- alone when there is no base, `owner/name@branch` when both are
---- set, `@branch` when a base stands with no repo (an unusual but
---- legal combination `item.problems` does not itself forbid), and ""
---- when both are empty. The inverse of `parse_target`, and the
---- format-4 WRITE: nothing writes a `target` line as of format 5, and
---- this stands as the documented inverse the round-trip property over
---- `parse_target` is stated against.
---- @param repo string The repo, "" when unset
---- @param base string The base branch, "" when unset
---- @return string The `target` line's value
-local function format_target(repo: string, base: string): string
-  if repo == "" and base == "" then
-    return ""
-  end
-  if base == "" then
-    return repo
-  end
-  return repo .. "@" .. base
-end
-
---- Split a `target` line's value back into `repo`/`base`. A target
---- with more than one `@` is malformed — `to_item` folds the message
---- this returns into the decoded item's `.decode_problems` rather than
---- failing the read outright, the same tolerance every other content
---- problem gets.
---- @param target string The `target` line's value, "" when absent
---- @return string repo
---- @return string base
---- @return string A problem message; "" when `target` parsed cleanly
-local function parse_target(target: string): string, string, string
-  if target == "" then
-    return "", "", ""
-  end
-  local at1 = target:find("@", 1, true)
-  if at1 == nil then
-    return target, "", ""
-  end
-  local at2 = target:find("@", at1 + 1, true)
-  if at2 ~= nil then
-    return target:sub(1, at1 - 1), target:sub(at1 + 1),
-    ("target must have at most one @: %s"):format(target)
-  end
-  return target:sub(1, at1 - 1), target:sub(at1 + 1), ""
 end
 
 --- The `order` blob's text for a ranked list of ids: one per line,
@@ -193,7 +145,7 @@ end
 --- whether a `held` marker blob was present at the tree root, its
 --- `order` blob's already-parsed ids, and every edge kind found under
 --- `edges`, carried opaquely. Content problems (a multiline title, a
---- claimed parentless item, a malformed `target`, ...) are attached at
+--- claimed parentless item, ...) are attached at
 --- `.decode_problems` rather than failing the build — `item.decode`'s
 --- own tolerance, reused here so a store built from a hand-edited
 --- commit still reads. `held` is unknown to this build: its presence
@@ -207,22 +159,12 @@ end
 --- @return item.Item The item, present even with content problems
 local function to_item(id: string, meta: {string: string}, held: boolean,
     order: {string}, other_edges: {string: {string: string}}): item.Item
-  -- `repo`/`base` are their own lines as of format 5; a format-4 tree
-  -- collapsed them into `target`, read here only when neither own line
-  -- is present — one tolerant reader, the same forward tolerance
-  -- `parse_meta` gives an unknown key, never a second decode path.
-  local repo = meta.repo or ""
-  local base = meta.base or ""
-  local target_err = ""
-  if repo == "" and base == "" and (meta.target or "") ~= "" then
-    repo, base, target_err = parse_target(meta.target)
-  end
   local it: item.Item = {
     id = id,
     title = meta.title or "",
     parent = meta.parent or "",
-    repo = repo,
-    base = base,
+    repo = meta.repo or "",
+    base = meta.base or "",
     key = meta.key or "",
     order = order,
     other_edges = other_edges,
@@ -262,9 +204,6 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     it.depends_on[#it.depends_on + 1] = dep
   end
   local bad = item.problems(it)
-  if target_err ~= "" then
-    bad[#bad + 1] = target_err
-  end
   if held then
     bad[#bad + 1] = "held: marker this build does not interpret"
   end
@@ -468,8 +407,6 @@ end
 local record itemtree
   type Spec = Spec
   META_KEYS: {string}
-  format_target: function(repo: string, base: string): string
-  parse_target: function(target: string): string, string, string
   encode_meta: function(it: item.Item): string
   parse_meta: function(text: string): {string: string}
   encode_order: function(ids: {string}): string
@@ -482,8 +419,6 @@ end
 
 local M: itemtree = {
   META_KEYS = META_KEYS,
-  format_target = format_target,
-  parse_target = parse_target,
   encode_meta = encode_meta,
   parse_meta = parse_meta,
   encode_order = encode_order,

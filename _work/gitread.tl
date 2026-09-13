@@ -244,18 +244,11 @@ end
 --- rather than in every reader: a board on a layout this tool cannot
 --- trust is refused before anything else it read alongside it is
 --- believed.
---- `allow_old_format` lets the one-time migration read the one
---- immediately previous layout a normal `format.refusal` rejects. The
---- bypass applies ONLY when `format.migratable` says the marker is the
---- supported predecessor, never to a missing marker or an unknown
---- future version, both of which stay refused exactly as before. Every
---- other caller omits it.
 --- @param root string The repository root
---- @param allow_old_format boolean | nil True to read past a one-hop refusal
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
-local function list(root: string, allow_old_format?: boolean): Board | nil, string
+local function list(root: string): Board | nil, string
   local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
   if found == nil then
     return nil, ferr
@@ -324,9 +317,7 @@ local function list(root: string, allow_old_format?: boolean): Board | nil, stri
   local format_content = gitboardstate.read(board_refs, batch)
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
-    if not (allow_old_format and format.migratable(format_content)) then
-      return gitbatch.session_fail(sess, frefusal)
-    end
+    return gitbatch.session_fail(sess, frefusal)
   end
   local kinds_by_id: {string: {string: string}} = {}
   local kind_queries: {string} = {}
@@ -392,7 +383,7 @@ local record gitread
   lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
   known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
-  list: function(root: string, allow_old_format?: boolean): Board | nil, string
+  list: function(root: string): Board | nil, string
   -- Exported only for `_work.gitreadmany.load_many` to reuse without
   -- duplicating this module's own read-path primitives.
   edge_kinds: function(edges_content: string): {string: string}

@@ -8,6 +8,7 @@
 -- strings `head_checks` can report.
 
 local check = require("cosmic.check")
+local itemtree = require("_work.itemtree")
 local act = require("_work.action")
 local fixture = require("_work.fixture")
 local idxmod = require("_work.index")
@@ -62,8 +63,8 @@ local function placed_root(items: {Item}): Item
   return root
 end
 
-local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
-.. "## Acceptance\n`ci`\n"
+local READY < const >: itemtree.Spec = {change = "Do this.\n",
+  non_goals = "Not that.\n"}
 
 local function ready_specs(items: {Item}): act.Specs
   local out: act.Specs = {}

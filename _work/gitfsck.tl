@@ -22,13 +22,11 @@
 ---
 --- What SQL cannot answer, this module still asks directly: an item's
 --- tree not re-encoding to what it was read from (a hand edit, a
---- canonical form that drifted — `tree_problem`; every item still on
---- the format-4 shape is reported by it too, since an unmigrated
---- `meta` re-encodes to a different blob and a `spec.md` beside a
---- `spec/` subtree is a different tree, and that noise stands rather
---- than being suppressed: the format marker already refuses ordinary
---- reads and writes on a format-4 board, so the only session that sees
---- it is the one running the migration), an id filed under
+--- canonical form that drifted — `tree_problem`), an open item whose
+--- Change says it is blocked on an item its `depends_on` does not
+--- declare, and a `depends_on` cycle (both `_work.gitfsck_depends`,
+--- reported rather than refused, since a hand edit can put one on
+--- the refs and an audit reports what is), an id filed under
 --- both `refs/heads/items` and `refs/heads/ended` at once (the residue
 --- of a resolution whose atomic push landed the create half of an
 --- old-style namespace move and lost the delete half — the pushing
@@ -41,6 +39,7 @@
 --- is, nothing else asked.
 local cacherebuild = require("_work.cacherebuild")
 local claimbatchfsck = require("_work.gitfsck_claimbatch")
+local dependsfsck = require("_work.gitfsck_depends")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
@@ -446,6 +445,9 @@ local function cmd_fsck(s: store.Store): integer
     if p ~= nil then
       problems[#problems + 1] = p
     end
+  end
+  for _, p in ipairs(dependsfsck.problems(all, specs)) do
+    problems[#problems + 1] = p
   end
   local lanes_p = stale_lanes_ref_problem(s)
   if lanes_p ~= nil then

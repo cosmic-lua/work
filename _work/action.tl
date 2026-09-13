@@ -174,7 +174,7 @@ end
 --- Infallible: every input already came from an open row.
 --- @param ranked boolean The item's own `queue` row's `ranked` column
 --- @param id string The item's id
---- @param specs Specs Spec sidecar body, by item id
+--- @param specs Specs Spec blobs, by item id
 --- @param items ItemIndex Every item by id, for the dependency check
 --- @return boolean True when the item may be offered as a pull
 local function passes_bar(ranked: boolean, id: string, specs: Specs,
@@ -186,7 +186,7 @@ local function passes_bar(ranked: boolean, id: string, specs: Specs,
   if i ~= nil and #unresolved_deps(i, items) > 0 then
     return false
   end
-  return #flow.ready_gaps(specs[id] or "") == 0
+  return #flow.ready_gaps(specs[id]) == 0
 end
 
 --- The decision over the ONE queue (`_work.read.queue`, tie-broken):
@@ -198,7 +198,7 @@ end
 --- on the first has somewhere to go without another round trip.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param items {Item} All items
---- @param specs Specs Spec sidecar body, by item id
+--- @param specs Specs Spec blobs, by item id
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Stale claim/review ages, by id — the CLAIM
 --- half for `is_mine`, the REVIEW half for the review-stale skip
@@ -362,7 +362,7 @@ end
 --- guessing.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param items {Item} All items
---- @param specs Specs Spec sidecar body, by item id
+--- @param specs Specs Spec blobs, by item id
 --- @param session string This session's name, "" when unnamed
 --- @param ages health.Ages Stale claim ages, by id
 --- @param review_ages health.Ages Stale review ages, by id

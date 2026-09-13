@@ -295,32 +295,12 @@ local function test_distance_refusal_covers_builders_and_speccers()
     "an unnamed session is never involved")
 end
 
---- A cross-owner declaration as it actually reaches the owner rule as
---- of format 5: inside the Change blob, which is the shape an
---- unmigrated format-4 `spec.md` reads back as. `## Access` is no
---- longer a section a WRITE may carry — `spec.split` refuses it, naming
---- the field that replaces it (`_work/spec_test.tl`) — so the rule is
---- exercised against the data that carries the declaration rather than
---- through the verb that no longer accepts one.
-local ACCESS_PROSE < const >: itemtree.Spec = {
-  change = "Do exactly this.\n\n## Access\n"
-  .. "- whilp/cosmopolitan (the fork the diff deliberately targets)\n",
-  non_goals = "Not that.\n",
-}
-
 --- A spec sidecar with the given body, through the spec verb.
 local function write_spec(s: store.Store, id: string, name: string,
     body: string)
   local path = fs.join(fixture.tmpdir, ("owner-%s.md"):format(name))
   assert(fs.write(path, body))
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
-  fixture.caller_publish(s)
-end
-
---- The same, straight into the tree: for prose no verb will accept.
-local function save_spec(s: store.Store, id: string, prose: itemtree.Spec)
-  local it = check.must(store.load(s, id))
-  assert(storewrite.save(s, it, "fixture: prose written past the verb", prose))
   fixture.caller_publish(s)
 end
 
@@ -367,11 +347,13 @@ local function test_a_same_owner_repo_passes_the_bar()
   fixture.claim_item(s, leaf, "session-a")
 end
 
--- The deliberate cross-owner case: the item's own prose names the
--- slug under `## Access`, and the field is accepted as stated.
-local function test_a_foreign_owner_declared_under_access_passes_the_bar()
+-- The deliberate cross-owner case: the item declares the slug in its
+-- `access` field, and the repo is accepted as stated.
+local function test_a_foreign_owner_declared_as_access_passes_the_bar()
   local s, leaf = foreign_leaf("declared", fixture.READY_SPEC)
-  save_spec(s, leaf, ACCESS_PROSE)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, nil, nil, nil,
+      {"whilp/cosmopolitan"}) == 0, "the field is declarable")
+  fixture.caller_publish(s)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared cross-owner repo is no problem: "
     .. table.concat(problems, "; "))

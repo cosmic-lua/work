@@ -213,22 +213,17 @@ local function test_spec_bar_names_an_undeclared_repo()
   assert(#problems > 0, "the item remains visibly below the ready bar")
 end
 
--- Declaring the same repo under `## Access` clears the bar — the gate
+-- Declaring the same repo in `access` clears the bar — the gate
 -- checks that the requirement is STATED, not that it is satisfied.
--- `## Access` is no longer a section a WRITE may carry (`spec.split`
--- refuses it by name), so the declaration is put where the rule reads
--- it: inside the Change blob, the shape an unmigrated `spec.md` reads
--- back as.
+-- The declaration is the field `set --access` writes; the prose is
+-- read only for what it reaches.
 local function test_declaring_the_repo_clears_the_bar()
   local s = init_state_repo("declared-repo")
   local _, leaf = root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0)
-  local declared = check.must(specmod.split(UPSTREAM_CLONE))
-  declared.change = declared.change
-  .. "\n## Access\n- jart/cosmopolitan (read-only, upstream history)\n"
-  local target = check.must(store.load(s, leaf))
-  assert(storewrite.save(s, target, "fixture: declared access", declared))
-  assert(publish.publish(s))
+  assert(gitspec.cmd_spec(s, leaf, spec_file("declared", UPSTREAM_CLONE)) == 0)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, nil, nil, nil,
+      {"jart/cosmopolitan"}) == 0, "the field is declarable")
   fixture.caller_publish(s)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared repo clears the bar: "

@@ -8,13 +8,8 @@ acceptance is not per-item: the repo's own gate passing (for cosmic,
 done every item shares, and proof specific to a change rides the
 DIFF as a test or ratchet the gate runs. A gate outlives the sidecar
 that asked for it; a sidecar command runs at most twice and dies
-with the item. An `## Acceptance` section, where a spec still
-carries one, is the refiner's own worked proof that the Change's
-claims held at measurement time — read once by the puller to
-sanity-check the shape still holds and once by the reviewer to
-spot-check a claim — never re-executed bullet by bullet as a second
-gate. A bound worth enforcing permanently is a test or ratchet IN
-THE DIFF, not a bullet a builder re-derives by hand.
+with the item. A bound worth enforcing permanently is a test or
+ratchet IN THE DIFF, not a bullet a builder re-derives by hand.
 
 `## Change` is what to build: files named, the shape of the change
 in each, every decision made. Imperative and concrete — never

@@ -8,7 +8,7 @@
 --- refusals stay there.
 local flow = require("_work.flow")
 local item = require("_work.item")
-local overlap = require("_work.overlap")
+local itemtree = require("_work.itemtree")
 local read = require("_work.read")
 local spec = require("_work.spec")
 local store = require("_work.store")
@@ -50,24 +50,21 @@ local function pr_collision_refusal(all: {item.Item}, id: string,
   return nil
 end
 
---- The repositories a spec reaches (`spec.reached_repos`) that are
---- neither the item's own `repo` field nor declared as its read
---- access, by either spelling — its `access` field or the
---- `## Access` prose an unmigrated sidecar carries — an undeclared source
---- strands a claim before it starts and a review just as surely,
---- since neither session's grant is anything this board can see. The
---- item's own `repo` is the one exemption that needs no declaring: it
---- is where the diff lands, not a source read on the side.
+--- The repositories a spec reaches (`spec.reached_repos`, over the
+--- rendered prose) that are neither the item's own `repo` field nor
+--- declared in its `access` field — an undeclared source strands a
+--- claim before it starts and a review just as surely, since neither
+--- session's grant is anything this board can see. The item's own
+--- `repo` is the one exemption that needs no declaring: it is where
+--- the diff lands, not a source read on the side. What the text
+--- REACHES is still read out of the prose, because that is the fact
+--- the declaration was always checked against; the declaration itself
+--- is the field, which `gitboard set ID --access` writes.
 --- @param it item.Item The item
---- @param body string Its spec sidecar
+--- @param body string Its spec, rendered (`spec.document`)
 --- @return {string} Undeclared repo slugs, in first-seen order
 local function undeclared_repos(it: item.Item, body: string): {string}
-  -- Both spellings of the declaration, unioned: the item's `access`
-  -- field, and the `## Access` prose an unmigrated sidecar still
-  -- carries. `_work.gitowner.repo_problem` reads the same pair, for
-  -- the reason its header states — the union only ever recognizes MORE
-  -- declarations, so the move costs no item its escape.
-  local declared = spec.declared_repos(body)
+  local declared: {string: boolean} = {}
   for _, repo in ipairs(it.access or {}) do
     declared[repo:lower()] = true
   end
@@ -88,11 +85,11 @@ end
 --- one list `check` reports and `take` enforces.
 --- @param s store.Store The store
 --- @param it item.Item The item
---- @param body string | nil Its spec sidecar, when the caller already
---- has it (a batched `read_specs`, say) — nil to read it here
+--- @param prose itemtree.Spec | nil Its two spec blobs, when the caller
+--- already has them (a batched `read_specs`, say) — nil to read them here
 --- @return {string} Problems, empty when the item meets the bar
 local function ready_problems(s: store.Store, it: item.Item,
-    body?: string): {string}
+    prose?: itemtree.Spec): {string}
   local out: {string} = {}
   local c, cerr = store.read(s)
   if c == nil then
@@ -141,18 +138,15 @@ local function ready_problems(s: store.Store, it: item.Item,
         tail.handle(dep), blocker.title)
     end
   end
-  local spec_body = body or spec.document(store.read_spec(s, it.id))
-  for _, gap in ipairs(flow.ready_gaps(spec_body)) do
+  local sp = prose or store.read_spec(s, it.id)
+  for _, gap in ipairs(flow.ready_gaps(sp)) do
     out[#out + 1] = ("spec: %s"):format(gap)
   end
-  local not_ready = overlap.ready_when(spec_body)
-  if not_ready then
-    out[#out + 1] = not_ready
-  end
-  for _, repo in ipairs(undeclared_repos(it, spec_body)) do
+  for _, repo in ipairs(undeclared_repos(it, spec.document(sp))) do
     out[#out + 1] = ("spec reaches %s with no declared read access — "
-      .. "declare it; undeclared, it strands the claim now and the review "
-      .. "just as surely"):format(repo)
+      .. "declare it (`gitboard set %s --access %s`); undeclared, it "
+      .. "strands the claim now and the review just as surely"):format(
+      repo, it.id:sub(1, 8), repo)
   end
   return out
 end
@@ -164,7 +158,7 @@ local record gitready
   number: integer): string
   undeclared_repos: function(it: item.Item, body: string): {string}
   ready_problems: function(s: store.Store, it: item.Item,
-  body?: string): {string}
+  prose?: itemtree.Spec): {string}
 end
 
 local M: gitready = {
