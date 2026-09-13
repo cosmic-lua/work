@@ -1,10 +1,10 @@
 title: cache: an events table from each item's commit chain — PR rounds, verdict timing and reworks become one SELECT, show ID's history stops spawning git log
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/work
+repo: cosmic-lua/work
 pr: 38
 verdict: accept
 verdict_head: f3361dd3d8cf237dc27f133572747a0ce8a7db67
-verdict_spec: 2daeca8a4e75c045629865e8fcce5d4e69588e59
 resolution: completed
 builders: build-KYPX_s06P-32638265
 speccers: build-KYPX_s06P-32638265
+touches: _work/cachedb.tl _work/events.tl _work/gitwrite.tl _work/cache.tl _work/publish.tl _work/gitshow_test.tl _work/events_test.tl _work/index_test.tl _work/cacheevents.tl _work/cachedb_events.tl
