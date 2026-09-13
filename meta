@@ -1,6 +1,7 @@
 title: cosmopolitan: clock_gettime raises on an invalid or unsupported clock — integer|nil becomes integer, integer
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 277
 resolution: completed
 builders: 13571aad-150e-5056-92a4-43d5c41b362e
+touches: third_party/lua/lunix.c tool/net/definitions.lua tool/lua/test_definitions_conformance.lua
