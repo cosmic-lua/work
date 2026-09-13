@@ -1,5 +1,6 @@
 title: the review guard keys on claim-holding, not authorship: a discarded competing build disqualifies a reviewer
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+touches: _work/flow.tl _work/action_test.tl _work/action.tl _work/gitreview.tl _work/gitverdict.tl _work/session.tl _work/flow_test.tl _work/gitverdict_test.tl _work/converge_test.tl _work/gitreview_test.tl
