@@ -1,5 +1,3 @@
-## Change
-
 Implement chunk 2 of Wdaw_QfXv after chunk1: add the internal diagnostic
 checkpoint codec and filesystem boundary without enabling diagnostic runs.
 Repo cosmic-lua/cosmic. Parent spec freezes the complete protocol and limits.
