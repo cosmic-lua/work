@@ -1,6 +1,7 @@
 title: gitboard: a backward move (do -> ready) drops a live claim without --force, so re-pulling reissues the item under a new session
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1425
 resolution: completed
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
+touches: _work/gitboard.tl _work/gitverbs.tl _work/gitverbs_test.tl
