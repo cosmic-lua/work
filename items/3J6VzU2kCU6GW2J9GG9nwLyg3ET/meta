@@ -1,6 +1,6 @@
 title: research review brief: reconcile board access and verdict evidence with commit-only doctrine
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: f2f16b3670fa4d371e0bd27288909c23787a73b1
 external_url: https://github.com/cosmic-lua/work/pull/99
 verdict: accept
