@@ -1,5 +1,3 @@
-## Change
-
 `gitboard verdict` verifies the head it records: against the PR when
 the board can read one, and against a sane shape always.
 
@@ -43,12 +41,3 @@ short, non-hex, mismatched prefix, matched prefix, nil PR;
 reproduced `deadbee` is 7 hex chars and SHAPE-valid, so use `xyz`
 and a 6-char sha) refuses before any commit, and that the existing
 local-board verdicts still land unchanged with a well-formed head.
-
-## Non-goals
-
-Existing verdict-line formats and the pair guard are unchanged; the
-new refusals are additions in the standing `REFUSED: ...` shape. No
-correction verb for an already-recorded wrong head (that is
-3IVRNCFB's remaining half, filed separately). `--head` stays
-required; no default is derived from the PR, because the field
-records what the reviewer JUDGED, not what happens to be current.
