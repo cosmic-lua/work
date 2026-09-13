@@ -1,6 +1,7 @@
 title: literal is the one codec _fuzz does not cover: parse/format properties over the pure-Teal reader and writer
 parent: 3IK8E4XFNSEMc6fXtc6qbUxiLVO
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1347
 resolution: completed
 builders: claude-sched-2026-08-23T2145
+touches: _fuzz/literal_fuzz_test.tl _fuzz/json_fuzz_test.tl
