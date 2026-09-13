@@ -1,5 +1,3 @@
-## Change
-
 Ready when: release `2026-09-10-851d5ec` exists with a `cosmic-lua` asset.
 
 Update only `bin/cosmic.pin` to pin
@@ -11,9 +9,3 @@ Download that exact asset independently, verify its digest, and verify
 `--version` reports `2026-09-10-851d5ec`. Run the focused pin/bootstrap tests
 named by the repository. Keep the product diff to the existing two data lines
 in `bin/cosmic.pin`; comments need no rewrite.
-
-## Non-goals
-
-No CLI activation, parser changes, surface code, build-system changes, release
-workflow edits, or additional pin updates. Bounce if the published asset does
-not match the tag and digest above.
