@@ -9,6 +9,7 @@ local check = require("cosmic.check")
 local itemtree = require("_work.itemtree")
 local act = require("_work.action")
 local fixture = require("_work.fixture")
+local flow = require("_work.flow")
 local health = require("_work.health")
 local idxmod = require("_work.index")
 local item = require("_work.item")
@@ -63,6 +64,23 @@ local function placed_root(items: {Item}): Item
   items[#items + 1] = board
   items[#items + 1] = root
   return root
+end
+
+--- `placed_root` plus a second ranked outcome standing at
+--- `flow.LANE_PARENT`, so an item under `lane` is a lane repair by
+--- parentage and one under `root` is ordinary work.
+--- @param items {Item} The item list to append the board and both outcomes to
+--- @return Item root
+--- @return Item lane
+local function placed_lane(items: {Item}): Item, Item
+  local board = make({})
+  local root = make({parent = board.id})
+  local lane = make({id = flow.LANE_PARENT, parent = board.id})
+  board.order = {root.id, lane.id}
+  items[#items + 1] = board
+  items[#items + 1] = root
+  items[#items + 1] = lane
+  return root, lane
 end
 
 --- A spec map passing the bar for every id given.
@@ -270,8 +288,8 @@ end
 -- accepted.
 local function test_lane_repair_outranks_ordinary_pulls()
   local items: {Item} = {}
-  local root = placed_root(items)
-  local repair = make({parent = root.id, key = "release.yml"})
+  local root, lane = placed_lane(items)
+  local repair = make({parent = lane.id, title = "lane repair: release.yml is red"})
   local ordinary = make({parent = root.id})
   items[#items + 1] = repair
   items[#items + 1] = ordinary
@@ -280,16 +298,16 @@ local function test_lane_repair_outranks_ordinary_pulls()
   assert(a.kind == "pull" and a.item.id == repair.id,
     "the repair is offered ahead of the ordinary pull: " .. a.kind
     .. " " .. (a.item and a.item.id or ""))
-  assert(a.reason == "lane repair: release.yml",
-    "the reason names the lane: " .. a.reason)
+  assert(a.reason == "lane repair: release.yml is red",
+    "the reason is the repair's title, naming the lane: " .. a.reason)
 end
 
 local function test_a_pending_merge_still_outranks_the_repair()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, lane = placed_lane(items)
   local accepted = make({parent = root.id, claim = "who", pr = 1,
       verdict = "accept"})
-  local repair = make({parent = root.id, key = "release.yml"})
+  local repair = make({parent = lane.id, title = "lane repair: release.yml is red"})
   items[#items + 1] = accepted
   items[#items + 1] = repair
   local specs = ready_specs(items)
@@ -306,9 +324,9 @@ end
 -- the merge test green while this one goes red.
 local function test_a_pending_review_still_outranks_the_repair()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, lane = placed_lane(items)
   local reviewable = make({parent = root.id, claim = "who", pr = 2})
-  local repair = make({parent = root.id, key = "release.yml"})
+  local repair = make({parent = lane.id, title = "lane repair: release.yml is red"})
   items[#items + 1] = reviewable
   items[#items + 1] = repair
   local specs = ready_specs(items)
@@ -320,12 +338,12 @@ end
 -- Existing in-flight work does not hold a lane repair back either.
 local function test_lane_repair_is_admitted_with_other_work_in_flight()
   local items: {Item} = {}
-  local root = placed_root(items)
+  local root, lane = placed_lane(items)
   for k = 1, 12 do
     items[#items + 1] = make({parent = root.id,
         claim = ("wake-%d"):format(k)})
   end
-  local repair = make({parent = root.id, key = "fuzz.yml"})
+  local repair = make({parent = lane.id, title = "lane repair: fuzz.yml is red"})
   items[#items + 1] = repair
   local specs = ready_specs(items)
   local a = next_action(items, specs, "me")

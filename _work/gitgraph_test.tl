@@ -274,7 +274,6 @@ local function test_set_refuses_every_flow_field_flag()
     {"--verdict", "accept"},
     {"--parent", leaf},
     {"--resolution", "completed"},
-    {"--key", "release.yml"},
   }
   for _, pair in ipairs(flow_flags) do
     local flag, value = pair[1], pair[2]
@@ -288,7 +287,6 @@ local function test_set_refuses_every_flow_field_flag()
   assert(after.parent == before.parent, "parent untouched: " .. after.parent)
   assert(after.resolution == before.resolution,
     "resolution untouched: " .. after.resolution)
-  assert(after.key == before.key, "key untouched: " .. after.key)
 end
 
 -- `set` repairs the two declared lists the same way it repairs a

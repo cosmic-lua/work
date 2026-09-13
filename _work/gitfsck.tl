@@ -12,9 +12,9 @@
 ---
 --- Structural findings — a dangling `parent`, a second parentless item
 --- (there is meant to be exactly one — the board), an `order` entry
---- naming an id that is not a child of the item carrying it, two open
---- items sharing a `key`, and a parent chain broken, cyclic, or deeper
---- than 16 levels — are `_work.read.structure`'s five SQL-derivable
+--- naming an id that is not a child of the item carrying it, and a
+--- parent chain broken, cyclic, or deeper than 16 levels — are
+--- `_work.read.structure`'s four SQL-derivable
 --- kinds, asked of the same throwaway rebuild. An `order` entry naming
 --- a non-child is reported but never counted: a read that walks
 --- `_work.read.children` skips straight past it, so it is not a
@@ -57,7 +57,7 @@ local tail = require("_work.tail")
 --- throwaway rebuild — every column but `id` itself, which is the key
 --- the comparison is keyed on.
 local ITEM_COLUMNS < const >: {string} = {
-  "title", "parent", "repo", "base", "key", "claim", "reviewer", "pr",
+  "title", "parent", "repo", "base", "claim", "reviewer", "pr",
   "result", "verdict", "verdict_head", "resolution",
   "ref", "tip", "touched_at",
 }
@@ -392,7 +392,7 @@ local function cmd_fsck(s: store.Store): integer
 
   if mem ~= nil then
     local rebuilt: index.Index = {db = mem, specs = spec_texts, load_problems = {}}
-    -- `read.structure`'s five SQL-derivable findings, asked of the
+    -- `read.structure`'s four SQL-derivable findings, asked of the
     -- fresh rebuild — what a Teal walk over `all` used to compute by
     -- hand. `stale_order` is reported but never counted: a read that
     -- walks `_work.read.children` skips straight past it, so it is

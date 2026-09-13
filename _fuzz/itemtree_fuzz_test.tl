@@ -262,7 +262,7 @@ local function test_meta_round_trip()
         end
         local it: item.Item = {
           id = ksuid.new(), title = title, parent = "", repo = repo,
-          base = base, key = "", order = {},
+          base = base, order = {},
           claim = "", builders = {}, speccers = {},
           reviewer = "", pr = math.tointeger(tonumber(pr_text)) or 0,
           result = "", verdict = "", verdict_head = "",

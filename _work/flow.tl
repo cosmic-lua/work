@@ -45,6 +45,15 @@ local spec = require("_work.spec")
 --- board's own log, as a reviewed change here.
 local DOING_LIMIT < const >: integer = 10
 
+--- Where a red lane's repair items are filed: G8, the flow-system
+--- outcome that mechanism serves. Parentage under it is what MAKES an
+--- open todo item a lane repair — `_work.lanes.file_repair` files
+--- there, `_work.readddl`'s `stage` view ranks it `STAGE_REPAIR`, and
+--- `_work.gitgate`'s review-debt carve-out reads the same fact — so
+--- the id lives here, beside the stage it earns, rather than in the
+--- module that files it.
+local LANE_PARENT < const > = "3HyRdT1JQS7pCPgF3sZi2Deo66q"
+
 --- The stage half of the unified order: how close an item is to
 --- done, lower ranks first. ONE declaration — every queue, offer,
 --- and refusal that says "finishing beats starting" derives from
@@ -82,6 +91,7 @@ end
 
 local record flow
   DOING_LIMIT: integer
+  LANE_PARENT: string
   STAGE_ACCEPTED: integer
   STAGE_REVIEW: integer
   STAGE_REWORK: integer
@@ -94,6 +104,7 @@ end
 
 local M: flow = {
   DOING_LIMIT = DOING_LIMIT,
+  LANE_PARENT = LANE_PARENT,
   STAGE_ACCEPTED = STAGE_ACCEPTED,
   STAGE_REVIEW = STAGE_REVIEW,
   STAGE_REWORK = STAGE_REWORK,

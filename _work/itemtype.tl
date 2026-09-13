@@ -18,10 +18,6 @@ local record Item
   repo: string
   --- Product base branch; "" is unset.
   base: string
-  --- The scheduled workflow file this item repairs; "" for ordinary
-  --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN
-  --- item may carry a given key.
-  key: string
   --- This item's ranked children, in rank order. Stored as one "id id"
   --- string — the literal domain has no lists. Empty when it has
   --- ranked none; an unranked child is simply absent from the list.

@@ -97,7 +97,7 @@ local function ensure_board(dir: string): boolean, string
   end
   local id = ksuid.new()
   local it: item.Item = {
-    id = id, title = "board", parent = "", repo = "", base = "", key = "",
+    id = id, title = "board", parent = "", repo = "", base = "",
     order = {}, claim = "", builders = {}, speccers = {}, reviewer = "",
     pr = 0, result = "", verdict = "", verdict_head = "",
     resolution = "",

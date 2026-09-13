@@ -183,7 +183,7 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   local order: {string} = {}
   local by_id: {string: item.Item} = {}
   local rows, err = c.db:query([[
-    SELECT id, title, parent, repo, base, key, claim, claim_base, claim_batch,
+    SELECT id, title, parent, repo, base, claim, claim_base, claim_batch,
       handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
       landed_head, resolution
     FROM items ORDER BY id
@@ -200,7 +200,6 @@ local function items(c: cache.Cache): {item.Item} | nil, string
       parent = row.parent as string, -- cast: from any (sqlite row)
       repo = row.repo as string, -- cast: from any (sqlite row)
       base = row.base as string, -- cast: from any (sqlite row)
-      key = row.key as string, -- cast: from any (sqlite row)
       order = {},
       claim = row.claim as string, -- cast: from any (sqlite row)
       claim_base = row.claim_base as string, -- cast: from any (sqlite row)

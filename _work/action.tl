@@ -321,7 +321,7 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
             acts[#acts + 1] = {
               kind = "pull",
               item = i,
-              reason = ("lane repair: %s"):format(i.key),
+              reason = i.title,
             }
           end
         elseif #acts < CANDIDATES then

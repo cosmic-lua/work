@@ -25,6 +25,7 @@
 --- must exist first. `_work.cacherebuild.rebuild` applies both, once,
 --- to every persisted cache file; `_work.read` is the typed reader
 --- every verb queries through, via `_work.store.read`'s open handle.
+local flow = require("_work.flow")
 local index = require("_work.index")
 
 local type Index = index.Index
@@ -80,7 +81,8 @@ CREATE TABLE role (
 -- stage: id -> the integer `_work.flow.stage_rank` gives, for open
 -- work items only (`workable`): accepted 1, review 2, rework 3,
 -- building 4 for a doing item (`state`/`substate` already derive
--- which); repair 5 for a todo item carrying a lane-repair `key`;
+-- which); repair 5 for a todo item filed under `_work.flow.LANE_PARENT`
+-- (a lane repair is known by its parentage);
 -- ordinary todo 6.
 CREATE VIEW stage AS
   SELECT w.id AS id,
@@ -92,7 +94,7 @@ CREATE VIEW stage AS
           WHEN 'rework' THEN 3
           ELSE 4
         END
-      WHEN w.key <> '' THEN 5
+      WHEN w.parent = ']] .. flow.LANE_PARENT .. [[' THEN 5
       ELSE 6
     END AS stage
   FROM workable w
@@ -206,13 +208,12 @@ CREATE VIEW children AS
   WHERE i.parent <> '';
 
 -- structure: the whole-board audit findings a SQL view can answer
--- without a git object read — the same five kinds
+-- without a git object read — the same four kinds
 -- `_work.gitfsck.structural_problems` and `_work.index`'s own live
--- queries (`dangling_parents`, `key_duplicates`) already check, plus
--- `rank_path`'s own bound standing in for `broken_chains`: a dangling
--- parent, a second parentless item, an `order` entry naming a
--- non-child, two open items sharing a key, and a parent chain deeper
--- than 16 (absent from `rank_path` entirely). One row per finding:
+-- query (`dangling_parents`) already check, plus `rank_path`'s own
+-- bound standing in for `broken_chains`: a dangling parent, a second
+-- parentless item, an `order` entry naming a non-child, and a parent
+-- chain deeper than 16 (absent from `rank_path` entirely). One row per finding:
 -- (kind, id, detail).
 CREATE VIEW structure AS
   SELECT 'dangling_parent' AS kind, i.id AS id,
@@ -231,21 +232,6 @@ CREATE VIEW structure AS
   FROM ranks r
   LEFT JOIN items c ON c.id = r.child AND c.parent = r.parent
   WHERE c.id IS NULL
-  -- `one_open_item_per_key` already refuses a second OPEN item sharing
-  -- a key at load time (see `_work.index.key_duplicates`'s own header),
-  -- so — like that Teal check — this kind can never actually fire
-  -- through the ordinary `_work.index.open` path: the offending row
-  -- never lands in `items` to be found here. Kept anyway as the same
-  -- live, queried check on the invariant `key_duplicates` already
-  -- states the reason for, in case the day this index stops enforcing
-  -- it at load ever comes.
-  UNION ALL
-  SELECT 'duplicate_key' AS kind, o.id AS id,
-    'shares key ' || o.key || ' with ' || (d.n - 1) || ' other open item(s)' AS detail
-  FROM open_items o
-  JOIN (
-    SELECT key, COUNT(*) AS n FROM open_items WHERE key <> '' GROUP BY key HAVING COUNT(*) > 1
-  ) d ON d.key = o.key
   UNION ALL
   SELECT 'deep_chain' AS kind, o.id AS id,
     'parent chain is broken, cyclic, or deeper than 16 levels' AS detail

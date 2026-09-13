@@ -292,7 +292,7 @@ end
 --- @return string Error message
 local function review_debt_refusal(c: Index, items: {item.Item},
     session: string, taking: item.Item): string | nil, string
-  if (taking.key or "") ~= "" then
+  if (taking.parent or "") == flow.LANE_PARENT then
     return nil, ""
   end
   local debt, derr = review_debt(c, items, session)
