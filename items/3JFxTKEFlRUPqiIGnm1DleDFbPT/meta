@@ -1,0 +1,2 @@
+title: cosmic.http refuses a body over ~32KB with 400 whenever a client delivers it faster than one recv can drain (core defect, affects both chunked and Content-Length)
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
