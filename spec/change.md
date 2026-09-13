@@ -1,32 +1,3 @@
-## Evidence
-
-cosmopolitan promoted FTS5 into the library build on the promise that it "gives every
-lua binding a full-text index over its own data with two statements"
-(`third_party/sqlite3/BUILD.mk`, the NOTES header, ~208 KiB measured there). In cosmic
-the two statements are still written by hand at every site, and each site re-solves
-the same four problems: is the module present in THIS binary; how to quote a
-free-typed query so `-`, `*`, `:`, `AND` read as words; which `bm25()` weight goes
-with which column (FTS5 binds them by POSITION, `UNINDEXED` columns included, so a
-weight list silently shifts when a column is added); and how to get a snippet back.
-
-The one production instance is the board's `_work/find.tl` (183 lines): a 40-line
-header on tokenizer choice and weight positions, `escape_token`/`match_all`/`match_any`,
-a ranked query, `snippet()` with its own ellipsis constants. «J9eH_ond1» ports the
-three pure builders into `cosmic.sqlite`. Three more consumers are now on the board —
-`--docs` search («So6c_e5pY»), the prose near-duplicate report, the `--docs`
-mentions view — and each would write the DDL, the probe, the weights and the snippet
-call again. `cosmic/sqlite/init.tl` is at 459 of 500 lines and `extras.tl` at 128
-(`wc -l cosmic/sqlite/*.tl`), so the battery is a new shard.
-
-Nothing in the wrapper knows FTS5 today:
-
-```
-$ grep -rln "fts\|bm25\|snippet" cosmic/sqlite/*.tl
-(nothing)
-```
-
-## Change
-
 Blocked on «J9eH_ond1» (the MATCH builders it lands are reused, never duplicated).
 
 1. `cosmic/sqlite/fts.tl` (new shard, requireable as `cosmic.sqlite.fts` — public by
@@ -70,10 +41,3 @@ Blocked on «J9eH_ond1» (the MATCH builders it lands are reused, never duplicat
    cosmic.sqlite` renders it.
 5. `_work/find.tl` is NOT changed here (a different repository); its shrink onto the
    battery is a follow-up on the work board once this lands.
-
-## Non-goals
-
-Custom tokenizers — `fts5_api` is C, unbound by `lsqlite3`; identifier-aware
-tokenizing is done by the caller before `add`, or with `trigram`. `create_function`
-exposure («Es2a_EOny» is that). Highlight rendering beyond `snippet()`. Vocabulary
-tables (`fts5vocab`) — one consumer today, the prose report; add when a second appears.

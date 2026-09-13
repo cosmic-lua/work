@@ -1,3 +1,4 @@
 title: cosmic.sqlite.fts: the two-statement full-text battery — create, add, ranked search with weights by column name and snippets, availability probe
 parent: 3IvLRVaUko5RlSGou7dcgs8XHhE
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/sqlite/fts.tl cosmic/sqlite/zipfile_test.tl cosmic/sqlite/fts_test.tl cosmic/sqlite/init_example.tl cosmic/sqlite/init.tl _work/find.tl
