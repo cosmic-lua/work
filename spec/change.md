@@ -1,56 +1,3 @@
-## Evidence
-
-Decided by the goal owner in conversation, 2026-09-04: the release no
-longer gates on the perf compare; the same measurement moves to a
-scheduled daily lane that reports and never blocks anything.
-
-Forces, measured. `release.yml`'s "compare against the previous
-release" step has refused to publish on noise more often than on
-regressions: five consecutive scheduled releases 2026-08-18..22 (the
-step's own comment), three held 2026-08-24..26 (D31's context), and
-the 09-03 run (`33746684991`, `re_match_log_line +1.5%` inside a
-±10% band, counted as a regression because "no same-binary control
-explains the gap"). D31, D34→D36 and D35 each bought the gate more
-evidence and each record says plainly it lowers the false-red rate
-without eliminating it. Meanwhile a red release lane holds the trust
-root: `bin/cosmic.pin` cannot advance to a release that does not
-exist, and today three cosmos pin bumps and their dependents wait on
-exactly that («Xvox_XNCM» → `3IkMf7BY`, `3ImjB20O`, `3In3fTdC`). The
-compare instrument itself is sound and stays; what changes is what a
-red verdict is allowed to stop.
-
-What the tree pins today (`grep -n` at `79aa8c16`):
-- `.github/workflows/release.yml:13-17` — the `perf_gate` dispatch
-  input; `:120-139` "measure the release"; `:141-201` "compare against
-  the previous release"; `:240-247` the artifact list carrying
-  `perf.json`, `selfcheck.json`, `compare.txt`; `:330-375` the
-  `release` job copies and publishes those three and puts
-  `compare.txt`'s verdict line first in the release notes.
-- `_build/workflows_test.tl:345-392` — two ratchets over that step
-  (`pipefail`/`exit "$rc"`/no `|| true`/SKIP path; `_perf/baserun.tl`
-  and `--baseline-bin`), and `:127-343` the per-workflow container /
-  digest / privileged / non-root-builder ratchets that any new
-  workflow file inherits via `workflows()` (`fs.find` over
-  `.github/workflows/*.yml`).
-- `docs/goals.md:131-142` (G6: "enforced by the existing
-  `perf-compare` gate", "ratchets per release") and `:173` (G9: "the
-  perf history (G6's release-asset pattern)").
-- Comments naming the release step: `_perf/baseline.tl:2-24`,
-  `_perf/gate.tl:426`, `_perf/skew_test.tl:1-12`,
-  `skills/optimize/SKILL.md:59`; `AGENTS.md:56-59` and `:399-403`
-  list the lanes.
-- Board tool: `o/board/_work/lanes.tl:29` `LANES = {"release.yml",
-  "fuzz.yml", "docs.yml"}` — the new lane is not observed by `sync`
-  until that list grows; that is a board-tool item, not this PR.
-
-Schedule: release.yml fires `0 6 * * *`, fuzz.yml `0 9 * * *`. The
-perf lane fires `0 3 * * *`, BEFORE the release, so its compare is
-"today's main against the latest published release" — yesterday's
-main — and never the near-A/A of a binary against its own commit
-that an after-release slot would measure.
-
-## Change
-
 One PR on cosmic-lua/cosmic, `Board:` this item.
 
 1. New `.github/workflows/perf.yml`, modelled line for line on
@@ -130,13 +77,3 @@ Walls: `_perf/gate.tl`, `_perf/compare.tl`, `_perf/tiebreak.tl`,
 `_perf/baseline.tl`'s behaviour and every verdict-line format are
 frozen — this PR moves the caller, not the instrument. `_perf/run.tl`'s
 JSON format is frozen. No change to `pr.yml`, `fuzz.yml`, `docs.yml`.
-
-## Non-goals
-
-- Not the `includeIf`/`origin/board` fix in `release.yml` — «Acp1_MOgO»,
-  a separate PR on the same file; whichever lands second rebases.
-- Not adding `perf.yml` to gitboard's `LANES` — a board-tool item.
-- Not resolving `c5wU_p1n9` (the `re_match_log_line` question): it
-  stops holding the release and stays a perf item.
-- Not `3IHHKCyzBe8` (perf.json's role as a release asset): this PR
-  dissolves it; it is ended when this lands.
