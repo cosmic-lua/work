@@ -9,6 +9,12 @@ local briefmeasure = require("_work.briefmeasure")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+-- Requiring the fixture module points this process at an empty global
+-- git config (`GIT_CONFIG_GLOBAL`), which is what lets `git init` run
+-- under the build fence, where the home directory's config is
+-- unreadable; its own `git` helper returns nothing, and `rev-parse`
+-- below needs stdout, so the runner stays local.
+local _fixture = require("_work.fixture")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
