@@ -1,2 +1,3 @@
 title: --make build reports PASS with a broken binary when a generator writes modules into the tree
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
+access: cosmic-lua/cosmic
