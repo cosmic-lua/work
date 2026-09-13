@@ -1,5 +1,3 @@
-## Change
-
 Decided by the operator 2026-08-30: the merge-queue ruleset keeps the
 Actions check-run names (`pr / ci|build|repro|smoke`) as the required
 checks; the `gate/*` commit-status mirror retires. Background: the
@@ -31,11 +29,3 @@ One PR on main:
    run is now recovered by re-running that run, not by a dispatch run
    satisfying statuses. Update the decisions README index row if the
    H1/status grammar requires it.
-
-## Non-goals
-
-No ruleset changes (operator already configured it). No AGENTS.md edit
-(item LTMyAU2E owns the AGENTS.md trigger sentence). No changes to
-concurrency groups or job content. Item GkZU2EFI (the action's stale
-trigger-list comment) is ended by the orchestrator as superseded once
-this merges — not part of this diff.
