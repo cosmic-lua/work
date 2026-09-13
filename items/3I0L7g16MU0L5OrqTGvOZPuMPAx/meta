@@ -1,5 +1,6 @@
 title: the feedback half emits prose, not issues: four countermeasures went unfiled today
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1247
 resolution: completed
+touches: _work/verdict.tl _work/verbs.tl _work/verdict_test.tl
