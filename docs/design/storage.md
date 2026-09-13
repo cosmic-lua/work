@@ -1,7 +1,7 @@
 # Design — one branch is the board
 
 A board is one branch. Its tree is the board's state, its first-parent
-history orders native mutations as they are published, and one
+history is every mutation in the order it was published, and one
 non-forced push of that one ref is the only write.
 
 ## The rule
@@ -9,29 +9,46 @@ non-forced push of that one ref is the only write.
 A board is `refs/heads/state` on cosmic-lua/work, and format 6 is that
 layout. The branch's tree is the whole of the board's state — every
 item, every recorded lease, the format marker. Its first-parent history
-orders native mutations, one commit each. Imported history retains its
-original identities and causal relationships through a compatibility
-bridge; replay order is not an invented historical publication order.
-One non-forced push of that one ref is the only write a
+is every mutation ever published, one commit each, in the order it was
+published. One non-forced push of that one ref is the only write a
 mutation makes.
 
 Everything below is that rule applied.
 
-## Compatibility with the single-head rebuild
+## What carries over from the single-head proof of concept
 
-Format 6 extends work#167's transaction and publication machinery with
-a native tree layout. The envelope's packs are a storage choice; its
-frozen plans, destination binding, deadline checks, integrity checks,
-publication receipts and claim-authority rules are requirements to
-carry forward. Native-tree publication must work through the connector
-before either the live cutover or retirement of the envelope adapter.
+work#167 answered a connector-only environment — a GitHub connector
+that can write a tree and advance one branch, with no credential for
+shell git — by archiving the ref layout as base64 packs inside one
+branch. Its packs are a storage choice this design replaces; its
+protocol is not. Four invariants carry over verbatim into the
+connector path here:
 
-All new structured storage uses `cosmic.literal`, through the canonical
-adapter in `_work/singlehead_literal.tl`: claims, prepared manifests,
-plans, receipts, event attribution and migration checkpoints. Existing
-format-5 item payloads and Markdown bodies keep their established codecs.
-This is a design contract, not a claim that the native layout is already
-implemented. The compatibility and cutover tests below gate activation.
+- **One immutable attempt.** A publication plan is frozen once, bound
+  to one destination repository and branch, and every call the caller
+  executes is rendered from that saved plan — never from a draft ref
+  that may have moved, and never spliced with a call from another
+  attempt (`_work/singlehead_calls.tl`'s saved-plan schema and its
+  indexed `call` rendering).
+- **The deadline is checked at the final call.** A claim batch carries
+  the earliest member's expiry as `publish_by`; the non-forced
+  `update_ref` is refused past it, on the shell path and the connector
+  path alike. It is a client check, not a server lease.
+- **Publication is not authority.** A landed publication proves that
+  the transaction landed; whether the session holds a claim now is
+  read from the current tree. `refresh` reports the two separately.
+- **A connector-created commit is not the local candidate.** The
+  provider mints the commit, so its sha differs from the one staged
+  locally; the returned sha is what confirmation records.
+
+What does not carry over is everything that exists only because the
+envelope held packs: chunk uploads and their budget, hydration into
+tracking refs, validation of inherited pack chunks and object
+connectivity, the sequence codec, and the manifest of receipts that
+every publication rewrote. That manifest is the one piece that could
+not survive even in principle: on a tree whose write fence is per path,
+a blob every writer touches makes every pair of writers conflict, so
+the receipt has to be the commit itself (`## One commit, one mutation`).
 
 ## What the ref layout costs
 
@@ -46,15 +63,8 @@ $ git for-each-ref refs/remotes/origin/ended | wc -l
 723
 $ git for-each-ref refs/remotes/origin/claim-batches | wc -l
 518
-$ git count-objects -vH
-count: 20361
-size: 92.80 MiB
-in-pack: 66720
-packs: 6
+$ git count-objects -vH | grep size-pack
 size-pack: 20.03 MiB
-prune-packable: 40
-garbage: 0
-size-garbage: 0 bytes
 $ git rev-list --count --all
 31694
 $ git for-each-ref --format="%(objectname)" refs/remotes/origin/items \
@@ -63,11 +73,9 @@ $ git for-each-ref --format="%(objectname)" refs/remotes/origin/items \
 14350
 ```
 
-The last two numbers are different facts and the design needs both.
 `--all` counts every commit this clone can reach, a second board remote
-and its own branch refs included; 14350 is what the board itself is —
-the commits on the 1965 item, ended and claim-batch refs, which is what
-one branch has to carry.
+included; 14350 is the board itself — the commits on the 1965 item,
+ended and claim-batch refs — and is what one branch has to carry.
 
 Three costs follow from that shape, and together they are why the
 board becomes one branch rather than a tidier set of refs.
@@ -81,9 +89,9 @@ between 50 and 100 ref updates (1, 10 and 50 pass; 100 fail; a 6 MB
 body passes; a ref deletion is refused identically). The migration ran
 in **31 atomic batches of at most 50 refs with the marker riding the
 last one**, and D49 makes that the standing discipline for every
-whole-board rewrite. One-ref native mutations avoid that ref-count cap;
-bootstrap still needs bounded uploads, restart safety and an explicit
-activation boundary. This record
+whole-board rewrite. A board whose every write touches one ref never
+approaches the ref-count cap; what remains is a body-size bound the
+migration's staged pushes respect (`## The migration`). This record
 does not restate D49; it inherits it.
 
 **The layout is load-bearing in 27 modules.** Every one of them names
@@ -92,52 +100,18 @@ a ref path, enumerates refs, or knows about claim batches:
 ```
 $ grep -lE 'refs/heads/items|for_each_ref|claim-batches' _work/*.tl | grep -v _test | wc -l
 27
-$ grep -lE 'refs/heads/items|for_each_ref|claim-batches' _work/*.tl | grep -v _test
-_work/cache.tl
-_work/cachedb.tl
-_work/cachewatch.tl
-_work/doctrine.tl
-_work/fixture.tl
-_work/format.tl
-_work/gitclaim.tl
-_work/gitdedupe.tl
-_work/gitdraft.tl
-_work/gitfsck.tl
-_work/gitfsck_claimbatch.tl
-_work/gitlog.tl
-_work/gitread.tl
-_work/gitreadmany.tl
-_work/gitreadspec.tl
-_work/gitshow.tl
-_work/gitwrite.tl
-_work/indexddl.tl
-_work/prepared.tl
-_work/publish.tl
-_work/refs.tl
-_work/singlehead_hydrate.tl
-_work/singlehead_objects.tl
-_work/singlehead_transaction.tl
-_work/store.tl
-_work/storeinit.tl
-_work/tail.tl
 ```
 
-**The single-head transport supplies the compatibility baseline.**
-work#167's proof of concept answers a separate measured constraint:
-a connector that can write a
-tree and advance one branch, with no credential for shell git — and it
-answers it by *preserving* the ref layout rather than replacing it:
-the original commit graph is archived as base64-encoded git packs
-under `gitboard/packs/<sha256>/<chunk>.pack.b64` on one envelope
-branch, with a logical ref map beside them in
-`gitboard/state.literal`. Every reader has to import those packs and
-project the logical refs back into a tracking namespace before it can
-read an item at all (`_work/singlehead_hydrate.tl`), and GitHub can
-show none of it: the branch's tree holds base64 chunks, not specs. One
-branch whose tree *is* the board makes current specs directly readable.
-The connector and shell-git writer share that native layout and the
-existing transaction guarantees; archived history remains available
-until its consumers have a verified replacement.
+**The single-head transport exists only because a multi-ref push
+cannot be expressed as connector calls.** It preserves the ref layout
+by archiving the original commit graph as base64-encoded git packs
+under `gitboard/packs/<sha256>/<chunk>.pack.b64` with a logical ref map
+beside them in `gitboard/state.literal`; every reader must import the
+packs and project the logical refs back into a tracking namespace
+before it can read an item (`_work/singlehead_hydrate.tl`), and GitHub
+can show none of it. One branch whose tree *is* the board needs no
+envelope and no hydration: the connector writes the same tree every
+other writer writes, under the invariants above.
 
 ## The tree
 
@@ -149,7 +123,11 @@ items/<id>/spec/non-goals.md
 items/<id>/order          present only when this item ranks a child
 items/<id>/edges/<kind>/<id>
 items/<id>/log/<ksuid>.md an appended entry (`log ID --add FILE`)
-claims/<id>               canonical cosmic.literal claim record
+claims/<id>               the recorded lease: id, holder, acquired_at,
+                          renewed_at, expires_at, product_base —
+                          one `key: value` per line
+migration/marks           written once by the migration: `<old> <new>`
+                          per replayed commit, the evidence bridge
 ```
 
 `spec/change.md` and `spec/non-goals.md` carry over from format 5
@@ -173,30 +151,25 @@ $ grep -n '"claim-bridge"' _work/gitclaim.tl
 207:        op = "claim-bridge"})
 ```
 
-**Reuse the item codec with explicit changes.** `spec/`, `order` and
-`edges/` under `items/<id>/` retain the bytes produced by
-`_work/itemtree.tl`'s `build_tree`. Removing `claim_batch` changes the
-meta blob and subtree ID; adding `log/` changes the subtree too. Do not
-assert identity between the complete old and new item trees. The native
-board tree grafts the transformed subtree under `items/<id>/`.
+**The item codec is reused, not rewritten.** `spec/`, `order` and
+`edges/` under `items/<id>/` are the bytes `_work/itemtree.tl`'s
+`build_tree` already produces, and `meta` is the same encoder with one
+key fewer. The subtree's id therefore differs from the format-5 tree
+whenever `claim_batch` was set or a `log/` entry exists; nothing
+compares the two trees for identity, and nothing should.
 
-**A claim records an acquisition, not just a live timestamp.** Preserve
-`holder`, `acquired_at`, `renewed_at`, `expires_at`, `product_base` and
-the root/control semantics of `_work/claim.tl`. Expiry permits a new
-acquisition; it does not erase the previous claimant's work or delete a
-blob by itself. A new acquisition creates a new identity; repeated
-`take` by its active holder stays idempotent. `renew` keeps the identity,
-and `drop` removes the current record atomically for the batch.
-
-An imported acquisition keeps its original root identity, which names
-existing product branches and worktrees. Native acquisitions must have
-a distinct root after every reacquisition, including by the same holder.
-Neither root nor control can be reconstructed as the first or last path
-write across all history: renewal, drop, reacquisition and migration are
-different events. The codec and history bridge must specify acquisition
-boundaries and resolve control to the actual published commit without
-a self-referential commit hash. Rebase and connector publication must
-preserve that association. Removing batch refs waits for these proofs.
+**`claims/<id>` records an acquisition, not a timestamp.** The blob
+carries the fields of `_work/claim.tl`'s `State` with the two commit
+ids replaced: `root` becomes `id`, a 32-hex identity minted at
+acquisition — the value `claim.branch` already turns into the work
+branch `work/<handle>/<id12>`, so the branch is known before anything
+is published and survives a rebase — and `control` is dropped, since
+the deadline it fed is `expires_at` and the blob carries that
+directly. `claim` writes the file with a fresh `id`, `renew` rewrites it
+keeping the `id`, `drop` deletes it. A lease that expired is not
+deleted by expiry: the holder may still drop it (as today) and a new
+acquisition supersedes it with a new `id`. `refs/heads/claim-batches/*`
+and `meta`'s `claim_batch` line both go away for new writes.
 
 **The branch is named `state` because `board` and `items` are taken.**
 A git ref cannot be both a file and a directory, and both names are
@@ -211,10 +184,7 @@ fatal: update_ref failed for ref 'refs/heads/board': cannot lock ref 'refs/heads
 $ git update-ref refs/heads/state HEAD
 ```
 
-Either name would only become available once every `items/*` and
-`board/*` ref had been deleted — which the retire child does, long
-after the new branch has to exist. `state` is free today, in every
-clone, on both sides of the migration.
+`state` is free today, in every clone, on both sides of the migration.
 
 ## One commit, one mutation
 
@@ -224,59 +194,73 @@ committer gitboard, its subject the verb grammar already in use and
 already parsed: `_work/events.tl`'s `parse_subject` reads the first
 token as the verb, the token after ` by ` as the session and the hex
 after `head:` as the head, and it classifies nothing it cannot parse
-rather than refusing. The `Op: <verb>` trailer stays exactly as
-it is.
+rather than refusing. The `Op: <verb>` trailer stays exactly as it is,
+and one trailer is added: `Transaction: <id>`, the prepared
+transaction's id, which is how a published commit is found again
+(`git log --first-parent --grep`) — the commit is its own receipt, and
+there is no manifest of receipts for every writer to fight over.
 
 A `log --add` entry writes `items/<id>/log/<ksuid>.md` **and** carries
 the same text in the commit body, so `git log -- items/<id>` and the
 tree both show it. That is a change from format 5, where the entry is
 a tree-identical commit and the body is the only copy
-(`_work/fastimport.tl`'s empty-`ops` shape). A path-only walk would miss
-those imported commits. Migration must retain their messages, ordering
-and explicit item attribution even when their trees are identical;
-the compatibility reader cannot rely only on `git log -- items/<id>`.
+(`_work/fastimport.tl`'s empty-`ops` shape): with one branch, a
+tree-identical commit is indistinguishable from a no-op, and the path
+is what makes `git log -- items/<id>` an item's history.
 
-A native claim batch is one commit writing every member's `claims/<id>`;
+A claim batch is one commit writing every member's `claims/<id>`;
 `renew` rewrites them in one commit, `drop` deletes them in one. The
-separate batch object is unnecessary for new writes. Imported batch
-history remains subject to the compatibility contract.
+batch object and its manifest are gone for new writes, because the
+commit *is* the batch; the `id` in each blob is the batch's identity.
 
-The native branch can replace `board/seq` as the serialization point,
-but must also preserve its bounded-mutation validation in
-`_work/gitgate.tl`. Ordering commits alone does not revalidate decisions
-made against an earlier board snapshot.
+There is no `board/seq`. The bare-lease ref exists today to serialise
+the BOUNDED mutations — a new `take` against the doing bound, a lane
+mint — whose gates read the whole board before deciding. On one
+branch a bounded mutation fences the whole head instead
+(`## The write fence`): the ordering is the branch's first-parent
+order, and the revalidation is explicit.
 
 ## The write fence
 
-Record both the write set and the read dependencies at staging base B,
-including absent paths. An item edit fences its claim record even if it
-does not write that record; claims fence the item state they authorize.
-Subtree/blob IDs detect content changes, while acquisition and item
-event identities detect relevant changes that leave content unchanged.
-Cross-item predicates such as cycle checks need their complete read
-dependencies or a whole-head fence. Initially, use a whole-head fence
-for bounded predicates whose narrower dependency set is not proved.
-At publish, with fetched head H:
+A mutation records, at its staging base B, the object id of every path
+it READ to decide, not only the paths it writes — an absent path
+recorded as the zero id:
+
+- an item mutation: the subtree `items/<id>` **and** the blob
+  `claims/<id>`, so an edit staged before someone else's claim lands
+  loses to that claim exactly as the shared item ref makes it lose
+  today;
+- a claim, renew or drop: the same two paths for every member;
+- a bounded mutation: the head B itself, whole.
+
+At publish, with the fetched head H:
 
 - H equals B — push.
-- H differs from B, and every read/write dependency still matches —
-  revalidate the applicable gate, then build a fresh candidate on H
-  applying the staged changes. Freeze a new publication attempt.
-- A dependency or required predicate no longer holds — `LOST_RACE`, the same
+- H differs from B, and every recorded path has the same object id at
+  H as at B — rebase the commit onto H (re-apply the same tree changes
+  over H's tree, `git cherry-pick`-shaped) and push.
+- H differs from B and the mutation is bounded — re-run its gate
+  against H's tree in-process; if it still passes, rebase and push,
+  otherwise refuse with the gate's own message.
+- Any recorded path differs between B and H — `LOST_RACE`, the same
   refusal `_work/publish.tl` documents today
   (`store.LOST_RACE`: *"lost the push race — the mutation was dropped
   whole and the checkout re-synced; re-run the verb against the
   current board"*). The verb re-reads and decides again.
 
 A non-fast-forward rejection at the push is a moved head, not a lost
-race: fetch, repeat, at most five times, then refuse.
+race: fetch, repeat, at most five times, then refuse as `LOST_RACE`.
 
-The final update is globally serialized. Disjoint transactions may
-retry automatically, but sustained contention can exhaust the retry
-budget. Same-item conflicts and cross-item predicate conflicts refuse
-the whole transaction. The proof cases include an edit staged before
-another session acquires its item, and two individually valid graph
-edits whose combined result would be invalid.
+Against the ref-per-item fence this is the same refusal for the same
+races — the same-item writer, the edit racing a claim, two bounded
+mutations — with one gain and one cost stated plainly. The gain:
+disjoint writers never wait on each other, and the retry is a local
+rebase of a commit the writer already holds rather than a fresh
+transaction from a re-read board. The cost: the final update is one
+ref, so every publish serialises there, and sustained contention can
+exhaust the five retries; the contention child measures that before
+the cutover, and that number is what would make cosmic's D50 (the
+record the second child writes) revisit.
 
 ## Reading
 
@@ -286,213 +270,232 @@ the refs disagree with what the cache last recorded. What changes is
 that the digest over a whole ref namespace becomes one sha. The cache
 rebuilds when `refs/remotes/<remote>/state` differs from the sha
 `cache_meta` recorded, and every save and fetch patches the rows it
-moved. Mere existence of `state`, or a `format` blob in an uploaded
-ancestor, does not select the native reader: the verified activation
-record described below does.
+moved.
+
+The reader activates on the MARKER, not on the branch. A format-6
+reader runs when `refs/heads/board/format` (its tracking ref) reads
+`6`; the existence of `state` alone selects nothing, because the
+migration's staged pushes create the branch long before it is complete
+(`## The migration`). A format-5 build refuses the same marker by name
+(`format.refusal("6", true)` returns *"refs/heads/board/format is 6,
+this tool expects 5 — it cannot safely read or write this board"*).
 
 A rebuild is three reads:
 
-- one `git ls-tree -r` over the head's tree and one `git cat-file
-  --batch`, giving every item's `meta`, spec blobs, `order`, `edges`
-  and log entries, and every `claims/<id>`;
+- one `git ls-tree -r -z` of the head, classified by path;
+- one `git cat-file --batch` for every `meta`, `order`, `edges` entry,
+  spec and log blob, and every `claims/<id>`;
 - one walk of the branch —
   `git log --first-parent --format=%H%x00%ct%x00%an <%ae>%x00%s --name-only` —
-  joined with explicit event attribution and the migration bridge,
-  giving `events`, per-item `tip` and `touched_at`. Claim-only events
-  and imported tree-identical notes must remain attributable. The
-  global head, per-item event tip, subtree ID, claim control and research
-  result SHA are distinct identities with separate uses.
+  giving the `events` rows, attributed by path: a commit naming
+  `items/<id>/` or `claims/<id>` is an event of item `<id>`, a claim
+  batch touching N members yields N rows, and the first commit in the
+  walk naming a path under `items/<id>/` is that item's `tip` and its
+  `touched_at`.
 
-The source measurement above is 14350 commits across 1965 tips; the
-native replay and compatibility bridge may have different traversal
-costs. Incremental reads can use one range from the recorded head to
-the new head. Measure full and incremental rebuilds with the history
-bridge enabled before claiming a performance improvement.
+Four identities that the ref layout let one sha stand in for are
+distinct here and are named where they are used: the global head (the
+cache digest), an item's tip (its lease and `touched_at`), the subtree
+id of `items/<id>` (the write fence), and the published board commit a
+research handover names (`## Evidence`).
+
+The cost, honestly: a full rebuild walks every commit on the branch,
+14350 today, where the ref layout's walk covers the same commits spread
+across 1965 tips. It is one process either way. The incremental patch
+on save and on fetch reads only the commits between the recorded sha
+and the head — one range on one ref rather than a range per moved ref.
+Both numbers are measured by the contention child before the cutover,
+not asserted here.
+
+## Evidence
+
+Three item fields name board commits: `result` (a research handover,
+`take ID --result`, records the item's tip as the researcher observed
+it), `verdict_head` and `landed_head` when they judge and close that
+result. On one branch the tip an item's reader observes is a
+PUBLISHED commit — `store.list` reads the tracking ref — so its sha is
+stable, and `verdict`'s lineage check becomes: the recorded commit is
+an ancestor of the fetched head and names `items/<id>` in its diff. A
+speculative commit is never evidence: `take --result` under a draft is
+refused until the draft is published, because a draft commit's sha
+changes when its chain is rebased.
+
+The migration rewrites every commit, so every `result`, `verdict_head`
+and `landed_head` that names a format-5 board commit is rewritten
+through the marks map to the replayed commit (`## The migration`);
+`migration/marks` in the tree keeps that bridge readable afterwards.
 
 ## Drafts and prepared transactions
 
-A prepared transaction keeps `refs/gitboard/prepared/<id>` and an
-immutable `cosmic.literal` manifest. Its schema carries the destination
-repository/branch binding, transaction identity, base, read/write
-dependencies, staged changes, publication deadline and candidate/receipt
-association. One ref simplifies the update set; it does not replace
-these protections in `_work/prepared.tl` and the single-head machinery.
+A prepared transaction is a local ref `refs/gitboard/prepared/<id>`
+naming the staged commit, and `_work/prepared.tl`'s manifest keeps the
+fields the commit cannot carry for itself: the destination remote, the
+base B, the recorded dependencies (`{path, id}`), the `publish_by`
+deadline for a claim batch, and — once published — the sha the
+destination actually holds (the connector's returned commit, or the
+rebased commit the shell push sent). The expected/next ref triples go
+away; the ref is the update.
 
 A draft is `refs/gitboard/drafts/<id>` (the namespace
 `_work/gitdraft.tl` already owns): a chain of staged commits from one
-snapshot, each one a mutation. Publishing freezes the complete draft
-before any upload, validates its external dependencies and each staged
-transition, and publishes the complete candidate chain in one update.
-Every mutation stays its own commit —
-the chain is not squashed, because the branch's history is the log.
+snapshot, each one a mutation with its own dependencies. Publishing
+rebases the chain onto the fetched head one commit at a time, each
+fence checked against the head it lands on, and pushes the tip once;
+every mutation stays its own commit, because the branch's history is
+the log. A draft whose chain advanced after its publication snapshot
+is not confirmed by that publication.
 
-`refresh` confirms the actual published candidate against the fetched
-head of the bound destination. A connector-created commit may differ
-from its local candidate; persist the returned SHA and its verified
-transaction association before the final update. Recovery after an
-ambiguous response must reconcile the remote evidence. A historical
-receipt proves publication, never current claim authority: acquisition,
-renewal and drop reconcile separately against current state. Confirmation
-must not retire a draft that advanced after its publication snapshot.
+`refresh` confirms a transaction when its published commit — found by
+its `Transaction:` trailer on the first-parent chain, or by the sha the
+manifest recorded — is an ancestor of the fetched head, and retires the
+local ref. It reports claim authority separately, from the current
+`claims/<id>` blobs, never from the fact of publication.
 
 ## A connector-only environment
 
-Extend `_work/singlehead_calls.tl` and its saved-plan protocol with a
-native-tree payload. Small mutations commonly render as:
+The publication plan is the saved-plan schema `_work/singlehead_calls.tl`
+already defines, with the pack payload replaced by the changed paths:
+`{head, base_tree, changes, message, publish_by}`, where a change is
+`{path, mode, content | delete}`. It renders as the three calls the
+proof of concept renders today:
 
-- `create_tree(base_tree = head's tree)` with the changes,
+- `create_tree(base_tree = head's tree)` with the changes, split into
+  bounded calls exactly as `TREE_CALL_BYTES` splits them now,
 - `create_commit(parents = [head])`,
-- `update_ref(force = false)`.
+- `update_ref(force = false)`, guarded by `publish_by`.
 
-Larger changes may require bounded blob/tree uploads and drafts may
-require multiple commits. All bytes and call dependencies belong to one
-immutable saved attempt; per-call execution must not reread mutable
-draft refs. Validate the destination binding, inherited state and object
-closure before producing a ready plan. Reject shallow/incomplete sources
-unless their required closure is explicitly obtained and verified.
-
-Check the deadline at execution of the final non-forced ref update.
-On a race, preserve the old attempt and create a new one only after the
-write-fence checks; never splice calls from different candidates. Retain
-the receipt/current-authority distinction in `_work/singlehead_receipts.tl`.
-Shell and connector writers use the same semantics and native layout;
-byte-identical commit SHAs require controlled metadata, not an assumption.
+The fence runs in Teal against the fetched head before the calls are
+rendered, the plan is frozen once and bound to its destination, every
+call is rendered from the saved plan, and the returned commit sha is
+recorded before confirmation. A connector-only writer and a shell-git
+writer produce the same tree on the same branch, so there is one
+transport with two executors. What the connector cannot do is update
+two refs atomically, which is why the migration's activation push is
+shell-git only.
 
 ## The migration
 
-Migration is a compatibility transform from a frozen source snapshot.
-An existing envelope board and a format-5 ref board must both have a
-supported import path. Reject incomplete sources and validate all
-inherited archives before replay. Persist the source repository identity,
-exact logical refs, object closure, claim snapshot and transform version
-in a canonical `cosmic.literal` checkpoint. Resume from that checkpoint;
-do not silently resample claims or rebuild from a moving source.
+`migrate6` replays every item ref's first-parent chain into one
+`git fast-import` stream (`_work/fastimport.tl`) producing `state`:
 
-The transform may use `git fast-import` and graft existing item trees,
-but must preserve original commits as reachable evidence, or supply a
-verified identity/ancestry bridge for every existing consumer before
-removing them. In particular:
+- every commit of every `items/*` and `ended/*` ref, merged across
+  refs by committer date with each ref's own order preserved — a
+  child never precedes its parent, and ties between unrelated refs
+  fall to the ref name;
+- message, author and dates preserved exactly; the tree the item's
+  tree grafted under `items/<id>/`, with `claim_batch` removed from
+  `meta`;
+- a claim bridge (`Op: claim-bridge`) replayed as the item tree it
+  carries, its batch's acquisition becoming the `claims/<id>` write
+  that commit makes;
+- a tree-identical log entry (format 5's `Op: log`) materialised as
+  `items/<id>/log/<ksuid>.md` carrying the body, so the path walk sees
+  it;
+- `--export-marks` kept as `migration/marks`, and in a final commit
+  every `result`, `verdict_head` and `landed_head` naming a replayed
+  commit rewritten through it, and every item's current lease — active
+  or expired but not dropped — written as `claims/<id>` with its batch
+  id as `id`.
 
-- `_work/gittake.tl` records a board commit as a research result;
-  `_work/gitverdict.tl` and `_work/gitdone.tl` verify result identity,
-  `verdict_head` and lineage. Rewritten commit IDs cannot silently
-  replace those references.
-- Preserve author, committer, dates, messages and parent relationships
-  as source evidence. Replay in a deterministic topological order;
-  timestamps can break ties between unrelated events, not reorder a
-  child before its parent or establish a global historical order.
-- Attribute tree-identical notes, ended-item history and claim-bridge
-  events explicitly. Removing `claim_batch` from current meta does not
-  permit losing the historical batch graph or acquisition identities.
-- Carry recorded claims with their acquisition/control associations,
-  including expired records needed for continuation semantics. Derive
-  active status from the clock when read; do not erase it during replay.
-- Pending drafts/prepared work need an explicit conversion or a clear
-  refusal that retains recoverable local data. A pinned client must
-  understand the old board throughout the pre-activation interval.
+The run is checkpointed: `o/migrate6/checkpoint.literal` records the
+source tip of every ref, the marks, and the replayed head, so a rerun
+compares tree ids and reports `identical` or refuses, and a source ref
+that moved since the checkpoint is named rather than resampled.
 
-The native replay count need not equal the number of distinct commits
-reachable from the old refs. Audit items, raw logs, research evidence,
-claims and graph closure, rather than treating a matching count or tree
-as proof of compatibility. Restore and verify in a temporary destination,
-then install atomically so a failed import can retry cleanly.
+The push is one ref, but the stream is 14350 commits and one body may
+exceed what the proxy accepts. So push ancestors of the tip in turn —
+`git push origin <sha>:refs/heads/state`, `--limit N` commits apart,
+each one a fast-forward, each idempotent on rerun — which is D49's
+discipline applied to body size instead of ref count. A partial
+`state` activates nothing (`## Reading`). The last push carries
+`refs/heads/board/format` → `6` atomically with the tip, so the
+cutover is one instant.
 
-## Activation and recovery
+**Fencing the writers that did not refetch.** A format-5 client that
+staged a transaction before the marker moved, and publishes without
+fetching, pushes to the old refs with a lease that still holds; its
+write lands there and never reaches `state`. Two measures close that:
+before the activation push the board owner sets a GitHub ruleset that
+refuses updates to `refs/heads/items/**`, `ended/**`,
+`claim-batches/**` and `board/seq`; and `fsck` on a format-6 board
+compares every old tracking ref against the checkpoint's source tips
+and reports any that moved, which `migrate6 --catch-up` replays through
+the same marks.
 
-1. Establish an enforceable fence against legacy writes, including
-   transactions staged by already-running old clients. A marker checked
-   only on fetch is insufficient. Drain/revoke old writers or provide a
-   server-enforced fence; then capture and verify the final source snapshot.
-   The exact fencing mechanism is a prerequisite for the migration runner.
-2. Upload bounded chunks or ancestor commits under a dedicated staging
-   branch. Readers keep using the old authority. Neither a staging branch
-   nor an incomplete `state` branch activates format 6. Persist upload
-   progress and verify the complete candidate against the checkpoint.
-3. Prepare an activation record binding the destination, source snapshot,
-   verified native tip and compatibility bridge. Define and test the
-   atomic activation protocol for the chosen publisher. A shell path may
-   update `state` and the legacy marker atomically; a connector path must
-   use a single activation authority after staging immutable objects.
-   It cannot assume a two-ref atomic API. Legacy writers remain fenced.
-4. Native readers require the activation record and verify its bound tip
-   is the head or an ancestor of the current `state` head. Recheck that
-   the legacy source has not moved before activation. Publish activation
-   only after the complete snapshot is durable and verified.
-5. Validate fresh readers, logs, research completion and a full claim
-   acquire/renew/drop cycle through shell and connector sessions. Record
-   the observed publication receipts and current authority separately.
+## Validation
 
-A failed upload resumes from the same immutable checkpoint; a changed
-source requires a new checkpoint and audit. An ambiguous activation
-response is resolved by reading the bound remote authority. Before
-activation, abandoning staging leaves the old board authoritative.
-After native writes begin, old refs are an archive, not a current
-rollback target: reversal requires fencing native writers and migrating
-their new work back. Retirement never means silently falling back to a
-stale board.
+Before the release that carries the cutover, the following are held by
+tests in the tree, each with at least one semantic mutant shown to make
+it fail (the discipline `experiments/single-head/mutations.tl` set):
 
-## Validation gates
-
-Carry forward the regressions in `experiments/single-head/VALIDATION.md`
-and the semantic mutation cases in `experiments/single-head/mutations.tl`.
-Port storage-specific fixtures while retaining their behavioral assertions.
-The separate validation branch must prove:
-
-- bootstrap, multi-item transactions and drafts/logs through actual
-  connector calls; interoperation with a shell writer and fresh reader;
-- immutable per-call execution when the source draft advances, wrong
-  destination refusal, final-call deadline expiry and ambiguous responses;
-- disjoint retries, overlap refusal, edit-versus-claim races, bounded
-  predicate/write-skew refusal and retry-budget exhaustion;
-- acquisition identity across renew, drop/reacquire, migration and rebase;
-  old publication receipts never conferring a newer claim's authority;
-- accepted research and its exact result/verdict evidence across migration,
-  tree-identical logs, ended items and historical claim batches;
-- incomplete sources, corrupt inherited storage, interrupted uploads,
-  failed-then-retried restoration, and late legacy writes during migration;
-- partial uploads remaining invisible, crash recovery around activation,
-  and refusal to revert to stale legacy state after a native write.
-
-Use targeted semantic mutants to demonstrate that removing each critical
-fence/validation makes its regression fail behaviorally. Compilation or
-harness errors do not count as caught mutants. Record a passing baseline
-and restored baseline with fresh test discovery, following the existing
-mutation runner. These are implementation acceptance gates; this document
-does not report them as already passing for format 6.
+- two disjoint writers from one base both land, the second by rebase;
+- the same-item writer, the edit racing a claim, and two bounded
+  mutations each lose exactly as on format 5;
+- a claim's `id` survives renew and rebase, and a reacquisition after
+  expiry mints a new one;
+- a plan rendered from a saved attempt is unchanged when the draft it
+  came from advances; a wrong destination and an expired `publish_by`
+  are refused at the final call; a returned sha is what confirmation
+  records;
+- an accepted research result, a tree-identical log entry, an ended
+  item and a claim-bridge commit each survive the migration with their
+  evidence resolvable through `migration/marks`;
+- a partial `state` reads as nothing; a rerun of the migration is
+  identical; a moved source ref is named and reported.
 
 ## Plan
 
-The child specs under «yDA5_DbKm» must be aligned with this contract
-after design agreement, before their implementation or cutover proceeds.
-The dependency order is:
+Ranked children under the container, in landing order:
 
-1. **Compatibility and transaction contract** — extend the existing frozen
-   plan/receipt machinery; define history, acquisition and activation
-   identities and the legacy-writer fence.
-2. **Native codec and reader** — reuse item payloads; use `cosmic.literal`
-   for new records; retain old-board support and explicit activation.
-3. **Writer, claims, drafts and connector** — implement both publication
-   paths together, including read dependencies, bounded gates, deadlines,
-   current-authority reconciliation and immutable candidate chains.
-4. **Audit, init and migration** — implement the complete-history bridge,
-   deterministic checkpointed import and transactional recovery.
-5. **Compatibility and contention proof** — run the validation gates on a
-   separate branch; carry forward and extend adversarial/mutation tests.
-6. **Release and pin bump** — publish a validated build with old-board
-   support, native read/write, connector support and the migration runner;
-   verify and update cosmic's `bin/gitboard.pin`.
-7. **Freeze, migrate and activate** — execute the reviewed writer fence,
-   capture the final snapshot, stage and verify it, then activate explicitly.
-8. **Live validation** — verify the new authority with real sessions and
-   retain a documented recovery path.
-9. **Retire** — remove obsolete storage adapters only after equivalent
-   behavior is demonstrated. Keep the transaction/receipt protections and
-   their tests. Historical object retention and old-ref deletion require
-   their own verified evidence-retention decision.
+1. **The boardtree codec** — `items/<id>/`, `claims/<id>` and
+   `migration/marks` as paths in one tree, the item subtree from
+   `build_tree`, the claim blob with its `id`, the `format` blob.
+2. **The reader** — activation on the marker, the `ls-tree`/`cat-file`
+   load, the path-attributed walk, the cache keyed on one sha.
+3. **The writer and prepared transactions** — one commit per mutation,
+   the dependency fence, bounded revalidation, `publish_by`, the
+   `Transaction:` trailer, the local rebase and its retry bound.
+4. **Claims as files** — `claims/<id>` with a minted `id`, replacing
+   the batch namespace and `meta`'s `claim_batch`.
+5. **Drafts and log entries** — the per-commit rebased chain, and
+   `items/<id>/log/<ksuid>.md` beside the commit body.
+6. **`fsck` and `init`** — the audit rebuilt from the branch, and an
+   `init` that writes `format` and an empty board.
+7. **The connector plan** — `publish --plan` over the saved-plan
+   schema, three calls, the four invariants above.
+8. **The contention and proof scenarios** — the validation list held
+   by tests, and the `_perf` measurement of retries per publish.
+9. **`migrate6`** — the checkpointed replay, marks, materialised logs,
+   evidence rewrite, staged pushes, the drift audit.
+10. **Release and pin bump** — `bin/gitboard.pin` naming a release
+    that reads and writes format 6 through both executors and carries
+    `migrate6`.
+11. **Run the migration** — the ruleset, the dry run, the staged
+    pushes, the marker riding the last, then one full claim, take,
+    verdict and done cycle through a shell session and a connector
+    session, recorded on the item.
+12. **Retire** — the ref-layout reader and writer, `claim-batches`,
+    `board/seq`, the pack-specific single-head code and its guide
+    under `experiments/`, and the README's `no items/ directory` line.
 
-Reader, writer, connector and migration support must all be released
-before activation. `docs/design/schema.md` records the previous pinning
-hazard: a new pinned build must continue operating the old board while
-migration is pending. A release or pin bump alone never authorizes a
-live cutover. Retirement follows confirmed operation and compatibility,
-not merely a successful final ref update.
+Two orderings are load-bearing.
+
+**Everything before the release.** A build that cannot read format 6
+cannot be pinned; a build that can read but not write still operates
+the old board; a build without the connector executor darkens a
+connector-only session at the cutover. So reader, writer, both
+executors and `migrate6` are all in the release the pin names, and
+the release keeps operating a format-5 board until the marker moves.
+
+**Migration, release and pin, back to back.** `docs/design/schema.md`
+records what the alternative cost: the format-5 plan put the pin ahead
+of the migration's code, and since a format-5 build refuses a format-4
+board outright, pinning first would have darkened every clone for as
+long as the migration took to build. Same here — 11 follows 10
+follows 9 with nothing in between.
+
+Retire waits for a confirmed live board: not for the push to succeed,
+but for the board to have been read and written through `state` by
+real sessions. Until then the old refs are the fallback; after the
+first native write they are an archive, since rolling back would lose
+that write. Deleting them is the owner's step and cannot be undone.
