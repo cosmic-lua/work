@@ -1,3 +1,5 @@
 title: retire: the format-4 reader, the path parsers, and the Ready-when mechanism
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/format.tl _work/gitread.tl _work/itemtree.tl _work/fastimport.tl _work/gitmigrate.tl _work/gitmigrate_cli.tl _work/gitmigrate_test.tl _work/gitcommands.tl _work/gitboard.tl _work/gitverbs.tl _work/spec.tl _work/overlap.tl _work/briefmeasure.tl _work/cachequery.tl _work/gitreadywhen.tl _work/gitready.tl _work/flow.tl _work/itemtype.tl _work/item.tl spec/change.md _work/overlap_test.tl _work/spec_test.tl _work/gitshow_test.tl _work/gitview_test.tl _work/lanes_test.tl _work/gitgate_test.tl _work/index_test.tl _work/read_test.tl _work/format_test.tl _work/gitfsck_test.tl _work/readddl.tl _work/gitfsck.tl _work/cachedb.tl
+access: cosmic-lua/cosmic
