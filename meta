@@ -1,3 +1,6 @@
 title: deps projection 3: sparse ordinal projection with bounded dense fallback
 parent: 3JDEav2cqkdwFEIHSsKcPq9FvtC
-target: cosmic-lua/cosmic@main
+repo: cosmic-lua/cosmic
+base: main
+touches: _make/deps.tl
+access: cosmic-lua/work
