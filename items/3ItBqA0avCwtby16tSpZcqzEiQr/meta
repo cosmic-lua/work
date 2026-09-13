@@ -1,3 +1,4 @@
 title: overlap.tl's change_section duplicates spec.tl's sections almost verbatim, narrowed to one heading
 parent: 3IvL2wUvcjnmW8CFTHMrV1061nP
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/overlap.tl _work/overlap_test.tl
