@@ -21,6 +21,10 @@ local record Proof
   after: Observation
   prefix: string
   source_digest: string
+  --- Every fenced-namespace write this freeze actually REFUSED, attempt name
+  --- to the destination's own refusal text. A read of the ruleset says the
+  --- fence is configured; these say it bites.
+  refusals: {string: string}
 end
 local record Snapshot
   proof: Proof
@@ -28,6 +32,8 @@ local record Snapshot
 end
 local type Provider = function(string, integer): string | nil, string
 local type Fetcher = function(string, string, string): boolean, string
+--- One `git push` of `args` to `url`: true when the destination ACCEPTED it.
+local type Pusher = function(string, string, {string}): boolean, string
 local REQUIRED < const >: {string: boolean} = {
   ["refs/heads/items/**"] = true, ["refs/heads/ended/**"] = true,
   ["refs/heads/claim-batches/**"] = true, ["refs/heads/board/seq"] = true,
@@ -137,6 +143,63 @@ local function inspect(raw: string, url: string, repo: string, id: integer): Obs
     updated_at = updated_at, digest = hash.sha256_hex(canonical)}, ""
 end
 
+--- The globbed legacy namespaces a throwaway ref can be probed inside.
+--- `refs/heads/board/seq` is a single exact ref with nothing under it, so a
+--- probe there would have to write the real lease: that one name is covered by
+--- the ruleset read alone, which `inspect` requires the pattern for.
+local PROBED < const >: {string} = {"refs/heads/items/", "refs/heads/ended/", "refs/heads/claim-batches/"}
+
+local function push_probe(root: string, url: string, args: {string}): boolean, string
+  local argv: {string} = {"push", "--porcelain", url}
+  for _, value in ipairs(args) do argv[#argv + 1] = value end
+  local out, err = source.git(root, argv)
+  if out == nil then return false, (err:gsub("%s+$", "")) end
+  return true, (out:gsub("%s+$", ""))
+end
+
+--- Prove the freeze BITES, not merely that it is configured: under every
+--- globbed legacy namespace, attempt to create a throwaway ref, to force it to
+--- another tip, and to delete it, and require the destination to refuse all
+--- three. The offered commit is this checkout's own `HEAD`, which a checkout of
+--- the board it is migrating shares with the destination, so a refused attempt
+--- transfers nothing.
+---
+--- An accepted attempt disproves the freeze. It is also a ref this tool just
+--- created on a live board, so it is deleted again before refusing — and if
+--- that cleanup itself fails, the refusal says so by name rather than leaving
+--- a stray ref unmentioned.
+--- @param root string Source repository, for its git binary and objects
+--- @param url string The exact push destination the freeze is bound to
+--- @param pusher Pusher | nil Test seam; production always pushes
+--- @return {string: string} | nil Attempt name -> the refusal it earned
+--- @return string Failure diagnostic naming the attempt that was permitted
+local function probe(root: string, url: string, pusher?: Pusher): {string: string} | nil, string
+  local local_head, herr = source.git(root, {"rev-parse", "HEAD"})
+  if local_head == nil then return nil, "freeze probe needs a commit to offer: " .. herr end
+  local sha = local_head:match("^([0-9a-f][0-9a-f]+)")
+  if sha == nil then return nil, "freeze probe needs a commit to offer" end
+  local push = pusher or push_probe
+  local name = "migrate6-freeze-probe-" .. ksuid.new()
+  local out: {string: string} = {}
+  for _, namespace in ipairs(PROBED) do
+    local ref = namespace .. name
+    local attempts: {{string}} = {{"create", sha .. ":" .. ref},
+      {"update", "--force", sha .. ":" .. ref}, {"delete", ":" .. ref}}
+    for _, attempt in ipairs(attempts) do
+      local args: {string} = {}
+      for index = 2, #attempt do args[#args + 1] = attempt[index] end
+      local accepted, detail = push(root, url, args)
+      if accepted then
+        local cleaned, cerr = push(root, url, {"--force", ":" .. ref})
+        local stray = cleaned and "" or ("; the probe ref remains: " .. cerr)
+        return nil, ("freeze does not refuse %s of %s%s"):format(attempt[1], ref, stray)
+      end
+      out[attempt[1] .. " " .. namespace] = detail
+    end
+  end
+  return out, ""
+end
+
 --- @param root string Source repository
 --- @param remote string Explicit configured remote
 --- @param id integer Explicit ruleset id
@@ -194,6 +257,15 @@ local function decode(raw: any): Proof | nil, string
   or not (digest is string) or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
     return nil, "invalid freeze proof fields"
   end
+  local refusals = raw.refusals
+  if not (refusals is {string: any}) then return nil, "freeze proof lacks recorded refusals" end
+  local proved = 0
+  for attempt, detail in pairs(refusals) do
+    if not (detail is string) or detail == "" then return nil, "freeze refusal must record its text" end
+    if not attempt:match("^%a+ refs/heads/%a[%w%-]*/$") then return nil, "unknown freeze refusal attempt" end
+    proved = proved + 1
+  end
+  if proved ~= 3 * #PROBED then return nil, "freeze proof must refuse create, update and delete in every namespace" end
   local proof = raw as Proof -- cast: field shapes verified above
   local valid, err = brackets(proof.before, proof.after)
   if not valid then return nil, err end
@@ -208,11 +280,13 @@ end
 --- @return Snapshot | nil Fresh private source namespace and bound freeze proof
 --- @return string Failure diagnostic
 local function snapshot(root: string, remote: string, id: integer, provider?: Provider,
-    fetcher?: Fetcher, existing_prefix?: string): Snapshot | nil, string
+    fetcher?: Fetcher, existing_prefix?: string, pusher?: Pusher): Snapshot | nil, string
   if existing_prefix ~= nil and not existing_prefix:match("^refs/gitboard/migrate6/source%-%w+/$") then
     return nil, "verified catch-up requires an owned private source prefix"
   end
   local before, err = observe(root, remote, id, provider); if before == nil then return nil, err end
+  local refusals, perr = probe(root, before.destination, pusher)
+  if refusals == nil then return nil, perr end
   local prefix = existing_prefix or ("refs/gitboard/migrate6/source-" .. ksuid.new() .. "/")
   local fetched, ferr = (fetcher or fetch_source)(root, before.destination, prefix)
   if not fetched then return nil, ferr end
@@ -221,7 +295,7 @@ local function snapshot(root: string, remote: string, id: integer, provider?: Pr
   local refs, rerr = source.snapshot(root, prefix); if refs == nil then return nil, rerr end
   local encoded, eerr = wire.encode(refs); if encoded == nil then return nil, eerr end
   return {sources = refs, proof = {before = before, after = after, prefix = prefix,
-      source_digest = hash.sha256_hex(encoded)}}, ""
+      refusals = refusals, source_digest = hash.sha256_hex(encoded)}}, ""
 end
 
 --- @param root string Repository holding the immutable checkpoint
@@ -232,7 +306,7 @@ end
 --- @return boolean Whether this exact freeze still holds for the snapshot
 --- @return string Failure diagnostic
 local function verify(root: string, remote: string, proof: Proof, refs: {string: string},
-    provider?: Provider): boolean, string
+    provider?: Provider, pusher?: Pusher): boolean, string
   local bracketed, berr = brackets(proof.before, proof.after); if not bracketed then return false, berr end
   local encoded, err = wire.encode(refs); if encoded == nil then return false, err end
   if hash.sha256_hex(encoded) ~= proof.source_digest then return false, "freeze witness source snapshot differs" end
@@ -241,7 +315,11 @@ local function verify(root: string, remote: string, proof: Proof, refs: {string:
   end
   local current, cerr = observe(root, remote, proof.before.ruleset_id, provider)
   if current == nil then return false, cerr end
-  return brackets(proof.after, current)
+  local bracketed_now, nerr = brackets(proof.after, current)
+  if not bracketed_now then return false, nerr end
+  local refusals, perr = probe(root, current.destination, pusher)
+  if refusals == nil then return false, perr end
+  return true, ""
 end
 
 local record Freeze
@@ -250,14 +328,16 @@ local record Freeze
   type Snapshot = Snapshot
   type Provider = Provider
   type Fetcher = Fetcher
+  type Pusher = Pusher
   destination: function(string, string): string | nil, string
   repository: function(string): string | nil, string
   inspect: function(string, string, string, integer): Observation | nil, string
   brackets: function(Observation, Observation): boolean, string
   decode: function(any): Proof | nil, string
-  snapshot: function(root: string, remote: string, id: integer, provider?: Provider, fetcher?: Fetcher, existing_prefix?: string): Snapshot | nil, string
-  verify: function(root: string, remote: string, proof: Proof, refs: {string: string}, provider?: Provider): boolean, string
+  probe: function(root: string, url: string, pusher?: Pusher): {string: string} | nil, string
+  snapshot: function(root: string, remote: string, id: integer, provider?: Provider, fetcher?: Fetcher, existing_prefix?: string, pusher?: Pusher): Snapshot | nil, string
+  verify: function(root: string, remote: string, proof: Proof, refs: {string: string}, provider?: Provider, pusher?: Pusher): boolean, string
 end
 local M: Freeze = {destination = destination, repository = repository, inspect = inspect, brackets = brackets, decode = decode,
-  snapshot = snapshot, verify = verify}
+  probe = probe, snapshot = snapshot, verify = verify}
 return M
