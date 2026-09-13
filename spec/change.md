@@ -1,5 +1,3 @@
-## Change
-
 ADOPT, re-decided 2026-08-29: the earlier deferral's blocking fact is
 cleared — the merge queue is a GitHub feature restricted to
 organization-owned repositories (public repos on any plan, private on
@@ -39,11 +37,3 @@ required contexts gate/ci, gate/build, gate/repro,
 gate/smoke-macos-latest, gate/smoke-windows-latest) is the operator's
 action, outside this PR; until flipped the merge_group trigger is
 inert and additive.
-
-## Non-goals
-
-No workflow job changes; no gitboard code changes; no org-migration
-advocacy in the record beyond the enabling fact stated neutrally. The
-repo-wide owner-rename residue outside skills/work/SKILL.md (notably
-bin/cosmic.pin and other whilp/* references across the tree) is a
-separate item, not this diff.
