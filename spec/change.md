@@ -1,12 +1,3 @@
-## Goal
-
-`cosmic/teal_narrowing_test.tl` stops being 15 lines from the 500
-cap with the narrow-* patch queue still behind it: the next
-narrowing item adds its tests as a spec decision, not a
-mid-implementation lint failure.
-
-## Change
-
 Split at the nil-flow seam, into the sibling shape
 `teal_closure_test.tl` already established:
 
@@ -33,21 +24,3 @@ the sixth patch group) is the next narrowing item behind the cap,
 and its tests are nil-flow tests — the new file is their home, with
 ~350 lines of headroom, while guard-rule growth keeps ~165 in the
 original.
-
-## Non-goals
-
-No test bodies change (byte-identical moves; a diff shows only
-relocation). No patch entries move. No new narrowing behavior. The
-generic file-near-cap class (3IHFPLpb) stays its own item.
-
-## Acceptance
-
-`--make ci` ends `ci: PASS`. `wc -l` on both files prints under 400
-each. Every moved test still runs (the two files' test counts sum to
-the original's 16). `git diff` shows deletions in one file and
-additions in the other with no body edits.
-
-## Enablement
-
-None: sibling test files are convention (position is the manifest),
-and teal_closure_test.tl is the standing precedent.
