@@ -66,3 +66,24 @@ missing.
 ## Access
 
 - cosmic-lua/cosmic: read+write.
+
+## Note carried forward from «FyJ2_UFwQ»'s round-2 review (non-blocking there, in scope here)
+
+The core's `response.tl` `COMPUTED` header set (`cosmic/http/response.tl:34-38`)
+covers `date`/`content-length`/`connection` — the headers the server
+itself must own — but not `transfer-encoding`. Verified live against
+the core: a handler that calls `res:set_header("Transfer-Encoding",
+"chunked")` on a plain `send`-based response gets BOTH
+`Transfer-Encoding: chunked` and a `Content-Length` on the wire, an
+RFC 9112 §6.1 framing ambiguity (not client-reachable — a handler must
+write it deliberately — but real once a handler can, since this item
+adds an actual `start`/`write`/`finish` chunked path).
+
+When this item lands `Transfer-Encoding: chunked` as a genuine,
+server-computed header (via `start`), make sure `set_header`/
+`add_header` refuse (or the framing logic otherwise prevents) a
+handler from setting `Transfer-Encoding` directly on a `send`-based
+(non-streamed) response, the same way `Content-Length`/`Connection`/
+`Date` are already protected as `COMPUTED`. Add a regression case
+pinning that a handler cannot self-declare `Transfer-Encoding` outside
+the `start`/`write`/`finish` path.
