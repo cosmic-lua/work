@@ -1,9 +1,9 @@
 title: cosmic/ast: generic cycle-guarded walk + span computation (node_start/node_end)
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1759
 verdict: accept
 verdict_head: 4c386aeae431499171ccf473d92a27083c1ea49c
-verdict_spec: 55f05009eb26ad7e16bb4f4962aea0deae44c221
 resolution: completed
 builders: build-gDNw_5bFk-f6f470de
+touches: cosmic/ast/walk.tl docs/design/ast-rewrite/tlgrep.tl o/3p/tl/tl.lua
