@@ -1,6 +1,7 @@
 title: D23's throw exemption list is closed, and cosmic.time needs a seat on it
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1384
 resolution: completed
 builders: 8c92b9ca-104b-5e75-8fd9-6298beb5919c
+touches: docs/decisions/d23-check-throws.md skills/decide/SKILL.md docs/decisions/README.md
