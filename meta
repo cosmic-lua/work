@@ -1,5 +1,6 @@
 title: D50: one branch is the board, with D49 amended
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/cosmic
+claim_batch: 403d617f358d2432f976a840c25db7a7846c870d
 touches: docs/decisions/d50-one-branch-is-the-board.md docs/decisions/d49-board-rewrite-pushes-in-idempotent-batches.md docs/decisions/README.md
 depends_on: 3JHjKht9GJ6Th9z4IYXSkANdnKR
