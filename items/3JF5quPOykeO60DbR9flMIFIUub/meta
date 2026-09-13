@@ -1,9 +1,10 @@
 title: review brief: judge a research handover's board commit, not refuse it
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: ee3d4f19a94afd486d1553befdcd49c666c62278
 verdict: accept
 verdict_head: ee3d4f19a94afd486d1553befdcd49c666c62278
 landed_head: acac47df4c4f2a79566f80b7a610aea711fe33df
 resolution: completed
 builders: 01f08b2323c2db94eba489ef4914a07b
+touches: _work/brief.tl _work/indexddl.tl _work/brieftext_review.tl
