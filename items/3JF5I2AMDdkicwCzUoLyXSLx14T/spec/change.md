@@ -7,7 +7,7 @@ fields and deletes what read prose instead. The migration was pushed in
 batches, which is why the module it deletes is larger than the one #163
 shipped: cosmic-lua/work#164 gave `migrate` idempotence, `--limit` and
 `--only`, and cosmic's D49
-(`docs/decisions/d49-board-rewrite-pushes-in-idempotent-batches.md`) records
+(https://github.com/cosmic-lua/cosmic/blob/main/docs/decisions/d49-board-rewrite-pushes-in-idempotent-batches.md) records
 why and says the NEXT migration copies from this item's retire commit's
 parent, batching included — so the deletion here is what preserves it.
 
