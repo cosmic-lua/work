@@ -1,5 +1,3 @@
-## Change
-
 Extend `cosmic.template`'s html mode past HTML text context to the three contexts
 that need different escaping, each carried by its own nominal type so the wrong
 escaper is a build-time type error rather than an injection.
@@ -51,10 +49,3 @@ the second is uniform with the rest.
 Nothing implicit. Each context has its own type, so the pipeline names the escaper
 and the checker enforces the match — an interpolation in a `<script>` block bound
 as `SafeJs` cannot be satisfied by `html.safe`, and the error names the line.
-
-## Non-goals
-
-- **No context inference.** The generator does not scan surrounding markup to
-  decide which escaper you meant. The type at the interpolation is the obligation,
-  and it is written down.
-- No change to `cosmic.html.escape` / `unescape` signatures.
