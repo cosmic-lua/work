@@ -1,3 +1,5 @@
 title: briefs teach the bar the gate enforces, not a retired five-section template
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/doctrine_bar.tl _work/brieftext.tl _work/brieftext_bar_test.tl _work/brieftext_test.tl _work/doctrine.tl _work/brieftext_review.tl
+access: cosmic-lua/cosmic
