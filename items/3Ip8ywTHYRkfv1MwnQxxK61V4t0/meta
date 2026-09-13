@@ -1,4 +1,6 @@
 title: gitboard new: refuse a mint that duplicates an open item or one ended in the last 14 days, by title and by the binding it names
 parent: 3IvL2wUvcjnmW8CFTHMrV1061nP
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
 builders: build-xK61_V4t0
+touches: _work/dedup.tl _work/gitgraph.tl _work/dedup_test.tl _work/gitgraph_test.tl skills/work/SKILL.md
