@@ -1,35 +1,3 @@
-# cosmic.htmx: the HX-* contract as pure functions over http.Request/http.Response — fragment-or-page reply, request predicates, response headers, OOB
-
-## Goal
-
-Make htmx a one-liner at every point it touches the server, without
-teaching the server anything: a module of pure functions that read
-`req.headers` and call `res:set_header`, plus the one helper that
-carries the whole idiom — reply with a fragment when htmx asked, the
-full page otherwise. This is what Go's htmx helper libraries are
-(request predicates, response-header setters, a partial-vs-full
-render), typed.
-
-## Evidence
-
-The htmx wire contract this module covers, from the htmx reference
-(https://htmx.org/reference/#request_headers and
-`#response_headers`) — request: `HX-Request`, `HX-Boosted`,
-`HX-Current-URL`, `HX-History-Restore-Request`, `HX-Prompt`,
-`HX-Target`, `HX-Trigger`, `HX-Trigger-Name`; response: `HX-Location`,
-`HX-Push-Url`, `HX-Redirect`, `HX-Refresh`, `HX-Replace-Url`,
-`HX-Reswap`, `HX-Retarget`, `HX-Reselect`, `HX-Trigger`,
-`HX-Trigger-After-Settle`, `HX-Trigger-After-Swap`. The puller
-re-checks that page and names any header added since in the PR.
-
-The typed pieces it composes: `cosmic.html.SafeHtml`
-(`cosmic/html.tl:44`), `cosmic.json.encode` (`cosmic/json.tl:84`) for
-`HX-Trigger`'s JSON form, `cosmic.url.SafeUrl` (`cosmic/url.tl:347`)
-for the URL-carrying headers, and the core child's `Request.headers`
-(lowercase names) and `Response:set_header`/`:html`.
-
-## Change
-
 Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
 
 That is the core child merged; today the command reports the path as
@@ -78,15 +46,3 @@ page. Pure functions over cosmic.http's Request and Response."):
   `oob` output with escaping.
 - `cosmic/htmx_example.tl`: `Example_reply` — two requests, one with
   `HX-Request: true`, through a `serve_one`, printing both bodies.
-
-## Non-goals
-
-- Nothing in `cosmic/http/` changes. If a needed `Response` method is
-  missing, that is a child of this item, not a reach into the server.
-- No htmx JS asset, no CSRF, no session: the guide child.
-- No `hx-*` attribute builders for templates: attributes are text in a
-  `.tmpl`; the template module's `attr` context already types them.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.

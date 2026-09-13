@@ -1,3 +1,4 @@
 title: cosmic.htmx: the HX-* contract as pure functions over http.Request/http.Response — fragment-or-page reply, request predicates, response headers, OOB
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/http/init.tl cosmic/htmx.tl cosmic/htmx_test.tl cosmic/htmx_example.tl
