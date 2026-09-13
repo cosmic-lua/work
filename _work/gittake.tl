@@ -23,6 +23,9 @@ local item = require("_work.item")
 local gitreadspec = require("_work.gitreadspec")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
+local format = require("_work.format")
+local gitdraft = require("_work.gitdraft")
+local stateevidence = require("_work.stateevidence")
 
 --- Record a commit-only handover after verifying the product commit locally.
 --- The optional URL is navigation metadata and participates in no gate.
@@ -182,6 +185,12 @@ end
 local function take_result(s: store.Store, it: item.Item, session: string,
     pr: integer): integer
   local id8 = it.id:sub(1, 8)
+  local native, native_err = format.state_head(s.root)
+  if native == nil then return gate.verdict_line("take", false, native_err) end
+  if native ~= "" and gitdraft.active(s.root) ~= nil then
+    return gate.verdict_line("take", false,
+      "REFUSED: publish the draft before recording research evidence")
+  end
   if (pr or 0) ~= 0 then
     return gate.verdict_line("take", false,
       "REFUSED: --pr and --result together — a deliverable is a diff or "
@@ -228,6 +237,7 @@ local function take_result(s: store.Store, it: item.Item, session: string,
   -- the recorded parent again. A legacy 40-hex digest resolves to no
   -- object, compares unequal, and is re-typed by this very handover.
   local recorded = gitreadspec.read_spec(s.root, {it.result or ""})
+  if native ~= "" then recorded = stateevidence.read_spec(s.root, it.result or "", it.id) end
   if recorded.change == body.change and recorded.non_goals == body.non_goals
   and (it.result or "") ~= "" and verdict ~= "request changes" then
     return gate.verdict_line("take", true,

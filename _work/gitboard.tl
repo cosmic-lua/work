@@ -34,6 +34,8 @@ local rank = require("_work.gitrank")
 local refs = require("_work.refs")
 local session = require("_work.session")
 local store = require("_work.store")
+local statepublish_cli = require("_work.statepublish_cli")
+local statecli = require("_work.statecli")
 local tail = require("_work.tail")
 local vrd = require("_work.gitverdict")
 local show = require("_work.gitshow")
@@ -66,6 +68,7 @@ local function resolve_id(s: store.Store, input: string): string | nil, string
   if id ~= nil or not tail.is_tail_shape(input) then
     return id, rerr
   end
+  if s.state_head ~= "" then return statecli.resolve(s, input) end
   local cached, cerr = cachequery.resolve_tail(s.root, input)
   if cerr ~= "" then
     return nil, cerr
@@ -158,9 +161,11 @@ local function main(...: string): integer
     return gitinit.cmd_init(d.parsed.values["dir"] or ".",
       d.parsed.switches["remote"] or false,
       d.parsed.switches["local"] or false,
-      d.parsed.values["remote-name"] or "")
+      d.parsed.values["remote-name"] or "", d.parsed.values["format"])
   end
   local dir = d.parsed.values["dir"] or "."
+  if d.command == "migrate6" then return statecli.migration(dir,
+      d.parsed.args, d.parsed.values, d.parsed.switches) end
   if d.command == "single-head" then return singlehead.cmd_single_head(dir,
       d.parsed.args, d.parsed.values, d.parsed.switches) end
   local explicit_remote = d.parsed.values["remote"] or ""
@@ -208,6 +213,12 @@ local function main(...: string): integer
   if d.command == "publish" then
     local selectors = d.parsed.args
     if #selectors == 0 and selected_draft ~= "" then selectors = {selected_draft} end
+    if s.state_head ~= "" then
+      return statepublish_cli.cmd_publish(s, selectors, remote,
+        d.parsed.switches["execute"] or false, d.parsed.values["plan"] or "",
+        d.parsed.values["from-plan"] or "", d.parsed.values["call"] or "",
+        d.parsed.values["published"] or "", d.parsed.values["repository"] or "")
+    end
     return transport.cmd_publish(s, selectors,
       remote,
       d.parsed.switches["execute"] or false)
@@ -423,6 +434,10 @@ local function main(...: string): integer
     end
     local it, ierr = store.load(s, id)
     if it == nil then return gate.verdict_line("take", false, ierr) end
+    if d.parsed.switches["result"] then
+      if d.parsed.values["head"] then return gate.verdict_line("take", false, "choose --head or --result") end
+      return gittake.take_result(s, it, who, 0)
+    end
     return gittake.take_handover(s, it, who, d.parsed.values["head"] or "",
       d.parsed.values["url"] or "", d.parsed.values["repo-dir"] or "")
   end

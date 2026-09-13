@@ -38,6 +38,8 @@
 --- mutation's `store.save`, and `_work.publish` that wraps its fetches
 --- with `around_fetch` — a `Store` dependency here would close a cycle
 --- against both.
+local statecache = require("_work.stateread_cache")
+local format = require("_work.format")
 local cachedb = require("_work.cachedb")
 local cacherebuild = require("_work.cacherebuild")
 local cachewatch = require("_work.cachewatch")
@@ -248,6 +250,12 @@ end
 local function after_save(root: string, before_digest: string | nil,
     items: {item.Item}, spec_body: string | nil, message: string,
     written: {string: string}, written_at?: integer)
+  local native = format.state_head(root)
+  if native ~= nil and native ~= "" then
+    local patched, _err = statecache.patch(root, before_digest, native)
+    if not patched then cachedb.wipe(root) end
+    return
+  end
   if #items == 0 then
     return
   end
@@ -404,6 +412,16 @@ local function around_fetch(root: string, fetch_fn: function(): boolean, string)
   end
   local ok, err = fetch_fn()
   if not ok or before_entries == nil then
+    return ok, err
+  end
+  local native = format.state_head(root)
+  if native ~= nil and native ~= "" then
+    local before = ""
+    for _, entry in ipairs(before_entries) do
+      if entry.refname == "refs/heads/state" then before = entry.sha end
+    end
+    local patched, _perr = statecache.patch(root, before, native)
+    if not patched then cachedb.wipe(root) end
     return ok, err
   end
   local after_entries = cachedb.refs_snapshot(root)

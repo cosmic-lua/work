@@ -13,6 +13,7 @@
 --- reopened final connection returns to `_work.cachedb`'s ordinary WAL
 --- rule (`open_conn`). `_work.cache.rebuild` is this module's `rebuild`
 --- re-exported unchanged — every caller still goes through there.
+local stateread = require("_work.stateread")
 local cachedb = require("_work.cachedb")
 local events = require("_work.events")
 local find = require("_work.find")
@@ -85,6 +86,10 @@ local function fill(db: sqlite.Database, root: string, board: gitread.Board,
   if not rdok then
     return false, rderr
   end
+  local native_view = board.native_view
+  if native_view ~= nil then
+    return stateread.fill_events(db, root, native_view.head, native_view, board.native_history)
+  end
   local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
   if not evok then
     return false, everr
@@ -110,7 +115,9 @@ local function rebuild(root: string): Cache | nil, string
   -- One indexed text per item, rendered from the two blobs the tree
   -- holds (`spec.document`) — `find.build` reads `Cache.specs`.
   local specs: {string: string} = {}
-  for id, sp in pairs(gitreadspec.read_specs(root, board.shas_by_id, ids)) do
+  local native_view = board.native_view
+  local prose = native_view ~= nil and native_view.specs_by_id or gitreadspec.read_specs(root, board.shas_by_id, ids)
+  for id, sp in pairs(prose) do
     specs[id] = spec.document(sp)
   end
   local dir_ok, dir_err = fs.make_dirs(fs.join(root, "o"))
@@ -141,11 +148,7 @@ local function rebuild(root: string): Cache | nil, string
     local _c, _cerr = db:close()
     return nil, pverr
   end
-  local digest, digerr = cachedb.fresh_digest(root)
-  if digest == nil then
-    local _c, _cerr = db:close()
-    return nil, digerr
-  end
+  local digest = board.refs_digest
   local fp, fperr = cachedb.expected_schema_fingerprint()
   if fp == nil then
     local _c, _cerr = db:close()

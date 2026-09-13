@@ -1,6 +1,8 @@
 --- Fixed-process board reads. Duplicate `items`/`ended` refs from legacy
 --- half-landed moves are resolved consistently and reported for repair.
 --- Canonical namespace selection belongs to `_work.refs`.
+local boardread = require("_work.boardread")
+local boardhistory = require("_work.boardhistory")
 local cachedb = require("_work.cachedb")
 local claimprojection = require("_work.claimprojection")
 local format = require("_work.format")
@@ -42,6 +44,8 @@ end
 --- read. The board's own outcome ranking is not a separate field here:
 --- it is one of `items`' own `.order`, read the same way every item's is.
 local record Board
+  native_view: boardread.View | nil
+  native_history: boardhistory.History | nil
   items: {item.Item}
   refs_by_id: {string: string}
   shas_by_id: {string: string}
@@ -178,6 +182,17 @@ end
 --- @return string Error message; "no item <id>" when absent
 local function load_item(root: string, id: string,
     known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
+  local head, herr = format.state_head(root)
+  if head == nil then return nil, herr end
+  if head ~= "" then
+    local view, verr = boardread.list(root, head)
+    if view == nil then return nil, verr end
+    local it = view.items_by_id[id]
+    if it == nil then return nil, "no item " .. id end
+    local history, hierr = boardhistory.read(root, head)
+    if history == nil then return nil, hierr end
+    return {it = it, ref = "refs/heads/state", sha = history.tip_by_id[id] or head}
+  end
   local ref, sha = known_ref, known_sha
   if ref == nil or ref == "" or sha == nil or sha == "" then
     local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
@@ -249,7 +264,20 @@ end
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
 local function list(root: string): Board | nil, string
-  local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
+  local head, herr = format.state_head(root)
+  if head == nil then return nil, herr end
+  if head ~= "" then
+    local view, verr = boardread.list(root, head)
+    if view == nil then return nil, verr end
+    local history, hierr = boardhistory.read(root, head)
+    if history == nil then return nil, hierr end
+    local native_refs: {string: string} = {}
+    for _, it in ipairs(view.items) do native_refs[it.id] = "refs/heads/state" end
+    return {native_view = view, native_history = history, items = view.items, refs_by_id = native_refs,
+      shas_by_id = history.tip_by_id, touched_by_id = history.touched_by_id,
+      seq_sha = "", duplicates = {}, refs_digest = head}
+  end
+  local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board", "refs/heads/state"})
   if found == nil then
     return nil, ferr
   end

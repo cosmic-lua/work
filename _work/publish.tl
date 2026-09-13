@@ -6,6 +6,8 @@
 --- refreshes from already-fetched remote-tracking refs unless
 --- explicitly asked to execute the rendered fetch. History remains a
 --- local Git/cache read.
+local statepublish = require("_work.statepublish")
+local boardhistory = require("_work.boardhistory")
 local events = require("_work.events")
 local gitdraft = require("_work.gitdraft")
 local prepared = require("_work.prepared")
@@ -50,6 +52,7 @@ end
 --- @return boolean True on success
 --- @return string Error message
 local function sync(s: store.Store, execute?: boolean): boolean, string
+  if s.state_head ~= "" then return statepublish.sync(s, execute) end
   local remote = refs.board_remote(s.root)
   if execute and refs.board_mode(s.root) == "remote" then
     local fetched, ferr = prepared.execute(s.root, prepared.fetch_argv(remote))
@@ -103,6 +106,7 @@ end
 --- nothing to push)
 --- @return string Error message; `LOST_RACE` exactly, for a lost race
 local function publish(s: store.Store, execute?: boolean): boolean, string
+  if s.state_head ~= "" then return statepublish.publish(s, execute) end
   local remote = refs.board_remote(s.root)
   if #s.pending == 0 then
     s.pending = {}
@@ -288,6 +292,21 @@ end
 --- @return {Event} | nil Events, possibly empty
 --- @return string Error message
 local function history(s: store.Store, id?: string): {Event} | nil, string
+  if s.state_head ~= "" then
+    local native_history, err = boardhistory.read(s.root, s.state_head)
+    if native_history == nil then return nil, err end
+    local rows = id ~= nil and (native_history.events_by_id[id] or {}) or native_history.events
+    local out: {Event} = {}
+    local seen: {string: boolean} = {}
+    for i = #rows, 1, -1 do
+      local row = rows[i]
+      if not seen[row.sha] then
+        seen[row.sha] = true
+        out[#out + 1] = {sha = row.sha:sub(1, 7), at = iso8601_z(row.at), subject = row.subject}
+      end
+    end
+    return out, ""
+  end
   local cached: {Event} | nil = nil
   if id ~= nil then
     cached = events_from_cache(s, id)

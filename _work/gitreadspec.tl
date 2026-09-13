@@ -8,6 +8,7 @@
 --- The prose is a `spec/` subtree of two blobs (`_work.itemtree`'s
 --- `Spec`), read here in one `cat-file --batch` that asks for both
 --- paths of every candidate at once.
+local format = require("_work.format")
 local gitobj = require("_work.gitobj")
 local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
@@ -95,6 +96,32 @@ end
 --- @return {string: itemtree.Spec} Prose by id, both fields "" when absent
 local function read_specs(root: string, shas_by_id: {string: string},
     ids: {string}): {string: itemtree.Spec}
+  local head = format.state_head(root)
+  if head ~= nil and head ~= "" then
+    local native: {string: itemtree.Spec} = {}
+    local queries: {string} = {}
+    for _, id in ipairs(ids) do
+      local sha = shas_by_id[id]
+      native[id] = {change = "", non_goals = ""}
+      if sha ~= nil then
+        local prefix = sha .. ":items/" .. id .. "/spec/"
+        queries[#queries + 1], queries[#queries + 2] = prefix .. "change.md", prefix .. "non-goals.md"
+      end
+    end
+    local batch = gitobj.cat_file_batch(root, queries)
+    if batch ~= nil then
+      for _, id in ipairs(ids) do
+        local sha = shas_by_id[id]
+        if sha ~= nil then
+          local prefix = sha .. ":items/" .. id .. "/spec/"
+          local change, non_goals = batch[prefix .. "change.md"], batch[prefix .. "non-goals.md"]
+          if change ~= nil then native[id].change = change.content end
+          if non_goals ~= nil then native[id].non_goals = non_goals.content end
+        end
+      end
+    end
+    return native
+  end
   local result: {string: itemtree.Spec} = {}
   local queries: {string} = {}
   local object_of: {string: string} = {}

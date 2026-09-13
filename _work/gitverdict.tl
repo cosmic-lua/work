@@ -7,6 +7,8 @@ local ghland = require("_work.ghland")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
+local stateevidence = require("_work.stateevidence")
+local format = require("_work.format")
 
 local KIND_ALIASES: {string: string} = {
   ["request-changes"] = "request changes",
@@ -47,6 +49,9 @@ local function verify_result(s: store.Store, it: item.Item,
     return nil, ("%s's research handover is %s, not %s — a research head is "
       .. "named exactly"):format(id8, result, given)
   end
+  local native, nerr = format.state_head(s.root)
+  if native == nil then return nil, nerr end
+  if native ~= "" then return stateevidence.verify(s.root, native, result, it.id) end
   local tip = s.leased_sha[it.id] or ""
   if tip == "" then
     return nil, ("%s has no observed board commit — read the board first")

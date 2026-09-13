@@ -8,6 +8,7 @@
 --- message carries is the retrospective — what was measured, what was
 --- found, what happened along the way. Nothing else in the store reads
 --- a commit message, so this is the one place that grammar lives.
+local boardhistory = require("_work.boardhistory")
 local child = require("cosmic.child")
 local refs = require("_work.refs")
 
@@ -32,7 +33,7 @@ local FIELDS < const > =
 --- is the body an author actually put there, empty for every commit
 --- the board carries today.
 local TOOL_TRAILERS < const >: {string: boolean} = {
-  ["Op"] = true, ["Claim-Batch"] = true,
+  ["Gitboard-Author"] = true, ["Transaction"] = true, ["Op"] = true, ["Claim-Batch"] = true,
 }
 
 --- One commit on an item's ref.
@@ -181,6 +182,24 @@ local function read_history(root: string, candidates: {string}): {Entry} | nil, 
   return nil, ("no history for %s"):format(table.concat(candidates, " "))
 end
 
+--- Read an item's native first-parent history, including claim path changes.
+local function read_state_history(root: string, head: string, id: string): {Entry} | nil, string
+  local r, err = child.run({"git", "log", "--first-parent", "--reverse",
+      "--format=" .. RS .. "%(trailers:key=Gitboard-Author,valueonly,unfold)" .. US .. FIELDS,
+      head, "--", "items/" .. id, "claims/" .. id}, {cwd = root})
+  if r == nil then return nil, err end
+  if not r.ok then return nil, r.stderr end
+  local out: {Entry} = {}
+  for _, chunk in ipairs(split(r.stdout, RS)) do
+    local entry = entry_of(chunk, 1)
+    if entry ~= nil then
+      entry.author = boardhistory.logical_author(split(chunk, US)[1], entry.author)
+      out[#out + 1] = entry
+    end
+  end
+  return out
+end
+
 --- Every named item's history in ONE `git log`, oldest first per item,
 --- empty for an id whose tip is unknown — the whole-board counterpart
 --- to `read_history`, so a board-wide pass over entries costs one
@@ -265,6 +284,7 @@ end
 local record gitreadlog
   type Entry = Entry
   prose_of: function(body: string): string
+  read_state_history: function(root: string, head: string, id: string): {Entry} | nil, string
   read_history: function(root: string, candidates: {string}): {Entry} | nil, string
   read_histories: function(root: string, shas_by_id: {string: string},
   ids: {string}): {string: {Entry}} | nil, string
@@ -273,6 +293,7 @@ end
 
 local M: gitreadlog = {
   prose_of = prose_of,
+  read_state_history = read_state_history,
   read_history = read_history,
   read_histories = read_histories,
   outcome_body = outcome_body,

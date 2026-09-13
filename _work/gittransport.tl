@@ -2,6 +2,7 @@
 --- leased pushes and `refresh` inspects already-fetched tracking refs. Only an
 --- explicit `--execute` runs the exact ordinary Git argv being rendered; this
 --- module never discovers or handles credentials.
+local statepublish = require("_work.statepublish")
 local cache = require("_work.cache")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
@@ -238,6 +239,13 @@ end
 local function cmd_refresh(s: store.Store, remote: string,
     execute: boolean, hydrated?: boolean,
     confirmation_receipts?: {string: boolean}): integer
+  if s.state_head ~= "" then
+    if remote ~= refs.board_remote(s.root) then
+      return gate.verdict_line("refresh", false, "native refresh destination differs")
+    end
+    local ok, detail = statepublish.sync(s, execute)
+    return gate.verdict_line("refresh", ok, detail)
+  end
   local mode = refs.board_mode(s.root)
   -- A claim transaction's batch object records the remote whose canonical
   -- item tips were leased. Inspect that binding before `prepared.refresh`

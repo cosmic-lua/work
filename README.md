@@ -34,9 +34,17 @@ The experimental transport is implemented in Teal and embedded in the gitboard
 binary. See [the single-head guide](experiments/single-head/README.md) for
 setup, frozen publication plans, confirmation, and validation results.
 
-Both transports are planned to be replaced by one branch whose tree is the
-board — `refs/heads/state`, format 6 — designed in
-[`docs/design/storage.md`](docs/design/storage.md).
+Native format 6 implements one branch whose tree is the board —
+`refs/heads/state` — following [`docs/design/storage.md`](docs/design/storage.md).
+It is opt-in: `gitboard init --local --format 6` creates an isolated native
+board, while existing format-5 boards continue to use the legacy transport
+described below. `gitboard help native` covers frozen connector plans, claims,
+research evidence, and offline migration planning. New structured records use
+`cosmic.literal`; item payloads retain the existing item-tree encoding.
+
+The native implementation is under review. It does not cut over the live board,
+change the consumer pin, or grant connector plans claim authority before a
+fresh read confirms the complete transaction and current claim record.
 
 `_work/index.tl` and `_work/find.tl` define a DERIVED SQLite schema
 over the loaded items — the read model every verb reads, rebuilt from

@@ -42,6 +42,7 @@ local claimbatchfsck = require("_work.gitfsck_claimbatch")
 local dependsfsck = require("_work.gitfsck_depends")
 local gate = require("_work.gitgate")
 local gitobj = require("_work.gitobj")
+local stateread_fsck = require("_work.stateread_fsck")
 local gitread = require("_work.gitread")
 local index = require("_work.index")
 local item = require("_work.item")
@@ -334,7 +335,9 @@ local function cmd_fsck(s: store.Store): integer
   -- `claim_batch` intentionally makes `gitread.list` fail closed, but fsck
   -- still has enough raw Git structure to say exactly which immutable object
   -- or bridge is incomplete.
-  local claim_problems = claimbatchfsck.problems(s)
+  local claim_problems: {string} = {}
+  if s.state_head == "" then claim_problems = claimbatchfsck.problems(s)
+  else claim_problems = stateread_fsck.problems(s.root, s.state_head) end
   -- A fresh git read, never the cache-backed `store.list`: this audit's
   -- own job is checking the database against git, so it needs to
   -- rebuild the derived rows from the refs itself rather than trust
@@ -434,16 +437,18 @@ local function cmd_fsck(s: store.Store): integer
   -- One process for every item's observed tree, whatever the board's
   -- size — the batched form of `gitobj.tree_of`, which used to cost
   -- one `git rev-parse` PER item here.
-  local observed_trees, terr = gitobj.tree_of_batch(s.root, observed_shas)
-  if observed_trees == nil then
-    problems[#problems + 1] = ("could not read observed trees: %s"):format(terr)
-    observed_trees = {}
-  end
-  for _, it in ipairs(all) do
-    local p = tree_problem(s, it, specs[it.id]
-      or {change = "", non_goals = ""}, observed_trees)
-    if p ~= nil then
-      problems[#problems + 1] = p
+  if s.state_head == "" then
+    local observed_trees, terr = gitobj.tree_of_batch(s.root, observed_shas)
+    if observed_trees == nil then
+      problems[#problems + 1] = ("could not read observed trees: %s"):format(terr)
+      observed_trees = {}
+    end
+    for _, it in ipairs(all) do
+      local p = tree_problem(s, it, specs[it.id]
+        or {change = "", non_goals = ""}, observed_trees)
+      if p ~= nil then
+        problems[#problems + 1] = p
+      end
     end
   end
   for _, p in ipairs(dependsfsck.problems(all, specs)) do

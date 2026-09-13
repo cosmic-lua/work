@@ -14,6 +14,7 @@ local repository_map = require("_work.repository_map")
 local refs = require("_work.refs")
 local singlehead = require("_work.gitsinglehead_config")
 local store = require("_work.store")
+local stateclaim_cli = require("_work.stateclaim_cli")
 local transport = require("_work.gittransport")
 
 local function resolve_caller(explicit: string): string | nil, string
@@ -166,7 +167,10 @@ end
 --- base the handover cannot descend from (see `handover_ancestry_refusal`).
 local function product_base(s: store.Store, it: item.Item, source_ref: string,
     repo_dir: string, fetch_base: boolean): string | nil, string
-  if (it.repo or "") == "" then return refs.read_ref(s.root, source_ref) end
+  if (it.repo or "") == "" then
+    if (s.state_head or "") ~= "" then return s.state_head, "" end
+    return refs.read_ref(s.root, source_ref)
+  end
   local root, err = repository_map.resolve(s.root, it.repo, repo_dir)
   if root == nil then return nil, err end
   local base = default_base(it.repo, it.base or "")
@@ -235,6 +239,12 @@ local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
   local all, aerr = store.list(s)
   if all == nil then
     return gate.verdict_line(verb, false, aerr)
+  end
+  if (s.state_head or "") ~= "" then
+    return stateclaim_cli.run(s, ids, all, action, caller, remote, force, why, execute,
+      function(it: item.Item): string | nil, string
+        return product_base(s, it, "", repo_dir, fetch_base or false)
+      end)
   end
   local by_id = item.by_id(all)
   local mode = refs.board_mode(s.root)

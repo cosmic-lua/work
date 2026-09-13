@@ -11,6 +11,7 @@
 --- is a linked worktree of another checkout (`_work.storeinit`'s
 --- `linked_worktree_refusal` — the same guard `init_repo` runs, so
 --- there is one implementation of the check, not two).
+local statewrite = require("_work.statewrite")
 local item = require("_work.item")
 local format = require("_work.format")
 local gitwrite = require("_work.gitwrite")
@@ -93,6 +94,7 @@ local function save(s: store.Store, it: item.Item, message: string,
   if not current then
     return false, ferr
   end
+  if s.state_head ~= "" then return statewrite.save(s, it, message, spec, also) end
   local batch: {item.Item} = {it}
   for _, other in ipairs(also or {}) do
     batch[#batch + 1] = other

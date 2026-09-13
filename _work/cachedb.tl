@@ -19,6 +19,7 @@
 --- one path it names, so a sidecar left under the temp name would
 --- otherwise become permanent litter.
 local cachedb_events = require("_work.cachedb_events")
+local format = require("_work.format")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local hash = require("cosmic.hash")
@@ -62,7 +63,7 @@ local type Cache = index.Index
 --- suspenders once more, the fingerprint already moved with the DDL.
 --- The cache is disposable: this is a rebuild boundary, never an
 --- in-place data migration.
-local SCHEMA_VERSION < const > = 10
+local SCHEMA_VERSION < const > = 11
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -92,6 +93,11 @@ local DB_FILENAME < const > = "board.db"
 --- the other modules) covers it exactly as if it were written inline
 --- here.
 local EXTRA_DDL < const > = [[
+CREATE TABLE state_paths (
+  path TEXT PRIMARY KEY,
+  oid TEXT NOT NULL
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE cache_meta (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL
@@ -120,7 +126,7 @@ CREATE TABLE ci_checks (
 --- guard's own otherwise-fresh `for-each-ref` is skipped — reads it
 --- from here rather than repeating the list (`_work.gitview.list_via_cache`,
 --- which also wants the same snapshot's committer dates).
-local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}
+local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board", "refs/heads/state"}
 
 --- The cache file's path for a given store root.
 --- @param root string The store's root
@@ -195,6 +201,9 @@ end
 --- @return string | nil The digest
 --- @return string Error message
 local function fresh_digest(root: string): string | nil, string
+  local head, herr = format.state_head(root)
+  if head == nil then return nil, herr end
+  if head ~= "" then return head, "" end
   local entries, err = refs_snapshot(root)
   if entries == nil then
     return nil, err

@@ -3,6 +3,7 @@ local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local claim = require("_work.claim")
 local claimbatch = require("_work.claimbatch")
+local native = require("_work.stateclaim_authority")
 local claimcli = require("_work.gitclaim_cli")
 local claimsession = require("_work.claimsession")
 local gitclaim = require("_work.gitclaim")
@@ -102,6 +103,7 @@ end
 --- identity; renewals change only the control/deadline.
 local function active_claim(s: store.Store, it: item.Item, session: string):
   claim.State | nil, string
+  if (s.state_head or "") ~= "" then return native.current(s, it.id, session) end
   local holder = it.claim or ""
   if holder == "" then
     return nil, ("REFUSED: %s is not claimed by %s — claim it first")
@@ -150,6 +152,7 @@ local function confirmed(s: store.Store, it: item.Item, session: string): claim.
   if not claimsession.is_id(session) then return nil, "receipt needs a minted session" end
   local st, err = active_claim(s, it, session)
   if st == nil then return nil, err end
+  if (s.state_head or "") ~= "" then return st, "" end
   local problems = batchcheck.problems(s)
   if #problems > 0 then return nil, table.concat(problems, "\n") end
   local pending, perr = gitclaim.list_prepared(s.root, refs.board_remote(s.root))
@@ -233,6 +236,13 @@ local function read(s: store.Store, it: item.Item, kind: string, file: string,
   or values["board-remote"] ~= remote or values.item ~= it.id or values.session ~= session
   or values["claim-fact"] ~= st.root or values["product-base"] ~= st.product_base then
     return {}, "preparation receipt does not match current claim"
+  end
+  if (s.state_head or "") ~= "" then
+    local historical = native.historical(s, it.id, values["claim-control"], st)
+    if historical ~= "" then return {}, historical end
+    local invalid = checkout(values, tree)
+    if invalid ~= "" then return {}, invalid end
+    return values, ""
   end
   local old, oerr = claimbatch.read_state(s.root, values["claim-control"], it.id)
   if old == nil then return {}, "receipt control unavailable: " .. oerr end

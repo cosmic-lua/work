@@ -5,6 +5,7 @@
 --- file cap, so a verb's OPTIONS live beside its one-line summary
 --- rather than crowding the module that dispatches to it.
 local flags = require("cosmic.flags")
+local statecommands = require("_work.statecommands")
 
 local function dir_flag(): flags.Flag
   return {long = "dir", arg = "DIR", default = os.getenv("GITBOARD_DIR") or ".",
@@ -37,7 +38,8 @@ local CSPEC: flags.CommandSpec = {
           {long = "remote", help = "use caller-fetched remote-tracking refs"},
           {long = "remote-name", arg = "NAME", help = "persist the Git remote "
             .. "whose tracking refs are canonical (default: origin)"},
-          {long = "local", help = "use local heads (tests and migrations)"}}}},
+          {long = "local", help = "use local heads (tests and migrations)"},
+          {long = "format", arg = "5|6", help = "fresh board layout; 6 selects native state (default 5 during rollout)"}}}},
     {name = "session", summary = "mint an opaque per-run claim identity",
       spec = {usage = "new",
         summary = "mint an opaque per-run claim identity.\n\n"
@@ -326,6 +328,7 @@ local CSPEC: flags.CommandSpec = {
           {long = "session", arg = "SESSION",
             help = "minted claim identity; default $GITBOARD_SESSION"},
           {long = "head", arg = "SHA", help = "product commit handed over"},
+          {long = "result", help = "hand over this item's published board state as research evidence"},
           {long = "url", arg = "URL", help = "optional non-authoritative link"},
           {long = "repo-dir", arg = "DIR", help = "local product checkout; "
             .. "otherwise use the configured repository mapping"}}}},
@@ -432,6 +435,11 @@ local CSPEC: flags.CommandSpec = {
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in the push argv"},
+          {long = "plan", arg = "PLAN.literal", help = "native state: save one immutable connector publication plan"},
+          {long = "from-plan", arg = "PLAN.literal", help = "native state: inspect or execute a saved attempt"},
+          {long = "call", arg = "N", help = "native state: render zero-based call N from --from-plan"},
+          {long = "published", arg = "SHA", help = "native state: associate the connector-returned tip with this attempt"},
+          {long = "repository", arg = "OWNER/REPO", help = "native state: verify connector destination identity"},
           {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},
     {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
       spec = {summary = "confirm prepared transactions against caller-fetched "
@@ -462,6 +470,7 @@ local DRAFTABLE < const >: {string: boolean} = {
   set = true, spec = true, worktree = true, take = true, verdict = true,
   done = true, show = true, find = true, log = true,
 }
+statecommands.extend(CSPEC)
 for _, command in ipairs(CSPEC.commands) do
   if DRAFTABLE[command.name] then
     command.spec.flags = command.spec.flags or {}

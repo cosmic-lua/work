@@ -37,6 +37,7 @@ local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storeinit = require("_work.storeinit")
+local statewrite = require("_work.statewrite")
 local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 
@@ -107,7 +108,13 @@ local function cmd_log(s: store.Store, id: string, oneline?: boolean): integer
   if ref ~= nil then
     candidates = {ref}
   end
-  local entries, herr = gitreadlog.read_history(s.root, candidates)
+  local entries: {Entry} | nil
+  local herr = ""
+  if s.state_head ~= "" then
+    entries, herr = gitreadlog.read_state_history(s.root, s.state_head, id)
+  else
+    entries, herr = gitreadlog.read_history(s.root, candidates)
+  end
   if entries == nil then
     return verdict_line("log", false, herr)
   end
@@ -216,6 +223,12 @@ local function cmd_log_add(s: store.Store, id: string, file: string,
   -- forced mutation's subject does, so the audit travels with the
   -- commit rather than with the session.
   local subject = entry_subject(id, session or "") .. gate.forced_suffix(frc, rsn)
+  if s.state_head ~= "" then
+    local ok, err = statewrite.log(s, it, subject, prose)
+    if not ok then return verdict_line("log", false, err) end
+    local published, detail = publish.publish(s)
+    return verdict_line("log", published, detail)
+  end
   local now = fastimport.git_date_now()
   -- The epoch second the commit itself carries, so the lease and the
   -- `events` row the patch records name the same instant git does.

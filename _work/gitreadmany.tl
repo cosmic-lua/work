@@ -8,6 +8,7 @@
 --- directly, so it always rereads the ids it moved, in one batch
 --- rather than one `_work.gitread.load` per id.
 local gitbatch = require("_work.gitbatch")
+local format = require("_work.format")
 local gitread = require("_work.gitread")
 local refs = require("_work.refs")
 
@@ -33,6 +34,20 @@ local function load_many(root: string, ids: {string}): {string: Loaded} | nil, s
   local out: {string: Loaded} = {}
   if #ids == 0 then
     return out
+  end
+  local head, herr = format.state_head(root)
+  if head == nil then return nil, herr end
+  if head ~= "" then
+    local board, berr = gitread.list(root)
+    if board == nil then return nil, berr end
+    local wanted: {string: boolean} = {}
+    for _, id in ipairs(ids) do wanted[id] = true end
+    for _, it in ipairs(board.items) do
+      if wanted[it.id] then
+        out[it.id] = {it = it, ref = "refs/heads/state", sha = board.shas_by_id[it.id] or head}
+      end
+    end
+    return out, ""
   end
   local patterns: {string} = {}
   for _, id in ipairs(ids) do

@@ -41,7 +41,7 @@ end
 --- @return string | nil The refusal
 local function refusal(found: string, has_items: boolean): string | nil
   local trimmed = (found or ""):gsub("%s+$", "")
-  if trimmed == CURRENT then
+  if trimmed == CURRENT or trimmed == "6" then
     return nil
   end
   if trimmed == "" then
@@ -100,6 +100,25 @@ local function inspect(dir: string): Inspection | nil, string
   end
   return {content = blob_entry.content, sha = format_sha,
     has_items = has_items}, ""
+end
+
+--- Native reads activate only on the explicit marker, never a staged branch.
+local function state_head(dir: string): string | nil, string
+  local marker, err = inspect(dir)
+  if marker == nil then return nil, err end
+  local denied = refusal(marker.content, marker.has_items)
+  if denied ~= nil then return nil, denied end
+  if marker.content:gsub("%s+$", "") ~= "6" then return "", "" end
+  local entries, herr = refs.for_each_ref(dir, {"refs/heads/state"})
+  if entries == nil then return nil, herr end
+  local head = refs.ZERO_SHA
+  for _, entry in ipairs(entries) do
+    if entry.refname == "refs/heads/state" then head = entry.sha end
+  end
+  if head == refs.ZERO_SHA then
+    return nil, "format 6 requires refs/heads/state"
+  end
+  return head, ""
 end
 
 --- Gate a write against the confirmed board format. Reads already gate in
@@ -194,6 +213,7 @@ local function ensure(dir: string): boolean, string
 end
 
 local record format
+  state_head: function(dir: string): string | nil, string
   CURRENT: string
   type Inspection = Inspection
   blob: function(): string
@@ -204,6 +224,7 @@ local record format
 end
 
 local M: format = {
+  state_head = state_head,
   CURRENT = CURRENT,
   blob = blob,
   refusal = refusal,

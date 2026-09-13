@@ -4,6 +4,8 @@
 --- local ref is both the restart handle and the GC root for every staged
 --- successor. Publication collapses the history to one leased update per
 --- touched ref: original snapshot -> final speculative tip.
+local format = require("_work.format")
+local staging = require("_work.statestaging")
 local codec = require("cosmic.codec")
 local child = require("cosmic.child")
 local rand = require("cosmic.rand")
@@ -20,6 +22,7 @@ local record Anchor
 end
 
 local record Draft
+  native: staging.Receipt | nil
   id: string
   staging_ref: string
   manifest: string
@@ -27,6 +30,14 @@ local record Draft
   remote: string
   anchors: {Anchor}
   updates: {prepared.Update}
+end
+
+local function native_draft(root: string, receipt: staging.Receipt): Draft
+  local updates: {prepared.Update} = {}
+  if #receipt.transitions > 0 then updates = {{ref = "refs/heads/state", expected = receipt.base, next = receipt.tip}} end
+  return {native = receipt, id = receipt.id, staging_ref = receipt.ref, manifest = receipt.sha,
+    mode = refs.board_mode(root), remote = receipt.remote,
+    anchors = {{ref = "refs/heads/state", sha = receipt.base}}, updates = updates}
 end
 
 local ACTIVE_BY_ROOT: {string: Draft} = {}
@@ -149,6 +160,14 @@ local function decode(content: string): Decoded | nil, string
 end
 
 local function read(root: string, staging_ref: string): Draft | nil, string
+  local native_head, nerr = format.state_head(root)
+  if native_head == nil then return nil, nerr end
+  if native_head ~= "" then
+    local receipt, err = staging.load(root, staging_ref)
+    if receipt == nil then return nil, err end
+    if receipt.kind ~= "draft" then return nil, "not a native draft" end
+    return native_draft(root, receipt), ""
+  end
   local id = staging_ref:match("^refs/gitboard/drafts/([0-9a-f]+)$")
   if id == nil or not valid_id(id) then
     return nil, "not a draft ref: " .. staging_ref
@@ -189,6 +208,13 @@ end
 --- Begin an offline session from one immutable snapshot of every canonical
 --- board ref. Remote mode reads only remote-tracking refs and performs no fetch.
 local function begin(root: string): Draft | nil, string
+  local native_head, nerr = format.state_head(root)
+  if native_head == nil then return nil, nerr end
+  if native_head ~= "" then
+    local receipt, err = staging.create(root, "draft", native_head, {}, native_head)
+    if receipt == nil then return nil, err end
+    return native_draft(root, receipt), ""
+  end
   local found, err = refs.for_each_ref(root,
     {"refs/heads/items", "refs/heads/ended", "refs/heads/board"})
   if found == nil then return nil, err end
@@ -320,6 +346,7 @@ local function list(root: string): {Draft} | nil, string
 end
 
 local function abort(root: string, draft: Draft): boolean, string
+  if draft.native ~= nil then return staging.remove(root, draft.native) end
   local live, err = refs.read_ref(root, draft.staging_ref)
   if live == nil then return false, err end
   if live == refs.ZERO_SHA then return true, "" end
@@ -332,6 +359,17 @@ end
 --- ordering data, derived in one local Git process; authority remains only the
 --- object ids recorded by the manifest.
 local function activate(root: string, draft: Draft): boolean, string
+  local native = draft.native
+  if native ~= nil then
+    if draft.mode ~= refs.board_mode(root) or native.remote ~= refs.board_remote(root) then
+      return false, "draft destination differs"
+    end
+    staging.activate(root, native)
+    refs.set_overlay(root, {{refname = "refs/heads/state", sha = native.tip, touched = os.time()},
+        {refname = "refs/heads/board/format", sha = native.tip, touched = os.time()}})
+    ACTIVE_BY_ROOT[root] = draft
+    return true, ""
+  end
   if draft.mode ~= refs.board_mode(root) or draft.remote ~= refs.board_remote(root) then
     return false, "draft was opened for a different board mode or remote"
   end
@@ -362,6 +400,7 @@ local function active(root: string): Draft | nil
 end
 
 local function deactivate(root: string)
+  staging.activate(root)
   ACTIVE_BY_ROOT[root] = nil
   refs.clear_overlay(root)
 end

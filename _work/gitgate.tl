@@ -348,7 +348,9 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: itemtree.
   end
   storewrite.set_session(s, session or "")
   storewrite.set_op(s, verb)
-  storewrite.set_bounded(s, bounded or false)
+  local native_bounded = s.state_head ~= "" and
+  (verb == "depend" or verb == "attach" or verb == "done" or verb == "rank")
+  storewrite.set_bounded(s, bounded or native_bounded)
   -- Read before the write moves anything, so `after_save` below has
   -- proof the cache was valid immediately beforehand — see
   -- `_work.cache`'s own header for why this lives here rather than

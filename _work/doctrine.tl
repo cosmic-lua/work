@@ -11,6 +11,7 @@
 --- Pure data: no git, no filesystem. `_work/doctrine_test.tl` pins
 --- that every listed topic renders and that no topic shadows a verb.
 local doctrine_bar = require("_work.doctrine_bar")
+local doctrine_native = require("_work.doctrine_native")
 
 --- One page. `body` is the prose; `title` is the one-line summary the
 --- topic list prints beside the name.
@@ -21,6 +22,7 @@ local record Page
 end
 
 local PAGES < const >: {Page} = {
+  {name = "native", title = "format-6 publication, claims, history, and migration", body = doctrine_native.BODY},
   {name = "offline", title = "claim, work offline, and publish once",
     body = [[
 Gitboard keeps authentication at the caller boundary: it never discovers, stores, or

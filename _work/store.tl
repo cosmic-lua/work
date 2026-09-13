@@ -8,18 +8,13 @@
 --- a remote, and reading the log back, live in `_work.publish`, which calls back into
 --- `git`/`git_ok` here for the same deterministic tool identity every store call uses.
 ---
---- The read and write mechanics are `_work.gitread`/`_work.gitwrite`, split out to keep
---- this file under its line cap; this module is the read half — opening a repository,
---- resolving an id prefix, and loading or listing items. The write half — `save`,
---- `add_pending`, and the lease/CAS bookkeeping (`set_session`/`set_op`/`set_bounded`) a
---- verb sets before calling `save` — is `_work.storewrite`, split out the same way and for
---- the same reason; it requires this module for the `Store` type and the few pieces of
---- state (`NOOP_PREFIX`, `snapshot_item`, `stage`, `read_spec`) its own `save` needs, so
---- this module never requires it back.
+local boardhistory = require("_work.boardhistory")
+local boardread = require("_work.boardread")
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local cachequery = require("_work.cachequery")
 local child = require("cosmic.child")
+local format = require("_work.format")
 local fs = require("cosmic.fs")
 local gitdedupe = require("_work.gitdedupe")
 local gitread = require("_work.gitread")
@@ -47,15 +42,11 @@ local storeinit = require("_work.storeinit")
 --- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
 --- same fields this module's `load`/`list` populate.
 ---
---- `remote_url`/`remote_present` are a second memo, of the two ad hoc
---- git facts `_work.gh.slug` and `_work.publish.has_origin` each read
---- with their own process: `git remote get-url origin` and `git
---- remote`, neither of which changes within one run, so the first read
---- of each is the only one that ever has to happen — the `_read` flags
---- distinguish "not asked yet" from "asked, and the answer was empty
---- or an error," which an empty string alone cannot.
 local record Store
   root: string
+  state_head: string
+  state_receipt: string
+  state_reads: {string: string}
   session: string
   op: string
   bounded: boolean
@@ -159,7 +150,9 @@ local function open(root: string): Store | nil, string
   if not fs.is_present(fs.join(root, ".git")) then
     return nil, ("not a git repository: %s"):format(root)
   end
-  return {root = root, session = "", op = "", bounded = false, leased_ref = {},
+  local head, herr = format.state_head(root)
+  if head == nil then return nil, herr end
+  return {root = root, state_head = head, state_receipt = "", state_reads = {}, session = "", op = "", bounded = false, leased_ref = {},
     leased_sha = {}, leased_item = {}, touched_at = {}, written_at = 0, observed_seq = "",
     pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
     remote_url = "", remote_url_ok = false, remote_url_read = false,
@@ -177,6 +170,17 @@ end
 local function resolve(s: Store, prefix: string): string | nil, string
   if prefix == nil or prefix == "" or prefix:match("^%w+$") == nil then
     return nil, ("not an id prefix: %s"):format(tostring(prefix))
+  end
+  if s.state_head ~= "" then
+    local view, err = boardread.list(s.root, s.state_head)
+    if view == nil then return nil, err end
+    local matches: {string} = {}
+    for _, it in ipairs(view.items) do
+      if it.id:sub(1, #prefix) == prefix then matches[#matches + 1] = it.id end
+    end
+    if #matches == 1 then return matches[1], "" end
+    if #matches == 0 then return nil, "no item matches " .. prefix end
+    return nil, prefix .. " is ambiguous: " .. table.concat(matches, " ")
   end
   local found, ferr = refs.for_each_ref(s.root,
     {"refs/heads/items/" .. prefix .. "*", "refs/heads/ended/" .. prefix .. "*"})
@@ -209,6 +213,11 @@ end
 --- @param id string Item id
 --- @return itemtree.Spec The prose, both fields "" when it has none
 local function read_spec(s: Store, id: string): itemtree.Spec
+  if s.state_head ~= "" then
+    local view = boardread.list(s.root, s.state_head)
+    if view ~= nil then return view.specs_by_id[id] or {change = "", non_goals = ""} end
+    return {change = "", non_goals = ""}
+  end
   local ref = s.leased_ref[id]
   if ref ~= nil then
     return gitreadspec.read_spec(s.root, {ref})
@@ -225,32 +234,16 @@ end
 --- @param ids {string} Item ids to read, in any order
 --- @return {string: itemtree.Spec} Prose by id, both fields "" when absent
 local function read_specs(s: Store, ids: {string}): {string: itemtree.Spec}
+  if s.state_head ~= "" then
+    local view = boardread.list(s.root, s.state_head)
+    if view ~= nil then return view.specs_by_id end
+    return {}
+  end
   return gitreadspec.read_specs(s.root, s.leased_sha, ids)
 end
 
---- An independent copy of `it`, sharing no table with it — `encode`
---- then `decode` round-trips through fresh tables at every level
---- (`_work.item`'s own tested inverse pair), so this is cheaper to
---- lean on than a bespoke deep-copy function. Used here to snapshot an
---- item as OBSERVED, before any caller goes on to mutate the object
---- `load`/`list` handed back — `decode`'s own tolerance means this can
---- only fail on an item already flagged unreadable, in which case the
---- snapshot is skipped rather than surfaced as an error: the
---- fast-import diff (`_work.fastimport.diff_item`) treats a missing
---- snapshot as "unobserved", which only costs it writing every path
---- unconditionally for that one item, never a wrong answer. Exported
---- for `_work.storewrite.save` to snapshot what it just wrote, into
---- the same `leased_item` table this module populates.
----
---- `other_edges` rides along on its own, deep-copied by hand: it is
---- carried opaquely by `_work.itemtree` (the ref layout), never by
---- `item.encode`/`decode` (the OLD literal-table codec `encode`/
---- `decode` above still are), so the round trip would otherwise drop
---- it silently — invisible for an ordinary item, which never has any,
---- but exactly the field a diff over an unmigrated board's edges needs
---- an honest baseline for.
---- @param it item.Item The item to copy
---- @return item.Item | nil The copy, nil when re-decoding it failed
+--- Snapshot fields before a caller mutates them. Unknown edges survive the
+--- legacy literal codec through an explicit independent deep copy.
 local function snapshot_item(it: item.Item): item.Item | nil
   local copy, _err = item.decode(item.encode(it))
   if copy == nil then
@@ -280,6 +273,17 @@ end
 --- @return item.Item | nil The item
 --- @return string Error message; "no item <id>" when absent
 local function load_item(s: Store, id: string): item.Item | nil, string
+  if s.state_head ~= "" then
+    local loaded, err = boardread.load(s.root, s.state_head, id)
+    if loaded == nil then return nil, err end
+    local history, herr = boardhistory.read(s.root, s.state_head)
+    if history == nil then return nil, herr end
+    s.leased_ref[id], s.leased_sha[id] = "refs/heads/state", history.tip_by_id[id] or s.state_head
+    s.state_reads["items/" .. id], s.state_reads["claims/" .. id] = loaded.tree, loaded.claim_blob
+    s.leased_item[id] = snapshot_item(loaded.it)
+    s.touched_at[id] = history.touched_by_id[id] or 0
+    return loaded.it, ""
+  end
   local ref, sha = gitread.lease_decode(s.fresh_lease, id)
   s.fresh_lease = ""
   local loaded, err = gitread.load(s.root, id, ref, sha)
@@ -311,14 +315,18 @@ local function ensure_index(s: Store): cache.Cache | nil, string
   if found == nil then
     return nil, ferr
   end
-  local known_digest = cachedb.digest_of(found)
+  local known_digest = s.state_head ~= "" and s.state_head or cachedb.digest_of(found)
   local duplicates = gitdedupe.of(s.root, found)
   local c, cerr = cache.open(s.root, known_digest)
   if c == nil then
     return nil, cerr
   end
+  if s.state_head ~= "" and cachedb.meta_get(c.db, "refs_digest") ~= s.state_head then
+    local _ok, _err = cache.close(c)
+    return nil, "board moved while reading; re-run the command"
+  end
   s.index = c
-  s.duplicates = duplicates
+  s.duplicates = s.state_head ~= "" and {} or duplicates
   s.board_digest = known_digest
   return c, ""
 end
@@ -380,6 +388,11 @@ local function list(s: Store): {item.Item} | nil, string
   end
   for _, it in ipairs(all) do
     s.leased_item[it.id] = snapshot_item(it)
+  end
+  if s.state_head ~= "" then
+    local paths, perr = c.db:query("SELECT path,oid FROM state_paths")
+    if paths == nil then return nil, perr end
+    for row in paths do s.state_reads[row.path as string] = row.oid as string end -- cast: from any (strict SQLite text columns)
   end
   s.observed_seq = ls.seq_sha
   return all
