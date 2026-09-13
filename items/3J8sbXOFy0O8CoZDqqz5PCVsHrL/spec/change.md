@@ -1,0 +1,5 @@
+Make claim-base capture and landed verification agree. For an explicit product repository and target branch, detect when the local target ref is behind its configured remote-tracking ref. Provide an explicit authorized path that fetches/fast-forwards the target before claim publication, and otherwise refuse with the exact commands needed; never silently capture a known-stale base.
+
+Also make `take` record the actual implementation parent/base when the handed-off branch contains a clean fast-forward from the claim base before item edits, or make `done` derive the item patch without treating unrelated base advances as authored work. Preserve exact-byte squash/rebase verification. An audited `--force --landed SHA` repair must be able to retain the real landed SHA after explicit equivalence evidence instead of requiring it to be omitted.
+
+Add an isolated history: claim at A, remote target advances A->B with unrelated files, builder fast-forwards to B and commits item C, provider squashes C onto later target D. Normal completion must accept the squash and record its SHA; a squash missing or changing one item byte must refuse.
