@@ -1,5 +1,3 @@
-## Change
-
 Friction log for the board reshape of 2026-09-05: three agents, one
 per outcome group, filed containers, attached ~90 items, and ranked
 the outcomes' children. Numbers: roughly 180 tool calls across the
