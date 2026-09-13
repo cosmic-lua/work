@@ -1,5 +1,6 @@
 title: cosmopolitan bindings wave 1: Landlock ABI 4 — handled_access_net, NET_PORT rules, size-gated create_ruleset
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 267
 resolution: completed
+touches: libc/calls/landlock.h linux/landlock.h third_party/lua/lunix.c tool/net/definitions.lua
