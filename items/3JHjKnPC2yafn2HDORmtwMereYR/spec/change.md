@@ -19,13 +19,19 @@ ref counts, do not re-derive them.
 
 **decision** — a board is one branch (`refs/heads/state` on the board
 repository) whose tree holds every item as files under `items/<id>/`, the
-live leases under `claims/<id>`, and the format marker; a mutation is one
-commit on it; the write fence is the object id of each touched path at the
-staging base, re-checked at publish against the fetched head, so disjoint
-writers rebase past each other and a same-path writer loses the race; a
-publish is one non-forced push of that one ref, and a connector-only
-environment reproduces exactly that push with `create_tree`,
-`create_commit` and `update_ref(force = false)`. Sub-bullets for the parts.
+recorded leases under `claims/<id>`, and the format marker; a mutation is
+one commit on it; the write fence is the object id of every path the
+mutation READ to decide (the item subtree and its claim blob; the whole
+head for a bounded mutation, whose gate is re-run on the new head),
+re-checked at publish against the fetched head, so disjoint writers rebase
+past each other and a same-path writer loses the race; a publish is one
+non-forced push of that one ref, confirmed by the published commit's
+content; a connector-only environment reproduces exactly that push with
+`create_tree`, `create_commit` and `update_ref(force = false)` under the
+single-head proof of concept's protocol invariants (one immutable attempt,
+the deadline at the final call, publication is not authority). Sub-bullets
+for the parts; the mechanisms are `docs/design/storage.md`'s, named, not
+restated.
 
 **rejected**, each with the reason it lost — (a) keeping the ref-per-item
 layout and batching every large write (D49): batching is a workaround for
@@ -34,16 +40,19 @@ own transport; (b) the envelope of packs (work#167) as the durable format:
 every reader base64-decodes and unpacks before it can read, packs and the
 whole-blob manifest grow with every publication until compaction exists,
 GitHub cannot show an item's history, and an opaque pack means two writers
-can never merge, so every lost race is a re-executed call sequence; (c) a
+can never merge, so every lost race is a re-executed call sequence; (c) keeping the proof of
+concept's receipts manifest — a blob every writer rewrites conflicts with
+every other writer, defeating the per-path fence; (d) a
 database file committed on a branch (one SQLite blob): a binary blob merges
 never, every write conflicts with every other, and the history of one item
-is unreadable without the tool; (d) one file per item on a branch but
+is unreadable without the tool; (e) one file per item on a branch but
 history only in the file (an append-only log inside `meta`): loses the
 commit-per-mutation the events table and the flow measurements read.
 
 **consequences** — enables: one-ref publish under any proxy, git-level
 rebase of disjoint writers, a fresh reader that is a plain clone, GitHub's
-UI as an item browser, one transport for shell git and the connector; costs:
+UI as an item browser, one transport for shell git and the connector; enables also: the connector executor lands in the same release as the
+migration, so a connector-only session is never darkened; costs:
 every write serializes on one head (a `_perf` contention scenario is a
 child of the plan; the number is what would make us revisit), a full
 rebuild of the read model walks the branch's history (31618 commits at the
