@@ -1,5 +1,3 @@
-## Change
-
 In `_work/gittransport.tl`, `_work/prepared.tl`, and the claim/lifecycle
 modules, make gitboard coordinate work entirely through Git data while leaving
 every authenticated or remote interaction to the caller.
@@ -21,11 +19,3 @@ every authenticated or remote interaction to the caller.
   repeated lane warnings are removed from the core workflow.
 - Documentation and tests cover the redesigned lifecycle and migration.
 - The repository's full CI passes under its GitHub coverage sandbox.
-
-## Evidence
-
-Implementation: PR #90 head
-Landing: PR #90 merge
-Verification: repository CI on the implementation head and merge queue
-
-Commit IDs are recorded by the workflow transitions, not duplicated here.
