@@ -1,6 +1,7 @@
 title: perf gate sensitivity is level-dependent: the same delta reads ~2x larger at the fast level
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1460
 resolution: completed
 builders: e532d9f6-4b7d-5145-9534-7c6759ebc0d8
+touches: skills/optimize/measurement.md skills/docs-style/SKILL.md
