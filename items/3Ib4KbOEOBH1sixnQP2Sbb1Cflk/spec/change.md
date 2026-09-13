@@ -1,5 +1,3 @@
-## Change
-
 `gitboard next` carries the last bounce's gap when it offers a
 recently-dropped item, so the next session starts from the recorded
 gap instead of re-discovering it.
@@ -41,12 +39,3 @@ a reviewer-release drop and a take subject yield "") in
 `_work/gitspec_test.tl`'s style — take, drop --why, then `cmd_next`
 output contains "last bounce:" and the why text — using the
 `_work.fixture` harness.
-
-## Non-goals
-
-The bar is untouched: a bounced item STAYS pullable (holding it off
-pullable until the spec moves was considered and not chosen — the gap
-may be answerable by the next session without a spec edit, and the
-bound already throttles churn). Existing verdict-line formats
-unchanged; the note is appended to `next`'s reason text, which is not
-a frozen format.
