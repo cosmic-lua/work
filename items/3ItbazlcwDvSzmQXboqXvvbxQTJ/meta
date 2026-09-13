@@ -1,3 +1,4 @@
 title: _tool/surface.tl and cosmic --diff OLD: a binary's name-level public surface, and two binaries' difference
 parent: 3ItbbICLoC5xLF4MnRn7SGjMojk
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _cli/args.tl _cli/parse.tl sys/help.md _build/make_boundary.tl
