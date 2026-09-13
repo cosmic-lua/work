@@ -1,5 +1,4 @@
-title: _perf: a contention scenario — N disjoint writers on one head, retries per publish
+title: proof scenarios and _perf contention: the validation list held by tests, retries per publish at N writers
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
-touches: _perf/bench/contention_bench.tl README.md
 depends_on: 3JHjLHb4AEmuUtvaGLSQvAIjfpL
