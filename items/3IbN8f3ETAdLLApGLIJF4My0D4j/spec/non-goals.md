@@ -1,0 +1,1 @@
+No resolver behavior changes inside `_work/store.tl` or `_work/tail.tl` — composition happens at the dispatch layer. Verdict lines, refusal text SHAPES, commit subjects, `flow item=` lines untouched (`_work/flowstats_test.tl` proves the grammars).
