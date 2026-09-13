@@ -1,5 +1,3 @@
-## Change
-
 Implement on main commit 7aefdc66edaea50e77c293952056f6d5d0de8e37.
 It descends from this claim's ce5747ff91574594cd59782ecfe8b0ce59da73d1
 base: `git merge-base --is-ancestor <claim-base> <main-commit>` exits 0.
@@ -146,18 +144,3 @@ release.yml naming step 80; GITHUB_ENV stamp 89; pre-upload version
 assertion 175; release job 259; gh release create 306.
 workflows_test.tl UNCONTAINERISED 168; existing release exemption 171;
 version-preservation test 484.
-
-## Non-goals
-
-No change to the dated version scheme, CLI version format, debug-asset
-verification coverage, release immutability settings, existing published
-assets, or unrelated workflows.
-
-A tag-qualified download URL is not itself proof that GitHub enforces
-release immutability. This change proves the bytes downloaded during
-verification equal this run's publication digest and remain unchanged
-during execution. It does not promise that an administrator can never
-replace assets later.
-
-A post-publication failure marks the workflow failed; it does not undo
-publication. Do not delete, replace, or unpublish a failed release here.
