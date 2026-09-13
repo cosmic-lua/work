@@ -2,8 +2,6 @@ title: cosmic.http streaming: chunked request bodies, chunked/streamed responses
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
 claim_batch: 5ee1c40507dd016e93a9bd50d488b5da292b9eb6
-handover_head: d17fa082b80d9f943cd5bbe4e92a66c2e1d8a832
-verdict: request changes
-verdict_head: d17fa082b80d9f943cd5bbe4e92a66c2e1d8a832
-builders: 08f681bfb29d9a10d021fe2d9c31b6a3
+handover_head: 753c3caa6a2cd589aa116e183fc88d662ee0988c
+builders: 08f681bfb29d9a10d021fe2d9c31b6a3 78dd58cbf8900c86b5a69ae5aa45cd6e
 speccers: 053436c315f735c018dcd6ea337493b5
