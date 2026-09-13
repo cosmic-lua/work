@@ -1,4 +1,5 @@
 title: docs/guides/htmx.md: the shipped htmx guide with a runnable todo fixture — templates, router, forms, SSE, the htmx asset as a project pin
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 speccers: fab67b097486f18956a8b703877b2caa
+touches: cmd/todo/main.tl todo/page.tmpl todo/item.tmpl embed/htmx.min.js embed/htmx_gen.tl 3p/htmx/htmx_pin.tl todo/store.tl _make/fixtures_test.tl docs/guides/htmx.md _build/doc_symbols_test.tl docs/guides/index.md
