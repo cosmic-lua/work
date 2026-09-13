@@ -1,5 +1,3 @@
-## Change
-
 Evidence (review of PR #1541, 2026-08-30, reproduced by hand):
 `_make/clean.tl`'s `run()` appends the summary detail ", kept the
 verified bootstrap" unconditionally whenever `kept > 0` — with a fake
@@ -15,8 +13,3 @@ its wording and the absence of "bootstrap"; the bootstrap case keeps
 its existing wording. Mutation-verify (revert to the unconditional
 string, watch the worktree-only wording test go red). Note the test
 file is runner-mode: do NOT self-call new test functions.
-
-## Non-goals
-
-No behavior change to what clean keeps or removes (just merged —
-untouched); the per-skip lines stay as they are.
