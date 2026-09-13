@@ -195,14 +195,25 @@ end
 --- are about the repository the change was written for — not necessarily
 --- the one the running `bin/gitboard` was invoked from, which is a tree
 --- the diff's files need not exist in at all. Falls back to that
---- checkout when the item's repo has no local mapping.
+--- checkout when the item's repo has no local mapping, unless
+--- `map_only`: `REVIEW_SCRIPT`'s `--repo-dir` relies on the fallback
+--- when gitboard runs from the unmapped product checkout itself, while a
+--- research review names the checkout as the one the `gitboard.repository`
+--- map places the item's repository at — gitboard's own checkout rendered
+--- under that sentence would be a false claim, so the token survives for
+--- the caller instead.
 --- @param s store.Store The store
 --- @param it item.Item The item under brief
+--- @param map_only boolean Never fall back to gitboard's own checkout
 --- @return string The checkout's absolute path, "" if unknown
-local function review_product_root(s: store.Store, it: item.Item): string
+local function review_product_root(s: store.Store, it: item.Item,
+    map_only: boolean): string
   local checkout, _cerr = repository_map.resolve(s.root, it.repo or "", "")
   if checkout ~= nil then
     return checkout
+  end
+  if map_only then
+    return ""
   end
   return product_root()
 end
@@ -365,7 +376,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     gitboard_cmd = gitinvocation.prefix(gitboard_command, gitboard_cwd),
   }
   if prep.session == nil then
-    local root = kind == "review" and review_product_root(s, it) or product_root()
+    local root = kind == "review" and review_product_root(s, it, findings ~= nil)
+    or product_root()
     if root ~= "" then
       facts.product_root = root
     end

@@ -269,9 +269,9 @@ a review that only reads has verified nothing:
    with one caller, generality nobody asked for) and have it
    removed before merge.
 
-Mutation-test at least one guard the change adds: break what it
-guards, watch the test go red, restore it. A gate that cannot be
-shown to fail is decoration.
+The diff review's own step: mutation-test at least one guard the
+change adds — break what it guards, watch the test go red, restore
+it. A gate that cannot be shown to fail is decoration.
 
 Three verdicts. Each names the exact commit with `verdict ID KIND --head SHA`.
 `accept` — land that commit with caller-owned Git or provider tooling, then

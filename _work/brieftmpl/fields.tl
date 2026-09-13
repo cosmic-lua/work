@@ -12,6 +12,8 @@ local record brieftmpl_fields
   decompose: {string}
   review: {string}
   review_script: {string}
+  opening_diff: {string}
+  opening_research: {string}
   reviewing_diff: {string}
   reviewing_research: {string}
   posture_diff: {string}
@@ -68,7 +70,7 @@ local M: brieftmpl_fields = {
     "<CURRENT_SPEC>",
   },
   review = {
-    "<REPO>",
+    "<OPENING>",
     "<ITEM_ID>",
     "<HANDLE>",
     "<TITLE>",
@@ -77,7 +79,6 @@ local M: brieftmpl_fields = {
     "<SPEC>",
     "<ROUND_CONTEXT>",
     "<POSTURE>",
-    "<GITBOARD_CMD>",
   },
   review_script = {
     "<REPO>",
@@ -93,6 +94,12 @@ local M: brieftmpl_fields = {
     "<REVIEW_SESSION>",
     "<BOOTSTRAP_PHRASE>",
     "<GITBOARD_CMD>",
+  },
+  opening_diff = {
+    "<REPO>",
+  },
+  opening_research = {
+    "<REPO>",
   },
   reviewing_diff = {
     "<CLAIM_BASE>",
@@ -115,6 +122,8 @@ local M: brieftmpl_fields = {
   },
   posture_research = {
     "<HEAD_SHA>",
+    "<PRODUCT_ROOT>",
+    "<REPO>",
     "<BOARD_DIR>",
     "<REVIEW_SESSION>",
     "<GITBOARD_CMD>",

@@ -76,11 +76,12 @@ local record briefctx
   end
 
   --- `_work.brieftext_review`'s `REVIEW`: the full adversarial review.
-  --- `reviewing` is its "what you're reviewing" section and `posture`
-  --- its "how to review" through the verdict lines, each rendered from
-  --- the diff or research record below and spliced in.
+  --- `opening` is its first paragraph, `reviewing` its "what you're
+  --- reviewing" section and `posture` its "how to review" through the
+  --- verdict lines, the `done` line and the final report's ask, each
+  --- rendered from the diff or research record below and spliced in.
   record Review
-    repo: string
+    opening: string
     item_id: string
     handle: string
     title: string
@@ -89,7 +90,6 @@ local record briefctx
     spec: string
     round_context: string
     posture: string
-    gitboard_cmd: string
   end
 
   --- `_work.brieftext_review`'s `REVIEW_SCRIPT`: the mechanical review.
@@ -107,6 +107,13 @@ local record briefctx
     review_session: string
     bootstrap_phrase: string
     gitboard_cmd: string
+  end
+
+  --- `_work.brieftext_review`'s `OPENING_DIFF` and `OPENING_RESEARCH`:
+  --- the review's first paragraph, naming what kind of reviewer it
+  --- addresses. Both openings interpolate the same one field.
+  record Opening
+    repo: string
   end
 
   --- `_work.brieftext_review`'s `REVIEWING_DIFF`: a diff handover's
@@ -127,8 +134,9 @@ local record briefctx
 
   --- `_work.brieftext_review`'s `POSTURE_DIFF`: a diff handover's
   --- "how to review" — the adversarial list, the mutation step from
-  --- the reviewer's own worktree — and its verdict lines, which carry
-  --- that worktree as `--repo-dir`.
+  --- the reviewer's own worktree — its verdict lines, which carry
+  --- that worktree as `--repo-dir`, the `done --landed` line and the
+  --- final report's ask for the mutation run.
   record PostureDiff
     head_sha: string
     test_cmd_phrase: string
@@ -141,10 +149,14 @@ local record briefctx
   end
 
   --- `_work.brieftext_review`'s `POSTURE_RESEARCH`: a research
-  --- handover's "how to review" — what a findings review checks — and
-  --- its verdict lines, which name the board commit and no checkout.
+  --- handover's "how to review" — what a findings review checks, with
+  --- the product checkout a reproduction worktree is added from — its
+  --- verdict lines, which name the board commit and no checkout, and
+  --- the `done` line whose `--landed` is that same board commit.
   record PostureResearch
     head_sha: string
+    repo: string
+    product_root: string
     board_dir: string
     review_session: string
     gitboard_cmd: string

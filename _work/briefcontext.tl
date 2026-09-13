@@ -31,15 +31,17 @@
 --- off the template at build time by `_work/brieftmpl_gen.tl` into
 --- `_work.brieftmpl.fields` — the same order a scan of the raw
 --- template used to produce, without the scan. A brief that splices a
---- sub-render in with its OWN tracker (the full review's two sections)
---- reports in the order the rendered brief first sees each token: the
---- spliced unit's tokens stand where its splice is, each once.
+--- sub-render in with its OWN tracker (the full review's three
+--- sections) reports in the order the rendered brief first sees each
+--- token: the spliced unit's tokens stand where its splice is, each once.
 
 local briefcommands = require("_work.briefcommands")
 local briefctx = require("_work.briefctx")
 local fields = require("_work.brieftmpl.fields")
 local tmpl_builder = require("_work.brieftmpl.builder")
 local tmpl_decompose = require("_work.brieftmpl.decompose")
+local tmpl_opening_diff = require("_work.brieftmpl.opening_diff")
+local tmpl_opening_research = require("_work.brieftmpl.opening_research")
 local tmpl_posture_diff = require("_work.brieftmpl.posture_diff")
 local tmpl_posture_research = require("_work.brieftmpl.posture_research")
 local tmpl_refine = require("_work.brieftmpl.refine")
@@ -244,6 +246,21 @@ local function decompose(f: Facts): string, {string}
   return tmpl_decompose.render(d), survivors(fields.decompose, tr)
 end
 
+--- The opening paragraph a full review splices in: a findings reviewer
+--- when `f.findings` is set, a code reviewer otherwise. Rendered with
+--- the review's own tracker: the repository it names is the review's
+--- survivor when the board cannot answer it.
+--- @param tr Tracker The review's survivor set
+--- @param f Facts The board's resolved facts
+--- @return string The rendered paragraph
+local function opening(tr: Tracker, f: Facts): string
+  local d: briefctx.Opening = {repo = need(tr, "<REPO>", f.repo)}
+  if f.findings ~= nil then
+    return tmpl_opening_research.render(d)
+  end
+  return tmpl_opening_diff.render(d)
+end
+
 --- The "what you're reviewing" section a full review splices in: the
 --- research wording when `f.findings` is set, the diff wording
 --- otherwise. Rendered with the review's own tracker, since
@@ -266,13 +283,17 @@ local function reviewing(tr: Tracker, f: Facts): string
     })
 end
 
---- The "how to review" section and verdict lines a full review splices
---- in: the research wording when `f.findings` is set — what a findings
---- review checks, verdict lines naming no checkout — and the diff
---- wording otherwise, the mutation step from the reviewer's own
---- worktree and `--repo-dir` on every verdict line. Rendered with the
---- review's own tracker: the worktree and bootstrap plan a diff review
---- owes are the review's survivors, and a research review owes neither.
+--- The "how to review" section, verdict lines, `done` line and final
+--- report a full review splices in: the research wording when
+--- `f.findings` is set — what a findings review checks, reproduced in
+--- a worktree added from the product checkout, verdict lines naming no
+--- checkout, `--landed` the board commit itself — and the diff wording
+--- otherwise, the mutation step from the reviewer's own worktree,
+--- `--repo-dir` on every verdict line and the mutation run in the
+--- report. Rendered with the review's own tracker: the worktree and
+--- bootstrap plan a diff review owes are the review's survivors, a
+--- research review owes neither, and the product checkout it
+--- reproduces from is its own.
 --- @param tr Tracker The review's survivor set
 --- @param f Facts The board's resolved facts
 --- @param cmds briefcommands.Commands The item's repo-mechanics commands
@@ -282,6 +303,8 @@ local function posture(tr: Tracker, f: Facts, cmds: briefcommands.Commands): str
   if f.findings ~= nil then
     return tmpl_posture_research.render({
         head_sha = head_sha,
+        repo = need(tr, "<REPO>", f.repo),
+        product_root = need(tr, "<PRODUCT_ROOT>", f.product_root),
         board_dir = f.board_dir,
         review_session = f.review_session,
         gitboard_cmd = f.gitboard_cmd,
@@ -308,7 +331,7 @@ local function review(f: Facts, cmds: briefcommands.Commands): string, {string}
   local tr = tracker()
   local is_research = f.findings ~= nil
   local d: briefctx.Review = {
-    repo = need(tr, "<REPO>", f.repo),
+    opening = opening(tr, f),
     item_id = f.item_id,
     handle = f.handle,
     title = f.title,
@@ -317,9 +340,9 @@ local function review(f: Facts, cmds: briefcommands.Commands): string, {string}
     spec = f.spec,
     round_context = f.round_context,
     posture = posture(tr, f, cmds),
-    gitboard_cmd = f.gitboard_cmd,
   }
   local declared = spliced_order(fields.review, {
+      ["<OPENING>"] = is_research and fields.opening_research or fields.opening_diff,
       ["<REVIEWING>"] = is_research and fields.reviewing_research or fields.reviewing_diff,
       ["<POSTURE>"] = is_research and fields.posture_research or fields.posture_diff,
     })

@@ -12,6 +12,7 @@ local brieftext_review = require("_work.brieftext_review")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local doctrine = require("_work.doctrine")
+local env = require("cosmic.env")
 local evidence = require("_work.commit_evidence")
 local fixture = require("_work.fixture")
 local flow = require("_work.commit_flow_fixture")
@@ -197,6 +198,17 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   local _, id = fixture.root_with_leaf(s)
   fixture.give_spec(s, id)
   local result = research_result(s, id, FINDINGS)
+  -- The item's repository, mapped here: the checkout a reproduction
+  -- worktree is added from is the item's own, not the board's.
+  local it = check.must(store.load(s, id))
+  it.repo = "acme/widgets"
+  assert(storewrite.save(s, it, "set repo"))
+  local product = fs.join(fs.absolute_path(fixture.tmpdir), "brief-research-widgets")
+  assert(fs.remove_all(product))
+  assert(fs.make_dirs(product))
+  fixture.git(product, {"init", "-q"})
+  check.must(store.git_ok(s, {"config", "--local", "--add", "gitboard.repository",
+        "acme/widgets=" .. product}))
   reclaim(s, id, "session-b")
   local before = check.must(store.git_ok(s, {"show-ref"})).stdout
   local code, out = capture(s, "review", id)
@@ -224,10 +236,37 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   -- and verdict lines naming no `--repo-dir`.
   for _, diff_only in ipairs({"The diff is the Change", "cosmic --find",
       "Mutation-test at least one guard", "fresh checkout", "<WORKTREE>",
-      "--repo-dir", "o/3p"}) do
+      "--repo-dir", "o/3p", "no product worktree"}) do
     assert(out:find(diff_only, 1, true) == nil,
       "a research review carries no diff instruction: " .. diff_only .. "\n" .. out)
   end
+  -- The shared tail and the opening follow the deliverable too: a
+  -- research item lands nothing, so `done` names the board commit; the
+  -- report asks for the re-run claims, not a mutation run; and the
+  -- reviewer is addressed as one of findings, not of a change.
+  for _, diff_only in ipairs({"code reviewer", "seen this change before",
+      "--landed SHA", "the mutation-test\nyou ran and its result"}) do
+    assert(out:find(diff_only, 1, true) == nil,
+      "a research review carries no diff-shaped tail: " .. diff_only .. "\n" .. out)
+  end
+  assert(out:find("fresh-context findings reviewer for `acme/widgets`", 1, true) ~= nil
+    and out:find("done " .. id .. " --landed " .. result .. "`.", 1, true) ~= nil
+    and out:find("each measured claim you\nre-ran and whether it reproduced", 1, true) ~= nil,
+    "and says what a findings reviewer is, lands, and reports: " .. out)
+  -- Reproduction needs a tree, and the brief names the one to add a
+  -- worktree from: the item's repository as the map places it.
+  assert(out:find("`git worktree add <dir> <commit>` from the product checkout at\n"
+      .. "   `" .. product .. "` — the item's repository, `acme/widgets`, as the\n"
+      .. "   caller's `gitboard.repository` map places it", 1, true) ~= nil,
+    "the reproduction sentence names its tree: " .. out)
+  assert(out:find("<PRODUCT_ROOT>", 1, true) == nil, "and the tree is resolved: " .. out)
+  assert(out:find("Bootstrap that worktree the way the product\n"
+      .. "   repository's own instructions (its AGENTS.md) bootstrap a new\n"
+      .. "   checkout, before the first re-run.", 1, true) ~= nil
+    and out:find("never bootstrap that loader yourself — the\n"
+      .. "reproduction worktree above is the one tree you bootstrap.", 1, true) ~= nil
+    and out:find("never bootstrap one yourself", 1, true) == nil,
+    "and says how that tree is bootstrapped, and that the loader is not: " .. out)
   for _, wanted in ipairs({"names its command, and the command reproduces",
       "follows from the measurements and not past them",
       "Nothing the spec asked to be measured is missing",
@@ -239,8 +278,7 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
     "the verdict lines name the board commit and the session, nothing more: " .. out)
   -- A product commit recorded beside it is the handover: the brief
   -- judges that commit and carries no findings.
-  local it = check.must(store.load(s, id))
-  it.repo = "acme/widgets"
+  it = check.must(store.load(s, id))
   it.handover_head = HEAD
   assert(storewrite.save(s, it, ("take %s by session-a head:%s"):format(
         id:sub(1, 8), HEAD:sub(1, 12))))
@@ -262,6 +300,44 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   assert(none_code == 1, none)
   assert(none:find(id:sub(1, 8) .. " has no handover recorded — `take "
       .. id:sub(1, 8) .. " --head SHA` is what a commit review judges", 1, true) ~= nil, none)
+  assert(store.close(s))
+end
+
+-- The reproduction sentence calls its path the `gitboard.repository`
+-- map's placement, so an item the map cannot place leaves
+-- `<PRODUCT_ROOT>` to the caller even when gitboard's own checkout is
+-- findable — the fallback a diff review's `--repo-dir` relies on would
+-- render that checkout under a sentence calling it the map's answer.
+local function test_an_unmapped_repo_leaves_the_reproduction_tree_to_the_caller()
+  local s = fixture.init_state_repo("brief-research-unmapped")
+  local _, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  local result = research_result(s, id, FINDINGS)
+  local it = check.must(store.load(s, id))
+  it.repo = "acme/unmapped"
+  assert(storewrite.save(s, it, "set repo"))
+  reclaim(s, id, "session-b")
+  -- A findable fallback: `GITBOARD_DIR` under a root holding
+  -- `bin/gitboard`, which every other brief kind would answer with.
+  local root = fs.join(fs.absolute_path(fixture.tmpdir), "brief-research-gitboard-root")
+  assert(fs.make_dirs(fs.join(root, "bin")))
+  assert(fs.write(fs.join(root, "bin/gitboard"), ""))
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", fs.join(root, "o/board")))
+  local code, out = capture(s, "review", id)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
+  assert(code == 0, out)
+  assert_exact_review(out, result)
+  assert(out:find("`git worktree add <dir> <commit>` from the product checkout at\n"
+      .. "   `<PRODUCT_ROOT>` — the item's repository, `acme/unmapped`, as the\n"
+      .. "   caller's `gitboard.repository` map places it", 1, true) ~= nil,
+    "the reproduction tree survives as its token: " .. out)
+  assert(out:find(root, 1, true) == nil,
+    "gitboard's own checkout is never named as the map's placement: " .. out)
+  local vline = out:match("[^\n]*$")
+  assert(vline:find("fill <PRODUCT_ROOT>, then paste the body verbatim", 1, true) ~= nil,
+    "and the verdict line owes it: " .. vline)
   assert(store.close(s))
 end
 
@@ -352,6 +428,9 @@ follows from the deliverable — and a research handover's brief carries the
 commit's message body verbatim beside the spec it answers.]], 1, true) ~= nil, page)
   assert(page:find("no review brief is available", 1, true) == nil,
     "the refusal stance is gone from the doctrine: " .. page)
+  assert(flat_text(page):find("The diff review's own step: mutation-test at least one "
+      .. "guard the change adds", 1, true) ~= nil,
+    "the mutation step is stated as the diff review's, not every review's: " .. page)
   assert(brieftext_review.REVIEW:find("{{.reviewing}}", 1, true) ~= nil
     and brieftext_review.REVIEW:find("The caller has made", 1, true) == nil,
     "the full review splices its section rather than carrying one wording")

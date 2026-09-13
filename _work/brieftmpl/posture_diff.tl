@@ -90,7 +90,15 @@ local function render(d: briefctx.PostureDiff): string
   -- posture_diff:64
   local v22: string = d.worktree
   parts[#parts + 1] = v22
-  parts[#parts + 1] = "\n```\n"
+  parts[#parts + 1] = "\n```\n\nRun exactly the one line matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item; after landing, the caller runs\n`"
+  -- posture_diff:70
+  local v23: string = d.gitboard_cmd
+  parts[#parts + 1] = v23
+  parts[#parts + 1] = " done "
+  -- posture_diff:70
+  local v24: string = d.item_id
+  parts[#parts + 1] = v24
+  parts[#parts + 1] = " --landed SHA`.\n\n## Final report\n\nThe verdict you recorded (or why you could not), the mutation-test\nyou ran and its result, and any concrete findings quoted with\nfile:line. Keep it factual and concise.\n"
   return table.concat(parts)
 end
 

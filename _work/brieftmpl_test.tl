@@ -99,6 +99,8 @@ local function test_declared_fields_are_the_templates_own_tokens()
     decompose = fields.decompose,
     review = fields.review,
     review_script = fields.review_script,
+    opening_diff = fields.opening_diff,
+    opening_research = fields.opening_research,
     reviewing_diff = fields.reviewing_diff,
     reviewing_research = fields.reviewing_research,
     posture_diff = fields.posture_diff,
@@ -272,16 +274,23 @@ local function test_the_review_section_follows_the_deliverable()
     .. table.concat(hleft, " "))
 end
 
--- The full review's "how to review" section and verdict lines follow
--- the deliverable the same way: `findings` nil is a diff — the
--- adversarial list over the diff, the mutation step from the reviewer's
--- own worktree, `--repo-dir` on every verdict line, byte for byte what
--- the review always carried, pinned here as rendered — and `findings`
--- set is research: what a findings review checks, no diff to list, no
--- guard to mutate, no worktree, verdict lines naming no checkout.
+-- The full review's "how to review" section, verdict lines, `done` line
+-- and final report follow the deliverable the same way: `findings` nil
+-- is a diff — the adversarial list over the diff, the mutation step
+-- from the reviewer's own worktree, `--repo-dir` on every verdict line,
+-- `done --landed SHA` after landing, the mutation run in the report,
+-- byte for byte what the review always carried, pinned here as rendered
+-- through the first line of the paragraph the review still carries
+-- itself, and its opening paragraph the same way, pinned from the
+-- brief's first byte through the first line the review carries itself —
+-- and `findings` set is research: what a findings review
+-- checks, reproduced in a worktree added from the product checkout, no
+-- diff to list, no guard to mutate, verdict lines naming no checkout,
+-- `--landed` the board commit itself, the re-run claims in the report.
 -- Spliced with the review's own tracker, so the worktree and bootstrap
 -- plan a diff review cannot answer are its survivors, in the rendered
--- brief's own order, and a research review owes neither.
+-- brief's own order, and a research review owes neither — only the
+-- product checkout it reproduces from.
 local DIFF_POSTURE < const > = [[
 
 
@@ -352,12 +361,35 @@ bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H reject \
 ```
 
 Run exactly the one line matching your judgment. The board stores the SHA,
+not review prose. Put concrete gaps in your final report for the caller. An
+accept does not merge or complete the item; after landing, the caller runs
+`bin/gitboard done 3JEQZ7UEoFtzblNFG29uOsCKV6H --landed SHA`.
+
+## Final report
+
+The verdict you recorded (or why you could not), the mutation-test
+you ran and its result, and any concrete findings quoted with
+file:line. Keep it factual and concise.
+
+A request-changes verdict names five labeled facts, not a fix: the
+]]
+
+local DIFF_OPENING < const > = [[
+You are a fresh-context code reviewer for `cosmic-lua/work`. You have never
+seen this change before — that is deliberate: the review must come
+from a distance from the builder. Everything you need is below.
+
+## What you're reviewing
+
+Board item id: `3JEQZ7UEoFtzblNFG29uOsCKV6H` (handle uOsC_KV6H)
 ]]
 
 local function test_the_review_posture_follows_the_deliverable()
   local f = full_facts()
   local diff_body, dleft = briefcontext.review(f, full_commands())
   assert(#dleft == 0, "a diff review answers everything: " .. table.concat(dleft, " "))
+  assert(diff_body:sub(1, #DIFF_OPENING) == DIFF_OPENING,
+    "the diff opening is byte for byte what the review always carried: " .. diff_body)
   assert(diff_body:find(DIFF_POSTURE, 1, true) ~= nil,
     "the diff posture is byte for byte what the review always carried: " .. diff_body)
   assert(diff_body:find("There is no diff here", 1, true) == nil, diff_body)
@@ -367,16 +399,34 @@ local function test_the_review_posture_follows_the_deliverable()
   for _, diff_only in ipairs({"The diff is the Change", "cosmic --find",
       "Mutation-test at least one guard", "fresh checkout", "--repo-dir",
       "/wt/work/abcd", "<WORKTREE>", "o/3p", "`test <file>`",
-      "`fetch` before you run any test."}) do
+      "`fetch` before you run any test.", "no product worktree",
+      "code reviewer", "seen this change before", "--landed SHA",
+      "the mutation-test\nyou ran and its result", "never bootstrap one yourself"}) do
     assert(research_body:find(diff_only, 1, true) == nil,
       "diff wording a research reviewer cannot act on: " .. diff_only .. "\n" .. research_body)
   end
   for _, wanted in ipairs({"the posture is ADVERSARIAL",
+      "You are a fresh-context findings reviewer for `cosmic-lua/work`. You have never\n"
+      .. "seen these findings before",
       "names its command, and the command reproduces",
+      "`git worktree add <dir> <commit>` from the product checkout at\n"
+      .. "   `/src/work` — the item's repository, `cosmic-lua/work`, as the\n"
+      .. "   caller's `gitboard.repository` map places it — and run there, never\n"
+      .. "   in that checkout itself. Bootstrap that worktree the way the product\n"
+      .. "   repository's own instructions (its AGENTS.md) bootstrap a new\n"
+      .. "   checkout, before the first re-run.",
+      "never substitute a `bin/gitboard`\nfrom a product checkout, and never bootstrap "
+      .. "that loader yourself — the\nreproduction worktree above is the one tree you "
+      .. "bootstrap.",
       "follows from the measurements and not past them",
       "Nothing the spec asked to be measured is missing",
       "prospective evidence for the item's parent chain",
-      "stale by construction; never read, grep or build"}) do
+      "stale by construction; never read, grep or build",
+      "a research item lands\nnothing — its deliverable is the board commit itself — "
+      .. "so the caller runs\n`bin/gitboard done 3JEQZ7UEoFtzblNFG29uOsCKV6H "
+      .. "--landed 0123456789abcdef`.\n\n## Final report\n\n"
+      .. "The verdict you recorded (or why you could not), each measured claim you\n"
+      .. "re-ran and whether it reproduced,"}) do
     assert(research_body:find(wanted, 1, true) ~= nil,
       "what a findings review checks: " .. wanted .. "\n" .. research_body)
   end
@@ -396,6 +446,10 @@ local function test_the_review_posture_follows_the_deliverable()
   local _rbody, rowed = briefcontext.review(f, cmds)
   assert(table.concat(rowed, " ") == "<HEAD_SHA>",
     "a research review owes no worktree and no bootstrap plan: " .. table.concat(rowed, " "))
+  f.product_root = nil
+  local _pbody, powed = briefcontext.review(f, cmds)
+  assert(table.concat(powed, " ") == "<HEAD_SHA> <PRODUCT_ROOT>",
+    "but does owe the checkout it reproduces from: " .. table.concat(powed, " "))
   f.findings = nil
   local _dbody, dowed = briefcontext.review(f, cmds)
   assert(table.concat(dowed, " ") == "<HEAD_SHA> <WORKTREE> <BOOTSTRAP_PHRASE>",
