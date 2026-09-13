@@ -1,6 +1,7 @@
 title: guide.recipes is the composition answer nothing early points at
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1356
 resolution: completed
 builders: magical-bell
+touches: sys/help.md docs/guides/quickstart.md
