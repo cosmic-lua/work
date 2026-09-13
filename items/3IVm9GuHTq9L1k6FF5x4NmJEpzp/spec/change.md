@@ -1,12 +1,3 @@
-## Goal
-
-G8 — the flow system (parent 3HyRdT1J). A session invoked as `/work N`
-(typically `/loop /work 5`) runs one bounded orchestrator pass per
-invocation instead of interpreting the fan-out from scratch: terse
-reporting, never blocking, and the review distance held across a wave.
-
-## Change
-
 Two files on `main`, delivered as PR 1462 (already open and green;
 this item joins it to the board for review).
 
@@ -31,26 +22,3 @@ drop-and-re-run story the board branch's publish rewrite landed
 (a lost race drops the mutation whole and names the re-run; a
 rejection with the remote unmoved is policy and keeps the commit
 local) — the follow-up that rewrite's PR promised on `main`.
-
-## Non-goals
-
-- No machinery change: `built_by` prefix matching (3IVJVZJt) and the
-  verdict verb's builders check (3IVJUjX4) are their own items.
-- No change to `parallel.md` — the loop chapter builds on it by
-  reference and restates none of its mechanics.
-- No new WIP limits or lease values.
-
-## Acceptance
-
-- `bin/cosmic --make ci` from the repo root ends `ci: PASS` (run at
-  head 946badeb: `ci: PASS (5 stages)`; all five CI lanes green).
-- `skills/work/loop.md` exists and SKILL.md's chapter list names it.
-- SKILL.md's CAS paragraph describes drop-and-re-run, not
-  rebase-and-recheck.
-
-## Enablement
-
-none needed — two markdown files on `main`, gated by the repo's own
-`--make ci`; no blocker items. The review is prose review: does the
-chapter say what the system means, and does the CAS paragraph match
-the machinery that merged.
