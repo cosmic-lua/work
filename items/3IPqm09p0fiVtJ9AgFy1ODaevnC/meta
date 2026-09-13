@@ -1,4 +1,5 @@
 title: casts: the 17 test sites where the decode IS the subject — is-narrowing, never a changed call
 parent: 3IOegofMj4ewlWfVCFTkOrT1Kox
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: cosmic/json_test.tl cosmic/literal_test.tl _build/casts_baseline.tl
