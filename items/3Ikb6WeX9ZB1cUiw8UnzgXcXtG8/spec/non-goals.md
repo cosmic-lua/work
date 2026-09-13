@@ -1,0 +1,2 @@
+- No change to `docs/decisions/d25-*.md` or `docs/goals.md`.
+- No change to `_work/` tooling.
