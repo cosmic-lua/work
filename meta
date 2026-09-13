@@ -2,7 +2,5 @@ title: review brief: the shared tail (done --landed, the final report, the heade
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
 claim_batch: 36353e92e3e065ec365acf8de465103fe0e9b2e1
-handover_head: b27614334eb04706402a631d4688a62558fa40e2
-verdict: request changes
-verdict_head: b27614334eb04706402a631d4688a62558fa40e2
+handover_head: 4fb9f3011c76285863bae0be38dffe5a6cb96c80
 builders: 914d90759d48f83db7aced96741c6acb
