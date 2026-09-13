@@ -1,20 +1,3 @@
-## Evidence
-
-Two `/work 9 --routine` passes ran on 2026-09-04. The second's own
-friction log records that none of its 13 spawned agents (7 build or
-research, 6 review) received the friction paragraph
-`skills/work/friction.md` ("what the agent reports") asks the
-orchestrator to append, so its per-agent sections are absent
-entirely; the first pass appended it by hand. The paragraph rides
-after the brief as an environment note today, the same channel as the
-worktree path, which is exactly the channel an orchestrator forgets.
-`gitboard brief` already carries every standing rule the agent needs
-(`_work/brieftext.tl`, 497 lines: the `Board:` line, the capture
-rule, the bounce rule) and a `--dir`-filled path; nothing in it asks
-for friction.
-
-## Change
-
 New module `_work/brieftext_friction.tl` (well under 40 lines) holding
 one string, `ASK`: the paragraph from `skills/work/friction.md`'s
 "what the agent reports" block — a `## Friction` section of at most
@@ -31,8 +14,3 @@ so this lands without the template split.
 sentence. `skills/work/friction.md` (a follow-up PR on main, after
 this ships in a release): delete the sentence that says to append the
 paragraph by hand and say the brief carries it.
-
-## Non-goals
-
-No change to the orchestrator-side procedure in `friction.md` beyond
-deleting the sentence that says to append the paragraph by hand.
