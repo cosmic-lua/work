@@ -1,4 +1,5 @@
 title: spec bar: a bootstrap-staged change carries a non-circular release graph
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 resolution: not-planned
+touches: _work/spec.tl bin/cosmic.pin _work/spec_test.tl
