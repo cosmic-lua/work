@@ -1,3 +1,5 @@
 title: zip: Appender:remove leaves dead space, so removing entries never shrinks an archive
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: tool/net/lzip.c tool/net/definitions.lua
+access: cosmic-lua/cosmic
