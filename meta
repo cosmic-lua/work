@@ -1,5 +1,6 @@
 title: no gate catches a duplicated function body: three copies survived four green CI runs and two rework rounds on #1156
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1285
 resolution: completed
+touches: _cli/lint.tl _build/casts.tl _build/casts_test.tl _build/dupes.tl _build/dupes_test.tl
