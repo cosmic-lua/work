@@ -1,6 +1,6 @@
 title: review gate: semantic review starts after green exact-head CI
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: b574f22d601b72cac4c9eae2795b8652c34e6f86
 external_url: https://github.com/cosmic-lua/work/pull/131
 verdict: accept
