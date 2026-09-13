@@ -27,10 +27,16 @@ and the ordering is an invariant nothing pins.
 
 Add the two cases to `_work/gitverdict_test.tl`:
 
-- `reject` on a research head clears `result` and `verdict_head`, the
-  item reads as mid-flight afterwards (`is_review_or_rework` false),
-  and a subsequent `take --result` records a new tip rather than
-  hitting the unmoved-spec no-op.
+- `reject` on a research head clears `result` — and KEEPS
+  `verdict_head`, as the rejected commit is the durable verdict
+  evidence, exactly as the diff-side `reject` already does and its
+  test `test_reject_clears_the_handover_but_not_the_claim` pins (an
+  earlier draft of this line said `verdict_head` is cleared too; the
+  builder checked the code and the sibling test and pinned the actual
+  behaviour, and the fresh-context review upheld it). The item reads
+  as mid-flight afterwards (`is_review_or_rework` false), and a
+  subsequent `take --result` records a new tip rather than hitting the
+  unmoved-spec no-op.
 - an item with BOTH `handover_head` and `result` recorded is judged on
   the product commit: `verdict --head <result sha>` is refused and
   `verdict --head <handover sha>` is accepted, with `repo_dir` resolving
