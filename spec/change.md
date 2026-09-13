@@ -1,5 +1,3 @@
-## Change
-
 Drop the shrink-only ceiling and the zero-site check from the cast-kind
 ratchet — decided in review: the count of sites per kind is not worth
 tracking; only whether a cast is classified or justified matters. This
@@ -61,17 +59,3 @@ Neither touched passage contains a fenced ` ```text ` citation block
 `### ` headings, lines 66-450, none of which this item edits), so
 `--check lint`'s citation rule (`_cli/citations.tl`) has nothing new
 to re-verify here.
-
-## Non-goals
-
-Does not change what makes a cast pass or fail: `cast-justify` (the
-comment requirement) and `casts_test.tl`'s classification test both
-keep running exactly as they do today. Folding them into one `--check
-lint` rule, and deleting `_build/casts_test.tl`, is the sibling item.
-
-## Acceptance
-
-`bin/cosmic --make ci` ends `ci: PASS`. `bin/cosmic --make test
-_build/casts_test.tl` passes with two fewer test functions and no
-`sites` field anywhere in `_build/casts_kinds.tl` (`grep -c sites
-_build/casts_kinds.tl` → 0).
