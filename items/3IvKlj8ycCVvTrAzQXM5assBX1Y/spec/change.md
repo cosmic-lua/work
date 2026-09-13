@@ -1,5 +1,3 @@
-## Change
-
 New `_cli/rewrite.tl`, a `--rewrite` verb wired into the dispatcher the
 same way `_cli/lint.tl`/`_cli/format.tl` already are (grep
 `_cli/lint.tl`'s own registration site at pull time and mirror it —
@@ -69,22 +67,3 @@ what it prints). Fix the index to `"_CMD"`, add an `Example_rewrite`
 exercising `cosmic.ast.rewrite` on one hit, and add one sentence to
 `match.tl`'s `match` doc comment: "capture keys carry the desugared
 `_` prefix (`$CMD` binds as `_CMD`)".
-
-## Non-goals
-
-No multi-pass/fixpoint application in this item (depends on a fixpoint
-mechanism not yet built — see the rewrite item's non-goals). No dry-run
-diff rendering beyond the plain per-hit line above; a nicer unified-diff
-`--check` mode is a reasonable follow-up, not required here.
-
-## Acceptance
-
-Re-run this session's dogfood as the acceptance check: `cosmic
---rewrite 'cosmo.$F($$$ARGS)' _make _cli _tool _types _docs _perf cmd`
-(re-measure the exact file count and match count at pull time — this
-session measured 304 files, 3 real call sites, all three carrying
-rationale comments; re-confirm the count still holds on the current
-tree) should complete in one process and report exactly those call
-sites, not the ~30-file noise a plain grep for `cosmo\.` produces (most
-of that noise being comments and `*_test.tl` files, per the same
-session's findings).
