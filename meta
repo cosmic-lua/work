@@ -2,3 +2,6 @@ title: format 6 lands as work#171: the engine children, connector plan and retir
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
 claim_batch: da0eac085d86507cccca31c3f8b4f9a5606fbb6e
+handover_head: e44f8c4d2afe2ce3d75142a88d6e91c560862efa
+external_url: https://github.com/cosmic-lua/work/pull/171
+builders: cc637f1a646014849d64578dac8fd4ba
