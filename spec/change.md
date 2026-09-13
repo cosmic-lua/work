@@ -1,12 +1,3 @@
-
-## Goal
-
-G3 — an honest type layer, no escape hatches (docs/goals.md). This is wave 0.5
-("Transition scaffolds") of the epic 3HyArM3A3zHuRxn3VYCvKmUZ7KW ("G3: measure and
-drive down the as-cast count"): the cheapest remaining large win, to land before wave 3.
-
-## Change
-
 Both surfaces these two test files reach through `as {string: any}` are now fully
 declared and typed on `fs` and `time` — the casts are dead scaffolding left over from
 when those surfaces were still landing. Remove the scaffolding and call the typed API
@@ -167,56 +158,3 @@ $ grep -n -B1 "traps_test\|time_test" _build/casts_baseline.tl
 129-  ["cosmic/time.tl"] = 7,
 130:  ["cosmic/time_test.tl"] = 2,
 ```
-
-## Non-goals
-
-- No other cast-removal wave from the epic's plan (waves 1-7, or the `_eval`/`_fuzz`
-  ratchet-hole fix in wave 7) is touched in this slice. In particular, do not touch
-  `cosmic/time.tl`'s own 7 casts (unrelated `binding-boundary`/`from any` sites, a
-  later wave) — only `cosmic/time_test.tl` is in scope.
-- No new `is` guards are introduced anywhere in either file. This slice is deletion
-  only: call the now-typed API directly, or (for the one surviving probe) keep the
-  `{string: any}` escape hatch as-is. Do not replace the survivor with an `is` check —
-  the whole point of `test_mkstemp_is_gone` / `test_is_accessible` /
-  `test_retired_aliases_are_gone` is that the probed names are ABSENT from the typed
-  record, so there is nothing for `is` to narrow.
-- The coverage floor (`.cosmic-coverage`) is not touched and needs no regen: it holds
-  zero `_test.tl` rows (see facts), so deleting test-file casts changes no covered-line
-  count the ratchet tracks.
-- No behavioral change to any test's assertions. Every `assert(...)` in both files
-  keeps checking exactly what it checks today; only how the value under test is reached
-  changes (typed call vs. cast-through-`any`).
-
-## Acceptance
-
-- `bin/cosmic --make run _build/casts.tl --baseline` (from the repo root) regenerates
-  `_build/casts_baseline.tl` from the post-change tree, and the diff shows exactly:
-  `cosmic/fs/traps_test.tl` dropping from `19` to `1`, and `cosmic/time_test.tl`
-  dropping from `2` to `0` (its baseline row disappears — a file with a zero count is
-  absent from the baseline, per `_build/casts.tl`'s own comment on why absent-means-zero).
-  No other file's baseline row changes. Commit the regenerated
-  `_build/casts_baseline.tl` in the same PR as the test-file edits — this is required
-  because `_build/casts_test.tl`'s `test_the_cast_counts_match_the_committed_baseline`
-  gates the tree against the committed baseline, and it fails the moment the cast
-  counts move without a matching baseline update.
-- `grep -c -- "-- cast:" cosmic/fs/traps_test.tl` prints `1`, and
-  `grep -n -- "-- cast:" cosmic/fs/traps_test.tl` shows only line 10, reading
-  `-- cast: probe removed surface`.
-- `grep -c -- "-- cast:" cosmic/time_test.tl` prints `0`.
-- `git grep -n -- "-- cast: signature transition"` prints nothing (the reason string
-  is retired from the tree).
-- `bin/cosmic --make test cosmic/fs/traps_test.tl cosmic/time_test.tl` passes.
-- `bin/cosmic --make ci` ends `ci: PASS`.
-
-## Enablement
-
-None needed. Every fact this slice depends on is already mechanized: the typed
-declarations it calls out (`fs.copy_tree`, `fs.temp_file`, `TempFile`, `Handle`,
-`fs.open_dir`/`Dir`, `fs.DT_DIR`/`DT_REG`, `time.sleep_ms`) are all landed and
-type-checked today; the `-- cast: <reason>` justification convention and its lint are
-already enforced by `--make lint`; the cast-count ratchet and its regen command
-(`bin/cosmic --make run _build/casts.tl --baseline`) already exist and are exercised by
-`_build/casts_test.tl`; and the house phrasing for the one surviving reason string
-(`probe removed surface`) already has a precedent to copy verbatim
-(`cosmic/compress_test.tl:171`). No decision in this slice is left open for an
-implementer to invent.
