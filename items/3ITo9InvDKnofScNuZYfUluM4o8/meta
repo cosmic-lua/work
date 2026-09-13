@@ -1,6 +1,7 @@
 title: split tl_patch.tl into tl_patch/ once the pinned mechanism reads directories (stage 2 of 3ISnTFGe)
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1437
 resolution: completed
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
+touches: 3p/tl/tl_patch/ast_cache.tl 3p/tl/tl_patch/narrow.tl 3p/tl/tl_patch.tl _make/patch_test.tl
