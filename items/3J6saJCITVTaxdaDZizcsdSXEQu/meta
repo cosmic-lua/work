@@ -1,6 +1,6 @@
 title: test runner: bound every subprocess and distinguish product failure from unavailable host capability
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: 8d25f742410452703573889290c8c00180e66d6b
 verdict: accept
 verdict_head: 8d25f742410452703573889290c8c00180e66d6b
