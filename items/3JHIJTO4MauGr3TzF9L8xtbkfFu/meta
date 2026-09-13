@@ -2,4 +2,6 @@ title: retire: key leaves the schema, lane repair keyed by title and parentage
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 repo: cosmic-lua/work
 handover_head: 9fc356a21f6b32b3433afda218fae43b09330192
+verdict: accept
+verdict_head: 9fc356a21f6b32b3433afda218fae43b09330192
 builders: d30eee26f080a456867acb9da8733781
