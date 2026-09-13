@@ -1,5 +1,3 @@
-## Change
-
 Two finishing touches on the tail-8 handle, one surface each way:
 the last head-8 reading line flips to the tail, and every rendered
 handle gains a wrapper that marks it as a handle at a glance.
@@ -43,12 +41,3 @@ handle gains a wrapper that marks it as a handle at a glance.
 
 Current sizes (`wc -l`): tail.tl 87, tail_test.tl 106,
 gitview.tl 282, gitshow.tl 192 — nothing near the 500 cap.
-
-## Non-goals
-
-Mutation verdict lines, refusal texts, commit subjects,
-`flow item=` key=value lines, item files, and guidance strings are
-untouched (run `_work/flowstats_test.tl` to prove the grammars) —
-the guillemets exist ONLY where the tail handle renders, never
-around head-8 prefixes or full ids. No color, no petnames. The
-handle stays derived, never stored.
