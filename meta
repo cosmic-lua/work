@@ -1,3 +1,4 @@
 title: D10: amend — every break ships its wrapper; recoverability is the commitment, not compatibility
 parent: 3ItbbICLoC5xLF4MnRn7SGjMojk
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: docs/decisions/d10-right-to-break.md docs/goals.md
