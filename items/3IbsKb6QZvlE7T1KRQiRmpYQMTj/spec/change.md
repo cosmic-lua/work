@@ -1,5 +1,3 @@
-## Change
-
 Both refusal strings that chain in the same-session repair path must
 name the audited escape. Measured 2026-08-30 (fresh sweep):
 `already_judged_refusal` (`_work/gitverdict.tl:61-67`) advises running
@@ -18,8 +16,3 @@ substrings in `_work/gitverdict_test.tl` — on the PRINTED `cmd_verdict`
 output for the distance path (the end-to-end printed-line seam added by
 item Td76up8O's PR, which lands before this one), and mutation-verify
 each pin red against the old text.
-
-## Non-goals
-
-No guard-behavior change: both paths still refuse; only the words
-change. No new flags.
