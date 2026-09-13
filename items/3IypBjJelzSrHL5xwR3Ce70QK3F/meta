@@ -1,3 +1,4 @@
 title: reads: and the justification markers are read from the token stream's comments, not line text
 parent: 3Iyp6NSfVgBLmLs2TRVtoDRPvTt
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _tool/comments.tl _cli/reads_lint.tl _tool/lint.tl _cli/reads_lint_test.tl _tool/lint_test.tl
