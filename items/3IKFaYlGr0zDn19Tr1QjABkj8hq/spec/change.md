@@ -1,10 +1,3 @@
-Design reworked from the original Go-`text/template` capture. The reflective
-runtime engine is **dropped**: templates compile to Teal source and the existing
-checker does the checking. Sizing is still above one session — see the seam at
-the end — but the design below is decided.
-
-## Change
-
 Add `cosmic/template/`, a directory module (precedent: `cosmic/fs/`,
 `cosmic/doc/`, `cosmic/flags/`, `cosmic/sqlite/`) that turns template text into
 **Teal source**. It has no template engine, no runtime, and no reflection: it is a
@@ -145,15 +138,3 @@ Lexer, parser, codegen, the `cosmic.html` additions and their tests are past the
 public API, nothing user-facing to misuse) landing before `codegen`+`init`+the html
 additions. Splitting there preserves the invariant that no release ever carries an
 HTML mode without escaping, because nothing renders until the second half lands.
-
-## Non-goals
-
-- **No runtime template engine.** Templates known only at run time are not served
-  by this item.
-- **No reflection, no `Funcs` registry, no runtime name resolution.**
-- **No `*.tmpl` build convention.** Build-time use is an ordinary user `*_gen.tl`
-  calling `compile`. The convention is its own item.
-- **No URL, JavaScript or CSS contexts.** HTML text context only; the rest is its
-  own item.
-- **No context scanner.** Escaping is a type obligation, not an inferred property
-  of surrounding markup.
