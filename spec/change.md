@@ -1,5 +1,3 @@
-## Change
-
 Two costs every agent that added a file paid today. First, the
 coverage ratchet fails a new file with no `.cosmic-coverage` row, but
 the failure line does not print the row to paste, so the agent ran
