@@ -1,6 +1,7 @@
 title: casts: honest signatures at the cosmic.sqlite and cosmic.fetch any boundaries
 parent: 3IOuS3IEGiHpgmFRrgEsXcsXuEA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1394
 resolution: completed
 builders: 36ae82ba-a5e7-5a37-a920-eb3ccc30cc84
+touches: cosmic/sqlite/bind.tl cosmic/sqlite/extras.tl cosmic/fetch/extras.tl _build/casts_baseline.tl fetch/extras.tl
