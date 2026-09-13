@@ -1,3 +1,5 @@
 title: an item's spec is a typed schema, not a free-markdown sidecar
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: docs/design/schema.md spec/change.md spec/non-goals.md _work/format.tl
+access: cosmic-lua/cosmic
