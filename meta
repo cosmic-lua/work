@@ -1,6 +1,7 @@
 title: literal compact encode: consume the C-side domain refusal and delete the Teal pre-walk
 parent: 3IOFN9bnvMQn8DrCiGQdrmOzNNR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1403
 resolution: completed
 builders: 6cc6e54c-fe11-50d2-a398-c1a870c6bc57
+touches: 3p/cosmos/cosmos_pin.tl cosmic/_literal_format.tl cosmic/_literal_format_test.tl
