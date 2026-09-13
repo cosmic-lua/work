@@ -1,6 +1,7 @@
 title: G8's flow instrument: measure phase dwell, WIP adherence, bounce/rework/accept from the board branch's git log, replacing the deleted label-era stats.tl
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1324
 resolution: completed
 builders: workflow-3q9w2x
+touches: _work/store.tl _work/flowstat.tl _work/gitboard.tl _work/flowstat_test.tl
