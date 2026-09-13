@@ -1,6 +1,7 @@
 title: casts: the 6 residue sites that close by guarding a pcall result or a package.loaded index
 parent: 3IOuSKFx5sScSxX4nfqn79PHUjj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1396
 resolution: completed
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+touches: cmd/cosmic/main.tl cosmic/_seal_coverage.tl cosmic/_teal_engine.tl
