@@ -6,8 +6,8 @@ history, never in its spec.
 
 ## Landed
 
-Every step of the plan at the end of this record has landed, all on
-2026-09-13. The plan is kept as it was written; this section names what
+Every step of the plan at the end of this record has landed, over
+2026-09-12 and 2026-09-13. The plan is kept as it was written; this section names what
 each step became and where it left the plan.
 
 1. **Doctrine and briefs agree** — #143, the change that introduced
@@ -28,7 +28,7 @@ each step became and where it left the plan.
    outright, so pinning first would have darkened every clone for as
    long as the migration took to build. The pin waited for the release
    carrying `migrate` and the migration ran from it the moment it
-   merged. cosmic#1855 pins the release carrying the retire.
+   merged. cosmic#1855, open at this writing, pins the release carrying the retire.
 4. **The migration** — #163 is the transform, #164 the batching it
    actually ran with. 1425 refs (702 `items/*`, 723 `ended/*`; the
    plan's 1360 had grown), 425 `## Acceptance` sections dropped, in
@@ -60,7 +60,7 @@ What deviated from the plan, beyond the batched push:
   is history, not an undeclared dependency. `depends_on` was left
   empty by the migration; the two real prose dependencies the report
   surfaced were declared by hand after the pin bump.
-- **Lane repairs are identified by title, not parentage.** Their parent
+- **Lane repairs are identified by title under their parent, not parentage alone.** Their parent
   is the outcome ordinary items are filed under, so parentage alone
   would have promoted nine of those to the repair stage. Nothing on the
   board had ever carried a `key`.
