@@ -134,6 +134,10 @@ claims/<id>               the live lease: holder, acquired, renewed,
                           expires, product_base — one `key: value` per line
 ```
 
+`spec/change.md` and `spec/non-goals.md` carry over from format 5
+unchanged, and what belongs in them is cosmic's D47: named here, not
+restated.
+
 Three invariants hold it together, and they — with the sections below —
 constrain five definitions already in the tree. Located once, here, so
 nothing further down has to cite a line number that drifts:
