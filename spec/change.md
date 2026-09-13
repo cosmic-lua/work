@@ -1,5 +1,3 @@
-## Change
-
 New `cosmic/ast/rewrite.tl` (public, `cosmic.ast.rewrite`), depending
 on `cosmic.ast.node`, `cosmic.ast.walk`, and `cosmic.ast.match`. Port
 from `docs/design/ast-rewrite/tlgrep.tl` (branch
@@ -45,18 +43,3 @@ from `docs/design/ast-rewrite/tlgrep.tl` (branch
   and reports `ok = false` on a syntax error the splice introduced —
   treat that as a hard failure (return it, don't write malformed
   output), not a warning to swallow.
-
-## Non-goals
-
-No CLI, no project-wide file loop, no multi-pass/fixpoint application
-(a rule creating a new match of itself or another rule) — a real
-fixpoint pass belongs in a LATER item modeled on `_make/converge.tl`'s
-existing capped-at-two-generations pattern, not invented fresh here;
-this item is single-pass, single-file only.
-
-## Acceptance
-
-As `cosmic/ast/rewrite_test.tl`: the `assert(os.execute($X))` rewrite
-over `os.execute(cmd)` (confirms formatter round-trip on a clean
-splice) and the comment-loss refusal case above (confirms a hit is
-left untouched, not silently mangled, when refusing).
