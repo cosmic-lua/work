@@ -1,3 +1,6 @@
 title: fetch reuse 3: native socket ownership and bounded idle pools
 parent: 3JDCmyZ6DlNf2AFJcgwDQC6jvNm
-target: cosmic-lua/cosmopolitan@master
+repo: cosmic-lua/cosmopolitan
+base: master
+touches: libc/thread/pthread_atfork.c tool/lua/test_fetch_pool_lifetime.lua
+access: cosmic-lua/cosmic cosmic-lua/work
