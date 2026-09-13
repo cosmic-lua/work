@@ -1,5 +1,3 @@
-## Change
-
 Evidence (re-review of PR #1538, 2026-08-30, observed live): `take`'s
 review-claim routing (`_work/gitverbs.tl:153` at measurement; re-measure)
 derives a review claim only when `it.verdict == ""`. An item that was
@@ -24,8 +22,3 @@ take by session B claims the review (B lands in reviewer, NOT in
 builders); take by A still routes as build/rework; the fresh-item and
 no-verdict paths unchanged. Mutation-verify the routing condition
 (drop the request-changes arm, watch the B-claims-review test go red).
-
-## Non-goals
-
-No change to the distance guard itself, the verdict verb, or claim
-leases. No new flags.
