@@ -1,30 +1,3 @@
-## Evidence
-
-An item's history is in git and nowhere else. Every mutation is one commit
-on the item's ref with a self-describing subject — `take <id8> by <session>
-pr:N`, `verdict <id8> accept by <session> …`, `done <id8> completed (from
-accepted)`, `new`, `attach`, `spec`, `block`, `compare`, `set`, `drop`,
-`hold` (`_work/gitverbs.tl:239,307,330,430`, `_work/gitgraph.tl:116,176,397`,
-`_work/gitverdict.tl:292`, `_work/gitcompare.tl:93,147`). The index carries
-only the item's CURRENT scalars (`items.pr`, `verdict`, `verdict_head`), so
-"which PR heads did this item see, and when", "how long from take to
-accept", "every item whose PR was reworked before acceptance" are answered
-only by walking each ref's log by hand. `show ID` already pays for that
-walk: `_work/publish.tl:128` `history` runs one `git log --format=%h\t%cI\t%s`
-process per render.
-
-Measured 2026-09-05 on the live board clone: 930 item refs, 7,163 commits;
-one walk over all of them, `git log --format='%H %ct %s' $(git for-each-ref
---format='%(refname)' refs/heads/items refs/heads/ended)`, takes 0.13 s. The
-subjects' leading token has 20 distinct values today (`… | awk '{print $1}'
-| sort | uniq -c`): the current verbs above plus legacy `move` (1,025),
-`gitboard:` (439), `board:` (48), `migrate:` (45), `work:` (34), `retitle`,
-`uncompare`, `repo`; 336 subjects carry a `pr:N` token. So the grammar is
-mostly regular but not entirely, and an events row must keep the subject
-verbatim so a legacy shape loses nothing.
-
-## Change
-
 A derived `events` table in the cache, one row per commit on an item's
 ref, rebuilt from one log walk and patched on every save.
 
@@ -78,11 +51,3 @@ ref, rebuilt from one log walk and patched on every save.
    under the cap; otherwise in a new `_work/cachedb_events.tl` that
    `cachedb.tl`'s schema list includes, so the fingerprint still covers
    it. Moving unrelated code out of either file is not this item.
-
-## Non-goals
-
-Writing events anywhere but the cache — the commit chain stays the truth
-and the only durable record; changing any commit subject (frozen; readers
-parse them, they are not made regular); deriving `builders`/`speccers`
-from the log — those stay explicit meta lines by decision (the schema
-discussion of 2026-09-04); changing `show ID`'s printed history.
