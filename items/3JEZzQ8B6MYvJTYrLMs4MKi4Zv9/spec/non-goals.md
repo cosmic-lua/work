@@ -1,0 +1,2 @@
+- Optimizing anything. Baseline only.
+- Concurrency scenarios: none until the loop-shape decision.

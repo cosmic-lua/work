@@ -1,25 +1,3 @@
-# _perf/bench/http_server_bench.tl: a served-requests scenario so cosmic.http has a baseline before its loop shape changes
-
-## Goal
-
-Put a number on the server before anyone optimizes or restructures it:
-requests per second and per-request latency for `cosmic.http` answering
-a small HTML fragment on loopback, measured by the existing harness so
-the daily `perf.yml` compare (D44) watches it from the first release
-that carries the module.
-
-## Evidence
-
-The harness already has the client-side shape: `_perf/bench/http_bench.tl:1-2`
-"HTTP client scenarios against a loopback server. A forked child serves
-fixed HTTP/1.1 responses" with its helpers in `_perf/bench/server.tl`
-(`read_request` at `:18`, `send_all` at `:34`, `cleanup` at `:53`) — a
-hand-rolled server measuring `cosmo.Fetch`. This scenario is the
-inverse: the server under test is `cosmic.http`, the client is the
-fixed cost.
-
-## Change
-
 Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
 
 That is the core child merged; today the command reports the path as
@@ -40,12 +18,3 @@ missing.
 - Run: `bin/cosmic --make run _perf/run.tl --out o/perf/current.json`
   twice; paste the two readings and the `selfcheck` verdict in the PR
   (`skills/optimize/measurement.md`). Never commit `o/perf/*.json`.
-
-## Non-goals
-
-- Optimizing anything. Baseline only.
-- Concurrency scenarios: none until the loop-shape decision.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.
