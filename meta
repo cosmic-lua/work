@@ -1,7 +1,7 @@
 title: retire: the format-4 reader, the path parsers, and the Ready-when mechanism
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 repo: cosmic-lua/work
-claim_batch: 55dc3f7442ff263daf2c55c7b03711888712e5dc
+claim_batch: fa39d8e89595bbe95c6b540eea51a095be47bb34
 handover_head: 1ec547f0dabb0414bab413c3fd66f87c5d9dfd58
 builders: be21c1ebddacb42302460088b126aaba
 access: cosmic-lua/cosmic
