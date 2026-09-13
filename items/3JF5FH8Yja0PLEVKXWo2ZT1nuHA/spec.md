@@ -2,10 +2,19 @@
 
 ## Change
 
-Depends on `03-verbs`: the release this pins must carry both that item and
-`02-tree-and-fields`, because no clone can read or write a format-5 board until
-its pinned build understands one, and `05-migration` cannot run until every
-session's `bin/gitboard` is that build.
+Depends on `03-verbs` AND on `05-migration`'s CODE having merged: the release
+this pins must carry `02-tree-and-fields`, `03-verbs` and the `migrate` verb,
+because no clone can read or write a format-5 board until its pinned build
+understands one, and the migration run cannot happen until every session's
+`bin/gitboard` is a build that carries the verb. The ordering was reversed
+after a measurement: release `2026-09-13-44281f4` (the chain through
+`03-verbs`, without `migrate`) answers the live board with
+`refs/heads/board/format is 4, this tool expects 5 — run `gitboard migrate`
+before reading or writing the board`, so pinning it would have darkened the
+board for the whole item cycle `05-migration`'s code takes. Pinning the
+release that carries the verb instead narrows the dark window to the minutes
+between this merging and the migration's push, which the orchestrator runs
+from this pin in the same sitting.
 
 This item's `repo` is **cosmic-lua/cosmic**, not cosmic-lua/work: the pin is a
 file on cosmic's `main`. The machinery repository has no copy of it —
@@ -42,7 +51,9 @@ sha256 = b1833c18adbb791d27dc69eb1df3ece7c0d8ad555d6b207831d73aa3cfcc0fd8
 ```
 
 Replace the tag in `url` with the release cut from the cosmic-lua/work commit
-that merged `03-verbs`, and `sha256` with that release's own `SHA256SUMS` value.
+that merged `05-migration`'s code (the newest release at the time of the
+bump; `03-verbs` is already behind it), and `sha256` with that release's own
+`SHA256SUMS` value.
 Both lines move together; the comment header is unchanged. Nothing else in
 cosmic's tree names the pin's contents:
 
@@ -81,15 +92,16 @@ unoperable by design: `02-tree-and-fields` set `format.CURRENT` to `"5"` while
 (`git cat-file -p refs/remotes/origin/board/format:format` prints `4`), and
 `format.refusal` answers a format-4 board with
 `run `gitboard migrate` before reading or writing the board`. So this item and
-`05-migration` land back to back, and the migration is run by the same build
-this pin names — not by a checkout of the machinery tree, which would be a
-second build.
+`05-migration`'s run land back to back, and the migration is run by the same
+build this pin names — not by a checkout of the machinery tree, which would be
+a second build.
 
 Verify the pin the way the trust root does, and paste the output in the PR:
 
 ```
 $ rm -rf o/bootstrap && bin/gitboard help | head -1
 $ o/bootstrap/gitboard help | grep -c "depend"   # the verbs 03-verbs added
+$ o/bootstrap/gitboard help | grep -c "migrate"  # the verb 05-migration added
 ```
 
 ## Non-goals
@@ -97,7 +109,7 @@ $ o/bootstrap/gitboard help | grep -c "depend"   # the verbs 03-verbs added
 - No change to `bin/gitboard`, to cosmic's `bin/cosmic.pin`, or to any workflow
   in either repository. The release mechanism already produces what this pins.
 - The migration is not run here. This item ends with a pin that can run it;
-  `05-migration` runs it.
+  `05-migration`'s run, from this pin, is the next thing that happens.
 - No change to cosmic's `skills/work/SKILL.md`. The skill points at the tool
   and restates none of its verbs, so the two new verbs reach every session
   through this pin alone.
