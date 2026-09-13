@@ -61,3 +61,22 @@ apply).
 ## Access
 
 - cosmic-lua/cosmic: read+write.
+
+## Addendum: a compound value also slips through wrong (found in «gWQu_76VE» review)
+
+The same substring match (`encoding:find("chunked", 1, true)`) has a
+second failure mode, distinct from the "unrecognized value" case above:
+a COMPOUND value like `Transfer-Encoding: gzip, chunked` (announcing a
+codings *list*, per RFC 9112 §6.1 — apply `gzip` first, then `chunked`)
+matches the substring check and is decoded as if it were plain
+`chunked` alone. The framing itself stays correct (the wire is chunked
+either way), but the payload handed to the handler is still
+gzip-compressed — silently wrong content, not just a framing issue.
+`Content-Encoding`/compression is this item's own stated non-goal, so
+the right fix is not to add gzip support here, but the dispatch should
+distinguish "the value IS exactly `chunked`" from "the value merely
+contains the substring `chunked`" and refuse (501) any compound or
+unrecognized coding list rather than accepting it and silently doing
+the wrong thing with the body. This sharpens the direction above: it's
+not just an "unrecognized value" case, it's "any value other than the
+literal token `chunked`" that should refuse.
