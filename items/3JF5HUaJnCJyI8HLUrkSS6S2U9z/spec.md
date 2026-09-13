@@ -15,11 +15,6 @@ unoperable for a whole item cycle, and pinning a release that carries it
 narrows the window to the minutes between the bump and the push. The item is
 done when the run has landed, not when the code has.
 
-Access to cosmic-lua/cosmic is declared as the `access` field, for
-`docs/decisions/d47-spec-declares-intent-only.md`, whose rejected alternatives
-fix three choices this makes (no backdating, no lazy per-item migration, no
-`notes` hatch for the tail), and `docs/decisions/d48-dependency-is-its-own-relation.md`
-for why `depends_on` is left empty.
 
 One cutover over every ref, then nothing is left in two shapes. The shape to
 copy is the format-3 to format-4 migration, retired in `3423bac6`
@@ -229,3 +224,12 @@ single `prepared.prepare` over every ref plus the marker.
   the bodies are `git log` output, and a renderer for them is unbuilt work this
   chain does not cover.
 
+
+## Access
+
+- cosmic-lua/cosmic — `docs/decisions/d47-spec-declares-intent-only.md`, whose
+  rejected alternatives fix three choices this makes (no backdating, no lazy
+  per-item migration, no `notes` hatch for the tail), and
+  `docs/decisions/d48-dependency-is-its-own-relation.md` for why `depends_on` is
+  left empty. This section is the pre-migration spelling of the `access` field;
+  the run this item delivers is what turns it into one.
