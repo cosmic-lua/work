@@ -8,13 +8,13 @@ local check = require("cosmic.check")
 local commit_flow = require("_work.commit_flow_fixture")
 local eventsmod = require("_work.events")
 local fixture = require("_work.fixture")
-local gitread = require("_work.gitread")
+local gitreadspec = require("_work.gitreadspec")
+local itemtree = require("_work.itemtree")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local show = require("_work.gitshow")
-local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -255,33 +255,24 @@ local function test_show_prints_a_flagged_items_decode_problems()
   assert(not matched(clean, "^flagged:"), "no problems, no flagged lines")
 end
 
-local function test_show_says_whether_the_spec_moved_since_the_verdict()
+-- The verdict line cites the head it judged and nothing more: a spec
+-- revision is no longer recorded against a verdict, so there is no
+-- "moved since" half to render whatever the sidecar now says.
+local function test_show_prints_a_verdict_by_the_head_it_judged()
   local all = a_board()
-  local judged = spec.revision(SIDECAR)
   local reworked = check.must(item.decode({id = WORK, title = "a slice",
         parent = UNDER, claim = "session-a", pr = 42,
-        verdict = "request changes", verdict_head = "5364cc21",
-        verdict_spec = judged}))
-  local moved = report_for(reworked, all, SIDECAR .. "\n## Evidence\n",
-    {}, {})
-  assert(matched(moved, "^verdict: request changes %(head 5364cc21, "
-      .. "spec changed since%)$"), table.concat(moved, "\n"))
-  local still = report_for(reworked, all, SIDECAR, {}, {})
-  assert(matched(still, "^verdict: request changes %(head 5364cc21, "
-      .. "spec unchanged since%)$"), table.concat(still, "\n"))
-  -- An unrecorded revision says nothing rather than guessing: the line
-  -- reads exactly as it did before the field existed.
-  local legacy = check.must(item.decode({id = WORK, title = "a slice",
-        parent = UNDER, claim = "session-a", pr = 42, verdict = "accept",
-        verdict_head = "5364cc21"}))
-  local plain = report_for(legacy, all, SIDECAR, {}, {})
-  assert(matched(plain, "^verdict: accept %(head 5364cc21%)$"),
-    table.concat(plain, "\n"))
+        verdict = "request changes", verdict_head = "5364cc21"}))
+  for _, body in ipairs({SIDECAR, SIDECAR .. "\nmore prose\n"}) do
+    local lines = report_for(reworked, all, body, {}, {})
+    assert(matched(lines, "^verdict: request changes %(head 5364cc21%)$"),
+      table.concat(lines, "\n"))
+  end
 end
 
--- A research handover's deliverable is the spec at a revision, so
--- `show` prints that digest's seven hex where a diff's PR number goes,
--- and no PR line — the two never both stand.
+-- A research handover's deliverable is a board commit, so `show` prints
+-- its seven hex where a diff's PR number goes, and no PR line — the two
+-- never both stand.
 local function test_show_prints_a_research_handovers_digest()
   local all = a_board()
   local handed = check.must(item.decode({id = next_id(), title = "a handover",
@@ -297,19 +288,17 @@ local function test_show_prints_a_research_handovers_digest()
 end
 
 -- A handover's verdict carries no head — `verdict` leaves it "" for a
--- PR-less item — so the verdict line cites the recorded digest where
--- a diff's verdict line cites the head it judged.
+-- PR-less item — so the verdict line cites the recorded board commit
+-- where a diff's verdict line cites the head it judged.
 local function test_show_prints_a_handovers_verdict_by_result_not_head()
   local all = a_board()
-  local judged = spec.revision(SIDECAR)
   local accepted = check.must(item.decode({id = next_id(), title = "a handover",
         parent = UNDER, claim = "session-a", builders = "session-a",
         result = ("abcdef0123456789"):rep(4), verdict = "accept",
-        verdict_head = "", verdict_spec = judged}))
+        verdict_head = ""}))
   local lines = report_for(accepted, all, SIDECAR, {}, {})
-  assert(matched(lines,
-      "^verdict: accept %(result abcdef0, spec unchanged since%)$"),
-    "the digest prints where a diff's head would: "
+  assert(matched(lines, "^verdict: accept %(result abcdef0%)$"),
+    "the board commit prints where a diff's head would: "
     .. table.concat(lines, "\n"))
 end
 
@@ -382,21 +371,22 @@ local function show_and_capture(s: store.Store, id: string): integer, string
 end
 
 -- `show ID`'s spec body comes from the same batched `read_specs` that
--- already covers every open sibling — never a standalone `cat-file -p
--- <ref>:spec.md` — so it renders correctly even with that single-file
--- path (`gitread.read_spec`) stubbed to fail outright.
+-- already covers every open sibling — never a standalone single-object
+-- read — so it renders correctly even with that single-item path
+-- (`gitreadspec.read_spec`) stubbed to fail outright.
 local function test_show_id_renders_the_spec_without_gitreads_single_file_read()
   local s = init_state_repo("show-spec-from-batch")
   local id = file_item(s, "an item", "")
   give_spec(s, id)
 
-  local real_read_spec = gitread.read_spec
-  gitread.read_spec = function(_root: string, _candidates: {string}): string
-    error("gitread.read_spec must not run: the body should come from "
+  local real_read_spec = gitreadspec.read_spec
+  gitreadspec.read_spec = function(_root: string,
+      _candidates: {string}): itemtree.Spec
+    error("gitreadspec.read_spec must not run: the prose should come from "
       .. "the batched read_specs", 0)
   end
   local ok, code, out = pcall(show_and_capture, s, id)
-  gitread.read_spec = real_read_spec
+  gitreadspec.read_spec = real_read_spec
   if not ok then
     error(code, 0)
   end

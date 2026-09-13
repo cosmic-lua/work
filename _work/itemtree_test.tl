@@ -18,6 +18,12 @@ local ksuid = require("_work.ksuid")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
+--- The prose every tree-sha case below writes, so the `spec/` subtree
+--- is part of what the round trip proves rather than a hole in it.
+local PROSE < const >: itemtree.Spec = {
+  change = "Do it.\n", non_goals = "Not that.\n",
+}
+
 local counter = 0
 
 --- A fresh deterministic, well-formed id; later calls sort later.
@@ -61,18 +67,20 @@ local function full_item(): item.Item
         claim_batch = ("ef"):rep(20),
         builders = "session-a session-b",
         speccers = "session-c",
+        touches = "_work/itemtree.tl _work/item.tl",
+        access = "cosmic-lua/cosmic jart/cosmopolitan",
+        depends_on = child1 .. " " .. child2,
         reviewer = "session-d",
         pr = 42,
         verdict = "request changes",
         verdict_head = ("ab"):rep(20),
-        verdict_spec = ("cd"):rep(20),
       }))
   it.other_edges = {relates = {[edge1] = "context", [edge2] = ""}}
   return it
 end
 
 -- `encode_meta` writes every non-zero scalar field, one `key: value`
--- line each, `repo`/`base` collapsed into one `target` line — an edge
+-- line each, `repo` and `base` each on their own — an edge
 -- kind is not among them; that lives under `edges` entries, tree
 -- content this file never touches.
 local function test_meta_round_trips_every_scalar_field()
@@ -84,7 +92,9 @@ local function test_meta_round_trips_every_scalar_field()
   local parsed = itemtree.parse_meta(text)
   assert(parsed.title == it.title)
   assert(parsed.parent == it.parent)
-  assert(parsed.target == it.repo .. "@" .. it.base)
+  assert(parsed.repo == it.repo and parsed.base == it.base,
+    "repo and base are their own lines as of format 5")
+  assert(parsed.target == nil, "and nothing writes a collapsed target line")
   assert(parsed.key == it.key)
   assert(parsed.claim == nil, "projected claim facts never ride in item history")
   assert(parsed.claim_base == nil,
@@ -94,9 +104,42 @@ local function test_meta_round_trips_every_scalar_field()
   assert(parsed.pr == tostring(it.pr))
   assert(parsed.verdict == it.verdict)
   assert(parsed.verdict_head == it.verdict_head)
-  assert(parsed.verdict_spec == it.verdict_spec)
   assert(parsed.builders == table.concat(it.builders, " "))
   assert(parsed.speccers == table.concat(it.speccers, " "))
+  -- The three declared list fields ride as space-joined lines exactly as
+  -- `builders`/`speccers` do, and an empty one writes no line at all.
+  assert(parsed.touches == table.concat(it.touches, " "))
+  assert(parsed.access == table.concat(it.access, " "))
+  assert(parsed.depends_on == table.concat(it.depends_on, " "))
+  local bare = check.must(item.decode({id = fresh_id(), title = "bare"}))
+  local none = itemtree.encode_meta(bare)
+  for _, field in ipairs({"touches", "access", "depends_on"}) do
+    assert(not none:find(field, 1, true),
+      ("an empty %s writes no line: %s"):format(field, none))
+  end
+end
+
+-- The declared lists round-trip through the tree in declared ORDER —
+-- they are lists, not sets, and `to_item`'s `%S+` loop is the same read
+-- `builders` gets.
+local function test_declared_lists_round_trip_in_order()
+  local it = full_item()
+  local parsed = itemtree.parse_meta(itemtree.encode_meta(it))
+  local back = itemtree.to_item(it.id, parsed, false, it.order, {})
+  for i, path in ipairs(it.touches) do
+    assert(back.touches[i] == path,
+      ("touches[%d]: %s vs %s"):format(i, back.touches[i], path))
+  end
+  assert(#back.touches == #it.touches, "touches length")
+  for i, slug in ipairs(it.access) do
+    assert(back.access[i] == slug, ("access[%d]: %s"):format(i, back.access[i]))
+  end
+  assert(#back.access == #it.access, "access length")
+  for i, dep in ipairs(it.depends_on) do
+    assert(back.depends_on[i] == dep,
+      ("depends_on[%d]: %s"):format(i, back.depends_on[i]))
+  end
+  assert(#back.depends_on == #it.depends_on, "depends_on length")
 end
 
 -- Zero values are OMITTED, not written as empty: an item with nothing
@@ -108,25 +151,30 @@ local function test_meta_omits_zero_values()
   assert(text == "title: bare\n", "got: " .. text)
 end
 
--- `target` collapses `repo`/`base`: `owner/name` alone when there is
--- no base, `owner/name@branch` when both are set, and omitted (like
--- any other zero value) when both are empty.
-local function test_target_combines_repo_and_base()
+-- `repo` and `base` are each their own meta line, each omitted (like
+-- any other zero value) when empty — and `format_target`, the format-4
+-- write no writer calls any more, still states the collapsed form the
+-- round-trip property over `parse_target` is measured against.
+local function test_repo_and_base_are_their_own_lines()
   local repo_only = check.must(item.decode({id = fresh_id(), title = "t",
         parent = fresh_id(), repo = "cosmic-lua/cosmic"}))
-  assert(itemtree.encode_meta(repo_only):find(
-      "target: cosmic%-lua/cosmic\n", 1, false) ~= nil,
-    itemtree.encode_meta(repo_only))
+  local one = itemtree.encode_meta(repo_only)
+  assert(one:find("repo: cosmic%-lua/cosmic\n", 1, false) ~= nil, one)
+  assert(not one:find("base", 1, true), "an empty base writes no line: " .. one)
+  assert(not one:find("target", 1, true), "and nothing writes a target line")
 
   local both = check.must(item.decode({id = fresh_id(), title = "t",
         parent = fresh_id(), repo = "cosmic-lua/cosmic", base = "main"}))
-  assert(itemtree.encode_meta(both):find(
-      "target: cosmic%-lua/cosmic@main\n", 1, false) ~= nil,
-    itemtree.encode_meta(both))
+  local two = itemtree.encode_meta(both)
+  assert(two:find("repo: cosmic%-lua/cosmic\n", 1, false) ~= nil, two)
+  assert(two:find("base: main\n", 1, false) ~= nil, two)
+  assert(itemtree.format_target("cosmic-lua/cosmic", "main")
+    == "cosmic-lua/cosmic@main", "the format-4 form still states itself")
 
   local neither = check.must(item.decode({id = fresh_id(), title = "t"}))
-  assert(not itemtree.encode_meta(neither):find("target", 1, true),
-    "no target line when both are empty")
+  local none = itemtree.encode_meta(neither)
+  assert(not none:find("repo", 1, true) and not none:find("base", 1, true),
+    "neither line when both are empty: " .. none)
 end
 
 -- `parse_target`'s inverse, including the round trip through
@@ -238,7 +286,7 @@ local function test_canonical_round_trip_is_tree_sha_identical()
   -- Written for real: the read-back below goes through
   -- `cat_file_batch`, a real `git cat-file`, which needs the objects
   -- to actually be in this repository's odb.
-  local tree1 = check.must(itemtree.build_tree(root, it, "## Change\nDo it.\n", true))
+  local tree1 = check.must(itemtree.build_tree(root, it, PROSE, true))
 
   local meta, held, order, other_edges = read_tree(root, tree1)
   local decoded = itemtree.to_item(it.id, meta, held, order, other_edges)
@@ -252,12 +300,12 @@ local function test_canonical_round_trip_is_tree_sha_identical()
     and decoded.order[2] == it.order[2],
     "order round-trips in rank order: " .. table.concat(decoded.order, ","))
 
-  local tree2 = check.must(itemtree.build_tree(root, decoded, "## Change\nDo it.\n"))
+  local tree2 = check.must(itemtree.build_tree(root, decoded, PROSE))
   assert(tree1 == tree2, "decode -> encode gives an identical tree sha: "
     .. tree1 .. " vs " .. tree2)
 
   -- A third pass off the second tree changes nothing further.
-  local tree3 = check.must(itemtree.build_tree(root, decoded, "## Change\nDo it.\n"))
+  local tree3 = check.must(itemtree.build_tree(root, decoded, PROSE))
   assert(tree2 == tree3, "stable under a second round trip too")
 end
 
@@ -316,7 +364,7 @@ local function test_old_layout_tree_edges_and_held_marker()
   end
   assert(found, table.concat(decoded.decode_problems or {}, "; "))
 
-  local rebuilt_sha = check.must(itemtree.build_tree(root, decoded, "", true))
+  local rebuilt_sha = check.must(itemtree.build_tree(root, decoded, nil, true))
   local orig_edges = check.must(gitobj.cat_file_batch(root, {old_tree_sha .. ":edges"}))
   local rebuilt_edges = check.must(gitobj.cat_file_batch(root, {rebuilt_sha .. ":edges"}))
   assert(orig_edges[old_tree_sha .. ":edges"].content
@@ -324,15 +372,46 @@ local function test_old_layout_tree_edges_and_held_marker()
     "beats and blocked_by re-encode byte for byte")
 end
 
--- `spec.md` is present only when a non-empty body is given — an
--- absent sidecar and an empty-string one are the same tree.
-local function test_spec_md_is_omitted_when_empty_or_nil()
+-- The `spec` subtree carries one blob per NON-EMPTY field, and is
+-- absent entirely when neither field has prose — a nil record and a
+-- record of two empty fields are the same tree, and a Change with no
+-- Non-goals carries `spec/change.md` alone.
+local function test_spec_subtree_holds_one_blob_per_non_empty_field()
   local root = fresh_repo("spec-omit")
   local it = check.must(item.decode({id = fresh_id(),
         title = "no spec"}))
   local nil_tree = check.must(itemtree.build_tree(root, it, nil))
-  local empty_tree = check.must(itemtree.build_tree(root, it, ""))
-  assert(nil_tree == empty_tree, "nil and \"\" build the same tree")
+  local empty_tree = check.must(itemtree.build_tree(root, it,
+      {change = "", non_goals = ""}))
+  assert(nil_tree == empty_tree, "nil and two empty fields build the same tree")
+  local one = check.must(itemtree.build_tree(root, it,
+      {change = "Do it.\n", non_goals = ""}, true))
+  local two = check.must(itemtree.build_tree(root, it,
+      {change = "Do it.\n", non_goals = "Not that.\n"}, true))
+  assert(one ~= empty_tree and two ~= one, "each field moves the tree")
+  local names = check.must(child.run({"git", "ls-tree", "--name-only", one .. ":spec"},
+      {cwd = root}))
+  assert(names.ok and names.stdout == "change.md\n",
+    "an empty Non-goals contributes no blob: " .. names.stdout)
+  local both = check.must(child.run({"git", "ls-tree", "--name-only", two .. ":spec"},
+      {cwd = root}))
+  assert(both.ok and both.stdout == "change.md\nnon-goals.md\n", both.stdout)
+end
+
+-- A format-4 tree collapsed `repo`/`base` into one `target` line. The
+-- one tolerant read of it: own lines win, and `target` is unpacked only
+-- when neither is present.
+local function test_a_format_4_target_line_still_decodes()
+  local id = fresh_id()
+  local old = itemtree.to_item(id,
+    {title = "legacy", target = "cosmic-lua/cosmic@main"}, false, {}, {})
+  assert(old.repo == "cosmic-lua/cosmic" and old.base == "main",
+    ("target did not unpack: %q / %q"):format(old.repo, old.base))
+  local both = itemtree.to_item(id,
+    {title = "legacy", repo = "a/b", base = "trunk",
+      target = "cosmic-lua/cosmic@main"}, false, {}, {})
+  assert(both.repo == "a/b" and both.base == "trunk",
+    "own lines win over a stale target line")
 end
 
 -- `_work.gitwrite` builds every item's commit through
@@ -345,10 +424,10 @@ end
 local function test_fast_import_tree_matches_mktree_tree()
   local root = fresh_repo("fastimport-roundtrip")
   local it = full_item()
-  local spec = "## Change\nDo it.\n"
-  local mktree_sha = check.must(itemtree.build_tree(root, it, spec))
+  local mktree_sha = check.must(itemtree.build_tree(root, it, PROSE))
 
-  local ops = fastimport.diff_item(nil, it, spec, "")
+  local ops = fastimport.diff_item(nil, it, PROSE,
+    {change = "", non_goals = ""})
   assert(#ops > 0, "a brand-new item has paths to write")
   local plan: fastimport.CommitPlan = {
     ref = "refs/fastimport-check/x", from = nil,

@@ -1,5 +1,5 @@
 --- An item's canonical git tree: the `meta` text blob, the optional
---- `spec.md` sidecar, the optional `order` blob, and the
+--- `spec/` subtree, the optional `order` blob, and the
 --- `edges/<kind>/<id>` entries — and the two directions between that
 --- tree and an `_work.item.Item`. This is the ONE place that shape is
 --- written, so `_work.store`'s writer and reader, and the round-trip
@@ -8,10 +8,10 @@
 --- `meta` carries every scalar field as one `key: value` line, keys in
 --- the order below; a zero value — "", 0, an empty list — is OMITTED,
 --- so two items differing only in which fields are unset differ in
---- their tree too. `repo`/`base` collapse into one `target` line,
---- written `owner/name@branch`, `owner/name` alone when `base` is
---- empty, and omitted when both are empty (`format_target`/
---- `parse_target`). `order` is not a meta line either: one blob, child
+--- their tree too. `repo` and `base` are each their own line; a
+--- format-4 tree wrote them collapsed into one `target` line
+--- (`format_target`/`parse_target`), which `to_item` still reads when
+--- neither own line is present. `order` is not a meta line either: one blob, child
 --- ids one per line with a trailing newline, present only when this
 --- item has ranked at least one child (`encode_order`/`parse_order` —
 --- the same shape the board's own item carries for its own outcomes,
@@ -31,22 +31,34 @@
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 
---- Scalar meta keys, in the order they are written. `target` (the
---- combined `repo`/`base`) sits where `_work.item.Item` declares
---- `parent`'s neighbor; `id` and `held` are not `meta` lines at all.
+--- Scalar meta keys, in the order they are written. `repo` and `base`
+--- sit where `_work.item.Item` declares `parent`'s neighbors; `id` and
+--- `held` are not `meta` lines at all.
 local META_KEYS < const >: {string} = {
-  "title", "parent", "target", "key", "claim_batch",
+  "title", "parent", "repo", "base", "key", "claim_batch",
   "handover_head", "external_url", "reviewer", "pr", "result", "verdict",
-  "verdict_head", "landed_head", "verdict_spec", "resolution",
-  "builders", "speccers",
+  "verdict_head", "landed_head", "resolution",
+  "builders", "speccers", "touches", "access", "depends_on",
 }
+
+--- An item's spec prose, the two blobs the `spec/` subtree holds: what
+--- to build, and the walls around it. Either field may be "" — an
+--- empty one contributes no blob, and both empty contribute no `spec`
+--- entry at all, the same `""`-means-omitted convention every other
+--- path in this tree follows.
+local record Spec
+  change: string
+  non_goals: string
+end
 
 --- Combine `repo`/`base` into one `target` line's value: `owner/name`
 --- alone when there is no base, `owner/name@branch` when both are
 --- set, `@branch` when a base stands with no repo (an unusual but
 --- legal combination `item.problems` does not itself forbid), and ""
---- when both are empty — `put`'s own zero check then omits the line
---- entirely. The inverse of `parse_target`.
+--- when both are empty. The inverse of `parse_target`, and the
+--- format-4 WRITE: nothing writes a `target` line as of format 5, and
+--- this stands as the documented inverse the round-trip property over
+--- `parse_target` is stated against.
 --- @param repo string The repo, "" when unset
 --- @param base string The base branch, "" when unset
 --- @return string The `target` line's value
@@ -127,7 +139,8 @@ local function encode_meta(it: item.Item): string
   end
   put("title", it.title or "")
   put("parent", it.parent or "")
-  put("target", format_target(it.repo or "", it.base or ""))
+  put("repo", it.repo or "")
+  put("base", it.base or "")
   put("key", it.key or "")
   put("claim_batch", it.claim_batch or "")
   put("handover_head", it.handover_head or "")
@@ -140,13 +153,21 @@ local function encode_meta(it: item.Item): string
   put("verdict", it.verdict or "")
   put("verdict_head", it.verdict_head or "")
   put("landed_head", it.landed_head or "")
-  put("verdict_spec", it.verdict_spec or "")
   put("resolution", it.resolution or "")
   if #(it.builders or {}) > 0 then
     parts[#parts + 1] = "builders: " .. table.concat(it.builders, " ") .. "\n"
   end
   if #(it.speccers or {}) > 0 then
     parts[#parts + 1] = "speccers: " .. table.concat(it.speccers, " ") .. "\n"
+  end
+  if #(it.touches or {}) > 0 then
+    parts[#parts + 1] = "touches: " .. table.concat(it.touches, " ") .. "\n"
+  end
+  if #(it.access or {}) > 0 then
+    parts[#parts + 1] = "access: " .. table.concat(it.access, " ") .. "\n"
+  end
+  if #(it.depends_on or {}) > 0 then
+    parts[#parts + 1] = "depends_on: " .. table.concat(it.depends_on, " ") .. "\n"
   end
   return table.concat(parts)
 end
@@ -186,7 +207,16 @@ end
 --- @return item.Item The item, present even with content problems
 local function to_item(id: string, meta: {string: string}, held: boolean,
     order: {string}, other_edges: {string: {string: string}}): item.Item
-  local repo, base, target_err = parse_target(meta.target or "")
+  -- `repo`/`base` are their own lines as of format 5; a format-4 tree
+  -- collapsed them into `target`, read here only when neither own line
+  -- is present — one tolerant reader, the same forward tolerance
+  -- `parse_meta` gives an unknown key, never a second decode path.
+  local repo = meta.repo or ""
+  local base = meta.base or ""
+  local target_err = ""
+  if repo == "" and base == "" and (meta.target or "") ~= "" then
+    repo, base, target_err = parse_target(meta.target)
+  end
   local it: item.Item = {
     id = id,
     title = meta.title or "",
@@ -205,13 +235,15 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     external_url = meta.external_url or "",
     builders = {},
     speccers = {},
+    touches = {},
+    access = {},
+    depends_on = {},
     reviewer = meta.reviewer or "",
     pr = math.tointeger(tonumber(meta.pr or "0")) or 0,
     result = meta.result or "",
     verdict = meta.verdict or "",
     verdict_head = meta.verdict_head or "",
     landed_head = meta.landed_head or "",
-    verdict_spec = meta.verdict_spec or "",
     resolution = meta.resolution or "",
   }
   for name in (meta.builders or ""):gmatch("%S+") do
@@ -219,6 +251,15 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
   end
   for name in (meta.speccers or ""):gmatch("%S+") do
     it.speccers[#it.speccers + 1] = name
+  end
+  for path in (meta.touches or ""):gmatch("%S+") do
+    it.touches[#it.touches + 1] = path
+  end
+  for slug in (meta.access or ""):gmatch("%S+") do
+    it.access[#it.access + 1] = slug
+  end
+  for dep in (meta.depends_on or ""):gmatch("%S+") do
+    it.depends_on[#it.depends_on + 1] = dep
   end
   local bad = item.problems(it)
   if target_err ~= "" then
@@ -327,7 +368,8 @@ local function build_edges_tree(root: string, it: item.Item,
   return mktree_fn(root, subtrees)
 end
 
---- Build an item's git tree: `meta`, `spec.md` when given, `order`
+--- Build an item's git tree: `meta`, the `spec/` subtree when the spec
+--- given carries any prose, `order`
 --- when it has ranked at least one child, and `edges` when it carries
 --- any. `write` chooses between the two forms every blob and subtree
 --- this needs goes through: pure (the default — no process, nothing
@@ -337,13 +379,14 @@ end
 --- that follows this with `commit_tree` against the sha it gets back).
 --- @param root string The repository root
 --- @param it item.Item The item
---- @param spec_body string | nil The spec sidecar; nil or "" omits `spec.md`
+--- @param spec Spec | nil The item's prose; nil, or both fields "",
+--- omits the `spec` entry entirely
 --- @param write boolean | nil True to actually write the objects;
 --- false or nil computes the id only
 --- @return string | nil The item's tree sha
 --- @return string Error message
 local function build_tree(root: string, it: item.Item,
-    spec_body: string | nil, write?: boolean): string | nil, string
+    spec: Spec | nil, write?: boolean): string | nil, string
   local hash_object_fn = gitobj.hash_object
   local mktree_fn = gitobj.mktree
   if write then
@@ -356,13 +399,35 @@ local function build_tree(root: string, it: item.Item,
     return nil, merr
   end
   entries[#entries + 1] = {mode = "100644", otype = "blob", sha = meta_sha, name = "meta"}
-  if (spec_body or "") ~= "" then
-    local spec_sha, serr = hash_object_fn(root, spec_body)
+  -- The `spec/` subtree: one blob per non-empty field, and no `spec`
+  -- entry at all when neither carries prose — the same omission
+  -- `build_edges_tree` makes for a kind with nothing in it.
+  local change = ""
+  local non_goals = ""
+  if spec ~= nil then
+    change = spec.change or ""
+    non_goals = spec.non_goals or ""
+  end
+  local spec_names: {string} = {"change.md", "non-goals.md"}
+  local spec_texts: {string} = {change, non_goals}
+  local spec_entries: {gitobj.TreeEntry} = {}
+  for i, name in ipairs(spec_names) do
+    if spec_texts[i] ~= "" then
+      local bsha, berr = hash_object_fn(root, spec_texts[i])
+      if bsha == nil then
+        return nil, berr
+      end
+      spec_entries[#spec_entries + 1] =
+      {mode = "100644", otype = "blob", sha = bsha, name = name}
+    end
+  end
+  if #spec_entries > 0 then
+    local spec_sha, serr = mktree_fn(root, spec_entries)
     if spec_sha == nil then
       return nil, serr
     end
     entries[#entries + 1] =
-    {mode = "100644", otype = "blob", sha = spec_sha, name = "spec.md"}
+    {mode = "40000", otype = "tree", sha = spec_sha, name = "spec"}
   end
   if #(it.order or {}) > 0 then
     local order_sha, oerr = hash_object_fn(root, encode_order(it.order))
@@ -401,6 +466,7 @@ local function build_tree(root: string, it: item.Item,
 end
 
 local record itemtree
+  type Spec = Spec
   META_KEYS: {string}
   format_target: function(repo: string, base: string): string
   parse_target: function(target: string): string, string, string
@@ -411,7 +477,7 @@ local record itemtree
   to_item: function(id: string, meta: {string: string}, held: boolean,
   order: {string}, other_edges: {string: {string: string}}): item.Item
   build_tree: function(root: string, it: item.Item,
-  spec_body: string | nil, write?: boolean): string | nil, string
+  spec: Spec | nil, write?: boolean): string | nil, string
 end
 
 local M: itemtree = {

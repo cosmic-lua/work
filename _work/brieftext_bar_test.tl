@@ -27,14 +27,22 @@ local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 
 local function test_research_drafts_a_capture_to_the_gates_own_bar()
+  -- `## Access` left this list when `spec.split` started refusing the
+  -- section: access is a declared fact on the item now, so a brief that
+  -- still taught the section would teach a write the tool rejects. The
+  -- claim is STRONGER than the one it replaces — the bar is named AND
+  -- closed, where before it was only named.
   assert(RESEARCH:find(
       "meeting the ready bar (`## Change`, every tree-fact it names "
       .. "measured with the command that produced it, plus "
-      .. "`## Non-goals` where a wall is at stake and `## Access` "
-      .. "where the spec's own text reaches a repository other than "
-      .. "the item's own)", 1, true) ~= nil,
-    "a drafted capture meets the bar the gate enforces, not a "
-    .. "five-section template: " .. RESEARCH)
+      .. "`## Non-goals` where a wall is at stake — and NO other "
+      .. "section: a write refuses one, and a repository the spec's own "
+      .. "text reaches is a declared fact on the item, reported by the "
+      .. "ready bar rather than written as prose)", 1, true) ~= nil,
+    "a drafted capture meets the bar the gate enforces, and is told the "
+    .. "bar is closed: " .. RESEARCH)
+  assert(RESEARCH:find("`## Access`", 1, true) == nil,
+    "and is not sent to write a section a write refuses")
   assert(RESEARCH:find(
       "No `## Goal` — goal context is the parent chain — and no "
       .. "`## Acceptance`: the repo's own gate passing is the one "
@@ -48,10 +56,13 @@ end
 local function test_refine_names_the_whole_bar_and_no_retired_section()
   assert(REFINE:find(
       "Rewrite the item's `## Change` (and `## Non-goals` if a wall "
-      .. "is at stake, `## Access` if the spec's own text reaches a "
-      .. "repository other than the item's own)", 1, true) ~= nil,
-    "the refine brief names the headings the bar admits, Access "
-    .. "included: " .. REFINE)
+      .. "is at stake — those two and nothing else; a write refuses "
+      .. "any other section, and a repository the spec reaches is a "
+      .. "declared fact on the item, not prose)", 1, true) ~= nil,
+    "the refine brief names the two headings the bar admits and closes "
+    .. "the list: " .. REFINE)
+  assert(REFINE:find("`## Access`", 1, true) == nil,
+    "and does not send a refiner to write a section a write refuses")
   assert(REFINE:find(
       "Do NOT write a `## Goal` section — goal context is the parent "
       .. "chain — and do NOT write an `## Acceptance` checklist a "

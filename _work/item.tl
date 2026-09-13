@@ -3,117 +3,21 @@
 --- import layout. Role and state are derived from graph position and lifecycle
 --- facts; this module validates only one item's shape.
 local identity = require("_work.identity")
+local itemtype = require("_work.itemtype")
 local ksuid = require("_work.ksuid")
 local shape = require("cosmic.shape")
+
+--- The record and its index, declared in `_work.itemtype` and aliased
+--- back here so every existing `item.Item`/`item.Index` reference keeps
+--- resolving. The split is the file cap, nothing else.
+local type Item = itemtype.Item
+local type Index = itemtype.Index
 
 --- The most parent hops a walk up the tree takes before giving up:
 --- deeper nesting than this is its own design smell, and a chain this
 --- long is cyclic in practice. `_work.rank` and `_work.flow` both walk
 --- parent chains and share this one bound.
 local MAX_DEPTH < const > = 16
-
-local record Item
-  --- The filename stem and the one name other items use: a KSUID.
-  id: string
-  title: string
-  --- The id this item decomposes; "" for the board, the one parentless
-  --- item.
-  parent: string
-  --- Product repository, as owner/name; "" is unset.
-  repo: string
-  --- Product base branch; "" is unset.
-  base: string
-  --- The scheduled workflow file this item repairs; "" for ordinary
-  --- items. `_work.lanes.mint`'s idempotency key: at most one OPEN
-  --- item may carry a given key.
-  key: string
-  --- This item's ranked children, in rank order. Stored as one "id id"
-  --- string — the literal domain has no lists. Empty when it has
-  --- ranked none; an unranked child is simply absent from the list.
-  order: {string}
-  --- Edge kinds this reader does not interpret, carried opaquely so a
-  --- tree written by a newer reader round-trips unchanged: kind -> id
-  --- -> content (the reason, possibly ""). Never rendered by any verb
-  --- and never validated here; `_work.itemtree` is the only reader and
-  --- writer of it, and `gitboard fsck` is the only verb that reports
-  --- on it at all.
-  other_edges: {string: {string: string}} | nil
-  --- The session that claimed it; "" when unclaimed.
-  claim: string
-  --- Product commit the current claim started from. Claims use this
-  --- immutable base to name their work branch and to verify the change
-  --- eventually handed over. nil/"" on unclaimed items and claims made
-  --- before the lease redesign.
-  claim_base: string | nil
-  --- Immutable claim-batch commit projected into `claim`/`claim_base` on
-  --- read. This pointer is durable item data; the projected facts are not.
-  claim_batch: string | nil
-  --- Product commit handed over for review. It is navigation-independent:
-  --- the caller may also record an external URL, but this commit alone is
-  --- what verdict and completion gates consume.
-  handover_head: string | nil
-  --- Optional provider-neutral navigation URL. No state transition or gate
-  --- depends on it.
-  external_url: string | nil
-  --- Every session that has held the claim, oldest first. Stored as
-  --- one "name name" string — the literal domain has no lists.
-  ---
-  --- The claim is a LEASE and moves: a drop clears it and the next
-  --- take writes a new one, so the claim alone cannot answer "who has
-  --- worked this item". This is that answer — the audit record, never
-  --- cleared while the item is open, so who built and who took over
-  --- stays readable in the committed file and in the log after the
-  --- fact. Outside this module nothing reads it: no verb renders it
-  --- and none refuses on it.
-  builders: {string}
-  --- Every session that has replaced this item's spec sidecar, oldest
-  --- first. Stored and validated exactly like `builders` — same
-  --- space-joined string, same no-repeats rule — because the
-  --- no-self-review guarantee needs authorship of the SPEC recorded
-  --- too: a session offered the review of a decision it wrote is the
-  --- same hole `builders` closes for the diff.
-  speccers: {string}
-  --- The session reviewing the item's PR; "" when nobody claimed the
-  --- review. A lease like `claim`, on a shorter horizon
-  --- (`_work.health`): the claim is pushed BEFORE the reading starts,
-  --- the verdict consumes it.
-  reviewer: string
-  --- The PR under review; 0 when none.
-  pr: integer
-  --- The research handover: the spec sidecar's revision
-  --- (`_work.spec.revision`) as it stood when `take --result` handed
-  --- the item over for a verdict; "" when none. The one deliverable
-  --- is a diff OR board state, so `pr` and `result` never both stand,
-  --- and a handover records work, so `result` never stands with no
-  --- `builders`. `verdict` refuses when the sidecar has moved past it.
-  result: string
-  --- Standing review verdict: "" | "accept" | "request changes".
-  --- A reject stands nowhere: it clears the claim and the PR, so the
-  --- item is todo again and the learning lives in its spec.
-  verdict: string
-  --- Head commit the last verdict was written against.
-  verdict_head: string
-  --- Product commit recorded when accepted work is completed. Empty on an
-  --- open item and on non-completed resolutions.
-  landed_head: string | nil
-  --- The spec revision the verdict judged (`_work.spec.revision` of
-  --- the sidecar as it stood). A review judges a diff AND the spec it
-  --- is measured against, so the head alone cannot say whether a
-  --- second look has anything new to see. "" on an item verdicted
-  --- before the field existed — unknown, which is not the same as
-  --- unchanged, and nothing may be concluded from it.
-  verdict_spec: string
-  --- Why a finished item ended: "completed" | "not-planned"; "" while
-  --- open. A non-empty resolution IS what "done" means.
-  resolution: string
-  --- Content problems `decode` found on this item (`problems(it)`,
-  --- possibly several), carried alongside a successful decode instead
-  --- of failing it — a read-time snapshot, not a stored fact: nil for
-  --- an item built directly (never decoded) or freshly re-decoded
-  --- clean, and never written back by `encode`. See `decode` and
-  --- `is_flagged`.
-  decode_problems: {string} | nil
-end
 
 --- The shape `decode`'s input must have. Every field is optional —
 --- the literal domain omits zero values on write (see `encode`), so
@@ -143,8 +47,10 @@ local SPEC < const > = shape.record({
     verdict = shape.optional(shape.string),
     verdict_head = shape.optional(shape.string),
     landed_head = shape.optional(shape.string),
-    verdict_spec = shape.optional(shape.string),
     resolution = shape.optional(shape.string),
+    touches = shape.optional(shape.string),
+    access = shape.optional(shape.string),
+    depends_on = shape.optional(shape.string),
   })
 
 --- The type `shape.into` hands `decode` back: SPEC typed, with every
@@ -172,8 +78,10 @@ local record Raw
   verdict: string | nil
   verdict_head: string | nil
   landed_head: string | nil
-  verdict_spec: string | nil
   resolution: string | nil
+  touches: string | nil
+  access: string | nil
+  depends_on: string | nil
 end
 
 --- The valid `verdict` values, exported so a schema carrying its own
@@ -240,9 +148,6 @@ end
 local function is_parentless(it: Item): boolean
   return (it.parent or "") == ""
 end
-
---- Items indexed by id.
-local type Index = {string: Item}
 
 --- Every item indexed by its own id — the one lookup nearly every
 --- graph walk in `_work.rank` and `_work.flow` needs first.
@@ -346,6 +251,19 @@ local function problems(it: Item): {string}
       specced_seen[name] = true
     end
   end
+  -- One item's own dependency list is all this can judge: a CYCLE spans
+  -- two items, so it is refused at the mutation that would create it
+  -- and reported by `fsck`, both bounded by `MAX_DEPTH`.
+  local depends_seen: {string: boolean} = {}
+  for _, id in ipairs(it.depends_on or {}) do
+    if id == (it.id or "") then
+      out[#out + 1] = "an item cannot depend on itself"
+    elseif depends_seen[id] then
+      out[#out + 1] = ("depends_on repeats %s"):format(id)
+    else
+      depends_seen[id] = true
+    end
+  end
   return out
 end
 
@@ -388,6 +306,9 @@ local function decode(t: {string: any}): Item | nil, string
   local order = split_ids(raw.order)
   local builders = split_ids(raw.builders)
   local speccers = split_ids(raw.speccers)
+  local touches = split_ids(raw.touches)
+  local access = split_ids(raw.access)
+  local depends_on = split_ids(raw.depends_on)
   local it: Item = {
     id = raw.id or "",
     title = raw.title or "",
@@ -409,8 +330,10 @@ local function decode(t: {string: any}): Item | nil, string
     verdict = raw.verdict or "",
     verdict_head = raw.verdict_head or "",
     landed_head = raw.landed_head or "",
-    verdict_spec = raw.verdict_spec or "",
     resolution = raw.resolution or "",
+    touches = touches,
+    access = access,
+    depends_on = depends_on,
   }
   local bad = problems(it)
   if #bad > 0 then
@@ -458,14 +381,22 @@ local function encode(it: Item): {string: any}
   if (it.verdict or "") ~= "" then t.verdict = it.verdict end
   if (it.verdict_head or "") ~= "" then t.verdict_head = it.verdict_head end
   if (it.landed_head or "") ~= "" then t.landed_head = it.landed_head end
-  if (it.verdict_spec or "") ~= "" then t.verdict_spec = it.verdict_spec end
   if (it.resolution or "") ~= "" then t.resolution = it.resolution end
+  if #(it.touches or {}) > 0 then
+    t.touches = table.concat(it.touches, " ")
+  end
+  if #(it.access or {}) > 0 then
+    t.access = table.concat(it.access, " ")
+  end
+  if #(it.depends_on or {}) > 0 then
+    t.depends_on = table.concat(it.depends_on, " ")
+  end
   return t
 end
 
 local record item
-  type Item = Item
-  type Index = Index
+  type Item = itemtype.Item
+  type Index = itemtype.Index
   MAX_DEPTH: integer
   VERDICTS: {string: boolean}
   RESOLUTIONS: {string: boolean}

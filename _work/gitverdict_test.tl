@@ -24,7 +24,6 @@ local function test_accept_records_only_the_handed_over_commit()
   assert(it.verdict == "accept" and it.verdict_head == p.head)
   assert(it.handover_head == p.head)
   assert(it.claim == flow.REVIEWER, "a verdict never releases a claim")
-  assert((it.verdict_spec or "") == "", "a commit id is the only evidence")
 end
 test_accept_records_only_the_handed_over_commit()
 

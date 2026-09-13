@@ -6,8 +6,12 @@
 -- throwaway script that first checked it against the production board
 -- (937 items, 0 mismatches). Exercises every field that check covered
 -- on a small hand-built fixture: `builders`/`speccers` (order matters
--- there — oldest first), and one item carrying an edge kind this build
--- does not interpret — present on the git-truthed side and absent on
+-- there — oldest first), the three declared list fields
+-- (`touches`/`access`/`depends_on`, each with its own side table and
+-- its own hydration — a field with neither is written back EMPTY by the
+-- next verb that saves an item it read from `store.list`, which is what
+-- this comparison exists to catch), and one item carrying an edge kind
+-- this build does not interpret — present on the git-truthed side and absent on
 -- the cache-hydrated one, since the cache carries no edge kind at all.
 -- `gitread.list`, not `store.list`, is the git-truthed side here:
 -- `store.list` is itself cache-backed now, so it carries the same gap
@@ -81,11 +85,13 @@ local function assert_items_match(want: item.Item, got: item.Item)
   assert(got.result == want.result, id8 .. " result")
   assert(got.verdict == want.verdict, id8 .. " verdict")
   assert(got.verdict_head == want.verdict_head, id8 .. " verdict_head")
-  assert(got.verdict_spec == want.verdict_spec, id8 .. " verdict_spec")
   assert(got.resolution == want.resolution, id8 .. " resolution")
   assert_same_order(want.order, got.order, id8 .. " order")
   assert_same_order(want.builders, got.builders, id8 .. " builders")
   assert_same_order(want.speccers, got.speccers, id8 .. " speccers")
+  assert_same_order(want.touches, got.touches, id8 .. " touches")
+  assert_same_order(want.access, got.access, id8 .. " access")
+  assert_same_order(want.depends_on, got.depends_on, id8 .. " depends_on")
   assert_same_set(want.decode_problems or {}, got.decode_problems or {},
     id8 .. " decode_problems")
 end
@@ -106,6 +112,9 @@ local function test_items_matches_gitread_list_field_for_field_and_in_order()
   leaf_it.other_edges = {relates = {[leaf2] = "see also"}}
   leaf_it.builders = {"session-a", "session-b"}
   leaf_it.speccers = {"session-c"}
+  leaf_it.touches = {"_work/itemtree.tl", "_work/item.tl"}
+  leaf_it.access = {"cosmic-lua/cosmic"}
+  leaf_it.depends_on = {leaf2, leaf3}
   assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with an edge and a roster"))
 
   local want = check.must(gitread.list(s.root)).items

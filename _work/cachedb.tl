@@ -59,7 +59,7 @@ local type Cache = index.Index
 --- where the SQL columns themselves remain unchanged, claim state is decoded
 --- through a different representation. The cache is disposable: this is a
 --- rebuild boundary, never an in-place data migration.
-local SCHEMA_VERSION < const > = 8
+local SCHEMA_VERSION < const > = 9
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"

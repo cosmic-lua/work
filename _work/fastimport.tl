@@ -45,9 +45,10 @@ local time = require("cosmic.time")
 
 --- One path change a commit carries: replace `path` with `content`,
 --- or delete it when `content` is nil. Every path this item's tree
---- can hold — `meta`, `spec.md`, `order`, `edges/<kind>/<id>` — is a
---- single file, so one flat list of these (nested paths and all) is
---- the whole of what one item's commit needs to say.
+--- can hold — `meta`, `spec/change.md`, `spec/non-goals.md`, `order`,
+--- `edges/<kind>/<id>` — is a single file, so one flat list of these
+--- (nested paths and all) is the whole of what one item's commit needs
+--- to say.
 local record Op
   path: string
   --- nil deletes the path; "" is a legal blob (an empty edge marker)
@@ -102,9 +103,10 @@ end
 
 --- The paths one item's commit must change: `meta` when any scalar
 --- field moved (compared as the one encoded blob `_work.itemtree`
---- already builds it as, never field by field), `spec.md` only when
---- `spec_replacement` is given AND differs from `old_spec` (nil
---- leaves the sidecar untouched — no read, no write, no path at all,
+--- already builds it as, never field by field), the `spec/` subtree
+--- only when `spec_replacement` is given AND either field differs from
+--- `old_spec` (nil leaves the prose untouched — no read, no write, no
+--- path at all,
 --- carried forward by `from`), `order` added, changed or removed when
 --- the ranked child list moved (compared as its own encoded blob, the
 --- same way `meta` is), and every `edges/<kind>/<id>` entry — every
@@ -113,13 +115,13 @@ end
 --- item carries is then "added".
 --- @param old item.Item | nil The item as last observed, nil when new
 --- @param new_it item.Item The item as it stands now
---- @param spec_replacement string | nil Replacement spec.md text; nil
---- to leave the sidecar exactly as observed
---- @param old_spec string The sidecar's current text; read only when
---- `spec_replacement` is not nil, ignored otherwise
+--- @param spec_replacement itemtree.Spec | nil Replacement prose; nil
+--- to leave the `spec/` subtree exactly as observed
+--- @param old_spec itemtree.Spec The prose currently stored; read only
+--- when `spec_replacement` is not nil, ignored otherwise
 --- @return {Op} The path changes, possibly empty (a true no-op item)
 local function diff_item(old: item.Item | nil, new_it: item.Item,
-    spec_replacement: string | nil, old_spec: string): {Op}
+    spec_replacement: itemtree.Spec | nil, old_spec: itemtree.Spec): {Op}
   local ops: {Op} = {}
   local new_meta = itemtree.encode_meta(new_it)
   local old_meta: string = nil
@@ -129,12 +131,29 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
   if new_meta ~= old_meta then
     ops[#ops + 1] = {path = "meta", content = new_meta}
   end
-  if spec_replacement ~= nil and spec_replacement ~= old_spec then
-    if spec_replacement == "" then
-      ops[#ops + 1] = {path = "spec.md", content = nil}
-    else
-      ops[#ops + 1] = {path = "spec.md", content = spec_replacement}
+  -- A prose change writes BOTH blobs and drops any `spec.md` beside
+  -- them, rather than only the field that moved. `old_spec` is the
+  -- tolerant read, so for a format-4 item it holds the single
+  -- `spec.md`'s text in `change`: emitting only the field that differed
+  -- would delete that blob and leave the other field's path never
+  -- written. Re-emitting a blob whose content is unchanged costs one
+  -- `M` line and builds the identical tree, and a `D` on a path this
+  -- item never had is a no-op fast-import accepts, so the whole
+  -- subtree is stated at once whenever any of it moved.
+  if spec_replacement ~= nil
+  and ((spec_replacement.change or "") ~= (old_spec.change or "")
+    or (spec_replacement.non_goals or "") ~= (old_spec.non_goals or "")) then
+    local names: {string} = {"spec/change.md", "spec/non-goals.md"}
+    local texts: {string} = {spec_replacement.change or "",
+      spec_replacement.non_goals or ""}
+    for i, name in ipairs(names) do
+      if texts[i] == "" then
+        ops[#ops + 1] = {path = name, content = nil}
+      else
+        ops[#ops + 1] = {path = name, content = texts[i]}
+      end
     end
+    ops[#ops + 1] = {path = "spec.md", content = nil}
   end
   local old_order = ""
   if old ~= nil then
@@ -269,7 +288,7 @@ local record fastimport
   type CommitPlan = CommitPlan
   git_date_now: function(): string
   diff_item: function(old: item.Item | nil, new_it: item.Item,
-  spec_replacement: string | nil, old_spec: string): {Op}
+  spec_replacement: itemtree.Spec | nil, old_spec: itemtree.Spec): {Op}
   data_block: function(content: string): string
   build_stream: function(commits: {CommitPlan}): string
   run: function(root: string, commits: {CommitPlan}): boolean, string

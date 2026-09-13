@@ -7,6 +7,7 @@ local check = require("cosmic.check")
 local find = require("_work.find")
 local fixture = require("_work.fixture")
 local index = require("_work.index")
+local spec = require("_work.spec")
 local store = require("_work.store")
 
 local init_state_repo = fixture.init_state_repo
@@ -21,7 +22,11 @@ local function built_index(s: store.Store): index.Index
   for _, it in ipairs(all) do
     ids[#ids + 1] = it.id
   end
-  local idx = check.must(index.open(all, store.read_specs(s, ids)))
+  local bodies: {string: string} = {}
+  for id, sp in pairs(store.read_specs(s, ids)) do
+    bodies[id] = spec.document(sp)
+  end
+  local idx = check.must(index.open(all, bodies))
   assert(find.build(idx))
   return idx
 end

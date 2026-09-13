@@ -49,8 +49,8 @@ local function pr_collision_refusal(all: {item.Item}, id: string,
 end
 
 --- The repositories a spec reaches (`spec.reached_repos`) that are
---- neither the item's own `repo` field nor declared under its
---- `## Access` heading (`spec.declared_repos`) — an undeclared source
+--- neither the item's own `repo` field nor declared as its read
+--- access (`spec.declared_repos`) — an undeclared source
 --- strands a claim before it starts and a review just as surely,
 --- since neither session's grant is anything this board can see. The
 --- item's own `repo` is the one exemption that needs no declaring: it
@@ -115,7 +115,7 @@ local function ready_problems(s: store.Store, it: item.Item,
       .. "(`gitboard rank <outcome>`), or attach it under an item that "
       .. "already is"):format(it.id:sub(1, 8))
   end
-  local spec_body = body or store.read_spec(s, it.id)
+  local spec_body = body or spec.document(store.read_spec(s, it.id))
   for _, gap in ipairs(flow.ready_gaps(spec_body)) do
     out[#out + 1] = ("spec: %s"):format(gap)
   end
@@ -124,9 +124,9 @@ local function ready_problems(s: store.Store, it: item.Item,
     out[#out + 1] = not_ready
   end
   for _, repo in ipairs(undeclared_repos(it, spec_body)) do
-    out[#out + 1] = ("spec reaches %s with no declared read access — name "
-      .. "it under \"## Access\"; undeclared, it strands the claim now "
-      .. "and the review just as surely"):format(repo)
+    out[#out + 1] = ("spec reaches %s with no declared read access — "
+      .. "declare it; undeclared, it strands the claim now and the review "
+      .. "just as surely"):format(repo)
   end
   return out
 end

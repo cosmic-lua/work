@@ -39,6 +39,7 @@ local env = require("cosmic.env")
 local read = require("_work.read")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
@@ -61,12 +62,10 @@ local DONE_POOL_SIZE < const > = 96
 --- keeps `build`'s ids visibly synthetic even if it were).
 local EPOCH_SECONDS < const > = 1700000000
 
-local FIXTURE_SPEC < const > = [[
-## Change
-Fixture item for the gitboard perf scenarios: no real change.
-## Non-goals
-Real work; this item is never taken.
-]]
+local FIXTURE_SPEC < const >: itemtree.Spec = {
+  change = "Fixture item for the gitboard perf scenarios: no real change.\n",
+  non_goals = "Real work; this item is never taken.\n",
+}
 
 --- One item's id: a KSUID whose payload is a pure function of `i`, so it
 --- never collides across items and never changes between builds.

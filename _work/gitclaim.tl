@@ -7,6 +7,7 @@ local claim = require("_work.claim")
 local claimbatch = require("_work.claimbatch")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
+local gitreadspec = require("_work.gitreadspec")
 local itemtree = require("_work.itemtree")
 local prepared = require("_work.prepared")
 local refs = require("_work.refs")
@@ -189,7 +190,7 @@ local function prepare_batch(requests: {Request}): BatchResult
     end
     if row == nil then out.refused.batch = "created batch lost a member"; return out end
     got.it.claim_batch = batch.commit
-    local spec = gitread.read_spec(first.root, {row.item_tip})
+    local spec = gitreadspec.read_spec(first.root, {row.item_tip})
     local tree, tree_err = itemtree.build_tree(first.root, got.it, spec, true)
     if tree == nil then out.refused[req.id] = tree_err; return out end
     local date = ("%d +0000"):format(first.now)

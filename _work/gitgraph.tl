@@ -27,10 +27,12 @@
 local cachequery = require("_work.cachequery")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local rank = require("_work.gitrank")
 local read = require("_work.read")
+local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -103,8 +105,9 @@ end
 
 --- File a new item into the graph, todo if it lands below the outcome
 --- level, triage if it lands directly under the board. `spec` is nil
---- to leave the tree with no `spec.md` at all — an empty string would
---- instead write an EMPTY `spec.md`, which is a different, visible
+--- to leave the tree with no `spec/` subtree at all — a record whose
+--- fields are both "" is the same absence, while a record carrying
+--- prose writes one blob per non-empty field, which is a different, visible
 --- outcome. Mints a fresh id; a caller that needs a chosen id (a
 --- fixture, a replay) builds the `item.Item` and calls
 --- `storewrite.save` directly — see `_work/storeinit_test.tl`'s
@@ -114,9 +117,9 @@ end
 --- @param parent string The parent id, or "" to file it under the
 --- board — refused when this repository has no board yet (`init`
 --- creates one)
---- @param spec string | nil Sidecar prose to write, or nil to write none
+--- @param spec itemtree.Spec | nil Prose to write, or nil to write none
 --- @param repo string The item's repo field; nil becomes "". Refused
---- under a foreign owner unless `spec` names it under `## Access`
+--- under a foreign owner unless `spec` declares it as read access
 --- @param force boolean | nil Override a claimed-parent write gate
 --- @param why string | nil Why --force was needed
 --- @param before string | nil Place it immediately before this sibling
@@ -125,7 +128,7 @@ end
 --- under `parent`; at most one of before/after
 --- @return integer 0 on success, 1 otherwise
 local function cmd_new(s: store.Store, title: string, parent: string,
-    spec: string | nil, repo: string, force?: boolean, why?: string,
+    prose: itemtree.Spec | nil, repo: string, force?: boolean, why?: string,
     before?: string, after?: string, claim_session?: string): integer
   local frc = force or false
   local rsn = why or ""
@@ -177,8 +180,12 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   end
   -- The owner rule binds at the write, so a foreign `repo` never
   -- enters the board: the spec being filed alongside is where an
-  -- `## Access` escape would be read from.
-  local foreign = owner.repo_problem(s, it.repo, spec or "", "")
+  -- the access declaration would be read from.
+  local declared = ""
+  if prose ~= nil then
+    declared = spec.document(prose)
+  end
+  local foreign = owner.repo_problem(s, it.repo, declared, "")
   if foreign then
     return gate.verdict_line("new", false, "REFUSED: " .. foreign)
   end
@@ -225,7 +232,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     rank_note = (", rank %d of %d under %s"):format(position, total,
       tail.handle(parent_item.id))
   end
-  local ok, err = gate.commit_and_publish(s, it, spec,
+  local ok, err = gate.commit_and_publish(s, it, prose,
     ("new %s %s%s"):format(it.id:sub(1, 8), title, gate.forced_suffix(frc, rsn)),
     "new", also, claim_session, false, frc, rsn)
   if not ok then
@@ -421,7 +428,8 @@ local function cmd_set(s: store.Store, id: string, title: string | nil,
         "REFUSED: --repo cannot be empty — clearing it is not supported; "
         .. "set --repo <owner>/<name> to change it")
     end
-    local foreign = owner.repo_problem(s, repo, store.read_spec(s, id), id)
+    local foreign = owner.repo_problem(s, repo,
+      spec.document(store.read_spec(s, id)), id)
     if foreign then
       return gate.verdict_line("set", false, "REFUSED: " .. foreign)
     end
@@ -456,7 +464,7 @@ end
 
 local record gitgraph
   cmd_new: function(s: store.Store, title: string, parent: string,
-  spec: string | nil, repo: string, force?: boolean, why?: string,
+  prose: itemtree.Spec | nil, repo: string, force?: boolean, why?: string,
   before?: string, after?: string, claim_session?: string): integer
   cmd_attach: function(s: store.Store, id: string, parent: string,
   before?: string, after?: string, claim_session?: string,

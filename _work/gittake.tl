@@ -20,8 +20,8 @@ local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
 local health = require("_work.health")
 local item = require("_work.item")
+local gitreadspec = require("_work.gitreadspec")
 local repository_map = require("_work.repository_map")
-local spec = require("_work.spec")
 local store = require("_work.store")
 
 --- Record a commit-only handover after verifying the product commit locally.
@@ -69,7 +69,7 @@ local function take_handover(s: store.Store, it: item.Item, session: string,
   -- Acceptance belongs to one commit. Prior verdicts remain in item history;
   -- a different handover needs a fresh verdict, while URL-only edits do not.
   if not accepted then
-    it.verdict, it.verdict_head, it.verdict_spec = "", "", ""
+    it.verdict, it.verdict_head = "", ""
   end
   local bad = item.problems(it)
   if #bad > 0 then
@@ -156,10 +156,13 @@ end
 --- per capture). Nothing on the item's fields could otherwise tell
 --- "applied, awaiting a verdict" from "builder mid-flight": both are
 --- claimed, PR-less, with builders on record. So the handover is
---- declared, and what it records is the sidecar's revision
---- (`spec.revision`, the same digest a verdict stores as
---- `verdict_spec`): the reviewer judges THAT spec, and `verdict`
---- refuses one that moved since, the way a moved PR head is refused.
+--- declared, and what it records is the BOARD COMMIT the applied
+--- recommendation sits on — the item ref's tip as it stood when the
+--- handover was made, which is the `spec`/`new`/`attach` commits the
+--- researcher just landed. The handover commit is that commit's child,
+--- so `git log <result>..<tip>` reads the handover itself; a commit
+--- cannot carry its own sha in its own tree, which is why a
+--- single-commit handover records the parent and not itself.
 ---
 --- Only the live claim holder hands over — a handover asserts the
 --- holder's own work is done, so there is no takeover here and no
@@ -199,21 +202,38 @@ local function take_result(s: store.Store, it: item.Item, session: string,
         .. "first"):format(id8, holder))
   end
   local body = store.read_spec(s, it.id)
-  if body == "" then
+  if body.change == "" and body.non_goals == "" then
     return gate.verdict_line("take", false,
-      ("REFUSED: %s has no spec sidecar — a research handover hands the "
+      ("REFUSED: %s has no spec — a research handover hands the "
         .. "spec over, and there is none"):format(id8))
   end
-  local digest = spec.revision(body)
+  -- The tip `store.list` hydrated for this item: the commit the applied
+  -- recommendation sits on. Refuse rather than record an empty sha —
+  -- "" in `result` reads as "no handover recorded".
+  local tip = s.leased_sha[it.id] or ""
+  if tip == "" then
+    return gate.verdict_line("take", false,
+      ("REFUSED: %s has no observed board commit to hand over — read the "
+        .. "board first"):format(id8))
+  end
   local verdict = it.verdict or ""
   local standing = "awaiting review"
   if verdict ~= "" then
     standing = ("its %s stands"):format(verdict)
   end
-  if digest == (it.result or "") and verdict ~= "request changes" then
+  -- The predicate the recorded digest used to express — has the spec
+  -- moved since the recorded handover — computed from git objects
+  -- instead of a hash: tip-equality cannot express it, because after
+  -- the first handover the tip IS the handover commit and never equals
+  -- the recorded parent again. A legacy 40-hex digest resolves to no
+  -- object, compares unequal, and is re-typed by this very handover.
+  local recorded = gitreadspec.read_spec(s.root, {it.result or ""})
+  if recorded.change == body.change and recorded.non_goals == body.non_goals
+  and (it.result or "") ~= "" and verdict ~= "request changes" then
     return gate.verdict_line("take", true,
       ("%s already records this spec's handover — %s"):format(id8, standing))
   end
+  local digest = tip
   it.result = digest
   if verdict == "request changes" then
     it.verdict = ""

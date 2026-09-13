@@ -22,7 +22,13 @@
 ---
 --- What SQL cannot answer, this module still asks directly: an item's
 --- tree not re-encoding to what it was read from (a hand edit, a
---- canonical form that drifted — `tree_problem`), an id filed under
+--- canonical form that drifted — `tree_problem`; every item still on
+--- the format-4 shape is reported by it too, since an unmigrated
+--- `meta` re-encodes to a different blob and a `spec.md` beside a
+--- `spec/` subtree is a different tree, and that noise stands rather
+--- than being suppressed: the format marker already refuses ordinary
+--- reads and writes on a format-4 board, so the only session that sees
+--- it is the one running the migration), an id filed under
 --- both `refs/heads/items` and `refs/heads/ended` at once (the residue
 --- of a resolution whose atomic push landed the create half of an
 --- old-style namespace move and lost the delete half — the pushing
@@ -44,6 +50,7 @@ local itemtree = require("_work.itemtree")
 local read = require("_work.read")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
+local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -52,7 +59,7 @@ local tail = require("_work.tail")
 --- the comparison is keyed on.
 local ITEM_COLUMNS < const >: {string} = {
   "title", "parent", "repo", "base", "key", "claim", "reviewer", "pr",
-  "result", "verdict", "verdict_head", "verdict_spec", "resolution",
+  "result", "verdict", "verdict_head", "resolution",
   "ref", "tip", "touched_at",
 }
 
@@ -67,12 +74,12 @@ local ITEM_COLUMNS < const >: {string} = {
 --- same as what is already there.
 --- @param s store.Store The store
 --- @param it item.Item The item
---- @param spec_body string Its spec sidecar, "" when it has none
+--- @param prose itemtree.Spec Its prose, both fields "" when it has none
 --- @param observed_trees {string: string} Every observed commit sha
 --- (`s.leased_sha`) mapped to its tree sha, from ONE
 --- `gitobj.tree_of_batch` call over the whole board
 --- @return string | nil The problem
-local function tree_problem(s: store.Store, it: item.Item, spec_body: string,
+local function tree_problem(s: store.Store, it: item.Item, prose: itemtree.Spec,
     observed_trees: {string: string}): string
   local observed_sha = s.leased_sha[it.id]
   if observed_sha == nil or observed_sha == "" then
@@ -82,7 +89,7 @@ local function tree_problem(s: store.Store, it: item.Item, spec_body: string,
   if observed_tree == nil then
     return ("%s: could not read its observed tree"):format(it.id:sub(1, 8))
   end
-  local rebuilt, berr = itemtree.build_tree(s.root, it, spec_body)
+  local rebuilt, berr = itemtree.build_tree(s.root, it, prose)
   if rebuilt == nil then
     return ("%s: could not re-encode its tree: %s"):format(it.id:sub(1, 8), berr)
   end
@@ -355,6 +362,12 @@ local function cmd_fsck(s: store.Store): integer
     end
   end
   local specs = store.read_specs(s, ids)
+  -- The throwaway rebuild indexes one searchable text per item, where
+  -- the round trip below wants the record the tree actually holds.
+  local spec_texts: {string: string} = {}
+  for id, sp in pairs(specs) do
+    spec_texts[id] = spec.document(sp)
+  end
 
   local problems: {string} = {}
   local stale_orders: {string} = {}
@@ -370,7 +383,7 @@ local function cmd_fsck(s: store.Store): integer
   if mem == nil then
     problems[#problems + 1] = ("could not open a throwaway database: %s"):format(merr)
   else
-    local fok, ferr = cacherebuild.fill(mem, s.root, board, specs)
+    local fok, ferr = cacherebuild.fill(mem, s.root, board, spec_texts)
     if not fok then
       problems[#problems + 1] = ("could not rebuild the throwaway database: %s"):format(ferr)
       local _c, _cerr = mem:close()
@@ -379,7 +392,7 @@ local function cmd_fsck(s: store.Store): integer
   end
 
   if mem ~= nil then
-    local rebuilt: index.Index = {db = mem, specs = specs, load_problems = {}}
+    local rebuilt: index.Index = {db = mem, specs = spec_texts, load_problems = {}}
     -- `read.structure`'s five SQL-derivable findings, asked of the
     -- fresh rebuild — what a Teal walk over `all` used to compute by
     -- hand. `stale_order` is reported but never counted: a read that
@@ -428,7 +441,8 @@ local function cmd_fsck(s: store.Store): integer
     observed_trees = {}
   end
   for _, it in ipairs(all) do
-    local p = tree_problem(s, it, specs[it.id] or "", observed_trees)
+    local p = tree_problem(s, it, specs[it.id]
+      or {change = "", non_goals = ""}, observed_trees)
     if p ~= nil then
       problems[#problems + 1] = p
     end

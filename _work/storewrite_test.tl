@@ -16,6 +16,7 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local prepared = require("_work.prepared")
@@ -24,6 +25,9 @@ local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
+
+--- One item's prose, for the round-trip cases below.
+local G1 < const >: itemtree.Spec = {change = "G1\n", non_goals = ""}
 
 -- Git reads a global (and system) config before it does anything, and
 -- a config it cannot READ is fatal, not skipped — see
@@ -199,14 +203,14 @@ local function test_save_load_spec_and_history()
   local s = check.must(store.open(root))
   local it = make_item("first title")
   local short = it.id:sub(1, 8)
-  assert(storewrite.save(s, it, "new " .. short, "## Change\nG1\n"))
+  assert(storewrite.save(s, it, "new " .. short, G1))
   local loaded = check.must(store.load(s, it.id))
   assert(loaded.title == "first title", "title: " .. loaded.title)
-  assert(store.read_spec(s, it.id) == "## Change\nG1\n", "spec sidecar")
+  assert(store.read_spec(s, it.id).change == G1.change, "spec prose")
   loaded.title = "second title"
   assert(storewrite.save(s, loaded, "retitle " .. short .. " by session-b"))
-  assert(store.read_spec(s, it.id) == "## Change\nG1\n",
-    "a nil spec leaves the sidecar alone")
+  assert(store.read_spec(s, it.id).change == G1.change,
+    "a nil spec leaves the prose alone")
   local events = check.must(publish.history(s, it.id))
   assert(#events == 2, "want 2 events, got " .. #events)
   assert(events[1].subject:find("by session%-b"), events[1].subject)
@@ -223,8 +227,9 @@ local function test_history_covers_the_spec_sidecar()
   local s = check.must(store.open(root))
   local it = make_item()
   local short = it.id:sub(1, 8)
-  assert(storewrite.save(s, it, "new " .. short, "## Change\nG1\n"))
-  assert(storewrite.save(s, it, "spec " .. short, "## Change\nG8\n"))
+  assert(storewrite.save(s, it, "new " .. short, G1))
+  assert(storewrite.save(s, it, "spec " .. short,
+      {change = "G8\n", non_goals = ""}))
   local events = check.must(publish.history(s, it.id))
   assert(#events == 2, "want 2 events, got " .. #events)
   assert(events[1].subject == "spec " .. short,

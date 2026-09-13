@@ -15,11 +15,22 @@ local refs = require("_work.refs")
 --- item ref advances through a first-parent bridge naming that same batch,
 --- making the requested set an atomic shared fact rather than unrelated item
 --- mutations.
-local CURRENT < const > = "4"
+local CURRENT < const > = "5"
+local PREVIOUS < const > = "4"
+
+--- Whether `found` is the one board layout this build can upgrade.
+--- Migration is deliberately one-hop: accepting an arbitrary older
+--- marker would silently skip transformations a future intermediate
+--- layout may require.
+--- @param found string The marker blob's content
+--- @return boolean True only for the immediately previous layout
+local function migratable(found: string): boolean
+  return (found or ""):gsub("%s+$", "") == PREVIOUS
+end
 
 --- The `format` blob's content: the version text plus its own
 --- trailing newline, the same shape every other text blob this store
---- writes carries (`meta`, `spec.md`, a blocker's reason).
+--- writes carries (`meta`, `spec/change.md`, a blocker's reason).
 --- @return string The blob content
 local function blob(): string
   return CURRENT .. "\n"
@@ -52,6 +63,11 @@ local function refusal(found: string, has_items: boolean): string | nil
       .. "items — this is an old layout this tool predates; expected format "
       .. "%s (run `gitboard init` to write the marker, once every other "
       .. "clone of this board has moved past whatever changed it)"):format(CURRENT)
+  end
+  if trimmed == PREVIOUS then
+    return ("refs/heads/board/format is %s, this tool expects %s — run "
+      .. "`gitboard migrate` before reading or writing the board")
+    :format(trimmed, CURRENT)
   end
   return ("refs/heads/board/format is %s, this tool expects %s — it cannot safely "
     .. "read or write this board"):format(trimmed, CURRENT)
@@ -195,8 +211,10 @@ end
 
 local record format
   CURRENT: string
+  PREVIOUS: string
   type Inspection = Inspection
   blob: function(): string
+  migratable: function(found: string): boolean
   refusal: function(found: string, has_items: boolean): string | nil
   inspect: function(dir: string): Inspection | nil, string
   require_current: function(dir: string): boolean, string
@@ -205,7 +223,9 @@ end
 
 local M: format = {
   CURRENT = CURRENT,
+  PREVIOUS = PREVIOUS,
   blob = blob,
+  migratable = migratable,
   refusal = refusal,
   inspect = inspect,
   require_current = require_current,

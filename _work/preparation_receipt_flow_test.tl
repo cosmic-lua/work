@@ -21,7 +21,7 @@ local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
 local git = fixture.git
-local SPEC < const > = "## Change\nKeep <BRANCH> and <PREPARATION> literal; café\\t.\n## Non-goals\nNothing else.\n"
+local SPEC < const > = "## Change\n\nKeep <BRANCH> and <PREPARATION> literal; café\\t.\n\n## Non-goals\n\nNothing else.\n"
 local record Case
   s: store.Store
   id: string

@@ -48,7 +48,6 @@ CREATE TABLE items (
   verdict TEXT NOT NULL DEFAULT '' CHECK(verdict IN ('', 'accept', 'request changes')),
   verdict_head TEXT NOT NULL DEFAULT '',
   landed_head TEXT NOT NULL DEFAULT '',
-  verdict_spec TEXT NOT NULL DEFAULT '',
   resolution TEXT NOT NULL DEFAULT '' CHECK(resolution IN ('', 'completed', 'not-planned')),
   -- The write lease: the branch this item lives on
   -- (`refs/heads/items/<id>` or `refs/heads/ended/<id>`), the commit sha
@@ -82,6 +81,33 @@ CREATE TABLE builders (
 CREATE TABLE speccers (
   item TEXT REFERENCES items(id),
   session TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY(item, seq)
+) STRICT, WITHOUT ROWID;
+
+-- The three declared list fields, one row per entry in the same shape
+-- `builders`/`speccers` carry — `(item, <value>, seq)`, `seq` the
+-- 1-based index in the declared list. A whole-board read rebuilds each
+-- `item.Item` from these columns (`_work.cachequery`), so a field
+-- without its own table here is written back EMPTY by the next verb
+-- that saves an item it read from `store.list`.
+CREATE TABLE touches (
+  item TEXT REFERENCES items(id),
+  path TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY(item, seq)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE access (
+  item TEXT REFERENCES items(id),
+  repo TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  PRIMARY KEY(item, seq)
+) STRICT, WITHOUT ROWID;
+
+CREATE TABLE depends_on (
+  item TEXT REFERENCES items(id),
+  target TEXT NOT NULL,
   seq INTEGER NOT NULL,
   PRIMARY KEY(item, seq)
 ) STRICT, WITHOUT ROWID;

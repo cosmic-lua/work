@@ -85,11 +85,11 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
     local landed = try(db, [[
       INSERT INTO items(id, title, parent, repo, base, key, claim, claim_base, claim_batch,
         handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
-        landed_head, verdict_spec, resolution,
+        landed_head, resolution,
         ref, tip, touched_at)
       VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :claim_base, :claim_batch,
         :handover_head, :external_url, :reviewer, :pr, :result, :verdict,
-        :verdict_head, :landed_head, :verdict_spec, :resolution,
+        :verdict_head, :landed_head, :resolution,
         :ref, :tip, :touched_at)
     ]], {
         id = it.id, title = it.title, parent = it.parent or "",
@@ -100,7 +100,6 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
         reviewer = it.reviewer or "",
         pr = it.pr or 0, result = it.result or "", verdict = it.verdict or "",
         verdict_head = it.verdict_head or "", landed_head = it.landed_head or "",
-        verdict_spec = it.verdict_spec or "",
         resolution = it.resolution or "",
         ref = lease.ref, tip = lease.tip, touched_at = lease.touched_at,
       }, nil, problems, it.id)
@@ -112,6 +111,18 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
       for seq, name in ipairs(it.speccers or {}) do
         try(db, "INSERT OR IGNORE INTO speccers(item, session, seq) VALUES (?, ?, ?)",
           {it.id, name, seq}, nil, problems, it.id)
+      end
+      for seq, path in ipairs(it.touches or {}) do
+        try(db, "INSERT OR IGNORE INTO touches(item, path, seq) VALUES (?, ?, ?)",
+          {it.id, path, seq}, nil, problems, it.id)
+      end
+      for seq, repo in ipairs(it.access or {}) do
+        try(db, "INSERT OR IGNORE INTO access(item, repo, seq) VALUES (?, ?, ?)",
+          {it.id, repo, seq}, nil, problems, it.id)
+      end
+      for seq, target in ipairs(it.depends_on or {}) do
+        try(db, "INSERT OR IGNORE INTO depends_on(item, target, seq) VALUES (?, ?, ?)",
+          {it.id, target, seq}, nil, problems, it.id)
       end
       -- `it.order`'s own array index IS the stored 1-based position —
       -- a stale entry (naming something no longer a child of `it`)
@@ -276,6 +287,9 @@ local function delete_item(db: sqlite.Database, id: string): boolean, string
   for _, sql in ipairs({
       "DELETE FROM builders WHERE item = ?",
       "DELETE FROM speccers WHERE item = ?",
+      "DELETE FROM touches WHERE item = ?",
+      "DELETE FROM access WHERE item = ?",
+      "DELETE FROM depends_on WHERE item = ?",
       "DELETE FROM ranks WHERE parent = ?",
       "DELETE FROM items WHERE id = ?",
     }) do

@@ -18,6 +18,8 @@ local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local gitread = require("_work.gitread")
+local gitreadspec = require("_work.gitreadspec")
+local spec = require("_work.spec")
 local index = require("_work.index")
 local index_rank = require("_work.index_rank")
 local proc = require("cosmic.proc")
@@ -105,7 +107,12 @@ local function rebuild(root: string): Cache | nil, string
   for _, it in ipairs(board.items) do
     ids[#ids + 1] = it.id
   end
-  local specs = gitread.read_specs(root, board.shas_by_id, ids)
+  -- One indexed text per item, rendered from the two blobs the tree
+  -- holds (`spec.document`) — `find.build` reads `Cache.specs`.
+  local specs: {string: string} = {}
+  for id, sp in pairs(gitreadspec.read_specs(root, board.shas_by_id, ids)) do
+    specs[id] = spec.document(sp)
+  end
   local dir_ok, dir_err = fs.make_dirs(fs.join(root, "o"))
   if not dir_ok then
     return nil, dir_err

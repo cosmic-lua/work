@@ -18,6 +18,8 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gh = require("_work.gh")
 local gitread = require("_work.gitread")
+local gitreadspec = require("_work.gitreadspec")
+local itemtree = require("_work.itemtree")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local publish = require("_work.publish")
@@ -26,7 +28,7 @@ local store = require("_work.store")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
-local SPEC_BODY < const > = "## Change\ndo it\n## Non-goals\nnot that\n"
+local SPEC_BODY < const >: itemtree.Spec = {change = "do it\n", non_goals = "not that\n"}
 
 --- A mutable call counter for a swapped-out module function, carrying
 --- its own restore alongside it (rather than a second return value) so
@@ -178,23 +180,25 @@ local function test_rank_reads_the_board_once_not_twice()
     "second read must be the narrow write compatibility check")
 end
 
--- `new` never asks git for `<new-id>:spec.md`: the id being minted has
--- no ref yet, so any candidate read is guaranteed to fail, twice, once
--- per namespace tried. `gitread.read_spec` is the one function that
+-- `new` never asks git for the minted id's prose: the id being minted
+-- has no ref yet, so any candidate read is guaranteed to come back
+-- empty. `gitreadspec.read_spec` is the one function that
 -- makes that ask; stubbing it to fail outright proves `new` never
 -- calls it at all for a brand-new item, not merely that its failure is
 -- tolerated.
 local function test_new_never_reads_spec_md_for_the_minted_id()
   local a = fixture.init_state_repo("new-no-spec-read")
-  local original = gitread.read_spec
-  gitread.read_spec = function(_root: string, _candidates: {string}): string
-    error("gitread.read_spec must never be asked about an id new is still minting")
+  local original = gitreadspec.read_spec
+  gitreadspec.read_spec = function(_root: string,
+      _candidates: {string}): itemtree.Spec
+    error("gitreadspec.read_spec must never be asked about an id new is "
+      .. "still minting")
   end
   local ok, result = pcall(function(): integer
       return graph.cmd_new(a, "no spec read", "", SPEC_BODY, "")
     end)
-  gitread.read_spec = original
-  assert(ok, "new must not read spec.md for the id it is minting: "
+  gitreadspec.read_spec = original
+  assert(ok, "new must not read the prose of the id it is minting: "
     .. tostring(result))
   assert(result == 0, "new should still be accepted")
 end

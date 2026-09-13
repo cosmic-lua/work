@@ -9,9 +9,19 @@
 --- counterpart for spec authorship — in the SAME commit as the
 --- sidecar; a flag-shaped name is refused before anything is staged
 --- (`item.record_involvement`).
+---
+--- The file is a whole markdown document and the tree holds two blobs,
+--- so the file is SPLIT once (`spec.split`) and every one of this
+--- verb's three comparisons — the compare-and-swap against `--base`,
+--- the unchanged no-op, and the `(+N/-M lines)` report — is made
+--- against RECORDS rather than against text. Comparing text would
+--- report a spurious stale base, or a spurious write, the moment an
+--- author's heading spelling or blank lines differed from the
+--- canonical render, which is a difference the tree cannot hold.
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
+local spec = require("_work.spec")
 local store = require("_work.store")
 
 --- Split text into its lines, with no trailing empty entry for a final
@@ -100,16 +110,20 @@ local function cmd_spec(s: store.Store, id: string, file: string,
       return gate.verdict_line("spec", false, refusal)
     end
   end
-  local body, rerr = fs.read(file)
-  if body == nil then
+  local text, rerr = fs.read(file)
+  if text == nil then
     return gate.verdict_line("spec", false, rerr)
+  end
+  local body, serr = spec.split(text)
+  if body == nil then
+    return gate.verdict_line("spec", false, "REFUSED: " .. serr)
   end
   local current = store.read_spec(s, id)
   local stale = gate.base_refusal(current, base or "", id)
   if stale then
     return gate.verdict_line("spec", false, stale)
   end
-  if body == current then
+  if body.change == current.change and body.non_goals == current.non_goals then
     return gate.verdict_line("spec", true,
       ("%s's spec is unchanged — nothing written"):format(id:sub(1, 8)))
   end
@@ -129,7 +143,7 @@ local function cmd_spec(s: store.Store, id: string, file: string,
   if store.is_noop(err) then
     return gate.verdict_line("spec", true, err)
   end
-  local added, removed = diffstat(current, body)
+  local added, removed = diffstat(spec.document(current), spec.document(body))
   return gate.verdict_line("spec", true,
     ("%s's spec replaced (+%d/-%d lines)"):format(id:sub(1, 8), added, removed))
 end

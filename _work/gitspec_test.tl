@@ -7,6 +7,7 @@
 -- item's MOTION.
 
 local check = require("cosmic.check")
+local specmod = require("_work.spec")
 local gitready = require("_work.gitready")
 local gitspec = require("_work.gitspec")
 local fs = require("cosmic.fs")
@@ -24,6 +25,15 @@ local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
 local commits = fixture.commits
 local give_spec = fixture.give_spec
+
+--- The item's stored prose as the markdown document an author reads and
+--- edits — what `show --raw` prints, and what a `--base` file holds.
+--- @param s store.Store The store
+--- @param id string The item id
+--- @return string The document, "" when it has no prose
+local function raw(s: store.Store, id: string): string
+  return specmod.document(store.read_spec(s, id))
+end
 local root_with_leaf = fixture.root_with_leaf
 
 -- The spec bar judges the item being taken. Another item's broken
@@ -142,7 +152,7 @@ local function test_spec_refuses_a_write_with_no_base()
   local before = commits(s)
   assert(gitspec.cmd_spec(s, leaf, second) ~= 0,
     "a second write with no base is last-write-wins")
-  assert(store.read_spec(s, leaf) == READY_SPEC, "so the first text stands")
+  assert(raw(s, leaf) == READY_SPEC, "so the first text stands")
   assert(commits(s) == before, "and nothing was committed")
 end
 
@@ -163,10 +173,10 @@ local function test_spec_refuses_a_stale_base()
     "a base the second write already replaced is stale")
   assert(gitspec.cmd_spec(s, leaf, third, fs.join(tmpdir, "gone.md")) ~= 0,
     "and an unreadable base is refused, not taken as empty")
-  local current = spec_file("stale-current", store.read_spec(s, leaf))
+  local current = spec_file("stale-current", raw(s, leaf))
   assert(gitspec.cmd_spec(s, leaf, third, current) == 0,
     "re-reading the sidecar makes the same write land")
-  assert(store.read_spec(s, leaf):find("Second edit.", 1, true) ~= nil,
+  assert(raw(s, leaf):find("Second edit.", 1, true) ~= nil,
     "carrying the text it meant to write")
 end
 
@@ -205,13 +215,21 @@ end
 
 -- Declaring the same repo under `## Access` clears the bar — the gate
 -- checks that the requirement is STATED, not that it is satisfied.
+-- `## Access` is no longer a section a WRITE may carry (`spec.split`
+-- refuses it by name), so the declaration is put where the rule reads
+-- it: inside the Change blob, the shape an unmigrated `spec.md` reads
+-- back as.
 local function test_declaring_the_repo_clears_the_bar()
   local s = init_state_repo("declared-repo")
   local _, leaf = root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "whilp/cosmopolitan", nil) == 0)
-  local declared = UPSTREAM_CLONE
+  local declared = check.must(specmod.split(UPSTREAM_CLONE))
+  declared.change = declared.change
   .. "\n## Access\n- jart/cosmopolitan (read-only, upstream history)\n"
-  assert(gitspec.cmd_spec(s, leaf, spec_file("declared", declared)) == 0)
+  local target = check.must(store.load(s, leaf))
+  assert(storewrite.save(s, target, "fixture: declared access", declared))
+  assert(publish.publish(s))
+  fixture.caller_publish(s)
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "a declared repo clears the bar: "
     .. table.concat(problems, "; "))
@@ -239,14 +257,14 @@ local function test_spec_refuses_a_foreign_live_claim()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   fixture.claim_item(s, leaf, "builder-a")
-  local before_spec = store.read_spec(s, leaf)
+  local before_spec = raw(s, leaf)
   local before_commits = commits(s)
   local base = spec_file("foreign-base", before_spec)
   local rewrite = spec_file("foreign-rewrite",
     (before_spec:gsub("Not that.", "Rewritten.")))
   assert(gitspec.cmd_spec(s, leaf, rewrite, base, "refiner-b") ~= 0,
     "a foreign session may not redefine work another session claims")
-  assert(store.read_spec(s, leaf) == before_spec, "the sidecar is untouched")
+  assert(raw(s, leaf) == before_spec, "the sidecar is untouched")
   assert(commits(s) == before_commits, "and nothing was committed")
   local it = check.must(store.load(s, leaf))
   assert(it.claim == "builder-a", "the claim stands")
@@ -260,12 +278,12 @@ local function test_spec_the_holders_own_rewrite_still_lands()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   fixture.claim_item(s, leaf, "builder-a")
-  local base = spec_file("holder-base", store.read_spec(s, leaf))
+  local base = spec_file("holder-base", raw(s, leaf))
   local rewrite = spec_file("holder-rewrite",
     (READY_SPEC:gsub("Not that.", "Reworked answering a bounce.")))
   assert(gitspec.cmd_spec(s, leaf, rewrite, base, "builder-a") == 0,
     "the claim holder reworks their own spec")
-  assert(store.read_spec(s, leaf):find("Reworked answering a bounce.", 1, true)
+  assert(raw(s, leaf):find("Reworked answering a bounce.", 1, true)
     ~= nil)
 end
 
@@ -276,14 +294,14 @@ local function test_spec_force_needs_why()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   fixture.claim_item(s, leaf, "builder-a")
-  local before_spec = store.read_spec(s, leaf)
+  local before_spec = raw(s, leaf)
   local before_commits = commits(s)
   local base = spec_file("forceonly-base", before_spec)
   local rewrite = spec_file("forceonly-rewrite",
     (before_spec:gsub("Not that.", "Overridden.")))
   assert(gitspec.cmd_spec(s, leaf, rewrite, base, "refiner-b", true) ~= 0,
     "--force with no --why is refused")
-  assert(store.read_spec(s, leaf) == before_spec, "and nothing changed")
+  assert(raw(s, leaf) == before_spec, "and nothing changed")
   assert(commits(s) == before_commits, "nothing was committed")
 end
 
@@ -294,14 +312,14 @@ local function test_spec_force_and_why_overrides_a_foreign_claim()
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   fixture.claim_item(s, leaf, "builder-a")
-  local before_spec = store.read_spec(s, leaf)
+  local before_spec = raw(s, leaf)
   local base = spec_file("override-base", before_spec)
   local rewrite = spec_file("override-rewrite",
     (before_spec:gsub("Not that.", "Overridden.")))
   assert(gitspec.cmd_spec(s, leaf, rewrite, base, "refiner-b", true,
       "builder-a's session died mid-build") == 0,
     "forced, with a reason, the foreign write lands")
-  assert(store.read_spec(s, leaf):find("Overridden.", 1, true) ~= nil)
+  assert(raw(s, leaf):find("Overridden.", 1, true) ~= nil)
   local events = check.must(publish.history(s, leaf))
   assert(events[1].subject:find("forced: builder-a's session died mid-build",
       1, true), "the reason rides the commit: " .. events[1].subject)
@@ -324,8 +342,8 @@ local function test_spec_records_the_speccer_in_the_same_commit()
   local shown = check.must(store.git(s, {"show", "--name-only",
         "--pretty=format:", s.leased_ref[leaf]}))
   assert(shown.stdout:find("meta", 1, true) ~= nil
-    and shown.stdout:find("spec.md", 1, true) ~= nil,
-    "the item's meta and its spec sidecar land in the one commit: " .. shown.stdout)
+    and shown.stdout:find("spec/change.md", 1, true) ~= nil,
+    "the item's meta and its spec prose land in the one commit: " .. shown.stdout)
 
   local second = spec_file("speccer-second",
     (READY_SPEC:gsub("Not that.", "Refined again.")))

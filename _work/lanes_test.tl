@@ -54,7 +54,7 @@ local function test_mint_is_idempotent_per_lane()
   -- The minted sidecar clears the spec bar honestly — `_work.spec`'s
   -- real check, not a copy of its rule — which is what lets `next`
   -- offer the item and `take` admit it without disagreeing.
-  local body = store.read_spec(s, repair.id)
+  local body = spec.document(store.read_spec(s, repair.id))
   local gaps = spec.ready_gaps(body)
   assert(#gaps == 0,
     "the minted sidecar passes the spec bar: " .. table.concat(gaps, "; "))
@@ -221,7 +221,7 @@ local function test_a_minted_repair_is_offered_and_admitted()
 
   local specs: {string: string} = {}
   for _, it in ipairs(all) do
-    specs[it.id] = store.read_spec(s, it.id)
+    specs[it.id] = spec.document(store.read_spec(s, it.id))
   end
   local c2 = check.must(store.read(s))
   local a, aerr = action.next_action(c2, all, specs)

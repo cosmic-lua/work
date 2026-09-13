@@ -99,7 +99,7 @@ local function ensure_board(dir: string): boolean, string
   local it: item.Item = {
     id = id, title = "board", parent = "", repo = "", base = "", key = "",
     order = {}, claim = "", builders = {}, speccers = {}, reviewer = "",
-    pr = 0, result = "", verdict = "", verdict_head = "", verdict_spec = "",
+    pr = 0, result = "", verdict = "", verdict_head = "",
     resolution = "",
   }
   local tree_sha, terr = itemtree.build_tree(dir, it, nil, true)

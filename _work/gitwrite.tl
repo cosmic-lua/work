@@ -15,6 +15,7 @@
 --- module stays under its line cap; `_work.store` is the only caller
 --- outside tests.
 local fastimport = require("_work.fastimport")
+local itemtree = require("_work.itemtree")
 local item = require("_work.item")
 local refs = require("_work.refs")
 
@@ -35,17 +36,17 @@ local record Request
   message: string
   session: string
   op: string
-  --- Replacement spec for `items[1]`; nil leaves it exactly as
-  --- observed. Every other item's sidecar is always carried forward
+  --- Replacement prose for `items[1]`; nil leaves it exactly as
+  --- observed. Every other item's prose is always carried forward
   --- unchanged — untouched entirely, not even read, since `from`
   --- alone carries an unchanged path forward.
-  spec_for_first: string | nil
+  spec_for_first: itemtree.Spec | nil
   leased_ref: {string: string}
   leased_sha: {string: string}
   leased_item: {string: item.Item}
   bounded: boolean
   seq_sha: string
-  read_spec: function(id: string): string
+  read_spec: function(id: string): itemtree.Spec
   --- Ids whose tree carries a `held` blob this save must force-delete.
   --- `item.Item` has no field for it (see `_work.itemtree`'s header),
   --- so `fastimport.diff_item` cannot see it on its own; `gitboard
@@ -93,21 +94,22 @@ end
 --- caller adds neither a commit nor any bookkeeping for it.
 --- @param req Request The save request
 --- @param it item.Item The item to write
---- @param spec_replacement string | nil `items[1]`'s replacement spec; nil elsewhere
+--- @param spec_replacement itemtree.Spec | nil `items[1]`'s replacement
+--- prose; nil elsewhere
 --- @param now string This save's commit date, shared by every commit it makes
 --- @return fastimport.CommitPlan | nil The commit to add to the stream
 --- @return Planned | nil Its bookkeeping, set together with the plan
 local function plan_one(req: Request, it: item.Item,
-    spec_replacement: string | nil, now: string):
+    spec_replacement: itemtree.Spec | nil, now: string):
   fastimport.CommitPlan | nil, Planned | nil
   local ref = req.leased_ref[it.id] or ("refs/heads/items/" .. it.id)
   local old_sha = req.leased_sha[it.id] or refs.ZERO_SHA
   local old = req.leased_item[it.id]
-  local old_spec = ""
+  local old_spec: itemtree.Spec = {change = "", non_goals = ""}
   -- An id never observed (not in the snapshot — `old_sha` still
-  -- `ZERO_SHA`) has no existing ref to hold a spec sidecar, so reading
-  -- one would only ever come back "" the hard way, one `cat-file -p`
-  -- per candidate ref against a ref that does not exist yet.
+  -- `ZERO_SHA`) has no existing ref to hold prose, so reading it would
+  -- only ever come back empty the hard way, one `cat-file --batch`
+  -- against a ref that does not exist yet.
   if spec_replacement ~= nil and old_sha ~= refs.ZERO_SHA then
     old_spec = req.read_spec(it.id)
   end
@@ -153,7 +155,7 @@ local function save_batch(req: Request): Outcome | nil, string
   local commits: {fastimport.CommitPlan} = {}
   local planned: {Planned} = {}
   for idx, it in ipairs(req.items) do
-    local spec_replacement: string | nil = nil
+    local spec_replacement: itemtree.Spec | nil = nil
     if idx == 1 then
       spec_replacement = req.spec_for_first
     end

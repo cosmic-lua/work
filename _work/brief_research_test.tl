@@ -36,7 +36,9 @@ end
 
 local function legacy_result(s: store.Store, id: string): string
   local it = check.must(store.load(s, id))
-  it.result = spec.revision(store.read_spec(s, id))
+  -- A pre-format-5 value: a digest of the spec blob, which resolves to
+  -- no board commit at all — exactly the legacy shape under test.
+  it.result = spec.revision(spec.document(store.read_spec(s, id)))
   assert(item.record_involvement(it.builders, flow.BUILDER))
   assert(storewrite.save(s, it, "take old result:" .. it.result))
   return it.result
@@ -87,7 +89,7 @@ local function test_result_only_refuses_without_output_or_state_changes()
   assert(code == 0, out)
   assert(out:find("never at\na `gitboard` command", 1, true) ~= nil, out)
   assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before)
-  assert(storewrite.save(s, it, "remove spec", ""))
+  assert(storewrite.save(s, it, "remove spec", {change = "", non_goals = ""}))
   code, out = capture(s, "review", id)
   assert(code == 1 and out:find("has no spec sidecar", 1, true) ~= nil, out)
   assert(out:find("legacy research result", 1, true) == nil, out)

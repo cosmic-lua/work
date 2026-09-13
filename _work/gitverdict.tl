@@ -102,7 +102,6 @@ local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
   end
 
   it.verdict_head = canonical
-  it.verdict_spec = ""
   if kind == "reject" then
     -- The rejected handover no longer stands, but the claim does. Its holder
     -- explicitly drops or renews; no workflow transition releases it.

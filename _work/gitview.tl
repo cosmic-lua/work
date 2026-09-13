@@ -22,6 +22,7 @@ local publish = require("_work.publish")
 local read = require("_work.read")
 local readywhen = require("_work.gitreadywhen")
 local sess = require("_work.session")
+local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -61,7 +62,13 @@ local function read_specs(s: store.Store, all: {item.Item}): act.Specs
       ids[#ids + 1] = i.id
     end
   end
-  return store.read_specs(s, ids)
+  -- `_work.action`'s `Specs` is one whole document per item, so the
+  -- two blobs the tree holds are rendered back to it here.
+  local out: act.Specs = {}
+  for id, sp in pairs(store.read_specs(s, ids)) do
+    out[id] = spec.document(sp)
+  end
+  return out
 end
 
 --- The lanes row: one `lane=conclusion` pair per required lane, in

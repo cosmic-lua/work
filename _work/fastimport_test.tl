@@ -12,6 +12,19 @@
 local check = require("cosmic.check")
 local fastimport = require("_work.fastimport")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
+
+--- No prose at all, the answer `_work.gitwrite` reads for an item whose
+--- ref does not exist yet.
+local NO_PROSE < const >: itemtree.Spec = {change = "", non_goals = ""}
+
+--- One prose record from its Change alone, for the `spec_replacement`
+--- rules below — the Non-goals half diffs identically.
+--- @param change string The Change blob's text
+--- @return itemtree.Spec The record
+local function prose(change: string): itemtree.Spec
+  return {change = change, non_goals = ""}
+end
 
 --- A minimal, valid item — every field a `diff_item` test does not
 --- care about left at its zero value.
@@ -30,14 +43,15 @@ end
 local function test_diff_item_new_item_adds_every_path()
   local it = make_item()
   it.other_edges = {relates = {a = "why"}}
-  local ops = fastimport.diff_item(nil, it, nil, "")
+  local ops = fastimport.diff_item(nil, it, nil, NO_PROSE)
   local by_path: {string: string} = {}
   for _, op in ipairs(ops) do
     by_path[op.path] = op.content
   end
   assert(by_path["meta"] ~= nil, "meta is always written for a new item")
   assert(by_path["edges/relates/a"] == "why", "an edge kind's entry is added")
-  assert(by_path["spec.md"] == nil, "no spec_replacement means no spec.md op")
+  assert(by_path["spec/change.md"] == nil,
+    "no spec_replacement means no spec op at all")
 end
 
 -- An edge kind this build does not interpret — carried opaquely on
@@ -48,7 +62,7 @@ local function test_diff_item_other_edges_round_trips()
   old.other_edges = {relates = {a = "why a", b = "same"}}
   local new_it = make_item()
   new_it.other_edges = {relates = {a = "why a changed", b = "same", c = ""}}
-  local ops = fastimport.diff_item(old, new_it, nil, "")
+  local ops = fastimport.diff_item(old, new_it, nil, NO_PROSE)
   local by_path: {string: string} = {}
   local deleted: {string: boolean} = {}
   for _, op in ipairs(ops) do
@@ -71,7 +85,7 @@ end
 local function test_diff_item_unchanged_item_is_empty()
   local it = make_item({claim = "session-a"})
   local old = check.must(item.decode(item.encode(it)))
-  local ops = fastimport.diff_item(old, it, nil, "")
+  local ops = fastimport.diff_item(old, it, nil, NO_PROSE)
   assert(#ops == 0, "identical old and new items diff to nothing")
 end
 
@@ -80,7 +94,7 @@ end
 local function test_diff_item_scalar_change_rewrites_meta_only()
   local old = make_item()
   local new_it = make_item({title = "a changed title"})
-  local ops = fastimport.diff_item(old, new_it, nil, "")
+  local ops = fastimport.diff_item(old, new_it, nil, NO_PROSE)
   assert(#ops == 1, "only meta moved: " .. #ops)
   assert(ops[1].path == "meta")
   assert(ops[1].content:find("title: a changed title", 1, true) ~= nil,
@@ -95,7 +109,7 @@ local function test_diff_item_other_edges_add_and_remove()
   old.other_edges = {relates = {gone = ""}}
   local new_it = make_item()
   new_it.other_edges = {relates = {kept = "", new = ""}}
-  local ops = fastimport.diff_item(old, new_it, nil, "")
+  local ops = fastimport.diff_item(old, new_it, nil, NO_PROSE)
   local by_path: {string: string} = {}
   local deleted: {string: boolean} = {}
   for _, op in ipairs(ops) do
@@ -120,31 +134,43 @@ local function test_diff_item_edge_reason_change_is_one_m()
   old.other_edges = {blocked_by = {b1 = "old reason", b2 = "same"}}
   local new_it = make_item()
   new_it.other_edges = {blocked_by = {b1 = "new reason", b2 = "same"}}
-  local ops = fastimport.diff_item(old, new_it, nil, "")
+  local ops = fastimport.diff_item(old, new_it, nil, NO_PROSE)
   assert(#ops == 1, "only b1's reason moved: " .. #ops)
   assert(ops[1].path == "edges/blocked_by/b1")
   assert(ops[1].content == "new reason")
 end
 
--- `spec_replacement` nil never touches spec.md, whatever `old_spec`
+-- `spec_replacement` nil never touches the prose, whatever `old_spec`
 -- says (it is not even read in that case by a real caller — see
--- `_work.gitwrite.plan_one`); a replacement equal to the current text
--- is a no-op on that path, and a genuine change is an `M`; "" deletes
--- an existing sidecar rather than writing an empty blob.
+-- `_work.gitwrite.plan_one`); a replacement equal to the stored record
+-- is a no-op; and a genuine change states the WHOLE subtree at once —
+-- both blobs plus the `spec.md` a format-4 item may still carry —
+-- rather than only the field that moved, an empty field as a delete.
 local function test_diff_item_spec_replacement_rules()
   local it = make_item()
-  assert(#fastimport.diff_item(it, it, nil, "anything") == 0,
+  assert(#fastimport.diff_item(it, it, nil, prose("anything")) == 0,
     "nil spec_replacement: no op, whatever old_spec is")
-  assert(#fastimport.diff_item(it, it, "same", "same") == 0,
+  assert(#fastimport.diff_item(it, it, prose("same"), prose("same")) == 0,
     "an identical replacement is a no-op")
-  local changed = fastimport.diff_item(it, it, "new text", "old text")
-  assert(#changed == 1 and changed[1].path == "spec.md"
-    and changed[1].content == "new text", "a genuine replacement is one M")
-  local cleared = fastimport.diff_item(it, it, "", "had text")
-  assert(#cleared == 1 and cleared[1].path == "spec.md" and cleared[1].content == nil,
-    "\"\" against existing text deletes spec.md")
-  assert(#fastimport.diff_item(it, it, "", "") == 0,
-    "\"\" against no existing text is still a no-op")
+  local changed = fastimport.diff_item(it, it, prose("new text"), prose("old text"))
+  local by_path: {string: string} = {}
+  local deleted: {string: boolean} = {}
+  for _, op in ipairs(changed) do
+    if op.content == nil then deleted[op.path] = true else by_path[op.path] = op.content end
+  end
+  assert(by_path["spec/change.md"] == "new text", "the moved field is an M")
+  assert(deleted["spec/non-goals.md"], "an empty field is a D, not an empty blob")
+  assert(deleted["spec.md"], "and any format-4 blob beside them is dropped")
+  local both = fastimport.diff_item(it, it,
+    {change = "c", non_goals = "n"}, {change = "c", non_goals = "was"})
+  local paths: {string: string} = {}
+  for _, op in ipairs(both) do paths[op.path] = op.content end
+  assert(paths["spec/change.md"] == "c",
+    "the unmoved field is restated, so a format-4 blob is never dropped "
+    .. "without its prose being written back")
+  assert(paths["spec/non-goals.md"] == "n", "the moved field is written")
+  assert(#fastimport.diff_item(it, it, NO_PROSE, NO_PROSE) == 0,
+    "empty against empty is still a no-op")
 end
 
 -- "now" is `<epoch> <+HHMM>` — the same raw shape

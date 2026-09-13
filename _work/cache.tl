@@ -44,7 +44,8 @@ local cachewatch = require("_work.cachewatch")
 local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
-local gitread = require("_work.gitread")
+local gitreadspec = require("_work.gitreadspec")
+local spec = require("_work.spec")
 local gitreadmany = require("_work.gitreadmany")
 local index = require("_work.index")
 local index_rank = require("_work.index_rank")
@@ -299,7 +300,7 @@ end
 
 --- The fetch path's incremental update: read exactly `ids` fresh from
 --- git, in one batch (`_work.gitreadmany.load_many`, plus one
---- `gitread.read_specs` for their sidecars) rather than one read per
+--- `gitreadspec.read_specs` for their prose) rather than one read per
 --- id, then patch them — unlike the save path, a fetch can land a
 --- version nobody observed directly, so this always rereads rather
 --- than trusting anything already in memory. An id `load_many` did
@@ -330,7 +331,13 @@ local function patch_fetched(root: string, before_digest: string | nil,
   for id, l in pairs(loaded) do
     shas[id] = l.sha
   end
-  local specs = gitread.read_specs(root, shas, ids)
+  -- `search` indexes one text per item, so the two blobs are rendered
+  -- back to the document they render to (`spec.document`) — the same
+  -- text a whole-board read used to hand straight through.
+  local specs: {string: string} = {}
+  for id, sp in pairs(gitreadspec.read_specs(root, shas, ids)) do
+    specs[id] = spec.document(sp)
+  end
   local touched_at = cachewatch.touched_by_item(after_entries)
   return apply_patch(root, before_digest, after_entries,
     function(tx: sqlite.Database): boolean, string
