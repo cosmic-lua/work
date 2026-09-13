@@ -127,7 +127,10 @@ local function declared_access(text: string, own: string,
   local section = (spec.sections(text)["access"] or ""):lower()
   local whole: {string: boolean} = {}
   for token in section:gmatch("[^%s`()%[%]<>\"']+") do
-    local bare = token:gsub("[,.;:]+$", "")
+    -- Markdown emphasis and punctuation are the token's EDGES, not its
+    -- shape: `**owner/name**:` declares the same repository as a bare
+    -- `owner/name`, and the live board writes both.
+    local bare = token:gsub("^[*_,.;:]+", ""):gsub("[*_,.;:]+$", "")
     if bare:match("^[%w%-]+/[%w%-_]+$") then
       whole[bare] = true
     end
@@ -137,7 +140,10 @@ local function declared_access(text: string, own: string,
     local by_url = section:find("github.com/" .. slug, 1, true) ~= nil
     or section:find("github.com:" .. slug, 1, true) ~= nil
     local owner = slug:match("^([^/]+)/")
-    if slug ~= own:lower() and (by_url or (whole[slug] and owners[owner])) then
+    -- The loose rule also yields `owner/name.git` for an SSH remote;
+    -- the URL reader already stripped that suffix from the real slug.
+    if slug ~= own:lower() and slug:match("%.git$") == nil
+    and (by_url or (whole[slug] and owners[owner])) then
       out[#out + 1] = slug
     end
   end

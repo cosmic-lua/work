@@ -25,7 +25,10 @@ local NOW < const > = 1700000000
 --- Acceptance block to drop, and Evidence and Access to carry. The
 --- Access section also carries the shapes the loose read-side rule
 --- mistakes for repositories — a path fragment, a URL's tail, a file
---- with an extension — none of which may reach the field.
+--- with an extension — none of which may reach the field — and the
+--- shapes the strict rule must still read: a declaration wrapped in
+--- emphasis, a bare mention under an owner only a URL elsewhere on the
+--- board vouches for, an SSH remote whose `.git` must not double it.
 local RICH < const > = [[
 # The leaf
 
@@ -48,23 +51,26 @@ Run it and watch.
 
 ## Evidence
 
-Measured 2024-01-02: 1046 items.
+Measured 2024-01-02: 1046 items, against https://github.com/vendor/lib.
 
 ## Access
 
 - acme/other — `docs/decisions/d1-why.md`, and
   https://github.com/acme/upstream/blob/main/tool/net/x.c
 - acme/self
-- Acme/Tool (see bin/cosmic.pin), an either/or like algorithm/contract
+- **Acme/Tool**: read-only (see bin/cosmic.pin), an either/or like
+  algorithm/contract; vendor/lib-tools; git@github.com:acme/ssh.git
 ]]
 
 local CHANGE_BLOB < const > = "Do the thing in `_work/a.tl` and `_work/b_test.tl`.\n\n"
 .. "### Files\n\n| `_work/c.tl` | grows |\n| --- | --- |\n"
 
-local BODY < const > = "# The leaf\n\n## Evidence\n\nMeasured 2024-01-02: 1046 items.\n\n"
+local BODY < const > = "# The leaf\n\n## Evidence\n\nMeasured 2024-01-02: 1046 items, "
+.. "against https://github.com/vendor/lib.\n\n"
 .. "## Access\n\n- acme/other — `docs/decisions/d1-why.md`, and\n"
 .. "  https://github.com/acme/upstream/blob/main/tool/net/x.c\n- acme/self\n"
-.. "- Acme/Tool (see bin/cosmic.pin), an either/or like algorithm/contract"
+.. "- **Acme/Tool**: read-only (see bin/cosmic.pin), an either/or like\n"
+.. "  algorithm/contract; vendor/lib-tools; git@github.com:acme/ssh.git"
 
 local PLAIN < const > = "Just prose.\n\nMore of it.\n"
 
@@ -205,12 +211,14 @@ local function test_leaf_prose_becomes_two_blobs_two_fields_and_a_body()
   local it = check.must(store.load(s, b.leaf))
   assert(table.concat(it.touches, " ") == "_work/a.tl _work/b_test.tl _work/c.tl",
     table.concat(it.touches, " "))
-  assert(table.concat(it.access, " ") == "acme/other acme/tool acme/upstream",
+  assert(table.concat(it.access, " ")
+    == "acme/other acme/ssh acme/tool acme/upstream vendor/lib-tools",
     table.concat(it.access, " "))
   -- The loose read-side rule saw more than that; the write kept less.
   assert(specmod.declared_repos(RICH)["docs/decisions"]
     and specmod.declared_repos(RICH)["bin/cosmic.pin"]
-    and specmod.declared_repos(RICH)["algorithm/contract"],
+    and specmod.declared_repos(RICH)["algorithm/contract"]
+    and specmod.declared_repos(RICH)["acme/ssh.git"],
     "the read-side rule is still loose, which is why the write filters")
   assert(#it.depends_on == 0 and it.repo == "acme/self" and it.base == "main")
   assert(it.decode_problems == nil, table.concat(it.decode_problems or {}, "; "))
