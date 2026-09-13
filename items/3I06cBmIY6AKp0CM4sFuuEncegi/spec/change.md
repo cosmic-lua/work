@@ -1,14 +1,3 @@
-Imported from whilp/cosmic#1190. Refined 2026-08-17 against the current `_work/`
-layout (the tool was renamed from `work` to `gitboard` and its verbs split into
-per-file modules since this item's facts were first measured — see below).
-
-## Goal
-
-G8 — the flow system (its parent epic #1117 closed 2026-08-16, so this cites
-the goal directly).
-
-## Change
-
 **Why this is a re-refine, not a fresh card.** The item's original facts named
 `_work/github.tl` and `_work/implementer.tl`, which no longer exist — the tool
 was refactored into per-verb modules (`_work/gh.tl` transport, `_work/gitland.tl`
@@ -111,58 +100,3 @@ _work/gh.tl:133:    return false, ("PR #%d: this token may not merge (403) — a
 $ ls _work/gh_test.tl 2>/dev/null | wc -l
 0
 ```
-
-## Non-goals
-
-- **The other bare-`REFUSED:`/`ERROR` sites in `cmd_land` are untouched.**
-  `_work/gitland.tl`'s no-PR, wrong-phase, no-accept and no-response branches
-  keep their current strings and their current position in the gate sequence
-  — only the response-bearing merge failure gains classified text.
-- **No GraphQL.** `_work/api.tl` stays REST-only and is not edited at all: no
-  new transport, no `node_id`, no mutation.
-- **The verdict-line prefix is frozen at `gitboard-land:`.** Do not revert to
-  the old `work-land:` prefix the original issue used — the tool has since
-  been renamed and `gate.verdict_line` already supplies the current prefix
-  from the verb name; nothing in this change touches `verdict_line` itself.
-- **No new gate order and no new gates.** The phase / accept / no-PR / merge
-  sequence in `cmd_land` keeps its current order and its current strings for
-  every branch this item does not name above.
-- **No retry, no auto-merge, no fallback merge path.** A 403 is reported,
-  never worked around: nothing in this diff may attempt a second merge, a
-  different merge method, or a push.
-- **No status classification by string-matching.** `_work.api`'s
-  `"%s %s: HTTP %d%s"` message is for humans; branch on `res.status`, the
-  field.
-- **`_work/gitverbs.tl` and `_work/gitboard.tl` are not touched.** The merge
-  call and its classification are entirely inside `gitland.tl`/`gh.tl`.
-- **Do not create a new `_work/merge.tl`.** The original design's reason for
-  a separate module (15 lines of headroom on the old `github.tl`) no longer
-  holds; `gh.tl` has 344 lines of headroom today, and splitting it now would
-  be an unforced module for ~25 lines of pure code.
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`, run from the `board` branch worktree
-  (its own `README.md` has the bootstrap).
-- `bin/cosmic --make test _work/gh_test.tl` ends `test: PASS (1 file)`.
-- `grep -c "status == 403" _work/gh.tl` prints `1` — the classification
-  branches on the FIELD. The pattern matches nowhere else in `_work/**` today
-  outside `gh.tl` itself.
-- `grep -c "permission refusal, not the diff" _work/gh.tl` prints `1`.
-- `grep -c "REFUSED (403" _work/gh.tl` prints `1`.
-- `grep -rn "gh\.merge\b" --include=*.tl . --exclude-dir=o | grep -v _test` prints
-  exactly `./_work/gitland.tl:...` (still the one caller — unchanged count).
-- `grep -c "gh\.is_merged\|gh\.refusal" _work/gitland.tl` prints `2`.
-
-## Enablement
-
-none needed. Every countermeasure this slice wants is already a gate:
-`--check lint` enforces the 500-line cap that decided the placement above
-(now trivially satisfied — `gh.tl` stays well under 500 even after growing by
-~25 lines), the `fallible-returns` lint refuses a third return slot on the
-widened `merge` signature, `--check types` fails on any unused import or a
-`Result` field typo, and CI's loopback-only network namespace fails loudly if
-the new test reaches for a token. The one wrong turn no gate catches — reviving
-the old separate-module design after the headroom pressure that motivated it
-is gone — is answered by the measured headroom fact above and the explicit
-placement decision in `Change`.

@@ -1,5 +1,6 @@
 title: land's merge failures are indistinguishable: a 403 permission refusal needs its own branch
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1265
 resolution: completed
+touches: _work/github.tl _work/implementer.tl _work/gh.tl _work/gitland.tl _work/gitverbs.tl _work/gitboard.tl _work/gitgate.tl _work/merge.tl _work/gh_test.tl
