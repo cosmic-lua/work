@@ -10,26 +10,32 @@
 --- the context and picks the PR shape between `REVIEW` and
 --- `REVIEW_SCRIPT`, this module only holds the templates' text.
 ---
---- `REVIEW`'s "what you're reviewing" section is `{{.reviewing}}` and
---- its "how to review" through the verdict lines is `{{.posture}}`, each
---- rendered on its own from one of two sub-templates and spliced in
---- as data, the way `ROUND` is. `REVIEWING_DIFF` and `POSTURE_DIFF` are
---- a diff handover's: a product commit range the reviewer reads in a
---- checkout, the adversarial list over that diff, the mutation step run
---- from the reviewer's own worktree, and verdict lines carrying
---- `--repo-dir`. `REVIEWING_RESEARCH` and `POSTURE_RESEARCH` are a
---- research handover's, whose commit is board state: the message body
+--- Every sentence of `REVIEW` whose shape depends on the deliverable is
+--- spliced in from one of two sub-templates, rendered on its own as
+--- data the way `ROUND` is: the opening line is `{{.opening}}`, the
+--- "what you're reviewing" section is `{{.reviewing}}`, and "how to
+--- review" through the verdict lines, the `done` line after them and
+--- the final report's own ask is `{{.posture}}`. `OPENING_DIFF`,
+--- `REVIEWING_DIFF` and `POSTURE_DIFF` are a diff handover's: a code
+--- reviewer, a product commit range read in a checkout, the adversarial
+--- list over that diff, the mutation step run from the reviewer's own
+--- worktree, verdict lines carrying `--repo-dir`, a landing the caller
+--- records with `done --landed`, and a report naming the mutation run.
+--- `OPENING_RESEARCH`, `REVIEWING_RESEARCH` and `POSTURE_RESEARCH` are
+--- a research handover's, whose commit is board state: the message body
 --- of `{{.head_sha}}` on the item's own ref IS the findings, carried
 --- verbatim in `{{.findings}}` beside the spec they answer, and what a
 --- findings review checks is that each measured claim names its command
---- and that command reproduces at the commit the findings describe,
---- that the recommendation follows from the measurements and not past
---- them, that nothing the spec asked to be measured is missing, and
---- that the findings are prospective evidence for the parent chain, not
---- a narrative — no diff to list, no guard to mutate, no worktree, and
---- verdict lines naming no `--repo-dir`. Which pair a review takes
---- follows from the item's deliverable (`_work.brief`), never from
---- anything in this text.
+--- and that command reproduces at the commit the findings describe —
+--- in a worktree the reviewer adds from `{{.product_root}}`, since a
+--- research review is handed no tree — that the recommendation follows
+--- from the measurements and not past them, that nothing the spec asked
+--- to be measured is missing, and that the findings are prospective
+--- evidence for the parent chain, not a narrative. No diff to list, no
+--- guard to mutate, verdict lines naming no `--repo-dir`, and a `done`
+--- line whose `--landed` is the board commit itself: a research item
+--- lands nothing. Which set a review takes follows from the item's
+--- deliverable (`_work.brief`), never from anything in this text.
 ---
 --- Pure data: template SOURCE, in `cosmic.template`'s grammar.
 --- `_work/brieftmpl_gen.tl` compiles each one into a typed renderer
@@ -57,7 +63,8 @@
 --- resolver cannot place the item's repo.
 ---
 --- `{{.product_root}}` is the reviewer's own local product checkout — where the
---- diff is read and, in `REVIEW_SCRIPT`, the `--repo-dir` the caller passes;
+--- diff is read, in `REVIEW_SCRIPT` the `--repo-dir` the caller passes, and in
+--- `POSTURE_RESEARCH` the checkout a reproduction worktree is added from;
 --- `_work.brief` resolves it from the ITEM's own repository through the
 --- `gitboard.repository` map, so it names the tree the diff's files live
 --- in even when gitboard itself was run from a checkout of another
@@ -93,6 +100,18 @@ verbatim:
 
 Confirm each finding above is closed — repeat its own reproduction —
 then judge the whole diff; what round 1 accepted is settled.
+]]
+
+local OPENING_DIFF < const > = [[
+You are a fresh-context code reviewer for `{{.repo}}`. You have never
+seen this change before — that is deliberate: the review must come
+from a distance from the builder. Everything you need is below.
+]]
+
+local OPENING_RESEARCH < const > = [[
+You are a fresh-context findings reviewer for `{{.repo}}`. You have never
+seen these findings before — that is deliberate: the review must come
+from a distance from the researcher. Everything you need is below.
 ]]
 
 local REVIEWING_DIFF < const > = [[
@@ -187,6 +206,17 @@ substitute of your own, and never bootstrap one yourself.
 {{.gitboard_cmd}} verdict {{.item_id}} reject \
   --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
 ```
+
+Run exactly the one line matching your judgment. The board stores the SHA,
+not review prose. Put concrete gaps in your final report for the caller. An
+accept does not merge or complete the item; after landing, the caller runs
+`{{.gitboard_cmd}} done {{.item_id}} --landed SHA`.
+
+## Final report
+
+The verdict you recorded (or why you could not), the mutation-test
+you ran and its result, and any concrete findings quoted with
+file:line. Keep it factual and concise.
 ]]
 
 local POSTURE_RESEARCH < const > = [[
@@ -203,10 +233,14 @@ findings review checks the findings the way a diff review checks a diff.
 2. Every measured claim names its command, and the command reproduces.
    For each number, count, or behavior the findings assert, the findings
    name the command that produced it and the commit it was measured at;
-   re-run that command against the product tree at that commit — a
-   checkout of your own, never the orchestrator's — and compare. A claim
-   with no command, a command that does not reproduce, or a measurement
-   with no commit named is a finding — quote it.
+   re-run that command at that commit and compare. Reproduction needs a
+   tree and this brief hands you none: make your own with
+   `git worktree add <dir> <commit>` from the product checkout at
+   `{{.product_root}}` — the item's repository, `{{.repo}}`, as the
+   caller's `gitboard.repository` map places it — and run there, never
+   in that checkout itself. A claim with no command, a command that does
+   not reproduce, or a measurement with no commit named is a finding —
+   quote it.
 3. The recommendation follows from the measurements and not past them:
    each step it proposes rests on a measurement above it, and no
    measurement is contradicted or left unaccounted for. A recommendation
@@ -221,9 +255,10 @@ findings review checks the findings the way a diff review checks a diff.
    the researcher did. Judge them against the outcome the parent chain
    exists for, not just the letter of `## Change`.
 
-There is no guard to mutation-test and no product worktree to do it
-from: the deliverable is board state, judged where it lives. The
-checkout that holds the board worktree (`{{.board_dir}}/..`) is the
+There is no guard to mutation-test: the deliverable is board state,
+judged where it lives, and the only product tree you touch is the
+reproduction worktree above.
+The checkout that holds the board worktree (`{{.board_dir}}/..`) is the
 orchestrator's and is stale by construction; never read, grep or build
 in it.
 
@@ -249,13 +284,22 @@ substitute of your own, and never bootstrap one yourself.
 {{.gitboard_cmd}} verdict {{.item_id}} reject \
   --head {{.head_sha}} --session {{.review_session}}
 ```
+
+Run exactly the one line matching your judgment. The board stores the SHA,
+not review prose. Put concrete gaps in your final report for the caller. An
+accept does not merge or complete the item, and a research item lands
+nothing — its deliverable is the board commit itself — so the caller runs
+`{{.gitboard_cmd}} done {{.item_id}} --landed {{.head_sha}}`.
+
+## Final report
+
+The verdict you recorded (or why you could not), each measured claim you
+re-ran and whether it reproduced, and any concrete gaps quoted from the
+findings' own text. Keep it factual and concise.
 ]]
 
 local REVIEW < const > = [[
-You are a fresh-context code reviewer for `{{.repo}}`. You have never
-seen this change before — that is deliberate: the review must come
-from a distance from the builder. Everything you need is below.
-
+{{.opening}}
 ## What you're reviewing
 
 Board item id: `{{.item_id}}` (handle {{.handle}})
@@ -269,17 +313,6 @@ Title: {{.title}}
 
 {{.round_context}}
 {{.posture}}
-Run exactly the one line matching your judgment. The board stores the SHA,
-not review prose. Put concrete gaps in your final report for the caller. An
-accept does not merge or complete the item; after landing, the caller runs
-`{{.gitboard_cmd}} done {{.item_id}} --landed SHA`.
-
-## Final report
-
-The verdict you recorded (or why you could not), the mutation-test
-you ran and its result, and any concrete findings quoted with
-file:line. Keep it factual and concise.
-
 A request-changes verdict names five labeled facts, not a fix: the
 exact reproducer; the smallest permitted correction boundary; the
 tempting unsafe repair, when one is visible; the adjacent invariant
@@ -385,6 +418,8 @@ scope to find one.
 local record brieftext_review
   REVIEW: string
   REVIEW_SCRIPT: string
+  OPENING_DIFF: string
+  OPENING_RESEARCH: string
   REVIEWING_DIFF: string
   REVIEWING_RESEARCH: string
   POSTURE_DIFF: string
@@ -395,6 +430,8 @@ end
 local M: brieftext_review = {
   REVIEW = REVIEW,
   REVIEW_SCRIPT = REVIEW_SCRIPT,
+  OPENING_DIFF = OPENING_DIFF,
+  OPENING_RESEARCH = OPENING_RESEARCH,
   REVIEWING_DIFF = REVIEWING_DIFF,
   REVIEWING_RESEARCH = REVIEWING_RESEARCH,
   POSTURE_DIFF = POSTURE_DIFF,
