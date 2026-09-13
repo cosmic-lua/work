@@ -1,8 +1,15 @@
 #!/usr/bin/env cosmic
---- Isolated semantic mutation checks for the migration proof. Invoke with the
---- pinned runtime and repository root. The direct test tail is generated from
---- current sources, so stale compiled tests cannot disguise a surviving mutant.
---- Every mutant gets its own source copy; the shared checkout is never edited.
+--- Isolated semantic mutation checks for the migration proof. Run with
+--- `bin/cosmic experiments/native/migration_mutations.tl RUNTIME REPOSITORY`.
+--- The direct test tail is generated from current sources, so stale compiled
+--- tests cannot disguise a surviving mutant. Every mutant gets its own source
+--- copy; the shared checkout is never edited.
+---
+--- A campaign, not a test: it copies the tree once per mutant and type-checks
+--- and runs each one, which is minutes of work and a deliberate call rather
+--- than something every gate should pay for. It lives here beside the other
+--- native campaigns instead of under `_work/`, where its load-time `os.exit`
+--- would make it a module no caller could require.
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -52,7 +59,9 @@ local cases: {string: Case} = {
 local function main(...: string): integer
   local args = {...}
   local runtime, root = args[1], args[2]
-  assert(runtime ~= nil and root ~= nil, "usage: migrate6_mutations.tl RUNTIME REPOSITORY")
+  -- assert: a campaign invoked without its two arguments has nothing to check
+  assert(runtime ~= nil and root ~= nil,
+    "usage: migration_mutations.tl RUNTIME REPOSITORY")
   local scratch = assert(fs.temp_dir(fs.join(env.get("TEST_TMPDIR") or "/tmp", "migrate6-mutants-XXXXXX")))
   local results: {string: string} = {}
   local names: {string} = {}
@@ -91,4 +100,4 @@ local function main(...: string): integer
   assert(fs.remove_all(scratch))
   return 0
 end
-os.exit(main(...))
+os.exit(main(...)) -- exits: a campaign script is a process boundary with no caller

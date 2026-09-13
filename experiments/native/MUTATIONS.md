@@ -13,7 +13,7 @@ use the published follow-up checkpoint without source overlays.
 | Bounded workload policy | 3/3 | [Literal results](bounded-results.literal) | [Provenance](bounded-provenance.literal) |
 
 The separate migration campaign reports 12 kills through
-[`_work/migrate6_mutations.tl`](../../_work/migrate6_mutations.tl); those are not
+[`migration_mutations.tl`](migration_mutations.tl); those are not
 included in the 12+3 counts above.
 
 ## Method and scope

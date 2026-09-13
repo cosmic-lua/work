@@ -24,7 +24,7 @@ that review, not a substitute for the board record.
 | Ordinary writes, durable drafts, shell and connector publication | `statewrite`, `statestaging`, `statepublish*` | `statewrite_test`, `statepublish_cli_test` |
 | Claims, current authority, worktree receipts | `stateclaim*`, `preparation_receipt` | `stateclaim_test`, `stateclaim_cli_test` |
 | Research result identity and item attribution | `stateevidence`, `gittake`, `gitverdict` | `stateinit_test` |
-| Legacy replay, resumable checkpoints, guarded activation | `migrate6*` | `migrate6_test`, `migrate6_mutations` |
+| Legacy replay, resumable checkpoints, guarded activation | `migrate6*` | `migrate6_test`, `migrate6_logs_test` |
 
 All module names above are under `_work/`. New structured records are encoded
 with `cosmic.literal`. Item metadata and spec sections retain the canonical
