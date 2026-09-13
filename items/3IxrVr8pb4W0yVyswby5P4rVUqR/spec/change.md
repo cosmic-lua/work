@@ -1,21 +1,3 @@
-## Evidence
-
-The work board's costliest failures this pass were positional specs:
-a function named in the wrong file («lWFs_gdRS», ~10 min), line
-numbers drifted by ~75 lines («qPiX_DdxS»), a path that did not exist
-(«eoMl_RZUo», ~20 min), and every sweep item (cast classes, the 136
-nil-returns of «aWLs_pwIQ») built by a builder reading N sites by
-hand. `gitboard help bar` demands a measured fact with the command
-that produced it; today that command is `grep -n`, which cannot see
-structure. `cosmic.ast.node` + `parse` landed (cosmic#1758); walk and
-spans («gDNw_5bFk») are in build; the matcher («omzs_ww5P») defines a
-library API only (`match(pattern, node)`, `desugar`) — no CLI.
-
-`wc -l cmd/cosmic/main.tl` → 499 (a dispatch line does not fit until
-«SmAQinD», its extraction item, lands); `_cli/args.tl` → 164.
-
-## Change
-
 Ready when: `bin/gitboard show omzs_ww5P | grep '^resolution:'` prints
 `resolution: completed` AND `bin/gitboard show SmAQinD | grep '^resolution:'` prints
 `resolution: completed` (then `wc -l cmd/cosmic/main.tl` on main is ≤ 470).
@@ -58,9 +40,3 @@ first workflow consumer of the matcher.
   spec's two-of-three fixture prints `find: 2 hit(s) in 3 file(s)`.
 - `sys/help.md` (the `--help` text): one line for the flag;
   `docs/guides/` gets nothing until `--rewrite` lands.
-
-## Non-goals
-
-No rewriting, no type-filtered matching, no JSON output — the verdict
-line and file:line:col are the contract; everything else is
-«5ass_BX1Y»'s.
