@@ -34,6 +34,10 @@ The experimental transport is implemented in Teal and embedded in the gitboard
 binary. See [the single-head guide](experiments/single-head/README.md) for
 setup, frozen publication plans, confirmation, and validation results.
 
+Both transports are planned to be replaced by one branch whose tree is the
+board — `refs/heads/state`, format 6 — designed in
+[`docs/design/storage.md`](docs/design/storage.md).
+
 `_work/index.tl` and `_work/find.tl` define a DERIVED SQLite schema
 over the loaded items — the read model every verb reads, rebuilt from
 git on a digest mismatch and patched by every save (`docs/design/read.md`),
