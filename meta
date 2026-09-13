@@ -1,6 +1,7 @@
 title: gitboard: verdict kinds are guessable-wrong toward reject — no kind list in the error, no aliases, no confirm on the harsh path
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1411
 resolution: completed
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+touches: _work/gitverdict.tl _work/gitverdict_test.tl
