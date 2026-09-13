@@ -1,0 +1,2 @@
+- No change to what the definitions checks assert.
+- No ftrace filtering in the runtime.
