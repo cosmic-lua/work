@@ -56,6 +56,19 @@ local CSPEC: flags.CommandSpec = {
           {long = "remote", arg = "NAME",
             help = "select and bind begin to this canonical remote"},
           {long = "print-id", help = "for begin, print only the id for command substitution"}}}},
+    {name = "migrate", summary = "prepare the one-hop board format migration",
+      spec = {summary = "prepare one atomic format-4 to format-5 cutover. Every "
+        .. "item ref advances: its one `spec.md` becomes the `spec/` subtree "
+        .. "(`change.md`, `non-goals.md`), the paths its Change names and the "
+        .. "repositories its Access section names become the declared "
+        .. "`touches` and `access` fields, and every other section rides the "
+        .. "migration commit's body. Remote boards print exact leased push/fetch "
+        .. "instructions by default. --execute runs those ordinary Git commands "
+        .. "with caller-owned authentication.",
+        flags = {dir_flag(),
+          {long = "remote", arg = "NAME",
+            help = "Git remote named in rendered/executed instructions"},
+          {long = "execute", help = "run the rendered push and confirmation fetch"}}}},
     {name = "claim", summary = "prepare one all-or-nothing two-hour claim batch",
       spec = {usage = "ID... [options]",
         summary = "prepare one atomic, all-or-nothing two-hour claim set.\n\n"

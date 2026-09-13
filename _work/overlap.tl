@@ -452,6 +452,7 @@ end
 
 local record overlap
   type Collision = Collision
+  raw_paths_named: function(spec_text: string): {string}
   paths_named: function(spec_text: string): {string}
   collisions: function(id: string, bodies: {string: string}): {Collision}
   lines: function(id: string, bodies: {string: string}): {string}
@@ -462,6 +463,7 @@ local record overlap
 end
 
 local M: overlap = {
+  raw_paths_named = raw_paths_named,
   paths_named = paths_named,
   collisions = collisions,
   lines = lines,
