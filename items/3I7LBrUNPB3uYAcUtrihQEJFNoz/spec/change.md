@@ -1,15 +1,3 @@
-## Goal
-
-G2, requirements R1 and R3: `apply` never returns success while
-enforcing less than requested without saying, per section, what was
-degraded or skipped and why — and the options surface cannot construct
-a kernel EINVAL. Fixes the epic's defect 4 (a 5.13–6.1 kernel strips
-TRUNCATE/REFER and `apply` still answers as if enforcement were full)
-and its footgun (a truthy `{fs = false, sys = false}` from `best_effort`
-when NOTHING was enforced, so `if sandbox.apply(p) then` lies).
-
-## Change
-
 Public-surface rework of `cosmic.sandbox` (`init.tl`, measured 335
 lines: `wc -l cosmic/sandbox/init.tl`) and `cosmic.sandbox.landlock`
 (measured 305 lines: `wc -l cosmic/sandbox/landlock.tl`), with the
@@ -174,19 +162,3 @@ semantics recorded as a decision record (R8). Both stay far under the
    (`grep -rn "require(\"cosmic\.sandbox\")" --include="*.tl"` lists
    exactly the files above plus `cosmic/sandbox/init.tl`,
    `init_test.tl` and `init_example.tl` themselves).
-
-## Non-goals
-
-- no new enforcement capability: `net` is the R7 slice, gated on the
-  cosmopolitan pin; this slice only makes the report able to carry it.
-- no change to `landlock.RestrictOptions`, the WRITE/READ masks, or any
-  denial — weakening a denial to improve a report is the exact failure
-  this epic forbids.
-- no change to `fence()`'s policy: an unenforceable host still runs the
-  recipe, still unfenced, still only warning when `COSMIC_FENCE` is
-  explicitly set. `allow_unenforced` and the broadened warning condition
-  in item 8 change what `fence()` can now tell apart (full vs. degraded
-  vs. skipped) and what type it reads, never whether it proceeds.
-- no changes to `cosmic.quicksand` — its `sandbox.apply` calls in
-  `box/run.tl` and the comment in `box/init.tl` are re-confirmed
-  unaffected in item 8, not merely carried forward from the prior pass.
