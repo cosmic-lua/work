@@ -1,3 +1,4 @@
 title: brief review: refuse when --gitboard-command is absent instead of emitting an unresolved placeholder the reviewer is told not to resolve
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/brief_gitboard_cmd_test.tl
