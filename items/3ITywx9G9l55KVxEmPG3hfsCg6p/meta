@@ -1,6 +1,7 @@
 title: cosmic/teal_narrowing_test.tl is 15 lines under the cap with the narrow-* patch queue still behind it
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1448
 resolution: completed
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
+touches: cosmic/teal_nilflow_test.tl
