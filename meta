@@ -1,5 +1,6 @@
 title: G1: stand up the agent-eval instrument
 parent: 3HyRdGk0liOSXEXjHRReYYEUxdi
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1263
 resolution: completed
+touches: _eval/score.tl _perf/baseline.tl _eval/stage.tl _eval/bundle.tl _eval/suite.tl _eval/bundle_test.tl
