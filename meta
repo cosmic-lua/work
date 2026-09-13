@@ -1,6 +1,7 @@
 title: test runner decision record: discovery by name, a generated tail, all-or-nothing dispatch
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1404
 resolution: completed
 builders: 6cc6e54c-fe11-50d2-a398-c1a870c6bc57
+touches: docs/decisions/d29-tests-run-because-defined.md cosmic/test.tl docs/decisions/README.md
