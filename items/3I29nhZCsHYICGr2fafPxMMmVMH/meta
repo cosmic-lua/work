@@ -1,4 +1,5 @@
 title: concurrent --make in one tree yields a payload-less o/bin/cosmic that exits 0 as bare Lua
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 builders: orch9-9-PxMM
+touches: _make/artifact.tl _make/artifact_test.tl
