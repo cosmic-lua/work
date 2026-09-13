@@ -31,6 +31,7 @@ end
 
 local enum RefreshState
   "confirmed"
+  "historical"
   "pending"
   "lost-race"
 end
@@ -304,7 +305,8 @@ end
 --- outside expected/next is a lost race; verified nonzero conflicts
 --- quarantine the receipt for diagnosis. Missing observations remain
 --- staged. This function performs no fetch or publication retry.
-local function refresh(root: string, remote?: string): {RefreshResult} | nil, string
+local function refresh(root: string, remote?: string,
+    confirmation_receipts?: {string: boolean}): {RefreshResult} | nil, string
   local pending, err = list(root)
   if pending == nil then
     return nil, err
@@ -340,8 +342,17 @@ local function refresh(root: string, remote?: string): {RefreshResult} | nil, st
         end
       end
     end
+    if confirmation_receipts ~= nil then
+      if confirmation_receipts[tx.manifest] and state ~= "confirmed" then
+        state = "historical"
+        detail = "publication receipt confirmed; current logical refs have advanced"
+      elseif state == "confirmed" and not confirmation_receipts[tx.manifest] then
+        state = "pending"
+        detail = "logical tips match, but the current envelope has no transaction receipt"
+      end
+    end
     local quarantine_ref = ""
-    if state == "confirmed" then
+    if state == "confirmed" or state == "historical" then
       local cleaned, cerr = remove(root, tx)
       if not cleaned then
         return nil, cerr
@@ -398,7 +409,8 @@ local record prepared
   push_argv: function(tx: Transaction, remote?: string): {string}
   fetch_argv: function(remote?: string): {string}
   execute: function(root: string, argv: {string}): boolean, string
-  refresh: function(root: string, remote?: string): {RefreshResult} | nil, string
+  refresh: function(root: string, remote?: string,
+  confirmation_receipts?: {string: boolean}): {RefreshResult} | nil, string
   promote_local: function(root: string, tx: Transaction): boolean, string
 end
 

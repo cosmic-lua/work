@@ -27,6 +27,8 @@ local gitspec = require("_work.gitspec")
 local transport = require("_work.gittransport")
 local gittake = require("_work.gittake")
 local gitworktree = require("_work.gitworktree")
+local singlehead = require("_work.gitsinglehead")
+local singleconfig = require("_work.gitsinglehead_config")
 local publish = require("_work.publish")
 local rank = require("_work.gitrank")
 local refs = require("_work.refs")
@@ -36,7 +38,6 @@ local tail = require("_work.tail")
 local vrd = require("_work.gitverdict")
 local show = require("_work.gitshow")
 local view = require("_work.gitview")
-
 --- Commands that may still use the board sequence for global ordering.
 --- as `LOST_RACE` by the push itself (`_work.publish.publish`, which
 --- re-syncs on rejection), costing a round trip only when a race
@@ -152,13 +153,19 @@ local function main(...: string): integer
     return claimcli.cmd_session(d.parsed.args[1] or "")
   end
   if d.command == "init" then
+    local blocked = singleconfig.command_guard(d.parsed.values["dir"] or ".", "init")
+    if blocked ~= "" then return gate.verdict_line("init", false, "REFUSED: " .. blocked) end
     return gitinit.cmd_init(d.parsed.values["dir"] or ".",
       d.parsed.switches["remote"] or false,
       d.parsed.switches["local"] or false,
       d.parsed.values["remote-name"] or "")
   end
   local dir = d.parsed.values["dir"] or "."
+  if d.command == "single-head" then return singlehead.cmd_single_head(dir,
+      d.parsed.args, d.parsed.values, d.parsed.switches) end
   local explicit_remote = d.parsed.values["remote"] or ""
+  local blocked = singleconfig.command_guard(dir, d.command, explicit_remote)
+  if blocked ~= "" then return gate.verdict_line(d.command, false, "REFUSED: " .. blocked) end
   if explicit_remote ~= "" then
     local selected, selerr = refs.use_remote(dir, explicit_remote)
     if not selected then return gate.verdict_line(d.command or "gitboard", false,
@@ -173,6 +180,9 @@ local function main(...: string): integer
     d.parsed.values["draft"])
   if selected_draft == nil then
     return gate.verdict_line(d.command, false, "REFUSED: " .. draft_err)
+  end
+  if singleconfig.mutation_needs_draft(dir, d.command, selected_draft, d.parsed.values["add"] ~= nil) then
+    return gate.verdict_line(d.command, false, "REFUSED: item mutations on the experimental single-head backend require a remote-mode draft; run `gitboard draft begin` and pass --draft")
   end
   local s, serr = store.open(dir)
   if s == nil then
