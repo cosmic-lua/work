@@ -1,3 +1,4 @@
 title: events_test: cover a PR reused non-adjacently — the pr_rounds partition mutation passes every shipped test
 parent: 3IvL43g9uecot2ZqvAKN4a1JeMO
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/events_test.tl
