@@ -1,5 +1,6 @@
 title: coverage baseline for cosmic/fs/octal.tl disagrees with a clean-clone measurement (2/2 vs 2/4)
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1266
 resolution: completed
+touches: _tool/coverage/report.tl cosmic/script_test.tl cosmic/fs/octal.tl _tool/coverage/report_test.tl /zip/cosmic/fs.lua cosmic/fs/init.tl cosmic/fs.tl
