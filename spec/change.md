@@ -1,7 +1,3 @@
-# migrate: rewrite every ref to format 5 in one atomic push
-
-## Change
-
 Two halves, landing in this order: the CODE (this module, its verb, its
 tests) merges to cosmic-lua/work first, on the current pin — a format-4 board is
 still readable by the build every session runs today; then `04-release-and-pin`
@@ -205,31 +201,3 @@ the body under its own heading, the commit's author date equal to the run's
 `now` rather than any date inside the content, the marker at `5`, and a second
 `migrate` reporting already-current. One case asserts the transaction is a
 single `prepared.prepare` over every ref plus the marker.
-
-## Non-goals
-
-- `depends_on` is not populated from prose, for any item. See step 4.
-- No item's `## Acceptance` content is preserved in the tree, and no attempt is
-  made to turn one into a test. D47 settles that: done is the repo's gate
-  passing, and the text stays in history.
-- Nothing is backdated. Every migration commit carries the run's own date.
-- No lazy or partial migration, and no second pass. One transaction, one push;
-  a rejected push is re-prepared against the refreshed tips, never applied
-  halfway.
-- The migration module is NOT retired here — `06-retire` removes it, the same
-  way `3423bac6` removed its predecessor in its own change.
-- Nothing reads the migration commit bodies back. `gitboard log` exists now
-  (`grep -n 'name = "log"' _work/gitcommands.tl`) but renders an item's own
-  note entries, not arbitrary commit bodies, and this item does not extend it:
-  the bodies are `git log` output, and a renderer for them is unbuilt work this
-  chain does not cover.
-
-
-## Access
-
-- cosmic-lua/cosmic — `docs/decisions/d47-spec-declares-intent-only.md`, whose
-  rejected alternatives fix three choices this makes (no backdating, no lazy
-  per-item migration, no `notes` hatch for the tail), and
-  `docs/decisions/d48-dependency-is-its-own-relation.md` for why `depends_on` is
-  left empty. This section is the pre-migration spelling of the `access` field;
-  the run this item delivers is what turns it into one.
