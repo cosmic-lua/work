@@ -1,5 +1,3 @@
-## Change
-
 `gitboard new`'s usage says `TITLE [options]`, and a title that begins with a dash is
 refused as an unknown option — the parser (`cosmic.flags`, the pinned cosmic's) stops
 at `--` but nothing on gitboard's side says so. Reproduced 2026-09-05 against a
@@ -29,8 +27,3 @@ gitboard's is its own usage line and the `new` help page.
    sentence.
 3. The `skills/work/SKILL.md` bootstrap in cosmic-lua/cosmic is NOT edited: the
    doctrine ships with the tool, and this is the tool's page.
-
-## Non-goals
-
-Changing the parser or its message (cosmic's item). Any other verb's usage: `spec ID
-FILE`, `attach ID PARENT` take ids and paths, which never begin with a dash.

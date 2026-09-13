@@ -1,4 +1,5 @@
 title: gitboard new: usage and help say a title beginning with a dash goes after --
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
-target: cosmic-lua/work
+repo: cosmic-lua/work
 resolution: not-planned
+touches: _work/doctrine.tl _work/gitboard_test.tl skills/work/SKILL.md
