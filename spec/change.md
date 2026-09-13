@@ -1,5 +1,3 @@
-## Change
-
 The policy half of parent 3IHDCJ3o: an open lane-repair item (an
 item whose `lane` field is non-empty — the field and the minting
 land in the blocking sibling) is the motion that cannot wait, and
@@ -26,12 +24,3 @@ measure these against the tree at pull time, after it lands:
    repair-over-pull ordering, repair admitted at the bound, merge
    still ahead of repair, and the lanes row render (present and
    absent file). Mutation-check each new guard before pushing.
-
-## Non-goals
-
-No expedite field, no class-of-service marker (parent's Direction
-point 4): the `lane` field identifies WHAT the item is, and the
-ordering consequence lives in action.tl's rules, not in a rank any
-session can set. No observation/minting changes — that is the
-sibling. Verdict lines, refusal texts, commit subjects, `flow
-item=` grammars untouched (`_work/flowstats_test.tl`).
