@@ -99,6 +99,8 @@ local function test_declared_fields_are_the_templates_own_tokens()
     decompose = fields.decompose,
     review = fields.review,
     review_script = fields.review_script,
+    reviewing_diff = fields.reviewing_diff,
+    reviewing_research = fields.reviewing_research,
     round = fields.round,
   }
   for _, u in ipairs(source.UNITS) do
@@ -233,6 +235,39 @@ local function test_the_rework_section_reports_no_survivors_of_its_own()
   assert(body:find("<BRANCH>", 1, true) ~= nil, "spliced in verbatim")
   assert(#left == 0,
     "but the builder brief reports only its OWN fields: " .. table.concat(left, " "))
+end
+
+-- The full review's "what you're reviewing" section follows the
+-- deliverable: `findings` nil is a diff — the product commit range, the
+-- text it always carried — and `findings` set is research: that text
+-- verbatim under its own wording, the diff wording gone. The section is
+-- spliced with the review's own tracker, so a head the board could not
+-- answer is reported once, not once per splice.
+local function test_the_review_section_follows_the_deliverable()
+  local f = full_facts()
+  local diff_body, dleft = briefcontext.review(f, full_commands())
+  assert(#dleft == 0, "a diff review answers everything: " .. table.concat(dleft, " "))
+  assert(diff_body:find("The caller has made this exact commit available in your local checkout.\n"
+      .. "Review `fedcba9876543210..0123456789abcdef`;", 1, true) ~= nil, diff_body)
+  assert(diff_body:find("## The spec this PR is supposed to satisfy (verbatim)\n\n---\n"
+      .. "## Change\n\nDo the thing.\n\n---", 1, true) ~= nil, diff_body)
+  assert(diff_body:find("This is a research handover", 1, true) == nil, diff_body)
+  f.findings = "The probe held: three of four."
+  local research_body, rleft = briefcontext.review(f, full_commands())
+  assert(#rleft == 0, "a research review answers everything: " .. table.concat(rleft, " "))
+  assert(research_body:find("This is a research handover", 1, true) ~= nil, research_body)
+  assert(research_body:find("the body of `0123456789abcdef`)\n\n---\n"
+      .. "The probe held: three of four.\n---\n\n"
+      .. "## The spec these findings are supposed to answer (verbatim)\n\n---\n"
+      .. "## Change\n\nDo the thing.\n\n---", 1, true) ~= nil, research_body)
+  assert(research_body:find("the clone at\n`/src/work/o/board`", 1, true) ~= nil, research_body)
+  assert(research_body:find("The caller has made this exact commit", 1, true) == nil
+    and research_body:find("Review `fedcba", 1, true) == nil, research_body)
+  f.head_sha = nil
+  local _body, hleft = briefcontext.review(f, full_commands())
+  assert(table.concat(hleft, " ") == "<HEAD_SHA>",
+    "the spliced section's head is the review's own survivor, once: "
+    .. table.concat(hleft, " "))
 end
 
 -- The round-context section renders from the same typed path as every

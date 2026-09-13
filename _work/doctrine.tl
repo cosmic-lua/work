@@ -284,13 +284,15 @@ stuck item's dependency (`depend <STUCK> <NEW>`), then drops the claim:
 the stuck item is not pullable until that dependency resolves, and its
 `done` frees it with no further verb (`help depends`).
 Rejection is cheap by design; wrong work merged is expensive.
-Research agents return recommendations; the caller applies them in the product
-repository and hands over its exact commit through `take ID --head SHA`.
-That commit must descend from the claim's product base. A result digest or
-unrelated board item-ref commit is not a substitute. If no applying product
-commit exists, no review brief is available: stop for caller preparation.
-Research uses ordinary exact-head review; no result-only review template
-or additional agent board-read instructions are emitted.
+Research agents return recommendations. Applied in the product repository,
+the applying commit is handed over through `take ID --head SHA` and judged
+like any diff; recorded as board state, the findings are a `log ID --add
+FILE` entry on the item's own ref and `take ID --result` hands that commit
+over. A review judges a commit either way — which repository it lives in
+follows from the deliverable — and a research handover's brief carries the
+commit's message body verbatim beside the spec it answers. A legacy spec
+digest in `result` is not a commit and earns no brief until the next
+handover re-types it.
 
 When a container's last child ends, verify the container's stated
 outcome actually holds — run its observable test, not the

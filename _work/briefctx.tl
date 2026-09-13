@@ -76,13 +76,15 @@ local record briefctx
   end
 
   --- `_work.brieftext_review`'s `REVIEW`: the full adversarial review.
+  --- `reviewing` is its "what you're reviewing" section, rendered from
+  --- `ReviewingDiff` or `ReviewingResearch` below and spliced in.
   record Review
     repo: string
     item_id: string
     handle: string
     title: string
     change_source: string
-    claim_base: string
+    reviewing: string
     head_sha: string
     spec: string
     round_context: string
@@ -109,6 +111,22 @@ local record briefctx
     review_session: string
     bootstrap_phrase: string
     gitboard_cmd: string
+  end
+
+  --- `_work.brieftext_review`'s `REVIEWING_DIFF`: a diff handover's
+  --- "what you're reviewing" section — the product commit range.
+  record ReviewingDiff
+    claim_base: string
+    head_sha: string
+  end
+
+  --- `_work.brieftext_review`'s `REVIEWING_RESEARCH`: a research
+  --- handover's "what you're reviewing" section — the board commit
+  --- and the findings its message body carries.
+  record ReviewingResearch
+    board_dir: string
+    head_sha: string
+    findings: string
   end
 
   --- `_work.brieftext_review`'s `ROUND`: a later review round's own

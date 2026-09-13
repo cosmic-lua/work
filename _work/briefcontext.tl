@@ -41,6 +41,8 @@ local tmpl_refine = require("_work.brieftmpl.refine")
 local tmpl_research = require("_work.brieftmpl.research")
 local tmpl_review = require("_work.brieftmpl.review")
 local tmpl_review_script = require("_work.brieftmpl.review_script")
+local tmpl_reviewing_diff = require("_work.brieftmpl.reviewing_diff")
+local tmpl_reviewing_research = require("_work.brieftmpl.reviewing_research")
 local tmpl_rework = require("_work.brieftmpl.rework")
 
 --- The caller-fill tokens one brief could not resolve, as a set. Kept
@@ -54,7 +56,11 @@ end
 --- Every board fact a brief can carry, resolved once by `_work.brief`
 --- and shared by the kinds that declare each one. A field typed
 --- `string | nil` is one the board may be unable to answer; a plain
---- `string` is always resolved, "" included.
+--- `string` is always resolved, "" included. `findings` is the one
+--- exception to that reading: nil means the review's deliverable is a
+--- diff, not that the board could not answer — a research handover's
+--- findings are the message body of `head_sha` on the board, and a
+--- review carrying them takes the research wording.
 local record Facts
   repo: string | nil
   worktree: string | nil
@@ -62,6 +68,7 @@ local record Facts
   bounce_context: string | nil
   product_root: string | nil
   head_sha: string | nil
+  findings: string | nil
   preparation: string
   board_dir: string
   item_id: string
@@ -203,6 +210,28 @@ local function decompose(f: Facts): string, {string}
   return tmpl_decompose.render(d), survivors(fields.decompose, tr)
 end
 
+--- The "what you're reviewing" section a full review splices in: the
+--- research wording when `f.findings` is set, the diff wording
+--- otherwise. Rendered with the review's own tracker, since
+--- `<HEAD_SHA>` is a field the review template declares too.
+--- @param tr Tracker The review's survivor set
+--- @param f Facts The board's resolved facts
+--- @return string The rendered section
+local function reviewing(tr: Tracker, f: Facts): string
+  local head_sha = need(tr, "<HEAD_SHA>", f.head_sha)
+  if f.findings ~= nil then
+    return tmpl_reviewing_research.render({
+        board_dir = f.board_dir,
+        head_sha = head_sha,
+        findings = f.findings,
+      })
+  end
+  return tmpl_reviewing_diff.render({
+      claim_base = f.claim_base,
+      head_sha = head_sha,
+    })
+end
+
 --- @param f Facts The board's resolved facts
 --- @param cmds briefcommands.Commands The item's repo-mechanics commands
 --- @return string The rendered full review brief
@@ -215,7 +244,7 @@ local function review(f: Facts, cmds: briefcommands.Commands): string, {string}
     handle = f.handle,
     title = f.title,
     change_source = f.change_source,
-    claim_base = f.claim_base,
+    reviewing = reviewing(tr, f),
     head_sha = need(tr, "<HEAD_SHA>", f.head_sha),
     spec = f.spec,
     round_context = f.round_context,

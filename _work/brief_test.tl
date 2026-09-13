@@ -383,16 +383,17 @@ local function test_refine_brief_carries_the_current_spec_as_base()
   assert(rout:find("cd " .. PRODUCT_ROOT .. "\n", 1, true) ~= nil,
     "refine: PRODUCT_ROOT fills from GITBOARD_DIR: " .. rout)
 end
--- Legacy research metadata is readable, but only an exact head earns review.
-local function test_review_brief_refuses_a_result_only_handover()
+-- A legacy spec digest in `result` names no board commit, so it earns
+-- no review until the next `take --result` re-types it.
+local function test_review_brief_refuses_a_legacy_digest_result()
   local s = init_state_repo("brief-research-review")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
   research_handover(s, leaf)
   local code, out = brief_and_capture(s, "review", leaf)
-  assert(code ~= 0, "a result-only handover cannot earn review")
-  assert(out:find("has a legacy research result but no commit handover", 1, true) ~= nil, out)
-  assert(out:find("take " .. leaf:sub(1, 8) .. " --head SHA", 1, true) ~= nil, out)
+  assert(code ~= 0, "a digest names no commit, so it cannot earn review")
+  assert(out:find("is not a board commit — a legacy spec digest", 1, true) ~= nil, out)
+  assert(out:find("take " .. leaf:sub(1, 8) .. " --result", 1, true) ~= nil, out)
 end
 
 --- `s` with every run of whitespace collapsed to one space, so a

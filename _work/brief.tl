@@ -1,9 +1,11 @@
 --- `brief`: emit the prompt a subagent runs one role from — builder,
 --- research, review, refine, decompose — with every placeholder the board
 --- can answer already filled: id, handle, title, spec sidecar verbatim,
---- repo/base/item branch, the exact product commit, this checkout's own
---- path. Templates are `_work.brieftext` and `_work.brieftext_review`;
---- `review` picks between full and mechanical exact-head reviews.
+--- repo/base/item branch, the exact handed-over commit, this checkout's
+--- own path. Templates are `_work.brieftext` and `_work.brieftext_review`;
+--- `review` picks between full and mechanical reviews of a product
+--- commit, and the full review with the findings of a board commit
+--- for a research handover.
 --- Each template is compiled at build time into a typed renderer
 --- (`_work.brieftmpl`, from `_work/brieftmpl_gen.tl`) over a
 --- `_work.briefctx` record, so every field a template names is checked
@@ -37,6 +39,7 @@ local claimbatch = require("_work.claimbatch")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
+local gitreadlog = require("_work.gitreadlog")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local spec = require("_work.spec")
@@ -102,6 +105,43 @@ local function local_mechanical_diff(s: store.Store, it: item.Item): boolean
     additions, deletions = additions + ai, deletions + di
   end
   return is_mechanical_diff(files, additions, deletions)
+end
+
+--- The findings a research handover hands over: the message body of
+--- the board commit `take ID --result` recorded in `it.result` — the
+--- item's own tip at that moment, which is the `log ID --add FILE`
+--- entry that wrote them. Read through the one reader of commit
+--- messages the store has, so the tool's own trailers are already
+--- stripped. Refused, rather than rendered empty, when `result` names
+--- no commit (a legacy spec-blob digest: `git log` of a blob prints
+--- nothing, of an unknown object fails, and neither yields an entry
+--- with this sha) or a commit whose body carries no prose — a review
+--- with nothing to judge is not a brief.
+--- @param s store.Store The store
+--- @param it item.Item The item under brief, `result` set
+--- @return string | nil The findings
+--- @return string The refusal
+local function research_findings(s: store.Store, it: item.Item): string | nil, string
+  local sha = it.result or ""
+  local id8 = it.id:sub(1, 8)
+  local entries, _herr = gitreadlog.read_history(s.root, {sha})
+  local found: gitreadlog.Entry | nil = nil
+  for _, e in ipairs(entries or {}) do
+    if e.sha == sha then
+      found = e
+    end
+  end
+  if found == nil then
+    return nil, ("%s's research result %s is not a board commit — a legacy "
+      .. "spec digest; hand the research over again with `take %s --result` "
+      .. "to re-type it"):format(id8, sha:sub(1, 12), id8)
+  end
+  if found.body == "" then
+    return nil, ("%s's research handover %s carries no findings in its message "
+      .. "body — record them with `log %s --add FILE`, then hand over again "
+      .. "with `take %s --result`"):format(id8, sha:sub(1, 12), id8, id8)
+  end
+  return found.body, ""
 end
 
 --- Rework context contains only facts the board actually owns: the
@@ -262,24 +302,33 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       ("%s has no spec sidecar — a %s brief carries the spec verbatim, "
         .. "so refine it first"):format(id:sub(1, 8), kind))
   end
-  -- Every review judges an exact product handover, including research.
-  -- Legacy result metadata cannot substitute for or override that commit.
+  -- A review judges a commit. Which repository that commit lives in
+  -- follows from the item's deliverable: a diff hands over a product
+  -- commit (`handover_head`, read in the product checkout), research
+  -- hands over board state (`result`, a commit on the item's own ref
+  -- whose message body is the findings). With both recorded the
+  -- product commit is the handover, as `take --head` itself decides.
   local head_sha = ""
   local mechanical = false
+  local findings: string | nil = nil
   if kind == "review" then
-    if (it.handover_head or "") == "" then
-      if (it.result or "") ~= "" then
-        return gate.verdict_line("brief", false,
-          ("%s has a legacy research result but no commit handover — the caller must "
-            .. "supply the applying product commit with `take %s --head SHA`")
-          :format(id:sub(1, 8), id:sub(1, 8)))
+    if (it.handover_head or "") ~= "" then
+      head_sha = it.handover_head or ""
+      mechanical = local_mechanical_diff(s, it)
+    elseif (it.result or "") ~= "" then
+      -- The full review, selected outright: the mechanical probe runs
+      -- `git diff` in the product checkout, where a board commit would
+      -- make it answer "not mechanical" by accident, not by decision.
+      local body, ferr = research_findings(s, it)
+      if body == nil then
+        return gate.verdict_line("brief", false, ferr)
       end
+      head_sha = it.result or ""
+      findings = body
+    else
       return gate.verdict_line("brief", false,
         ("%s has no handover recorded — `take %s --head SHA` is what "
           .. "a commit review judges"):format(id:sub(1, 8), id:sub(1, 8)))
-    else
-      head_sha = it.handover_head or ""
-      mechanical = local_mechanical_diff(s, it)
     end
     -- A review names a live claim `verdict` will accept — never mints one.
     if (it.claim or "") == "" then
@@ -349,6 +398,9 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   if head_sha ~= "" then
     facts.head_sha = head_sha
+  end
+  if findings ~= nil then
+    facts.findings = findings
   end
   local body: string = ""
   local left: {string} = {}

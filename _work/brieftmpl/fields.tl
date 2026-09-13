@@ -12,6 +12,8 @@ local record brieftmpl_fields
   decompose: {string}
   review: {string}
   review_script: {string}
+  reviewing_diff: {string}
+  reviewing_research: {string}
   round: {string}
 end
 
@@ -69,10 +71,10 @@ local M: brieftmpl_fields = {
     "<HANDLE>",
     "<TITLE>",
     "<CHANGE_SOURCE>",
-    "<CLAIM_BASE>",
-    "<HEAD_SHA>",
+    "<REVIEWING>",
     "<SPEC>",
     "<ROUND_CONTEXT>",
+    "<HEAD_SHA>",
     "<TEST_CMD_PHRASE>",
     "<WORKTREE>",
     "<BOARD_DIR>",
@@ -94,6 +96,15 @@ local M: brieftmpl_fields = {
     "<REVIEW_SESSION>",
     "<BOOTSTRAP_PHRASE>",
     "<GITBOARD_CMD>",
+  },
+  reviewing_diff = {
+    "<CLAIM_BASE>",
+    "<HEAD_SHA>",
+  },
+  reviewing_research = {
+    "<BOARD_DIR>",
+    "<HEAD_SHA>",
+    "<FINDINGS>",
   },
   round = {
     "<ROUND_NUMBER>",
