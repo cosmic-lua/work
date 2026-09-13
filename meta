@@ -1,6 +1,6 @@
 title: spec bar: resolve a spec's paths against the item's repo, not the running checkout
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: 977afee6cfa2ddd90a983c3842954fa6ab893a39
 handover_head: 9705877cd5cf5933b60e8d4cd4738b9a27ae4fd7
 external_url: https://github.com/cosmic-lua/work/pull/136
