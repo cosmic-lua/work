@@ -1,5 +1,3 @@
-## Change
-
 `_work/flowstats.tl`: the G8 flow reader — lead time, rework rate,
 and bounce counts derived from the board's own git log, emitted as
 `key=value` lines in the house grammar.
@@ -48,10 +46,3 @@ settled; this is a report script run as
    FIRST take (time in the queue after a bounce is lead time, that is
    the point of measuring it); an incomplete item contributes
    nothing; summary medians over a three-item set.
-
-## Non-goals
-
-No new gitboard verb, no change to any existing verb or verdict-line
-format, no cost ratchet in this slice (its input is CI billing data
-the board does not hold — a later item), no persistence: the report
-recomputes from the log every run.
