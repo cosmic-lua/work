@@ -1,5 +1,6 @@
 title: the board has no view over whilp/cosmopolitan: cross-repo work (e.g. #265) is invisible once its pointer is buried in a done cosmic item
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1286
 resolution: completed
+touches: _work/item.tl _work/gh.tl _work/gitgate.tl _work/gitland.tl _work/gitverbs.tl _work/gitview.tl _work/item_test.tl _work/gh_test.tl _work/gitverbs_test.tl
