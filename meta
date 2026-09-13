@@ -1,3 +1,6 @@
 title: fetch reuse 1: isolate destination routes and enforce private-network policy
 parent: 3JDCnENOYc2Kke9YHL4MA2JaSeT
-target: cosmic-lua/cosmopolitan@master
+repo: cosmic-lua/cosmopolitan
+base: master
+touches: tool/net/fetchpool.inc tool/lua/test_fetch_pool_route.lua
+access: cosmic-lua/cosmic cosmic-lua/work
