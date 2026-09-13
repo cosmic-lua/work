@@ -1,6 +1,7 @@
 title: cosmic --check types answers from the shipped checker whatever a probe preloads: the third silent form of the tl-patch probe
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1487
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IWkCGVk
+touches: docs/guides/checking.md _make/patch_test.tl _make/patch.tl 3p/tl/tl_patch/ast_cache.tl _cli/main_handlers_test.tl docs/design/nil-flow.md
