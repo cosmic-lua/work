@@ -1,10 +1,10 @@
 title: make: seed o/_types from the fetched cosmos pin before any generator closure compiles
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1656
 verdict: accept
 verdict_head: f6f9afe1595568c9d9711fffaeb150dea9856db4
-verdict_spec: 754f862a6f13861532a85239cc44c875fea3503d1af82c57b739787ecf8c11f1
 resolution: completed
 builders: build-pawY_zI7x-obs1 build-pawY_zI7x-obs2
 speccers: build-pawY_zI7x-obs1
+touches: _make/seed.tl _types/types_gen.tl /zip/.lua/definitions.lua _make/generate.tl /zip/.types _make/seed_test.tl _make/generate_test.tl _build/coldbuild_test.tl bin/cosmic.pin
