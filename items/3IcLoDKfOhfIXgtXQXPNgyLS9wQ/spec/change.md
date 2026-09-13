@@ -1,5 +1,3 @@
-## Change
-
 `cosmic/format/init_test.tl` has no `test_*` functions at all: 425
 lines whose entire body is top-level `assert_format(...)` /
 `assert_format_fails(...)` / `assert_idempotent(...)` calls. It would
@@ -100,34 +98,3 @@ for `*_test.tl` with zero `local function test_` definitions: the only
 hits besides this file are fourteen `_eval/testdata/**` fixtures of 1-2
 lines each, which are deliberate fixture inputs for the eval runner,
 not tests. So this item closes the class.
-
-## Non-goals
-
-No assertion changes: every `assert_format`/`assert_format_fails`/`assert_idempotent`
-call keeps its input, expected output and message byte-identical, and
-the total assertion count must not move. No formatter behaviour
-change, and no change to `cosmic/format/init.tl`, `rules.tl` or
-`types.tl`. No change to `_tool/discover.tl`'s classification rules as
-a way of dodging the question. No renames of `assert_format` or
-`assert_idempotent` in either file, and no reference (silencing or
-otherwise) to `assert_format_fails` in `regressions_test.tl` — it is
-simply absent from that file, matching the precedent that a file
-duplicates only what it calls. No reflow of assertion bodies beyond
-the indent their new enclosing function requires.
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `_tool/discover` classifies both files `runner`, and neither
-  `legacy` nor `empty`.
-- `grep -c 'local function test_' cosmic/format/init_test.tl` → `24`,
-  and the same on `cosmic/format/regressions_test.tl` → `29`.
-- No self-calls: `grep -c '^test_[A-Za-z0-9_]*()$'` → `0` in both.
-- Both files are ≤500 lines (`wc -l`), which `--check lint` also gates.
-- `grep -c 'local function assert_format_fails' cosmic/format/regressions_test.tl`
-  → `0` (it must not be duplicated there).
-- The assertion count is preserved: the sum of
-  `grep -cE '^\s*assert_(format|format_fails|idempotent)\('` across the
-  two files equals the count on `origin/main`'s single file.
-- `bin/cosmic --make test cosmic/format/` passes and reports 53 test
-  functions across the two files.
