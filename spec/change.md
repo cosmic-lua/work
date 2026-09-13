@@ -1,9 +1,3 @@
-Design settled in conversation; **not yet at the spec bar** — the shape below is
-decided, but the sizing is wrong for one PR and several behavioural claims are
-readings rather than measurements. Refine and decompose before pulling.
-
-## Change
-
 Let a cosmic project depend on modules published inside another cosmic artifact,
 resolved and baked in **at build time**. The consuming project's output stays one
 fat binary; nothing is shared at run time.
@@ -143,25 +137,3 @@ Each is plausibly its own item; the order below is roughly the dependency order.
    including diamond detection that names both requirers.
 6. Per-package payload prefixing.
 7. Teaching `fmt`, `lint`, the line cap and coverage to skip staged foreign trees.
-
-## Non-goals
-
-- **No runtime linkage.** A built artifact never opens another artifact's zip. This
-  was considered and dropped: Lua's `package.loaded` is one global table keyed by
-  module name, so two versions of a module cannot coexist in one state without a
-  private per-package registry, and the memory and C-binding-state cost of that
-  buys nothing once the closure is baked in anyway.
-- **No content-addressed store.** A Nix-style store is what makes Nix's dedup work,
-  and it is an install step, a GC-root problem and a missing-directory failure mode
-  on six operating systems. The Nix-shaped half worth having — exact, content-hashed,
-  enumerable pins — is already what `*_pin.tl` and D16 do.
-- **No registry and no ranges.** Packages are named by url and sha256, as pins are.
-- **No solver.**
-- **No stdlib shadowing.** A package can never provide `cosmic.*`.
-
-## Why this is blocked
-
-D10 is *right to break*. A package system converts every stdlib break into a break in
-code the project does not own, discovered in a build the project does not run. Until a
-compatibility commitment bounds D10, this feature is a mechanism for distributing
-future breakage. The blocker item carries that record.
