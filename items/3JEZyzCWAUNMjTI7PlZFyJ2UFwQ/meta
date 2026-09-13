@@ -1,9 +1,11 @@
 title: cosmic.http core: listen, serve one connection at a time with keep-alive, a typed Request/Response over cosmo.http and cosmic.net
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: ddf5f31c17a250d6ae9449a2202105acbee0da63
 verdict: accept
 verdict_head: ddf5f31c17a250d6ae9449a2202105acbee0da63
 landed_head: 10fe9042e111b1b10007fdcde62e835ecfa073d7
 resolution: completed
 builders: db20b9a292094709f7dc3b5fbf57e19b 177e77e71014ac94b6229823672c1e23
+touches: cosmic/http/init.tl cosmic/http/request.tl cosmic/http/response.tl cosmic/http/conn.tl cosmic/http/init_test.tl cosmic/http/init_example.tl
+access: cosmic-lua/cosmopolitan
