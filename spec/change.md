@@ -1,5 +1,3 @@
-## Change
-
 `next` still calls `store.list`, which hydrates every item (1000 on
 the bench fixture, 1049 live) into `item.Item` records through
 `cachequery.items` before `action.next_action` reads one `queue` row
