@@ -2,9 +2,24 @@
 
 ## Change
 
-Depends on `04-release-and-pin`: the pin must already name a build that
-understands format 5, because this rewrite is run by that build and because
-every other clone is unoperable until the marker it writes lands.
+Two halves, landing in this order: the CODE (this module, its verb, its
+tests) merges to cosmic-lua/work first, on the current pin — a format-4 board is
+still readable by the build every session runs today; then `04-release-and-pin`
+pins the release that merge cuts; then the RUN is executed from that freshly
+pinned `bin/gitboard`, in the same sitting. The order is forced by a measured
+refusal: a format-5 build answers the live board with
+`refs/heads/board/format is 4, this tool expects 5 — run `gitboard migrate`
+before reading or writing the board` (release `2026-09-13-44281f4` against
+`o/board`), so pinning before `migrate` exists would leave every clone
+unoperable for a whole item cycle, and pinning a release that carries it
+narrows the window to the minutes between the bump and the push. The item is
+done when the run has landed, not when the code has.
+
+Access to cosmic-lua/cosmic is declared as the `access` field, for
+`docs/decisions/d47-spec-declares-intent-only.md`, whose rejected alternatives
+fix three choices this makes (no backdating, no lazy per-item migration, no
+`notes` hatch for the tail), and `docs/decisions/d48-dependency-is-its-own-relation.md`
+for why `depends_on` is left empty.
 
 One cutover over every ref, then nothing is left in two shapes. The shape to
 copy is the format-3 to format-4 migration, retired in `3423bac6`
@@ -208,15 +223,9 @@ single `prepared.prepare` over every ref plus the marker.
   halfway.
 - The migration module is NOT retired here — `06-retire` removes it, the same
   way `3423bac6` removed its predecessor in its own change.
-- Nothing reads the migration commit bodies back. `gitboard log ID` does not
-  exist (`grep -n 'name = "log"' _work/gitcommands.tl` matches nothing) and this
-  item does not add it: the bodies are `git log` output, and the verb that
-  renders them is unbuilt work this chain does not cover.
+- Nothing reads the migration commit bodies back. `gitboard log` exists now
+  (`grep -n 'name = "log"' _work/gitcommands.tl`) but renders an item's own
+  note entries, not arbitrary commit bodies, and this item does not extend it:
+  the bodies are `git log` output, and a renderer for them is unbuilt work this
+  chain does not cover.
 
-## Access
-
-- cosmic-lua/cosmic — `docs/decisions/d46-spec-declares-intent-only.md`, whose
-  rejected alternatives fix three choices this makes (no backdating, no lazy
-  per-item migration, no `notes` hatch for the tail), and
-  `docs/decisions/d47-dependency-is-its-own-relation.md` for why `depends_on` is
-  left empty.
