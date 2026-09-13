@@ -1,3 +1,5 @@
 title: lua fetch: enable TLS 1.3 now that the client links Mbed TLS 3.6
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: third_party/mbedtls3/include/mbedtls/ssl.h
+access: cosmic-lua/cosmic
