@@ -2,3 +2,5 @@ title: verdict and done: accept a research handover's board commit as the judged
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
 claim_batch: 1b3b96c1acb177ede034ce072f0d49eb052e6cb9
+handover_head: 640e696d327da42c7b4cdbe677dc85768849812a
+builders: 0062a25fe48ef11a9b2e79bc5b9e379f
