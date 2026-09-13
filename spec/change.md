@@ -1,14 +1,3 @@
-## Goal
-
-G9 — the least thing: `re.gsub` and `re.split` do measurable work
-nobody reads. Parent `3HyRcd9F`. `all_matches` materializes a full
-`{Span}` list — one Span table plus one `text:sub` copy of the matched
-substring per match — and gsub/split then walk that list a second time,
-though split never reads the copy and literal-string gsub never reads
-either the copy or the captures.
-
-## Change
-
 In `cosmic/re.tl` only. Factor the single non-overlapping find loop out
 of `all_matches` into a private helper, and have `gsub` and `split`
 consume it directly instead of building and re-walking a `{Span}` list.
@@ -123,59 +112,3 @@ only lines 362 (gmatch), 424 and 428 (gsub's function-repl path);
 The `compile_for_iter` call and the `if not regex then return nil, cerr
 end` guard at the head of `gsub`/`split` are unchanged; only the body
 after the `all_matches` call is replaced.
-
-## Non-goals
-
-- **The public contract is frozen.** Return shapes (`gsub` →
-  `string | nil, string`; `split` → `{string} | nil, string`),
-  no-match behavior (split yields one field; gsub returns text
-  unchanged), the empty-match rejection, and the `nil`-from-function-repl
-  "keep the match" rule all stay byte-identical. This is the Acceptance
-  equality check's whole subject.
-- **Do not touch `find`, `find_all`, `gmatch`, or `match`.** They keep
-  `all_matches`/their own loop; `gmatch` reads `sp.m`/`sp.caps`, so its
-  Spans are not surplus.
-- **Do not delete `all_matches` or the `Span` record.** `find_all` and
-  `gmatch` still return them, and `Span` is exported (re.tl:441).
-- **No `cosmo.*`/engine change**, no new public function, no signature
-  change on any exported name.
-- **Do not widen the file past the cap.** Keep the change inside the
-  measured headroom rather than reformatting neighbours to make room.
-
-## Acceptance
-
-```
-bin/cosmic --make ci
-bin/cosmic --make test cosmic/re_test.tl
-wc -l cosmic/re.tl
-```
-
-- `bin/cosmic --make ci` ends `ci: PASS` — fmt, check (no new warning
-  from the added closures/casts), example, lint (the one `as integer`
-  cast carries its `-- cast:` justification), coverage.
-- `bin/cosmic --make test cosmic/re_test.tl` passes all 35 `test_*`
-  functions — this is the output-equality gate for the frozen contract
-  (gsub literal + function repl, split with leading/trailing/adjacent
-  matches, engine-error propagation, empty-match rejection).
-- `wc -l cosmic/re.tl` prints a number **≤ 500** (today 473).
-- **Performance — the `optimize` skill's compare gate.** Per
-  `skills/optimize/SKILL.md`: baseline `o/bin/cosmic` before the change,
-  build after, and
-  `bin/cosmic --make run _perf/gate.tl compare BASE.json CUR.json SELFB.json`
-  shows `re_gsub_redact_numbers` and `re_split_colon_list` improved past
-  their noise bars and **no scenario regressed**. The scenarios and
-  their functional `check()`s already exist (`_perf/bench/re_bench.tl`:
-  `re_split_colon_list` at :88, `re_gsub_redact_numbers` at :107); do
-  not weaken either. The hypothesis probed −38% on gsub via a direct
-  `regex:find` loop producing byte-identical output (bare finds = 53µs
-  is the C floor); report the harness figure as this session's
-  measurement, not the probe's.
-
-## Enablement
-
-none needed — the change is contained to one file whose relevant
-functions are cited by line, the loop body to lift is quoted from the
-source, every constraint that must survive is named in Non-goals with
-its enforcing gate, and the perf acceptance is the `optimize` skill's
-standing gate. The `as integer` cast is copied verbatim with its
-existing justification, so lint stays green.
