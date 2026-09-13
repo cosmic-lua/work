@@ -1,3 +1,5 @@
 title: unix.*: AF_INET6 socket support and a dual-stack getaddrinfo resolver
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: third_party/lua/cosmo/lunix.c tool/net/definitions.lua
+access: cosmic-lua/cosmic
