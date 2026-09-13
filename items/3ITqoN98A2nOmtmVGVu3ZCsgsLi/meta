@@ -1,5 +1,6 @@
 title: perf compare gate: the escalation re-measures only the current binary, so a baseline from an earlier machine window flags a regression no triage can clear
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: completed
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+touches: _perf/gate.tl _perf/gate_test.tl _perf/skew_test.tl
