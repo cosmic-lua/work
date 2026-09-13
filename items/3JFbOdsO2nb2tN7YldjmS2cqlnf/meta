@@ -1,0 +1,2 @@
+title: cosmo.http silently collapses duplicate Content-Length headers instead of rejecting the disagreement (security: request-smuggling adjacent)
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
