@@ -1,6 +1,7 @@
 title: casts beyond from-any: every remaining class mapped to what closes it, or named as the floor the win condition must admit
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1489
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IYDxqM8
+touches: docs/design/casts.md _build/casts_baseline.tl docs/design/cast-sites.tsv tool/net/definitions.lua docs/goals.md docs/design/nil-flow-sites.tsv
