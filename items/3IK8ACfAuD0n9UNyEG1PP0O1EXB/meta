@@ -1,6 +1,7 @@
 title: re.gsub/split: fuse the find loop — all_matches builds Spans nobody reads, -38% probed byte-identical
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1349
 resolution: completed
 builders: claude-sched-2026-08-24T0238
+touches: cosmic/re.tl
