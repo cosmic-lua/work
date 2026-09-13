@@ -1,3 +1,4 @@
 title: docs search trigram: a trigram column over names, record fields, signatures and example bodies so identifier fragments like busy_timeout match
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/doc/search.tl cosmic/doc/types.tl cosmic/doc/search_test.tl _perf/bench/docs_bench.tl
