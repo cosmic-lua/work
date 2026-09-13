@@ -1,57 +1,3 @@
-## Evidence
-
-A cold build compiles each `*_gen.tl`'s import closure before running
-it (`_make/generate.tl:145-217`, `closure_argv`), strictly, with the
-include path from `cosmic/_teal_engine.tl:76-86`:
-
-```
-$ sed -n '76,86p' cosmic/_teal_engine.tl
-local function default_include_dirs(): {string}
-  return {
-    "o/_types/types_gen",
-    "/zip/.types", -- Bundled cosmic types (in binary)
-    "/zip/.tl", "/zip",
-  }
-end
-```
-
-On a cold tree `o/_types/types_gen` is absent, so every closure member
-is checked against the RUNNING binary's `/zip/.types` — the trust root
-`bin/cosmic.pin` (`2026-08-31-a5b36f4`) — not the `3p/cosmos` pin the
-same build just fetched. Any closure member adapted to a new `cosmo.*`
-shape therefore fails before the graph exists. Both generators are
-exposed (the `require()` walk pasted in `3IoULYAu`'s Recommendation, run at `96afd807`):
-
-```
-== _types/tlast_gen.tl: 24 files; changed-binding members: child/init.tl child/io.tl
-   fd.tl fs/dir.tl fs/file.tl fs/ops.tl proc/init.tl proc/rusage.tl time.tl
-== _types/types_gen.tl: 26 files; changed-binding members: fd.tl fs/dir.tl
-   fs/file.tl fs/ops.tl proc/init.tl proc/rusage.tl
-```
-
-`run_generator` (generate.tl:218-231) clears the generator's own output
-dir BEFORE `closure_argv`, so `types_gen`'s closure never sees its own
-previous output either. The generator itself resolves its helpers from
-the running binary when no closure is handed to it (generate.tl:121-131),
-and those helpers ship: `_types/gentype*.tl`, `_types/gentl.tl` are kind
-`module`, and `_make/artifact.tl:51-55` ships `module`, `entry`,
-`payload`; `_types/types_gen.tl` is kind `gen` and does NOT ship.
-
-Two facts a first build measured (2026-09-03, `origin/main` `96afd807`):
-
-    $ wc -l _make/generate.tl
-    483 _make/generate.tl        # 17 lines of headroom under the 500-line cap
-
-so the seed pass cannot live in `generate.tl` — a minimal in-file
-version measured 56 functional lines (`--check lint` refused it at
-561). And `o/_types/types_gen` is absent on EVERY project's first
-build (`stamp_types` writes the empty sentinel for a project with no
-generator: `_make/testdata/hello` has no `_types/`), so an
-unconditional seed would run a file only this repo owns against every
-downstream root and every `_make/generate_test.tl` fixture.
-
-## Change
-
 New module `_make/seed.tl` (target well under 120 lines), owning the
 whole seed pass so `generate.tl` grows by no more than ~12 lines:
 
@@ -104,8 +50,3 @@ generation 1 (`_build/coldbuild_test.tl`). It lands under the current
 `3p/cosmos` pin (seed output equals final output, so nothing observable
 changes), a release is cut, `bin/cosmic.pin` is bumped, and only then
 can the adaptation + `3p/cosmos` bump (`A3HK_gamw`) cold-build.
-
-## Non-goals
-
-Not the adaptation itself, not any `_types/tlast_gen.tl` dependency
-change, not a change to what `o/_types/types_gen` contains.
