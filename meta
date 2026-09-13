@@ -1,3 +1,4 @@
 title: cosmic.sqlite: expose ksuid() as a registered SQL scalar function
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
 speccers: fc09a540-18f6-5543-a2f5-4cd00ba22649
+touches: cosmic/sqlite/init.tl cosmic/sqlite/udf.tl
