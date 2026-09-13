@@ -1,11 +1,3 @@
-## Goal
-
-G3 — an honest type layer, no escape hatches. This item measures; it decides
-nothing. Its output is the census the `ke6byr5h` wording decision needs if a
-type-decided cast rule is to be one of the candidates.
-
-## Change
-
 Prototype a cast-legality rule in the carried tl patch set, run it over the tree,
 and record what it refuses, by class.
 
@@ -92,10 +84,3 @@ these is the point of the item:
   Closing it means declaring a wrapper that returns `any` — the same
   push-opacity-into-a-declaration move — which the census should price as a
   prerequisite rather than assume away.
-
-## Non-goals
-
-- **Does not enable the rule.** No tree-wide gate, no `--make ci` change.
-- **Does not fix any cast site.**
-- **Does not decide G3's wording.** That is `ke6byr5h`; this item gives it numbers.
-- No change to `_build/casts.tl` or its baseline.

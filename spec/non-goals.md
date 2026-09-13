@@ -1,0 +1,4 @@
+- **Does not enable the rule.** No tree-wide gate, no `--make ci` change.
+- **Does not fix any cast site.**
+- **Does not decide G3's wording.** That is `ke6byr5h`; this item gives it numbers.
+- No change to `_build/casts.tl` or its baseline.
