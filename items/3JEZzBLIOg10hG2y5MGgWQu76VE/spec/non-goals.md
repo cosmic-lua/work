@@ -1,0 +1,3 @@
+- Trailers. `Unchunk` skips them; nothing surfaces them.
+- Compression (`Content-Encoding`): its own item if ever.
+- WebSocket.
