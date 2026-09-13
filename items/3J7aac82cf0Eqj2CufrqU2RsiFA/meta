@@ -1,9 +1,10 @@
 title: surface archives: read embedded Teal sources without executing binaries
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: ed40d0aaecdfa6b449fa38c1095f456fc249ded7
 verdict: accept
 verdict_head: ed40d0aaecdfa6b449fa38c1095f456fc249ded7
 landed_head: 81c99fb7efbe95c922ab1899cdfd483d4be230be
 resolution: completed
 builders: 2598e3bbd4f6e3302d6e892bce6617c0
+touches: _tool/surface_archive.tl _tool/surface_archive_test.tl
