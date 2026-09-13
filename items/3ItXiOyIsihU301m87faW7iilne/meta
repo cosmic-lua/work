@@ -1,3 +1,4 @@
 title: flowstats: read lead time, rework and bounces from the events table and pr_rounds instead of a second commit-subject parser
 parent: 3IvL43g9uecot2ZqvAKN4a1JeMO
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/flowstats.tl
