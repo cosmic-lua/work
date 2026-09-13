@@ -5,9 +5,7 @@ printed `0` before the format-5 migration and prints `0` after it (1425 refs) �
 so no ref needs rewriting and it was deliberately left out of the cutover. Its
 removal is a mechanism change, in this order:
 
-one — `grep -c '^key: '` over all 1371 metas prints `0`, so no ref needs
-rewriting for this and it was deliberately left out of the format-5 cutover.
-Its removal is a mechanism change, in this order: `_work/lanes.tl:234`
+`_work/lanes.tl:234`
 (`return item.is_open(it) and (it.key or "") == lane`) compares
 `it.title == ("lane repair: %s is red"):format(lane)` — the one title
 `file_repair` writes at `_work/lanes.tl:244`
