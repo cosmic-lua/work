@@ -1,5 +1,3 @@
-## Change
-
 The `{{url ...}}` context in `cosmic.template`'s html mode splices a
 `SafeUrl.raw` into an attribute unchanged (`cosmic/template/codegen.tl:141-143`),
 and every per-component constructor except `safe_param` keeps `:`, `/`, `'`, `&`,
@@ -54,43 +52,3 @@ Tests the diff carries:
   test still emits bare `.raw`.
 - `cosmic/template/init_test.tl`: the every-context fixture at 74-97 switches
   its `href` to `cosmic.url.safe_href` and still type-checks.
-
-## Evidence
-
-Tables, from the cosmopolitan checkout (`origin/master`):
-`grep -n "xlat" net/http/kescapepath.c net/http/kescapesegment.c net/http/kescapeauthority.c net/http/kescapefragment.c net/http/kescapeparam.c`
-```
-kescapepath.c:      -DUL '.-~_@:!$&'"'"'()*+,;=/'
-kescapesegment.c:   -DUL '.-~_@:!$&'"'"'()*+,;='
-kescapeauthority.c: -DUL '_.!~*'"'"'();&=+$,-'
-kescapefragment.c:  -DUL '/?.~_@:!$&'"'"'()*+,;=-'
-kescapeparam.c:     -DUL '.-*_'
-```
-Behaviour under the pinned binary (`o/bootstrap/cosmic probe.lua`, probe
-calling `cosmic.url`; `safe_*` are `{raw = escape_*(s)}` per `cosmic/url.tl:353-383`):
-```
-escape_path("javascript:alert(1)") -> "javascript:alert(1)"
-escape_fragment("javascript:alert(1)") -> "javascript:alert(1)"
-escape_path("//evil.com/x") -> "//evil.com/x"
-escape_path("' onmouseover='alert(1)") -> "'%20onmouseover='alert(1)"
-escape_host("' onmouseover='alert(1)") -> "'%20onmouseover='alert(1)"
-escape_path("java\9script:x") -> "java%09script:x"
-escape_param("javascript:alert(1)") -> "javascript%3Aalert%281%29"
-parse("javascript:alert(1)") scheme=javascript host=nil path=alert(1)
-parse("//evil.com/x") scheme=nil host=evil.com path=/x
-parse("java\9script:x") scheme=nil host=nil path=java	script:x
-```
-Splice: `git show origin/main:cosmic/template/codegen.tl | sed -n 138,144p`
-```
-    if ctx.mode == "html" then
-      local target = CTX_TARGET[node.ctx]
-      ...
-      out[#out + 1] = indent .. "parts[#parts + 1] = " .. v .. ".raw"
-```
-Callers of the url context outside tests: `git grep -n "{{url" origin/main | grep -v _test` — doc comments only (`cosmic/template/init.tl:19`, `cosmic/url.tl:340`), so no template in the tree changes output.
-
-## Non-goals
-
-No markup scanning: the context word stays the author's declaration
-(`cosmic/template/parse.tl:80-89`). `cosmo.EscapePath` and friends are C
-contracts and stay as they are; the fix is cosmic-side.
