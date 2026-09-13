@@ -7,6 +7,7 @@
 local doneroot = require("_work.gitdoneroot")
 local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
+local gitverdict = require("_work.gitverdict")
 local item = require("_work.item")
 local read = require("_work.read")
 local repository_map = require("_work.repository_map")
@@ -83,7 +84,43 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   -- commit is in its ancestry or that a bounded first-parent suffix carries
   -- the exact accepted content patch (squash/rebase).
   local handed = it.handover_head or ""
+  local result = it.result or ""
   if reason == "completed" and (it.verdict or "") == "accept"
+  and handed == "" and result ~= "" then
+    -- The head follows the deliverable, as it does for `verdict`: an
+    -- accepted research item's judged head is a board commit (`result`),
+    -- so the landing `--landed` names is that same commit — there is no
+    -- product history for it to merge into, and no product checkout could
+    -- resolve it. `gitverdict.verify_result` checks it the way the accept
+    -- was checked: exactly `result`, still on the item's own ref, in the
+    -- board checkout.
+    if (it.verdict_head or "") ~= result then
+      return gate.verdict_line("done", false,
+        "REFUSED: acceptance must name the current research handover")
+    end
+    if (landed or "") == "" then
+      if not force then
+        return gate.verdict_line("done", false,
+          "REFUSED: completed accepted work names its landed commit with --landed")
+      end
+    else
+      local canonical, verr = gitverdict.verify_result(s, it, landed or "")
+      if canonical == nil then
+        -- The same audited repair as a product landing below: `--why`
+        -- already says why this commit is trusted, and it must at least be
+        -- a commit this board checkout can resolve.
+        if not force then
+          return gate.verdict_line("done", false, "REFUSED: " .. verr)
+        end
+        local resolved, rerr = commit_evidence.commit_id(s.root, landed or "")
+        if resolved == nil then
+          return gate.verdict_line("done", false, "REFUSED: " .. rerr)
+        end
+        canonical = resolved
+      end
+      it.landed_head = canonical
+    end
+  elseif reason == "completed" and (it.verdict or "") == "accept"
   and handed ~= "" then
     if (it.verdict_head or "") ~= handed then
       return gate.verdict_line("done", false,

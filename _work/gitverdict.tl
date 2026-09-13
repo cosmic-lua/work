@@ -24,6 +24,42 @@ local function already_judged_refusal(id: string, head: string): string
     .. "commit before judging again"):format(id:sub(1, 8), head:sub(1, 12))
 end
 
+--- The research counterpart of `commit_evidence.verify_lineage`, run in
+--- the BOARD checkout. A research review judges `result` — the board
+--- commit `take ID --result` recorded, the item ref's tip as it stood —
+--- so the sha the caller names must equal it exactly, and it must still
+--- sit in that ref's history: the same ancestry `verify_lineage` asks of
+--- a product commit against its claim base, with `result` as the base
+--- and the tip the store leased for this item as the head. The product
+--- checkout is never consulted; it could not resolve a board commit.
+--- `done` applies the same check to the `--landed` commit that closes an
+--- accepted research item, which is why it is exported.
+--- @param s store.Store The store, its lease on `it` taken by a load or list
+--- @param it item.Item The item, `result` set
+--- @param given string The commit the caller named
+--- @return string | nil The canonical board commit
+--- @return string Error message
+local function verify_result(s: store.Store, it: item.Item,
+    given: string): string | nil, string
+  local id8 = it.id:sub(1, 8)
+  local result = it.result or ""
+  if given ~= result then
+    return nil, ("%s's research handover is %s, not %s — a research head is "
+      .. "named exactly"):format(id8, result, given)
+  end
+  local tip = s.leased_sha[it.id] or ""
+  if tip == "" then
+    return nil, ("%s has no observed board commit — read the board first")
+    :format(id8)
+  end
+  local lineage, lerr = commit_evidence.verify_lineage(s.root, result, tip)
+  if lineage == nil then
+    return nil, ("%s's research result %s is not a commit on its own ref: %s")
+    :format(id8, result:sub(1, 12), lerr)
+  end
+  return lineage.base, ""
+end
+
 --- Record a verdict over one locally inspectable product commit. The reviewer
 --- must hold the current whole-item claim and must be independent of the
 --- builder/speccer unless an audited repair says otherwise. Review acquisition
@@ -67,29 +103,44 @@ local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
     return gate.verdict_line("verdict", false,
       ("REFUSED: %s's verdict belongs to its claim holder"):format(id:sub(1, 8)))
   end
+  -- The commit a review judges follows the item's deliverable, as `brief
+  -- review` renders it: a diff hands over a product commit
+  -- (`handover_head`, verified in the product checkout against the claim
+  -- base), research hands over board state (`result`, verified in the
+  -- board checkout against the item's own ref). With both recorded the
+  -- product commit is the handover, as `take --head` itself decides.
   local handed = it.handover_head or ""
-  if handed == "" then
+  local result = it.result or ""
+  local canonical = ""
+  if handed ~= "" then
+    local claim_base = it.claim_base or ""
+    if claim_base == "" then
+      return gate.verdict_line("verdict", false,
+        ("REFUSED: %s's claim has no product base commit"):format(id:sub(1, 8)))
+    end
+    local root, rerr = repository_map.resolve(s.root, it.repo or "", repo_dir)
+    if root == nil then
+      return gate.verdict_line("verdict", false, "REFUSED: " .. rerr)
+    end
+    local lineage, verr = commit_evidence.verify_lineage(root, claim_base, head)
+    if lineage == nil then
+      return gate.verdict_line("verdict", false, "REFUSED: " .. verr)
+    end
+    canonical = lineage.head
+    if canonical ~= handed then
+      return gate.verdict_line("verdict", false,
+        ("REFUSED: verdict names %s, but the handover is %s")
+        :format(canonical, handed))
+    end
+  elseif result ~= "" then
+    local judged, jerr = verify_result(s, it, head)
+    if judged == nil then
+      return gate.verdict_line("verdict", false, "REFUSED: " .. jerr)
+    end
+    canonical = judged
+  else
     return gate.verdict_line("verdict", false,
       ("REFUSED: %s has no commit handover to judge"):format(id:sub(1, 8)))
-  end
-  local claim_base = it.claim_base or ""
-  if claim_base == "" then
-    return gate.verdict_line("verdict", false,
-      ("REFUSED: %s's claim has no product base commit"):format(id:sub(1, 8)))
-  end
-  local root, rerr = repository_map.resolve(s.root, it.repo or "", repo_dir)
-  if root == nil then
-    return gate.verdict_line("verdict", false, "REFUSED: " .. rerr)
-  end
-  local lineage, verr = commit_evidence.verify_lineage(root, claim_base, head)
-  if lineage == nil then
-    return gate.verdict_line("verdict", false, "REFUSED: " .. verr)
-  end
-  local canonical = lineage.head
-  if canonical ~= handed then
-    return gate.verdict_line("verdict", false,
-      ("REFUSED: verdict names %s, but the handover is %s")
-      :format(canonical, handed))
   end
   if (it.verdict_head or "") == canonical and (it.verdict or "") == kind then
     return gate.verdict_line("verdict", false,
@@ -104,9 +155,13 @@ local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
   it.verdict_head = canonical
   if kind == "reject" then
     -- The rejected handover no longer stands, but the claim does. Its holder
-    -- explicitly drops or renews; no workflow transition releases it.
+    -- explicitly drops or renews; no workflow transition releases it. A
+    -- research handover is cleared the same way, so the item reads as
+    -- mid-flight again and the next `take --result` is a new handover,
+    -- never the no-op an unmoved spec would otherwise be.
     it.verdict = ""
     it.handover_head = ""
+    it.result = ""
     it.external_url = ""
   else
     it.verdict = kind
@@ -144,12 +199,15 @@ local record gitverdict
   pr: integer, head: string, session?: string, force?: boolean,
   why?: string, body_file?: string, no_land?: boolean): integer
   already_judged_refusal: function(id: string, head: string): string
+  verify_result: function(s: store.Store, it: item.Item,
+  given: string): string | nil, string
 end
 
 local M: gitverdict = {
   cmd_verdict_commit = cmd_verdict_commit,
   cmd_verdict = cmd_verdict,
   already_judged_refusal = already_judged_refusal,
+  verify_result = verify_result,
 }
 
 return M
