@@ -46,6 +46,10 @@ For a production snapshot, the owner first installs the legacy-write ruleset:
 This explicitly queries the ruleset through authenticated gh before and after
 a fresh fetch. The supported ruleset covers items/**, ended/**, claim-batches/**,
 and board/seq, refuses creation/update/deletion, and has no bypass or exclusions.
+It also PROVES the fence bites: under items/**, ended/** and claim-batches/** it
+attempts to create, force and delete a throwaway ref and requires every attempt
+refused, recording each refusal in the checkpoint. An accepted attempt disproves
+the freeze, and the ref it made is deleted again.
 Inspect staged pushes, then execute only when the cutover is ready:
   gitboard migrate6 activation-plan --checkpoint frozen.literal --limit 100
   gitboard migrate6 publish --checkpoint frozen.literal --limit 100 --execute

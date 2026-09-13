@@ -74,6 +74,13 @@ the checkpoint. It refuses bypass actors, exclusions, unsupported coverage, or
 missing creation/update/deletion restrictions. An offline checkpoint cannot
 be upgraded with a retroactive freeze assertion.
 
+The freeze is proven twice over: the ruleset read says the fence is configured,
+and a refused-push probe says it bites — a throwaway ref created, forced and
+deleted under each globbed legacy namespace, every attempt required to be
+refused, each refusal recorded in the checkpoint. `refs/heads/board/seq` is one
+exact ref with nothing under it, so probing it would mean writing the real lease;
+that name stays covered by the ruleset read alone.
+
 `activation-plan` renders the staged pushes; `publish --execute` invokes the
 concrete verifier, compares the complete fetched legacy ref set, stages the
 history, rechecks, and atomically pushes state plus the format marker. The CLI

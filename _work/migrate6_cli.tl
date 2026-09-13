@@ -86,9 +86,12 @@ local function run(root: string, args: {string}, values: {string: string}, switc
     if found == nil then return gate.verdict_line("migrate6", false, rerr) end
     report = found
   end
+  -- Every unmapped evidence field is NAMED, not just counted: a `verdict_head`
+  -- or `landed_head` the marks cannot resolve is a dangling reference the
+  -- operator has to see before activating, exactly as an unmapped `result` is.
   local summary, serr = literal.encode({checkpoint = path, head = cp.head, count = cp.count,
       phase = cp.phase, freeze = cp.freeze ~= nil, unmapped_evidence = report.count,
-      unmapped_results = report.results})
+      unmapped_fields = report.fields, unmapped_results = report.results})
   if summary == nil then return gate.verdict_line("migrate6", false, serr) end
   print(summary)
   return gate.verdict_line("migrate6", true, action == "plan" and err or "checkpoint inspected")
