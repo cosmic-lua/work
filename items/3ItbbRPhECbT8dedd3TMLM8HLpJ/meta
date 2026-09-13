@@ -1,3 +1,4 @@
 title: cosmic --upgrade [OLD]: report every use of a name that left with its wrapper's line, rewrite the pin, and bin/cosmic upgrade fetches the release
 parent: 3ItbbhM4aeULB2iiLRdBDFQ7gGe
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _cli/args.tl sys/help.md o/bootstrap/cosmic.ape _cli/upgrade.tl bin/cosmic.pin o/bootstrap/next.ape _cli/upgrade_test.tl .tl/cosmic/_gone/x.tl _cli/fence_test.tl
