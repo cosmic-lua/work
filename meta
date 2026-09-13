@@ -1,6 +1,7 @@
 title: lint: the -- assert: justification convention D23 introduced has no enforcement
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1401
 resolution: completed
 builders: 7614b81b-c1ce-5559-a344-440ce38a0565
+touches: _tool/lint.tl _cli/lint.tl _cli/assert_lint.tl _cli/assert_lint_test.tl cosmic/..._test.tl _tool/lint_test.tl docs/guides/lint.md
