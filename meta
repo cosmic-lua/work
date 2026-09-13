@@ -1,6 +1,7 @@
 title: tl narrowing: credit the four guards the checker ignores — non-return exit, or-fallback, compound condition, and-operand argument
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1383
 resolution: completed
 builders: 7cc6fb7f-bff8-5282-b29c-55347f720feb
+touches: 3p/tl/tl_patch.tl _make/patch.tl _docs/publish.tl cosmic/fs/tree.tl _tool/testrun_test.tl cosmic/codec_test.tl cosmic/teal_narrowing_test.tl
