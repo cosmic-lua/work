@@ -1,4 +1,7 @@
 title: fetch: safe opt-in buffered HTTP/TLS connection reuse
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic@main
+repo: cosmic-lua/cosmic
+base: main
 speccers: 535b806d19bcb4b7013ed5d6f60f1eeb
+touches: tool/net/fetch.inc net/http/parsehttpmessage.c cosmic/fetch/extras.tl
+access: cosmic-lua/cosmopolitan cosmic-lua/work
