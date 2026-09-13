@@ -1,6 +1,7 @@
 title: formatter emit pass owns 47% of format_module_source — stop copying the token stream (adds #1102's decomposition)
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1353
 resolution: completed
 builders: magical-bell
+touches: cosmic/format/init.tl _build/casts_test.tl
