@@ -1,5 +1,3 @@
-## Change
-
 Evidence (fresh-context sweep 2026-08-30, re-verified by the #1547
 review's probe (a)): a PR-less item can be completed with no review at
 all, while both doctrine and the tool's own guards assume it cannot.
@@ -38,9 +36,3 @@ unchanged re-record; done on a PR-less item without accept refuses,
 with accept completes, with `--force --why` completes; PR-carrying
 paths unchanged. Mutation-verify the done gate (drop the accept
 check, watch its refusal test go red).
-
-## Non-goals
-
-No `next`/`flow.substate` routing for research reviews (follow-up if
-the manual routing bites); no new schema fields or flags; no decode
-changes; no SKILL.md edit (the tool moves to match the prose).
