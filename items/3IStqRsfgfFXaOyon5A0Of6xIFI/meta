@@ -1,6 +1,7 @@
 title: move --evidence is unreachable: the check handover still reads PR #0 from GitHub and 404s
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1418
 resolution: completed
 builders: 77b4f3ab-41c0-54aa-8f07-edca34169b73
+touches: _work/gitverbs.tl _work/gitverbs_test.tl
