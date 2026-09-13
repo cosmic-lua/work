@@ -1,6 +1,6 @@
 title: spec bar: a Change that alters a committed tracking file's shape states how existing rows migrate
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: 175d9179acdf58076d7e3f8eb0286f5b2a8f3a6e
 handover_head: d558f1cb1af3b320ce357b3351faee7eaa38eda6
 external_url: https://github.com/cosmic-lua/work/pull/100
@@ -9,3 +9,4 @@ verdict_head: d558f1cb1af3b320ce357b3351faee7eaa38eda6
 landed_head: 583be716f8fb3fa6ee6bb440f538f1f0cb2045f6
 resolution: completed
 builders: 792f8b260c4c352217e375895e156e82
+touches: _work/doctrine.tl _work/doctrine_bar.tl _work/brieftext.tl _work/doctrine_test.tl _work/brieftext_test.tl _work/spec_test.tl _work/spec.tl
