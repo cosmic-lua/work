@@ -5,6 +5,8 @@ claim_batch: 4861785f4da3c4b1cc573c64d24f6c34de650836
 handover_head: 5063c0fc36b96ad903cd56741e7c3ff25520f560
 verdict: accept
 verdict_head: 5063c0fc36b96ad903cd56741e7c3ff25520f560
+landed_head: f52f3236fec2284b71503af50dd6839116366c89
+resolution: completed
 builders: dbd16e3acf4144535d6c2473c13086f6
 speccers: dbd16e3acf4144535d6c2473c13086f6
 touches: docs/decisions/d50-one-branch-is-the-board.md docs/decisions/d49-board-rewrite-pushes-in-idempotent-batches.md docs/decisions/README.md
