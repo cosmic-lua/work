@@ -1,20 +1,3 @@
-## Evidence
-
-`cosmic/quicksand/caps.tl:63`'s `number_of(name)` casts `(unix as
-{string: any})[name] as integer -- cast: dynamic constant lookup` to
-resolve a Linux capability name to its number. `QNQK_p3Wg`
-(cosmic-lua/cosmopolitan#392) adds `unix.CAP` as a real
-`table<string, integer>` name→value lookup, closing this gap at its
-source — the same staging shape as `rhKJ_HSQd`'s own `cosmic`-side
-sibling item for `unix.E`/`unix.SIG`.
-
-The new `unix.CAP` table is not usable from `cosmic-lua/cosmic` until
-(a) `QNQK_p3Wg` merges, (b) a `cosmos` release exists whose tagged
-commit descends from that merge, and (c) `3p/cosmos/cosmos_pin.tl` is
-bumped to name it.
-
-## Change
-
 Ready when: `QNQK_p3Wg` is `done` (merge commit sha recorded), AND a
 `cosmos` release exists descending from that commit (verify with
 `git merge-base --is-ancestor <QNQK_p3Wg-merge-sha> <release-tag-sha>`
@@ -44,8 +27,3 @@ Once ready:
   not part of that same bootstrap closure (verify this directly before
   assuming it's safe), a cold-build check catches the class of bug a
   converged/incremental one can hide.
-
-## Non-goals
-
-Not re-litigating `unix.CAP`'s own shape — that is `QNQK_p3Wg`'s scope,
-already landed by the time this item is ready.
