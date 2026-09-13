@@ -1,5 +1,3 @@
-## Change
-
 Correct the item 3 diagnostic test environment after exact-head Linux fuzz CI exposed an inherited iteration-count failure. Repo cosmic-lua/cosmic. Base the repair on item 3 commit `a16a539de34b34a41f8605ac6340bf0fe301f591`; change only `_fuzz/diagnostic_test.tl`.
 
 The test helper `with_selected` simulates the selected child by setting `FUZZ_ISOLATE` and `FUZZ_DIAGNOSTIC_DIR`, but leaves ambient `FUZZ_ITERS` untouched. The pull-request fuzz workflow exports `FUZZ_ITERS=2000`, so `test_observer_orders_every_primary_phase_and_unisolated_ignores_ambient` executes 2,000 iterations and fails its exact one-iteration phase sequence. Production selected children correctly honor the parent's pinned `FUZZ_ITERS`; do not change driver precedence or weaken the assertion.
