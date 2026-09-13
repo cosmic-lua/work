@@ -1,3 +1,4 @@
 title: binary packages: build-time module distribution between cosmic artifacts
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
 resolution: not-planned
+touches: docs/design/make/resolution.md cmd/cosmic/embed_gen.tl _make/validate.tl embed/schema.sql _make/patch.tl _make/clean.tl docs/design/make/model.md _make/graph.tl _make/imports.tl _make/deps.tl
