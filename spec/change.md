@@ -1,13 +1,3 @@
-## Goal
-
-G6 — the defining paths, ratcheted: the compare gate's escalation can
-measure BOTH binaries in one machine window, so a baseline measured in
-an earlier (or even ten-minute-old) window stops producing a FAIL no
-triage can clear. Unblocks 3ITnbooy (the cosmos pin bump), whose
-rework hit exactly this twice.
-
-## Change
-
 All in `_perf/gate.tl` (319 lines today, `wc -l` — 181 of headroom)
 and `_perf/gate_test.tl` (396 lines — 104 of headroom; if the new
 tests overflow it, split a `gate_ab_test.tl` beside it rather than
@@ -54,40 +44,3 @@ controls cannot clear drift that lives in the baseline file
 vs overlapping ranges), and baseline AGE alone is not the fix — ten
 minutes was enough — so the stamp/warn option is rejected and the
 interleaved instrument is the mechanism.
-
-## Non-goals
-
-No release.yml change: wiring `--baseline-bin` into the release
-compare step is its own follow-up once the flag proves out locally
-(file it at review if this lands). No change to `triage_many`,
-`TRIAGE_K`, or the noise-bar formula of the existing stages. No new
-module unless the test cap forces the test split named above. Frozen:
-the `perf-compare: PASS|FAIL` verdict line format, and the results
-JSON shape (the A/B stage reads standard `run.tl` outputs).
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `bin/cosmic --make test _perf/gate_test.tl` passes, including new
-  tests whose names contain `ab_`: a regression cleared by the
-  interleaved medians exits 0; one confirmed by them exits 1; with no
-  `baseline_bin` the flagged path is byte-identical to today (the
-  existing tests keep passing unmodified).
-
-## Enablement
-
-none needed — `run.tl --only` exists, `cosmic.child` exists, the
-skew guard for bare-load of `_perf/**` under an old binary landed as
-3ITdgu6f, and the test seam (injected measure) is established.
-
-## Result
-
-Closed 2026-08-27 against landed work, per the block recorded by
-3ITt7slj: PR #1432 ships `--baseline-bin` — on a flagged retry the
-gate re-measures the BASELINE binary in the current machine window
-(identity-guarded), wired into release.yml — plus the strike-twice
-intersection. The stale-window baseline class this item captured can
-no longer produce a FAIL that no triage clears; the heavier
-per-row interleaved-pairs instrument this spec drafted was
-implemented on a branch, superseded mid-flight, and not opened as a
-PR.
