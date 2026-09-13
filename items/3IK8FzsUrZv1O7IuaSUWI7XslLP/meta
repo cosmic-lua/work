@@ -1,6 +1,7 @@
 title: boot: 15 modules opened twice by the stock searcher probe — a /zip searcher saves ~130µs/exec
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1352
 resolution: completed
 builders: magical-bell
+touches: cosmic/searcher.tl cmd/cosmic/main.tl cosmic/embed/init.tl cosmic/searcher_test.tl /zip/cosmic/json.lua cosmic/searcher_tree_test.tl cosmic/embed_test.tl
