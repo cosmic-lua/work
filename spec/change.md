@@ -1,29 +1,3 @@
-## Evidence
-
-`gitboard help review`: "`accept` — merge (a PR against the product repo
-lands by enabling auto-merge …), then `done ID`"; "`request changes` —
-the concrete gaps quoted on the PR". Both are GitHub WRITES the review
-agent performs itself with the `gh` CLI or MCP tools before it records
-the verdict, so every reviewer needs a GitHub write path, and the verdict
-gitboard records is not the action that landed the PR — the two can
-disagree (a verdict recorded, the auto-merge never enabled, or the
-reverse). The board already reads everything a verdict needs:
-`_work/gitverdict.tl:182` fetches the PR (`gh.pull`), `:231` reads
-`merged`/`merge_sha`, and `brief review`/`take` already refuse while CI
-runs ("head 071cb8a has CI running (0 of 2 checks done) — review when
-it settles", observed 2026-09-06), so at verdict time the head's checks
-are settled by construction.
-
-Line counts (`wc -l`, main, 2026-09-06): `_work/gitverdict.tl` 319,
-`_work/gitverdict_test.tl` 393, `_work/gh.tl` 323,
-`_work/brieftext_review.tl` 208, `_work/gitcommands.tl` 187.
-
-Ready when: `grep -n 'body: string' _work/api.tl` prints the write-path
-signature from the sibling item «gitboard take --open» (its PR merged);
-until then this item is not buildable — drop bare.
-
-## Change
-
 `gitboard verdict` performs the GitHub side of the verdict it records,
 so a reviewer runs exactly one command and touches no GitHub tool.
 
@@ -64,10 +38,3 @@ so a reviewer runs exactly one command and touches no GitHub tool.
 - `_work/gitverdict.tl` is at 319 and gains the landing branch; keep it
   under 500 by putting the GitHub calls in `gh.tl` and only the
   decision (merge → auto-merge → record) here.
-
-## Non-goals
-
-No change to the verdict kinds, the distance guard, or the head/spec
-recording. No merge of a PR whose judged head is not the current head
-(the `sha` field guarantees it). No retry loop: a failed landing is one
-verdict line the orchestrator acts on.
