@@ -1,3 +1,4 @@
 title: gitboard brief: add --body-only to omit the trailing verdict line
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/gitcommands.tl _work/brief.tl _work/brief_rework_test.tl _work/brief_test.tl
