@@ -1,0 +1,3 @@
+- No file outside these four; no library file.
+- No checker change; no census doc edit; no committed strict checker.
+- Do not change what a test asserts. Do not add a cast.
