@@ -1,7 +1,7 @@
 title: the ready bar measures file facts but not behavioural ones: a spec may assert what a verb does without running it
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1497
-verdict_spec: d244c2e538f53b0fd02fb895ec7f234e9d3fdad065360559e40d87b421344af7
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+touches: skills/work/decompose.md skills/work/review.md
