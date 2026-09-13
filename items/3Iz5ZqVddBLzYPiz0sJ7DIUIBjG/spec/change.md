@@ -1,0 +1,1 @@
+`near_matches` also checks `is_in_scope(site.path, c.kind.where)` before listing a kind as a near match, so the near-list narrows to kinds whose scope actually covers the site. `_build/casts_test.tl` gains a case: a cast outside every kind's scope (or matching a pattern but not a scope) reports a near-list of only the in-scope candidates, not all pattern-sharing kinds.
