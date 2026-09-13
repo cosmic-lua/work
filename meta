@@ -1,3 +1,5 @@
 title: net/ip: IPv6 support (blocked on cosmic-lua/cosmopolitan#144)
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: 3p/cosmos/cosmos_pin.tl cosmic/ip.tl cosmic/net/init.tl cosmic/net/connect_test.tl
+access: cosmic-lua/cosmopolitan
