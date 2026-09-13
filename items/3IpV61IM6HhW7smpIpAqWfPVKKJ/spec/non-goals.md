@@ -1,0 +1,1 @@
+No sandboxing; prose only.
