@@ -12,6 +12,17 @@ local refs = require("_work.refs")
 local spec = require("_work.spec")
 local sqlite = require("cosmic.sqlite")
 
+--- Move the index from the head it recorded to `head` by rewriting only the
+--- items whose subtree, claim blob or tip actually moved — the incremental half
+--- of the read model, which is why a fetch of one commit does not cost a full
+--- rebuild. Silently does nothing unless the index is valid at `before`: a
+--- stale or absent file is left for the next open to rebuild, never patched on
+--- trust.
+--- @param root string The store's root
+--- @param before string | nil The head the index was valid at
+--- @param head string The head to move it to
+--- @return boolean True when the index is now at `head`, or was left alone
+--- @return string Error message
 local function patch(root: string, before: string | nil, head: string): boolean, string
   if before == nil or before == "" or before == head or not fs.is_file(cachedb.path_of(root)) then
     return true, ""

@@ -74,6 +74,10 @@ local function gh(repo: string, id: integer): string | nil, string
   return r.stdout, ""
 end
 
+--- Whether a decoded JSON field is an empty list — how the ruleset says "no
+--- bypass actors" and "no exclusions", both of which the freeze requires.
+--- @param value any A decoded JSON field
+--- @return boolean True for an empty array
 local function empty(value: any): boolean
   return value is {any} and next(value) == nil
 end
@@ -149,6 +153,13 @@ end
 --- the ruleset read alone, which `inspect` requires the pattern for.
 local PROBED < const >: {string} = {"refs/heads/items/", "refs/heads/ended/", "refs/heads/claim-batches/"}
 
+--- One `git push` of `args` to `url`, reporting whether the destination
+--- ACCEPTED it and, either way, what it said.
+--- @param root string The repository to push from
+--- @param url string The exact destination
+--- @param args {string} The refspecs and flags after the URL
+--- @return boolean True when the push was accepted
+--- @return string The destination's own output or refusal
 local function push_probe(root: string, url: string, args: {string}): boolean, string
   local argv: {string} = {"push", "--porcelain", url}
   for _, value in ipairs(args) do argv[#argv + 1] = value end
@@ -214,6 +225,14 @@ local function observe(root: string, remote: string, id: integer, provider?: Pro
   return inspect(raw, url, repo, id)
 end
 
+--- Fetch every branch of the destination into this run's own private namespace,
+--- so the snapshot the checkpoint freezes cannot be disturbed by, or disturb,
+--- any board reader's tracking refs.
+--- @param root string The repository to fetch into
+--- @param url string The exact destination
+--- @param prefix string The private namespace to land them under
+--- @return boolean True on success
+--- @return string Error message
 local function fetch_source(root: string, url: string, prefix: string): boolean, string
   local fetched, err = source.git(root, {"fetch", "--no-tags", "--prune", url, "+refs/heads/*:" .. prefix .. "*"})
   return fetched ~= nil, err
@@ -233,6 +252,10 @@ local function brackets(before: Observation, after: Observation): boolean, strin
   return true, ""
 end
 
+--- Whether a decoded checkpoint field has every field an observation needs, of
+--- the right type — checked before a proof from disk is trusted at all.
+--- @param raw any A field from the decoded checkpoint
+--- @return boolean True when the shape is an observation
 local function observation_shape(raw: any): boolean
   if not (raw is {string: any}) then return false end
   for _, key in ipairs({"repository", "destination", "digest"}) do

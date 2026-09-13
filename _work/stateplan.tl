@@ -33,6 +33,17 @@ local record Plan
   calls: {Call}
   snapshots: {{{string: any}}}
 end
+--- The write fence at publication, in the order the design fixes: every path
+--- this transition RECORDED must hold the same object id at `head` as it did at
+--- the staging base — any difference is `LOST_RACE` and comes first, which a
+--- bounded transition never skips — and only then, when the head has moved, is a
+--- bounded transition's own gate re-run against it.
+--- @param root string The repository holding `head`
+--- @param head string The fetched head this transition would land on
+--- @param transition tx.Transition The frozen transition
+--- @param gate Gate | nil The bounded revalidation; required when bounded
+--- @return boolean True when the transition may be rebased onto `head`
+--- @return string "LOST_RACE: <path>", or the gate's own refusal
 local function fence(root: string, head: string, transition: tx.Transition, gate?: Gate): boolean, string
   for _, dependency in ipairs(transition.dependencies) do
     local actual, err = projection.path_id(root, head, dependency.path)
@@ -45,6 +56,15 @@ local function fence(root: string, head: string, transition: tx.Transition, gate
   end
   return true, ""
 end
+--- The connector calls one plan is published by, rendered from the SAVED
+--- attempt and nothing else: per transition a `create_tree` split at the
+--- connector's byte budget and a `create_commit` parented on the previous one,
+--- then a single non-forced `update_ref` carrying the deadline guard. A
+--- transition with a deletion is rendered as a complete tree from its recorded
+--- snapshot instead, since the wire has no way to say "remove this path".
+--- @param plan Plan The saved attempt
+--- @return {Call} | nil The ordered calls, the last one the publication point
+--- @return string Error message
 local function render(plan: Plan): {Call} | nil, string
   local out: {Call} = {}
   local parent, base = plan.expected_head, plan.base_tree
@@ -90,6 +110,15 @@ local function render(plan: Plan): {Call} | nil, string
       repository_full_name = plan.frozen.repository, branch_name = plan.frozen.branch, sha = parent, force = false}}
   return out, ""
 end
+--- Everything about a saved attempt that must still hold before any call is
+--- made from it: its own version, the frozen chain's rules, the exact expected
+--- commit it was built against (re-hashed, so a plan cannot claim a base it did
+--- not read), the earliest member deadline, and calls that are byte-identical to
+--- what `render` produces from the same plan — a plan whose calls were edited is
+--- refused rather than executed.
+--- @param plan Plan The saved attempt
+--- @return boolean True when the attempt may still be published
+--- @return string Error message
 local function validate(plan: Plan): boolean, string
   if plan.format ~= "gitboard-state-plan-v2" then
     return false, "unsupported state plan; regenerate a new attempt from its frozen transaction"
@@ -114,6 +143,18 @@ local function validate(plan: Plan): boolean, string
   if literal.encode(expected) ~= literal.encode(plan.calls) then return false, "saved publication chain differs" end
   return true, ""
 end
+--- Freeze one publishable attempt against `head`: each transition fenced and
+--- rebased onto the previous candidate in turn, its deadline honoured, its
+--- complete chain verified against the frozen one, and its calls rendered once.
+--- The plan is bound to this destination and this head; a moved head means a new
+--- attempt, never an edited one.
+--- @param root string The board checkout
+--- @param frozen tx.Frozen The chain to publish
+--- @param head string The fetched head to rebase onto
+--- @param gate Gate | nil The bounded revalidation
+--- @param now integer | nil The instant deadlines are judged at
+--- @return Plan | nil The attempt, with its local candidate and calls
+--- @return string Error message; "LOST_RACE: <path>" for a lost fence
 local function build(root: string, frozen: tx.Frozen, head: string, gate?: Gate, now?: integer): Plan | nil, string
   local copy, err = tx.freeze(frozen)
   if copy == nil then return nil, err end
@@ -169,6 +210,14 @@ local function connector_call(plan: Plan, index: integer, now?: integer): Call |
   local call = chain[index]
   return call, ""
 end
+--- `validate`, plus proof that this checkout's objects really are the attempt:
+--- the candidate's first-parent chain has one commit per transition, starts at
+--- the expected head, and each commit's tree matches the snapshot the plan
+--- recorded. What a shell publication checks before pushing the candidate.
+--- @param root string The board checkout
+--- @param plan Plan The saved attempt
+--- @return boolean True when the local objects match the attempt
+--- @return string Error message
 local function validate_local(root: string, plan: Plan): boolean, string
   local ok, err = validate(plan)
   if not ok then return false, err end
@@ -186,12 +235,25 @@ local function validate_local(root: string, plan: Plan): boolean, string
   end
   return true, ""
 end
+--- The commit a shell publication pushes, once the attempt and its local
+--- objects are proven and its deadline has not passed.
+--- @param root string The board checkout
+--- @param plan Plan The saved attempt
+--- @param now integer | nil The instant the deadline is judged at
+--- @return string | nil The candidate commit to push
+--- @return string Error message
 local function local_candidate(root: string, plan: Plan, now?: integer): string | nil, string
   local ok, err = validate_local(root, plan)
   if not ok then return nil, err end
   if plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then return nil, "prepared claim expired before publication" end
   return plan.candidate, ""
 end
+--- Write a validated attempt exactly once, sealed with its own digest so a
+--- later load proves the bytes are the ones this call wrote.
+--- @param path string Where to save it
+--- @param plan Plan The attempt to freeze onto disk
+--- @return boolean True when it was written
+--- @return string Error message
 local function save(path: string, plan: Plan): boolean, string
   local ok, err = validate(plan)
   if not ok then return false, err end
@@ -201,6 +263,12 @@ local function save(path: string, plan: Plan): boolean, string
   if raw == nil then return false, rerr end
   return saved.write_once(path, raw)
 end
+--- A saved attempt back from disk: the seal, then the plan's own validation,
+--- then the canonical-bytes check — all three, in a protected call, because the
+--- file is untrusted input a connector session may have carried around.
+--- @param path string The saved attempt's path
+--- @return Plan | nil The attempt
+--- @return string Error message
 local function load_saved(path: string): Plan | nil, string
   local raw, err = fs.read(path)
   if raw == nil then return nil, err end

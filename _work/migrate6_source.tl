@@ -16,6 +16,14 @@ local record Event
   message: string
 end
 
+--- Run one git command in the source repository, with replacement objects and
+--- lazy promisor fetches disabled — a migration must read the history that is
+--- really there.
+--- @param root string The source repository
+--- @param args {string} Arguments after "git"
+--- @param input string | nil Bytes for stdin
+--- @return string | nil Standard output
+--- @return string The command's stderr on failure
 local function git(root: string, args: {string}, input?: string): string | nil, string
   local argv: {string} = {"git", "-c", "core.createObject=rename"}
   for _, value in ipairs(args) do argv[#argv + 1] = value end
@@ -26,6 +34,11 @@ local function git(root: string, args: {string}, input?: string): string | nil, 
   return r.stdout, ""
 end
 
+--- Whether a ref under `prefix` is one of the four the migration reads: an
+--- item, an ended item, a claim batch, or the bare sequence lease.
+--- @param ref string The full ref name
+--- @param prefix string The namespace prefix it was listed under
+--- @return boolean True when this ref is migration source
 local function source_name(ref: string, prefix: string): boolean
   local name = ref:sub(#prefix + 1)
   return ref:sub(1, #prefix) == prefix and
@@ -33,6 +46,12 @@ local function source_name(ref: string, prefix: string): boolean
     or name:match("^claim%-batches/") ~= nil or name == "board/seq")
 end
 
+--- The complete source ref set and its tips, as one listing — the fact the
+--- checkpoint freezes and every later check compares against.
+--- @param root string The source repository
+--- @param prefix string The namespace to read, `refs/`-rooted and slash-ended
+--- @return {string: string} | nil Ref name -> tip
+--- @return string Error message
 local function snapshot(root: string, prefix: string): {string: string} | nil, string
   if prefix:sub(1, 5) ~= "refs/" or prefix:sub(-1) ~= "/"
   or prefix:find("[%s%c]") then return nil, "invalid source ref prefix" end
@@ -45,6 +64,12 @@ local function snapshot(root: string, prefix: string): {string: string} | nil, s
   return out, ""
 end
 
+--- Whether two source ref sets are identical, naming every difference by kind —
+--- moved, added or removed — so drift is reported rather than resampled.
+--- @param expected {string: string} The ref set the checkpoint froze
+--- @param actual {string: string} The ref set observed now
+--- @return boolean True when they are identical
+--- @return string "source drift: " and every difference, sorted
 local function compare(expected: {string: string}, actual: {string: string}): boolean, string
   local changes: {string} = {}
   for ref, sha in pairs(expected) do
@@ -59,6 +84,14 @@ local function compare(expected: {string: string}, actual: {string: string}): bo
   return true, ""
 end
 
+--- Whether this repository can be migrated at all: not shallow, not a promisor
+--- or partial clone, carrying at least one source ref, and holding every object
+--- those refs reach. A migration from a repository missing objects would replay
+--- a quietly truncated history.
+--- @param root string The source repository
+--- @param refs {string: string} The source ref set
+--- @return boolean True when the whole history is present locally
+--- @return string Which condition refused
 local function integrity(root: string, refs: {string: string}): boolean, string
   local shallow, err = git(root, {"rev-parse", "--is-shallow-repository"})
   if shallow == nil then return false, err end
@@ -84,6 +117,15 @@ local function integrity(root: string, refs: {string: string}): boolean, string
   return true, ""
 end
 
+--- One source commit as a replayable event: its parent, tree, exact author and
+--- committer lines, committer date and message, all read from the object itself
+--- so the replay reproduces them byte for byte.
+--- @param sha string The commit id
+--- @param ref string The ref it was reached from
+--- @param id string The item id that ref names
+--- @param raw string The commit object's bytes
+--- @return Event | nil The event
+--- @return string Error message
 local function parse(sha: string, ref: string, id: string, raw: string): Event | nil, string
   local header, message = raw:match("^(.-)\n\n(.*)$")
   if header == nil then return nil, "malformed source commit " .. sha end

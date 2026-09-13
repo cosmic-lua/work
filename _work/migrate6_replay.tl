@@ -25,6 +25,10 @@ local record Result
   count: integer
 end
 
+--- An item's `meta` without its `claim_batch` line: on one branch the lease is
+--- `claims/<id>`, so that key goes away for every replayed item.
+--- @param meta string The format-5 meta blob
+--- @return string The meta the replay writes
 local function stripped(meta: string): string
   local lines: {string} = {}
   for line in (meta .. "\n"):gmatch("([^\n]*)\n") do
@@ -33,6 +37,13 @@ local function stripped(meta: string): string
   return table.concat(lines, "\n")
 end
 
+--- One historical item tree as the replay needs it: the grafted subtree, its
+--- meta with `claim_batch` stripped, the batch that line named, and a signature
+--- that tells a tree-identical event from a real one.
+--- @param root string The source repository
+--- @param tree string The source commit's tree
+--- @return Product | nil The grafted subtree and what it carries
+--- @return string Error message
 local function product(root: string, tree: string): Product | nil, string
   local got, err = gitobj.cat_file_batch(root, {tree})
   if got == nil or got[tree] == nil then return nil, err or "missing item tree" end
@@ -53,6 +64,15 @@ local function product(root: string, tree: string): Product | nil, string
     batch = itemtree.parse_meta(raw).claim_batch or ""}, ""
 end
 
+--- The `claims/<id>` blob one historical claim batch means for one member, or
+--- "" when the lease was dropped. An imported lease keeps its acquisition commit
+--- as its identity, so every existing work branch and worktree still matches
+--- after the migration.
+--- @param root string The source repository
+--- @param batch string The claim batch commit the item's meta named
+--- @param id string The member's item id
+--- @return string | nil The blob content, "" when there is no lease
+--- @return string Error message
 local function lease(root: string, batch: string, id: string): string | nil, string
   if batch == "" then return "", "" end
   local st, err = claimbatch.read_state(root, batch, id)
@@ -66,10 +86,23 @@ local function lease(root: string, batch: string, id: string): string | nil, str
       expires_at = st.expires_at, product_base = st.product_base})
 end
 
+--- One fast-import `M 100644 inline` op writing `text` at `path`.
+--- @param path string The path to write
+--- @param text string Its exact content
+--- @return string The stream fragment
 local function modify(path: string, text: string): string
   return "M 100644 inline " .. path .. "\n" .. fastimport.data_block(text)
 end
 
+--- One replayed commit as a fast-import block: the source's own author,
+--- committer and message verbatim, this event's tree ops, and its place in the
+--- single chain being built.
+--- @param event source.Event The source commit being replayed
+--- @param index integer Its position in the merged order, used as its mark
+--- @param ops string The tree ops this commit applies
+--- @param base string The commit to start the chain from, "" for the first
+--- @param ref string The private ref this attempt builds
+--- @return string The stream fragment
 local function event_block(event: source.Event, index: integer, ops: string, base: string, ref: string): string
   local lines: {string} = {"commit " .. ref .. "\nmark :" .. tostring(index) .. "\n",
     "author " .. event.author .. "\n", "committer " .. event.committer .. "\n",
@@ -80,6 +113,12 @@ local function event_block(event: source.Event, index: integer, ops: string, bas
   return table.concat(lines)
 end
 
+--- One item's `meta` with every `result`, `verdict_head` and `landed_head`
+--- naming a replayed commit rewritten through the marks — the evidence rewrite,
+--- applied in the final commit so every mark is known by then.
+--- @param meta string The replayed meta blob
+--- @param marks {string: string} Source commit id -> replayed commit id
+--- @return string The meta with its evidence remapped
 local function remap_meta(meta: string, marks: {string: string}): string
   local lines: {string} = {}
   for line in (meta .. "\n"):gmatch("([^\n]*)\n") do
@@ -110,6 +149,19 @@ local function parse_marks(raw: string, events: {source.Event}): {string: string
   return out, ""
 end
 
+--- Replay every source event into one `state` candidate: each item's tree
+--- grafted under `items/<id>/`, a claim bridge becoming the `claims/<id>` write
+--- its batch means, a tree-identical event materialised as a log path so it is
+--- still an event the path walk attributes, and a final commit carrying the
+--- marks and the remapped evidence. Builds into a fresh private ref and promotes
+--- it under a compare-and-swap, so a retried checkpoint can never rewind a
+--- completed candidate to an intermediate tip.
+--- @param root string The source repository
+--- @param events {source.Event} The merged source order to replay
+--- @param workdir string Where the export-marks file is written
+--- @param previous Result | nil A completed prior replay to append onto
+--- @return Result | nil The candidate head, the marks and the event count
+--- @return string Error message
 local function replay(root: string, events: {source.Event}, workdir: string,
     previous?: Result): Result | nil, string
   if #events == 0 then return nil, "no item history to migrate" end

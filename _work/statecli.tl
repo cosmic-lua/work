@@ -3,6 +3,13 @@ local migrate = require("_work.migrate6_cli")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
+--- The item a handle names on a native board, matched on the id's last eight
+--- characters exactly as the ref-layout reader does — one whole-board read, no
+--- ref enumeration.
+--- @param s store.Store The open store
+--- @param input string A handle, in any of the forms `tail.normalize` accepts
+--- @return string | nil The full item id
+--- @return string Error message: nothing matched, or the matches
 local function resolve(s: store.Store, input: string): string | nil, string
   local items, err = store.list(s)
   if items == nil then return nil, err end

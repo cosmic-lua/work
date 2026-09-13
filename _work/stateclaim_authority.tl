@@ -5,6 +5,14 @@ local claim = require("_work.claim")
 local refs = require("_work.refs")
 local stateclaim = require("_work.stateclaim")
 local store = require("_work.store")
+--- Whether this session holds `id` NOW, read from the current `claims/<id>`
+--- blob — never from the fact that a publication landed. A lease that expired
+--- or belongs to someone else is no authority.
+--- @param s store.Store An open store on a format-6 board
+--- @param id string Item id
+--- @param session string The session claiming to hold it
+--- @return claim.State | nil The live lease this session holds
+--- @return string Error message, or why it holds nothing
 local function current(s: store.Store, id: string, session: string): claim.State | nil, string
   local ref = refs.board_mode(s.root) == "local" and "refs/heads/state"
   or "refs/remotes/" .. refs.board_remote(s.root) .. "/state"
@@ -18,6 +26,15 @@ local function current(s: store.Store, id: string, session: string): claim.State
   st.control = head
   return st, ""
 end
+--- Why a receipt naming `control` is not evidence of the lease `st`: a
+--- reacquisition mints a new identity, and a control commit off the branch's
+--- first-parent history never recorded this acquisition at all. "" when the
+--- receipt does match the current acquisition.
+--- @param s store.Store An open store on a format-6 board
+--- @param id string Item id
+--- @param control string The commit a worktree receipt recorded
+--- @param st claim.State The lease currently recorded for `id`
+--- @return string The refusal, "" when the receipt is current
 local function historical(s: store.Store, id: string, control: string, st: claim.State): string
   local lineage, err = child.run({"git", "rev-list", "--first-parent", st.control}, {cwd = s.root})
   if lineage == nil then return err end

@@ -8,6 +8,18 @@ local publish = require("_work.migrate6_publish")
 local diagnostics = require("_work.migrate6_diagnostics")
 local literal = require("_work.singlehead_literal")
 
+--- `gitboard migrate6`: `plan` and `show` read and report locally, `plan
+--- --freeze-ruleset ID` binds an observed and probed legacy-write freeze to the
+--- source snapshot, `verify-source` and `verify-remote` re-compare the ref set,
+--- `activation-plan` renders the staged pushes, and `publish --execute` is the
+--- only action that writes to a destination. The CLI accepts no boolean claiming
+--- a freeze was verified: the verifier is called here, with the checkpoint's own
+--- bound proof.
+--- @param root string The source board checkout
+--- @param args {string} The action, defaulting to `plan`
+--- @param values {string: string} The flag values
+--- @param switches {string: boolean} The flag switches
+--- @return integer The verdict line's exit status
 local function run(root: string, args: {string}, values: {string: string}, switches: {string: boolean}): integer
   local action = args[1] or "plan"
   local path = values.checkpoint or fs.join(root, "o/migrate6/checkpoint.literal")

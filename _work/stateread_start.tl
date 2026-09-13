@@ -11,6 +11,12 @@ local record Start
   head: string
 end
 
+--- Release the scoped batch reader a startup snapshot held, once its consumer
+--- has taken what it needs. Idempotent, and a no-op for a snapshot that never
+--- opened one.
+--- @param start Start | nil The snapshot to release, nil accepted
+--- @return boolean True on success
+--- @return string Error message
 local function close(start: Start | nil): boolean, string
   if start == nil then return true, "" end
   local reader = start.reader
@@ -19,6 +25,14 @@ local function close(start: Start | nil): boolean, string
   return true, ""
 end
 
+--- One invocation's opening read: the canonical ref snapshot, the board
+--- format decided from the marker inside it, and — while the format is still
+--- unknown — the `cat-file --batch` process that read the marker, kept open so
+--- the first item read shares it instead of spawning its own. This is why
+--- selecting the format costs a verb no process of its own.
+--- @param root string The board checkout
+--- @return Start | nil The snapshot, its head ("" on a legacy board) and reader
+--- @return string Error message, including the format's own refusal
 local function open(root: string): Start | nil, string
   local snapshot, err = refs.for_each_ref(root, cachedb.WATCH_PATTERNS)
   if snapshot == nil then return nil, err end

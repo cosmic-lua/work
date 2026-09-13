@@ -1,6 +1,14 @@
 --- Shared graph predicates used by verbs and native bounded replay.
 local item = require("_work.item")
 
+--- The dependency chain from `on` back to `id`, or nil when none exists — the
+--- witness `depend` refuses with, walked breadth-first and bounded by
+--- `item.MAX_DEPTH` hops so an already-corrupt graph terminates too. Shared
+--- with the bounded re-run, so the verb and the revalidation cannot diverge.
+--- @param index item.Index Every item by id
+--- @param id string The waiter a cycle would come back to
+--- @param on string The proposed blocker the walk starts from
+--- @return {string} | nil The ids from `on` to `id`, `on` first
 local function cycle_path(index: item.Index, id: string,
     on: string): {string} | nil
   local frontier: {{string}} = {{on}}
@@ -61,10 +69,19 @@ local function role(index: item.Index, it: item.Item): string
   if parent ~= nil and (parent.parent or "") == "" then return "outcome" end
   return "work"
 end
+--- Whether filing under `parent` reopens it: a resolved outcome does, because
+--- a child under it is explicit evidence against the resolution; a review or
+--- rework item never does.
+--- @param parent item.Item The proposed parent
+--- @param parent_role string Its role, from `role`
+--- @return boolean True when the parent's resolution must be cleared
 local function reopen(parent: item.Item, parent_role: string): boolean
   return not item.is_review_or_rework(parent) and parent_role == "outcome"
   and (parent.resolution or "") ~= ""
 end
+--- Why `it` cannot be written, as one line; nil when it is well formed.
+--- @param it item.Item The item as the mutation would leave it
+--- @return string | nil The joined problems, nil when there are none
 local function item_refusal(it: item.Item): string | nil
   local bad = item.problems(it)
   if #bad > 0 then return table.concat(bad, "; ") end

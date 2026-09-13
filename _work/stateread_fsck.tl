@@ -4,6 +4,14 @@ local boardtree = require("_work.boardtree")
 local gitobj = require("_work.gitobj")
 local ksuid = require("_work.ksuid")
 
+--- Everything wrong with one format-6 head, in sorted order and mutating
+--- nothing: a `format` blob that is not canonically `6`, retained migration
+--- marks that no longer decode, a claim for an item that is absent, an item id
+--- that is not a ksuid, and an item subtree whose bytes are not what its own
+--- fields encode to. Empty when the head is sound.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to audit
+--- @return {string} One line per problem, sorted; empty when there are none
 local function problems(root: string, head: string): {string}
   local view, err = boardread.list(root, head)
   if view == nil then return {err} end

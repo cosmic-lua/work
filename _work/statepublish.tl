@@ -7,21 +7,48 @@ local staging = require("_work.statestaging")
 local plan = require("_work.stateplan")
 local proof = require("_work.stateplan_receipts")
 local store = require("_work.store")
+--- The board head a publication races against: the branch itself in local
+--- mode, the tracking ref in remote mode — never a prepared local successor.
+--- @param root string The board checkout
+--- @param remote string The configured board remote
+--- @return string | nil The head, `ZERO_SHA` on a board with none
+--- @return string Error message
 local function head(root: string, remote: string): string | nil, string
   local ref = refs.board_mode(root) == "local" and "refs/heads/state" or "refs/remotes/" .. remote .. "/state"
   return refs.read_ref(root, ref)
 end
+--- The fetch a native board needs: exactly the two refs a reader activates on,
+--- atomically, so `state` and its marker never land apart.
+--- @param remote string The configured board remote
+--- @return {string} The argv to run
 local function fetch_argv(remote: string): {string}
   return {"git", "fetch", "--atomic", remote,
     "+refs/heads/state:refs/remotes/" .. remote .. "/state",
     "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
 end
+--- Whether this checkout still points where the attempt was frozen for — the
+--- remote, the repository identity and the exact push URL. Re-checked before
+--- every push and on every refresh, so a receipt cannot be published to a
+--- destination it was never bound to.
+--- @param root string The board checkout
+--- @param receipt staging.Receipt The attempt
+--- @param remote string | nil A remote the caller requires it to match
+--- @return boolean True when the binding still holds
+--- @return string Which part of the destination differs
 local function binding(root: string, receipt: staging.Receipt, remote?: string): boolean, string
   if remote ~= nil and remote ~= receipt.remote then return false, "prepared transaction destination differs" end
   if staging.repository(root, receipt.remote) ~= receipt.repository then return false, "prepared repository destination differs" end
   if staging.target_url(root, receipt.remote) ~= receipt.target_url then return false, "prepared remote URL differs" end
   return true, ""
 end
+--- What the fetched head says about this attempt: confirmed, in conflict, or
+--- pending — and, when pending, whether its ABSENCE is proven, which is what
+--- makes another push attempt safe rather than a possible duplicate.
+--- @param root string The board checkout
+--- @param receipt staging.Receipt The attempt
+--- @param known string | nil A candidate sha this session just pushed
+--- @return proof.Status | nil What the head proves
+--- @return string Error message
 local function inspect_current(root: string, receipt: staging.Receipt, known?: string): proof.Status | nil, string
   local current, err = head(root, receipt.remote)
   if current == nil then return nil, err end
@@ -29,11 +56,27 @@ local function inspect_current(root: string, receipt: staging.Receipt, known?: s
   if frozen == nil then return nil, ferr end
   return proof.inspect(root, current, frozen, known or (receipt.published ~= "" and receipt.published or nil))
 end
+--- Drop the receipt whole and return exactly `store.LOST_RACE`, which is the
+--- refusal callers compare by identity. A lost race that left the prepared ref
+--- behind would fail identically on every retry and make `refresh` ambiguous,
+--- so a receipt that cannot be retired says so instead of claiming the race.
+--- @param root string The board checkout
+--- @param receipt staging.Receipt The attempt that lost
+--- @return string `store.LOST_RACE`, or why the receipt was kept
 local function lost(root: string, receipt: staging.Receipt): string
   local retired, err = staging.retire(root, receipt)
   if not retired then return "lost race, but receipt was retained: " .. err end
   return store.LOST_RACE
 end
+--- One publishable attempt against the head as it is now: the destination
+--- re-checked, an already-published attempt named as such rather than
+--- re-pushed, and an undetermined one refused rather than guessed at. A lost
+--- fence retires the receipt here, so the caller gets `store.LOST_RACE`.
+--- @param root string The board checkout
+--- @param receipt staging.Receipt The attempt
+--- @param remote string | nil A remote the caller requires it to match
+--- @return plan.Plan | nil The plan to publish
+--- @return string Error message, or `store.LOST_RACE`
 local function build(root: string, receipt: staging.Receipt, remote?: string): plan.Plan | nil, string
   local valid, verr = binding(root, receipt, remote)
   if not valid then return nil, verr end
@@ -53,9 +96,23 @@ local function build(root: string, receipt: staging.Receipt, remote?: string): p
   if projected == nil and perr:match("^LOST_RACE") then return nil, lost(root, receipt) end
   return projected, perr
 end
+--- The non-forced push that publishes `candidate` as the board head.
+--- @param receipt staging.Receipt The attempt, for its remote
+--- @param candidate string The commit to publish
+--- @return {string} The argv to run
 local function push_argv(receipt: staging.Receipt, candidate: string): {string}
   return {"git", "push", receipt.remote, candidate .. ":refs/heads/state"}
 end
+--- Publish one attempt, retrying a MOVED head at most five times: each attempt
+--- re-reads the head, re-checks the fence, rebases and pushes non-forced. A
+--- rejection is only a lost race once the fence says so; after the fifth
+--- attempt the head is inspected once more — a push whose acknowledgement was
+--- lost is confirmed rather than retried — and only then is the attempt retired
+--- as `store.LOST_RACE`.
+--- @param root string The board checkout
+--- @param receipt staging.Receipt The attempt to publish
+--- @return boolean True when the attempt landed
+--- @return string What landed, or the refusal
 local function execute(root: string, receipt: staging.Receipt): boolean, string
   local last_candidate: string = nil
   for attempt = 1, 5 do
@@ -109,6 +166,15 @@ local function execute(root: string, receipt: staging.Receipt): boolean, string
   end
   return false, lost(root, receipt)
 end
+--- Report every outstanding attempt against the fetched head, and claim
+--- authority separately from it: a confirmed attempt retires its local ref, a
+--- conflicting one is reported and kept, and a draft that advanced since its
+--- publication snapshot stays pending rather than being confirmed by it.
+--- Publication is not authority — the current `claims/<id>` blobs are.
+--- @param root string The board checkout
+--- @param remote string The configured board remote
+--- @return boolean True when nothing conflicts
+--- @return string The counts and the current claim authority
 local function refresh(root: string, remote: string): boolean, string
   local all, err = staging.list(root)
   if all == nil then return false, err end
@@ -154,6 +220,12 @@ local function refresh(root: string, remote: string): boolean, string
   return conflicts == 0, ("confirmed=%d pending=%d conflict=%d\n%s")
   :format(confirmed, pending, conflicts, authority)
 end
+--- Drop everything this invocation staged or observed and re-sync to the
+--- current head — what a lost race leaves behind, so the verb re-reads and
+--- decides again rather than retrying against a board that moved.
+--- @param s store.Store The open store to re-sync
+--- @return boolean True on success
+--- @return string Error message
 local function reset(s: store.Store): boolean, string
   local current, err = head(s.root, refs.board_remote(s.root))
   if current == nil then return false, err end
@@ -161,6 +233,14 @@ local function reset(s: store.Store): boolean, string
   s.leased_item = {}; s.leased_sha = {}; s.leased_ref = {}; s.touched_at = {}
   return store.close(s)
 end
+--- Fetch when asked, confirm what landed, and leave the store reading the
+--- current head. A `LOST_RACE` from an unrelated stale attempt does not mask
+--- this session's own publication: `published` is inspected on its own.
+--- @param s store.Store The open store
+--- @param execute_fetch boolean | nil Whether to run the fetch, not just report it
+--- @param published staging.Receipt | nil This session's own attempt, if any
+--- @return boolean True when nothing conflicts
+--- @return string The refresh report, or the refusal
 local function sync(s: store.Store, execute_fetch?: boolean, published?: staging.Receipt): boolean, string
   local remote = refs.board_remote(s.root)
   if execute_fetch and refs.board_mode(s.root) == "remote" then
@@ -184,6 +264,14 @@ local function sync(s: store.Store, execute_fetch?: boolean, published?: staging
   local _closed, _cerr = store.close(s)
   return ok, err
 end
+--- Publish whatever this invocation prepared. A draft is staged, not published;
+--- a local board publishes at once; a remote board prepares and prints the
+--- command that publishes, because a real push is the caller's decision. A lost
+--- race resets the store before returning `store.LOST_RACE`.
+--- @param s store.Store The open store carrying the prepared receipt
+--- @param execute_push boolean | nil Whether to push now on a remote board
+--- @return boolean True on success, including "prepared, not published"
+--- @return string What happened, or `store.LOST_RACE`
 local function publish(s: store.Store, execute_push?: boolean): boolean, string
   if s.state_receipt == "" then return true, "" end
   local receipt, err = staging.load(s.root, s.state_receipt)

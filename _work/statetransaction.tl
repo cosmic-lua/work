@@ -39,6 +39,12 @@ local record Frozen
   transitions: {Transition}
 end
 local FORMAT < const > = "gitboard-state-transaction-v1"
+--- Whether a path may appear in a transition: relative, non-empty, with no
+--- traversal, no doubled or trailing separator, and no control characters —
+--- checked here rather than at the writer, so a saved attempt cannot name a
+--- path some later executor would resolve differently.
+--- @param path string A tree path from a change or dependency
+--- @return boolean True when the path is acceptable
 local function path_ok(path: string): boolean
   return path ~= "" and path:sub(1, 1) ~= "/" and path:sub(-1) ~= "/"
   and not path:find("[%z\n\r\t]") and not path:find("//", 1, true)
@@ -105,11 +111,22 @@ local function validate(value: Frozen, assembling?: boolean): boolean, string
   end
   return true, ""
 end
+--- A validated transaction as its canonical literal bytes.
+--- @param value Frozen The transaction to encode
+--- @return string | nil The canonical literal
+--- @return string The validation refusal
 local function encode(value: Frozen): string | nil, string
   local ok, err = validate(value)
   if not ok then return nil, err end
   return literal.encode(value)
 end
+--- A transaction back from its bytes, refusing anything that is not the
+--- byte-identical canonical encoding of what it decodes to — so one saved
+--- attempt has exactly one representation, and a hand-edited manifest is
+--- refused rather than interpreted.
+--- @param raw string The saved bytes
+--- @return Frozen | nil The transaction
+--- @return string Error message
 local function decode(raw: string): Frozen | nil, string
   local value, err = literal.decode_object(raw)
   if value == nil then return nil, err end
@@ -142,16 +159,32 @@ local function freeze(value: Frozen): Frozen | nil, string
   if not valid then return nil, ferr end
   return copy, ""
 end
+--- The attempt's digest, which is what a receipt records so a publication can
+--- be compared against the attempt that was frozen rather than re-derived.
+--- @param value Frozen The transaction
+--- @return string | nil Its sha256 over the canonical bytes
+--- @return string The validation refusal
 local function digest(value: Frozen): string | nil, string
   local raw, err = encode(value)
   if raw == nil then return nil, err end
   return objects.sha256(raw), ""
 end
+--- Write a frozen attempt exactly once: a path that already holds one is
+--- refused, never overwritten, because a second attempt at the same path would
+--- make the first unverifiable.
+--- @param path string Where to save it
+--- @param value Frozen The transaction to freeze onto disk
+--- @return boolean True when it was written
+--- @return string Error message
 local function save(path: string, value: Frozen): boolean, string
   local raw, err = encode(value)
   if raw == nil then return false, err end
   return saved.write_once(path, raw)
 end
+--- A saved attempt back from disk, through the same canonical decode.
+--- @param path string The saved attempt's path
+--- @return Frozen | nil The transaction
+--- @return string Error message
 local function load_saved(path: string): Frozen | nil, string
   local raw, err = fs.read(path)
   if raw == nil then return nil, err end

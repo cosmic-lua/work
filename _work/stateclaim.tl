@@ -26,11 +26,31 @@ local record Result
   refused: {string: string}
   publish_by: integer
 end
+--- One recorded lease as the shared claim logic sees it. `root` carries the
+--- blob's `id`, which is the minted identity for a native acquisition and the
+--- acquisition commit for an imported one; `control` is empty because the
+--- deadline it fed on format 5 is `expires_at`, which the blob carries itself.
+--- @param value boardtree.Claim | nil The recorded lease, nil when none
+--- @return claim.State | nil The lease in the shared shape, nil when none
 local function state(value: boardtree.Claim | nil): claim.State | nil
   if value == nil then return nil end
   return {holder = value.holder, root = value.id, control = "", acquired_at = value.acquired_at,
     renewed_at = value.renewed_at, expires_at = value.expires_at, product_base = value.product_base}
 end
+--- Everything one claim, renew, drop or take needs to become a transition,
+--- decided against one immutable head: the `claims/<id>` writes, the two paths
+--- every member fences, the earliest member's expiry as `publish_by`, and the
+--- per-member identity and work branch to report. A refusal anywhere empties
+--- the whole result: a claim batch is atomic, so no member lands alone.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to decide against
+--- @param requests {Request} One entry per member, with its product base
+--- @param action Action take, renew or drop
+--- @param caller string The session asking
+--- @param now integer The instant leases are judged at
+--- @param force boolean Whether to supersede another session's live lease
+--- @param why string The reason a forced acquisition carries
+--- @return Result The changes, fences, deadline and members, or the refusals
 local function prepare(root: string, head: string, requests: {Request}, action: Action,
     caller: string, now: integer, force: boolean, why: string): Result
   local out: Result = {changes = {}, dependencies = {}, members = {}, refused = {}, publish_by = 0}

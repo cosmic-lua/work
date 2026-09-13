@@ -9,6 +9,22 @@ local stateclaim = require("_work.stateclaim")
 local statewrite = require("_work.statewrite")
 local staging = require("_work.statestaging")
 local store = require("_work.store")
+--- `claim`, `renew` and `drop` on a native board: one commit writing every
+--- member's `claims/<id>`, refused whole when any member is refused, carrying
+--- the earliest member's expiry as the deadline the final push is checked
+--- against. Claim operations are refused inside a draft overlay — a lease
+--- nobody else can see is not a lease.
+--- @param s store.Store The open store
+--- @param ids {string} The members
+--- @param all {item.Item} The board, for resolving each member
+--- @param action stateclaim.Action take, renew or drop
+--- @param caller string The session asking
+--- @param remote string The remote the caller expects to publish to
+--- @param force boolean Whether to supersede another session's live lease
+--- @param why string The reason a forced acquisition carries
+--- @param execute boolean Whether to push now
+--- @param base function The product base to record for a member
+--- @return integer The verdict line's exit status
 local function run(s: store.Store, ids: {string}, all: {item.Item},
     action: stateclaim.Action, caller: string, remote: string, force: boolean, why: string,
     execute: boolean, base: function(item.Item): string | nil, string): integer

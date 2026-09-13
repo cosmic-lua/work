@@ -31,6 +31,10 @@ local record Options
   freeze: freeze.Proof
 end
 
+--- Whether a decoded checkpoint field is a map whose every value is an object
+--- id — the shape the source and marks maps must have before anything trusts one.
+--- @param raw any A field from the decoded checkpoint
+--- @return boolean True when every value is a full lowercase hex id
 local function sha_map(raw: any): boolean
   if not (raw is {string: any}) then return false end
   for _, value in pairs(raw) do
@@ -39,6 +43,13 @@ local function sha_map(raw: any): boolean
   return true
 end
 
+--- One checkpoint back from disk, every field checked: the version, the two id
+--- maps, the phase's own invariants, and the freeze proof when one is bound. A
+--- checkpoint is what makes the migration restartable, so a malformed one is
+--- refused rather than partially believed.
+--- @param path string The checkpoint's path
+--- @return Checkpoint | nil The checkpoint
+--- @return string Error message
 local function read(path: string): Checkpoint | nil, string
   local content, err = fs.read(path)
   if content == nil then return nil, err end
@@ -68,18 +79,43 @@ local function read(path: string): Checkpoint | nil, string
   return raw as Checkpoint, "" -- cast: literal fields checked above
 end
 
+--- Write the checkpoint atomically, so an interrupted run leaves either the
+--- previous checkpoint or the new one, never half of either.
+--- @param path string The checkpoint's path
+--- @param checkpoint Checkpoint The checkpoint to write
+--- @return boolean True on success
+--- @return string Error message
 local function save(path: string, checkpoint: Checkpoint): boolean, string
   local encoded, err = wire.encode(checkpoint)
   if encoded == nil then return false, err end
   return fs.write(path, encoded, {atomic = true})
 end
 
+--- Whether the source refs still are what the checkpoint recorded — every name
+--- and every tip. Any ref moved, added or removed is named rather than
+--- resampled: a migration that re-read its own sources would silently replay a
+--- different board than the one it checkpointed.
+--- @param root string The source repository
+--- @param checkpoint Checkpoint The checkpoint to compare against
+--- @return boolean True when the source ref set is identical
+--- @return string The drift, ref by ref
 local function validate_sources(root: string, checkpoint: Checkpoint): boolean, string
   local actual, err = source.snapshot(root, checkpoint.prefix)
   if actual == nil then return false, err end
   return source.compare(checkpoint.sources, actual)
 end
 
+--- Whether a drifted source ref may still be replayed: only while the
+--- destination's `state` carries no native write past the activation commit.
+--- The live head is read from the destination itself and confirmed not to have
+--- moved during the check; an absent one refuses, because "no state" is not
+--- proof that nothing was written.
+--- @param root string The source repository
+--- @param checkpoint Checkpoint The checkpoint being resumed
+--- @param state_ref string | nil The ref to read the live head from
+--- @param remote string | nil The destination remote to confirm against
+--- @return boolean True when catch-up may append
+--- @return string Why hand reconciliation is required instead
 local function validate_catch_up(root: string, checkpoint: Checkpoint,
     state_ref?: string, remote?: string): boolean, string
   local ref = state_ref or (checkpoint.prefix .. "state")
@@ -115,6 +151,16 @@ local function validate_catch_up(root: string, checkpoint: Checkpoint,
   return true, ""
 end
 
+--- Plan or resume the migration, locally: snapshot the source refs, refuse a
+--- shallow or partial clone, replay every item ref's history into one candidate
+--- `state`, and checkpoint all of it. A rerun against an unchanged source
+--- reports the same head; a moved source ref refuses unless catch-up is asked
+--- for and allowed. Nothing here pushes, and no public ref is touched.
+--- @param root string The source repository
+--- @param options Options | nil The prefix, checkpoint path, freeze proof and
+--- catch-up switch; every field has a default
+--- @return Checkpoint | nil The checkpoint, phase "planned" once replayed
+--- @return string Error message
 local function run(root: string, options?: Options): Checkpoint | nil, string
   local opts = options or {}
   local prefix = opts.prefix or "refs/heads/"

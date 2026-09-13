@@ -6,6 +6,13 @@ local plans = require("_work.stateplan")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local gate = require("_work.gitgate")
+--- The one outstanding attempt these selectors name — an id prefix or a full
+--- ref, or nothing at all when the checkout holds exactly one. Anything else is
+--- refused: publishing "whichever matched" is how the wrong attempt lands.
+--- @param root string The board checkout
+--- @param selectors {string} Id prefixes or refs, possibly empty
+--- @return staging.Receipt | nil The single match
+--- @return string Error message when zero or several match
 local function select_one(root: string, selectors: {string}): staging.Receipt | nil, string
   local all, err = staging.list(root)
   if all == nil then return nil, err end
@@ -22,6 +29,21 @@ local function select_one(root: string, selectors: {string}): staging.Receipt | 
   if #matches ~= 1 then return nil, "select exactly one prepared transaction or draft" end
   return matches[1], ""
 end
+--- `gitboard publish` on a native board: publish a prepared attempt or draft,
+--- save a connector plan, render one indexed call from a saved plan, or record
+--- the commit a connector returned. Every connector path goes through the SAVED
+--- plan, never a live re-render, and a plan's destination is re-checked against
+--- this checkout before any call is emitted.
+--- @param s store.Store The open store
+--- @param selectors {string} Which attempt to act on
+--- @param remote string The configured board remote
+--- @param execute boolean Whether to push now
+--- @param plan_path string | nil Where to save a connector plan
+--- @param from_plan string | nil A saved plan to render or confirm from
+--- @param call_index string | nil Which call of that plan to render
+--- @param published_sha string | nil The commit the connector returned
+--- @param repository string | nil The repository the caller expects
+--- @return integer The verdict line's exit status
 local function cmd_publish(s: store.Store, selectors: {string}, remote: string, execute: boolean,
     plan_path?: string, from_plan?: string, call_index?: string, published_sha?: string,
     repository?: string): integer

@@ -8,6 +8,13 @@ local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
 local storeinit = require("_work.storeinit")
 
+--- Create an empty format-6 board in `root`: the `format` marker at 6, one
+--- board item, and `refs/heads/state` carrying both. A repository that already
+--- holds legacy item, ended or claim-batch refs is refused rather than
+--- half-converted — moving such a board is `migrate6`'s job.
+--- @param root string The directory to initialise, `git init`ed when bare of one
+--- @return boolean True when the board exists and carries the marker
+--- @return string Error message
 local function init(root: string): boolean, string
   local denied = storeinit.linked_worktree_refusal(root)
   if denied ~= nil then return false, denied end

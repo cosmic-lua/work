@@ -13,6 +13,19 @@ local tx = require("_work.statetransaction")
 local stategate = require("_work.stategate")
 local staging = require("_work.statestaging")
 
+--- Turn one mutation into one immutable commit and one frozen transition: the
+--- fence from what this invocation read to decide, the message with its
+--- reserved trailers bound, the bounded gate re-checked against the staging
+--- base before anything is written, the commit itself, and the receipt that
+--- keeps all of it publishable. Nothing here touches `refs/heads/state`:
+--- publication is `_work.statepublish`'s.
+--- @param s store.Store An open store on a format-6 board
+--- @param changes {tx.Change} The paths this mutation writes or deletes
+--- @param message string The commit subject and body, before trailers
+--- @param publish_by integer | nil A claim batch's deadline, 0 for none
+--- @param gate string | nil The gate to re-run when this mutation is bounded
+--- @return boolean True on success, including the no-op success
+--- @return string The no-op message, or the refusal
 local function transition(s: store.Store, changes: {tx.Change}, message: string,
     publish_by?: integer, gate?: string): boolean, string
   if #changes == 0 then return true, store.NOOP_PREFIX .. message .. " leaves the board unchanged" end
@@ -110,6 +123,16 @@ local function observe(s: store.Store, id: string): boolean, string
   end
   return true, ""
 end
+--- One item edit (with any `also` items) as a transition: the paths come from
+--- the same fast-import diff the ref layout uses, against the item as OBSERVED,
+--- so an unchanged field writes nothing and an unchanged item is a no-op.
+--- @param s store.Store An open store on a format-6 board
+--- @param it item.Item The item as the verb left it
+--- @param message string The commit subject
+--- @param spec itemtree.Spec | nil Replacement prose for `it`, nil to leave it
+--- @param also {item.Item} | nil Further items this mutation writes
+--- @return boolean True on success, including the no-op success
+--- @return string The no-op message, or the refusal
 local function save(s: store.Store, it: item.Item, message: string, spec?: itemtree.Spec,
     also?: {item.Item}): boolean, string
   local batch: {item.Item} = {it}
@@ -143,6 +166,15 @@ local function save(s: store.Store, it: item.Item, message: string, spec?: itemt
   end
   return true, ""
 end
+--- A log entry: `items/<id>/log/<ksuid>.md` carrying the prose AND the same
+--- text in the commit body, so `git log -- items/<id>` and the tree both show
+--- it. The path is what makes the entry an event the reader can attribute.
+--- @param s store.Store An open store on a format-6 board
+--- @param it item.Item The item the entry belongs to
+--- @param subject string The commit subject
+--- @param prose string The entry's text
+--- @return boolean True on success
+--- @return string The refusal
 local function log(s: store.Store, it: item.Item, subject: string, prose: string): boolean, string
   local ok, err = observe(s, it.id)
   if not ok then return false, err end

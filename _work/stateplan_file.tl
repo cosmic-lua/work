@@ -2,6 +2,16 @@
 local fd = require("cosmic.fd")
 local fs = require("cosmic.fs")
 local rand = require("cosmic.rand")
+--- Publish `raw` at `path` exactly once and durably: written to a private
+--- temporary, fsynced, then hard-linked into place, so a path that already
+--- holds an attempt fails rather than being overwritten and no reader ever sees
+--- a half-written one. The directory is fsynced too, so the link survives a
+--- crash. Create-once is the point: a second attempt at the same path would
+--- make the first unverifiable.
+--- @param path string The path to create
+--- @param raw string The exact bytes to publish
+--- @return boolean True when the path now holds these bytes
+--- @return string Error message; "saved attempt already exists" for a collision
 local function write_once(path: string, raw: string): boolean, string
   local directory = fs.dirname(path)
   local made, merr = fs.make_dirs(directory, fs.octal("700"))

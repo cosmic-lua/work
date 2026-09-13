@@ -8,6 +8,10 @@ local item = require("_work.item")
 local projection = require("_work.stateplan_git")
 local tx = require("_work.statetransaction")
 
+--- Every item id this transition writes a path under — the set a re-run gate
+--- judges, rather than the whole board it reads to judge them.
+--- @param t tx.Transition The frozen transition
+--- @return {string: boolean} Item ids present as keys
 local function changed_item_ids(t: tx.Transition): {string: boolean}
   local out: {string: boolean} = {}
   for _, change in ipairs(t.changes) do
@@ -17,6 +21,15 @@ local function changed_item_ids(t: tx.Transition): {string: boolean}
   return out
 end
 
+--- `attach`'s own gate re-run against the fetched head: only an edge this
+--- transition actually MOVED is re-judged, through the same
+--- `_work.graphguards` predicates the verb used, so a cycle, a broken chain, a
+--- newly invalid item, or a parent that now needs reopening refuses here for
+--- the same reason it would have refused at the verb.
+--- @param before {item.Item} The board at the fetched head
+--- @param items {item.Item} That board with this transition applied
+--- @param changed {string: boolean} The ids this transition writes
+--- @return string | nil The refusal, nil when the edge still holds
 local function parent_refusal(before: {item.Item}, items: {item.Item}, changed: {string: boolean}): string | nil
   local index, old = item.by_id(items), item.by_id(before)
   for id in pairs(changed) do
@@ -36,6 +49,14 @@ local function parent_refusal(before: {item.Item}, items: {item.Item}, changed: 
   end
   return nil
 end
+--- `depend`'s own gate re-run against the fetched head: for every dependency
+--- this transition ADDS, the shared cycle walk runs again over the board that
+--- landed meanwhile, which is how an edit racing onto the cycle path is
+--- refused rather than fenced.
+--- @param before {item.Item} The board at the fetched head
+--- @param items {item.Item} That board with this transition applied
+--- @param changed {string: boolean} The ids this transition writes
+--- @return string | nil The refusal, nil when no added edge closes a cycle
 local function dependency_refusal(before: {item.Item}, items: {item.Item}, changed: {string: boolean}): string | nil
   local index, old = item.by_id(items), item.by_id(before)
   for id in pairs(changed) do
@@ -70,6 +91,12 @@ local function doing_count(items: {item.Item}): integer
   return n
 end
 
+--- The lane mint's gate re-run: a repair item for a lane that already has an
+--- open one is refused, which is what the mint read the whole board to decide.
+--- @param before {item.Item} The board at the fetched head
+--- @param after {item.Item} That board with this transition applied
+--- @param changed {string: boolean} The ids this transition writes
+--- @return string | nil The refusal naming the existing repair, nil otherwise
 local function lane_refusal(before: {item.Item}, after: {item.Item},
     changed: {string: boolean}): string | nil
   local old = item.by_id(before)
@@ -85,6 +112,16 @@ local function lane_refusal(before: {item.Item}, after: {item.Item},
   return nil
 end
 
+--- Re-run a BOUNDED mutation's own gate against the head it is about to land
+--- on. Publication calls this only after every fenced path matched, so this is
+--- the whole of what protects a decision made from reading beyond the items
+--- written. An unrecognised gate name refuses: a bounded transition whose gate
+--- this build cannot re-run must not be published on trust.
+--- @param root string The repository holding `head`
+--- @param head string The fetched board head this transition would land on
+--- @param transition tx.Transition The frozen transition and its gate name
+--- @return boolean True when the gate passes again
+--- @return string The gate's own refusal
 local function check(root: string, head: string, transition: tx.Transition): boolean, string
   local known = transition.gate == "take" or transition.gate == "doing-bound"
   or transition.gate == "new" or transition.gate == "lane-mint"

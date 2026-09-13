@@ -10,10 +10,26 @@ local record Status
   reason: string
   absence_proven: boolean
 end
+--- Whether two transitions are the same publication: the changed paths and
+--- their content, the message, and the logical author — all three, because a
+--- commit with a matching `Transaction:` trailer but different content is not
+--- this attempt, and neither is one that landed under another author.
+--- @param a tx.Transition One transition
+--- @param b tx.Transition The other
+--- @return boolean True when they are the same publication
 local function same_transition(a: tx.Transition, b: tx.Transition): boolean
   return literal.encode(a.changes) == literal.encode(b.changes)
   and a.message == b.message and literal.encode(a.author) == literal.encode(b.author)
 end
+--- Whether `tip`'s first-parent chain carries the frozen chain WHOLE: one
+--- commit per transition, walked back in order, each compared by content. A
+--- candidate that reaches the same final tree with a transition missing or
+--- squashed fails here, which is the point — the branch's history is the log.
+--- @param root string The repository holding `tip`
+--- @param tip string The candidate tip
+--- @param frozen tx.Frozen The attempt to confirm against
+--- @return boolean True when every transition is present, in order
+--- @return string Which transition differs, or why the walk could not continue
 local function complete_chain(root: string, tip: string, frozen: tx.Frozen): boolean, string
   local normalized, nerr = tx.freeze(frozen)
   if normalized == nil then return false, nerr end

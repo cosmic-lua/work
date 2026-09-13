@@ -1,6 +1,9 @@
 --- Native storage commands share the ordinary board command table.
 local flags = require("cosmic.flags")
 
+--- Add the native-only commands to the ordinary board command table, so
+--- `migrate6` is one verb among the rest rather than a separate entry point.
+--- @param spec flags.CommandSpec The command table, appended to in place
 local function extend(spec: flags.CommandSpec)
   spec.commands[#spec.commands + 1] = {name = "migrate6",
     summary = "prepare, audit, and explicitly publish a frozen native-board migration",

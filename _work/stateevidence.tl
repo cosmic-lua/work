@@ -5,6 +5,13 @@ local gitobj = require("_work.gitobj")
 local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 
+--- The prose a research handover recorded, read at the commit it named: on one
+--- branch a recorded result is a published board commit, so the spec is
+--- `<sha>:items/<id>/spec/*` rather than a ref's own tree.
+--- @param root string The repository holding `sha`
+--- @param sha string The board commit the handover recorded
+--- @param id string The item whose prose to read
+--- @return itemtree.Spec The prose, both fields "" when the commit has none
 local function read_spec(root: string, sha: string, id: string): itemtree.Spec
   local out: itemtree.Spec = {change = "", non_goals = ""}
   if not ksuid.is_id(id) or #sha ~= 40 or not sha:match("^[0-9a-f]+$") then return out end
@@ -17,6 +24,17 @@ local function read_spec(root: string, sha: string, id: string): itemtree.Spec
   return out
 end
 
+--- Whether a recorded commit may stand as evidence for `id`: it must be an
+--- ancestor of the fetched head AND an event of that item under the reader's
+--- own attribution — its diff names `items/<id>/` or `claims/<id>` — so a
+--- result recorded on a claim bridge still resolves, and a commit from another
+--- item's history never does.
+--- @param root string The repository holding `head`
+--- @param head string The fetched board head
+--- @param result string The commit the handover recorded
+--- @param id string The item the evidence must belong to
+--- @return boolean True when the commit is this item's published history
+--- @return string Error message naming why it is not
 local function verify(root: string, head: string, result: string,
     id: string): string | nil, string
   if not ksuid.is_id(id) then return nil, "invalid evidence item id" end

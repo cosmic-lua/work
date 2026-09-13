@@ -33,14 +33,28 @@ end
 local type Claim = boardtree.Claim
 local type Entry = boardtree.Entry
 
+--- A fresh 40-hex claim identity, minted at claim time so the work branch
+--- `work/<handle>/<id12>` is known before publication and never moves — unlike
+--- an imported lease, whose identity is its acquisition commit.
+--- @return string A 40-character lowercase hex id
 local function mint_claim_id(): string
   return codec.encode_hex(rand.bytes(20))
 end
 
+--- Whether `value` is a full lowercase hex object id, the only id shape the
+--- claim and marks records admit.
+--- @param value any Any decoded literal field
+--- @return boolean True for exactly 40 lowercase hex characters
 local function full_sha(value: any): boolean
   return value is string and #value == 40 and value:match("^[0-9a-f]+$") ~= nil
 end
 
+--- The `claims/<id>` blob for one recorded lease, refusing a record no reader
+--- should have to interpret: an id that is not an object id, an empty holder,
+--- or timestamps out of order.
+--- @param st Claim The lease to encode
+--- @return string | nil The canonical literal blob content
+--- @return string Error message naming the field that refused
 local function encode_claim(st: Claim): string | nil, string
   if not full_sha(st.id) then return nil, "claim id must be a full lowercase hex id" end
   if st.holder == "" then return nil, "claim holder must not be empty" end
@@ -52,6 +66,12 @@ local function encode_claim(st: Claim): string | nil, string
       expires_at = st.expires_at, product_base = st.product_base})
 end
 
+--- One `claims/<id>` blob back as a lease, refusing anything that is not the
+--- byte-identical canonical encoding of itself — an unknown field, a missing
+--- one, a re-ordered one — so no two blobs can mean the same lease.
+--- @param source string The blob's exact content
+--- @return Claim | nil The lease
+--- @return string Error message
 local function decode_claim(source: string): Claim | nil, string
   local raw, err = wire.decode_object(source)
   if raw == nil then return nil, err end
@@ -79,6 +99,10 @@ local function decode_claim(source: string): Claim | nil, string
   return st
 end
 
+--- The `migration/marks` blob: the replay's old-id to new-id map, written once.
+--- @param marks {string: string} Source commit id -> replayed commit id
+--- @return string | nil The canonical literal blob content
+--- @return string Error message when either side is not an object id
 local function encode_marks(marks: {string: string}): string | nil, string
   for old, new in pairs(marks) do
     if not full_sha(old) or not full_sha(new) then
@@ -88,6 +112,11 @@ local function encode_marks(marks: {string: string}): string | nil, string
   return wire.encode(marks)
 end
 
+--- `migration/marks` back as a map, refusing a non-canonical encoding or any
+--- entry that is not a pair of object ids.
+--- @param source string The blob's exact content
+--- @return {string: string} | nil Source commit id -> replayed commit id
+--- @return string Error message
 local function decode_marks(source: string): {string: string} | nil, string
   local raw, err = wire.decode_object(source)
   if raw == nil then return nil, err end
@@ -103,6 +132,17 @@ local function decode_marks(source: string): {string: string} | nil, string
   return out
 end
 
+--- One `items/<id>` subtree: the bytes `_work.itemtree.build_tree` already
+--- produces for the ref layout, with `claim_batch` dropped from `meta` (the
+--- lease lives in `claims/<id>` now) and a `log/` subtree added when the item
+--- has entries. `write` false computes the ids without creating objects.
+--- @param root string The repository to compute or write objects in
+--- @param it item.Item The item; its `claim_batch` is restored before returning
+--- @param spec itemtree.Spec | nil The prose, nil for an item with none
+--- @param logs {string: string} | nil Log entry ksuid -> its prose
+--- @param write boolean | nil Whether to write the objects, not just hash them
+--- @return string | nil The subtree id
+--- @return string Error message
 local function build_item(root: string, it: item.Item, spec: itemtree.Spec | nil,
     logs?: {string: string}, write?: boolean): string | nil, string
   local claim_batch = it.claim_batch
@@ -154,6 +194,12 @@ local function rebuild_item(root: string, it: item.Item, spec: itemtree.Spec | n
   return gitobj.mktree(root, nonlog)
 end
 
+--- Every path in one commit's tree, trees included — one `ls-tree -r -t`, so
+--- the cost is one process regardless of board size.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to list
+--- @return {Entry} | nil Every entry, blobs and trees alike
+--- @return string Error message
 local function snapshot_tree_entries(root: string, head: string): {Entry} | nil, string
   local r, err = child.run({"git", "ls-tree", "-r", "-t", "-z", head}, {cwd = root})
   if r == nil then return nil, err end
@@ -166,6 +212,12 @@ local function snapshot_tree_entries(root: string, head: string): {Entry} | nil,
   return out
 end
 
+--- Every BLOB path in one commit's tree — `snapshot_tree_entries` without the
+--- tree entries, for a caller that only wants content.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to list
+--- @return {Entry} | nil Every blob entry
+--- @return string Error message
 local function snapshot_entries(root: string, head: string): {Entry} | nil, string
   local all, err = snapshot_tree_entries(root, head)
   if all == nil then return nil, err end
@@ -174,6 +226,14 @@ local function snapshot_entries(root: string, head: string): {Entry} | nil, stri
   return out
 end
 
+--- The object id one path holds at `head`, or `ZERO_SHA` when the path is
+--- absent — the fence records an absent path as the zero id rather than
+--- omitting it, so a path that APPEARS is a change like any other.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to read
+--- @param path string A path in its tree; "" means the root tree itself
+--- @return string | nil The object id, `ZERO_SHA` when absent
+--- @return string Error message
 local function path_id(root: string, head: string, path: string): string | nil, string
   if path == "" then return gitobj.tree_of(root, head) end
   local r, err = child.run({"git", "rev-parse", "--verify", head .. ":" .. path}, {cwd = root})

@@ -20,6 +20,12 @@ local record Plan
   prerequisites: {string}
 end
 
+--- The exact URL a migration push would go to, refusing a remote name that
+--- could be read as an option or carries control characters.
+--- @param root string The source repository
+--- @param remote string The configured migration remote
+--- @return string | nil The push URL
+--- @return string Error message
 local function remote_url(root: string, remote: string): string | nil, string
   if remote == "" or remote:sub(1, 1) == "-" or remote:find("[%c]") then
     return nil, "invalid migration remote"
@@ -29,6 +35,11 @@ local function remote_url(root: string, remote: string): string | nil, string
   return (url:gsub("%s+$", "")), ""
 end
 
+--- Every branch the destination advertises right now, as ref to tip.
+--- @param root string The repository to run git in
+--- @param remote string The remote or URL to ask
+--- @return {string: string} | nil Ref name -> tip
+--- @return string Error message
 local function remote_refs(root: string, remote: string): {string: string} | nil, string
   local raw, err = source.git(root, {"ls-remote", "--refs", remote, "refs/heads/*"})
   if raw == nil then return nil, err end
@@ -37,6 +48,11 @@ local function remote_refs(root: string, remote: string): {string: string} | nil
   return out, ""
 end
 
+--- Just the four fenced legacy namespaces out of a ref map, renamed to their
+--- `refs/heads/` form so a local snapshot and a remote listing compare directly.
+--- @param refs {string: string} Any ref map
+--- @param prefix string The prefix those names carry
+--- @return {string: string} The legacy refs, keyed by their branch name
 local function legacy(refs: {string: string}, prefix: string): {string: string}
   local out: {string: string} = {}
   for ref, sha in pairs(refs) do
@@ -49,6 +65,14 @@ local function legacy(refs: {string: string}, prefix: string): {string: string}
   return out
 end
 
+--- The commit that moves `refs/heads/board/format` to 6, parented on the marker
+--- the destination holds now. A destination already at 6 needs no new commit;
+--- one at neither 5 nor 6 refuses rather than being overwritten.
+--- @param root string The repository to write the commit in
+--- @param parent string The marker commit the destination holds, "" for none
+--- @param date string The author and committer date to stamp
+--- @return string | nil The marker commit to push
+--- @return string Error message
 local function marker(root: string, parent: string, date: string): string | nil, string
   if parent ~= "" then
     local existing, err = source.git(root, {"show", parent .. ":format"})
@@ -71,6 +95,18 @@ local function marker(root: string, parent: string, date: string): string | nil,
       message = "activate format 6", op = "migrate6"})
 end
 
+--- The pushes that publish a replayed migration: ancestors of the candidate in
+--- turn, `limit` commits apart, each a fast-forward and each idempotent on a
+--- rerun, then one atomic push carrying `state` and the format marker together —
+--- so a partial `state` activates nothing and the cutover is one instant.
+--- @param root string The source repository
+--- @param cp migrate6.Checkpoint The replayed checkpoint
+--- @param remote string The destination remote
+--- @param limit integer Maximum commits between staged pushes
+--- @param marker_parent string | nil The marker commit the destination holds
+--- @param published_head string | nil The `state` the destination already has
+--- @return Plan | nil The staged pushes, the activation push and its prerequisites
+--- @return string Error message
 local function plan(root: string, cp: migrate6.Checkpoint, remote: string,
     limit: integer, marker_parent?: string, published_head?: string): Plan | nil, string
   if cp.phase ~= "planned" then return nil, "migration is not fully replayed" end
@@ -114,6 +150,16 @@ local function plan(root: string, cp: migrate6.Checkpoint, remote: string,
       "Connector activation is unavailable: state and marker must update in one atomic shell push."}}, ""
 end
 
+--- Re-fetch the destination's complete legacy ref set into a private namespace
+--- and compare every name and tip against the checkpoint — with `--prune`, so a
+--- ref DELETED since the snapshot cannot hide behind a stale tracking ref. Run
+--- immediately before activation: this is what makes the freeze provable rather
+--- than assumed.
+--- @param root string The source repository
+--- @param cp migrate6.Checkpoint The checkpoint to compare against
+--- @param remote string The destination remote
+--- @return {string: string} | nil The destination's refs as observed
+--- @return string The drift, or why the closure is incomplete
 local function verify_sources(root: string, cp: migrate6.Checkpoint,
     remote: string): {string: string} | nil, string
   local destination, uerr = remote_url(root, remote)
@@ -142,6 +188,19 @@ local function verify_sources(root: string, cp: migrate6.Checkpoint,
   return actual, ""
 end
 
+--- Every guard the activation stands on, freshly: the witness bound to this
+--- exact destination, the freeze proven effective BEFORE the source snapshot,
+--- the independent verifier's own answer, and the complete destination ref set
+--- re-compared. Deliberately separate from `plan`, so no saved plan can bypass
+--- these.
+--- @param root string The source repository
+--- @param cp migrate6.Checkpoint The replayed checkpoint
+--- @param remote string The destination remote
+--- @param limit integer Maximum commits between staged pushes
+--- @param proof FreezeProof The witness bound to the destination
+--- @param verify Verifier The independent verifier; required
+--- @return Plan | nil The plan, guarded
+--- @return string Which guard refused
 local function prepare_activation(root: string, cp: migrate6.Checkpoint, remote: string,
     limit: integer, proof: FreezeProof, verify: Verifier): Plan | nil, string
   local destination, err = remote_url(root, remote)
@@ -174,6 +233,16 @@ local function activate(root: string, cp: migrate6.Checkpoint, remote: string,
   return true, ""
 end
 
+--- Run the migration's publication: the staged pushes in order, then the atomic
+--- activation, each behind a freshly verified freeze and ref-set recheck.
+--- @param root string The source repository
+--- @param cp migrate6.Checkpoint The replayed checkpoint
+--- @param remote string The destination remote
+--- @param limit integer Maximum commits between staged pushes
+--- @param proof FreezeProof The witness bound to the destination
+--- @param verify Verifier The independent verifier
+--- @return boolean True when `state` and the marker are live
+--- @return string Error message
 local function publish(root: string, cp: migrate6.Checkpoint, remote: string,
     limit: integer, proof: FreezeProof, verify: Verifier): boolean, string
   local p, err = prepare_activation(root, cp, remote, limit, proof, verify)

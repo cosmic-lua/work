@@ -20,6 +20,13 @@ end
 local type HistoryEvent = boardhistory.HistoryEvent
 local type History = boardhistory.History
 
+--- The author a commit means, which is not always the one Git recorded: a
+--- connector that cannot set the author writes its own identity and carries the
+--- session's in the `Gitboard-Author` trailer, so that trailer wins when it
+--- parses and the physical author stands in when it does not.
+--- @param value string The trailer's value, "" when the commit has none
+--- @param fallback string The physical `Name <email>` Git recorded
+--- @return string `Name <email>` to attribute the commit to
 local function logical_author(value: string, fallback: string): string
   if value == "" then return fallback end
   local decoded = literal.decode_object(value)
@@ -29,6 +36,16 @@ local function logical_author(value: string, fallback: string): string
   return name .. " <" .. email .. ">"
 end
 
+--- The branch's first-parent history as board events, attributed BY PATH: a
+--- commit naming `items/<id>/` or `claims/<id>` is an event of that item, so a
+--- claim batch of N members yields N rows, and the newest commit naming an
+--- item is its tip and `touched_at`. One `git log`, whatever the board's size.
+--- Trailer parsing is pinned with explicit `-c` overrides so ambient
+--- configuration cannot change who a commit is attributed to.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to walk back from
+--- @return History | nil Events oldest-first, with each item's tip and date
+--- @return string Error message
 local function read(root: string, head: string): History | nil, string
   local r, err = child.run({"git", "-c", "core.commentChar=#", "-c", "trailer.separators=:",
       "-c", "trailer.Gitboard-Author.key=Gitboard-Author", "log", "--first-parent",

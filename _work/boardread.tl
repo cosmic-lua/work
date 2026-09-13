@@ -24,6 +24,18 @@ end
 local type Decoded = boardread.Decoded
 local type View = boardread.View
 
+--- Project the whole board from one commit: every item with its claim folded
+--- in, its prose, its log entries, and the object id of each `items/<id>`
+--- subtree and `claims/<id>` blob — the two ids a mutation fences against.
+--- `migration/marks` is deliberately not materialised: it is retained
+--- evidence, validated by `_work.stateread_fsck`, and decoding it on every
+--- read would cost megabytes no reader wants.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to project; no ref is resolved
+--- @param now integer | nil The instant claims are judged live or expired at,
+--- defaulting to this process's clock
+--- @return View | nil The projection
+--- @return string Error message naming the first unreadable path
 local function list(root: string, head: string, now?: integer): View | nil, string
   local projected_at = now or os.time()
   local all_entries, err = boardtree.snapshot_tree_entries(root, head)
@@ -108,6 +120,14 @@ local function list(root: string, head: string, now?: integer): View | nil, stri
   return out
 end
 
+--- One item as of `head`, with the two object ids that item's fence records.
+--- Reads the whole snapshot, since a format-6 board is one tree: there is no
+--- cheaper single-item read to prefer.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to read
+--- @param id string Item id
+--- @return Decoded | nil The item, its prose, claim, logs and path ids
+--- @return string Error message; "item not found: <id>" when absent
 local function load_item(root: string, head: string, id: string): Decoded | nil, string
   local view, err = list(root, head); if view == nil then return nil, err end
   local it = view.items_by_id[id]; if it == nil then return nil, "item not found: " .. id end

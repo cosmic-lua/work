@@ -5,6 +5,17 @@ local boardhistory = require("_work.boardhistory")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 
+--- Fill a fresh index's native tables from one head: the `state_paths` row per
+--- item (its subtree and claim ids) and the path-attributed `events` rows. The
+--- view and history are parameters so a caller that already read them — a
+--- rebuild always has — pays for neither a second time.
+--- @param db sqlite.Database The index being rebuilt, inside its transaction
+--- @param root string The repository holding `head`
+--- @param head string The exact commit being projected
+--- @param known_view boardread.View | nil A projection already read
+--- @param known_history boardhistory.History | nil A history already read
+--- @return boolean True on success
+--- @return string Error message
 local function fill_events(db: sqlite.Database, root: string, head: string,
     known_view?: boardread.View, known_history?: boardhistory.History): boolean, string
   local history = known_history
@@ -38,6 +49,13 @@ local function fill_events(db: sqlite.Database, root: string, head: string,
     end)
 end
 
+--- The two fenced path ids for each named item at `head`, an absent path as
+--- the zero id — one whole-board read for the batch rather than one per item.
+--- @param root string The repository holding `head`
+--- @param head string The exact commit to read
+--- @param ids {string} Item ids
+--- @return {string: string} | nil Path -> object id for every id given
+--- @return string Error message
 local function paths(root: string, head: string, ids: {string}): {string: string} | nil, string
   local view, err = boardread.list(root, head)
   if view == nil then return nil, err end
