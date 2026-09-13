@@ -1,5 +1,3 @@
-## Change
-
 Implement chunk 4 of Wdaw_QfXv after integrated diagnostics: commit adversarial
 end-to-end regression tests and accurate driver documentation; verify the
 complete feature through the repo gate. Repo cosmic-lua/cosmic. Parent freezes
