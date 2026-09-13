@@ -1,5 +1,6 @@
 title: briefs: CI and PR state come from show/sync on the board's cache, not the GitHub connector — the connector's bucket is the one that rate-limits, and it is shared by every session
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: 0bb7ec89e32efa6299f2c6bb4071bf264be4dc73
 resolution: not-planned
+touches: _work/brieftext_review.tl _work/brieftext.tl skills/work/SKILL.md _work/gitshow_test.tl _work/brief_test.tl
