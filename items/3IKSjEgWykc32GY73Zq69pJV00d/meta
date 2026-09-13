@@ -1,6 +1,7 @@
 title: cosmo.DecodeLua: the C literal parser in tool/net, beside ljson.c
 parent: 3IK8E4XFNSEMc6fXtc6qbUxiLVO
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 274
 resolution: completed
 builders: 931e78b5-bbf4-5886-9bf0-76f62cce36c7 881222fd-9a27-5a97-939d-2ff71f1bb67b
+touches: tool/net/llua.h tool/net/ljson.h tool/net/llua.c libc/ctype.h tool/lua/lcosmo.c tool/net/BUILD.mk tool/lua/BUILD.mk tool/net/definitions.lua tool/lua/test_llua.lua
