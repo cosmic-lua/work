@@ -1,5 +1,3 @@
-## Change
-
 `cosmic/css.tl:4-15` says the alphanumeric allowlist makes a value safe
 "without parsing CSS: none of those bytes can open a string, a comment, a
 `url(…)`, or an `expression(…)`". True for OPENING one; false inside one the
@@ -24,27 +22,3 @@ Test the diff carries, in `cosmic/css_test.tl`: extend
 asserts no `(`/`)` survive) to assert the exact output
 `css.escape("javascript:alert(1)") == "javascript\\3a alert\\28 1\\29 "`, so
 the shape the doc warns about is pinned rather than described.
-
-## Evidence
-
-Shape, computed with the escape body of `cosmic/css.tl:18-30` under
-`o/bootstrap/cosmic probe.lua`:
-```
-css(javascript:alert(1)) -> javascript\3a alert\28 1\29 
-```
-Per CSS Syntax Level 3 §4.3.6 (consume a url token) and §4.3.7 (consume an
-escaped code point), `\3a ` inside an unquoted url token is the code point
-U+003A, so the token's value is `javascript:alert(1)`.
-Doc text claiming coverage: `git show origin/main:cosmic/css.tl | sed -n 12,15p`
-```
---- alphanumerics is what makes this safe without parsing CSS: none of
---- those bytes can open a string, a comment, a `url(…)`, or an
---- `expression(…)`.
-```
-Current test: `git show origin/main:cosmic/css_test.tl | sed -n 19,24p` asserts only `not result:match("[()]")`.
-
-## Non-goals
-
-No CSS-context escaper for url()/selectors: the correct tool there is a URL
-allowlist, which is the `safe_href` item (template-url-context). No
-markup scanning in the template.
