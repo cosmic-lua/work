@@ -1,5 +1,3 @@
-## Change
-
 Replace crash bisection and parent-side input reconstruction in `_fuzz/driver.tl`
 with truthful process classification and at most ONE diagnostic rerun. The rerun
 records the actual child's most recent execution checkpoint. It may reproduce
@@ -248,16 +246,3 @@ Any fixture read/copied by path declares `--- reads: <fixture-path>` before
 its first local. Fixtures must use the candidate-built module closure, not a
 pin's embedded _fuzz module. The driver_test headroom sibling eDS8_niuS stays
 open for its own reconciliation; this plan needs no separate preparatory PR.
-
-## Non-goals
-
-Do not require pure generators, promise byte-only replay restores arbitrary
-closure state, or repair the ordinary shrinker's impure-generator semantics.
-Do not persist a corpus, add fuzz guidance, authenticate ambient FUZZ_ISOLATE,
-change process APIs beyond preserving the signal, implement shared memory
-across exec, or journal every passing run. Full original-input recording
-would require always-on IPC/storage and a separate measured design. Bisection
-is rejected because crash/no-crash is not monotonic for stateful/nondeterministic
-or timed-out executions; no amount of parent-side reseeding repairs that.
-No speedup is claimed for this design. Diagnosis may fail to reproduce due to
-changed timing or state; honest unavailability is the required result.
