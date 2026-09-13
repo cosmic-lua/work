@@ -1,5 +1,3 @@
-## Change
-
 The read model made mutations faster and reads slower. Medians of
 two interleaved runs each of `_perf/bench/verbs_bench.tl` on the
 1000-item fixture, release 2026-09-05-bc8a0ae against
