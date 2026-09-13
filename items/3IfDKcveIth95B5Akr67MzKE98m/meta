@@ -1,6 +1,7 @@
 title: third_party/lua: pristine sources + numbered patches, and land 5.4.9 with it
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
 resolution: completed
 builders: work9c-agent-4 work9-agent-2
 speccers: e277faa5-ee02-55c9-8d7e-4d688b76f501
+touches: third_party/lua/lua.h third_party/sqlite3/update.sh third_party/lua/update.sh 3p/cosmos/cosmos_pin.tl
