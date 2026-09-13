@@ -82,8 +82,8 @@ CREATE TABLE role (
 -- work items only (`workable`): accepted 1, review 2, rework 3,
 -- building 4 for a doing item (`state`/`substate` already derive
 -- which); repair 5 for a todo item filed under `_work.flow.LANE_PARENT`
--- (a lane repair is known by its parentage);
--- ordinary todo 6.
+-- AND titled as `_work.flow.repair_title` writes — G8 has ordinary
+-- children too, so parentage alone names nothing; ordinary todo 6.
 CREATE VIEW stage AS
   SELECT w.id AS id,
     CASE
@@ -94,7 +94,8 @@ CREATE VIEW stage AS
           WHEN 'rework' THEN 3
           ELSE 4
         END
-      WHEN w.parent = ']] .. flow.LANE_PARENT .. [[' THEN 5
+      WHEN w.parent = ']] .. flow.LANE_PARENT .. [['
+        AND w.title LIKE ']] .. flow.REPAIR_TITLE_LIKE .. [[' THEN 5
       ELSE 6
     END AS stage
   FROM workable w

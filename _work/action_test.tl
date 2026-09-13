@@ -67,8 +67,8 @@ local function placed_root(items: {Item}): Item
 end
 
 --- `placed_root` plus a second ranked outcome standing at
---- `flow.LANE_PARENT`, so an item under `lane` is a lane repair by
---- parentage and one under `root` is ordinary work.
+--- `flow.LANE_PARENT`, so an item under `lane` titled as a repair is
+--- a lane repair and one under `root` is ordinary work.
 --- @param items {Item} The item list to append the board and both outcomes to
 --- @return Item root
 --- @return Item lane

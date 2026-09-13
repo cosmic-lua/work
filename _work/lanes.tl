@@ -226,7 +226,7 @@ end
 --- @param lane string Workflow filename
 --- @return string The title
 local function repair_title(lane: string): string
-  return ("lane repair: %s is red"):format(lane)
+  return flow.repair_title(lane)
 end
 
 --- Whether `it` is the open repair item for `lane` — the search

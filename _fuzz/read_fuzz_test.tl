@@ -68,9 +68,10 @@ local MAX_ORDER < const > = 5
 
 --- A fixed pool of ids: which items and which order/root-list entries
 --- use which is what the generator randomizes.
---- `flow.LANE_PARENT` sits in the pool so a drawn parent can make an
---- item a lane repair — the parentage `_work.readddl`'s stage view
---- ranks at `STAGE_REPAIR`, otherwise unreachable from letter ids.
+--- `flow.LANE_PARENT` sits in the pool so a drawn parent, with a
+--- drawn repair title, can make an item a lane repair — the shape
+--- `_work.readddl`'s stage view ranks at `STAGE_REPAIR`, otherwise
+--- unreachable from letter ids and `x` titles.
 local ID_POOL < const >: {string} = {"a", "b", "c", "d", "e", "f", "g", "h",
   flow.LANE_PARENT}
 
@@ -93,8 +94,8 @@ end
 --- Build one adversarial item: a real id from the pool, a parent drawn
 --- from the same pool (itself, a sibling, or a dangling id), an
 --- `order` list drawn the same way, and randomized stage-affecting
---- fields; a parent drawn as `flow.LANE_PARENT` makes the item a
---- lane repair.
+--- fields; a parent drawn as `flow.LANE_PARENT` together with a
+--- drawn repair title makes the item a lane repair.
 --- @param src source.Recorder The source to draw from
 --- @param pool {string} The id pool
 --- @param id string This item's own id (also in the pool)
@@ -115,7 +116,8 @@ local function adversarial_item(src: source.Recorder, pool: {string},
   end
   local verdict = VERDICTS[src:int(1, #VERDICTS)]
   return {
-    id = id, title = "x", parent = parent, repo = "", base = "",
+    id = id, title = src:int(1, 3) == 1 and flow.repair_title("x") or "x",
+    parent = parent, repo = "", base = "",
     order = id_list(src, pool),
     claim = claim, builders = {}, speccers = {}, reviewer = "", pr = pr,
     result = "", verdict = verdict, verdict_head = "",
@@ -139,6 +141,7 @@ local function gen_graph(src: source.Recorder): string
     local id = pool[src:int(1, #pool)]
     local it = adversarial_item(src, pool, id)
     put(out, id)
+    put(out, it.title)
     put(out, it.parent)
     put(out, it.claim)
     put(out, tostring(it.pr))
@@ -185,13 +188,14 @@ local function decode_graph(blob: string): Graph | nil, string
     if id == nil or id == "" then
       break
     end
+    local title = take(c)
     local parent = take(c)
     local claim = take(c)
     local pr_text = take(c)
     local verdict = take(c)
     local norder_text = take(c)
-    if parent == nil or claim == nil or pr_text == nil or verdict == nil
-    or norder_text == nil then
+    if title == nil or parent == nil or claim == nil or pr_text == nil
+    or verdict == nil or norder_text == nil then
       return nil, "malformed item"
     end
     local pr = math.tointeger(tonumber(pr_text))
@@ -210,7 +214,7 @@ local function decode_graph(blob: string): Graph | nil, string
     if not seen[id] then
       seen[id] = true
       items[#items + 1] = {
-        id = id, title = "x", parent = parent, repo = "", base = "",
+        id = id, title = title, parent = parent, repo = "", base = "",
         order = order,
         claim = claim, builders = {}, speccers = {},
         reviewer = "", pr = pr, result = "", verdict = verdict,
