@@ -1,6 +1,7 @@
 title: zipos: recycle the fixed-size stored-member handle through a 4-slot lock-free array
 parent: 3IK8GFHjEDon4Ni4GNkwzCtGI0o
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 272
 resolution: completed
 builders: claude-sched-2026-08-24T0238 qmnmv1
+touches: libc/runtime/zipos.internal.h libc/runtime/zipos-open.c test/libc/runtime/BUILD.mk test/libc/runtime/prog/stored_smoke.txt test/libc/runtime/zipos_test.c /zip/test/libc/runtime/prog/stored_smoke.txt
