@@ -1,2 +1,3 @@
 title: CLAUDE.md/D21: a checker-behavior-changing tl patch should grep _build/testdata/gotchas/ for fixtures it now invalidates
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
+touches: docs/decisions/d21-carried-tl-patch.md docs/guides/gotchas.md _build/gotchas_test.tl
