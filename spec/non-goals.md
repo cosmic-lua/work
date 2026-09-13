@@ -1,0 +1,2 @@
+- Fixing any gate bug found along the way (file it).
+- Declaring any other goal held.
