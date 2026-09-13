@@ -1,2 +1,3 @@
 title: run migrate6 against the live board, confirm fsck and one full cycle on format 6
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
+depends_on: 3JHjLu9wjswTYz7WpJco5U3nF9g
