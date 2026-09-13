@@ -1,7 +1,3 @@
-# brief review: pin the diff/script kinds' unmapped-repo fallback with a test
-
-## Change
-
 `review_product_root(s, it, map_only)` (`_work/brief.tl`, landed in #162) keeps
 gitboard's own checkout as the fallback root for the diff and script review
 kinds when the caller's `gitboard.repository` map cannot place the item's repo,
@@ -17,9 +13,3 @@ Add one test to `_work/brief_review_script_test.tl`: a script-kind handover
 whose repo is NOT in the map, rendered from a checkout that is the product
 repo itself, asserting `--repo-dir` names that checkout. Then run the same
 mutation and show it red.
-
-## Non-goals
-
-- No behaviour change to `review_product_root`; the fallback stays.
-- No change to the research branch, which is already pinned map-only by
-  `test_an_unmapped_repo_leaves_the_reproduction_tree_to_the_caller`.
