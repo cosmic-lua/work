@@ -6,3 +6,4 @@ handover_head: 0c00982a0d267a49593dbef376cd608b1d1de4b0
 verdict: accept
 verdict_head: 0c00982a0d267a49593dbef376cd608b1d1de4b0
 builders: dc9f44af304d2956a78ebb6f02622700
+speccers: c5965f63f3ab2d2491729254b164856a
