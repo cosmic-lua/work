@@ -1,6 +1,6 @@
 title: land and release complete make-startup capability
 parent: 3J1B5l8QWSTTfWOobuKlmuuJdtZ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: aa2d7ef2ae6274038a7afa2ac795093445d689b9
 external_url: https://github.com/cosmic-lua/cosmic/pull/1807
 verdict: accept
