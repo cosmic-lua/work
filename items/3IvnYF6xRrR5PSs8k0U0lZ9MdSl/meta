@@ -1,3 +1,4 @@
 title: read verbs regressed 2x under the read model: show 391 ms, next 430 ms — reads at or under the old numbers, cache on disk
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _perf/bench/verbs_bench.tl
