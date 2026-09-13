@@ -1,0 +1,2 @@
+- No change to the success-path return shape (`nlog, nckpt`).
+- No change to default `mode`/`name` argument handling.
