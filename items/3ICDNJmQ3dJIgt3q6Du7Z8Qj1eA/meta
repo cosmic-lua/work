@@ -1,6 +1,7 @@
 title: gitboard land: verdict_head is never enforced at merge — commits pushed after an accept merge unreviewed
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1323
 resolution: completed
 builders: workflow-3q9w2x
+touches: _work/review.tl _work/gh.tl _work/gitland.tl _work/review_test.tl _work/gh_test.tl
