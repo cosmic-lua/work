@@ -1,2 +1,3 @@
 title: cosmo.ksuid: a C fast path for cosmic.ksuid's encode/decode, once the contract is proven
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
+touches: tool/net/definitions.lua _work/ksuid.tl cosmic/ksuid.tl
