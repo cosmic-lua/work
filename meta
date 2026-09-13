@@ -2,3 +2,5 @@ title: verdict: pin the two behaviours whose mutations survived review — rejec
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
 claim_batch: 7cd2bb0bc24f68b6574b735f25e277227736a376
+handover_head: 0c00982a0d267a49593dbef376cd608b1d1de4b0
+builders: dc9f44af304d2956a78ebb6f02622700
