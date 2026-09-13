@@ -1,0 +1,3 @@
+- Do not add a cast or a `-- cast:` line at any of these sites.
+- Do not change a record's field types to make the checker quiet.
+- Do not touch the checker or `3p/tl/tl_patch.tl`.
