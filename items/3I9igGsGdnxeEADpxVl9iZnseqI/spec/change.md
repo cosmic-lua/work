@@ -1,5 +1,3 @@
-## Change
-
 `take --pr` refuses to record a PR number another OPEN item already
 carries, so one pull request can never couple two items' verdicts.
 
@@ -28,9 +26,3 @@ stays the existing no-op. Tests in `_work/gitverbs_test.tl` or
 double-record refuses naming the holder; the same item re-recording
 its own pr stays a no-op; a DONE item holding the number does not
 block (its PR is spent); --force lands with the suffix.
-
-## Non-goals
-
-Verdict and done are unchanged — the gate sits at the one write site
-that couples the items. Existing verdict-line formats unchanged; the
-refusal is an addition in the standing `REFUSED: ...` shape.
