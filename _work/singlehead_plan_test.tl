@@ -122,6 +122,9 @@ local function test_nonforced_races_retry_only_disjoint_original_transaction()
     "the serialized winners must retain both disjoint logical updates")
   assert(final.publication_status == "confirmed",
     "the final archive must carry the exact retried transaction receipt")
+  local reused, reuse_err = build(b_root, b_candidate, "writer-a", b_change)
+  assert(reused == nil and reuse_err:find("reused for different contents", 1, true),
+    "a committed transaction ID must stay bound to its original contents: " .. reuse_err)
 end
 test_nonforced_races_retry_only_disjoint_original_transaction()
 

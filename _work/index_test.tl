@@ -295,15 +295,3 @@ local function test_ddl_verdict_and_resolution_match_item_vocabularies()
   assert_same_vocabulary(ddl_check_values("resolution"), item.RESOLUTIONS,
     "resolution")
 end
-
-local function test_key_uniqueness_refuses_a_second_open_claim()
-  local a = make({key = "release.yml"})
-  local b = make({key = "release.yml"})
-  local idx = check.must(idxmod.open({a, b}))
-  local problems = idxmod.problems(idx)
-  local text = table.concat(problems, "\n")
-  assert(text:find("key", 1, true) and text:find(b.id, 1, true), text)
-  local n = check.must(idx.db:query_one("SELECT COUNT(*) AS n FROM items"))
-  assert(n.n == 1, "only the first claimant's row lands")
-  check.must(idxmod.close(idx))
-end

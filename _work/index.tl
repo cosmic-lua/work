@@ -83,17 +83,17 @@ local function load_items(db: sqlite.Database, items: {Item}, problems: {string}
   for _, it in ipairs(items) do
     local lease = (leases ~= nil and leases[it.id]) or EMPTY_LEASE
     local landed = try(db, [[
-      INSERT INTO items(id, title, parent, repo, base, key, claim, claim_base, claim_batch,
+      INSERT INTO items(id, title, parent, repo, base, claim, claim_base, claim_batch,
         handover_head, external_url, reviewer, pr, result, verdict, verdict_head,
         landed_head, resolution,
         ref, tip, touched_at)
-      VALUES (:id, :title, :parent, :repo, :base, :key, :claim, :claim_base, :claim_batch,
+      VALUES (:id, :title, :parent, :repo, :base, :claim, :claim_base, :claim_batch,
         :handover_head, :external_url, :reviewer, :pr, :result, :verdict,
         :verdict_head, :landed_head, :resolution,
         :ref, :tip, :touched_at)
     ]], {
         id = it.id, title = it.title, parent = it.parent or "",
-        repo = it.repo or "", base = it.base or "", key = it.key or "",
+        repo = it.repo or "", base = it.base or "",
         claim = it.claim or "", claim_base = it.claim_base or "",
         claim_batch = it.claim_batch or "",
         handover_head = it.handover_head or "", external_url = it.external_url or "",
@@ -173,24 +173,6 @@ local function open(items: {Item}, specs?: {string: string}): Index | nil, strin
   return {db = db, specs = specs or {}, load_problems = problems}
 end
 
---- Items sharing one non-empty key while both are open — always empty
---- given `one_open_item_per_key`'s unique index already refuses the
---- second such row at load; kept as a live, queried check on the
---- invariant rather than trusted to the index definition alone.
---- @param self Index The index
---- @return {string} Problem lines, possibly empty
-local function key_duplicates(self: Index): {string}
-  local out: {string} = {}
-  for row in assert(self.db:query([[
-      SELECT key, COUNT(*) AS n FROM open_items
-      WHERE key <> '' GROUP BY key HAVING COUNT(*) > 1
-    ]])) do
-    out[#out + 1] = ("key %s is claimed by %d open items at once"):format(
-      row.key, math.tointeger(row.n) or 0)
-  end
-  return out
-end
-
 --- Items whose `parent` names no row in `items` — a dangling parent,
 --- queried live since the column carries no foreign key.
 --- @param self Index The index
@@ -240,8 +222,8 @@ local function broken_chains(self: Index): {string}
 end
 
 --- Every problem the index knows about: the row refusals `open`
---- collected, plus the dangling-parent, broken-chain, and
---- key-duplicate findings queried live from the loaded tables.
+--- collected, plus the dangling-parent and broken-chain findings
+--- queried live from the loaded tables.
 --- @param self Index The index
 --- @return {string} Problem lines, possibly empty
 local function problems(self: Index): {string}
@@ -253,9 +235,6 @@ local function problems(self: Index): {string}
     out[#out + 1] = p
   end
   for _, p in ipairs(broken_chains(self)) do
-    out[#out + 1] = p
-  end
-  for _, p in ipairs(key_duplicates(self)) do
     out[#out + 1] = p
   end
   return out

@@ -4,6 +4,7 @@
 --- no provider or network is contacted.
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local gitboard = require("_work.gitboard")
 local objects = require("_work.singlehead_objects")
 local plans = require("_work.singlehead_plan")
 local literal = require("_work.singlehead_literal")
@@ -12,17 +13,39 @@ local refs = require("_work.refs")
 local tmp = assert(os.getenv("TEST_TMPDIR"))
 local board = fs.join(tmp, "board")
 assert(fs.make_dirs(board))
-local binary = fs.absolute_path("o/bin/gitboard")
+local command_count = 0
 
 local function command(argv: {string}, expected?: integer): string
-  local full: {string} = {"bash", binary}
+  local full: {string} = {}
   for _, word in ipairs(argv) do full[#full + 1] = word end
   full[#full + 1] = "--dir"
   full[#full + 1] = board
-  local r, err = child.run(full)
-  assert(r ~= nil, err)
-  assert(r.code == (expected or 0), r.stdout .. r.stderr)
-  return r.stdout .. r.stderr
+  command_count = command_count + 1
+  local stdout_path = fs.join(tmp, "command-" .. tostring(command_count) .. ".out")
+  local stderr_path = fs.join(tmp, "command-" .. tostring(command_count) .. ".err")
+  local stdout, stderr = assert(io.open(stdout_path, "w")),
+  assert(io.open(stderr_path, "w"))
+  local old_print, old_stdout, old_stderr = _G.print, io.stdout, io.stderr
+  io.stdout, io.stderr = stdout, stderr
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for index = 1, select("#", ...) do
+      parts[index] = tostring((select(index, ...)))
+    end
+    stdout:write(table.concat(parts, "\t"), "\n")
+  end
+  local ok, code = pcall(function(): integer
+      return gitboard.main(table.unpack(full))
+    end)
+  stdout:flush()
+  stderr:flush()
+  stdout:close()
+  stderr:close()
+  _G.print, io.stdout, io.stderr = old_print, old_stdout, old_stderr
+  if not ok then error(code, 0) end
+  local output = assert(fs.read(stdout_path)) .. assert(fs.read(stderr_path))
+  assert(code == (expected or 0), output)
+  return output
 end
 
 local function git(argv: {string}, cwd?: string): string
@@ -93,6 +116,9 @@ local function bootstrap(): string
   local configured = command({"single-head", "configure", "--remote", "origin",
       "--repository", "acme/native-board", "--branch", "envelope-poc"})
   assert(not configured:find("helper", 1, true), configured)
+  -- The public CLI starts a fresh process for every command. This in-process
+  -- harness must refresh refsconfig's per-process cache after configure.
+  assert(refs.set_board_mode(board, "remote"))
   local refused = command({"refresh", "--remote", "other"}, 1)
   assert(refused:find("cannot change an active single%-head binding"), refused)
   local refresh_rebind = command({"single-head", "refresh", "--remote", "other"}, 1)
@@ -178,6 +204,8 @@ local function test_claim_lifecycle_and_historical_receipt()
   local late = command({"single-head", "refresh"})
   assert(late:find("confirmed historical claim publication", 1, true), late)
   assert(not late:find("authority active", 1, true), late)
+  assert(refs.read_ref(board, take_ref) == refs.ZERO_SHA,
+    "historically confirmed staging receipt must be retired")
 end
 test_claim_lifecycle_and_historical_receipt()
 print("gitsinglehead_cli_test: ok")

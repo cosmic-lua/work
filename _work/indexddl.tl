@@ -36,7 +36,6 @@ CREATE TABLE items (
   parent TEXT NOT NULL DEFAULT '',
   repo TEXT NOT NULL DEFAULT '',
   base TEXT NOT NULL DEFAULT '',
-  key TEXT NOT NULL DEFAULT '',
   claim TEXT NOT NULL DEFAULT '',
   claim_base TEXT NOT NULL DEFAULT '',
   claim_batch TEXT NOT NULL DEFAULT '',
@@ -111,9 +110,6 @@ CREATE TABLE depends_on (
   seq INTEGER NOT NULL,
   PRIMARY KEY(item, seq)
 ) STRICT, WITHOUT ROWID;
-
-CREATE UNIQUE INDEX one_open_item_per_key
-  ON items(key) WHERE key <> '' AND resolution = '';
 
 -- `parent` and a rank's `child` carry no foreign key (see the module
 -- header), so nothing here forces their use — but both are join/filter

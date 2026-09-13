@@ -34,6 +34,14 @@ local function test_deadline_is_rechecked_only_at_the_final_call()
   assert(final ~= nil and final.tool == "github_update_ref", final_err)
 end
 
+local function test_final_publication_call_is_nonforced()
+  local plan = ready()
+  local final, err = calls.connector_call(plan, #plan.calls, DEADLINE - 1)
+  assert(final ~= nil and final.tool == "github_update_ref", err)
+  assert(final.arguments.force == false,
+    "the frozen publication call must preserve non-forced race semantics")
+end
+
 local function test_calls_cannot_be_retargeted_or_mutate_the_plan()
   local plan = ready()
   local wrong, rerr = calls.connector_calls(plan, "other/board", plan.branch)

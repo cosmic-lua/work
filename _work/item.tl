@@ -32,7 +32,6 @@ local SPEC < const > = shape.record({
     parent = shape.optional(shape.string),
     repo = shape.optional(shape.string),
     base = shape.optional(shape.string),
-    key = shape.optional(shape.string),
     order = shape.optional(shape.string),
     claim = shape.optional(shape.string),
     claim_base = shape.optional(shape.string),
@@ -63,7 +62,6 @@ local record Raw
   parent: string | nil
   repo: string | nil
   base: string | nil
-  key: string | nil
   order: string | nil
   claim: string | nil
   claim_base: string | nil
@@ -333,7 +331,6 @@ local function decode(t: {string: any}): Item | nil, string
     parent = raw.parent or "",
     repo = raw.repo or "",
     base = raw.base or "",
-    key = raw.key or "",
     order = order,
     claim = raw.claim or "",
     claim_base = raw.claim_base or "",
@@ -382,7 +379,6 @@ local function encode(it: Item): {string: any}
   if (it.parent or "") ~= "" then t.parent = it.parent end
   if (it.repo or "") ~= "" then t.repo = it.repo end
   if (it.base or "") ~= "" then t.base = it.base end
-  if (it.key or "") ~= "" then t.key = it.key end
   if #(it.order or {}) > 0 then t.order = table.concat(it.order, " ") end
   if (it.claim_batch or "") ~= "" then t.claim_batch = it.claim_batch end
   if (it.handover_head or "") ~= "" then t.handover_head = it.handover_head end

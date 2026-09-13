@@ -33,7 +33,7 @@ local item = require("_work.item")
 --- sit where `_work.item.Item` declares `parent`'s neighbors; `id` and
 --- `held` are not `meta` lines at all.
 local META_KEYS < const >: {string} = {
-  "title", "parent", "repo", "base", "key", "claim_batch",
+  "title", "parent", "repo", "base", "claim_batch",
   "handover_head", "external_url", "reviewer", "pr", "result", "verdict",
   "verdict_head", "landed_head", "resolution",
   "builders", "speccers", "touches", "access", "depends_on",
@@ -93,7 +93,6 @@ local function encode_meta(it: item.Item): string
   put("parent", it.parent or "")
   put("repo", it.repo or "")
   put("base", it.base or "")
-  put("key", it.key or "")
   put("claim_batch", it.claim_batch or "")
   put("handover_head", it.handover_head or "")
   put("external_url", it.external_url or "")
@@ -165,7 +164,6 @@ local function to_item(id: string, meta: {string: string}, held: boolean,
     parent = meta.parent or "",
     repo = meta.repo or "",
     base = meta.base or "",
-    key = meta.key or "",
     order = order,
     other_edges = other_edges,
     -- Claims are projected from refs/heads/claims/<id>; item history never

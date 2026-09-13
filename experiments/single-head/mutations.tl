@@ -1,0 +1,92 @@
+return {
+  deadline_boundary = {
+    file = "_work/singlehead_calls.tl",
+    before = "(now or os.time()) >= plan.publish_by",
+    after = "(now or os.time()) > plan.publish_by",
+    test = "_work/singlehead_calls_adversarial_test.tl",
+  },
+  inverted_deadline = {
+    file = "_work/singlehead_calls.tl",
+    before = "(now or os.time()) >= plan.publish_by",
+    after = "(now or os.time()) < plan.publish_by",
+    test = "_work/singlehead_calls_adversarial_test.tl",
+  },
+  mutable_returned_calls = {
+    file = "_work/singlehead_calls.tl",
+    before = "return copied as {Call}, \"\"",
+    after = "return plan.calls, \"\"",
+    test = "_work/singlehead_calls_adversarial_test.tl",
+  },
+  forced_publication = {
+    file = "_work/singlehead_calls.tl",
+    before = "branch_name = plan.branch, sha = \"$create_commit.sha\", force = false}}",
+    after = "branch_name = plan.branch, sha = \"$create_commit.sha\", force = true}}",
+    test = "_work/singlehead_calls_adversarial_test.tl",
+  },
+  unchecked_call_arguments = {
+    file = "_work/singlehead_calls.tl",
+    before = "if got.id ~= want.id or got.tool ~= want.tool or wa ~= ga then",
+    after = "if got.id ~= want.id or got.tool ~= want.tool or (wa ~= ga and false) then",
+    test = "_work/singlehead_calls_adversarial_test.tl",
+  },
+  unchecked_pack_digest = {
+    file = "_work/singlehead_objects.tl",
+    before = "if sha256(packed) ~= descriptor.sha256 then",
+    after = "if sha256(packed) ~= descriptor.sha256 and false then",
+    test = "_work/singlehead_objects_adversarial_test.tl",
+  },
+  shallow_source = {
+    file = "_work/singlehead_objects.tl",
+    before = "if shallow ~= \"false\" then return false, \"shallow source cannot prove complete object history\" end",
+    after = "if shallow ~= \"false\" and false then return false, \"shallow source cannot prove complete object history\" end",
+    test = "_work/singlehead_objects_adversarial_test.tl",
+  },
+  unchecked_archive_graph = {
+    file = "_work/singlehead_objects.tl",
+    before = "if not ok then return nil, verr end",
+    after = "if not ok and false then return nil, verr end",
+    test = "_work/singlehead_objects_adversarial_test.tl",
+  },
+  lost_empty_sequence = {
+    file = "_work/singlehead_literal.tl",
+    before = "local out = sequence()",
+    after = "local out: {any} = {}",
+    test = "_work/singlehead_literal_test.tl",
+  },
+  regressed_materialization = {
+    file = "_work/singlehead_hydrate.tl",
+    before = "if materialized ~= refs.ZERO_SHA",
+    after = "if false",
+    test = "_work/singlehead_hydrate_test.tl",
+  },
+  missing_envelope_witness = {
+    file = "_work/singlehead_hydrate.tl",
+    before = "{{ref = envelope_ref, expected = head}})",
+    after = "{})",
+    test = "_work/singlehead_hydrate_test.tl",
+  },
+  historical_receipt_requires_exact_refs = {
+    file = "_work/singlehead_receipts.tl",
+    before = "status = observed == digest and \"confirmed\" or \"pending\"",
+    after = "status = observed == digest and exact and \"confirmed\" or \"pending\"",
+    test = "_work/gitsinglehead_cli_test.tl",
+  },
+  reused_transaction_identity = {
+    file = "_work/singlehead_plan.tl",
+    before = "if prior ~= digest then return nil, \"transaction ID reused for different contents\" end",
+    after = "if prior ~= digest and false then return nil, \"transaction ID reused for different contents\" end",
+    test = "_work/singlehead_plan_test.tl",
+  },
+  wrong_fetch_repository = {
+    file = "_work/singlehead_binding.tl",
+    before = "if fetch_repository ~= checked_repository then",
+    after = "if false then",
+    test = "_work/singlehead_binding_test.tl",
+  },
+  unretired_historical_receipt = {
+    file = "_work/prepared.tl",
+    before = "if state == \"confirmed\" or state == \"historical\" then",
+    after = "if state == \"confirmed\" then",
+    test = "_work/gitsinglehead_cli_test.tl",
+  },
+}

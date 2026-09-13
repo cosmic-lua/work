@@ -31,11 +31,10 @@ local RED: {string: string} = {["release.yml"] = "failure",
 local GREEN: {string: string} = {["release.yml"] = "success",
   ["fuzz.yml"] = "success", ["docs.yml"] = "success"}
 
---- The one open repair item carrying `lane` as its `key`, nil when
---- there is none.
+--- The one open repair item titled for `lane`, nil when there is none.
 local function repair_for(all: {item.Item}, lane: string): item.Item
   for _, it in ipairs(all) do
-    if item.is_open(it) and it.key == lane then
+    if item.is_open(it) and it.title == ("lane repair: %s is red"):format(lane) then
       return it
     end
   end
@@ -43,7 +42,7 @@ local function repair_for(all: {item.Item}, lane: string): item.Item
 end
 
 -- Two red observations of the same lane mint exactly one repair item:
--- the lane's filename is the idempotency key `mint` searches on
+-- the lane's title is what `mint` searches on
 -- before ever filing one — five red days cost one item, not five.
 local function test_mint_is_idempotent_per_lane()
   local s = init_state_repo("mint-idempotent")
@@ -62,7 +61,7 @@ local function test_mint_is_idempotent_per_lane()
   local all = check.must(store.list(s))
   local count = 0
   for _, it in ipairs(all) do
-    if it.key == "release.yml" then count = count + 1 end
+    if it.title == "lane repair: release.yml is red" then count = count + 1 end
   end
   assert(count == 1,
     "a second red observation mints nothing new: " .. tostring(count))
@@ -202,7 +201,7 @@ local function test_a_minted_repair_is_offered_and_admitted()
   check.must(store.list(s))
   local c = check.must(store.read(s))
   local board_id = check.must(read.board(c))
-  local parent = check.must(item.decode({id = lanes.LANE_PARENT,
+  local parent = check.must(item.decode({id = flow.LANE_PARENT,
         title = "lane repair outcome", parent = board_id}))
   assert(storewrite.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
   -- Straight through `storewrite.save`, bypassing the cache patch AND
@@ -232,11 +231,12 @@ local function test_a_minted_repair_is_offered_and_admitted()
   local problems = gitready.ready_problems(s, repair)
   assert(#problems == 0,
     "take admits it too: " .. table.concat(problems, "; "))
-  -- A lane repair's own `key` is the doing bound's bypass
+  -- A lane repair's parentage is the doing bound's bypass
   -- (`_work.gitverbs`'s `doing_refusal`): never capped by how much is
   -- already in flight, because a red lane's fix cannot wait on a
   -- queue depth it did not cause.
-  assert(repair.key ~= "", "and the doing bound never holds a lane repair back")
+  assert(repair.parent == flow.LANE_PARENT,
+    "and the doing bound never holds a lane repair back")
 end
 
 -- The freshness window: an observation noted moments ago skips the

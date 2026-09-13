@@ -81,6 +81,16 @@ local function test_state_and_pack_are_bound_and_fully_validated()
     REPOSITORY, BRANCH)
   assert(archive == nil and err:find("corrupt envelope pack", 1, true), err)
 
+  local other_tree = check.must(objects.make_tree(f.source, {{path = "other",
+          mode = "100644", otype = "blob", content = "other\n"}}))
+  local other = check.must(objects.make_commit(f.source, other_tree, "other\n"))
+  local alternate = check.must(objects.pack_objects(f.source, {f.target, other}))
+  assert(objects.sha256(alternate) ~= f.state.packs[1].sha256)
+  local mismatched = replace_pack(f, alternate, f.state.packs[1].sha256)
+  archive, err = objects.read_validated_archive(f.envelope, mismatched,
+    REPOSITORY, BRANCH)
+  assert(archive == nil and err:find("corrupt envelope pack", 1, true), err)
+
   local legacy_tree = check.must(objects.make_tree(f.envelope, {{path = "gitboard/state.json",
           mode = "100644", otype = "blob", content = "{}\n"}}))
   local legacy = check.must(objects.make_commit(f.envelope, legacy_tree, "legacy envelope\n"))
@@ -96,6 +106,21 @@ local function test_disconnected_pack_and_incomplete_sources_refuse()
   local ok, err = objects.validate_object_graph({incomplete}, {f.target})
   assert(not ok and (err:find("corrupt", 1, true)
       or err:find("incomplete", 1, true)), err)
+
+  local digest = objects.sha256(incomplete)
+  f.state.packs[1] = {sha256 = digest, chunks = 1}
+  local state = check.must(objects.encode_state(f.state))
+  local incomplete_tree = check.must(objects.make_tree(f.envelope, {
+        {path = objects.pack_path(digest), mode = "100644", otype = "blob",
+          content = codec.encode_base64(incomplete) .. "\n"},
+        {path = objects.STATE_PATH, mode = "100644", otype = "blob", content = state},
+      }))
+  local incomplete_head = check.must(objects.make_commit(f.envelope,
+      incomplete_tree, "incomplete envelope\n"))
+  local archive, archive_err = objects.read_validated_archive(f.envelope,
+    incomplete_head, REPOSITORY, BRANCH)
+  assert(archive == nil and (archive_err:find("corrupt", 1, true)
+      or archive_err:find("incomplete", 1, true)), archive_err)
 
   assert(fs.write(fs.join(f.source, ".git", "shallow"), f.target .. "\n"))
   ok, err = objects.source_is_complete(f.source)

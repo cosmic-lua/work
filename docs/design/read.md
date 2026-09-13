@@ -58,8 +58,8 @@ Views, one per derived fact, each named for the question it answers:
 - `stale`: claims and review claims past their lease, from
   `touched_at`.
 - `structure`: the facts `fsck` reports — a dangling parent, a second
-  parentless item, an `order` entry naming a non-child, two open items
-  sharing a key.
+  parentless item, an `order` entry naming a non-child, a parent
+  chain broken or deeper than 16 levels.
 
 ## What Teal keeps
 

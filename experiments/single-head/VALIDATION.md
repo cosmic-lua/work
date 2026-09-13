@@ -54,3 +54,26 @@ The remote validation uses small synthetic data. Production-scale service
 limits, long-lived receipt growth, compaction, and branch protection remain
 outside this POC's validation. Connector execution is caller-owned, and client
 deadline checks do not establish a server-time lease.
+
+## Mutation testing
+
+Targeted mutation testing found that the original suite accepted broken
+variants of seven safeguards:
+
+- Non-forced final connector publication.
+- Binding transaction receipts to their original contents.
+- Rejecting a valid Git pack stored under the wrong content digest.
+- Validating object connectivity through the public archive reader.
+- The exact envelope-ref witness during hydration.
+- Refusing to regress the materialized envelope head.
+- Retiring historically confirmed staging receipts.
+
+Focused regressions now cover these behaviors. The catalog also checks deadline
+boundaries, mutable returned calls, call-argument comparison, shallow sources,
+literal sequence identity, destination binding, and historical confirmation.
+The native runner uses the real test-discovery pipeline and freshly executes
+the compiled tests. CLI tests import the source dispatcher so their dependency
+closure includes receipt and prepared-transaction code. Compilation failures
+are not behavioral kills.
+This is a selected mutation sample; post-hydration confirmation/cache-failure
+injection remains outside the current tests.

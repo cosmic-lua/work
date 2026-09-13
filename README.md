@@ -117,9 +117,8 @@ case-tolerant) or an unambiguous prefix. `gitboard fsck` is the
 read-only, offline whole-board audit no single verb ever asks:
 a dangling `parent`, an edge kind this build does not interpret (an
 unmigrated board's), a stale `order` entry, an item's tree not
-re-encoding to what it was read from, two open items sharing a key, a
-second parentless item (there is meant to be exactly one — the
-board), a parentless item carrying a `repo`, an open item whose
+re-encoding to what it was read from, a second parentless item
+(there is meant to be exactly one — the board), a parentless item carrying a `repo`, an open item whose
 Change says it is blocked on another item (`blocked on «handle»`)
 without declaring that item in `depends_on`, a `depends_on` cycle
 (walked with the same bound `gitboard depend`'s refusal uses — the

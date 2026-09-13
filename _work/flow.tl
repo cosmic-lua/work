@@ -45,6 +45,40 @@ local spec = require("_work.spec")
 --- board's own log, as a reviewed change here.
 local DOING_LIMIT < const >: integer = 10
 
+--- Where a red lane's repair items are filed: G8, the flow-system
+--- outcome that mechanism serves. G8 is an ordinary outcome with
+--- ordinary children — dozens of them, measured on the live board —
+--- so parentage under it does NOT make an item a lane repair. What
+--- does is the title `_work.lanes.file_repair` writes, `repair_title`
+--- below, under that parent: `is_lane_repair` is the one predicate
+--- `_work.readddl`'s `stage` view (`STAGE_REPAIR`), `_work.gitgate`'s
+--- review-debt carve-out and `_work.lanes.is_repair_for` all reduce
+--- to, so the identity lives here beside the stage it earns.
+local LANE_PARENT < const > = "3HyRdT1JQS7pCPgF3sZi2Deo66q"
+
+--- The title a lane's repair item carries — the one thing that names
+--- it as a repair, together with its parent.
+--- @param lane string Workflow filename
+--- @return string The title
+local function repair_title(lane: string): string
+  return ("lane repair: %s is red"):format(lane)
+end
+
+--- `repair_title`'s shape as a SQL LIKE pattern, for the `stage`
+--- view; `%` stands for the lane and the pattern carries no `_`.
+local REPAIR_TITLE_LIKE < const > = "lane repair: % is red"
+
+--- Whether an item filed under `parent` with `title` is a lane repair:
+--- G8's child AND titled as one. Both halves are required — G8 has
+--- other children, and a repair title elsewhere is a coincidence.
+--- @param parent string The item's parent id, "" when none
+--- @param title string The item's title
+--- @return boolean True for a lane repair
+local function is_lane_repair(parent: string, title: string): boolean
+  return parent == LANE_PARENT
+  and title:match("^lane repair: .+ is red$") ~= nil
+end
+
 --- The stage half of the unified order: how close an item is to
 --- done, lower ranks first. ONE declaration — every queue, offer,
 --- and refusal that says "finishing beats starting" derives from
@@ -82,6 +116,10 @@ end
 
 local record flow
   DOING_LIMIT: integer
+  LANE_PARENT: string
+  REPAIR_TITLE_LIKE: string
+  repair_title: function(lane: string): string
+  is_lane_repair: function(parent: string, title: string): boolean
   STAGE_ACCEPTED: integer
   STAGE_REVIEW: integer
   STAGE_REWORK: integer
@@ -94,6 +132,10 @@ end
 
 local M: flow = {
   DOING_LIMIT = DOING_LIMIT,
+  LANE_PARENT = LANE_PARENT,
+  REPAIR_TITLE_LIKE = REPAIR_TITLE_LIKE,
+  repair_title = repair_title,
+  is_lane_repair = is_lane_repair,
   STAGE_ACCEPTED = STAGE_ACCEPTED,
   STAGE_REVIEW = STAGE_REVIEW,
   STAGE_REWORK = STAGE_REWORK,

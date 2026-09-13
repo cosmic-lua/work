@@ -172,6 +172,26 @@ bin/cosmic experiments/single-head/verify_snapshot.tl .
 Live connector validation results and the exact tested branch are recorded in
 [VALIDATION.md](VALIDATION.md).
 
+### Targeted mutation testing
+
+```bash
+bin/cosmic experiments/single-head/mutation_check.tl
+```
+
+This tests **committed HEAD** in an isolated temporary worktree. It changes one
+safeguard at a time using the literal catalog in `mutations.tl`, strictly
+compiles the mutant, and runs the relevant tests through the same discovery
+pipeline as CI, then executes the compiled tests with fresh result paths.
+CLI tests import the source dispatcher so changes to its dependencies invalidate
+the build. Cached test results and the changed compiled module are removed
+before each run.
+
+The runner checks the unmodified baseline before and after the experiment,
+reports assertion failures separately from compilation and harness errors, and
+exits unsuccessfully for any survivor or invalid run. Detailed logs and a
+`results.literal` record are written under `o/single-head-mutations/`.
+These are selected semantic mutations, not a claim of exhaustive fault coverage.
+
 ## Remaining production work
 
 - Bootstrap cost and growth: packs are chunked, but the ref/receipt manifest is

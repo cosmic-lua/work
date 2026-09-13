@@ -1,8 +1,8 @@
 #!/usr/bin/env cosmic
--- `_work.readddl`'s `structure` view: the five SQL-derivable
+-- `_work.readddl`'s `structure` view: the four SQL-derivable
 -- whole-board audit findings, each checked against the Teal it stands
 -- in for — `_work.gitfsck.structural_problems`'s dangling-parent,
--- second-parentless-item, stale-order, and duplicate-key findings, and
+-- second-parentless-item, and stale-order findings, and
 -- `_work.index`'s own `broken_chains` for a parent chain deeper than
 -- 16. Split out of `_work.read_test` to keep that file under the line
 -- cap. Runner mode (D29): every `test_*` below is enrolled by being
@@ -103,29 +103,6 @@ local function test_stale_order_entry()
   local hit = find(rows, "stale_order", parent.id)
   assert(hit ~= nil, "an order entry naming a non-child is reported")
   assert(hit.detail:find(elsewhere.id, 1, true) ~= nil, hit.detail)
-  check.must(idxmod.close(idx))
-end
-
-local function test_duplicate_key_is_unreachable_through_the_ordinary_load()
-  -- `one_open_item_per_key` (`_work.indexddl`) already refuses a
-  -- second OPEN item sharing a key at load — `_work.index`'s own
-  -- `key_duplicates` states this is why IT always reports empty too.
-  -- `structure`'s `duplicate_key` kind is the same live check on the
-  -- same invariant, kept for the same reason, and pinned here as
-  -- never firing through this path rather than asserted to catch a
-  -- violation this schema does not let land in the first place.
-  local board = make({})
-  local outcome = make({parent = board.id})
-  board.order = {outcome.id}
-  local a = make({parent = outcome.id, key = "lane-x"})
-  local b = make({parent = outcome.id, key = "lane-x"})
-  local idx = check.must(idxmod.open({board, outcome, a, b}))
-  check.must(irank.ensure_views(idx))
-  check.must(readddl.ensure_views(idx))
-  assert(#idxmod.problems(idx) == 1, "the second row is refused at load, not silently dropped")
-  local rows = check.must(read.structure(idx))
-  assert(find(rows, "duplicate_key", a.id) == nil, "unreachable this way")
-  assert(find(rows, "duplicate_key", b.id) == nil, "unreachable this way")
   check.must(idxmod.close(idx))
 end
 
