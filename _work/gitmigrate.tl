@@ -2,10 +2,15 @@
 --- prose as the `spec/` subtree of two blobs (`change.md`,
 --- `non-goals.md`) and carries what the prose used to declare as
 --- fields: the paths a Change names (`touches`) and the repositories
---- an Access section names (`access`). Every item ref advances in the
---- same atomic prepared transaction as the format marker, so either
---- every ref and the marker move or none does, and nothing is left in
---- two shapes.
+--- an Access section names (`access`). Every item ref advances in an
+--- atomic prepared transaction, and the format marker in the one that
+--- leaves nothing unmigrated: a caller whose transport takes every ref
+--- at once moves them all with the marker, and a caller whose transport
+--- caps a push at some number of ref updates moves them in batches
+--- (`limit`, `only`) the marker follows last. Between batches the board
+--- refuses the format-5 build, so no reader sees two shapes; a rerun
+--- skips every tip already carrying its migration commit, so nothing
+--- that landed is rewritten.
 ---
 --- One format-4 `spec.md` becomes, per item: the `change` section's
 --- text as `spec/change.md`, the `non-goals` section's as
@@ -36,7 +41,7 @@ local record Outcome
   current: boolean
   applied: boolean
   transaction: prepared.Transaction | nil
-  --- Item refs rewritten (every one on the board).
+  --- Item refs rewritten in this transaction.
   moved: integer
   --- Items ending with a non-empty `spec/change.md`.
   with_change: integer
@@ -48,7 +53,10 @@ local record Outcome
   no_change: integer
   --- `Acceptance` sections dropped rather than carried.
   dropped: integer
+  --- Tips already carrying their migration commit, left alone.
   skipped: integer
+  --- Unmigrated items this transaction did not take (`limit`, `only`);
+  --- the marker moves only when this is zero.
   remaining: integer
 end
 
@@ -204,14 +212,14 @@ local function format_commit(root: string, prior: string,
       op = "migrate"})
 end
 
---- The item's migration commit: its format-5 tree on top of `tip`,
---- the classified body as the message's remainder, both dates `at`.
 --- The subject every migration commit carries, and the mark a rerun
 --- recognises an already-migrated tip by.
 local function migration_subject(it: item.Item): string
   return ("migrate %s to format %s"):format(it.id:sub(-8), format.CURRENT)
 end
 
+--- The item's migration commit: its format-5 tree on top of `tip`,
+--- the classified body as the message's remainder, both dates `at`.
 local function migration_commit(root: string, it: item.Item,
     classified: Classified, tip: string, at: integer): string | nil, string
   local tree, terr = itemtree.build_tree(root, it, classified.spec, true)
@@ -280,9 +288,38 @@ local function migrate(root: string, now?: integer, limit?: integer,
   end
   local blobs, lerr = gitobj.cat_file_batch(root, queries)
   if blobs == nil then return nil, lerr end
+  -- The owners the board has seen come from the WHOLE board's prose,
+  -- however the batches fall: an unmigrated tip's `spec.md`, and for a
+  -- tip that already carries its migration commit the `spec.md` its
+  -- parent still holds — the exact text the single push would have
+  -- read, Acceptance sections included. Without this a later batch
+  -- forgets an owner only an earlier batch's item vouched for, and
+  -- writes a different `access` than the single push.
+  local subjects: {string: string} = {}
+  local migrated: {string} = {}
+  for _, it in ipairs(board.items) do
+    local tip = board.shas_by_id[it.id]
+    local head = blobs[tip]
+    local subject = ""
+    if head ~= nil and head.otype == "commit" then
+      subject = head.content:match("\n\n([^\n]*)") or ""
+    end
+    subjects[tip] = subject
+    if subject == migration_subject(it) then
+      migrated[#migrated + 1] = tip .. "^:spec.md"
+    end
+  end
+  local earlier, eerr = gitobj.cat_file_batch(root, migrated)
+  if earlier == nil then return nil, eerr end
   local bodies: {string} = {}
   for _, q in ipairs(queries) do
     local entry = blobs[q]
+    if entry ~= nil and entry.otype == "blob" then
+      bodies[#bodies + 1] = entry.content
+    end
+  end
+  for _, q in ipairs(migrated) do
+    local entry = earlier[q]
     if entry ~= nil and entry.otype == "blob" then
       bodies[#bodies + 1] = entry.content
     end
@@ -292,11 +329,7 @@ local function migrate(root: string, now?: integer, limit?: integer,
   for _, it in ipairs(board.items) do
     local tip = board.shas_by_id[it.id]
     local target = board.refs_by_id[it.id]
-    local head = blobs[tip]
-    local subject = ""
-    if head ~= nil and head.otype == "commit" then
-      subject = head.content:match("\n\n([^\n]*)") or ""
-    end
+    local subject = subjects[tip]
     local entry = blobs[tip .. ":spec.md"]
     local body = ""
     if entry ~= nil and entry.otype == "blob" then

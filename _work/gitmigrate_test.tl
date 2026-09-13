@@ -157,15 +157,17 @@ local record Board
   before: {string: string}
 end
 
---- A format-4 board: the leaf carries `RICH` and its own repo, the
---- outcome carries heading-less prose, the rest carry no `spec.md`.
-local function format4_board(name: string): Board
+--- A format-4 board: the leaf carries `RICH` (or `leaf_body`) and its
+--- own repo, the outcome carries heading-less prose (or
+--- `outcome_body`), the rest carry no `spec.md`.
+local function format4_board(name: string, leaf_body?: string,
+    outcome_body?: string): Board
   local s = fixture.init_state_repo(name)
   local outcome, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/self", "main") == 0)
   check.must(store.close(s))
-  downgrade(s.root, leaf, RICH)
-  downgrade(s.root, outcome, PLAIN)
+  downgrade(s.root, leaf, leaf_body or RICH)
+  downgrade(s.root, outcome, outcome_body or PLAIN)
   local marker = install_previous(s.root)
   return {root = s.root, leaf = leaf, outcome = outcome, marker = marker,
     before = item_tips(s.root)}
@@ -227,6 +229,36 @@ local function test_batches_skip_what_landed_and_move_the_marker_last()
   local c = format4_board("migrate-only-v5")
   local none, err = gitmigrate.migrate(c.root, NOW, 0, "ended")
   assert(none == nil and err:find("nothing to migrate", 1, true), err)
+end
+
+-- Batches write the same trees the single push writes. The owner set
+-- `access` is filtered by comes from the whole board's prose; here the
+-- leaf's Evidence carries the one URL vouching for `vendor`, and the
+-- outcome's Access names `vendor/tool` bare. The leaf migrates first,
+-- so one item at a time its `spec.md` is gone by the outcome's turn,
+-- and only reading the migrated parent keeps the grant.
+local function test_batches_write_the_trees_the_single_push_writes()
+  local vouching = "## Evidence\n\nSee https://github.com/vendor/lib.\n\n"
+  .. "## Access\n\n- vendor/tool\n"
+  local bare = "## Change\n\nDo it.\n\n## Access\n\n- vendor/tool\n"
+  local function access_of(root: string, id: string): string
+    local tip = item_tips(root)["refs/heads/items/" .. id]
+    local meta = check.must(gitobj.cat_file_batch(root, {tip .. ":meta"}))
+    return (("\n" .. meta[tip .. ":meta"].content):match("\naccess: ([^\n]*)") or "")
+  end
+  local whole = format4_board("migrate-equiv-once-v5", vouching, bare)
+  check.must(gitmigrate.migrate(whole.root, NOW))
+  assert(access_of(whole.root, whole.leaf) == "vendor/tool"
+    and access_of(whole.root, whole.outcome) == "vendor/tool",
+    "one push grants both: " .. access_of(whole.root, whole.leaf) .. " / " .. access_of(whole.root, whole.outcome))
+  local batched = format4_board("migrate-equiv-batched-v5", vouching, bare)
+  for _ = 1, nkeys(batched.before) do
+    check.must(gitmigrate.migrate(batched.root, NOW, 1))
+  end
+  assert(check.must(gitmigrate.migrate(batched.root)).current, "all moved")
+  assert(access_of(batched.root, batched.leaf) == "vendor/tool"
+    and access_of(batched.root, batched.outcome) == "vendor/tool",
+    "one item at a time grants the same: " .. access_of(batched.root, batched.leaf))
 end
 
 local function test_leaf_prose_becomes_two_blobs_two_fields_and_a_body()
