@@ -1,5 +1,3 @@
-## Change
-
 Evidence (2026-08-30): whilp/cosmopolitan transferred to the
 cosmic-lua organization along with whilp/cosmic — checkouts' remotes
 name https://github.com/cosmic-lua/cosmopolitan, and the pinned
@@ -22,10 +20,3 @@ is the correctness gate per its AGENTS.md, but a prose-only diff
 does not require it — CI's `build` check on the PR is the acceptance.
 Landing goes through that repo's merge queue (the orchestrator
 enqueues after review).
-
-## Non-goals
-
-No code, build, or definitions.lua changes; no keeping the fork
-"mergeable with upstream" concerns triggered (prose/comments only —
-if the sweep hits a file where upstream-mergeability makes the edit
-churn (e.g. a vendored README), leave it and report).
