@@ -1,9 +1,10 @@
 title: review brief: the shared tail (done --landed, the final report, the header) and the reproduction sentence follow the deliverable too
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 4fb9f3011c76285863bae0be38dffe5a6cb96c80
 verdict: accept
 verdict_head: 4fb9f3011c76285863bae0be38dffe5a6cb96c80
 landed_head: 44281f471453f32c3fbbd6a0338888a8384bb1cd
 resolution: completed
 builders: 914d90759d48f83db7aced96741c6acb
+touches: _work/brieftext_review.tl _work/doctrine.tl

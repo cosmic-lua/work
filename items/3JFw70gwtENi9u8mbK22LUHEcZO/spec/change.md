@@ -1,5 +1,3 @@
-## Change
-
 `brief: the review's posture and verdict lines follow the deliverable
 too` (cosmic-lua/work#160, accepted) moved the review's posture into a
 spliced unit so a research reviewer is no longer told to mutation-test
@@ -43,14 +41,3 @@ diff form byte-identical (that pin, `DIFF_POSTURE` in `brieftmpl_test`,
 must still hold; extend it if the span grows). `brief_research_test`
 asserts the three sentences are absent from the research render and the
 reproduction sentence names its tree.
-
-## Non-goals
-
-Any change to the diff-shaped review. It stays byte-identical, as #160
-guaranteed.
-
-The `spliced_order` in-place claim (#160's review finding 1: the doc
-promises tokens "stand where its splice is" and no reachable render can
-observe it). Narrowing that doc comment is one line and may ride this
-change, but pinning the property needs a fixture that does not exist
-and is not owed here.
