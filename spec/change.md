@@ -1,5 +1,3 @@
-## Change
-
 `cosmic.js.escape_literal` (`cosmic/js.tl:15-17`) is `cosmo.EscapeLiteral`
 verbatim. That table passes `` ` ``, `$` and `{` through and renders `"` as
 `\"` (Evidence). Two consequences: a `{{js .x | cosmic.js.safe}}` inside a JS
@@ -32,35 +30,3 @@ Tests the diff carries, in `cosmic/js_test.tl` (29 lines):
   `test_escape_literal_preserves_plain_text` as they are; add
   `escape_literal("\u{2028}") == "\\u2028"` so the line-terminator rule the
   doc claims is pinned.
-
-## Evidence
-
-`o/bootstrap/cosmic probe.lua` (calls `cosmo.EscapeLiteral`):
-```
-EscapeLiteral("`${alert(1)}`") -> `${alert(1)}`
-EscapeLiteral("\"") -> \"
-EscapeLiteral("'") -> \u0027
-EscapeLiteral("</script>") -> \u003c\/script\u003e
-EscapeLiteral(" ") ->            (input was U+2028)
-```
-Table, cosmopolitan `origin/master`:
-`sed -n 27,36p net/http/escapejsstringliteral.c`
-```
-static const char kEscapeLiteral[128] = {
-    9, 9, 9, 9, 9, 9, 9, 9, 9, 1, 2, 9, 4, 3, 9, 9,  // 0x00
-    9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,  // 0x10
-    0, 0, 7, 0, 0, 0, 9, 9, 0, 0, 0, 0, 0, 0, 0, 6,  // 0x20   ($ = 0, " = 7 -> \")
-    ...
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 0x60   (` = 0)
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9,  // 0x70   ({ } = 0)
-```
-Current test expecting `\"`: `git show origin/main:cosmic/js_test.tl | sed -n 4,7p`.
-Consumers of `escape_literal` outside js.tl: `git grep -n "escape_literal\|EscapeLiteral" origin/main -- cosmic ':(exclude)cosmic/js*'` — returns nothing; widen to `EscapeLiteral` across the tree before landing to confirm no other wrapper pins the `\"` shape.
-
-## Non-goals
-
-A bare, unquoted `{{js .x}}` slot (`var x = {{js .x | cosmic.js.safe}}`)
-stays unchecked: nothing scans the surrounding script, and the escaper cannot
-tell a string body from an expression. State it in the doc; do not add a
-quote-scanning parser. `cosmo.EscapeLiteral` is a C contract and is not
-changed. Template-literal safety is a side effect, not a documented context.
