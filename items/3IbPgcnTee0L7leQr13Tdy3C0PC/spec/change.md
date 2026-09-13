@@ -1,5 +1,3 @@
-## Change
-
 The observation half of parent 3IHDCJ3o (read its Evidence there):
 `sync` learns the scheduled lanes' health and records it, so a red
 release/fuzz/docs run becomes board state instead of an unseen
@@ -50,13 +48,3 @@ lane logic lives in a NEW module and `cmd_sync`
    repair left alone, no commit when facts unchanged (record
    returns false), and observe's nil path. Use a fake facts table —
    the network call itself is exercised only live.
-
-## Non-goals
-
-No ordering or admission changes — the policy half (status lanes
-row, admits_over_limit, finish-first placement) is the blocked
-sibling item, not this diff. No expedite field of any kind (parent's
-Direction, point 4). Verdict lines, refusal texts, existing commit
-subjects, `flow item=` grammars untouched (`_work/flowstats_test.tl`
-proves them); the one NEW commit subject is `sync lanes: ...` as
-specified.
