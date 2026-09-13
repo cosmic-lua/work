@@ -3,5 +3,7 @@ parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
 claim_batch: f7ad68e0c351b459038d1bb07477fafce3af1e69
 handover_head: 368860413c3af365782fe964784e191c7bb9cbf2
+verdict: request changes
+verdict_head: 368860413c3af365782fe964784e191c7bb9cbf2
 builders: 829b71e40aa0bf2ed23e6d766161a7ef
 touches: docs/design/storage.md README.md
