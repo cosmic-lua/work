@@ -1,6 +1,7 @@
 title: cosmopolitan: EncodeJson float round-trip loss — a float always encodes carrying a . or an exponent
 parent: 3HyRck1p5rpapP45GRGJ9anmT6e
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 273
 resolution: completed
 builders: magical-bell
+touches: third_party/lua/luaencodejsondata.c tool/lua/test_data_formats.lua test/tool/net/BUILD.mk tool/net/definitions.lua
