@@ -1,3 +1,4 @@
 title: reject-then-done is unpinned: the third builders-survives path lacks a regression test
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
