@@ -1,7 +1,3 @@
-# _build/gitboard_pin_test.tl: declare `--- reads: bin/gitboard.pin` so a pin edit re-runs it
-
-## Change
-
 `_build/gitboard_pin_test.tl` reads `bin/gitboard.pin` (its `PIN` constant)
 but carries no `--- reads: bin/gitboard.pin` header, so the runner reuses the
 last recorded result across an edit of the pin: the #1852 review mutated the
@@ -15,7 +11,3 @@ unaffected; only a local re-run is.
 Add the one header line before the first `local`, then show: edit the pin's
 sha to 63 characters, `--make test _build/gitboard_pin_test.tl` goes red
 without deleting any recorded result; restore, it goes green.
-
-## Non-goals
-
-- No change to what the test checks (shape, not value).
