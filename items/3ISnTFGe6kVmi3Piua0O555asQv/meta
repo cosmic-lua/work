@@ -1,6 +1,7 @@
 title: 3p/tl/tl_patch.tl is 1 line under the cap and the mechanism allows only one patch file, so no further carried entry can land
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1424
 resolution: completed
 builders: 0e714d6a-0cbe-5595-8ef6-73346e2f4d81
+touches: _make/patch.tl _make/fetch.tl 3p/tl/tl_patch/ast_cache.tl 3p/tl/tl_patch/narrow.tl 3p/tl/tl_patch.tl _make/patch_test.tl
