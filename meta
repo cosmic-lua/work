@@ -1,6 +1,6 @@
 title: brief builder: the 'It is on branch' line names an item-id prefix, not the branch worktree actually created
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: d6f3e720362c0169850d5a32d37a259e6b390563
 handover_head: 042f3854f5181f01c31dbca5a40ab88faa52bd7e
 external_url: https://github.com/cosmic-lua/work/pull/145
@@ -9,3 +9,4 @@ verdict_head: 042f3854f5181f01c31dbca5a40ab88faa52bd7e
 landed_head: 9a0281940a3228208985b8b9056dd9353d8e109b
 resolution: completed
 builders: 7acbd8f5531abbb91a992e06bc4f4376
+touches: _work/brieftext.tl
