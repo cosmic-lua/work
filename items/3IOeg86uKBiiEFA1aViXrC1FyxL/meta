@@ -1,6 +1,7 @@
 title: casts: close the 23 decoded-data shaping sites in non-test code with the validating decode
 parent: 3IOK2K7zvR9jUzs9pP9UtfDpdCt
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1378
 resolution: completed
 builders: f3fbcf94-e4f2-5cbb-8d9d-373d8007b973
+touches: _eval/score.tl _eval/stage.tl _build/size.tl _perf/baseline.tl _perf/compare.tl _build/casts_baseline.tl
