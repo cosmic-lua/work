@@ -1,5 +1,3 @@
-## Change
-
 `gitboard spec` refuses to rewrite the spec of an item that is in
 flight under another session, unless forced on the record.
 
@@ -54,10 +52,3 @@ are unchanged after the refusal; the holder's own rewrite with
 it lands and the commit subject carries the forced suffix. Existing
 base-CAS tests keep passing unchanged except for the added
 parameters at call sites.
-
-## Non-goals
-
-Existing verdict-line formats and refusal texts are unchanged (new
-refusals only, in the standing `REFUSED: ...` shape). No new verb.
-No claim check on any other verb. The reviewer field holds no spec
-lock — only the build claim gates.
