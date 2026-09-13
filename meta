@@ -1,7 +1,7 @@
 title: log ID --add FILE: append an entry without mutating the item
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
-claim_batch: 8922ba5ef039bc79a3e9ce50aa464b1899d18872
+claim_batch: 47f8a80f19ee50adf18145af6e864c0157218b34
 handover_head: c160f4814510040da5bf46f2c96bcf222a7d4a66
 builders: 5d055a8bfe4d25b076c2854761bb3396 475972e2254f777a7f1948c97f6543f5
 speccers: 475972e2254f777a7f1948c97f6543f5
