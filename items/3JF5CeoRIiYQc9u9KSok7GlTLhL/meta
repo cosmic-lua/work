@@ -1,4 +1,6 @@
 title: item tree: read and write format 5, with declared fields
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 resolution: completed
+touches: _work/itemtree.tl _fuzz/itemtree_fuzz_test.tl _work/item.tl _work/itemtype.tl _work/gitgate.tl _work/store.tl _work/fastimport.tl _work/gittake.tl _work/spec.tl _work/format.tl _work/gitspec.tl _work/gitspec_test.tl _work/gitread.tl
+access: cosmic-lua/cosmic
