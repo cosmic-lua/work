@@ -1,5 +1,3 @@
-## Change
-
 Evidence (review of PR #1542, 2026-08-30): the ETag cache's
 `CacheEntry` (`_work/api.tl`) carries no integrity check on `body` — a
 cache file corrupted in a way that still parses as a valid literal (a
@@ -17,9 +15,3 @@ fetch path). Tests: a hand-written syntactically-valid entry whose
 body disagrees with its integrity field reads as a miss; a valid
 entry still hits; mutation-verify the validation (skip the check,
 watch the mismatch test go red).
-
-## Non-goals
-
-No change to the 304 protocol, cache keying, or freshness logic. No
-cache format migration handling beyond treating old entries (missing
-the field) as misses — they repopulate on the next fetch.
