@@ -101,6 +101,16 @@ local function git_date_now(): string
   return ("%d %s%02d%02d"):format(secs, sign, hh, mm)
 end
 
+--- The epoch second a `git_date_now` date carries — the instant a
+--- commit's own author/committer line names, read back so the lease
+--- and cache row a write records name the same second git does. A
+--- date that does not parse falls back to the wall clock.
+--- @param date string A `<epoch> <+HHMM>` date
+--- @return integer The epoch second
+local function git_date_seconds(date: string): integer
+  return math.tointeger(tonumber(date:match("^(%d+)"))) or os.time()
+end
+
 --- The paths one item's commit must change: `meta` when any scalar
 --- field moved (compared as the one encoded blob `_work.itemtree`
 --- already builds it as, never field by field), the `spec/` subtree
@@ -287,6 +297,7 @@ local record fastimport
   type Op = Op
   type CommitPlan = CommitPlan
   git_date_now: function(): string
+  git_date_seconds: function(date: string): integer
   diff_item: function(old: item.Item | nil, new_it: item.Item,
   spec_replacement: itemtree.Spec | nil, old_spec: itemtree.Spec): {Op}
   data_block: function(content: string): string
@@ -296,6 +307,7 @@ end
 
 local M: fastimport = {
   git_date_now = git_date_now,
+  git_date_seconds = git_date_seconds,
   diff_item = diff_item,
   data_block = data_block,
   build_stream = build_stream,
