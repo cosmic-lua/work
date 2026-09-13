@@ -1,25 +1,3 @@
-# cosmic.http.static: serve a directory or the artifact's own /zip payload, content type from cosmo.http.find_content_type
-
-## Goal
-
-An htmx page needs `htmx.min.js` and a stylesheet served from
-somewhere, and the cosmic answer is "from inside the binary": a
-`--embed`-built artifact carries `embed/**` at `/zip/...`, so a static
-handler over a root path serves a self-contained web app from one
-file. The same handler over a filesystem directory serves a dev tree.
-
-## Evidence
-
-Traversal safety is bound already: `cosmo.IsAcceptablePath`
-(`tool/net/definitions.lua:3023`) — "checks if path is acceptable ...
-`.` or `..`" per the redbean docs. The content-type table is the
-binding child's `cosmo.http.find_content_type`. File reads are
-`cosmic.fs.read` (`cosmic/fs/init.tl`); `/zip/` paths read through it
-already (the doc index does: `cosmic/doc/mentions.tl:12` `GUIDES_DIR =
-"/zip/docs/guides"`).
-
-## Change
-
 Ready when: `ls cosmic/http/router.tl` prints `cosmic/http/router.tl`.
 
 That is the router child merged (its `*rest` patterns are how a static
@@ -53,14 +31,3 @@ New file `cosmic/http/static.tl` (module `cosmic.http.static`):
   `Last-Modified` format, and one request through `serve_one`.
 - `cosmic/http/init_example.tl`: `Example_static` — mount at
   `/static/*rest`, fetch `/static/app.css` from a temp dir.
-
-## Non-goals
-
-- `Range` requests and `If-Modified-Since`/`ETag` conditional GETs:
-  the next slice if a use appears; binding `ParseHttpRange` then.
-- Directory listings.
-- Compression.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.

@@ -1,3 +1,4 @@
 title: cosmic.http.static: serve a directory or the artifact's own /zip payload, content type from cosmo.http.find_content_type
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/http/router.tl cosmic/http/static.tl cosmic/http/static_test.tl .html/.css/.js/.png/.zzz cosmic/http/init_example.tl /static/app.css
