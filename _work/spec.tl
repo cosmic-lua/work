@@ -283,30 +283,75 @@ local function retired_section(heading: string): string
     .. "entry: gitboard log ID --add FILE"):format(heading)
 end
 
---- Split one markdown document into the two blobs the `spec/` subtree
---- holds — the inverse of `document` above, and the ONE text-to-record
---- seam every writer that holds a whole file goes through.
----
---- Its own scanner rather than `sections`, for two reasons that are
---- properties of `sections`, not of markdown: `sections` ends a
---- section at a thematic break, and neither scanner used to be
---- fence-aware. `sections` is the spec bar over every live sidecar on
---- the board, so tightening it is its own change measured against that
---- corpus; this reads only what this build writes, and is strict from
---- the start:
+--- One section of a markdown document as `segments` reads it: the
+--- heading's own text as written, the heading's level, and the lines
+--- under it as one blob (`section_blob`'s shape — outer blank lines
+--- dropped, one trailing newline, "" when hollow). Level 0 is the one
+--- segment with no heading: whatever non-blank text sits ahead of the
+--- first heading, present only when there is any.
+local record Segment
+  level: integer
+  heading: string
+  text: string
+end
+
+--- Every section of one markdown document, in source order — the one
+--- scanner `split` below stands on, exported so the format migration
+--- can read a whole sidecar with the same eyes and keep what `split`
+--- refuses. Its rules are properties of what this build writes, not of
+--- `sections` — which ends a section at a thematic break and was
+--- never fence-aware, and is the spec bar over every live sidecar, so
+--- tightening it is its own change measured against that corpus:
 ---
 ---   * fence-aware — a line inside a ``` fence is content, never a
 ---     heading, so a spec quoting `## Change` inside a pasted
 ---     command's output is ordinary prose;
----   * level-aware — a section opens at a heading whose lower-cased
----     text is `change` or `non-goals`, at whatever level the file
----     spells it, and runs until the next heading with no more `#`
----     than the opener, so a Change with `###` subsections keeps all
----     of it. A level-1 opener is the exception `sections` makes for
----     the same reason: a lone `#` is a document TITLE, so nothing
----     nests inside it and the next heading of any level closes it;
+---   * level-aware — a section opens at any heading and runs until
+---     the next heading with no more `#` than the opener, so a Change
+---     with `###` subsections keeps all of it. A level-1 opener is the
+---     exception `sections` makes for the same reason: a lone `#` is a
+---     document TITLE, so nothing nests inside it and the next heading
+---     of any level closes it;
 ---   * thematic breaks are content — a `---` line is a table rule or
 ---     a separator, and ends nothing.
+--- @param body string One markdown file's text
+--- @return {Segment} Its sections, in source order
+local function segments(body: string): {Segment}
+  local out: {Segment} = {}
+  local lines: {string} = {}
+  local level = 0
+  local heading = ""
+  local fenced = false
+  local function flush()
+    local text = section_blob(lines)
+    if level > 0 or text ~= "" then
+      out[#out + 1] = {level = level, heading = heading, text = text}
+    end
+    lines = {}
+  end
+  for line in (body .. "\n"):gmatch("([^\n]*)\n") do
+    local is_fence = line:match("^%s*```+") ~= nil
+    local hashes, text = line:match("^(#+)%s+(.-)%s*$")
+    if is_fence then
+      fenced = not fenced
+      lines[#lines + 1] = line
+    elseif not fenced and text ~= nil
+    and (level <= 1 or #hashes <= level) then
+      flush()
+      level, heading = #hashes, text
+    else
+      lines[#lines + 1] = line
+    end
+  end
+  flush()
+  return out
+end
+
+--- Split one markdown document into the two blobs the `spec/` subtree
+--- holds — the inverse of `document` above, and the ONE text-to-record
+--- seam every writer that holds a whole file goes through. Built on
+--- `segments`: a section opens at a heading whose lower-cased text is
+--- `change` or `non-goals`, at whatever level the file spells it.
 ---
 --- Anything else CARRYING CONTENT is refused rather than dropped: a
 --- heading that opens a section of its own, is neither of the two, and
@@ -321,50 +366,28 @@ end
 local function split(body: string): itemtree.Spec | nil, string
   local change: {string} = {}
   local non_goals: {string} = {}
-  -- The open section's own buffer, nil ahead of the first heading and
-  -- for a section this build does not keep — whose first non-blank
-  -- line is the refusal, so `other` names which heading to cite.
-  local current: {string} = nil
-  local other = ""
-  local level = 0
-  local fenced = false
-  for line in (body .. "\n"):gmatch("([^\n]*)\n") do
-    local is_fence = line:match("^%s*```+") ~= nil
-    local hashes, text = line:match("^(#+)%s+(.-)%s*$")
-    if is_fence then
-      fenced = not fenced
-      if current ~= nil then
-        current[#current + 1] = line
-      end
-    elseif not fenced and text ~= nil
-    and (current == nil and other == "" or level == 1 or #hashes <= level) then
-      local lowered = text:lower()
-      current, other = nil, ""
-      if lowered == "change" then
-        current = change
-      elseif lowered == "non-goals" then
-        current = non_goals
-      else
-        other = text
-      end
-      level = #hashes
-    elseif current ~= nil then
-      current[#current + 1] = line
-    elseif line:match("%S") then
-      if other ~= "" then
-        return nil, retired_section(other)
-      end
+  for _, seg in ipairs(segments(body)) do
+    local lowered = seg.heading:lower()
+    if seg.level == 0 then
       return nil, ("text before the first heading is not a spec section — a "
         .. "measurement or a narrative is a log entry: gitboard log ID "
         .. "--add FILE")
+    elseif lowered == "change" then
+      change[#change + 1] = seg.text
+    elseif lowered == "non-goals" then
+      non_goals[#non_goals + 1] = seg.text
+    elseif seg.text ~= "" then
+      return nil, retired_section(seg.heading)
     end
   end
-  return {change = section_blob(change), non_goals = section_blob(non_goals)}, ""
+  return {change = table.concat(change), non_goals = table.concat(non_goals)}, ""
 end
 
 local record spec
   READY_SECTIONS: {string}
   document: function(sp: itemtree.Spec): string
+  type Segment = Segment
+  segments: function(body: string): {Segment}
   split: function(body: string): itemtree.Spec | nil, string
   sections: function(body: string): {string: string}
   ready_gaps: function(body: string): {string}
@@ -376,6 +399,7 @@ end
 local M: spec = {
   READY_SECTIONS = READY_SECTIONS,
   document = document,
+  segments = segments,
   split = split,
   sections = sections,
   ready_gaps = ready_gaps,

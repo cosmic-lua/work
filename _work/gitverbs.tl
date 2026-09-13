@@ -15,6 +15,7 @@ local ciobs = require("_work.ciobs")
 local gate = require("_work.gitgate")
 local gitdepend = require("_work.gitdepend")
 local gitdone = require("_work.gitdone")
+local migratecli = require("_work.gitmigrate_cli")
 local gitlog = require("_work.gitlog")
 local gitready = require("_work.gitready")
 local gittake = require("_work.gittake")
@@ -354,6 +355,7 @@ local record gitverbs
   open?: boolean, body_file?: string): integer
   cmd_drop: function(s: store.Store, id: string, session: string,
   why: string, force: boolean): integer
+  cmd_migrate: function(dir: string, remote: string, execute: boolean): integer
   cmd_done: function(s: store.Store, id: string, reason: string,
   force: boolean, why: string, by?: string): integer
   cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
@@ -368,6 +370,7 @@ end
 local M: gitverbs = {
   cmd_take = cmd_take,
   cmd_drop = cmd_drop,
+  cmd_migrate = migratecli.cmd_migrate,
   cmd_done = gitdone.cmd_done,
   cmd_log = gitlog.cmd_log,
   cmd_log_add = gitlog.cmd_log_add,
