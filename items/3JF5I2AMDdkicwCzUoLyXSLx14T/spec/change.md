@@ -189,7 +189,7 @@ Delete those passages; the surrounding brief text stands.
 
 Two derived reports, both whole-board questions no verb asks:
 
-- D48's: an item whose `spec/change.md` names another item's handle as blocking
+- D48's: an item whose Change blob names another item's handle as blocking
   — the `«handle»` spelling `_work.tail` already renders — where that id is not
   in its `depends_on`. One line per item, naming both.
 - A `depends_on` cycle, walked with the same `item.MAX_DEPTH` bound
