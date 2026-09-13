@@ -1,3 +1,4 @@
 title: writer: one commit per mutation on state, the path fence at publish, rebase past disjoint writers, one non-forced push
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 touches: _work/gitwrite.tl _work/prepared.tl _work/publish.tl _work/gittransport.tl _work/refs.tl
+depends_on: 3JHjL4ZcosAuK5e592yZ347Pcan
