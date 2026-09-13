@@ -1,6 +1,6 @@
 title: brief review: the round-context injection blanking gets its own test, like the builder side has
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 9b785e3fe17be17781a78c952045d81aadf222e4
 external_url: https://github.com/cosmic-lua/work/pull/109
 verdict: accept
@@ -8,3 +8,5 @@ verdict_head: 9b785e3fe17be17781a78c952045d81aadf222e4
 landed_head: 098d7ca17c2a136dde8c9d8a4bb52dc48a2e9d9f
 resolution: completed
 builders: cb538eb89d57f71188ff4ab8139a09b5
+touches: _work/brief_rework_test.tl
+access: cosmic-lua/cosmic
