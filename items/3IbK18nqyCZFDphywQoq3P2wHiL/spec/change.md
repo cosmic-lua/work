@@ -1,5 +1,3 @@
-## Change
-
 The handle's chunk divider becomes an underscore — `«d0x1_37YJ»` —
 because `_` is a word character and `-` is not: a double-click
 selects the whole 9-character handle body in one gesture instead of
@@ -24,11 +22,3 @@ literals in `_work/tail_test.tl` lines 31/38/62, plus whatever
 hyphenated handle — measure with `grep -n '«.*-.*»'`). Add one
 assertion that a HYPHENATED paste (`«d0x1-37YJ»` form) still
 resolves, pinning the backward tolerance.
-
-## Non-goals
-
-Nothing outside `_work/tail.tl` and the render tests changes — the
-render sites call `tail.handle` and inherit the divider. Verdict
-lines, refusal texts, commit subjects, `flow item=` lines, and item
-files untouched (`_work/flowstats_test.tl` proves the grammars).
-The handle stays derived, never stored.
