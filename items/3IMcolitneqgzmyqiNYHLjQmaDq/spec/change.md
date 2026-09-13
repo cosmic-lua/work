@@ -1,5 +1,3 @@
-## Change
-
 Decide which of SQLite's compile-time features the vendored library build enables,
 and enable them in `third_party/sqlite3/BUILD.mk`.
 
@@ -45,10 +43,3 @@ asserted.
 
 Gate: `make -j$(nproc) o//tool/lua/test` passes, and the probe above reports
 `AVAILABLE` for each enabled feature.
-
-## Non-goals
-
-- No new third-party code. Everything here is already vendored.
-- No registration API. Compile-time features are present on every connection by
-  construction; the opt-in vocabulary is a separate item and treats these as
-  capabilities to *verify*, never to enable.
