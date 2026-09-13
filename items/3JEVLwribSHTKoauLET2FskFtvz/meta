@@ -1,3 +1,5 @@
 title: zip/tar/compress: incremental deflate/inflate handles, so the big movers can adopt the stream contract
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: tool/net/lfuncs.c tool/net/definitions.lua tool/net/lzip.c
+access: cosmic-lua/cosmic
