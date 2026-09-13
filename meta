@@ -1,4 +1,5 @@
 title: cosmic joins the dupes gate: glob_to_pattern exported once from cosmic.fs
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: _make/project.tl _build/dupes.tl cosmic/fs/find.tl cosmic/doc/visibility.tl cosmic/fs/init.tl _build/dupes_test.tl _build/public_surface_baseline.tl
