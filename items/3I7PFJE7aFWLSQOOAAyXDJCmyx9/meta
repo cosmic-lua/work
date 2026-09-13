@@ -1,5 +1,6 @@
 title: fuzz child 4: per-input instruction budget in the driver; sse's hand-rolled bound deleted
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1291
 resolution: completed
+touches: _fuzz/driver.tl _fuzz/sse_fuzz_test.tl _fuzz/driver_test.tl
