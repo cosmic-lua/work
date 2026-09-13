@@ -1,4 +1,5 @@
 title: bump bin/cosmic.pin to a release carrying the discover counter fix (#1455)
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: bin/cosmic.pin _types/tlast_test.tl
