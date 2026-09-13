@@ -1,0 +1,1 @@
+A test that spawns `cosmic` by bare name through `PATH` without the token is not caught; `git grep -n '{"cosmic"' origin/main -- '*_test.tl'` finds no such argv today, which says only that this one spelling is absent.
