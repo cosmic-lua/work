@@ -1,0 +1,2 @@
+- No annotation content changes; the gate only.
+- No change to cosmic's generator.

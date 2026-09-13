@@ -1,4 +1,5 @@
 title: definitions coverage check 9: whitespace before a depth-0 '|' still passes, and gentype drops everything after it from the type
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
 resolution: not-planned
+touches: tool/lua/test_definitions_coverage.lua
