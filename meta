@@ -1,3 +1,4 @@
 title: cosmic.bench: the perf harness, types, stats, compare and gate as a public module — work's perf lane clones cosmic's tree to reach _perf/
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _perf/harness.tl _perf/perf_types.tl _perf/stats.tl _perf/gate_test.tl cosmic/bench_example.tl
