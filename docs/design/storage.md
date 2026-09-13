@@ -79,16 +79,14 @@ board becomes one branch rather than a tidier set of refs.
 
 **A whole-board write is a multi-ref push, and this environment cannot
 make one.** cosmic's D49 records the measurement: the format-5
-migration's single atomic push over 1425 item refs plus the marker — a
-4.29 MB body — was refused by the session's egress proxy with a bare
-`403` on the `git-receive-pack` POST, and throwaway pushes put the cap
-between 50 and 100 ref updates (1, 10 and 50 pass; 100 fail; a 6 MB
-body passes; a ref deletion is refused identically). The migration ran
-in **31 atomic batches of at most 50 refs with the marker riding the
-last one**, and D49 makes that the standing discipline for every
-whole-board rewrite. A board whose every write touches one ref never
-approaches the ref-count cap; what remains is a body-size bound the
-migration's staged pushes respect (`## The migration`). This record
+migration's one atomic push over 1425 item refs plus the marker (a
+4.29 MB body) was refused by the session's egress proxy with a bare
+`403`, and throwaway pushes put the cap between 50 and 100 ref updates
+(1, 10 and 50 pass; 100 fail; a 6 MB body passes). It ran in **31
+batches of at most 50 refs with the marker riding the last one**, the
+discipline D49 sets for every whole-board rewrite. A board whose every
+write touches one ref never approaches that cap; what remains is a
+body-size bound the migration's staged pushes respect. This record
 does not restate D49; it inherits it.
 
 **The layout is load-bearing in 27 modules.** Every one of them names
@@ -126,8 +124,7 @@ migration/marks           a `cosmic.literal` map, old sha to new, written
 ```
 
 `spec/change.md` and `spec/non-goals.md` carry over from format 5
-unchanged, and what belongs in them is cosmic's D47: named here, not
-restated.
+unchanged; what belongs in them is cosmic's D47, named, not restated.
 
 Three invariants hold it together, and they — with the sections below —
 constrain five definitions already in the tree. Located once, here, so
@@ -186,23 +183,20 @@ $ git update-ref refs/heads/state HEAD
 
 A mutation is one commit. Its parent is the staging base — the fetched
 `refs/remotes/<remote>/state`. Its author is the session, its
-committer gitboard, its subject the verb grammar already in use and
-already parsed: `_work/events.tl`'s `parse_subject` reads the first
-token as the verb, the token after ` by ` as the session and the hex
-after `head:` as the head, and it classifies nothing it cannot parse
-rather than refusing. The `Op: <verb>` trailer stays exactly as it is,
-and one trailer is added: `Transaction: <id>`, the prepared
+committer gitboard, its subject the verb grammar `_work/events.tl`'s
+`parse_subject` already reads (verb, ` by ` session, `head:`), which
+classifies nothing it cannot parse rather than refusing. The
+`Op: <verb>` trailer stays exactly as it is, and one trailer is added: `Transaction: <id>`, the prepared
 transaction's id, read back with `git interpret-trailers --parse` and
 never by text search. It locates a candidate; what proves the attempt
 landed is its content (`## Drafts and prepared transactions`).
 
 A `log --add` entry writes `items/<id>/log/<ksuid>.md` **and** carries
 the same text in the commit body, so `git log -- items/<id>` and the
-tree both show it. That is a change from format 5, where the entry is
-a tree-identical commit and the body is the only copy
-(`_work/fastimport.tl`'s empty-`ops` shape): with one branch, a
-tree-identical commit is indistinguishable from a no-op, and the path
-is what makes `git log -- items/<id>` an item's history.
+tree both show it. In format 5 the entry is a tree-identical commit
+(`_work/fastimport.tl`'s empty-`ops` shape); on one branch that is
+indistinguishable from a no-op, and the path is what makes
+`git log -- items/<id>` an item's history.
 
 A claim batch is one commit writing every member's `claims/<id>`;
 `renew` rewrites them in one commit, `drop` deletes them in one. The
@@ -211,10 +205,8 @@ commit *is* the batch; the `id` in each blob is the batch's identity.
 
 There is no `board/seq`. The bare-lease ref exists today to serialise
 the BOUNDED mutations — a new `take` against the doing bound, a lane
-mint — whose gates read the whole board before deciding. On one
-branch a bounded mutation fences the whole head instead
-(`## The write fence`): the ordering is the branch's first-parent
-order, and the revalidation is explicit.
+mint — whose gates read the whole board. On one branch a bounded
+mutation fences the whole head instead (`## The write fence`).
 
 ## The write fence
 
@@ -224,15 +216,13 @@ recorded as the zero id:
 
 - an item mutation: the subtree `items/<id>` **and** the blob
   `claims/<id>`, so an edit staged before someone else's claim lands
-  loses to that claim exactly as the shared item ref makes it lose
-  today;
+  loses to that claim, as the shared item ref makes it lose today;
 - a claim, renew or drop: the same two paths for every member;
 - a mutation whose gate reads beyond the items it writes — the doing
   bound on a new `take`, a lane mint, `depend`'s cycle walk, `attach`'s
   depth walk, `done`'s open-children check, `rank`'s parent order —
   records those paths too, and the whole-board ones fence the head B
-  itself: these are the BOUNDED mutations, and `depend` and `attach`
-  join the two `board/seq` covers today.
+  itself: the BOUNDED mutations, which `depend` and `attach` now join.
 
 At publish, with the fetched head H:
 
@@ -287,10 +277,9 @@ A rebuild is three reads:
 - one walk of the branch —
   `git log --first-parent --format=%H%x00%ct%x00%an <%ae>%x00%s --name-only` —
   giving the `events` rows, attributed by path: a commit naming
-  `items/<id>/` or `claims/<id>` is an event of item `<id>`, a claim
-  batch touching N members yields N rows, and the first commit in the
-  walk naming a path under `items/<id>/` is that item's `tip` and its
-  `touched_at`.
+  `items/<id>/` or `claims/<id>` is an event of item `<id>` (a claim
+  batch of N members yields N rows), and the first commit naming a
+  path under `items/<id>/` is that item's `tip` and `touched_at`.
 
 Four identities one sha used to stand in for are distinct here: the
 global head (the cache digest), an item's tip (`touched_at`), the
@@ -335,32 +324,40 @@ away; the ref is the update.
 
 A draft is `refs/gitboard/drafts/<id>` (the namespace
 `_work/gitdraft.tl` already owns): a chain of staged commits from one
-snapshot, each one a mutation with its own dependencies. Publishing
-rebases the chain onto the fetched head one commit at a time, each
-fence checked against the head it lands on, and pushes the tip once;
-every mutation stays its own commit, because the branch's history is
-the log. A draft whose chain advanced after its publication snapshot
-is not confirmed by that publication.
+snapshot, each one a mutation with its own dependencies. Its frozen
+attempt is the ordered chain of TRANSITIONS — for each commit, the
+object id of every changed path, its deletions and modes, its message
+and author — not the final tree. Publishing rebases the chain onto the
+fetched head one commit at a time, each fence checked against the head
+it lands on, and pushes the tip once; every mutation stays its own
+commit, because the branch's history is the log. A draft whose chain
+advanced after its publication snapshot is not confirmed by that
+publication.
 
-`refresh` confirms a transaction when a commit on the fetched head's
-first-parent chain — the sha the manifest recorded, or failing that
-the one whose parsed `Transaction:` trailer names it — carries the
-attempt's content: the object id of every changed path in that commit
-equals the id the frozen attempt staged (the attempt's digest, kept in
-the manifest as `_work/singlehead_receipts.tl` keeps one today). Only
-then is the local ref retired; a trailer match with different content
-is reported, never confirmed. It reports claim authority separately, from the current
-`claims/<id>` blobs, never from the fact of publication.
+`refresh` confirms an attempt when the fetched head's first-parent
+chain carries it whole: the tip located by the sha the manifest
+recorded, or failing that by its parsed `Transaction:` trailer, then
+walking back one commit per transition and checking each against the
+frozen chain in order — changed paths' object ids, deletions, message
+(the attempt's digest, kept in the manifest as
+`_work/singlehead_receipts.tl` keeps one today). A single transaction
+is a chain of one. A candidate that reaches the expected final tree
+with a transition missing or squashed is reported, never confirmed,
+and only a confirmed attempt retires its local ref. Claim authority is
+reported separately, from the current `claims/<id>` blobs, never from
+the fact of publication.
 
 ## A connector-only environment
 
 The plan is the saved-plan schema `_work/singlehead_calls.tl` already
 defines, its pack payload replaced by the changed paths —
 `{head, base_tree, changes, message, publish_by}`, a change being
-`{path, mode, content | delete}` — rendered as the three calls the
-proof of concept renders today: `create_tree(base_tree = head's tree)`
-split as `TREE_CALL_BYTES` splits it now, `create_commit(parents =
-[head])`, and `update_ref(force = false)` guarded by `publish_by`.
+`{path, mode, content | delete}` — rendered as the calls the proof of
+concept renders today: per transition a `create_tree(base_tree = the
+previous commit's tree)` split as `TREE_CALL_BYTES` splits it now and a
+`create_commit(parents = [the previous commit])`, then one
+`update_ref(force = false)` guarded by `publish_by`. A draft is N such
+pairs and one final update, never one squashed commit.
 
 The fence runs in Teal against the fetched head before rendering; the
 plan is frozen and bound; every call comes from the saved plan; the
@@ -410,11 +407,14 @@ atomically with the tip, so the cutover is one instant.
 transaction and publishes without fetching pushes to the old refs with
 a lease that still holds; its write would land there and never reach
 `state`. So the order is fixed: the board owner sets a GitHub ruleset
-refusing updates to `refs/heads/items/**`, `ended/**`,
-`claim-batches/**` and `board/seq`; THEN `migrate6` fetches, writes the
-checkpoint and replays; the staged pushes follow; and immediately
-before the activation push it refetches and refuses if any source tip
-differs from the checkpoint. `fsck` on a format-6 board keeps comparing
+that refuses creation, update and deletion of every ref under
+`refs/heads/items/**`, `ended/**`, `claim-batches/**` and `board/seq`,
+with an empty bypass list, so no legacy client can file, move or drop
+anything; THEN `migrate6` fetches, writes the checkpoint and replays;
+the staged pushes follow; and immediately before the activation push
+it refetches and compares the complete source ref set — every name
+and its tip — against the checkpoint, refusing on any tip that moved,
+any ref added, or any ref removed. `fsck` on a format-6 board keeps comparing
 the old tracking refs against the checkpoint and reports drift;
 `migrate6 --catch-up` replays a drifted ref only while `state` carries
 no native write past the activation commit, and refuses otherwise,
@@ -439,12 +439,14 @@ it fail (the discipline `experiments/single-head/mutations.tl` set):
   item and a claim-bridge commit each survive the migration with their
   evidence resolvable through `migration/marks`;
 - a partial `state` reads as nothing; a rerun of the migration is
-  identical; a source tip moved after the checkpoint refuses the
-  activation push; `--catch-up` refuses after a native write;
+  identical; a source ref moved, added or removed after the checkpoint
+  refuses the activation push; an old client's `new` during the freeze
+  is rejected by the fence; `--catch-up` refuses after a native write;
 - a published commit with a matching trailer but different content is
-  not confirmed; an imported lease's `id` still names its existing
-  work branch; `depend` racing an edit of an item on its cycle path is
-  refused.
+  not confirmed; a candidate reaching the expected final tree with a
+  transition missing or squashed is not confirmed; an imported lease's
+  `id` still names its existing work branch; `depend` racing an edit
+  of an item on its cycle path is refused.
 
 ## Plan
 
@@ -488,12 +490,11 @@ session at the cutover. So reader, writer, both executors and
 keeps operating a format-5 board until the marker moves.
 
 **Migration, release and pin, back to back.** `docs/design/schema.md`
-records what the alternative cost: pinning ahead of the migration's
-code darkened every clone for as long as the migration took to build.
-Same here — 11 follows 10 follows 9 with nothing in between.
+records what pinning ahead of the migration's code cost: every clone
+dark until it was built. Here 11 follows 10 follows 9 with nothing in
+between.
 
 Retire waits for a confirmed live board: read and written through
 `state` by real sessions. Until then the old refs are the fallback;
 after the first native write they are an archive, since rolling back
-would lose that write. Deleting them is the owner's step and cannot be
-undone.
+would lose that write. Deleting them is the owner's irreversible step.
