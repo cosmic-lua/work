@@ -1,5 +1,6 @@
 title: codec_base64_roundtrip_64k: +7.8% between cosmos 07fc94a1c and 354c17e08, with the codec byte-identical
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 resolution: completed
 builders: 94cc74d0-cf98-502f-a9a1-461e3b0e1dec
+touches: 3p/cosmos/cosmos_pin.tl _types/gentype.tl skills/optimize/cosmopolitan.md
