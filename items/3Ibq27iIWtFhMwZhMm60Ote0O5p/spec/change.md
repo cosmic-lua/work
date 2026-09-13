@@ -1,5 +1,3 @@
-## Change
-
 Reproduced 2026-08-30 in a scratch store copy: one item file whose
 title carries a literal newline (a shape an older, pre-refusal writer
 could have committed; crafted via a valid `\<newline>` escape) bricks
@@ -40,19 +38,3 @@ the good ones; the write path still refuses; mutation-verify the
 tolerance (restore the old fold-into-failure, watch the list test go
 red). Watch the 500-line cap: store.tl history shows it has run at the
 cap before — measure headroom first and extract minimally if needed.
-
-## Non-goals
-
-No gitgraph.tl edits (two sibling items own that file; `set`'s repair
-works through decode, not through verb changes). No relaxation of the
-write-time refusal. No schema migration of stored items.
-
-## Rework note (2026-08-30, speccer)
-
-The Change's item 2 promised a rendered "N flagged" report line while
-naming only item.tl and store.tl — a contradiction the builder
-correctly surfaced instead of guessing. Resolution: THIS item's scope
-is the brick fix plus the pure formatter (`store.flagged_summary`);
-the CLI wiring of that line into show/next output is a separate
-follow-up item (filed), since it touches gitshow/gitview. Judge the
-diff against that narrowed scope.
