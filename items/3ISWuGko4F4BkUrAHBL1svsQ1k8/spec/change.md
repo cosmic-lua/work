@@ -1,11 +1,3 @@
-## Goal
-
-G3 (this item's parent root) — formatter output is trustworthy: a
-keyword-in-type-position miscount silently dedents guard bodies and
-the fmt gate blesses the damage (idempotent output).
-
-## Change
-
 In `cosmic/format/types.tl` (354 lines today, `wc -l` → 146 headroom
 under the 500 cap), `mark_return_list` marks a function type's return
 list "to the end of the line", so a CODE keyword after the list is
@@ -28,24 +20,3 @@ the if-guard shape (`if x is function(): any then` with an indented
 body) formats to itself; the `while ... is function(): any do` shape;
 and `function(): any | nil` in an if-guard still formats to itself
 (the `nil` exemption).
-
-## Non-goals
-
-The lint half of the class — `end_line_of` on `as function(any, any)`
-(3IP9ijhv) — is a different walker in a different tree; untouched
-here, the item stays open. No change to `is_function_block_opener`
-(its `is` handling is already correct) or to the carried-depth
-mechanics. No reformat of committed files: today's tree contains no
-mangled instance (the one observed was fixed by hand in 3ISWHWQT).
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `bin/cosmic --make test cosmic/format/types_test.tl` passes,
-  including a new test whose name contains `guard` covering the
-  if-guard shape.
-
-## Enablement
-
-none needed — the module, its test file, and the repro command all
-exist; the fix is local to one helper.
