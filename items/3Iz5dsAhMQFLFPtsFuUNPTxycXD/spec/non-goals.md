@@ -1,0 +1,1 @@
+No change to the patch's behavior or its `find`/`replace` entries' matched text (a `find`/`replace` `_patch.tl` entry's `find` string must still match the pristine tl source verbatim, so verify this edit lands in the `note`/surrounding prose the patch owns, not in text the `find` matches).
