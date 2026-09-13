@@ -1,9 +1,3 @@
-## Goal
-G3 — an honest type layer. The parent is "casts: close the 55 any-map
-field walk from-any sites"; this is its tl-syntax-tree slice: 6 of those
-sites, all in `_tool/coverage/lines.tl`.
-
-## Change
 Declare the tl syntax-tree fields the coverage walker reads as a record
 LOCAL to `_tool/coverage/lines.tl`, and index it as a record. One file
 plus one baseline row; no other file moves.
@@ -98,61 +92,3 @@ declares no node shape. It is unrelated to this slice.
 `_build/public_surface_baseline.tl` is keyed by `cosmic.*` module name
 only — `grep -c "_tool" _build/public_surface_baseline.tl` prints `0`.
 This slice moves no public surface.
-
-## Non-goals
-- **The coverage line-mapping behaviour is frozen.** `walk`'s
-  traversal, `exec_kinds`, and every `mark_statement` branch keep their
-  current behaviour; only the TYPES move. `.cosmic-coverage` must not
-  move, and it does not: with this change applied on this tree,
-  `o/bin/cosmic --make coverage` ran 239 checks and printed
-  `coverage ratchet ok` / `coverage: PASS (239 files)` with no edit to
-  the committed floor. If it moves in your diff, the walk changed and
-  the diff is wrong — do not regenerate the floor to make it pass.
-- **Do not touch `_types/gentl.tl`** — not its erasure rules, not
-  `RECORD_FIELDS`, not `PRELUDE`, not `KEEP`/`TO_STRING`/`NAMED`. The
-  generated `tl.d.tl` surface does not move.
-- **No tl pin bump.** `3p/tl/tl_pin.tl` stays at v0.24.8.
-- **Do not widen `walk` to take `Node`,** and do not remove the three
-  remaining casts at `:75`, `:87` and `:122`. Closing those needs a
-  different mechanism and is not this slice.
-- **Do not edit `docs/design/casts.md`.** Its tables are a snapshot
-  dated `d3e59de7` and are already stale independently of this slice:
-  measured 2026-08-25 against `1f9279ab`, 5 of the 13 rows in its
-  "Any-map field walk" table name files that are gone or now carry zero
-  from-any sites, the live rows sum to 22 against a stated total of 55,
-  and the document's headline `192 of the 402` measures 111 of 314
-  today (`git ls-files '*.tl' | xargs grep -h -- "-- cast: " | wc -l`,
-  and the same piped through `grep -c "from any"`). Editing one row
-  leaves the document neither current nor a coherent snapshot, and every
-  sibling slice under this parent would collide on the same table.
-  Refreshing it is its own item, filed as `3IQC4GeO`.
-- **No change to any other file.** Not `_tool/coverage/report.tl`, not
-  `baseline.tl`, and no test file: `_tool/coverage/lines_test.tl`'s 8
-  test functions pass unchanged against the new types.
-
-## Acceptance
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `grep -c -- "-- cast: " _tool/coverage/lines.tl` prints `3` (it prints
-  `9` today).
-- `grep -c -- "-- cast: .*from any" _tool/coverage/lines.tl` prints `0`
-  (it prints `6` today).
-- `grep -n '"_tool/coverage/lines.tl"' _build/casts_baseline.tl` shows
-  `= 3` (it shows `= 9` today).
-- `wc -l _tool/coverage/lines.tl` reports at most 500.
-- `bin/cosmic --make test _tool/coverage/lines_test.tl` ends
-  `test: PASS (1 file)`.
-- `bin/cosmic --make coverage` ends `coverage: PASS` and prints
-  `coverage ratchet ok`.
-- `git diff --stat origin/main...HEAD` names exactly two files:
-  `_tool/coverage/lines.tl` and `_build/casts_baseline.tl`.
-
-## Enablement
-none needed. The mechanism is a Teal record declaration plus `is`
-dispatch over `any`, both already ubiquitous in this tree and stated in
-AGENTS.md ("Use `is` for dispatch past nil ... also dispatch over
-`any`"), and the cast floor's regen command is printed by the gate that
-fails. The whole shape was applied and gated during this refinement
-pass — `--check types` clean, `_tool/coverage` tests green, `fmt: PASS
-(527 files)`, `lint: PASS (624 files)`, `coverage: PASS (239 files)`
-with `coverage ratchet ok` — so no unknown remains for the implementing
-session to discover.
