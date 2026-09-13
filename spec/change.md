@@ -1,5 +1,3 @@
-## Change
-
 README's `## Performance` section tells a local run to set
 `GITBOARD_PERF_BIN` and `PERF_BIN` for `_perf/run.tl` and stops there.
 The gate's compare and selfcheck re-measure flagged scenarios, so they
