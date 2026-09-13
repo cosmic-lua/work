@@ -1,5 +1,3 @@
-## Change
-
 Evidence (2026-08-29): the fleet exhausted the account's shared GitHub
 API quota (5,000 REST/hr, 5,000 GraphQL points/hr, per user across ALL
 tokens) and landing two accepted PRs was blocked for most of an hour.
@@ -33,8 +31,3 @@ Tests beside the code in the existing seams (`gh_test.tl`,
 `lanes_test.tl`, `api`'s own): 304 reuse, freshness skip, low-remaining
 degrade — mutation-verify at least the 304 path. Watch the 500-line
 cap on every touched file.
-
-## Non-goals
-
-No GraphQL. No new verbs. No change to which verbs call the API. No
-committed cache files (o/ only).
