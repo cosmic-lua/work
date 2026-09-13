@@ -1,3 +1,4 @@
 title: gitboard: drop the copied _fuzz/driver.tl+source.tl+shrink.tl once cosmic.fuzz publishes
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _fuzz/driver.tl _fuzz/source.tl _fuzz/shrink.tl _fuzz/itemtree_fuzz_test.tl _fuzz/priority_fuzz_test.tl
