@@ -1,23 +1,3 @@
-# cosmic.http.router: method + path-pattern dispatch with `:param` segments, as a Handler
-
-## Goal
-
-The one piece every htmx app has on page one: `GET /todos` renders the
-list, `POST /todos` adds one, `DELETE /todos/:id` removes one and
-returns the fragment. A router is a `Handler` (so it plugs into
-`Server:serve` unchanged) that dispatches on method and path pattern
-and fills `req.params`.
-
-## Evidence
-
-The core child defines `type Handler = function(req: Request, res:
-Response)` and `Request.path` (percent-decoded via `cosmic.url.parse`,
-`cosmic/url.tl:125`) — the router matches on that. `Request` gets a
-`params: {string: string}` field here, empty for a request that never
-went through a router.
-
-## Change
-
 Ready when: `ls cosmic/http/init.tl` prints `cosmic/http/init.tl`.
 
 That is the core child merged; today the command reports the path as
@@ -52,14 +32,3 @@ New file `cosmic/http/router.tl` (module `cosmic.http.router`):
   pattern's error string.
 - `cosmic/http/init_example.tl`: `Example_router` — three routes, two
   requests through `serve_one`.
-
-## Non-goals
-
-- Regex patterns, typed params, route groups/middleware — the least
-  thing is `:param` and `*rest`. Middleware is function composition
-  over `Handler` and needs no router support.
-- Query-string routing.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.
