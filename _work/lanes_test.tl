@@ -9,6 +9,7 @@
 local check = require("cosmic.check")
 local env = require("cosmic.env")
 local action = require("_work.action")
+local flow = require("_work.flow")
 local api = require("_work.api")
 local cache = require("_work.cache")
 local fixture = require("_work.fixture")
@@ -20,7 +21,6 @@ local item = require("_work.item")
 local lanes = require("_work.lanes")
 local read = require("_work.read")
 local refs = require("_work.refs")
-local spec = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -54,8 +54,7 @@ local function test_mint_is_idempotent_per_lane()
   -- The minted sidecar clears the spec bar honestly — `_work.spec`'s
   -- real check, not a copy of its rule — which is what lets `next`
   -- offer the item and `take` admit it without disagreeing.
-  local body = spec.document(store.read_spec(s, repair.id))
-  local gaps = spec.ready_gaps(body)
+  local gaps = flow.ready_gaps(store.read_spec(s, repair.id))
   assert(#gaps == 0,
     "the minted sidecar passes the spec bar: " .. table.concat(gaps, "; "))
 
@@ -219,9 +218,9 @@ local function test_a_minted_repair_is_offered_and_admitted()
   local repair = repair_for(all, "release.yml")
   assert(repair ~= nil, "the red lane minted a repair")
 
-  local specs: {string: string} = {}
+  local specs: action.Specs = {}
   for _, it in ipairs(all) do
-    specs[it.id] = spec.document(store.read_spec(s, it.id))
+    specs[it.id] = store.read_spec(s, it.id)
   end
   local c2 = check.must(store.read(s))
   local a, aerr = action.next_action(c2, all, specs)

@@ -152,9 +152,7 @@ local function test_meta_omits_zero_values()
 end
 
 -- `repo` and `base` are each their own meta line, each omitted (like
--- any other zero value) when empty — and `format_target`, the format-4
--- write no writer calls any more, still states the collapsed form the
--- round-trip property over `parse_target` is measured against.
+-- any other zero value) when empty; nothing writes a `target` line.
 local function test_repo_and_base_are_their_own_lines()
   local repo_only = check.must(item.decode({id = fresh_id(), title = "t",
         parent = fresh_id(), repo = "cosmic-lua/cosmic"}))
@@ -168,8 +166,6 @@ local function test_repo_and_base_are_their_own_lines()
   local two = itemtree.encode_meta(both)
   assert(two:find("repo: cosmic%-lua/cosmic\n", 1, false) ~= nil, two)
   assert(two:find("base: main\n", 1, false) ~= nil, two)
-  assert(itemtree.format_target("cosmic-lua/cosmic", "main")
-    == "cosmic-lua/cosmic@main", "the format-4 form still states itself")
 
   local neither = check.must(item.decode({id = fresh_id(), title = "t"}))
   local none = itemtree.encode_meta(neither)
@@ -177,32 +173,15 @@ local function test_repo_and_base_are_their_own_lines()
     "neither line when both are empty: " .. none)
 end
 
--- `parse_target`'s inverse, including the round trip through
--- `to_item`, and its one refusal: more than one `@` is a decode
--- problem, not a hard failure — the malformed value still decodes.
-local function test_parse_target_round_trips_and_refuses_extra_at()
-  local repo, base, err = itemtree.parse_target("owner/name@branch")
-  assert(repo == "owner/name" and base == "branch" and err == "", err)
-
-  local repo2, base2, err2 = itemtree.parse_target("owner/name")
-  assert(repo2 == "owner/name" and base2 == "" and err2 == "", err2)
-
-  local repo3, base3, err3 = itemtree.parse_target("")
-  assert(repo3 == "" and base3 == "" and err3 == "", err3)
-
-  local _repo4, _base4, err4 = itemtree.parse_target("owner/name@a@b")
-  assert(err4 ~= "" and err4:find("at most one @", 1, true) ~= nil, err4)
-
+-- A `target` line — the collapsed `repo@base` a format-4 tree wrote —
+-- is an unknown key now: `to_item` skips it the way it skips any key
+-- it predates, so neither field is read from it and nothing is flagged.
+local function test_a_target_line_is_an_unknown_key()
   local decoded = itemtree.to_item(fresh_id(),
-    {title = "t", target = "owner/name@a@b"}, false, {}, {})
-  assert(item.is_flagged(decoded), "a malformed target flags the decode")
-  local found = false
-  for _, p in ipairs(decoded.decode_problems or {}) do
-    if p:find("at most one @", 1, true) then
-      found = true
-    end
-  end
-  assert(found, table.concat(decoded.decode_problems or {}, "; "))
+    {title = "t", target = "owner/name@branch"}, false, {}, {})
+  assert(decoded.repo == "" and decoded.base == "",
+    "no field is read from a target line")
+  assert(not item.is_flagged(decoded), "and its presence flags nothing")
 end
 
 -- `held` is a marker blob at the tree root, unknown to this build:
@@ -396,22 +375,6 @@ local function test_spec_subtree_holds_one_blob_per_non_empty_field()
   local both = check.must(child.run({"git", "ls-tree", "--name-only", two .. ":spec"},
       {cwd = root}))
   assert(both.ok and both.stdout == "change.md\nnon-goals.md\n", both.stdout)
-end
-
--- A format-4 tree collapsed `repo`/`base` into one `target` line. The
--- one tolerant read of it: own lines win, and `target` is unpacked only
--- when neither is present.
-local function test_a_format_4_target_line_still_decodes()
-  local id = fresh_id()
-  local old = itemtree.to_item(id,
-    {title = "legacy", target = "cosmic-lua/cosmic@main"}, false, {}, {})
-  assert(old.repo == "cosmic-lua/cosmic" and old.base == "main",
-    ("target did not unpack: %q / %q"):format(old.repo, old.base))
-  local both = itemtree.to_item(id,
-    {title = "legacy", repo = "a/b", base = "trunk",
-      target = "cosmic-lua/cosmic@main"}, false, {}, {})
-  assert(both.repo == "a/b" and both.base == "trunk",
-    "own lines win over a stale target line")
 end
 
 -- `_work.gitwrite` builds every item's commit through

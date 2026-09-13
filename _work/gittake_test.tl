@@ -135,9 +135,7 @@ local function test_result_records_the_item_refs_tip_as_a_board_commit()
     "and it must resolve as a commit in the board: " .. kind.stdout .. kind.stderr)
   -- A digest of the spec blob would not: the old payload was a hash of
   -- bytes, which names no object at all.
-  assert(#got.result == 40 and got.result ~= specmod.revision(
-      specmod.document(store.read_spec(s, id))),
-    "a spec-blob digest is not what is recorded any more")
+  assert(#got.result == 40, "a full commit id is recorded")
 end
 
 -- A second `take --result` with the spec untouched is the recorded

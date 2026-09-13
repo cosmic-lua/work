@@ -94,9 +94,9 @@ not know, or missing the marker while it already carries items, is
 refused rather than silently misread; `gitboard init` writes the
 marker on a board that has neither yet. Layout 1 (the old
 `beats`/`blocked_by`/`held`-carrying shape) has no migration path from
-here. The live board now uses layout 4. The one-time format-3 to
-format-4 migration has been retired; older layouts remain refused.
-Migration-created claim batches remain part of the durable format-4
+here. The live board now uses layout 5. The one-time format-4 to
+format-5 migration has been retired; older layouts remain refused.
+Migration-created claim batches remain part of the durable
 history and are still read normally. The local SQLite cache is disposable
 and can be rebuilt from the current refs.
 Nothing here is a file in the working tree: a read is
@@ -111,7 +111,12 @@ a dangling `parent`, an edge kind this build does not interpret (an
 unmigrated board's), a stale `order` entry, an item's tree not
 re-encoding to what it was read from, two open items sharing a key, a
 second parentless item (there is meant to be exactly one — the
-board), a parentless item carrying a `repo`,
+board), a parentless item carrying a `repo`, an open item whose
+Change says it is blocked on another item (`blocked on «handle»`)
+without declaring that item in `depends_on`, a `depends_on` cycle
+(walked with the same bound `gitboard depend`'s refusal uses — the
+refs may carry one from a hand edit, so it is reported, never
+refused),
 an id filed under both `refs/heads/items` and `refs/heads/ended` at
 once (the pushing credential can create and update a branch but never
 delete one, so an id can end up in both places only by hand, never by

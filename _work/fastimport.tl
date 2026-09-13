@@ -141,15 +141,11 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
   if new_meta ~= old_meta then
     ops[#ops + 1] = {path = "meta", content = new_meta}
   end
-  -- A prose change writes BOTH blobs and drops any `spec.md` beside
-  -- them, rather than only the field that moved. `old_spec` is the
-  -- tolerant read, so for a format-4 item it holds the single
-  -- `spec.md`'s text in `change`: emitting only the field that differed
-  -- would delete that blob and leave the other field's path never
-  -- written. Re-emitting a blob whose content is unchanged costs one
-  -- `M` line and builds the identical tree, and a `D` on a path this
-  -- item never had is a no-op fast-import accepts, so the whole
-  -- subtree is stated at once whenever any of it moved.
+  -- A prose change writes BOTH blobs rather than only the field that
+  -- moved. Re-emitting a blob whose content is unchanged costs one `M`
+  -- line and builds the identical tree, and a `D` on a path this item
+  -- never had is a no-op fast-import accepts, so the whole subtree is
+  -- stated at once whenever any of it moved.
   if spec_replacement ~= nil
   and ((spec_replacement.change or "") ~= (old_spec.change or "")
     or (spec_replacement.non_goals or "") ~= (old_spec.non_goals or "")) then
@@ -163,7 +159,6 @@ local function diff_item(old: item.Item | nil, new_it: item.Item,
         ops[#ops + 1] = {path = name, content = texts[i]}
       end
     end
-    ops[#ops + 1] = {path = "spec.md", content = nil}
   end
   local old_order = ""
   if old ~= nil then

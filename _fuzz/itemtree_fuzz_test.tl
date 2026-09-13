@@ -1,10 +1,8 @@
 --- Fuzz properties for `_work.itemtree`'s pure text/table parsers: the
---- `target` line (`format_target`/`parse_target`) and the `meta` blob
---- (`encode_meta`/`parse_meta`/`to_item`) — the exact text a git tree
---- blob carries for one item, and therefore exactly what a corrupted or
---- hand-edited commit hands back to a live read. Five properties:
----   parse_target is total over arbitrary bytes,
----   format_target/parse_target round-trip over github-shaped repo/base,
+--- `meta` blob (`encode_meta`/`parse_meta`/`to_item`) — the exact text
+--- a git tree blob carries for one item, and therefore exactly what a
+--- corrupted or hand-edited commit hands back to a live read. Three
+--- properties:
 ---   parse_meta is total over arbitrary bytes,
 ---   to_item is total over an adversarial meta table, order list, and edge lists, and
 ---   a validly-shaped item round-trips through encode_meta/parse_meta.
@@ -74,8 +72,7 @@ local NAME_CHARS < const > = OWNER_CHARS .. "_"
 local BRANCH_CHARS < const > = NAME_CHARS .. "/"
 
 --- Draw a repo shaped exactly like `item.problems`' own regex expects
---- (`^[%w%-%.]+/[%w%-%._]+$`), or "" — never containing '@', the
---- `target` line's own separator.
+--- (`^[%w%-%.]+/[%w%-%._]+$`), or "".
 --- @param src source.Recorder The source to draw from
 --- @return string The repo, possibly ""
 local function plausible_repo(src: source.Recorder): string
@@ -93,65 +90,6 @@ local function plausible_base(src: source.Recorder): string
     return ""
   end
   return label(src, BRANCH_CHARS, 8)
-end
-
--- parse_target answers every byte string: repo, base and a problem
--- string, never throwing. A target with two or more '@' names its own
--- problem; anything else is silently accepted, per its own doc.
-local function test_parse_target_totality()
-  local ok, message = driver.run({
-      name = "parse_target_totality",
-      gen = function(src: source.Recorder): string
-        return driver.bytes(src, 128)
-      end,
-      check = function(input: string): boolean, string
-        local repo, base, problem = itemtree.parse_target(input)
-        if type(repo) ~= "string" or type(base) ~= "string"
-        or type(problem) ~= "string" then
-          return false, "returned a non-string"
-        end
-        return true
-      end,
-    })
-  check.truthy(ok, message)
-end
-
--- format_target is documented as parse_target's inverse. Over repo/base
--- shaped exactly as item.problems requires (so neither ever embeds the
--- '@' separator), the round trip must hold with no reported problem.
-local function test_target_round_trip()
-  local ok, message = driver.run({
-      name = "target_round_trip",
-      gen = function(src: source.Recorder): string
-        local out: {string} = {}
-        put(out, plausible_repo(src))
-        put(out, plausible_base(src))
-        return table.concat(out)
-      end,
-      check = function(input: string): boolean, string
-        local c: Cursor = {blob = input, pos = 1}
-        local repo, rerr = take(c)
-        local base, berr = take(c)
-        if not repo or not base then
-          return false, "generated input did not decode: "
-          .. tostring(rerr or berr)
-        end
-        local target = itemtree.format_target(repo, base)
-        local got_repo, got_base, problem = itemtree.parse_target(target)
-        if problem ~= "" then
-          return false, string.format(
-            "round trip flagged a problem: repo=%q base=%q target=%q: %s",
-            repo, base, target, problem)
-        end
-        if got_repo ~= repo or got_base ~= base then
-          return false, string.format(
-            "round trip changed the value: repo=%q base=%q target=%q got=%q/%q",
-            repo, base, target, got_repo, got_base)
-        end
-        return true
-      end,
-    })
-  check.truthy(ok, message)
 end
 
 -- parse_meta answers every byte string with a table, never throwing: a

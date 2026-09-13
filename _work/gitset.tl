@@ -28,7 +28,6 @@
 local gate = require("_work.gitgate")
 local item = require("_work.item")
 local owner = require("_work.gitowner")
-local spec = require("_work.spec")
 local store = require("_work.store")
 
 --- @param s store.Store The store
@@ -80,8 +79,7 @@ local function cmd_set(s: store.Store, id: string, title: string | nil,
         .. "set --repo <owner>/<name> to change it")
     end
     local granted = access or it.access
-    local foreign = owner.repo_problem(s, repo,
-      spec.document(store.read_spec(s, id)), granted, id)
+    local foreign = owner.repo_problem(s, repo, granted, id)
     if foreign then
       return gate.verdict_line("set", false, "REFUSED: " .. foreign)
     end

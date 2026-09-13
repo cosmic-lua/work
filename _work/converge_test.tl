@@ -21,6 +21,7 @@
 -- too. `gitverbs_test.tl` proves the plumbing.
 
 local check = require("cosmic.check")
+local itemtree = require("_work.itemtree")
 local act = require("_work.action")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
@@ -64,8 +65,19 @@ local function make_index(items: {Item}): Index
   return idx
 end
 
-local READY < const > = "## Change\nDo this.\n## Non-goals\nNot that.\n"
-.. "## Acceptance\n`ci`\n"
+local READY < const >: itemtree.Spec = {change = "Do this.\n",
+  non_goals = "Not that.\n"}
+
+--- The prose one spec carries, as one string — what `signature`
+--- hashes for it; "" when the item has no spec at all.
+--- @param sp itemtree.Spec | nil The blobs
+--- @return string Both blobs, joined
+local function spec_text(sp: itemtree.Spec | nil): string
+  if sp == nil then
+    return ""
+  end
+  return (sp.change or "") .. (sp.non_goals or "")
+end
 
 --- A seeded generator, written out rather than taken from `math`, so a
 --- failing walk replays from its seed on any build.
@@ -105,7 +117,7 @@ local function signature(items: {Item}, specs: act.Specs): string
     parts[#parts + 1] = ("%s:%s:%s:%s:%d:%s:%d:%d"):format(i.id:sub(1, 8),
       (i.parent or ""):sub(1, 8), i.resolution or "", i.claim or "",
       i.pr or 0, i.verdict or "", blocked,
-      #(specs[i.id] or ""))
+      #spec_text(specs[i.id]))
   end
   return table.concat(parts, "|")
 end
@@ -167,7 +179,7 @@ local function apply(c: Index, items: {Item}, specs: act.Specs, a: act.Action,
   end
   if a.kind == "refine" then
     -- Refinement is a spec write: the sidecar reaches the bar.
-    if #flow.ready_gaps(specs[it.id] or "") == 0 then
+    if #flow.ready_gaps(specs[it.id]) == 0 then
       return "refine offered a spec already passing the bar"
     end
     specs[it.id] = READY
@@ -286,7 +298,7 @@ local function test_no_walk_ever_names_an_action_the_gates_refuse()
       if a.kind == "pull" then
         assert((a.item.claim or "") == "" and (a.item.pr or 0) == 0,
           ("seed %d: pulled in-flight work"):format(seed))
-        assert(#flow.ready_gaps(specs[a.item.id] or "") == 0,
+        assert(#flow.ready_gaps(specs[a.item.id]) == 0,
           ("seed %d: pulled past the spec bar"):format(seed))
       end
       if a.kind == "finish" and check.must(read.substate(c, a.item.id)) ~= "accepted" then

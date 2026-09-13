@@ -16,6 +16,7 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local fsck = require("_work.gitfsck")
 local gitboard = require("_work.gitboard")
+local gitdepend = require("_work.gitdepend")
 local index = require("_work.index")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -92,6 +93,63 @@ local function test_a_hand_edited_cache_row_is_caught()
   assert(code ~= 0, "a hand-edited cache row is a problem: " .. printed)
   assert(printed:find("cache: " .. tail.handle(root) .. " title reads tampered, refs say",
       1, true) ~= nil, printed)
+end
+
+-- An open item whose Change says it is blocked on a sibling, by the
+-- `«handle»` spelling the board renders, without declaring that
+-- sibling in `depends_on` is named with the `depend` that declares it
+-- — and once declared, the finding clears. A handle cited for any
+-- other reason (provenance, here) is not a claim of blocking.
+local function test_a_prose_blocker_without_a_dependency_is_reported()
+  local s = init_state_repo("fsck-undeclared-blocker")
+  local root, leaf = root_with_leaf(s)
+  local blocker = fixture.file_item(s, "the slice this one waits on", root)
+  local cited = fixture.file_item(s, "a slice cited for contrast", root)
+  local it = check.must(store.load(s, leaf))
+  assert(storewrite.save(s, it, "fixture: prose naming a blocker", {
+        change = ("Do it once %s lands. Blocked on %s. Compare %s.\n"):format(
+          tail.handle(blocker), tail.handle(blocker), tail.handle(cited)),
+        non_goals = "",
+      }))
+  fixture.caller_publish(s)
+  assert(store.close(s))
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "an undeclared prose blocker is a problem: " .. printed)
+  assert(printed:find(("%s: Change names %s as blocking but depends_on does "
+        .. "not declare it — `gitboard depend %s %s`"):format(
+        tail.handle(leaf), tail.handle(blocker), leaf:sub(1, 8),
+        blocker:sub(1, 8)), 1, true) ~= nil, printed)
+  assert(printed:find(tail.handle(cited) .. " as blocking", 1, true) == nil,
+    "a handle cited for contrast is not a blocker: " .. printed)
+
+  assert(gitdepend.cmd_depend(s, leaf, blocker) == 0, "declared through the verb")
+  fixture.caller_publish(s)
+  assert(store.close(s))
+  local after, printed_after = fsck_and_capture(s)
+  assert(after == 0, "declared, the finding clears: " .. printed_after)
+end
+
+-- A `depends_on` cycle the verb would have refused, put on the refs
+-- past it, is reported once — one line naming every member — rather
+-- than refused: an audit reports what is.
+local function test_a_depends_on_cycle_is_reported_once()
+  local s = init_state_repo("fsck-depends-cycle")
+  local root, first = root_with_leaf(s)
+  local second = fixture.file_item(s, "a second slice", root)
+  assert(gitdepend.cmd_depend(s, first, second) == 0, "one edge, through the verb")
+  fixture.caller_publish(s)
+  local closing = check.must(store.load(s, second))
+  closing.depends_on = {first}
+  assert(storewrite.save(s, closing, "fixture: the edge the verb refuses"))
+  fixture.caller_publish(s)
+  assert(store.close(s))
+  local code, printed = fsck_and_capture(s)
+  assert(code ~= 0, "a cycle is a problem: " .. printed)
+  local _, count = printed:gsub("cycle: depends_on closes on itself", "")
+  assert(count == 1, "one line per cycle, not per member: " .. printed)
+  assert(printed:find(tail.handle(first), 1, true) ~= nil
+    and printed:find(tail.handle(second), 1, true) ~= nil,
+    "both members are named: " .. printed)
 end
 
 -- A branch under the item namespace that is not a KSUID is a stray:

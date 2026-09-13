@@ -31,23 +31,11 @@ local function test_a_different_version_refuses_and_names_both()
   assert(format.refusal("99", false) ~= nil, "wrong on an empty board refuses too")
 end
 
--- The immediately previous layout is refused by ordinary readers and
--- writers but is named as the one supported predecessor, with an
--- actionable migration path — the one bypass the migration itself uses
--- (`_work.gitread.list`'s `allow_old_format`).
-local function test_previous_version_is_only_migratable_not_current()
-  assert(format.migratable(format.PREVIOUS .. "\n"))
-  assert(not format.migratable(format.CURRENT))
-  assert(not format.migratable("1"))
-  local refusal = format.refusal(format.PREVIOUS, true)
-  assert(refusal ~= nil)
-  assert(refusal:find("gitboard migrate", 1, true) ~= nil, refusal)
-end
-
--- Layouts older than the one supported migration hop refuse the same
--- generic way any other unexpected version does, advertising no upgrade.
+-- Every older layout, the immediately previous one included, refuses
+-- the same generic way any other unexpected version does, advertising
+-- no upgrade: there is no migration in this build to run.
 local function test_older_versions_refuse_without_advertising_an_upgrade()
-  for _, version in ipairs({"2", "3"}) do
+  for _, version in ipairs({"2", "3", "4"}) do
     local refusal = format.refusal(version, true)
     assert(refusal ~= nil)
     assert(refusal:find(version, 1, true) ~= nil, refusal)

@@ -5,21 +5,16 @@
 --- under the repo's line cap, exactly as `_work.gitreadmany` and
 --- `_work.gitreadlog` are.
 ---
---- Format 5 holds the prose as a `spec/` subtree of two blobs
---- (`_work.itemtree`'s `Spec`); format 4 held one `spec.md`. Both are
---- read here, in one `cat-file --batch` that asks for every path of
---- every candidate at once, and this is the ONE place the old shape is
---- known about.
+--- The prose is a `spec/` subtree of two blobs (`_work.itemtree`'s
+--- `Spec`), read here in one `cat-file --batch` that asks for both
+--- paths of every candidate at once.
 local gitobj = require("_work.gitobj")
 local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
 
---- One object's spec prose, read from a batch that asked for all three
---- of its spec paths — nil when the object carries none of them, which
---- is what lets `read_spec` fall through to its next candidate. A
---- format-4 tree holds a single `spec.md`, read as the `change` field:
---- the one tolerant read of the old shape, and the only place it is
---- known about.
+--- One object's spec prose, read from a batch that asked for both of
+--- its spec paths — nil when the object carries neither, which is what
+--- lets `read_spec` fall through to its next candidate.
 --- @param batch {string: gitobj.BatchEntry} The batch's answers
 --- @param object string The ref name or object id the queries were built from
 --- @return itemtree.Spec | nil The prose, nil when the object has none
@@ -27,32 +22,26 @@ local function spec_in_batch(batch: {string: gitobj.BatchEntry},
     object: string): itemtree.Spec | nil
   local change = batch[object .. ":spec/change.md"]
   local non_goals = batch[object .. ":spec/non-goals.md"]
-  if change ~= nil or non_goals ~= nil then
-    local sp: itemtree.Spec = {change = "", non_goals = ""}
-    if change ~= nil then
-      sp.change = change.content
-    end
-    if non_goals ~= nil then
-      sp.non_goals = non_goals.content
-    end
-    return sp
-  end
-  local legacy = batch[object .. ":spec.md"]
-  if legacy == nil then
+  if change == nil and non_goals == nil then
     return nil
   end
-  return {change = legacy.content, non_goals = ""}
+  local sp: itemtree.Spec = {change = "", non_goals = ""}
+  if change ~= nil then
+    sp.change = change.content
+  end
+  if non_goals ~= nil then
+    sp.non_goals = non_goals.content
+  end
+  return sp
 end
 
---- The three paths one object's prose can live at, appended to a batch
---- being built: the format-5 subtree's two blobs and the format-4
---- single blob.
+--- The two paths one object's prose lives at, appended to a batch
+--- being built.
 --- @param queries {string} The batch being built, appended to
 --- @param object string The ref name or object id to read
 local function spec_queries(queries: {string}, object: string)
   queries[#queries + 1] = object .. ":spec/change.md"
   queries[#queries + 1] = object .. ":spec/non-goals.md"
-  queries[#queries + 1] = object .. ":spec.md"
 end
 
 --- An item's spec prose, both fields "" when absent, tried against every

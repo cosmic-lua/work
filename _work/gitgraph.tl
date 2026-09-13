@@ -34,7 +34,6 @@ local gitset = require("_work.gitset")
 local owner = require("_work.gitowner")
 local rank = require("_work.gitrank")
 local read = require("_work.read")
-local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -187,13 +186,8 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     return gate.verdict_line("new", false, table.concat(bad, "; "))
   end
   -- The owner rule binds at the write, so a foreign `repo` never
-  -- enters the board: the spec being filed alongside is where an
-  -- the access declaration would be read from.
-  local declared = ""
-  if prose ~= nil then
-    declared = spec.document(prose)
-  end
-  local foreign = owner.repo_problem(s, it.repo, declared, it.access, "")
+  -- enters the board: `--access` filed alongside is the declaration.
+  local foreign = owner.repo_problem(s, it.repo, it.access, "")
   if foreign then
     return gate.verdict_line("new", false, "REFUSED: " .. foreign)
   end

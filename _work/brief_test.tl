@@ -5,6 +5,7 @@
 -- for the kinds that carry the spec, a review with no PR recorded.
 
 local check = require("cosmic.check")
+local hash = require("cosmic.hash")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -15,6 +16,7 @@ local claimbatch = require("_work.claimbatch")
 local fixture = require("_work.fixture")
 local gitinvocation = require("_work.gitinvocation")
 local gitspec = require("_work.gitspec")
+local graph = require("_work.gitgraph")
 local item = require("_work.item")
 local specmod = require("_work.spec")
 local store = require("_work.store")
@@ -53,7 +55,7 @@ local function research_handover(s: store.Store, id: string)
   local it = check.must(store.load(s, id))
   it.claim = "session-a"
   assert(item.record_involvement(it.builders, "session-a"))
-  it.result = specmod.revision(specmod.document(store.read_spec(s, id)))
+  it.result = hash.digest_hex("sha1", specmod.document(store.read_spec(s, id)))
   assert(storewrite.save(s, it,
       ("take %s by session-a result:%s"):format(
         id:sub(1, 8), it.result:sub(1, 7))))
@@ -133,11 +135,16 @@ local function test_tree_measurement_appends_to_builder_and_review()
   local spec_file = fs.join(s.root, "tree-spec.md")
   assert(fs.write(spec_file, [[
 ## Change
--probe.tl and absent.tl
+Measure the declared list.
 ## Non-goals
 No refusal.
 ]]))
   assert(gitspec.cmd_spec(s, leaf, spec_file) == 0)
+  -- The measured paths are the item's declared `touches`, not prose:
+  -- one present and tight, one absent.
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, nil, nil,
+      {"-probe.tl", "absent.tl"}) == 0, "the declared list is set")
+  fixture.caller_publish(s)
   local add = check.must(child.run({"git", "add", "--", "-probe.tl"}, {cwd = s.root}))
   assert(add.ok, "the measurement fixture is staged: " .. add.stderr)
   local commit = check.must(child.run({"git", "-c", "user.email=test@example.com",
@@ -151,8 +158,8 @@ No refusal.
   assert(out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
     "the measured file carries its headroom: " .. out)
   assert(out:find("absent.tl  absent", 1, true) ~= nil,
-    "the missing Change path is explicit: " .. out)
-  assert(out:find("measured Change paths under " .. s.root, 1, true) ~= nil,
+    "the missing declared path is explicit: " .. out)
+  assert(out:find("measured touches under " .. s.root, 1, true) ~= nil,
     "the verdict names what was measured: " .. out)
   handover(s, leaf)
   reclaim(s, leaf, "session-b")

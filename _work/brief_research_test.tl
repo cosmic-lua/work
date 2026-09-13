@@ -10,6 +10,7 @@
 local brief = require("_work.brief")
 local brieftext_review = require("_work.brieftext_review")
 local check = require("cosmic.check")
+local hash = require("cosmic.hash")
 local child = require("cosmic.child")
 local doctrine = require("_work.doctrine")
 local env = require("cosmic.env")
@@ -54,7 +55,7 @@ local function legacy_result(s: store.Store, id: string): string
   local it = check.must(store.load(s, id))
   -- A pre-format-5 value: a digest of the spec blob, which resolves to
   -- no board commit at all — exactly the legacy shape under test.
-  it.result = spec.revision(spec.document(store.read_spec(s, id)))
+  it.result = hash.digest_hex("sha1", spec.document(store.read_spec(s, id)))
   assert(item.record_involvement(it.builders, flow.BUILDER))
   assert(storewrite.save(s, it, "take old result:" .. it.result))
   return it.result

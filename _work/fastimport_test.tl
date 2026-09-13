@@ -144,8 +144,8 @@ end
 -- says (it is not even read in that case by a real caller — see
 -- `_work.gitwrite.plan_one`); a replacement equal to the stored record
 -- is a no-op; and a genuine change states the WHOLE subtree at once —
--- both blobs plus the `spec.md` a format-4 item may still carry —
--- rather than only the field that moved, an empty field as a delete.
+-- both blobs — rather than only the field that moved, an empty field
+-- as a delete.
 local function test_diff_item_spec_replacement_rules()
   local it = make_item()
   assert(#fastimport.diff_item(it, it, nil, prose("anything")) == 0,
@@ -160,14 +160,13 @@ local function test_diff_item_spec_replacement_rules()
   end
   assert(by_path["spec/change.md"] == "new text", "the moved field is an M")
   assert(deleted["spec/non-goals.md"], "an empty field is a D, not an empty blob")
-  assert(deleted["spec.md"], "and any format-4 blob beside them is dropped")
+  assert(not deleted["spec.md"], "and no other path is touched")
   local both = fastimport.diff_item(it, it,
     {change = "c", non_goals = "n"}, {change = "c", non_goals = "was"})
   local paths: {string: string} = {}
   for _, op in ipairs(both) do paths[op.path] = op.content end
   assert(paths["spec/change.md"] == "c",
-    "the unmoved field is restated, so a format-4 blob is never dropped "
-    .. "without its prose being written back")
+    "the unmoved field is restated with the moved one")
   assert(paths["spec/non-goals.md"] == "n", "the moved field is written")
   assert(#fastimport.diff_item(it, it, NO_PROSE, NO_PROSE) == 0,
     "empty against empty is still a no-op")

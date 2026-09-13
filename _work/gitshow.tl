@@ -372,29 +372,26 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
   local headroom: {string} = {}
   local body = ""
   if item.is_open(it) then
-    -- Every OTHER open item's id, one query against the database
-    -- rather than a whole-board `store.list` hydration — this item's
-    -- spec and every other's, read in ONE batch (`store.read_specs`)
-    -- rather than a single `cat-file -p` for this one plus a separate
-    -- batch for the rest, so `_work.overlap` (and `ready_problems`
-    -- below, handed the same body) never re-reads a spec this call
-    -- already has.
-    local others, oerr = read.open_ids(c, it.id)
-    if others == nil then
-      return verdict_line("show", false, oerr)
+    -- Every OTHER open item's declared `touches`, off the same cache
+    -- rows `store.list` hydrates for every whole-board read — no
+    -- other item's prose is read for the collision check. This item's
+    -- own prose comes through the batched `store.read_specs`, the one
+    -- read `ready_problems` below is handed too, so nothing here reads
+    -- a spec twice.
+    local all, aerr = store.list(s)
+    if all == nil then
+      return verdict_line("show", false, aerr)
     end
-    local ids: {string} = {id}
-    for _, oid in ipairs(others) do
-      ids[#ids + 1] = oid
+    local touches: {string: {string}} = {}
+    for _, other in ipairs(all) do
+      if item.is_open(other) then
+        touches[other.id] = other.touches or {}
+      end
     end
-    -- `_work.overlap` and `gitready.ready_problems` both read a whole
-    -- document, so the two blobs are rendered back to one per item.
-    local bodies: {string: string} = {}
-    for oid, sp in pairs(store.read_specs(s, ids)) do
-      bodies[oid] = spec.document(sp)
-    end
-    body = bodies[it.id] or ""
-    problems = gitready.ready_problems(s, it, body)
+    local prose = store.read_specs(s, {id})[id]
+    or {change = "", non_goals = ""}
+    body = spec.document(prose)
+    problems = gitready.ready_problems(s, it, prose)
     -- `_work.find`'s fuzzy title/spec ranking, over the SAME cache
     -- connection already open for `role`/`rank`/`children` below — one
     -- more FTS query, not a fresh whole-board read. `it.id` is excluded
@@ -403,7 +400,7 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     -- is measured against and crowds a real candidate out of the
     -- query's own limit (see `find.similar`'s own doc comment).
     local hits, _simerr = find.similar(c, it.title, it.id)
-    overlaps = overlap_and_similar_lines(overlap.collisions(it.id, bodies), hits or {})
+    overlaps = overlap_and_similar_lines(overlap.collisions(it.id, touches), hits or {})
     -- The item's OWN repo, resolved to a local checkout the same way
     -- `gitboard worktree` already does — never this process's own
     -- working directory, which may hold a checkout of a different
@@ -411,8 +408,8 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     -- repo's default-branch tip, rather than at whatever the checkout's
     -- working tree currently holds (see `_work.overlap.headroom_lines`).
     local checkout, _checkerr = repository_map.resolve(s.root, it.repo or "", "")
-    headroom = overlap.headroom_lines(body, checkout or "", it.repo or "",
-      it.claim_base or "")
+    headroom = overlap.headroom_lines(it.touches or {}, checkout or "",
+      it.repo or "", it.claim_base or "")
   else
     body = spec.document(store.read_spec(s, id))
   end

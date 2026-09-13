@@ -239,13 +239,15 @@ local function test_bar_requires_a_sweeps_own_pasted_dry_run_output()
     "the bar topic treats a 0-applied or refused paste as not ready")
 end
 
-local function test_build_mirrors_the_ready_when_convention()
+local function test_build_rechecks_the_measured_commands()
   local page = doctrine.page("build")
   assert(page ~= nil, "the build topic renders")
   assert(page:find(
-      "including `Ready when`, before\n   building",
+      "Re-run the spec's measured commands before\n   building",
       1, true) ~= nil,
-    "step 2 makes direct claim callers recheck readiness")
+    "step 2 makes direct claim callers recheck the spec's facts")
+  assert(page:find("Ready when", 1, true) == nil,
+    "and names no Ready-when convention: a precondition is a dependency")
 end
 
 --- The first paragraph of a `---`-commented module header: lines up

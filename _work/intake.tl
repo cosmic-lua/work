@@ -23,19 +23,22 @@ local decision = require("_work.decision")
 local flow = require("_work.flow")
 local index = require("_work.index")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local read = require("_work.read")
 
 local type Item = item.Item
 local type Index = index.Index
 local type Action = decision.Action
-local type Specs = {string: string}
+--- Every open item's two spec blobs, by id — what the bar reads, so a
+--- whole-board render never re-splits a rendered document.
+local type Specs = {string: itemtree.Spec}
 
 --- The highest-ranked todo item worth refining: ranked and failing the
 --- spec bar, in queue order (todo and lane-repair stages both — the
 --- same bucket `_work.read.queue`'s stage column keeps below review).
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param by_id {string: Item} Every item, by id
---- @param specs Specs Spec sidecar body, by item id
+--- @param specs Specs Spec blobs, by item id
 --- @return Item | nil The item to refine
 --- @return string Error message
 local function refinable(c: Index, by_id: {string: Item},
@@ -46,7 +49,7 @@ local function refinable(c: Index, by_id: {string: Item},
   end
   for _, row in ipairs(rows) do
     if row.stage >= flow.STAGE_REPAIR then
-      if row.ranked and #flow.ready_gaps(specs[row.id] or "") > 0 then
+      if row.ranked and #flow.ready_gaps(specs[row.id]) > 0 then
         return by_id[row.id], ""
       end
     end
@@ -57,7 +60,7 @@ end
 --- The intake decision, or nil when intake has nothing to offer.
 --- @param c Index An index with `_work.readddl.ensure_views` applied
 --- @param items {Item} All items
---- @param specs Specs Spec sidecar body, by item id
+--- @param specs Specs Spec blobs, by item id
 --- @return Action | nil The decision
 --- @return string Error message
 local function intake_action(c: Index, items: {Item},

@@ -32,6 +32,7 @@
 --- What a session should DO with all this is `_work.action`: the
 --- policy that reads the database and decides is a separate module,
 --- so growing one never crowds the other against the file-length cap.
+local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
 
 --- The most open doing items the board holds before a new take is
@@ -87,7 +88,7 @@ local record flow
   STAGE_BUILDING: integer
   STAGE_REPAIR: integer
   STAGE_TODO: integer
-  ready_gaps: function(body: string): {string}
+  ready_gaps: function(sp: itemtree.Spec | nil): {string}
   substate_of_stage: function(stage: integer): string
 end
 

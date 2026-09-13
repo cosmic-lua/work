@@ -190,7 +190,7 @@ fact nobody finishes.
    then read `show ID` — the sidecar is the
    spec, and the item's verdict/pr fields carry any standing review
    state.
-2. Re-run the spec's measured commands, including `Ready when`, before
+2. Re-run the spec's measured commands before
    building — the queue ages faster than the tree stands still, and a
    direct claim proves exclusivity rather than readiness. Numbers moved
    but the shape holds: refresh them in place

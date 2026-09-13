@@ -9,6 +9,7 @@
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
+local graph = require("_work.gitgraph")
 local show = require("_work.gitshow")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -18,14 +19,21 @@ local file_item = fixture.file_item
 local root_with_leaf = fixture.root_with_leaf
 
 --- Set a custom spec sidecar meeting the ready bar, through the spec
---- verb, so `## Change` names a real path for `_work.overlap` to find.
+--- verb, and declare `touches` through the set verb — the prose is
+--- what `find.similar` ranks, the declared list what `_work.overlap`
+--- compares.
 --- @param s store.Store The store
 --- @param id string The item whose spec is set
 --- @param body string The spec markdown
-local function write_spec(s: store.Store, id: string, body: string)
+--- @param touches {string} The declared paths
+local function write_spec(s: store.Store, id: string, body: string,
+    touches: {string})
   local path = fs.join(fixture.tmpdir, "dup-spec-" .. id .. ".md")
   assert(fs.write(path, body))
   assert(gitspec.cmd_spec(s, id, path) == 0, "spec should be accepted")
+  assert(graph.cmd_set(s, id, nil, nil, nil, nil, nil, nil, touches) == 0,
+    "set --touches should be accepted")
+  fixture.caller_publish(s)
 end
 
 --- Run show.cmd_show and capture exactly what it prints via print() —
@@ -52,7 +60,7 @@ local function show_and_capture(s: store.Store, id: string): integer, string
   return result, table.concat(lines, "\n")
 end
 
--- Two items naming the SAME real path under `## Change`, with
+-- Two items declaring the SAME real path in `touches`, with
 -- near-identical titles and spec wording besides — both signals fire
 -- for the same pair, so `show ID` prints one combined line rather than
 -- an `overlaps:` line and a `similar:` line a reader has to notice are
@@ -63,9 +71,11 @@ local function test_show_correlates_a_shared_path_with_similar_text()
   local first = file_item(s, "add caching for the boards find index lookups", root)
   local second = file_item(s, "add caching for the boards find index lookup path", root)
   write_spec(s, first,
-    "## Change\nWire caching into `_work/find.tl`'s ranked_rows lookup.\n")
+    "## Change\nWire caching into `_work/find.tl`'s ranked_rows lookup.\n",
+    {"_work/find.tl"})
   write_spec(s, second,
-    "## Change\nWire caching into `_work/find.tl`'s ranked_rows lookup path.\n")
+    "## Change\nWire caching into `_work/find.tl`'s ranked_rows lookup path.\n",
+    {"_work/find.tl"})
 
   local _, out_first = show_and_capture(s, first)
   assert(out_first:find("likely duplicate: " .. tail.handle(second), 1, true),
@@ -84,8 +94,8 @@ local function test_show_correlates_a_shared_path_with_similar_text()
     "the correlation is symmetric: " .. out_second)
 end
 
--- Same near-identical wording as above, but the two items name
--- DIFFERENT real paths under `## Change` — only the similarity signal
+-- Same near-identical wording as above, but the two items declare
+-- DIFFERENT real paths — only the similarity signal
 -- fires, so today's standalone `similar:` line renders unchanged, with
 -- no `overlaps:` or `likely duplicate:` line for this pair at all.
 local function test_show_keeps_the_standalone_similar_line_with_no_shared_path()
@@ -94,9 +104,11 @@ local function test_show_keeps_the_standalone_similar_line_with_no_shared_path()
   local first = file_item(s, "add caching for the boards find index lookups", root)
   local second = file_item(s, "add caching for the boards find index lookup path", root)
   write_spec(s, first,
-    "## Change\nWire caching into `_work/find.tl`'s ranked_rows lookup.\n")
+    "## Change\nWire caching into `_work/find.tl`'s ranked_rows lookup.\n",
+    {"_work/find.tl"})
   write_spec(s, second,
-    "## Change\nWire caching into `_work/cachequery.tl`'s ranked_rows lookup.\n")
+    "## Change\nWire caching into `_work/cachequery.tl`'s ranked_rows lookup.\n",
+    {"_work/cachequery.tl"})
 
   local _, out_first = show_and_capture(s, first)
   assert(out_first:find("similar: " .. tail.handle(second) .. " "
