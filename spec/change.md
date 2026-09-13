@@ -1,5 +1,3 @@
-## Change
-
 Follow-up to the merged decode-tolerance change: `item.decode` now
 returns flagged items (`Item.decode_problems`, `item.is_flagged`) and
 `store.flagged_summary(items)` formats the report line — but nothing
@@ -23,8 +21,3 @@ with one flagged record — bare show contains the summary line; show
 <id> names the problem; a clean store prints no summary line.
 Mutation-verify the wiring (drop the flagged_summary call, watch the
 bare-show test go red).
-
-## Non-goals
-
-No decode/store changes (already merged). No new verbs. No repair
-automation — rendering only.
