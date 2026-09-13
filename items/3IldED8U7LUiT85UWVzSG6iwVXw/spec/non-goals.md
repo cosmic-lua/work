@@ -1,0 +1,2 @@
+- No change to `mkdeps.c`.
+- No change to which flags `lua.main.c` is compiled with.
