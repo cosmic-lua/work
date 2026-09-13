@@ -1,11 +1,3 @@
-## Goal
-
-G8 — the flow system. `_work/gitverbs_test.tl` is where every verb refusal is
-pinned, and it is 10 lines from the hard cap, so the next verb change fails
-`cosmic --check lint` rather than the test it was written for.
-
-## Change
-
 Split `_work/gitverbs_test.tl` in two along the seam the file's own ordering
 already shows, moving test bodies VERBATIM. No test is renamed, added,
 removed, or edited; no source file changes. Re-measured at pull, on `board`
@@ -67,41 +59,3 @@ run, so `_work/gitverbs.tl 172 229` and every other row is untouched. If the
 coverage stage nevertheless fails, run exactly the regen command its failure
 message prints and commit the result; do not edit `.cosmic-coverage` by hand
 and do not weaken a test to move a number.
-
-## Non-goals
-
-- No edit to any file under `_work/` that is not one of the two test files:
-  `_work/gitverbs.tl`, `_work/gitgate.tl`, `_work/flow.tl` and the rest of
-  the sources stay byte-identical.
-- No edit to `_work/fixture.tl`. Both halves keep using the shared fixture;
-  do not fork it, and do not move `spec_file` into it — it is used by one
-  half only.
-- No test renamed, no assertion reworded, no test body changed, and no test
-  added or deleted. A verbatim move is what makes this reviewable as a
-  split rather than a rewrite.
-- No new `_work/gitspec.tl` source module, and no move of `cmd_spec` out of
-  `_work/gitverbs.tl`.
-- No `.cosmic-coverage` edit, no `--baseline` run, and no change to
-  `.github/workflows/**` or `.cosmicignore`.
-- No third file, and no further splitting of either half.
-
-## Acceptance
-
-- `bin/cosmic --make ci` from the `board` worktree ends `ci: PASS`, with its
-  coverage stage reporting `coverage ratchet ok`.
-- `bin/cosmic --make test _work/gitverbs_test.tl _work/gitspec_test.tl` ends
-  `test: PASS (2 files)` and reports `_work/gitverbs_test.tl (11 test
-  functions)` and `_work/gitspec_test.tl (10 test functions)`.
-- `grep -c "^local function test_" _work/gitverbs_test.tl` is 11 and
-  `grep -c "^local function test_" _work/gitspec_test.tl` is 10 — 21
-  together, the same 21 as today.
-- `wc -l _work/gitverbs_test.tl _work/gitspec_test.tl` — each at most 400,
-  which is the point of the split (490 in one file today).
-- `git diff --stat origin/board -- _work/gitverbs.tl _work/fixture.tl` is
-  empty: no source and no fixture moved.
-
-## Enablement
-
-none needed — a mechanical split of one test file on this branch, gated by
-`bin/cosmic --make ci` from the worktree. No blocker items; the tests being
-moved are already green on `board`.
