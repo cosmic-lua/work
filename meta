@@ -1,6 +1,7 @@
 title: cosmopolitan: path.join raises on all-nil arguments — the string? return becomes string
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 276
 resolution: completed
 builders: 13571aad-150e-5056-92a4-43d5c41b362e
+touches: tool/net/lpath.c tool/net/definitions.lua tool/lua/test_definitions_conformance.lua
