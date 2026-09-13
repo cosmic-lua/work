@@ -1,5 +1,3 @@
-## Change
-
 Evidence (builder of PR #1541, 2026-08-30): AGENTS.md's testing
 bullet still states "test files call each test where they define it:
 a `test_*` function in a `_test.tl` is called on the line after its
@@ -22,8 +20,3 @@ source for what it enforces (grep _tool/ and _cli/ for the
 mixed/runner detection) — the bullet must state when a file is
 runner-mode vs legacy, what the lint refuses, and what a NEW test
 file should do. Keep it as compact as the surrounding bullets.
-
-## Non-goals
-
-No code or lint changes; no test-file migrations (the batch items own
-those); no edits to skills/work/SKILL.md.
