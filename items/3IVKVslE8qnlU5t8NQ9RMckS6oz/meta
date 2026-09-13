@@ -1,6 +1,7 @@
 title: refine has no claim: next hands concurrent sessions the same plan item, and spec --base refuses only after the duplicate work is spent
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1465
 resolution: completed
 builders: 99ab8363-15f9-521d-84ee-bea371b7ac6c
+touches: _work/health.tl _work/intake.tl _work/action.tl _work/gittake.tl _work/gitverbs.tl _work/guidance.tl _work/refine_claim_test.tl
