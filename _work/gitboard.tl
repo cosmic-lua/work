@@ -167,7 +167,9 @@ local function main(...: string): integer
     end
     return migratecli.cmd_migrate(dir,
       explicit ~= "" and explicit or refs.board_remote(dir),
-      d.parsed.switches["execute"] or false)
+      d.parsed.switches["execute"] or false,
+      math.tointeger(tonumber(d.parsed.values["limit"] or "0")) or 0,
+      d.parsed.values["only"] or "")
   end
   local dir = d.parsed.values["dir"] or "."
   local explicit_remote = d.parsed.values["remote"] or ""

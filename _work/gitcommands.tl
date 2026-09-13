@@ -68,7 +68,12 @@ local CSPEC: flags.CommandSpec = {
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in rendered/executed instructions"},
-          {long = "execute", help = "run the rendered push and confirmation fetch"}}}},
+          {long = "execute", help = "run the rendered push and confirmation fetch"},
+          {long = "limit", arg = "N",
+            help = "rewrite at most N unmigrated items in this batch; the marker "
+            .. "moves with the batch that leaves none"},
+          {long = "only", arg = "NAMESPACE",
+            help = "restrict the batch to one ref namespace: ended or items"}}}},
     {name = "claim", summary = "prepare one all-or-nothing two-hour claim batch",
       spec = {usage = "ID... [options]",
         summary = "prepare one atomic, all-or-nothing two-hour claim set.\n\n"
