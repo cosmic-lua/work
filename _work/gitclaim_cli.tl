@@ -12,6 +12,7 @@ local item = require("_work.item")
 local prepared = require("_work.prepared")
 local repository_map = require("_work.repository_map")
 local refs = require("_work.refs")
+local singlehead = require("_work.gitsinglehead_config")
 local store = require("_work.store")
 local transport = require("_work.gittransport")
 
@@ -313,6 +314,20 @@ local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
     show_members("confirmed")
     return gate.verdict_line(verb, true,
       ("%s confirmed=%d refused=0"):format(result_label, #p.members))
+  end
+  if singlehead.enabled(s.root) then
+    print(("PREPARED batch=%s items=%d publish-by=%d"):format(
+        p.id, #p.members, p.deadline))
+    show_members("prepared")
+    local suffix = execute and " Legacy --execute was refused. " or " "
+    gate.verdict_line(verb, true,
+      ("PREPARED=%d confirmed=0 refused=0.%sNo claim was acquired. "
+        .. "Freeze this receipt with `gitboard single-head publish-plan %s "
+        .. "--out PLAN.literal`, execute its connector calls, then run `gitboard "
+        .. "single-head refresh --execute`; do not act until refresh confirms "
+        .. "the current claim state.")
+      :format(#p.members, suffix, p.transaction.staging_ref))
+    return 2
   end
   local argv, perr = gitclaim.push_argv(p, remote, os.time())
   if argv == nil then

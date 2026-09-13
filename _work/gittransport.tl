@@ -236,7 +236,8 @@ end
 --- Reconcile staged transactions against local tracking refs. Bare refresh
 --- also prints the exact caller-owned fetch; `--execute` runs it first.
 local function cmd_refresh(s: store.Store, remote: string,
-    execute: boolean): integer
+    execute: boolean, hydrated?: boolean,
+    confirmation_receipts?: {string: boolean}): integer
   local mode = refs.board_mode(s.root)
   -- A claim transaction's batch object records the remote whose canonical
   -- item tips were leased. Inspect that binding before `prepared.refresh`
@@ -256,7 +257,7 @@ local function cmd_refresh(s: store.Store, remote: string,
     end
   end
   local fetch = prepared.fetch_argv(remote)
-  if mode == "remote" then
+  if mode == "remote" and not hydrated then
     if execute then
       local ok, err = prepared.execute(s.root, fetch)
       if not ok then return gate.verdict_line("refresh", false, err) end
@@ -264,7 +265,7 @@ local function cmd_refresh(s: store.Store, remote: string,
       print(render_argv(fetch))
     end
   end
-  local outcomes, err = prepared.refresh(s.root, remote)
+  local outcomes, err = prepared.refresh(s.root, remote, confirmation_receipts)
   if outcomes == nil then return gate.verdict_line("refresh", false, err) end
   local confirmed, pending, lost, expired = 0, 0, 0, 0
   local moved_ids: {string} = {}
@@ -297,6 +298,11 @@ local function cmd_refresh(s: store.Store, remote: string,
                 .. "until %d"):format(claim_plan.id, members, authority_until))
           end
         end
+      elseif outcome.state == "historical" then
+        confirmed = confirmed + 1
+        print(("confirmed historical claim publication %s: current logical "
+            .. "refs have advanced; no current claim authority is inferred")
+          :format(claim_plan.id))
       elseif outcome.state == "pending" then
         pending = pending + 1
         print(("pending claim batch %s: %s; no claim authority confirmed")
@@ -312,7 +318,8 @@ local function cmd_refresh(s: store.Store, remote: string,
     else
       print(("%s %s: %s"):format(outcome.state,
           outcome.transaction.id, outcome.detail))
-      if outcome.state == "confirmed" then confirmed = confirmed + 1
+      if outcome.state == "confirmed" or outcome.state == "historical" then
+        confirmed = confirmed + 1
       elseif outcome.state == "pending" then pending = pending + 1
       else lost = lost + 1 end
     end
@@ -335,7 +342,16 @@ local function cmd_refresh(s: store.Store, remote: string,
       elseif observed == u.expected then expected_count = expected_count + 1
       else conflicts[#conflicts + 1] = u.ref end
     end
-    if #updates > 0 and next_count == #updates then
+    if #updates > 0 and confirmation_receipts ~= nil
+    and confirmation_receipts[draft.manifest] and next_count ~= #updates then
+      local removed, rerr = gitdraft.abort(s.root, draft)
+      if not removed then return gate.verdict_line("refresh", false, rerr) end
+      confirmed = confirmed + 1
+      print(("confirmed historical draft %s: current logical refs have advanced")
+        :format(draft.id))
+    elseif #updates > 0 and next_count == #updates
+    and (confirmation_receipts == nil
+      or confirmation_receipts[draft.manifest]) then
       local removed, rerr = gitdraft.abort(s.root, draft)
       if not removed then return gate.verdict_line("refresh", false, rerr) end
       confirmed = confirmed + 1
@@ -347,8 +363,10 @@ local function cmd_refresh(s: store.Store, remote: string,
       print(("lost-race draft %s: %s"):format(draft.id, detail))
     else
       pending = pending + 1
-      print(("pending draft %s: fetched refs still name the frozen baseline")
-        :format(draft.id))
+      local reason = next_count == #updates and confirmation_receipts ~= nil
+      and "logical tips match, but the current envelope has no transaction receipt"
+      or "fetched refs still name the frozen baseline"
+      print(("pending draft %s: %s"):format(draft.id, reason))
     end
     ::continue_draft::
   end
@@ -358,7 +376,7 @@ local function cmd_refresh(s: store.Store, remote: string,
   local _sclosed, _serr = store.close(s)
   local detail = ("confirmed=%d pending=%d lost-race=%d expired=%d; cache rebuilt")
   :format(confirmed, pending, lost, expired)
-  if mode == "remote" and not execute then
+  if mode == "remote" and not execute and not hydrated then
     detail = detail .. "; fetched refs were not changed"
   end
   if #moved_ids > 0 then
@@ -381,7 +399,8 @@ local record gittransport
   cmd_publish: function(s: store.Store, selectors: {string}, remote: string,
   execute: boolean): integer
   cmd_refresh: function(s: store.Store, remote: string,
-  execute: boolean): integer
+  execute: boolean, hydrated?: boolean,
+  confirmation_receipts?: {string: boolean}): integer
 end
 
 local M: gittransport = {

@@ -26,6 +26,14 @@ _perf/       wall-clock verb scenarios over a generated fixture — see
              `## Performance` below
 ```
 
+An opt-in `gitboard single-head` proof of concept supports environments whose
+authenticated GitHub connector can write Git trees and advance one branch, but
+cannot supply credentials to shell Git. It preserves existing item commits,
+logs, claim batches, and prepared transactions inside one envelope branch.
+The experimental transport is implemented in Teal and embedded in the gitboard
+binary. See [the single-head guide](experiments/single-head/README.md) for
+setup, frozen publication plans, confirmation, and validation results.
+
 `_work/index.tl` and `_work/find.tl` define a DERIVED SQLite schema
 over the loaded items — the read model every verb reads, rebuilt from
 git on a digest mismatch and patched by every save (`docs/design/read.md`),

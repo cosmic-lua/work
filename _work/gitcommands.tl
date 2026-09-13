@@ -44,6 +44,24 @@ local CSPEC: flags.CommandSpec = {
         .. "The plain output is only the new identity, suitable for "
         .. "`export GITBOARD_SESSION=$(gitboard session new)`. Gitboard "
         .. "does not derive identity from a user, host, provider, or credential."}},
+    {name = "single-head", summary = "EXPERIMENTAL connector envelope transport",
+      spec = {usage = "configure | seed-plan | publish-plan [TRANSACTION|DRAFT] | call | refresh [options]",
+        summary = "explicit proof-of-concept transport over one envelope branch.\n\n`configure` binds this "
+        .. "checkout to one remote, repository, and branch. "
+        .. "It refuses identity changes after activation. `seed-plan` and `publish-plan` write a frozen, "
+        .. "create-once connector plan; neither calls a provider. `call` prints one indexed connector call from "
+        .. "that saved plan. `refresh` fetches only the bound envelope branch when --execute is present, "
+        .. "validates and hydrates its archived objects into canonical remote-tracking refs, then runs ordinary "
+        .. "prepared/draft/claim confirmation. Ordinary publish, refresh, and sync are guarded after configuration.",
+        flags = {dir_flag(),
+          {long = "remote", arg = "NAME", help = "configure: canonical Git remote"},
+          {long = "repository", arg = "OWNER/NAME", help = "configure: connector repository identity"},
+          {long = "branch", arg = "BRANCH", help = "configure: dedicated envelope branch"},
+          {long = "head", arg = "SHA", help = "plan: exact envelope head; default bound tracking ref"},
+          {long = "out", arg = "PLAN.literal", help = "seed-plan/publish-plan: create this frozen literal plan"},
+          {long = "plan", arg = "PLAN.literal", help = "call: frozen literal plan file"},
+          {long = "call-index", arg = "N", help = "call: zero-based connector call index"},
+          {long = "execute", help = "refresh: run the exact single-branch Git fetch before hydration"}}}},
     {name = "draft", summary = "chain mutations offline, then publish final tips once",
       spec = {usage = "begin | show [ID] | abandon [ID] [options]",
         summary = "manage a durable, clone-local board draft.\n\n"
@@ -436,7 +454,6 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
   },
 }
-
 -- Draft selection is intentionally uniform across board reads and ordinary
 -- mutations. Keeping the flag injection here prevents each verb declaration
 -- from drifting while the environment variable keeps the common path terse.
@@ -452,7 +469,6 @@ for _, command in ipairs(CSPEC.commands) do
       help = "read and stage against this durable offline draft; default $GITBOARD_DRAFT"}
   end
 end
-
 local record gitcommands
   CSPEC: flags.CommandSpec
 end

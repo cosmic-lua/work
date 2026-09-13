@@ -11,6 +11,7 @@ local gitdraft = require("_work.gitdraft")
 local prepared = require("_work.prepared")
 local store = require("_work.store")
 local refs = require("_work.refs")
+local singlehead = require("_work.gitsinglehead_config")
 
 --- One item mutation as git recorded it.
 local record Event
@@ -150,6 +151,11 @@ local function publish(s: store.Store, execute?: boolean): boolean, string
     local _cok, _cerr = store.close(s)
     return true, ("STAGED draft=%s refs=%d; remote unchanged")
     :format(extended.id, #extended.updates)
+  end
+  if singlehead.enabled(s.root) then
+    return false, "REFUSED: item mutations on the experimental single-head "
+    .. "backend require a remote-mode draft; run `gitboard draft begin` "
+    .. "and repeat the mutation with --draft"
   end
   local tx, terr = prepared.prepare(s.root, updates)
   if tx == nil then
