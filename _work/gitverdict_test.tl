@@ -2,8 +2,12 @@
 -- Commit-only verdict policy: the reviewer holds the whole-item claim and
 -- judges exactly the locally inspectable commit handed over by the builder.
 local check = require("cosmic.check")
+local commit_evidence = require("_work.commit_evidence")
 local flow = require("_work.commit_flow_fixture")
+local gittake = require("_work.gittake")
+local item = require("_work.item")
 local store = require("_work.store")
+local storewrite = require("_work.storewrite")
 local verdict = require("_work.gitverdict")
 
 local function review_ready(name: string): store.Store, string,
@@ -89,3 +93,80 @@ local function test_legacy_pr_verdict_is_read_only_refused()
   assert((check.must(store.load(s, id)).verdict or "") == "")
 end
 test_legacy_pr_verdict_is_read_only_refused()
+
+-- A research handover: the builder hands the board state over with
+-- `take --result`, which records the item ref's tip as it stood — a
+-- board commit, not a product one — then drops, and the reviewer claims.
+-- `review_ready` with the deliverable the other way round.
+local function research_ready(name: string): store.Store, string,
+  flow.Product, string
+  local s, id, p = flow.fresh(name)
+  assert(flow.claim(s, id, flow.BUILDER, p) == 0)
+  check.must(store.list(s))
+  local it = check.must(store.load(s, id))
+  assert(item.record_involvement(it.builders, flow.BUILDER))
+  assert(gittake.take_result(s, it, flow.BUILDER, 0) == 0)
+  assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
+  assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
+  local result = check.must(store.load(s, id)).result or ""
+  assert(#result == 40, "the handover recorded a board commit")
+  return s, id, p, result
+end
+
+local function test_accept_records_a_research_handovers_board_commit()
+  local s, id, _p, result = research_ready("verdict-research-accept")
+  -- No `--repo-dir` and no repository mapping: a board commit is judged
+  -- in the board checkout, and the product checkout is never resolved.
+  assert(verdict.cmd_verdict_commit(s, id, "accept", result,
+      flow.REVIEWER, false, "", "") == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.verdict == "accept" and it.verdict_head == result)
+  assert(it.result == result and (it.handover_head or "") == "")
+  assert(it.claim == flow.REVIEWER, "a verdict never releases a claim")
+end
+test_accept_records_a_research_handovers_board_commit()
+
+local function test_request_changes_on_a_research_head()
+  local s, id, p, result = research_ready("verdict-research-rework")
+  assert(verdict.cmd_verdict_commit(s, id, "request-changes", result,
+      flow.REVIEWER, false, "", p.root) == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.verdict == "request changes" and it.verdict_head == result)
+  assert(it.result == result, "a send-back leaves the handover standing")
+end
+test_request_changes_on_a_research_head()
+
+local function test_a_head_that_is_neither_the_handover_nor_the_result()
+  local s, id, p, result = research_ready("verdict-research-neither")
+  assert(verdict.cmd_verdict_commit(s, id, "accept", p.head,
+      flow.REVIEWER, false, "", p.root) ~= 0,
+    "a product commit is not the head of a research handover")
+  assert(verdict.cmd_verdict_commit(s, id, "accept", result:sub(1, 12),
+      flow.REVIEWER, false, "", p.root) ~= 0,
+    "a research head is named exactly, never by prefix")
+  local it = check.must(store.load(s, id))
+  assert((it.verdict or "") == "" and (it.verdict_head or "") == "")
+end
+test_a_head_that_is_neither_the_handover_nor_the_result()
+
+local function test_a_result_off_the_items_own_ref_is_refused()
+  local s, id, p = research_ready("verdict-research-off-ref")
+  -- Another item's tip: a commit this board resolves, in no way part of
+  -- this item's ref history — the shape a mis-recorded `result` takes.
+  local all = check.must(store.list(s))
+  local elsewhere = ""
+  for _, other in ipairs(all) do
+    if other.id ~= id and (s.leased_sha[other.id] or "") ~= "" then
+      elsewhere = s.leased_sha[other.id]
+    end
+  end
+  assert(check.must(commit_evidence.commit_id(s.root, elsewhere)) == elsewhere,
+    "the fixture found a board commit off this item's ref")
+  local it = check.must(store.load(s, id))
+  it.result = elsewhere
+  assert(storewrite.save(s, it, "point the result off the ref"))
+  assert(verdict.cmd_verdict_commit(s, id, "accept", elsewhere,
+      flow.REVIEWER, false, "", p.root) ~= 0)
+  assert((check.must(store.load(s, id)).verdict or "") == "")
+end
+test_a_result_off_the_items_own_ref_is_refused()
