@@ -1,3 +1,5 @@
 title: perf: DecodeBase64 pays a branchy skip-loop per character — a valid-group fast path should cut codec_base64_roundtrip_64k ~30%
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: net/http/decodebase64.c net/http/encodebase64.c net/http/definitions.lua skills/optimize/cosmopolitan.md skills/optimize/measurement.md
+access: cosmic-lua/cosmic
