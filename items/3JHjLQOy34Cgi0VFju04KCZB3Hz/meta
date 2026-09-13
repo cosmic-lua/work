@@ -1,4 +1,4 @@
 title: drafts and log entries on format 6: a draft is a chain on refs/gitboard/draft/<id>; log --add writes items/<id>/log/<ksuid>.md
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
-touches: _work/gitdraft.tl _work/gitlog.tl
+repo: cosmic-lua/work
 depends_on: 3JHjLHb4AEmuUtvaGLSQvAIjfpL
