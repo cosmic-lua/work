@@ -50,6 +50,14 @@ local function test_freeze_observes_before_fresh_fetch_and_binds_destination_and
   assert(freeze.verify(root, "origin", snap.proof, snap.sources, provider))
   local changed = {[snap.proof.prefix .. "items/a"] = string.rep("a", 40)}
   assert(not freeze.verify(root, "origin", snap.proof, changed, provider), "snapshot source digest is immutable")
-  fixture.git(root, {"remote", "set-url", "--push", "origin", "git@github.com:owner/repo.git"})
+  -- Another exact URL for the SAME repository, differing only in its `.git`
+  -- suffix: the witness binds the destination git will actually push to, so a
+  -- rewritten spelling of it is still a different destination. An `ssh://` or
+  -- `git@` spelling would not do here — ambient `url.*.insteadOf`
+  -- configuration (which `GIT_CONFIG_PARAMETERS` can carry past an empty
+  -- global config) collapses those onto the https form.
+  fixture.git(root, {"remote", "set-url", "--push", "origin", "https://github.com/owner/repo"})
+  assert(freeze.destination(root, "origin") == "https://github.com/owner/repo",
+    "the fixture's push destination is the one this case binds against")
   assert(not freeze.verify(root, "origin", snap.proof, snap.sources, provider), "exact push destination is bound")
 end
