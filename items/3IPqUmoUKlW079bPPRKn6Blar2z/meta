@@ -1,6 +1,7 @@
 title: casts: close the 21 validating-decode sites in the eval, pin, config, doc and fetch tests
 parent: 3IOegofMj4ewlWfVCFTkOrT1Kox
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1389
 resolution: completed
 builders: 47472bef-1ae0-5be0-bea4-852f948efd61
+touches: _eval/score_test.tl _eval/stage_test.tl _make/pin_test.tl cosmic/teal_config_test.tl _tool/doc/index_test.tl cosmic/fetch/verbs_test.tl _build/casts_baseline.tl
