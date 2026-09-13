@@ -1,0 +1,1 @@
+Settle one naming rule for a nested owner chain and state it in `record_function_name`'s doc comment: the rendered name is the full dotted owner chain plus the method (`M.Sub.bar`, `M.Sub:baz`), the same for both forms. `_tool/doc/signature_test.tl` gains a two-level fixture for each form asserting that rendering; the one-level cases stay.
