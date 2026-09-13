@@ -1,6 +1,7 @@
 title: perf gate: a regression quiet on pass 2 gets two samples and no A/A control
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1496
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+touches: _perf/compare.tl _perf/gate.tl _perf/gate_strike_test.tl _perf/reproduce.tl _perf/reproduce_test.tl docs/decisions/README.md skills/decide/SKILL.md _perf/gate_test.tl _perf/compare_test.tl
