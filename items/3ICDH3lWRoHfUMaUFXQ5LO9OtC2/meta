@@ -1,5 +1,6 @@
 title: fuzz: shrink reruns check with the budget disarmed — a looping property hangs shrink and loses attribution
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1310
 resolution: completed
+touches: _fuzz/shrink.tl _fuzz/driver.tl _fuzz/driver_test.tl
