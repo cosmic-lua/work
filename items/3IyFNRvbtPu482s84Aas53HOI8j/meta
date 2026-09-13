@@ -1,3 +1,4 @@
 title: help orchestrate: a change cheaper by hand than by brief is built by hand, under a worker label, reviewed like any other
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/doctrine.tl _work/doctrine_test.tl
