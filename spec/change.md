@@ -1,5 +1,3 @@
-## Change
-
 Implement chunk 3 of Wdaw_QfXv after checkpoint codec and trustworthy isolation:
 enable exactly one diagnostic rerun for a natural crash, journal the actual
 child's execution, and render the parent's frozen report contract. Repo
