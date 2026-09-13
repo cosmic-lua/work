@@ -1,9 +1,9 @@
 title: check types hints: each gotcha section carries its checker message as a gated symptom line, and the hint names the section instead of the guide
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1721
 verdict: accept
 verdict_head: 2e6017d2ddae955c33a5ee73f9f2f54cbf7cf7dd
-verdict_spec: 37d601e51103fa299693829b5f4021dd88713906
 resolution: completed
 builders: build-DypT_hD7b-5c8fc82c
+touches: docs/guides/gotchas.md _build/snippets_test.tl _build/gotchas_test.tl cosmic/_teal_hints.tl cosmic/_teal_symptoms.tl /zip/docs/guides/gotchas.md cosmic/_teal_symptoms_test.tl docs/guides/lint.md
