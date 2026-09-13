@@ -1,0 +1,2 @@
+- No rendering of `is_held` in `show`/`status`.
+- No change to `hold`'s own refusals.
