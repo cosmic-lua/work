@@ -1,15 +1,3 @@
-## Goal
-
-G8 — the flow system (parent 3HyRdT1J). A mutation never lands on
-state its guards did not see: losing the push race always drops the
-mutation whole, re-syncs the checkout, and refuses with a line naming
-the re-run — so the re-run verb re-applies EVERY gate against the
-merged board, not just the WIP limit. Closes the class behind the
-reciprocal-block cycle (`_work/health.tl` header) and the
-last-two-children stranded parent.
-
-## Change
-
 Nine source files (two substantively, seven call-site trims), README,
 and tests, all on the `board` branch.
 
@@ -68,40 +56,3 @@ separate PR once this lands — noted in this PR's body.)
     child2: refused with `LOST_RACE`; the re-run computes
     `rephased_parent` against merged state and the parent returns to
     `backlog`.
-
-## Non-goals
-
-- No dispatcher auto-retry: the refusal names the re-run, and
-  take-mode already falls to its next candidate on any refusal. An
-  automatic re-run at dispatch is its own item if friction shows.
-- No change to `sync`/`rebase_onto_remote` as `cmd_sync` uses them
-  (the conflicted-rebase unwind there stays).
-- No transient-push-failure retry: a push that fails for any reason
-  is the same refusal, and the re-run costs one command.
-- No change to `save`'s one-mutation-one-commit contract — it is what
-  makes the drop exact.
-- No change to `wip_refusal`, `force`, or `vacated` semantics at the
-  up-front gate.
-- No edit to `skills/work/SKILL.md` on `main` — different branch,
-  different PR, sequenced after this lands.
-
-## Acceptance
-
-- `bin/cosmic --make ci` from the board worktree ends `ci: PASS`.
-- `bin/cosmic --make test _work/publish_race_test.tl
-  _work/store_test.tl _work/gitgate_test.tl` passes, including the
-  three named tests.
-- `grep -c "Revalidate" _work/store.tl _work/gitgate.tl` is 0 in
-  both.
-- `wc -l _work/store.tl` is under 490 and `wc -l _work/gitgate.tl`
-  under 378 (measured 2026-08-27: 490 and 378) — the change shrinks
-  both; every touched file stays at most 500.
-
-## Enablement
-
-none needed — board-branch modules only, gated by `bin/cosmic --make
-ci` from the worktree, no blocker items. 3IUFODun's rework (PR 1461)
-touches `store.tl`/`store_test.tl`/`gitverbs.tl` in different regions
-(`history`, `cmd_spec`, EOF test appends vs. `publish`,
-`test_publish_cas_refuses_over_limit`, call-site lines); whichever
-merges second resolves textually trivial hunks.
