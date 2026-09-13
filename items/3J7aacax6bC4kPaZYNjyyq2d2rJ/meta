@@ -1,9 +1,10 @@
 title: cosmic --diff OLD: activate archive surface comparison in the CLI
 parent: 3ItbazlcwDvSzmQXboqXvvbxQTJ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: 6ae7dee20d3669312e795134629809f736a97401
 verdict: accept
 verdict_head: 6ae7dee20d3669312e795134629809f736a97401
 landed_head: a44b020d8b044130b9f8abdc199d46373b3a8963
 resolution: completed
 builders: 7afecddf5908085e35b0edcee0fcf145
+touches: _cli/diff.tl _cli/diff_test.tl _cli/args.tl _cli/parse.tl _make/startup.tl cmd/cosmic/main.tl sys/help.md cmd/cosmic/embed_gen.tl
