@@ -1,5 +1,3 @@
-## Change
-
 One invocation takes the ref snapshot more than once: counted with a
 `git` wrapper on PATH against the live clone, `next` spawns
 `for-each-ref` twice and `show ID` three times plus two `cat-file

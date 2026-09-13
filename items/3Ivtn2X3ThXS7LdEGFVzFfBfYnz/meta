@@ -1,3 +1,4 @@
 title: one ref snapshot per invocation: next takes two, show ID takes three plus two cat-file sessions
 parent: 3IvnYF6xRrR5PSs8k0U0lZ9MdSl
-target: cosmic-lua/work
+repo: cosmic-lua/work
+touches: _work/gitview.tl
