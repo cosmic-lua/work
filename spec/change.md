@@ -1,13 +1,3 @@
-## Goal
-
-G9 — the least tree that keeps its promises. The owner's direction
-(recorded on 3I3mjNFi): no prose exemption from the 500-line cap,
-reclamation before any split, prefer gates over prose. This is the
-doctrinal reclamation — AGENTS.md's `## Language and Conventions` —
-and it carries the decision record that direction earned.
-
-## Change
-
 Measured 2026-08-19 at `bff1007`: the section spans lines 82–231 (150
 lines, 30% of the 500-line file), in four blocks. Per block:
 
@@ -49,32 +39,3 @@ Gate to respect while cutting: `_build/snippets_test.tl` reads
 AGENTS.md and checks its code snippets — deleting snippets shrinks its
 input legally, but the surviving snippets must still pass it, and
 `_docs`'s derive test gates the new decision record's grammar.
-
-## Non-goals
-
-- no rule CHANGES: every convention that exists keeps existing; only
-  its restatement of a gate-enforced text is cut. A rule found to be
-  enforced NOWHERE during the cut is not silently kept or dropped — it
-  is a capture (a gate candidate), filed per enable.md.
-- no structural split of AGENTS.md; no edits outside the section and
-  `docs/decisions/`.
-- not blocked on wording perfection: the docs-style skill's standard
-  (state what it is for, no history) governs the surviving prose.
-
-## Blocked by
-
-3I3mjNFi (same file, in ready) — mirrored in `blocked_by`.
-
-## Acceptance
-
-- `wc -l AGENTS.md` prints ≤ 390.
-- `bin/cosmic --make test _build/snippets_test.tl _build/docs_test.tl`
-  ends `test: PASS (2 files)`.
-- a new `docs/decisions/d*.md` exists and `bin/cosmic --make ci` ends
-  `ci: PASS` (the decisions index derive-test gates its grammar).
-
-## Enablement
-
-none needed — block-by-block targets are measured above, the two gates
-that read the file are named, and the owner direction this executes is
-recorded on 3I3mjNFi's trail.
