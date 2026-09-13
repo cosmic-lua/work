@@ -1,5 +1,3 @@
-## Change
-
 Add the filesystem prerequisite for the `--make` writer lock: an internal, nonblocking, generation-safe directory claim in `_make/lockdir.tl`, with deterministic tests in `_make/lockdir_test.tl`. Do not activate a build lock in this item. Its caller will still need a separately resolved writer-lifetime protocol before it may reclaim a dead holder.
 
 The storage protocol is a nonempty directory, atomically published at the caller's absolute lock path. Every generation has a fresh `cosmic.uuid.v4()` token and exactly one regular file named `owner-<token>`, containing an opaque payload. Construct that directory privately beside the destination, fully write and close the owner file, and only then rename the candidate directory to the lock path. A nonempty destination is contention. An empty destination left between retirement and directory removal may be replaced. Never publish an empty candidate, overwrite a nonempty destination, recursively remove the lock path, or decide that an owner is dead. The candidate and destination must share one existing parent directory. This primitive does not create that parent or use a temporary directory on another filesystem.
@@ -57,7 +55,3 @@ late-reaper-remove-old-owner false remove: <scratch>/.make.lock/owner-A: ENOENT:
 late-reaper-rmdir false remove_dir: <scratch>/.make.lock: ENOTEMPTY: Directory not empty
 successor-survives B
 ```
-
-## Non-goals
-
-No `--make` entry integration, convergence handoff, wait timeout, PID/PGID liveness policy, stale-age fallback, process-group changes, clean behavior changes, public `cosmic.*` API, C binding addition, or automatic removal of unknown files. In particular, this primitive does not make the parent writer-lock item ready: it solves safe publication and retirement, not the lifetime of all writers. Local-filesystem rename semantics are the boundary; network filesystem locking and hostile external replacement of lock directories are outside this item.
