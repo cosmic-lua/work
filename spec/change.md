@@ -1,5 +1,3 @@
-## Change
-
 Bump the board branch's `bin/cosmic.pin` to the release main already
 pins, and regenerate `.cosmic-coverage` with the new toolchain — the
 two land together because the gate cannot pass with either alone
@@ -58,32 +56,3 @@ Then prove the toolchain: from that same cold state, run `bin/cosmic
 --make ci` and read `ci: PASS` — the pin decides which checker the
 gates run under, so the whole gate under the new pin IS the
 acceptance.
-
-## Non-goals
-
-No `_work/**` changes ride along — `_work/githold_test.tl` stays
-self-calling in this diff; converting the board's test files to runner
-mode is the follow-on item blocked on this one. If the new toolchain's
-gate refuses existing machinery CODE (any stage but the
-coverage-baseline numbers), that is a bounce naming what broke, not a
-fix-up here. `.cosmic-coverage` is written only by `--make coverage
---baseline`, never by hand.
-
-## Acceptance
-
-- Cold (no `o/`) `bin/cosmic --make ci` on the board branch ends
-  `ci: PASS`; `board.yml` is green on the PR.
-- The probe that fails on the current pin passes on the new one: on a
-  scratch copy of the tree, `sed -i -E '/^test_[a-z_]+\(\)$/d'
-  _work/githold_test.tl`, then cold `bin/cosmic --make check` ends
-  `check: PASS (67 files)` with no `unused function` warning
-  (measured under the new pin on 2026-09-02).
-- `bin/cosmic --version` reports cosmos 2026.08.31-6dfa6728a, Lua 5.5.
-
-## Access
-
-Read access to `cosmic-lua/cosmic` (the release asset the new pin
-names, and `main`'s `bin/cosmic.pin` it is copied from) and to
-`whilp/cosmic` (the host of the CURRENT pin's release asset, read only
-to confirm the old sha256 before replacing it). Nothing is written to
-either; the PR lands on this repository's `board` branch.
