@@ -1,3 +1,6 @@
 title: fetch reuse 2: exact response framing before socket reuse
 parent: 3JDCn7ge6dM5PMSR0nUqgBsLCPk
-target: cosmic-lua/cosmopolitan@master
+repo: cosmic-lua/cosmopolitan
+base: master
+touches: tool/net/fetchframing.inc tool/lua/test_fetch_pool_framing.lua
+access: cosmic-lua/cosmic cosmic-lua/work
