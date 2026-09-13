@@ -1,5 +1,6 @@
 title: landlock.tl: intersect each rule's access with handled, not just the ABI mask
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1268
 resolution: completed
+touches: cosmic/sandbox/landlock.tl cosmic/sandbox/landlock_test.tl
