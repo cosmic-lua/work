@@ -1,0 +1,1 @@
+Do not change production rendering, item storage, verdict formats, or templates. Do not restore stored review prose, provider-derived round history, `scan_values`, or historical ROUND_CONTEXT blanking. Do not add fields or fabricate a stored round-1 review body. Do not undertake the typed-template migration or post to external issues in this change.
