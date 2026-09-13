@@ -1,40 +1,3 @@
-## Evidence
-
-A handle is the last 8 characters of the item's KSUID, rendered
-`«XXXX_XXXX»`, and every id-taking verb accepts one (`_work/tail.tl`).
-Resolving one loads the whole board. `_work/gitboard.tl:96-108` `resolve_id`:
-`store.resolve` (a prefix glob) fails for a handle because a handle is not a
-prefix, so the tail branch calls `store.list(s)` — the full load: one
-`for-each-ref` plus three `cat-file --batch` passes, 125–150 ms on the live
-board (the profile in «BZCt_Z5l7»'s Evidence) — and then `tail.resolve(all,
-input)` matches the tail against every id. The caller (`cmd_show`, every
-mutation verb) then loads the board again for its own work. That is the
-3-process, ~130 ms difference the reviews of cosmic-lua/work#18 measured and
-accepted as disclosed: `show <prefix>` 9 git processes, `show <handle>` 12.
-
-The ref name IS the id, so git can match the tail itself. Measured
-2026-09-05 on the live board clone (930 refs):
-
-    $ time git for-each-ref --format='%(refname) %(objectname)' \
-        'refs/heads/items/*VkzDq8u2' 'refs/heads/ended/*VkzDq8u2'
-    refs/heads/items/3It5sXzLGgV9qk4l9sqVkzDq8u2 832f0ef1…
-    real 0m0.007s
-
-`for-each-ref` patterns are fnmatch, so `*<tail>` is one process and no
-content read — the same shape and cost as `store.resolve`'s prefix glob
-`refs/heads/items/<prefix>*`. Tails are collision-free across all 930 refs
-(`… | sed 's#.*/##' | rev | cut -c1-8 | rev | sort | uniq -d | wc -l` → 0),
-which `tail.tl`'s header already records. One caveat: `tail.resolve` matches
-case-folded and fnmatch does not; a case-folded fallback needs only the ref
-NAMES (`for-each-ref --format=%(refname)` over the two namespaces, one
-process, no `cat-file`), never the content.
-
-The cache can do it with no process at all: ids are immutable, so `SELECT id
-FROM items WHERE id LIKE '%' || ? ` against `o/board.db` is exact when it
-hits; a miss (an item newer than the cache) falls back to the glob.
-
-## Change
-
 Handle resolution costs one `for-each-ref` at most and never a load; the
 whole-board load happens once per run, in the verb that needs it.
 
@@ -72,9 +35,3 @@ whole-board load happens once per run, in the verb that needs it.
    Expected for the builder's own strace check (not recorded): `show
    <handle>` equals `show <prefix>` (9 on the live board today), and 8 when
    the cache answers.
-
-## Non-goals
-
-Editing `_work/store.tl` (split in progress); changing the handle format
-or `tail.tl`'s rendering; changing any refusal string; the caller's own
-whole-board load («BZCt_Z5l7» and its follow-ups).
