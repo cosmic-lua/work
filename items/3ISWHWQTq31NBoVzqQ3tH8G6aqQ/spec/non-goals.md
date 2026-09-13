@@ -1,0 +1,3 @@
+- No release.yml change; no perf_gate skip.
+- No touch of the two flagged perf regressions — 3ISWHyP7's.
+- No change to what the stamps mean when present.
