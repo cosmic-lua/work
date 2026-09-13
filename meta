@@ -1,6 +1,7 @@
 title: cosmic.test: the in-process runner — ordered cases, continue past failure, the 0/2/fail grammar
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1405
 resolution: completed
 builders: f00d09f2-2783-565b-91ef-908df33cb9d4 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+touches: cosmic/test.tl cosmic/surface_test.tl _tool/records.tl cosmic/test_test.tl o/cosmic/test_test.lua _tool/records_test.tl cosmic/test_example.tl cosmic/example_coverage_test.tl _cli/env_vars.tl _build/env_vars_test.tl _build/public_surface_baseline.tl
