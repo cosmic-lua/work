@@ -1,4 +1,5 @@
 title: size the break/goto/error exit narrowing rule, then land it or record the measured no
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: docs/design/nil-flow.md 3p/tl/tl_patch.tl cosmic/teal_narrowing_test.tl

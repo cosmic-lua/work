@@ -1,0 +1,3 @@
+- Do not fix sites by hand while measuring.
+- Do not land the edit without the pinning test.
+- Do not bump the `tl` pin.
