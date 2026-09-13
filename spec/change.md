@@ -1,38 +1,3 @@
-# docs/guides/htmx.md: the shipped htmx guide (cosmic --docs guide.htmx) with a runnable todo app — templates, router, forms, SSE, the htmx asset as a project pin
-
-## Goal
-
-The document a builder (human or the G1 eval agent) reads to go from
-`cosmic --docs guide.htmx` to a working htmx app in one sitting:
-layout + fragment templates in `cosmic.template`, a router, a form
-POST that returns a fragment, an out-of-band counter, an SSE stream,
-the static handler serving `htmx.min.js` from inside the artifact —
-and every code block runs, because the app it teaches is a fixture the
-gate builds and drives.
-
-## Evidence
-
-Guides ship in the binary and are discovered by position:
-`cosmic/doc/mentions.tl:71-84` `guide_files()` lists every `*.md`
-under `/zip/docs/guides` except `index.md`, and `docs/guides/index.md:55`
-onward is the reader's list a new guide is appended to. The example-
-project doctrine for guides is `_build/doc_paths_test.tl:71` ("the
-guides' example project: the reader's tree, not this one").
-
-The asset question, settled here rather than in `cosmic.http`: the
-artifact "carries its modules and `embed/**`" (`docs/guides/make.md:134`),
-and a `*_pin.tl` lands its bytes under `o/3p/<name>/...`
-(`docs/guides/make.md:227-229`), which is NOT embedded. So a project
-that wants `htmx.min.js` inside its binary has, today, two shapes: a
-pin plus a `*_gen.tl` that copies `o/3p/htmx/htmx.min.js` into
-`embed/`, or committing the minified file under `embed/`. The guide
-shows the pin+generator shape (the pin is the sha-verified one and
-never puts a vendored blob in the tree); whether `--make` should grow
-"a pin whose payload embeds" is a separate research item this guide's
-PR files if the generator shape reads as a workaround.
-
-## Change
-
 Ready when: `ls cosmic/htmx.tl cosmic/http/static.tl 2>/dev/null | wc -l` prints `2`.
 
 That is the htmx and static children both merged; today the command
@@ -73,17 +38,3 @@ prints 0.
 3. `docs/guides/index.md`: append the guide's line.
 4. Gate: `bin/cosmic --make ci` ends `ci: PASS`, which now builds and
    drives the fixture.
-
-## Non-goals
-
-- No change to `cosmic.http` or `cosmic.htmx` — a gap found while
-  writing is a child item.
-- Not a `--make` feature: if the pin+generator shape is judged a
-  workaround, file the research item; do not build "embedding pins"
-  here.
-- No auth, no database: the store is a table. A SQLite variant is a
-  recipe line, not a section.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.
