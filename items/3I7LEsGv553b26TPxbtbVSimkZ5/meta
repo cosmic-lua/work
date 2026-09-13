@@ -1,5 +1,6 @@
 title: cosmopolitan bindings wave 2: Landlock ABI 5-9 — ioctl-dev, scoped, audit/TSYNC flags, uapi-verbatim
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 268
 resolution: completed
+touches: linux/landlock.h libc/calls/landlock.h third_party/lua/lunix.c tool/net/definitions.lua
