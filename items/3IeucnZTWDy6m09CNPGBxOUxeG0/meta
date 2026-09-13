@@ -1,4 +1,5 @@
 title: cosmic --make: *.tmpl as a position-declared template kind
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 builders: orchestrate9-BxOU_xeG0
+touches: x/y.tmpl x/y.tl _make/project.tl _make/validate.tl _make/generate.tl _make/graph.tl _make/deps.tl docs/design/make/model.md
