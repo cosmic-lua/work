@@ -1,14 +1,3 @@
-## Goal
-
-G3 — the cast epic's wave 6b. Wave 6's re-measure (item `3I7OygFC`,
-research) tested every `narrowing-gap` cast site against the tree by
-deleting it and running `--check types`. Ten sites under the single
-reason string `function shape` came back clean: the checker no longer
-needs the cast, so it is pure noise standing between a reader and the
-code. This wave deletes exactly those ten.
-
-## Change
-
 Delete the `as` cast and its `-- cast: function shape` marker at each
 of these ten sites, and nothing else.
 
@@ -74,55 +63,3 @@ reads 1 and `cosmic/string_test.tl` reads 3 — refresh them at pull per
 the slice loop. A conflict in `_build/casts_baseline.tl` is resolved by
 re-running the regen command on the merged tree, never by editing the
 rows by hand.
-
-## Non-goals
-
-- no other cast site moves — the other 32 verified-removable
-  `narrowing-gap` sites are wave 6c's (item `3IFUaiGA`), and the 40
-  still-blocked ones are the D5 upstream-first backlog's.
-- no restructuring: every one of these ten is a pure deletion. If a
-  site does not check clean after deleting the cast alone, main has
-  moved — stop and bounce the item rather than reshaping the code.
-- no tl patch work (`3p/tl/tl_patch.tl`).
-- the four `-- cast: function shape (…)` sites
-  (`cosmic/net/connect.tl:95`, `cosmic/net/socket.tl:333,396,436`) are
-  NOT in this wave: wave 6 confirmed all four are genuine binding
-  overload boundaries that refuse deletion. They carry a parenthesized
-  reason, so the `function shape$` grep in Acceptance already excludes
-  them.
-- the five bare `function shape` markers that SURVIVE this wave
-  (`cosmic/check_assertions_test.tl:382`, `cosmic/coverage/init.tl:162`,
-  `cosmic/quicksand/init.tl:73`, `cosmic/quicksand/proxy.tl:144,145`)
-  stay untouched, and the sixth quicksand marker
-  (`proxy.tl:142`, `-- cast: function shape from map view`) with them.
-- no change to `FetchModule`'s declared field types or to what
-  `fetch_extras.make` returns — the casts go, the contract does not.
-
-## Acceptance
-
-```
-bin/cosmic --make ci
-git grep -h -o -E -- '-- cast: [^(]*' -- '*.tl' | wc -l          # 434 (was 444)
-git grep -h -o -E -- '-- cast: function shape$' -- '*.tl' | wc -l # 5 (was 15)
-git status --short
-```
-
-- `bin/cosmic --make ci` ends `ci: PASS (5 stages)`, quoted in the PR
-  description. (Measured 2026-08-23 at `d01ea6ac` with this exact
-  change applied: it does.)
-- the marker count falls from 444 to 434 and the bare `function shape`
-  count from 15 to 5.
-- `git status --short` lists exactly five modified files and no others:
-  `_build/casts_baseline.tl`, `_cli/require_hints.tl`,
-  `cmd/cosmic/main.tl`, `cosmic/coverage/init_test.tl`,
-  `cosmic/fetch/init.tl`.
-
-## Enablement
-
-none needed — the ten sites are enumerated by `file:line` AND by the
-grep that relocates them, the deletion shape is spelled out for each of
-the three forms they take, the whole set was applied and gated green at
-`d01ea6ac` during this refinement pass, and the one wrong turn a
-literal session could take (skipping the baseline regen because the
-older spec called the ratchet a ceiling) is now measured, corrected,
-and caught by the `--make ci` acceptance.
