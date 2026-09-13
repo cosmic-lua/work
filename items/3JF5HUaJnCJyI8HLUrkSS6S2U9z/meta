@@ -2,4 +2,6 @@ title: migrate: rewrite every ref to format 5 in one atomic push
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/work
 handover_head: 85c7e8ec86a0cf6e0a406f0f4b23b17fcc6fd644
+verdict: accept
+verdict_head: 85c7e8ec86a0cf6e0a406f0f4b23b17fcc6fd644
 builders: 429104d81b0428040528bbc030a9f9c1
