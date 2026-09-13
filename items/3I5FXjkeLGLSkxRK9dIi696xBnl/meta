@@ -1,5 +1,6 @@
 title: traps_test.tl/time_test.tl: delete transition-scaffold casts, 21 -> 1
 parent: 3HyArM3A3zHuRxn3VYCvKmUZ7KW
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1267
 resolution: completed
+touches: cosmic/fs/traps_test.tl cosmic/time_test.tl
