@@ -1,5 +1,3 @@
-## Change
-
 Ship and verify the final runtime pin for buffered HTTP/TLS reuse, completing
 `uQsI_Q5CM`. Land in cosmic-lua/cosmic main. The child chain must already contain
 accepted upstream fixes and the benchmark/wrapper PR. Wait for the actual cosmos
@@ -49,11 +47,3 @@ After acceptance/landing, verify the parent design's matrix is accounted for by
 permanent tests across the child PRs, and record that final landed commit as the
 parent's evidence. Do not implement the parent again. No source implementation
 was performed by the refinement that created this chain.
-
-## Access
-
-Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
-cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
-read cosmic-lua/work for the parent design and prerequisite evidence, supplied
-by the orchestrator in the builder brief. The implementation PR targets only
-the repository assigned to this item; agents do not mutate the board.

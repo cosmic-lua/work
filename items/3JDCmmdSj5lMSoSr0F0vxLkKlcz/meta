@@ -1,3 +1,6 @@
 title: fetch reuse 7: final runtime pin and end-to-end performance verification
 parent: 3IOIgCXMKGltNC0IxcfuQsIQ5CM
-target: cosmic-lua/cosmic@main
+repo: cosmic-lua/cosmic
+base: main
+touches: 3p/cosmos/cosmos_pin.tl cosmic/fetch/init.tl cosmic/fetch/keep_alive_test.tl _perf/run.tl
+access: cosmic-lua/cosmopolitan cosmic-lua/work
