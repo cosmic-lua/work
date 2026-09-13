@@ -29,6 +29,10 @@ local UNITS < const >: {Unit} = {
   {name = "review", type_name = "Review", text = brieftext_review.REVIEW},
   {name = "review_script", type_name = "ReviewScript",
     text = brieftext_review.REVIEW_SCRIPT},
+  {name = "reviewing_diff", type_name = "ReviewingDiff",
+    text = brieftext_review.REVIEWING_DIFF},
+  {name = "reviewing_research", type_name = "ReviewingResearch",
+    text = brieftext_review.REVIEWING_RESEARCH},
   {name = "round", type_name = "Round", text = brieftext_review.ROUND},
 }
 

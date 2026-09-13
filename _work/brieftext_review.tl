@@ -2,12 +2,24 @@
 --- builder's handed-over commit the adversarial way, `REVIEW_SCRIPT` judges a
 --- mechanical one (no `.tl` file outside `*_test.tl`, or under 20
 --- changed lines) with a fixed four-move script instead,
---- research uses the same exact-head review. Split out
+--- and a research handover takes `REVIEW` with its own "what you're
+--- reviewing" wording. Split out
 --- of `_work.brieftext` so that module has headroom for its
 --- non-review templates to grow; the grammar, the context records,
 --- and the rendering itself are unchanged — `brief` still resolves
 --- the context and picks the PR shape between `REVIEW` and
 --- `REVIEW_SCRIPT`, this module only holds the templates' text.
+---
+--- `REVIEW`'s "what you're reviewing" section is `{{.reviewing}}`,
+--- rendered on its own from one of two sub-templates and spliced in
+--- as data, the way `ROUND` is: `REVIEWING_DIFF` for a diff handover —
+--- a product commit range the reviewer reads in a checkout — and
+--- `REVIEWING_RESEARCH` for a research handover, whose commit is
+--- board state: the message body of `{{.head_sha}}` on the item's own
+--- ref IS the findings, carried verbatim in `{{.findings}}` beside the
+--- spec they answer. Which of the two a review takes follows from the
+--- item's deliverable (`_work.brief`), never from anything in this
+--- text.
 ---
 --- Pure data: template SOURCE, in `cosmic.template`'s grammar.
 --- `_work/brieftmpl_gen.tl` compiles each one into a typed renderer
@@ -73,6 +85,32 @@ Confirm each finding above is closed — repeat its own reproduction —
 then judge the whole diff; what round 1 accepted is settled.
 ]]
 
+local REVIEWING_DIFF < const > = [[
+The caller has made this exact commit available in your local checkout.
+Review `{{.claim_base}}..{{.head_sha}}`; never substitute a branch tip or provider
+state for either commit. The spec below is authoritative. External checks,
+when used, must be inspected by the caller on this exact SHA.
+
+## The spec this PR is supposed to satisfy (verbatim)
+]]
+
+local REVIEWING_RESEARCH < const > = [[
+This is a research handover: its deliverable is board state, not a product
+diff. The commit under review lives in the BOARD repository (the clone at
+`{{.board_dir}}`), on the item's own ref — not in any product checkout — and
+its message body is the findings, carried verbatim below. Judge those
+findings against the spec they answer; never substitute the item's current
+tip, a later entry, or any product commit for `{{.head_sha}}`.
+
+## The findings this handover recorded (verbatim, the body of `{{.head_sha}}`)
+
+---
+{{.findings}}
+---
+
+## The spec these findings are supposed to answer (verbatim)
+]]
+
 local REVIEW < const > = [[
 You are a fresh-context code reviewer for `{{.repo}}`. You have never
 seen this change before — that is deliberate: the review must come
@@ -84,13 +122,7 @@ Board item id: `{{.item_id}}` (handle {{.handle}})
 Title: {{.title}}
 {{.change_source}}
 
-The caller has made this exact commit available in your local checkout.
-Review `{{.claim_base}}..{{.head_sha}}`; never substitute a branch tip or provider
-state for either commit. The spec below is authoritative. External checks,
-when used, must be inspected by the caller on this exact SHA.
-
-## The spec this PR is supposed to satisfy (verbatim)
-
+{{.reviewing}}
 ---
 {{.spec}}
 ---
@@ -278,12 +310,16 @@ scope to find one.
 local record brieftext_review
   REVIEW: string
   REVIEW_SCRIPT: string
+  REVIEWING_DIFF: string
+  REVIEWING_RESEARCH: string
   ROUND: string
 end
 
 local M: brieftext_review = {
   REVIEW = REVIEW,
   REVIEW_SCRIPT = REVIEW_SCRIPT,
+  REVIEWING_DIFF = REVIEWING_DIFF,
+  REVIEWING_RESEARCH = REVIEWING_RESEARCH,
   ROUND = ROUND,
 }
 

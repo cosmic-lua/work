@@ -1,6 +1,11 @@
 #!/usr/bin/env cosmic
--- Research migration is an exact-head review concern; this sibling keeps
--- brief_test's existing cases below the 500-line cap.
+-- The review brief of a research handover: `result` names a board
+-- commit whose message body is the findings, and the brief judges that
+-- commit — the full review, the findings verbatim beside the spec. A
+-- product commit beside it is still the handover; a legacy spec digest
+-- in `result` names no commit and still refuses; neither recorded
+-- refuses as it always did. This sibling keeps brief_test's existing
+-- cases below the 500-line cap.
 local brief = require("_work.brief")
 local brieftext_review = require("_work.brieftext_review")
 local check = require("cosmic.check")
@@ -10,12 +15,21 @@ local evidence = require("_work.commit_evidence")
 local fixture = require("_work.fixture")
 local flow = require("_work.commit_flow_fixture")
 local fs = require("cosmic.fs")
+local gittake = require("_work.gittake")
 local gitverdict = require("_work.gitverdict")
 local item = require("_work.item")
 local publish = require("_work.publish")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+
+local BASE < const > = ("a"):rep(40)
+local HEAD < const > = ("b"):rep(40)
+local FINDINGS < const > = [[
+## Findings
+
+The probe reproduced: three of four representative bodies disagree.
+Recommend one parser over a declared heading vocabulary.]]
 
 local function capture(s: store.Store, kind: string, id: string,
     path?: string): integer, string
@@ -47,61 +61,45 @@ end
 local function assert_refusal(s: store.Store, id: string, path?: string)
   local code, out = capture(s, "review", id, path)
   assert(code == 1, out)
-  assert(out:find(id:sub(1, 8)
-      .. " has a legacy research result but no commit handover — the caller must "
-      .. "supply the applying product commit with `take " .. id:sub(1, 8)
-      .. " --head SHA`", 1, true) ~= nil, out)
+  assert(out:find(id:sub(1, 8) .. "'s research result ", 1, true) ~= nil
+    and out:find(" is not a board commit — a legacy spec digest; hand the "
+      .. "research over again with `take " .. id:sub(1, 8)
+      .. " --result` to re-type it", 1, true) ~= nil, out)
   assert(out:find("You are", 1, true) == nil, "refusal must not emit a body")
   assert(out:find("claim it as", 1, true) == nil, "refusal must not mint a label")
 end
 
-local function test_result_only_refuses_without_output_or_state_changes()
-  local s = fixture.init_state_repo("brief-research-refusal")
-  local _, id = fixture.root_with_leaf(s)
-  fixture.give_spec(s, id)
-  local digest = legacy_result(s, id)
-  local before = check.must(store.git_ok(s, {"show-ref"})).stdout
-  local sentinel = fs.join(s.root, "sentinel.md")
-  local absent = fs.join(s.root, "absent.md")
-  assert(fs.write(sentinel, "keep this output\n"))
-  -- History is deliberately unavailable: refusal must precede label reads.
-  local old_history = publish.history
-  publish.history = function(_s: store.Store, _id: string): {publish.Event} | nil, string
-    error("result-only review must not read verdict history")
-  end
-  local ok, err = pcall(function()
-      assert_refusal(s, id)
-      assert_refusal(s, id, sentinel)
-      assert_refusal(s, id, absent)
-    end)
-  publish.history = old_history
-  if not ok then error(err, 0) end
-  assert(check.must(fs.read(sentinel)) == "keep this output\n")
-  assert(not fs.is_file(absent), "refusal must not create --out")
-  assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before)
-  assert(store.close(s))
-  s = check.must(store.open(s.root))
+--- The research handover as the verbs make it: the claim holder writes
+--- the findings as an entry on the item's own ref, then `take ID
+--- --result` records that tip — so `result` is a board commit whose
+--- message body is the findings, and `handover_head` stays empty.
+--- @param s store.Store The store
+--- @param id string The item
+--- @param findings string The entry's prose
+--- @return string The board commit `result` records
+local function research_result(s: store.Store, id: string, findings: string): string
+  fixture.claim_item(s, id, "session-a", BASE)
   local it = check.must(store.load(s, id))
-  assert(it.result == digest and (it.handover_head or "") == "",
-    "legacy metadata must survive reopening without becoming a commit")
-  assert_refusal(s, id)
-  local code, out = capture(s, "research", id)
-  assert(code == 0, out)
-  assert(out:find("never at\na `gitboard` command", 1, true) ~= nil, out)
-  assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before)
-  assert(storewrite.save(s, it, "remove spec", {change = "", non_goals = ""}))
-  code, out = capture(s, "review", id)
-  assert(code == 1 and out:find("has no spec sidecar", 1, true) ~= nil, out)
-  assert(out:find("legacy research result", 1, true) == nil, out)
-  fixture.give_spec(s, id)
+  assert(item.record_involvement(it.builders, "session-a"))
+  assert(storewrite.save(s, it,
+      ("note %s by session-a\n\n%s"):format(id:sub(1, 8), findings)))
   it = check.must(store.load(s, id))
-  it.result = ""
-  assert(storewrite.save(s, it, "clear legacy result"))
-  code, out = capture(s, "review", id)
-  assert(code == 1, out)
-  assert(out:find(id:sub(1, 8) .. " has no handover recorded — `take "
-      .. id:sub(1, 8) .. " --head SHA` is what a commit review judges", 1, true) ~= nil, out)
-  assert(store.close(s))
+  assert(gittake.take_result(s, it, "session-a", 0) == 0, "the handover is recorded")
+  it = check.must(store.load(s, id))
+  assert((it.result or "") ~= "" and (it.handover_head or "") == "",
+    "a research handover records a board commit and no product commit")
+  return it.result
+end
+
+--- Move the claim from the builder to a reviewing session, as the
+--- orchestrator does between a handover and `brief review ID`.
+local function reclaim(s: store.Store, id: string, session: string)
+  fixture.drop_claim(s, id, "session-a", "handed over")
+  fixture.claim_item(s, id, session, BASE)
+end
+
+local function flat_text(text: string): string
+  return (text:gsub("%s+", " "))
 end
 
 local function assert_exact_review(body: string, head: string)
@@ -188,16 +186,154 @@ local function test_legacy_result_migrates_only_through_product_commit_handover(
   assert(store.close(s))
 end
 
-local function test_research_doctrine_and_template_exports_require_a_product_commit()
-  local page = check.must(doctrine.page("review"))
-  assert(page:find([[Research agents return recommendations; the caller applies them in the product
-repository and hands over its exact commit through `take ID --head SHA`.
-That commit must descend from the claim's product base. A result digest or
-unrelated board item-ref commit is not a substitute. If no applying product
-commit exists, no review brief is available: stop for caller preparation.
-Research uses ordinary exact-head review; no result-only review template
-or additional agent board-read instructions are emitted.]], 1, true) ~= nil, page)
-  for key in next, brieftext_review do
-    assert(key ~= "RESEARCH_REVIEW", "the result-only template export is retired")
+-- The change this file is evidence for: a research handover is
+-- reviewable. Its brief is the FULL review — never the mechanical
+-- script, whose probe diffs in the product checkout — judging the board
+-- commit, with the findings verbatim under their own wording and the
+-- diff case's wording absent.
+local function test_a_research_handover_earns_the_full_review_of_its_findings()
+  local s = fixture.init_state_repo("brief-research-findings")
+  local _, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  local result = research_result(s, id, FINDINGS)
+  reclaim(s, id, "session-b")
+  local before = check.must(store.git_ok(s, {"show-ref"})).stdout
+  local code, out = capture(s, "review", id)
+  assert(code == 0, out)
+  assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before, "a brief is a read")
+  assert_exact_review(out, result)
+  assert(out:find("---\n" .. FINDINGS .. "\n---", 1, true) ~= nil,
+    "the findings ride the brief verbatim, fenced like the spec: " .. out)
+  assert(out:find("Do exactly this.", 1, true) ~= nil, "beside the spec: " .. out)
+  assert(out:find("This is a research handover", 1, true) ~= nil
+    and out:find("## The spec these findings are supposed to answer (verbatim)", 1, true) ~= nil,
+    "the research wording names the findings and the spec they answer: " .. out)
+  assert(flat_text(out):find("the clone at `" .. fs.absolute_path(s.root) .. "`", 1, true) ~= nil,
+    "and says which repository the commit lives in: " .. out)
+  assert(out:find("The caller has made this exact commit available", 1, true) == nil
+    and out:find("## The spec this PR is supposed to satisfy", 1, true) == nil,
+    "the diff case's wording is not used: " .. out)
+  assert(out:find("the posture is ADVERSARIAL", 1, true) ~= nil
+    and out:find("a numbered script", 1, true) == nil
+    and out:find("git show", 1, true) == nil,
+    "the full review is selected, never the mechanical script: " .. out)
+  -- A product commit recorded beside it is the handover: the brief
+  -- judges that commit and carries no findings.
+  local it = check.must(store.load(s, id))
+  it.repo = "acme/widgets"
+  it.handover_head = HEAD
+  assert(storewrite.save(s, it, ("take %s by session-a head:%s"):format(
+        id:sub(1, 8), HEAD:sub(1, 12))))
+  local both_code, both = capture(s, "review", id)
+  assert(both_code == 0, both)
+  assert_exact_review(both, HEAD)
+  assert(both:find(FINDINGS, 1, true) == nil
+    and both:find("This is a research handover", 1, true) == nil
+    and both:find("The caller has made this exact commit available", 1, true) ~= nil,
+    "both recorded, the product commit is what the review judges: " .. both)
+  -- Neither recorded refuses exactly as before.
+  it = check.must(store.load(s, id))
+  it.handover_head, it.result = "", ""
+  assert(storewrite.save(s, it, "clear both handovers"))
+  local none_code, none = capture(s, "review", id)
+  assert(none_code == 1, none)
+  assert(none:find(id:sub(1, 8) .. " has no handover recorded — `take "
+      .. id:sub(1, 8) .. " --head SHA` is what a commit review judges", 1, true) ~= nil, none)
+  assert(store.close(s))
+end
+
+-- A commit `result` names whose body carries no prose is nothing to
+-- judge: refused with the way to record findings, never rendered with
+-- an empty fence.
+local function test_a_result_commit_without_findings_is_refused()
+  local s = fixture.init_state_repo("brief-research-bodyless")
+  local _, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  fixture.claim_item(s, id, "session-a", BASE)
+  local it = check.must(store.load(s, id))
+  assert(item.record_involvement(it.builders, "session-a"))
+  -- The tip as claimed: a real board commit, its body only trailers.
+  local tip = s.leased_sha[id] or ""
+  assert(#tip == 40, "the fixture observed a tip: " .. tip)
+  it.result = tip
+  assert(storewrite.save(s, it, ("take %s by session-a result:%s"):format(
+        id:sub(1, 8), tip:sub(1, 7))))
+  reclaim(s, id, "session-b")
+  local code, out = capture(s, "review", id)
+  assert(code == 1, out)
+  assert(out:find(id:sub(1, 8) .. "'s research handover " .. tip:sub(1, 12)
+      .. " carries no findings in its message body — record them with `log "
+      .. id:sub(1, 8) .. " --add FILE`, then hand over again with `take "
+      .. id:sub(1, 8) .. " --result`", 1, true) ~= nil, out)
+  assert(out:find("You are", 1, true) == nil, "refusal must not emit a body")
+  assert(store.close(s))
+end
+
+local function test_result_only_refuses_without_output_or_state_changes()
+  local s = fixture.init_state_repo("brief-research-refusal")
+  local _, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  local digest = legacy_result(s, id)
+  local before = check.must(store.git_ok(s, {"show-ref"})).stdout
+  local sentinel = fs.join(s.root, "sentinel.md")
+  local absent = fs.join(s.root, "absent.md")
+  assert(fs.write(sentinel, "keep this output\n"))
+  -- History is deliberately unavailable: refusal must precede label reads.
+  local old_history = publish.history
+  publish.history = function(_s: store.Store, _id: string): {publish.Event} | nil, string
+    error("result-only review must not read verdict history")
   end
+  local ok, err = pcall(function()
+      assert_refusal(s, id)
+      assert_refusal(s, id, sentinel)
+      assert_refusal(s, id, absent)
+    end)
+  publish.history = old_history
+  if not ok then error(err, 0) end
+  assert(check.must(fs.read(sentinel)) == "keep this output\n")
+  assert(not fs.is_file(absent), "refusal must not create --out")
+  assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before)
+  assert(store.close(s))
+  s = check.must(store.open(s.root))
+  local it = check.must(store.load(s, id))
+  assert(it.result == digest and (it.handover_head or "") == "",
+    "legacy metadata must survive reopening without becoming a commit")
+  assert_refusal(s, id)
+  local code, out = capture(s, "research", id)
+  assert(code == 0, out)
+  assert(out:find("never at\na `gitboard` command", 1, true) ~= nil, out)
+  assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before)
+  assert(storewrite.save(s, it, "remove spec", {change = "", non_goals = ""}))
+  code, out = capture(s, "review", id)
+  assert(code == 1 and out:find("has no spec sidecar", 1, true) ~= nil, out)
+  assert(out:find("legacy research result", 1, true) == nil, out)
+  fixture.give_spec(s, id)
+  it = check.must(store.load(s, id))
+  it.result = ""
+  assert(storewrite.save(s, it, "clear legacy result"))
+  code, out = capture(s, "review", id)
+  assert(code == 1, out)
+  assert(out:find(id:sub(1, 8) .. " has no handover recorded — `take "
+      .. id:sub(1, 8) .. " --head SHA` is what a commit review judges", 1, true) ~= nil, out)
+  assert(store.close(s))
+end
+
+-- The doctrine states the rule the brief now holds — a review judges a
+-- commit, and which repository it lives in follows from the
+-- deliverable — and the research wording is its own template spliced
+-- into the one full review, not a second review template.
+local function test_research_doctrine_and_template_state_the_board_commit_rule()
+  local page = check.must(doctrine.page("review"))
+  assert(page:find([[A review judges a commit either way — which repository it lives in
+follows from the deliverable — and a research handover's brief carries the
+commit's message body verbatim beside the spec it answers.]], 1, true) ~= nil, page)
+  assert(page:find("no review brief is available", 1, true) == nil,
+    "the refusal stance is gone from the doctrine: " .. page)
+  assert(brieftext_review.REVIEW:find("{{.reviewing}}", 1, true) ~= nil
+    and brieftext_review.REVIEW:find("The caller has made", 1, true) == nil,
+    "the full review splices its section rather than carrying one wording")
+  assert(brieftext_review.REVIEWING_RESEARCH:find("{{.findings}}", 1, true) ~= nil,
+    "the research wording carries the findings")
+  assert(brieftext_review.REVIEWING_DIFF:find("{{.claim_base}}..{{.head_sha}}", 1, true) ~= nil,
+    "the diff wording carries the product commit range")
 end
