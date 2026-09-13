@@ -1,6 +1,6 @@
 title: refresh quarantines conclusively stale prepared publication receipts
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: 4d18681ee80fe2544aad1a48b4444ec3f362e512
 handover_head: d15e827e225f8fc70a814d5957a7108afc8e6ada
 external_url: https://github.com/cosmic-lua/work/pull/104
@@ -9,3 +9,4 @@ verdict_head: d15e827e225f8fc70a814d5957a7108afc8e6ada
 landed_head: 1490f2eacbd1bc90fe357238667eb9c72f8ff704
 resolution: completed
 builders: 84cae6d8a317324f1f89c3331d2a0b28
+touches: _work/refs.tl _work/prepared.tl _work/publish.tl _work/gittransport.tl _work/doctrine.tl _work/prepared_test.tl _work/refs_test.tl _work/prepared_quarantine_test.tl _work/gitcli_quarantine_test.tl _work/gitclaim_batch_object_test.tl _work/gitattach_test.tl _work/gitgate_test.tl _work/gitrank_test.tl _work/publish_test.tl
