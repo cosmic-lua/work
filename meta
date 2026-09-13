@@ -1,7 +1,7 @@
 title: cosmic.http streaming: chunked request bodies, chunked/streamed responses, and serving SSE through cosmic.sse.format
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
 target: cosmic-lua/cosmic
-claim_batch: 3efda0d0c34789e9d5b4b9bf0ae0a41c223f5352
+claim_batch: ae2d65a2cb10c43d27ee56a92200e544e858b5ac
 handover_head: dbc3b8b5c30a550dbfe3cff744f99d7920afe676
 builders: 08f681bfb29d9a10d021fe2d9c31b6a3 78dd58cbf8900c86b5a69ae5aa45cd6e 008d29dba37baf1f80c4e8078b98828c
 speccers: 053436c315f735c018dcd6ea337493b5
