@@ -1,5 +1,3 @@
-## Change
-
 Bump the `board` branch's `bin/cosmic.pin` to a release whose embedded
 `_make/policy.tl` carries the `COSMIC_COVERAGE_ENV` baseline-refusal
 guard, and regenerate `.cosmic-coverage` under it in the same commit —
@@ -52,18 +50,3 @@ After landing, confirm the fix: in a fresh `board`-branch worktree,
 `bin/cosmic --make coverage --baseline` run with `COSMIC_COVERAGE_ENV`
 UNSET now prints `coverage --baseline REFUSED: ...`, exits non-zero,
 and leaves `.cosmic-coverage` byte-identical (`git diff` empty).
-
-## Access
-
-Read access to `cosmic-lua/cosmic` (the release asset the new pin
-names, and `main`'s `bin/cosmic.pin` it is copied from). Nothing is
-written to any repository other than this one; the PR lands on this
-repository's `board` branch.
-
-## Non-goals
-
-Not a general coverage-tooling audit — scoped to this one pin bump and
-its regen. Not implementing a second copy of the guard anywhere in the
-`board` branch's own tree — there is nowhere to put one: the branch
-owns no `_make/`, no `cmd/cosmic`, no coverage-policy source of its
-own; the guard reaches `board` only via `bin/cosmic.pin`.
