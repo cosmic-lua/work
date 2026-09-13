@@ -1,0 +1,2 @@
+- No change to what the doc path gate asserts.
+- No general "always re-run" escape; the ref's commit is the key.
