@@ -1,6 +1,7 @@
 title: cast wave 4: cosmic.string.to_integer, the two testrun.tl default-fallback parse casts deleted
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1328
 resolution: completed
 builders: sched-pcoatp
+touches: _tool/testrun.tl cosmic/instrument.tl cosmic/string.tl cosmic/string_test.tl cosmic/string_example.tl cosmic/ansi_example.tl _build/casts_baseline.tl
