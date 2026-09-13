@@ -1,3 +1,4 @@
 title: reader: store.list, the cache rebuild and the events walk read refs/heads/state when it exists
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 touches: _work/gitread6.tl _work/format.tl _work/cacherebuild.tl _work/events.tl _work/fixture.tl
+depends_on: 3JHjKxy2tezj6i5RCqef2HQxztH
