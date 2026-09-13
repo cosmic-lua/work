@@ -1,14 +1,17 @@
 #!/usr/bin/env cosmic
 local check = require("cosmic.check")
-local child = require("cosmic.child")
+local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
 local stateread_fsck = require("_work.stateread_fsck")
 
+-- `_work.fixture` is required for its hermetic git environment alone: a git
+-- that cannot READ an ambient global config dies rather than skipping it, so
+-- `git init` here fails under the build fence without it.
 local function test_native_fsck_reports_actual_format_and_validates_marks()
-  local root = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "stateread-fsck-native")
+  local root = fs.join(fixture.tmpdir, "stateread-fsck-native")
   assert(fs.remove_all(root) and fs.make_dirs(root))
-  assert(check.must(child.run({"git", "init", "-q", root})).ok)
+  fixture.git(root, {"init", "-q"})
   local format = check.must(gitobj.hash_object_write(root, "format-six-sentinel\n"))
   local marks = check.must(gitobj.hash_object_write(root, "not a literal\n"))
   local migration = check.must(gitobj.mktree_write(root,
