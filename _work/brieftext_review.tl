@@ -68,8 +68,10 @@
 --- `_work.brief` resolves it from the ITEM's own repository through the
 --- `gitboard.repository` map, so it names the tree the diff's files live
 --- in even when gitboard itself was run from a checkout of another
---- repository, and falls back to that checkout only when the item's repo
---- is not mapped here. It is never the invocation gitboard itself runs
+--- repository, and falls back to that checkout only for a diff review
+--- whose item's repo is not mapped here — `POSTURE_RESEARCH` calls the
+--- path the map's placement, so there an unmapped repo leaves the token
+--- unresolved instead. It is never the invocation gitboard itself runs
 --- through: that is `{{.gitboard_cmd}}`, the caller's own exact loader-plus-
 --- executable prefix (`_work.brief` resolves it from a builder's `--receipt`
 --- or from `--gitboard-command`/`--gitboard-cwd` given directly to this
@@ -238,9 +240,11 @@ findings review checks the findings the way a diff review checks a diff.
    `git worktree add <dir> <commit>` from the product checkout at
    `{{.product_root}}` — the item's repository, `{{.repo}}`, as the
    caller's `gitboard.repository` map places it — and run there, never
-   in that checkout itself. A claim with no command, a command that does
-   not reproduce, or a measurement with no commit named is a finding —
-   quote it.
+   in that checkout itself. Bootstrap that worktree the way the product
+   repository's own instructions (its AGENTS.md) bootstrap a new
+   checkout, before the first re-run. A claim with no command, a command
+   that does not reproduce, or a measurement with no commit named is a
+   finding — quote it.
 3. The recommendation follows from the measurements and not past them:
    each step it proposes rests on a measurement above it, and no
    measurement is contradicted or left unaccounted for. A recommendation
@@ -273,8 +277,9 @@ string.
 
 GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
 loader and absolute executable the caller runs board commands through.
-Use it verbatim as the prefix below; never guess a product-checkout
-substitute of your own, and never bootstrap one yourself.
+Use it verbatim as the prefix below; never substitute a `bin/gitboard`
+from a product checkout, and never bootstrap that loader yourself — the
+reproduction worktree above is the one tree you bootstrap.
 
 ```
 {{.gitboard_cmd}} verdict {{.item_id}} accept \

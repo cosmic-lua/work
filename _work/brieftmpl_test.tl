@@ -281,7 +281,9 @@ end
 -- `done --landed SHA` after landing, the mutation run in the report,
 -- byte for byte what the review always carried, pinned here as rendered
 -- through the first line of the paragraph the review still carries
--- itself — and `findings` set is research: what a findings review
+-- itself, and its opening paragraph the same way, pinned from the
+-- brief's first byte through the first line the review carries itself —
+-- and `findings` set is research: what a findings review
 -- checks, reproduced in a worktree added from the product checkout, no
 -- diff to list, no guard to mutate, verdict lines naming no checkout,
 -- `--landed` the board commit itself, the re-run claims in the report.
@@ -372,10 +374,22 @@ file:line. Keep it factual and concise.
 A request-changes verdict names five labeled facts, not a fix: the
 ]]
 
+local DIFF_OPENING < const > = [[
+You are a fresh-context code reviewer for `cosmic-lua/work`. You have never
+seen this change before — that is deliberate: the review must come
+from a distance from the builder. Everything you need is below.
+
+## What you're reviewing
+
+Board item id: `3JEQZ7UEoFtzblNFG29uOsCKV6H` (handle uOsC_KV6H)
+]]
+
 local function test_the_review_posture_follows_the_deliverable()
   local f = full_facts()
   local diff_body, dleft = briefcontext.review(f, full_commands())
   assert(#dleft == 0, "a diff review answers everything: " .. table.concat(dleft, " "))
+  assert(diff_body:sub(1, #DIFF_OPENING) == DIFF_OPENING,
+    "the diff opening is byte for byte what the review always carried: " .. diff_body)
   assert(diff_body:find(DIFF_POSTURE, 1, true) ~= nil,
     "the diff posture is byte for byte what the review always carried: " .. diff_body)
   assert(diff_body:find("There is no diff here", 1, true) == nil, diff_body)
@@ -387,7 +401,7 @@ local function test_the_review_posture_follows_the_deliverable()
       "/wt/work/abcd", "<WORKTREE>", "o/3p", "`test <file>`",
       "`fetch` before you run any test.", "no product worktree",
       "code reviewer", "seen this change before", "--landed SHA",
-      "the mutation-test\nyou ran and its result"}) do
+      "the mutation-test\nyou ran and its result", "never bootstrap one yourself"}) do
     assert(research_body:find(diff_only, 1, true) == nil,
       "diff wording a research reviewer cannot act on: " .. diff_only .. "\n" .. research_body)
   end
@@ -398,7 +412,12 @@ local function test_the_review_posture_follows_the_deliverable()
       "`git worktree add <dir> <commit>` from the product checkout at\n"
       .. "   `/src/work` — the item's repository, `cosmic-lua/work`, as the\n"
       .. "   caller's `gitboard.repository` map places it — and run there, never\n"
-      .. "   in that checkout itself.",
+      .. "   in that checkout itself. Bootstrap that worktree the way the product\n"
+      .. "   repository's own instructions (its AGENTS.md) bootstrap a new\n"
+      .. "   checkout, before the first re-run.",
+      "never substitute a `bin/gitboard`\nfrom a product checkout, and never bootstrap "
+      .. "that loader yourself — the\nreproduction worktree above is the one tree you "
+      .. "bootstrap.",
       "follows from the measurements and not past them",
       "Nothing the spec asked to be measured is missing",
       "prospective evidence for the item's parent chain",

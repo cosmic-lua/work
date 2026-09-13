@@ -12,6 +12,7 @@ local brieftext_review = require("_work.brieftext_review")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local doctrine = require("_work.doctrine")
+local env = require("cosmic.env")
 local evidence = require("_work.commit_evidence")
 local fixture = require("_work.fixture")
 local flow = require("_work.commit_flow_fixture")
@@ -259,6 +260,13 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
       .. "   caller's `gitboard.repository` map places it", 1, true) ~= nil,
     "the reproduction sentence names its tree: " .. out)
   assert(out:find("<PRODUCT_ROOT>", 1, true) == nil, "and the tree is resolved: " .. out)
+  assert(out:find("Bootstrap that worktree the way the product\n"
+      .. "   repository's own instructions (its AGENTS.md) bootstrap a new\n"
+      .. "   checkout, before the first re-run.", 1, true) ~= nil
+    and out:find("never bootstrap that loader yourself — the\n"
+      .. "reproduction worktree above is the one tree you bootstrap.", 1, true) ~= nil
+    and out:find("never bootstrap one yourself", 1, true) == nil,
+    "and says how that tree is bootstrapped, and that the loader is not: " .. out)
   for _, wanted in ipairs({"names its command, and the command reproduces",
       "follows from the measurements and not past them",
       "Nothing the spec asked to be measured is missing",
@@ -292,6 +300,44 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   assert(none_code == 1, none)
   assert(none:find(id:sub(1, 8) .. " has no handover recorded — `take "
       .. id:sub(1, 8) .. " --head SHA` is what a commit review judges", 1, true) ~= nil, none)
+  assert(store.close(s))
+end
+
+-- The reproduction sentence calls its path the `gitboard.repository`
+-- map's placement, so an item the map cannot place leaves
+-- `<PRODUCT_ROOT>` to the caller even when gitboard's own checkout is
+-- findable — the fallback a diff review's `--repo-dir` relies on would
+-- render that checkout under a sentence calling it the map's answer.
+local function test_an_unmapped_repo_leaves_the_reproduction_tree_to_the_caller()
+  local s = fixture.init_state_repo("brief-research-unmapped")
+  local _, id = fixture.root_with_leaf(s)
+  fixture.give_spec(s, id)
+  local result = research_result(s, id, FINDINGS)
+  local it = check.must(store.load(s, id))
+  it.repo = "acme/unmapped"
+  assert(storewrite.save(s, it, "set repo"))
+  reclaim(s, id, "session-b")
+  -- A findable fallback: `GITBOARD_DIR` under a root holding
+  -- `bin/gitboard`, which every other brief kind would answer with.
+  local root = fs.join(fs.absolute_path(fixture.tmpdir), "brief-research-gitboard-root")
+  assert(fs.make_dirs(fs.join(root, "bin")))
+  assert(fs.write(fs.join(root, "bin/gitboard"), ""))
+  local prior = env.get("GITBOARD_DIR")
+  check.must(env.set("GITBOARD_DIR", fs.join(root, "o/board")))
+  local code, out = capture(s, "review", id)
+  if prior == nil then local _ok, _err = env.unset("GITBOARD_DIR")
+  else check.must(env.set("GITBOARD_DIR", prior)) end
+  assert(code == 0, out)
+  assert_exact_review(out, result)
+  assert(out:find("`git worktree add <dir> <commit>` from the product checkout at\n"
+      .. "   `<PRODUCT_ROOT>` — the item's repository, `acme/unmapped`, as the\n"
+      .. "   caller's `gitboard.repository` map places it", 1, true) ~= nil,
+    "the reproduction tree survives as its token: " .. out)
+  assert(out:find(root, 1, true) == nil,
+    "gitboard's own checkout is never named as the map's placement: " .. out)
+  local vline = out:match("[^\n]*$")
+  assert(vline:find("fill <PRODUCT_ROOT>, then paste the body verbatim", 1, true) ~= nil,
+    "and the verdict line owes it: " .. vline)
   assert(store.close(s))
 end
 
