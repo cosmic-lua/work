@@ -1,5 +1,3 @@
-## Change
-
 Implement chunk 1 of Wdaw_QfXv: trustworthy fuzz subprocess results and removal
 of invented crash inputs. Repo cosmic-lua/cosmic; baseline
 a327ff32760ec15bbde7514c1cd7ed34647ae8d7. Read the parent's frozen architecture,
@@ -66,9 +64,3 @@ _tool/testprocess.tl` ->500,499,224; new test files start at0. Locations from
 are283,307,353. Target ~350-400 changed lines including moved code and tests;
 do not raise file caps. Keep find_ccov and its existing nil-baseline row in
 driver; new helper signatures declare nil honestly, so no baseline additions.
-
-## Non-goals
-
-No diagnostic rerun/checkpoint writing yet, no changes to gen/check call sites,
-no new child supervisor, no public process API redesign, no quota/timeouts
-increased. Do not migrate or close other board items.
