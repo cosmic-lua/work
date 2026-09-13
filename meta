@@ -1,9 +1,9 @@
 title: build: the fallback base is the assimilated bootstrap, so every downstream artifact is a host-only ELF
 parent: 3HyRdABz3YA28CsiM5alei5yM5b
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1713
 verdict: accept
 verdict_head: 4b0c24f9f0fbe8e18f6627b1b5c19eb1031b777e
-verdict_spec: ab73cb438fb80a4c8b49d178e19e7b419a09d25e
 resolution: completed
 builders: build-ekqI_n3Mm-e1847cac
+touches: o/bootstrap/cosmic.ape _make/clean.tl _make/artifact.tl _make/artifact_test.tl _make/fixtures_test.tl _make/clean_test.tl _cli/fence_test.tl 3p/cosmic/cosmic_pin.tl cmd/gitboard/embed_gen.tl
