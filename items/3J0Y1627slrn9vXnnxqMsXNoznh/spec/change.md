@@ -1,5 +1,3 @@
-## Change
-
 Fold `cast-justify` (`_cli/lint.tl`'s comment-presence check) and the
 cast-kind classification (`_build/casts_test.tl`, a separate whole-tree
 `_test.tl`) into one `--check lint` rule: a cast passes when it
@@ -148,21 +146,3 @@ without a comment (parse a fixture whose cast matches one of
 site scoped to `cosmic/fs/`) and a test asserting an unmatched,
 uncommented cast still fails exactly as `test_the_pure_checks_come_from_style`
 (lines 200-207) already establishes belongs to `_cli.lint`.
-
-## Non-goals
-
-Does not generalize the allowlist into a documented per-project
-convention — `_build/casts_kinds.tl` stays this repo's own data, read
-opportunistically off disk by a generic rule that no-ops when the file
-is absent. Does not change `cosmic.ast`'s pattern grammar to
-distinguish same-rendered-type collisions (the `explicit` list stays
-the mechanism for those) — investigated and rejected in review as
-disproportionate machinery for ~16 stable sites.
-
-## Acceptance
-
-`bin/cosmic --make ci` ends `ci: PASS`. A cast under `cosmic/fs/` that
-matches the `userdata boundary` pattern and carries NO `-- cast:`
-comment passes `--check lint`; a cast anywhere else that matches no
-kind and carries no comment still fails it with the reworded
-`cast-justify` message.
