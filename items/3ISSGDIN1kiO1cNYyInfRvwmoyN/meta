@@ -1,6 +1,7 @@
 title: tl patch: carry is-fact narrowing into closures via an enclosing-body assigned_anywhere scan
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1442
 resolution: completed
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+touches: 3p/tl/tl_patch/closure.tl cosmic/teal_closure_test.tl
