@@ -1,5 +1,6 @@
 title: eval suite v1: score, checks, verdict
 parent: 3HyEEgwbqZ6MKZnjrggi2XJjoo9
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1209
 resolution: completed
+touches: _eval/eval_types.tl _eval/score.tl _eval/journal.tl _eval/score_test.tl _eval/journal_test.tl _eval/checks/checks_test.tl
