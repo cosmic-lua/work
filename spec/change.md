@@ -1,5 +1,3 @@
-## Change
-
 Export the glob-to-Lua-pattern conversion once from `cosmic.fs`, drop the copy in
 `_make/project.tl`, and add `cosmic` to the dupes gate's scope.
 
@@ -68,9 +66,3 @@ all `["cosmic.<name>"] = true`), so this does not move `_build/public_surface_ba
 The sibling item adding `_perf` to the gate edits the same two lines in
 `_build/dupes.tl` and `_build/dupes_test.tl`. Whichever lands second rebases; it is
 a one-entry list edit, not a conflict worth sequencing with a blocker.
-
-## Non-goals
-
-- No behaviour change to `.cosmicignore` matching or to `fs.find`'s globbing.
-- No new lint or ratchet. This widens an existing gate's scope; it does not change
-  what the gate does.
