@@ -1,5 +1,3 @@
-## Change
-
 `--check lint`'s file-length rule judges files that have no line
 grammar at all: a binary swept in by the project walk. Every file the
 walk sees is held to the 500-line cap on purpose, prose included, and
@@ -50,8 +48,3 @@ the reader to keep the binary outside the project or list it in
 in a confusing way". With the rule skipping binaries, delete that
 caution (a gate over a doc, per the bar) — measured: `grep -n
 "OUTSIDE the project" docs/guides/quickstart.md` → one hit, line 29.
-
-## Non-goals
-
-No change to which files the walk sees, to `.cosmicignore`, or to the
-prose cap. Text files of any extension remain judged.
