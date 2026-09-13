@@ -1,3 +1,4 @@
 title: cosmic.http: an HTTP/1.1 server whose engine is a cosmo.http binding over net/http (redbean inverted), shaped to sit under htmx
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+access: cosmic-lua/cosmopolitan
