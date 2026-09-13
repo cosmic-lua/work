@@ -1,5 +1,3 @@
-## Change
-
 Bump vendored Lua from 5.4.9 to 5.5.1 and run cosmic's gate against it.
 
 **DONE. cosmic runs on Lua 5.5.1**, merged as `a5b36f4a` on main. Four PRs:
@@ -228,8 +226,3 @@ overestimates or misreadings that measuring properly refuted:
 - 5.5 prints floats with enough digits to round-trip. Cosmic formats via explicit
   `%.17g` (`cosmic/_literal_format.tl:76`) and via the C encoder for JSON, so the
   practical impact looks nil — not confirmed inside `ljson.c`.
-
-## Non-goals
-
-- No Teal pin bump, and no adoption of an untagged Teal commit.
-- No change to `gen_target`, which stays `"5.4"`.

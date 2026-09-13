@@ -1,0 +1,2 @@
+- No Teal pin bump, and no adoption of an untagged Teal commit.
+- No change to `gen_target`, which stays `"5.4"`.
