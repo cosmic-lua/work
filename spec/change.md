@@ -1,34 +1,3 @@
-## Goal
-
-G3 — an honest type layer, no escape hatches. From the census in
-`docs/design/casts.md`: the **runtime capability probe** class, 10
-sites. Files: `_perf/bench/literal_bench.tl` 3; `cosmic/sandbox/init.tl`
-3; `_perf/run.tl` 2; `cosmic/quicksand/box/init.tl` 1;
-`cosmic/stream.tl` 1. The shape is code asking at runtime whether a
-surface exists, because the answer depends on the runtime or on which
-binary is loaded rather than on the types: whether this platform's
-`proc` carries `pledge`, whether `fs` carries `deny`, whether a reader
-implements the delimiter capability, whether an older embedded copy of
-`cosmic.literal` predates a function the benchmark wants to time. The
-census verdict is **why it is a floor**: the question is unanswerable
-at check time by construction, since a type says what a value is in the
-tree being checked and the probe exists precisely because the value may
-come from a different tree. It compresses, though. The boolean presence
-checks — `(proc as {string: any}).pledge ~= nil` and its four
-neighbours — all want one shared helper taking a module and a name and
-answering whether the field is there, which removes the per-site map
-view. What survives is one cast per probed SHAPE, to name what the
-probe found: five today. Reducing 10 to 5 lowers the affected
-`_build/casts_baseline.tl` rows; the residual five is the expected end
-state, not a failure. Do not fold this into the test-probe class — these
-are library and harness sites, and the tie-break in the census is that a
-probe in a test defeating its own API is the other class. The class
-description and exemplar citation are the
-`### runtime capability probe` section of `docs/design/casts.md`; the
-per-site list is `docs/design/cast-sites.tsv`.
-
-## Change
-
 The Goal's file list is stale — measured now, it names two files that
 no longer carry any cast and omits one that does:
 
@@ -174,24 +143,3 @@ internal cast.
    reports — do not run `--make coverage --baseline` (AGENTS.md: that
    rewrite is refused outside `COSMIC_COVERAGE_ENV=1`, which only CI's
    `ci` lane sets).
-
-## Non-goals
-
-- The other 4 sites in the class stay as they are: `cosmic/sandbox/init.tl:205`
-  and `cosmic/sandbox/plan.tl:190,241` are a value-FETCH-by-dynamic-name
-  shape, not a boolean presence test, and were never what the Goal's
-  "boolean presence checks" language described; `cosmic/stream.tl:237`
-  casts to a whole reader interface, a third shape again. Folding either
-  into `is_present` or inventing a second helper for them is a separate
-  item, not this one.
-- Do not route any of these 3 sites through `cosmic.check.is_exposed`
-  or `cosmic.check.refuses` — `cosmic/check.tl`'s own header rule
-  ("never require check from library code") forbids it; `cosmic/sandbox/`
-  and `cosmic/quicksand/box/` are library code.
-- Do not touch `docs/design/cast-legality.md`. It is a frozen,
-  dated census ("Measured against `e0580f41` on 2026-08-31") feeding a
-  separate decision (`ke6byr5h`) and says of itself "It decides
-  nothing" — it is not a live ratchet `--make ci` checks, and its own
-  line numbers for these sites are already stale relative to the
-  current tree.
-- Do not rewrite the whole `.cosmic-coverage` floor.
