@@ -1,22 +1,3 @@
-## Evidence
-
-See the parent outcome («AP77_4XCs») for the full evidence trail.
-`_work/gitworktree.tl:121-125` (`default_base`) matches on
-`repo:find("cosmopolitan", ...)` for its base-branch default;
-`:137-151` (`bootstrap`) detects a cosmic tree by `bin/cosmic`'s
-presence and then hardcodes `{"bin/cosmic", "--make", "fetch"}` /
-`{"bin/cosmic", "--make", "build"}` directly, with a second hardcoded
-branch for a cosmopolitan tree (nothing to run) and a third for
-anything else (also nothing, tree "unrecognized"). Adding, say, a
-`cosmic-lua/cosmopolitan`-adjacent repo with its own bootstrap step
-today means editing this function and shipping a new gitboard, not a
-change the product repo itself can make.
-
-Depends on the sibling item («oJ31_ppvR», the repo-mechanics resolver)
-landing first — this item is the resolver's first real caller.
-
-## Change
-
 `_work/gitworktree.tl`'s `bootstrap()`: once «oJ31_ppvR»'s resolver is
 available, resolve the worktree's own kind first. A `cosmic` kind runs
 `{"bin/cosmic","--make","fetch"}` then `{"bin/cosmic","--make","build"}`
@@ -47,16 +28,3 @@ default branch, asserting `default_base` honors it over the repo-name
 heuristic; a fixture with no reportable default branch, asserting the
 `repo:find`/`"main"` fallback chain is exactly as it is today
 (regression guard).
-
-## Non-goals
-
-Not adding the real `bootstrap`/`gate`/`check-file`/`test-file` targets
-to `cosmic-lua/cosmopolitan`'s own Makefile in this item — it lands the
-caller and proves it against a fixture; wiring cosmopolitan's actual
-Makefile is each repo's own follow-on once this and the sibling
-brief-template item are both in place. Not changing what `bootstrap()`'s
-verdict line looks like for the unrecognized-tree path.
-
-## Access
-
-cosmic-lua/work, read and write on a branch; no other repository.
