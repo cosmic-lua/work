@@ -1,11 +1,3 @@
-## Goal
-
-G8 — the flow system. A session following the `work` skill's slice loop runs
-the command the skill prints and gets a refusal; this makes both skills true
-against the verb as it now behaves.
-
-## Change
-
 Two one-line edits on `main`, in `skills/`. Nothing in `_work/` or on the
 `board` branch — that change already landed as whilp/cosmic#1461.
 
@@ -45,37 +37,3 @@ keep the text you read — and `gitboard help spec` owns the spelling. Measured:
 `wc -l skills/work/SKILL.md` is 439 and `skills/optimize/SKILL.md` is 282,
 both well under the 500-line cap, and neither edit changes a line count by
 more than 2.
-
-## Non-goals
-
-- No edit to any other `gitboard` command form: the same grep shows
-  `gitboard new`, `move`, `check`, `verdict`, `block`, `compare` and `show`
-  spelled with arguments elsewhere in these files, and none of their
-  contracts moved. Do not sweep them.
-- No `--base` spelling in either file, and no new paragraph explaining the
-  flag. The verb listing is `gitboard help`'s.
-- No change to `_work/**`, the `board` branch, or `AGENTS.md`/`CLAUDE.md` —
-  neither mentions the verb's argument list.
-- No restructuring of the slice loop's step 2 or of the optimize skill's
-  hypothesis-lifecycle paragraph beyond the parenthetical named above.
-- No new decision record: this is a doc catching up to a landed verb, not a
-  tradeoff.
-
-## Acceptance
-
-- `bin/cosmic --make ci` from the repo root ends `ci: PASS`.
-- `grep -rn "gitboard spec ID FILE" skills/ docs/ AGENTS.md CLAUDE.md`
-  returns nothing (returns 1 line today).
-- `grep -rn "gitboard spec" skills/ docs/ AGENTS.md CLAUDE.md` still returns
-  exactly 2 lines, and `grep -rn "gitboard spec.*--base" skills/` returns
-  nothing. Re-measured at pull: a bare `grep -rn -- "--base" skills/` was the
-  wrong command for this — it matches `skills/work/review.md:130`'s
-  `--baseline`, the coverage flag, both before and after this change.
-- `wc -l skills/work/SKILL.md skills/optimize/SKILL.md` — each at most 500
-  (439 and 282 today).
-
-## Enablement
-
-none needed — two markdown lines on `main`, gated by `bin/cosmic --make ci`
-like any other change here. The verb whose behaviour they describe is already
-merged (whilp/cosmic#1461 on `board`), so nothing has to land first.
