@@ -1,12 +1,3 @@
-## Goal
-
-3HyRdABz — the lint tells the truth about a correct file; and this
-counter now sits under D29's compile seam, where a definition it cannot
-close is a test that silently stops running, so it gates all seven
-3IU6* runner-migration batches under 3IU6AZEx.
-
-## Change
-
 Replace the token depth walk in `_tool/discover.tl` (`end_line_of`,
 lines 56-93) with the parser's own end positions: lex as today, then
 `tl.parse_program(tokens, errs, file)` (exposed by the narrowed API,
@@ -56,29 +47,3 @@ Measured now (2026-08-27, main head `4b55a888`, binary built from it):
   with 0 parse errors on either file;
 - `wc -l` — `_tool/discover.tl` 181, `_tool/discover_test.tl` 113: both
   have headroom under the 500-line cap for this change.
-
-## Non-goals
-
-No change to the mode vocabulary (legacy/runner/mixed/empty), to the
-immediacy rule (the call sits on the next non-blank line after `end`),
-or to the referenced-elsewhere disqualifier. No edits to
-`_tool/seam.tl` or `_cli/lint.tl` — both consume `discover.discover`
-and inherit the fix. No test file migrates to runner mode here (that is
-3IU6AZEx and its siblings). The formatter's separate keyword walk
-(`cosmic/format/types.tl`) was fixed by 3ISWuGko and is not touched.
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `bin/cosmic --make test _tool/discover_test.tl` passes, including the
-  new nested-record/enum/interface cases, the two type-position
-  `function` cases, and the tree-wide equality test (which fails
-  against the old counter with 8 under-counted files, 12 definitions
-  invisible).
-- `grep -c "end_line_of" _tool/discover.tl` = 0.
-
-## Enablement
-
-none needed — the change is self-contained in `_tool/discover.tl` plus
-its test file; nothing has to land first. The seven 3IU6* migration
-batches wait on THIS item and resume when it lands.
