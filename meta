@@ -1,6 +1,7 @@
 title: the checker accepts return nil from a bare non-nil declared return, so an annotation can lie and no nil tool fires
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1471
 resolution: completed
 builders: 9e51ea3a-3544-5795-b441-cd8aba4b7aee 0b13d2b4-bb26-5bc1-8635-407acd85452c
+touches: _docs/publish.tl cosmic/flags/parse.tl cosmic/fs/find.tl cosmic/zip.tl _cli/returns.tl _build/casts.tl cosmic/format/types.tl _types/cosmo/lsqlite3.d.tl _build/nil_returns.tl _build/nil_returns_baseline.tl _build/nil_returns_test.tl _build/casts_test.tl
