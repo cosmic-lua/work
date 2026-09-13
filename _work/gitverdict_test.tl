@@ -170,3 +170,61 @@ local function test_a_result_off_the_items_own_ref_is_refused()
   assert((check.must(store.load(s, id)).verdict or "") == "")
 end
 test_a_result_off_the_items_own_ref_is_refused()
+
+-- The research counterpart of `reject` above. Clearing `result` is what
+-- turns the item mid-flight again: `is_review_or_rework` reads a standing
+-- `result` as review, and `take_result`'s unmoved-spec no-op would then
+-- swallow the re-handover as "already records this spec's handover".
+local function test_reject_on_a_research_head_clears_the_result()
+  local s, id, p, result = research_ready("verdict-research-reject")
+  assert(verdict.cmd_verdict_commit(s, id, "reject", result,
+      flow.REVIEWER, false, "", "") == 0)
+  local it = check.must(store.load(s, id))
+  assert((it.verdict or "") == "" and (it.result or "") == "",
+    "reject clears the research handover")
+  assert(it.claim == flow.REVIEWER, "a verdict never releases a claim")
+  assert(it.verdict_head == result,
+    "the rejected commit remains the durable verdict evidence")
+  assert(not item.is_review_or_rework(it), "the item reads as mid-flight")
+  -- The re-handover: the reviewer lets go, the builder takes the item
+  -- back and hands the board state over again — a new tip, not the
+  -- no-op an unmoved spec over a standing `result` would be.
+  assert(flow.claim(s, id, flow.REVIEWER, p, "drop") == 0)
+  assert(flow.claim(s, id, flow.BUILDER, p) == 0)
+  check.must(store.list(s))
+  it = check.must(store.load(s, id))
+  assert(gittake.take_result(s, it, flow.BUILDER, 0) == 0)
+  local again = check.must(store.load(s, id)).result or ""
+  assert(#again == 40 and again ~= result,
+    "the next `take --result` records a new tip")
+end
+test_reject_on_a_research_head_clears_the_result()
+
+-- Both heads recorded: `take_handover` clears `result` but `take_result`
+-- leaves `handover_head` standing, so a product handover followed by a
+-- research one carries both. The product commit is then the handover,
+-- judged in the product checkout `repo_dir` resolves.
+local function test_with_both_heads_recorded_the_product_commit_is_judged()
+  local s, id, p = flow.fresh("verdict-both-heads")
+  assert(flow.claim(s, id, flow.BUILDER, p) == 0)
+  assert(flow.handover(s, id, flow.BUILDER, p, p.head) == 0)
+  check.must(store.list(s))
+  local it = check.must(store.load(s, id))
+  assert(gittake.take_result(s, it, flow.BUILDER, 0) == 0)
+  assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
+  assert(flow.claim(s, id, flow.REVIEWER, p) == 0)
+  it = check.must(store.load(s, id))
+  local result = it.result or ""
+  assert(#result == 40 and it.handover_head == p.head, "both heads recorded")
+  assert(verdict.cmd_verdict_commit(s, id, "accept", result,
+      flow.REVIEWER, false, "", p.root) ~= 0,
+    "the board commit is not the head once a product commit is handed over")
+  assert((check.must(store.load(s, id)).verdict or "") == "")
+  assert(verdict.cmd_verdict_commit(s, id, "accept", p.head,
+      flow.REVIEWER, false, "", p.root) == 0)
+  it = check.must(store.load(s, id))
+  assert(it.verdict == "accept" and it.verdict_head == p.head)
+  assert(it.handover_head == p.head and it.result == result,
+    "the verdict leaves both recorded heads as they were")
+end
+test_with_both_heads_recorded_the_product_commit_is_judged()

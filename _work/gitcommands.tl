@@ -334,7 +334,9 @@ local CSPEC: flags.CommandSpec = {
         .. "remote checks or performs a provider write.\n\n"
         .. PREPARES_ONLY,
         flags = {dir_flag(),
-          {long = "head", arg = "SHA", help = "exact product commit judged"},
+          {long = "head", arg = "SHA", help = "the commit judged, which follows "
+            .. "the deliverable: the product commit for a diff, the board commit for "
+            .. "research"},
           {long = "repo-dir", arg = "DIR", help = "local product checkout; "
             .. "otherwise use the configured repository mapping"},
           {long = "session", arg = "SESSION",
@@ -351,8 +353,9 @@ local CSPEC: flags.CommandSpec = {
             help = "completed or not-planned"},
           {long = "by", arg = "CHILD", help = "an outcome's evidence: its "
             .. "completed child, required with --reason completed"},
-          {long = "landed", arg = "SHA", help = "landed product commit for "
-            .. "completed accepted work"},
+          {long = "landed", arg = "SHA", help = "the commit the completed accepted "
+            .. "work landed as: the product commit for a diff, the board commit for "
+            .. "research"},
           {long = "repo-dir", arg = "DIR", help = "local product checkout; "
             .. "otherwise use the configured repository mapping"},
           {long = "session", arg = "SESSION",
