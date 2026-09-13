@@ -1,5 +1,3 @@
-## Change
-
 `gitboard show <board-id>` prints `bar: <id> is a board, not
 workable` and then ends with the verdict `gitboard-show: <id> is
 todo`. The board is the one parentless item and has no state. In
