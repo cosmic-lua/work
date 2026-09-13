@@ -1,4 +1,5 @@
 title: gitboard verdict/take: auto-rebase-and-retry on a rejected push instead of leaving an orphaned local commit
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
 builders: build-lER0_dvnI-62aa6405
