@@ -1,6 +1,6 @@
 title: claim acquire: current product base outranks a released historical claim fact
 parent: 3J4gvScAYIiBJjL1bU4DUXWY3Ut
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 62838d07ac2254ac1e7901c93bd729b3ba0613ec
 verdict: accept
 verdict_head: 62838d07ac2254ac1e7901c93bd729b3ba0613ec
