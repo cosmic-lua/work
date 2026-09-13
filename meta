@@ -1,7 +1,7 @@
 title: migrate: batches that a rerun never clobbers (--limit, --only, skip migrated tips)
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 repo: cosmic-lua/work
-claim_batch: c5bc39da1894b8458aaaa2ccc84642a92f92361c
+claim_batch: 72d28e489c99167d88d90546eb83b22798a0fbc8
 handover_head: 4cb9767bb8b5fac4242de965a40eac21c05e2b79
 verdict: request changes
 verdict_head: 4cb9767bb8b5fac4242de965a40eac21c05e2b79
