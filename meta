@@ -1,9 +1,9 @@
 title: lint: the 500-line file cap becomes --max-lines N, stated by the ci recipe, default 500
 parent: 3IyGWT7EU7ftyVcrEl0ineKwWK6
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1775
 verdict: accept
 verdict_head: a4626de9e55567d6106bdc1ab9d7bfeb54d6ca17
-verdict_spec: 69841b39edacf4430aba23cf6c7841dfe1372a8d
 resolution: completed
 builders: build-cVq7_eIpt-f6f470de
+touches: embed/cosmic.mk _tool/lint.tl _cli/lint_test.tl docs/decisions/d39-no-prose-exemption-from-the-file-cap.md
