@@ -1,0 +1,3 @@
+- Do not touch non-test files; that is the sibling slices' work.
+- Do not weaken or delete an assertion to make a site disappear.
+- Do not touch the checker or `3p/tl/tl_patch.tl`.
