@@ -1,3 +1,4 @@
 title: _build/gitboard_pin_test.tl: declare --- reads: bin/gitboard.pin so a pin edit re-runs it
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _build/gitboard_pin_test.tl bin/gitboard.pin
