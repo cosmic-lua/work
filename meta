@@ -1,4 +1,5 @@
 title: _work/boardtree.tl: the format-6 branch layout, pure — paths, mounts, the claim blob codec
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
+touches: _work/boardtree.tl _work/boardtree_test.tl
 depends_on: 3JHjKht9GJ6Th9z4IYXSkANdnKR
