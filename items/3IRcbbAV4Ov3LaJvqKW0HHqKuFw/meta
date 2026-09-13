@@ -1,6 +1,7 @@
 title: perf: the compact literal layout has no _perf scenario, so its hypothesis has no gate
 parent: 3IOFN9bnvMQn8DrCiGQdrmOzNNR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1400
 resolution: completed
 builders: 10cfd4c2-a2d7-551d-bea6-d49227f4394c
+touches: _perf/bench/literal_bench.tl
