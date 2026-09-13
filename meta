@@ -1,4 +1,5 @@
 title: cosmo.unix: unix.sigprocmask's only failure (EINVAL) is a degenerate 'how' value — raise-candidate
 parent: 3IQtgMjycyFrxa8xT2ZqwOHfdJl
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
 resolution: not-planned
+touches: cosmic/signal.tl
