@@ -181,19 +181,23 @@ $ git update-ref refs/heads/state HEAD
 
 ## One commit, one mutation
 
-A mutation is one commit, parented to the fetched `refs/remotes/<remote>/state`.
-Its logical author is the session. Shell publication writes that Git author and a
-gitboard committer; a connector that cannot set authors uses its provider's physical identity.
-Its subject follows `_work/events.tl`'s grammar (verb, ` by ` session, `head:`),
-which classifies nothing it cannot parse rather than refusing. `Op: <verb>` stays unchanged.
-`Transaction: <id>` names the prepared transaction. `Gitboard-Author: <literal>` carries
-the canonical single-line `cosmic.literal` record `{name, email, date}` on both executors.
-These reserved trailers occur exactly once in the final contiguous trailer block;
-rendering and parsing are independent of ambient Git trailer configuration.
-Parsed transaction identity locates a candidate; content proves publication
-(`## Drafts and prepared transactions`). Confirmation checks the logical author and
-complete message, not equality of the provider's physical author and the session.
-Logical authorship is writer-supplied provenance, not authentication; imports retain original authors/messages.
+A mutation is one commit. Its parent is the staging base — the fetched
+`refs/remotes/<remote>/state`. Its author is the session, its
+committer gitboard, its subject the verb grammar `_work/events.tl`'s
+`parse_subject` already reads (verb, ` by ` session, `head:`), which
+classifies nothing it cannot parse rather than refusing. The
+`Op: <verb>` trailer stays exactly as it is, and two trailers are
+added. `Transaction: <id>` is the prepared transaction's id, read back
+with `git interpret-trailers --parse` and never by text search; it
+locates a candidate, and what proves the attempt landed is its content
+(`## Drafts and prepared transactions`). `Gitboard-Author: <literal>`
+carries the session as `{name, email, date}`: the connector cannot set
+a git author, so the trailer is the author of record on BOTH executors
+— history and receipts read it, never the commit header — which is what
+makes one transition's message identical whichever executor publishes
+it. On the shell path the commit header carries the same session too.
+The two trailers occur once, in the final contiguous trailer block,
+parsed independently of ambient git config; imports keep their authors.
 
 A `log --add` entry writes `items/<id>/log/<ksuid>.md` and carries the same text
 in the commit body, so `git log -- items/<id>` and the tree both show it.
@@ -202,8 +206,7 @@ on one branch that is a no-op, and the path makes `git log -- items/<id>` an ite
 
 A claim batch is one commit writing every member's `claims/<id>`;
 `renew` rewrites them in one commit, `drop` deletes them in one. The
-batch object and its manifest are gone for new writes, because the
-commit *is* the batch; the `id` in each blob is the batch's identity.
+batch object is gone for new writes: the commit *is* the batch.
 
 There is no `board/seq`. The bare-lease ref exists today to serialise
 the BOUNDED mutations — a new `take` against the doing bound, a lane
@@ -363,10 +366,14 @@ pairs and one final update, never one squashed commit.
 
 The fence runs in Teal against the fetched head before rendering; the
 plan is frozen and bound; every call comes from the saved plan; the
-returned sha is recorded before confirmation. Both executors produce
-the same tree on the same branch: one transport. What the connector
-cannot do is update two refs atomically, so the activation push is
-shell-git only.
+returned sha is recorded before confirmation. The executor those call
+names target is ChatGPT Work's GitHub connector, and the requirement
+is EQUIVALENCE: a transition publishes the same tree and the same
+message whichever executor runs it, so one transport, verified by the
+same content check. A Claude Code session always has shell git and
+never takes this path (its GitHub tools expose only a one-call
+`push_files`). What the connector cannot do is update two refs
+atomically, so the activation push is shell-git only.
 
 ## The migration
 
@@ -412,7 +419,11 @@ a lease that still holds; its write would land there and never reach
 that refuses creation, update and deletion of every ref under
 `refs/heads/items/**`, `ended/**`, `claim-batches/**` and `board/seq`,
 with an empty bypass list, so no legacy client can file, move or drop
-anything; THEN `migrate6` fetches, writes the checkpoint and replays;
+anything; `migrate6` VERIFIES it by a refused-push probe — create a
+throwaway ref, update a tip and delete the throwaway under each fenced
+namespace, require every attempt refused, record the refusals in the
+checkpoint — on top of the owner's own confirmation; THEN it fetches,
+writes the checkpoint and replays;
 the staged pushes follow; and immediately before the activation push
 it refetches and compares the complete source ref set — every name
 and its tip — against the checkpoint, refusing on any tip that moved,
@@ -452,49 +463,38 @@ it fail (the discipline `experiments/single-head/mutations.tl` set):
 
 ## Plan
 
-Ranked children under the container, in landing order:
+Format 6 lands as ONE change, cosmic-lua/work#171, carrying the engine
+(codec, reader, writer and prepared transactions, claims, drafts and
+log entries, `fsck` and `init`), the connector plan, `migrate6` with
+its `publish` verb, and the retire — the ref-layout reader and writer,
+`claim-batches`, `board/seq`, the pack-specific single-head code and
+its guide under `experiments/`, the README's `no items/ directory`
+line. It is brought to this record by its reviews (two on the PR, the
+findings consolidated) and judged as a whole by one fresh-context
+review before the owner approves it. Three children remain:
 
-1. **The boardtree codec** — the paths, the item subtree from
-   `build_tree`, the claim and marks literals, the `format` blob.
-2. **The reader** — activation on the marker, the `ls-tree`/`cat-file`
-   load, the path-attributed walk, the cache keyed on one sha.
-3. **The writer and prepared transactions** — one commit per mutation,
-   the dependency fence, bounded revalidation, `publish_by`, the
-   trailer, content-verified confirmation, the rebase and its bound.
-4. **Claims as files** — `claims/<id>` with a minted `id`, replacing
-   the batch namespace and `meta`'s `claim_batch`.
-5. **Drafts and log entries** — the per-commit rebased chain, and
-   `items/<id>/log/<ksuid>.md` beside the commit body.
-6. **`fsck` and `init`** — the audit rebuilt from the branch, an
-   `init` that writes `format` and an empty board.
-7. **The connector plan** — `publish --plan` over the saved-plan
-   schema, three calls, the four invariants above.
-8. **The contention and proof scenarios** — the validation list held
-   by tests, and the `_perf` measurement of retries per publish.
-9. **`migrate6`** — the checkpointed replay, marks, materialised
-   events, evidence rewrite, staged pushes, the frozen recheck.
-10. **Release and pin bump** — a release that reads and writes format 6
-    through both executors and carries `migrate6`.
-11. **Run the migration** — the ruleset, the dry run, the staged
-    pushes, the marker riding the last, then one full claim, take,
-    verdict and done cycle through a shell and a connector session.
-12. **Retire** — the ref-layout reader and writer, `claim-batches`,
-    `board/seq`, the pack-specific single-head code and its guide
-    under `experiments/`, the README's `no items/ directory` line.
+1. **The contention and proof scenarios** — the validation list held
+   by tests, and the `_perf` measurement of retries per publish at 2,
+   4 and 8 writers; five retries with no backoff is the policy, and
+   that number is what would make D50 revisit.
+2. **Release and pin bump** — `bin/gitboard.pin` naming the release
+   built from the merge.
+3. **Run the migration** — the ruleset, the dry run, the staged
+   pushes, the marker riding the last, then one full claim, take,
+   verdict and done cycle through a shell session and a ChatGPT Work
+   session, run from a Claude Code session on the owner's go.
 
-Two orderings are load-bearing.
+One ordering is load-bearing, and the retire's place inside the PR
+sets it. A release that carries the retire cannot read a format-5
+board, so it cannot be pinned before activation: the order is release,
+then `migrate6` run from that release's binary (its replay reads the
+legacy refs with git plumbing, not through the retired reader), then
+the activation push, then the pin bump merged at once. Every clone is
+dark from activation until the pin lands — minutes under auto-merge —
+the accepted price of one release rather than two.
 
-**Everything before the release.** A build that cannot read format 6
-cannot be pinned; one that reads but cannot write still operates the
-old board; one without the connector executor darkens a connector-only
-session at the cutover. So reader, writer, both executors and
-`migrate6` are all in the release the pin names, and that release
-keeps operating a format-5 board until the marker moves.
-
-**Migration, release and pin, back to back.** `docs/design/schema.md`
-records what pinning ahead of the migration's code cost: every clone
-dark until it was built. Here 11 follows 10 follows 9 with nothing in
-between.
-
-Retire waits for real sessions to read and write `state`. Old refs are a fallback until
-the first native write, then an archive. Deleting them is the owner's irreversible step.
+The old refs stay as the archive, never deleted; after the first
+native write they are history, not a rollback target. The nineteen
+legacy `result:` digests that resolve to no object stay as they are,
+named by `migrate6 plan`; `verdict` on those items refuses until
+evidence is re-recorded.
