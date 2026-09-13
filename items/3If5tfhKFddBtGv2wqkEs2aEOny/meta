@@ -1,3 +1,4 @@
 title: cosmic.sqlite: expose create_function, create_aggregate and create_collation
 parent: 3It8xqOz7w8gSpGuCzkuVjwAj3b
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: tool/net/lsqlite3.c cosmic/sqlite/init.tl cosmic/sqlite/udf.tl cosmic/sqlite/types.tl cosmic/sqlite/udf_example.tl
