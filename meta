@@ -1,4 +1,5 @@
 title: casts: the 21 test sites whose shape is known — redundant cast, decode_object, or a validating decode
 parent: 3IOegofMj4ewlWfVCFTkOrT1Kox
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: _eval/score_test.tl _eval/eval_types.tl _eval/stage_test.tl _make/pin_test.tl cosmic/teal_config_test.tl _tool/doc/index_test.tl cosmic/fetch/verbs_test.tl _build/casts_baseline.tl
