@@ -1,0 +1,2 @@
+title: cosmic.http silently ignores an unrecognized Transfer-Encoding value instead of refusing it (security: framing disagreement)
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
