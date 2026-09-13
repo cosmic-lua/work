@@ -1,6 +1,6 @@
 title: gitboard worktree: verified cache-first preparation and explicit claim-bound adoption
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 27cbf956657c0c710d13c13eeab6a3cc8e119077
 external_url: https://github.com/cosmic-lua/work/pull/106
 verdict: accept
@@ -9,3 +9,4 @@ landed_head: d956948d2e67a842491482484763f41bc604924a
 resolution: completed
 builders: 5c16a96cddb842da9fc1645c834290a4
 speccers: 5c16a96cddb842da9fc1645c834290a4
+touches: _work/gitcommands.tl _work/gitboard.tl bin/cosmic.pin _work/worktree_runtime.tl o/bootstrap/cosmic.ape _work/worktree_adopt.tl _work/worktree_runtime_test.tl _work/worktree_adopt_test.tl _work/worktree_adopt_failure_test.tl
