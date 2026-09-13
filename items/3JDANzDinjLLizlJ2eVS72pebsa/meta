@@ -1,6 +1,6 @@
 title: storeref_processcount_test.tl: add the maintenance.auto guard PR #123's siblings already have
 parent: 3JCxlEZYdfw0aHqzs6bqNaE51wq
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 465c192be7df418ed9832a991052113169427f93
 external_url: https://github.com/cosmic-lua/work/pull/126
 verdict: accept
@@ -8,3 +8,4 @@ verdict_head: 465c192be7df418ed9832a991052113169427f93
 landed_head: d94cd4c730a610b361f9189b8024ea2989d1108e
 resolution: completed
 builders: 23ab55b5184eb30eac05ee22746770a1
+touches: _work/storeref_processcount_test.tl
