@@ -1,3 +1,4 @@
 title: cli: consolidate --examples and --docs behind one query path
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/doc/query.tl _cli/main_handlers.tl sys/help.md cosmic/doc/query_test.tl cosmic/doc/examples_query_test.tl _cli/main_handlers_test.tl
