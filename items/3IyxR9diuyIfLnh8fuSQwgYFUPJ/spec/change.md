@@ -1,0 +1,1 @@
+`sys/help.md`'s pattern-grammar block gains one entry for `$NAME:PATTERN` — a capture that also requires the captured node's rendered name (or, for a cast's `$T`, its rendered type) to match the Lua pattern — with one example (`$F:^test_`). `cosmic --help` is the block, so no other file changes; `_build/doc_symbols_test.tl` (or whichever test reads `sys/help.md`) keeps passing.
