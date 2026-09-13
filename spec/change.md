@@ -1,5 +1,3 @@
-## Change
-
 At main `65cce9fc0ac678c7653493ae282709ef0b7911d9`, extraction fails on
 `cosmic.sqlite.Db.exec`: `cosmic/sqlite/extras.tl:16` declares
 `params?: bind_mod.Params`, while `cosmic/sqlite/meta.tl:31` declares
@@ -68,24 +66,3 @@ archive test separately and complete the normal gate.
 The existing renderer prints the encoded value verbatim. Comparisons remain
 byte comparisons, and any distinct-type-set change is conservatively
 `retyped`; this change does not interpret compatibility among types.
-
-## Non-goals
-
-No SQLite source renames, signature changes, export-reachability analysis,
-alias resolution, semantic equivalence, file-qualified keys, path-dependent
-values, scanner changes, new surface kinds, comparator or renderer changes,
-CLI activation, archive-reader changes, baseline files, dependency pins, or
-network access.
-
-## Starting duplicate audit
-
-Exactly three repeated member keys exist:
-
-- conflicting: `cosmic.sqlite.Db.exec` in extras:16 and meta:31;
-- identical: `cosmic.quicksand.CapsModule.capabilities` in box/init:42 and
-  box/run:57;
-- identical: `cosmic.sandbox.Options.best_effort` in init:74 and unveil:61.
-
-Repeated declaration names are `sqlite.Db`, `sandbox.Options`, and
-`quicksand.CapsModule`; the latter also occurs in caps.tl:189 with disjoint
-members. No further conflicting member keys were found at the starting commit.
