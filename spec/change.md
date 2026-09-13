@@ -1,5 +1,3 @@
-## Change
-
 `attach ID PARENT` moves ID and leaves ID's entry in its OLD parent's
 `order` list, so `fsck` reports "order names ID, which is not a child
 of it" after every move of a positioned item; three agents reshaping
