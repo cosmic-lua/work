@@ -1,5 +1,3 @@
-## Change
-
 `cosmic.sqlite`'s ergonomic layer for the BLOB/TEXT distinction
 decided on board item `3IlL8oOGolatj0YHGHWsYEp31Y1` and built in
 `3If5s4hNeSCYCYLbOoyuYH1dq7T` (cosmic-lua/cosmopolitan): once that
@@ -30,20 +28,3 @@ will now receive a `Blob` table/record instead. The project owner
 confirmed this tradeoff is acceptable when the decision was made
 (board item `3IlL8oOG`) — no back-compat shim, no dual-mode read
 path.
-
-## Non-goals
-
-- No change to the cosmopolitan-side accessors themselves — this
-  item only consumes `value_type`/`column_type`, landed by
-  `3If5s4hN`.
-- No change to how NULL, INTEGER, or FLOAT columns are represented —
-  only BLOB gains a distinct type.
-- No UDF-registration changes beyond wrapping argument values that
-  already flow through the existing UDF-arg push path.
-
-## Enablement
-
-Blocked on `3If5s4hNeSCYCYLbOoyuYH1dq7T` (cosmic-lua/cosmopolitan):
-this item cannot be built, or even fully specified for a build step,
-until that repo ships `value_type`/`column_type` and cosmic bumps its
-`3p/cosmos` pin to a release carrying them.
