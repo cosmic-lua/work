@@ -1,3 +1,4 @@
 title: casts: land quicksand/caps.tl's CAP_* dynamic-lookup cast removal once unix.CAP is pinned
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
 speccers: 0bdbc441-3e41-5556-8999-305c4be92648
+touches: 3p/cosmos/cosmos_pin.tl _build/casts_baseline.tl docs/design/cast-sites.tsv docs/design/casts.md cosmic/zip.tl
