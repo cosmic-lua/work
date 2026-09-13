@@ -1,3 +1,6 @@
 title: fetch reuse 5: typed HTTP opt-in and sequential-session benchmarks
 parent: 3JDCmp2fsNzKpICm4uVWYVNUEqp
-target: cosmic-lua/cosmic@main
+repo: cosmic-lua/cosmic
+base: main
+touches: 3p/cosmos/cosmos_pin.tl cosmic/fetch/keep_alive_test.tl _perf/bench/http_session_bench.tl _perf/bench/http_session_server.tl _perf/fixture/fetch_server_pin.tl
+access: cosmic-lua/cosmopolitan cosmic-lua/work
