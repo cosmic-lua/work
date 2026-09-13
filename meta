@@ -1,3 +1,4 @@
 title: sweep the 48 records and 480 D-number references onto handles, and drop the old form
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _docs/derive.tl _build/docs_test.tl skills/decide/SKILL.md docs/decisions/README.md
