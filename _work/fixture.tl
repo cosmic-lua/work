@@ -33,10 +33,14 @@ local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 -- which is what a test of git behaviour wants regardless of the
 -- fence. The store itself is deliberately NOT hermetic: a real
 -- session's push needs the user's credentials and config.
+-- `GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT` carry config past any config FILE,
+-- where an ambient `url.*.insteadOf` rewrites what a test reads back: empty too.
 local hermetic_config < const > = fs.join(tmpdir, "gitconfig-empty")
 assert(fs.write(hermetic_config, ""))
 assert(env.set("GIT_CONFIG_GLOBAL", hermetic_config))
 assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
+assert(env.set("GIT_CONFIG_PARAMETERS", ""))
+assert(env.set("GIT_CONFIG_COUNT", "0"))
 
 local READY_SPEC < const > = [[
 ## Change
