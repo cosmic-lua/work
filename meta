@@ -2,3 +2,6 @@ title: cast-justify stopped seeing a justification on a multi-line cast, so a co
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
 target: cosmic-lua/cosmic
 claim_batch: 1794fe4d80d07b502a0829566687afc5fbbea917
+handover_head: 33402cdec91520d5788e714849ee609820fe18c9
+external_url: https://github.com/cosmic-lua/cosmic/pull/1849
+builders: cf225f29ec048ea8c2c6bc289c0441f8
