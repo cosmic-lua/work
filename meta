@@ -1,7 +1,7 @@
 title: docs/design/schema.md: mark the format-5 plan as landed
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 repo: cosmic-lua/work
-claim_batch: 56f45a5988b902c30d251f3b22a5baa6a69679e9
+claim_batch: a5373e1a1a975a051724e3903062df22d1dec27e
 handover_head: 867d395ab88d5b56800499b7d467767438f39e3c
 verdict: request changes
 verdict_head: 867d395ab88d5b56800499b7d467767438f39e3c
