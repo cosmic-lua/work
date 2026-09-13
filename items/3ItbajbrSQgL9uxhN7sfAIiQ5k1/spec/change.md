@@ -1,5 +1,3 @@
-## Change
-
 The design, so the children read as one thing. cosmic never
 stabilizes; code written for it is always trivially upgradable. Three
 sentences carry the whole mechanism:
@@ -29,10 +27,3 @@ Landing order is edges, not prose: `_tool/surface` + `--diff` first
 (the extractor both the ratchet and the verb read); the ratchet and
 gone tree behind it and behind the D10 amendment; `--upgrade` report
 behind both; `--upgrade apply` last. The four are file-disjoint.
-
-## Non-goals
-
-No retirement schedule for wrappers in this pass: they are data-sized,
-the per-release size report makes their weight visible, and a rule can
-be added when the report says so. No compatibility commitment of any
-kind. No codemod language: the transform is Teal.
