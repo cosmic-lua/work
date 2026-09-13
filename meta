@@ -3,5 +3,7 @@ parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 repo: cosmic-lua/work
 claim_batch: 105a90964984619c66e15177f59b09a36a4d86ce
 handover_head: 1ec547f0dabb0414bab413c3fd66f87c5d9dfd58
+verdict: request changes
+verdict_head: 1ec547f0dabb0414bab413c3fd66f87c5d9dfd58
 builders: be21c1ebddacb42302460088b126aaba
 access: cosmic-lua/cosmic
