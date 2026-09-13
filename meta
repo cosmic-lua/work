@@ -1,5 +1,6 @@
 title: perf-compare overwrites the result files it is given, silently changing the noise floor its verdict uses
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1307
 resolution: completed
+touches: _perf/gate.tl o/perf/current.json o/perf/current-retry.json _perf/gate_test.tl skills/optimize/SKILL.md skills/optimize/measurement.md
