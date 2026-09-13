@@ -1,4 +1,4 @@
 title: claims are files: claims/<id> written, renewed and deleted by one state commit; claim_batch leaves meta
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
-touches: _work/gitclaim_cli.tl _work/gitclaim.tl _work/claim.tl _work/item.tl _work/itemtree.tl
+repo: cosmic-lua/work
 depends_on: 3JHjLHb4AEmuUtvaGLSQvAIjfpL
