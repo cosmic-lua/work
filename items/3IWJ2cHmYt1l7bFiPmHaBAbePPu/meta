@@ -1,6 +1,7 @@
 title: tl patch: the metatable is-rescue hands the target's VALUE type to the narrowed variable — mt.__index types as integer
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1481
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c
+touches: cosmic/teal_narrowing_test.tl 3p/tl/tl_patch/narrow.tl cosmic/teal_metatable_test.tl _make/patch_test.tl docs/decisions/d32-metatable-rescue-judges-resolved-shape.md
