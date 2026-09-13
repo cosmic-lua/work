@@ -1,5 +1,6 @@
 title: fuzz: the failure message pairs the minimized input with the original run's detail and draw count
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1312
 resolution: completed
+touches: _fuzz/source.tl _fuzz/driver.tl _fuzz/driver_test.tl _fuzz/shrink.tl
