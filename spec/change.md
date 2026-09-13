@@ -1,5 +1,3 @@
-## Change
-
 Give `cosmic.sqlite.open` an `extensions` option whose meaning is *ensure each named
 capability is available on this connection, or fail*.
 
@@ -70,9 +68,3 @@ the migration, and it must be in the same PR.
 - `cosmic/sqlite/zipfile_test.tl`, `zipfile_example.tl`, `docs/guides/**` — the
   migration.
 - A test per outcome: registered, already-present-compile-time, and refused.
-
-## Non-goals
-
-- No default set, curated or otherwise.
-- No C changes; this consumes the registration entry point.
-- No UDF work.

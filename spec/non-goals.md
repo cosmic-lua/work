@@ -1,0 +1,3 @@
+- No default set, curated or otherwise.
+- No C changes; this consumes the registration entry point.
+- No UDF work.
