@@ -1,5 +1,3 @@
-## Change
-
 `_work/gitclaim_cli.tl`'s `handover_ancestry_refusal` prints a diagnosis
 that is the OPPOSITE of what its own code tests, and the remedy it then
 names only makes sense under the code's reading. Measured on the live
@@ -38,14 +36,3 @@ claim must diff from a base the handover is ahead of. Keep the remedy
 text as it is; it was already right. `_work/gitclaim_handover_ancestry_test.tl`
 already exercises the refusal — extend its assertion to pin the corrected
 wording so the message cannot drift back.
-
-## Non-goals
-
-Changing what the guard tests. `verify_lineage(base, handover)` is the
-correct check for a pre-merge review and stays.
-
-Making a review claim possible after the handover has merged. That is a
-model question — the claim base is captured as current main by design —
-and a caller who needs it can supply `--repo-dir` pointing at a checkout
-whose `main` sits at the handover's parent, which this session did. Not
-this item's to solve or to document beyond the message.
