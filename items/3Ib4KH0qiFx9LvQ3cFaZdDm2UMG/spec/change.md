@@ -1,5 +1,3 @@
-## Change
-
 `_work/item.tl`'s `decode` validates through `cosmic.shape` instead of
 hand-coercing every field.
 
@@ -39,11 +37,3 @@ every `items/*.tl` in the checkout through the new path and confirm
 zero refusals — the encode half has always written well-typed values
 (`pr` an integer, strings as strings), so the live board must pass
 unchanged; a refusal there is a bounce, not a workaround.
-
-## Non-goals
-
-`encode`, the `problems` rules, and every field's semantics are
-unchanged — this deletes coercion, not behaviour, except the pinned
-wrong-type refusal which was silent data corruption before.
-`_work/gh.tl`'s JSON boundary is a separate later slice; do not touch
-it.
