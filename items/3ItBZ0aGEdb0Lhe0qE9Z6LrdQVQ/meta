@@ -1,3 +1,4 @@
 title: cosmic.github: a public cached, rate-aware GitHub REST client, ported from _work/api.tl
 parent: 3ItRn7tdUxoILz4BxKpO2gGLHeb
 speccers: 32638265-cf26-5d58-a274-cc23010d498c
+touches: cosmic/github.tl _work/api.tl cosmic/github_test.tl cosmic/github_example.tl
