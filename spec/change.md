@@ -1,17 +1,3 @@
-## Goal
-
-G8 — the flow system: a review is claimed the way a pull is, so two
-sessions never verify the same diff. Measured 2026-08-27 (~4 sessions
-active): 3ISSFrCO/#1439 got two full independent verifications —
-checkout, fetch, ci, acceptance greps, minutes of builds each — and
-the second session learned of the first only when its `verdict` was
-refused, AFTER the work. `do` already has the answer (`move --claim`
-is the lock, a lease with staleness and --force takeover); `check`
-has nothing: the `claim` field there names the BUILDER, and
-`reviewable()` hands the same item to every non-builder that asks.
-
-## Change
-
 The board's own claim doctrine, extended to reviews — the claim is
 pushed BEFORE the work, and the board commit is the lock.
 
@@ -45,30 +31,3 @@ pushed BEFORE the work, and the board commit is the lock.
 10. skills/work on main: review.md's procedure gains the claim step
     (its own PR to main; the skill says what verbs are FOR, and
     claim-before-read is procedure, not verb reference).
-
-## Non-goals
-
-No plan/ready refinement claims: moves are already serialized by
-push-as-CAS, WIP limits cap the racers, and the measured waste there
-was spec churn, not builds — revisit if measured. No jitter in
-`next`: reviewer claims make the fan-out (the second reviewer sees
-the claim and takes the next item), so determinism stays. No change
-to do-claim semantics or the 4-hour lease. No reviewer authority:
-verdict stays valid from any non-builder.
-
-## Acceptance
-
-On the board branch, from its worktree: `bin/cosmic --make ci` ends
-`ci: PASS`. New tests pin: claim then foreign claim refused; stale
-foreign claim taken with --force --why (and offered without force
-once stale); builder refused; unnamed session refused; verdict
-clears the claim; move out of check clears it; `reviewable()` skips
-a live foreign reviewer and the reason names it; `is_review_stale`
-horizons. `gitboard help review` prints the verb. Two-session
-walkthrough by hand: A `review ID` then B `review ID` → B refused
-and B's `next` names a different item (or none).
-
-## Enablement
-
-None: the lease, session identity, force/why grammar, and the gate's
-commit-and-publish all exist; this composes them.
