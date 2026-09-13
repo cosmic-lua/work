@@ -1,10 +1,10 @@
 title: salvage cosmo.path/readlink/Slurp-range tests
 parent: 3IOCgCWGhARL1d3P9Cxaw9ICRlj
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
 pr: 303
 verdict: accept
 verdict_head: de2e0645ea10c8dbe50f09debbaeedb8a47f94fd
-verdict_spec: 81a23ba2f1d158088ae8ac2633c87429370ef23635ae4fb596091a9200b36ec1
 resolution: completed
 builders: work9c-agent-3 orch-peek8 work9-peek1 orch-peek3 orch-scout9-4 orch-scout9-23 orch-scout9-43 orch9-scout-skK4_s4BS orch9-hold-1 orch9-1-skK4
 speccers: orch-refine-skK4
+touches: test/tool/net/path_test.lua tool/lua/test_path_values.lua test/tool/net/readlink_test.lua tool/lua/test_unix_readlink.lua test/tool/net/slurp_test.lua tool/lua/test_slurp_ranges.lua
