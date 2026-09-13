@@ -1,18 +1,3 @@
-## Evidence
-
-The original item named `_make/policy.tl` as the coverage-ratchet owner, but
-that ownership was removed by the D27 one-floor change.  On current main,
-`_make/policy.tl` delegates to `_tool.coverage.minimum.gate`.
-`_tool/coverage/minimum.tl` now formats each under-floor refusal and the final
-`declined:` summary.
-
-The required data is already present.  `report.FileReport.missing` contains
-the sorted executable lines with zero merged hits, populated by
-`report.analyze`.  `_tool/coverage/report.tl` is at the 500-line cap and already
-contains a reusable compact range formatter.
-
-## Change
-
 Make each under-floor file refusal name its uncovered analyzed-code lines.
 
 1. Extract `report.format_ranges(sorted_lines, max_ranges)` into new
@@ -44,15 +29,3 @@ Run focused gaps/report/minimum tests, format/types for changed Teal, and
 `bin/cosmic --make ci`.  Mutation: remove only the refusal suffix append; the
 minimum-gate regression must fail while threshold behavior remains unchanged,
 then restore it.
-
-## Non-goals
-
-No new verb or flag.  No floor-format, threshold, percentage, ordering, or
-summary change.  No conversion between generated-Lua and Teal source line
-numbers.  No change to `_make/policy.tl`, `_make/policy_test.tl`, or
-`_tool/coverage/lines.tl`.
-
-## Access
-
-`cosmic-lua/cosmic`, read and write on a branch.  No access to
-`cosmic-lua/work` or `cosmic-lua/cosmopolitan` is required.
