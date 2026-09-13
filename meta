@@ -1,6 +1,7 @@
 title: cosmo.EncodeLua literal mode: the 22-way reserved-word scan is 68% of the tax — bucket it by length
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 279
 resolution: completed
 builders: 7d8265bc-6125-5df7-933c-f163d1620bd7
+touches: third_party/lua/luaencodeluadata.c
