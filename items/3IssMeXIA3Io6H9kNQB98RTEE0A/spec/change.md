@@ -1,30 +1,3 @@
-## Evidence
-
-gitboard's cost is git processes, not Lua. Measured 2026-09-04 on the pinned
-release (2026-09-04-98dd25d) against the live board, 915 items, 1,864 refs,
-warm cache, best of five (`for i in 1 2 3 4 5; do time o/bootstrap/gitboard
-show; done` from a cosmic checkout with `GITBOARD_DIR=o/board`; process
-counts by `strace -f -e trace=execve`): `--help` 0.007 s; `show` 0.18 s and
-7 processes (6 git); `show ID` 0.17 s, 13 (12 git); `next` 0.15 s, 7;
-`find` 0.02 s, 2; `sync` 0.65–0.96 s, 11 (network); `show` with the cache
-removed 0.58 s (rebuilds the 8.5 MB `o/board.db`); `fsck` 14.6 s, 4,465
-(4,464 git). Mutations in a sandbox clone with a local bare origin: `new`
-0.25 s, 24 (21 git); `compare` 0.36 s, 25 (22 git); `take` 0.30 s; `done`
-0.24 s, 6. Nothing records these numbers over time: a regression in a verb's
-latency is noticed by a session that finds it slow, or not at all.
-
-Cosmic already has the harness shape: `_perf/harness.tl` runs `Scenario`
-records (`_perf/perf_types.tl`: `name`, `setup`, `fn`, `check`, `teardown`),
-calibrates iterations, takes samples, reports median wall ns with a spread,
-and `_perf/gate.tl compare BASE CUR SELF` is the noise-aware regression gate;
-`_perf/run.tl` discovers `_perf/bench/*_bench.tl` relative to the working
-directory (`BENCH_DIR` at run.tl:174, `fs.find(BENCH_DIR, {glob =
-"*_bench.tl"})`) and requires each by module name. Process counts are the
-diagnosis a slow reading points at (`strace -f -e trace=execve`), not a
-gate: this item observes wall time and gates nothing.
-
-## Change
-
 Wall-clock scenarios for gitboard in cosmic's shape, measured against a
 generated fixture, compared release-against-main daily, blocking nothing.
 
@@ -60,10 +33,3 @@ generated fixture, compared release-against-main daily, blocking nothing.
    artifacts. The workflow's shape is cosmic's `.github/workflows/perf.yml`.
 6. README: one paragraph saying what the scenarios measure, that they
    gate nothing, and the command to run them locally.
-
-## Non-goals
-
-Gating any PR on wall time; `Benchmark_*` micro-benchmarks (gitboard's
-Lua is not where the time goes); measuring against the live board or over
-the network; fixing any verb — a slow number here becomes its own item
-with the reading as evidence.
