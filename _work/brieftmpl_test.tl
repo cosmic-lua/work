@@ -101,6 +101,8 @@ local function test_declared_fields_are_the_templates_own_tokens()
     review_script = fields.review_script,
     reviewing_diff = fields.reviewing_diff,
     reviewing_research = fields.reviewing_research,
+    posture_diff = fields.posture_diff,
+    posture_research = fields.posture_research,
     round = fields.round,
   }
   for _, u in ipairs(source.UNITS) do
@@ -268,6 +270,136 @@ local function test_the_review_section_follows_the_deliverable()
   assert(table.concat(hleft, " ") == "<HEAD_SHA>",
     "the spliced section's head is the review's own survivor, once: "
     .. table.concat(hleft, " "))
+end
+
+-- The full review's "how to review" section and verdict lines follow
+-- the deliverable the same way: `findings` nil is a diff — the
+-- adversarial list over the diff, the mutation step from the reviewer's
+-- own worktree, `--repo-dir` on every verdict line, byte for byte what
+-- the review always carried, pinned here as rendered — and `findings`
+-- set is research: what a findings review checks, no diff to list, no
+-- guard to mutate, no worktree, verdict lines naming no checkout.
+-- Spliced with the review's own tracker, so the worktree and bootstrap
+-- plan a diff review cannot answer are its survivors, in the rendered
+-- brief's own order, and a research review owes neither.
+local DIFF_POSTURE < const > = [[
+
+
+## How to review — the posture is ADVERSARIAL
+
+Your job is to try to make this diff fail, not to confirm it looks
+fine.
+
+1. Confirm you are reading exactly `0123456789abcdef`. If the caller supplies
+   external checks, confirm they name that SHA; red or running means stop and
+   record nothing. Never infer check state from the board. The caller spawns
+   this review only once mechanical checks are green on this exact head (or,
+   when CI was unavailable by the item's own design, once the caller ran the
+   spec-named guards locally instead) — trust that gate; your job is the
+   fresh semantic read and mutation below, not re-verifying CI.
+2. The diff is the Change — everything present, nothing extra. List
+   the changed files and confirm each is inside the spec's stated
+   scope. Anything outside it is scope creep — quote it, even when
+   it looks good; good ideas become their own items. When the spec
+   states a pattern and a count, re-run `cosmic --find` on the handed-over
+   commit from your checkout: the hit list IS the expected change
+   set — a hit the diff leaves unchanged, or a changed site outside
+   the hits, is a finding.
+3. The walls held: every `## Non-goals` line honored, frozen
+   contracts unmoved.
+4. Conventions hold: the repo's AGENTS.md binds. Anything a gate
+   should have caught but did not is itself a finding to report.
+5. It serves the outcome: judge the diff against the item's parent
+   chain, not just the letter of `## Change`. A green gate on a
+   change that misses the point means the SPEC was wrong — say so,
+   never wave the diff through.
+6. It is the least thing: name any surplus concretely and treat it
+   as a gap to quote.
+
+Mutation-test at least one guard the change adds or relies on: break
+what it guards, confirm the diff's own test catches it — run the ONE
+test file that guards it (`test <file>`), not the suite —
+restore it exactly. A real break changes the outcome the test reads,
+never just the text around it: replace a matched needle with
+unrelated text rather than extending it, flip a boolean rather than
+renaming it, and if the test stays green the guard is decoration.
+Do this from your own fresh checkout at `/wt/work/abcd` — never reuse
+another agent's worktree.
+The checkout that holds the board worktree (`/src/work/o/board/..`) is the
+orchestrator's and is stale by construction; never read, grep or build
+in it. Your worktree is the only tree.
+
+## Recording your verdict
+
+`verdict` verifies and records one local commit id. It performs no fetch,
+credential lookup, check read, merge, or provider write. The caller owns
+those operations. This review is claimed under session `sess-1` —
+you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+`fetch` before you run any test.
+
+GitBoard invocation for this review: `bin/gitboard` — the exact
+loader and absolute executable the caller runs board commands through.
+Use it verbatim as the prefix below; never guess a product-checkout
+substitute of your own, and never bootstrap one yourself.
+
+```
+bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H accept \
+  --head 0123456789abcdef --session sess-1 --repo-dir /wt/work/abcd
+bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H request-changes \
+  --head 0123456789abcdef --session sess-1 --repo-dir /wt/work/abcd
+bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H reject \
+  --head 0123456789abcdef --session sess-1 --repo-dir /wt/work/abcd
+```
+
+Run exactly the one line matching your judgment. The board stores the SHA,
+]]
+
+local function test_the_review_posture_follows_the_deliverable()
+  local f = full_facts()
+  local diff_body, dleft = briefcontext.review(f, full_commands())
+  assert(#dleft == 0, "a diff review answers everything: " .. table.concat(dleft, " "))
+  assert(diff_body:find(DIFF_POSTURE, 1, true) ~= nil,
+    "the diff posture is byte for byte what the review always carried: " .. diff_body)
+  assert(diff_body:find("There is no diff here", 1, true) == nil, diff_body)
+  f.findings = "The probe held: three of four."
+  local research_body, rleft = briefcontext.review(f, full_commands())
+  assert(#rleft == 0, "a research review answers everything: " .. table.concat(rleft, " "))
+  for _, diff_only in ipairs({"The diff is the Change", "cosmic --find",
+      "Mutation-test at least one guard", "fresh checkout", "--repo-dir",
+      "/wt/work/abcd", "<WORKTREE>", "o/3p", "`test <file>`",
+      "`fetch` before you run any test."}) do
+    assert(research_body:find(diff_only, 1, true) == nil,
+      "diff wording a research reviewer cannot act on: " .. diff_only .. "\n" .. research_body)
+  end
+  for _, wanted in ipairs({"the posture is ADVERSARIAL",
+      "names its command, and the command reproduces",
+      "follows from the measurements and not past them",
+      "Nothing the spec asked to be measured is missing",
+      "prospective evidence for the item's parent chain",
+      "stale by construction; never read, grep or build"}) do
+    assert(research_body:find(wanted, 1, true) ~= nil,
+      "what a findings review checks: " .. wanted .. "\n" .. research_body)
+  end
+  assert(research_body:find("```\nbin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H accept \\\n"
+      .. "  --head 0123456789abcdef --session sess-1\n"
+      .. "bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H request-changes \\\n"
+      .. "  --head 0123456789abcdef --session sess-1\n"
+      .. "bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H reject \\\n"
+      .. "  --head 0123456789abcdef --session sess-1\n```\n\n"
+      .. "Run exactly the one line matching your judgment.", 1, true) ~= nil,
+    "the research verdict lines name the board commit and the session, nothing more: "
+    .. research_body)
+  f.worktree = nil
+  f.head_sha = nil
+  local cmds = full_commands()
+  cmds.bootstrap_phrase = nil
+  local _rbody, rowed = briefcontext.review(f, cmds)
+  assert(table.concat(rowed, " ") == "<HEAD_SHA>",
+    "a research review owes no worktree and no bootstrap plan: " .. table.concat(rowed, " "))
+  f.findings = nil
+  local _dbody, dowed = briefcontext.review(f, cmds)
+  assert(table.concat(dowed, " ") == "<HEAD_SHA> <WORKTREE> <BOOTSTRAP_PHRASE>",
+    "a diff review owes both, in the rendered brief's own order: " .. table.concat(dowed, " "))
 end
 
 -- The round-context section renders from the same typed path as every

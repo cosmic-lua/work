@@ -30,13 +30,18 @@
 --- Survivor ORDER is the template's own first-seen field order, read
 --- off the template at build time by `_work/brieftmpl_gen.tl` into
 --- `_work.brieftmpl.fields` — the same order a scan of the raw
---- template used to produce, without the scan.
+--- template used to produce, without the scan. A brief that splices a
+--- sub-render in with its OWN tracker (the full review's two sections)
+--- reports in the order the rendered brief first sees each token: the
+--- spliced unit's tokens stand where its splice is, each once.
 
 local briefcommands = require("_work.briefcommands")
 local briefctx = require("_work.briefctx")
 local fields = require("_work.brieftmpl.fields")
 local tmpl_builder = require("_work.brieftmpl.builder")
 local tmpl_decompose = require("_work.brieftmpl.decompose")
+local tmpl_posture_diff = require("_work.brieftmpl.posture_diff")
+local tmpl_posture_research = require("_work.brieftmpl.posture_research")
 local tmpl_refine = require("_work.brieftmpl.refine")
 local tmpl_research = require("_work.brieftmpl.research")
 local tmpl_review = require("_work.brieftmpl.review")
@@ -111,6 +116,35 @@ local function survivors(declared: {string}, tr: Tracker): {string}
   for _, token in ipairs(declared) do
     if tr.absent[token] then
       out[#out + 1] = token
+    end
+  end
+  return out
+end
+
+--- `outer`'s tokens with each splice's own tokens standing where its
+--- splice token is — the order a brief whose sections are rendered on
+--- their own first sees each token. A token both sides declare (the
+--- review's head) is listed once, where it is first seen.
+--- @param outer {string} The enclosing template's declared tokens
+--- @param splices {string: {string}} Splice token to the unit's tokens
+--- @return {string} The expanded order, each token once
+local function spliced_order(outer: {string}, splices: {string: {string}}): {string}
+  local seen: {string: boolean} = {}
+  local out: {string} = {}
+  local function add(token: string)
+    if not seen[token] then
+      seen[token] = true
+      out[#out + 1] = token
+    end
+  end
+  for _, token in ipairs(outer) do
+    local inner = splices[token]
+    if inner ~= nil then
+      for _, t in ipairs(inner) do
+        add(t)
+      end
+    else
+      add(token)
     end
   end
   return out
@@ -232,12 +266,47 @@ local function reviewing(tr: Tracker, f: Facts): string
     })
 end
 
+--- The "how to review" section and verdict lines a full review splices
+--- in: the research wording when `f.findings` is set — what a findings
+--- review checks, verdict lines naming no checkout — and the diff
+--- wording otherwise, the mutation step from the reviewer's own
+--- worktree and `--repo-dir` on every verdict line. Rendered with the
+--- review's own tracker: the worktree and bootstrap plan a diff review
+--- owes are the review's survivors, and a research review owes neither.
+--- @param tr Tracker The review's survivor set
+--- @param f Facts The board's resolved facts
+--- @param cmds briefcommands.Commands The item's repo-mechanics commands
+--- @return string The rendered section
+local function posture(tr: Tracker, f: Facts, cmds: briefcommands.Commands): string
+  local head_sha = need(tr, "<HEAD_SHA>", f.head_sha)
+  if f.findings ~= nil then
+    return tmpl_posture_research.render({
+        head_sha = head_sha,
+        board_dir = f.board_dir,
+        review_session = f.review_session,
+        gitboard_cmd = f.gitboard_cmd,
+        item_id = f.item_id,
+      })
+  end
+  return tmpl_posture_diff.render({
+      head_sha = head_sha,
+      test_cmd_phrase = cmds.test_cmd_phrase,
+      worktree = need(tr, "<WORKTREE>", f.worktree),
+      board_dir = f.board_dir,
+      review_session = f.review_session,
+      bootstrap_phrase = need(tr, "<BOOTSTRAP_PHRASE>", cmds.bootstrap_phrase),
+      gitboard_cmd = f.gitboard_cmd,
+      item_id = f.item_id,
+    })
+end
+
 --- @param f Facts The board's resolved facts
 --- @param cmds briefcommands.Commands The item's repo-mechanics commands
 --- @return string The rendered full review brief
 --- @return {string} The tokens it left for the caller
 local function review(f: Facts, cmds: briefcommands.Commands): string, {string}
   local tr = tracker()
+  local is_research = f.findings ~= nil
   local d: briefctx.Review = {
     repo = need(tr, "<REPO>", f.repo),
     item_id = f.item_id,
@@ -245,17 +314,16 @@ local function review(f: Facts, cmds: briefcommands.Commands): string, {string}
     title = f.title,
     change_source = f.change_source,
     reviewing = reviewing(tr, f),
-    head_sha = need(tr, "<HEAD_SHA>", f.head_sha),
     spec = f.spec,
     round_context = f.round_context,
-    test_cmd_phrase = cmds.test_cmd_phrase,
-    worktree = need(tr, "<WORKTREE>", f.worktree),
-    board_dir = f.board_dir,
-    review_session = f.review_session,
-    bootstrap_phrase = need(tr, "<BOOTSTRAP_PHRASE>", cmds.bootstrap_phrase),
+    posture = posture(tr, f, cmds),
     gitboard_cmd = f.gitboard_cmd,
   }
-  return tmpl_review.render(d), survivors(fields.review, tr)
+  local declared = spliced_order(fields.review, {
+      ["<REVIEWING>"] = is_research and fields.reviewing_research or fields.reviewing_diff,
+      ["<POSTURE>"] = is_research and fields.posture_research or fields.posture_diff,
+    })
+  return tmpl_review.render(d), survivors(declared, tr)
 end
 
 --- @param f Facts The board's resolved facts

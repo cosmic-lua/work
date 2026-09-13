@@ -76,8 +76,9 @@ local record briefctx
   end
 
   --- `_work.brieftext_review`'s `REVIEW`: the full adversarial review.
-  --- `reviewing` is its "what you're reviewing" section, rendered from
-  --- `ReviewingDiff` or `ReviewingResearch` below and spliced in.
+  --- `reviewing` is its "what you're reviewing" section and `posture`
+  --- its "how to review" through the verdict lines, each rendered from
+  --- the diff or research record below and spliced in.
   record Review
     repo: string
     item_id: string
@@ -85,14 +86,9 @@ local record briefctx
     title: string
     change_source: string
     reviewing: string
-    head_sha: string
     spec: string
     round_context: string
-    test_cmd_phrase: string
-    worktree: string
-    board_dir: string
-    review_session: string
-    bootstrap_phrase: string
+    posture: string
     gitboard_cmd: string
   end
 
@@ -127,6 +123,32 @@ local record briefctx
     board_dir: string
     head_sha: string
     findings: string
+  end
+
+  --- `_work.brieftext_review`'s `POSTURE_DIFF`: a diff handover's
+  --- "how to review" — the adversarial list, the mutation step from
+  --- the reviewer's own worktree — and its verdict lines, which carry
+  --- that worktree as `--repo-dir`.
+  record PostureDiff
+    head_sha: string
+    test_cmd_phrase: string
+    worktree: string
+    board_dir: string
+    review_session: string
+    bootstrap_phrase: string
+    gitboard_cmd: string
+    item_id: string
+  end
+
+  --- `_work.brieftext_review`'s `POSTURE_RESEARCH`: a research
+  --- handover's "how to review" — what a findings review checks — and
+  --- its verdict lines, which name the board commit and no checkout.
+  record PostureResearch
+    head_sha: string
+    board_dir: string
+    review_session: string
+    gitboard_cmd: string
+    item_id: string
   end
 
   --- `_work.brieftext_review`'s `ROUND`: a later review round's own

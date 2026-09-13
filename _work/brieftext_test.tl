@@ -23,6 +23,7 @@ local BUILDER < const > = flat(brieftext.BUILDER)
 local REWORK < const > = flat(brieftext.REWORK)
 local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
+local POSTURE_DIFF < const > = flat(brieftext_review.POSTURE_DIFF)
 
 local function test_builder_requires_a_committed_migration_and_caller_report()
   assert(BUILDER:find(
@@ -156,10 +157,10 @@ local function test_the_review_brief_records_only_the_commit()
     and REVIEW:find("enable auto-merge", 1, true) == nil,
     "the review brief must not instruct a reviewer to enable auto-merge "
     .. "itself")
-  assert(REVIEW:find("{{.gitboard_cmd}} verdict {{.item_id}} accept", 1, true) ~= nil,
+  assert(POSTURE_DIFF:find("{{.gitboard_cmd}} verdict {{.item_id}} accept", 1, true) ~= nil,
     "the accept line runs the caller's own GitBoard invocation, not a "
     .. "guessed bin/gitboard")
-  assert(REVIEW:find(
+  assert(POSTURE_DIFF:find(
       "{{.gitboard_cmd}} verdict {{.item_id}} request-changes", 1, true)
     ~= nil, "request-changes records the same commit id")
   assert(REVIEW:find("--body FILE", 1, true) == nil
@@ -171,7 +172,7 @@ local function test_mutation_step_says_what_a_real_break_is()
   assert(BUILDER:find("replace a matched needle", 1, true) ~= nil,
     "the builder brief's mutation step must say a real break replaces "
     .. "a matched needle with unrelated text, not just extends it")
-  assert(REVIEW:find("replace a matched needle", 1, true) ~= nil,
+  assert(POSTURE_DIFF:find("replace a matched needle", 1, true) ~= nil,
     "the review brief's mutation sentence must say a real break "
     .. "replaces a matched needle with unrelated text, not just "
     .. "extends it")
@@ -192,7 +193,7 @@ local function test_step_three_names_the_ratchet_recovery_path()
 end
 
 local function test_step_one_bars_a_reviewer_from_rerunning_ci()
-  assert(REVIEW:find(
+  assert(POSTURE_DIFF:find(
       "If the caller supplies external checks, confirm they name that SHA; "
       .. "red or running means stop and record nothing. Never infer check "
       .. "state from the board.", 1, true) ~= nil,
@@ -200,7 +201,7 @@ local function test_step_one_bars_a_reviewer_from_rerunning_ci()
 end
 
 local function test_step_one_trusts_the_pre_spawn_ci_gate()
-  assert(REVIEW:find(
+  assert(POSTURE_DIFF:find(
       "The caller spawns this review only once mechanical checks are "
       .. "green on this exact head (or, when CI was unavailable by the "
       .. "item's own design, once the caller ran the spec-named guards "
@@ -250,7 +251,7 @@ local function test_orchestrate_gates_a_review_before_spawning_one()
 end
 
 local function test_step_two_reruns_find_against_the_handover()
-  assert(REVIEW:find(
+  assert(POSTURE_DIFF:find(
       "When the spec states a pattern and a count, re-run "
       .. "`cosmic --find` on the handed-over commit from your checkout: the hit "
       .. "list IS the expected change set — a hit the diff leaves "
@@ -261,7 +262,7 @@ local function test_step_two_reruns_find_against_the_handover()
 end
 
 local function test_mutation_step_names_the_one_file_shape()
-  assert(REVIEW:find(
+  assert(POSTURE_DIFF:find(
       "run the ONE test file that guards it ({{.test_cmd_phrase}}), "
       .. "not the suite", 1, true) ~= nil,
     "the mutation paragraph must send a reviewer to the diff's own "
@@ -294,7 +295,7 @@ end
 
 -- The numbered-script review's mutation move is checkout-free — a
 -- copy of the guarded file taken with `git show <head>:<path>`, never
--- a fresh checkout `REVIEW`'s own mutation paragraph sends a reviewer
+-- a fresh checkout `POSTURE_DIFF`'s own mutation paragraph sends a reviewer
 -- to make.
 local function test_the_review_script_mutates_a_git_show_copy()
   assert(REVIEW_SCRIPT:find("git show", 1, true) ~= nil,
@@ -311,10 +312,10 @@ local function test_the_review_script_verdict_is_checkout_free()
   assert(REVIEW_SCRIPT:find("git show", 1, true) ~= nil
     and REVIEW_SCRIPT:find("product checkout", 1, true) ~= nil,
     "the script verdict must name the product checkout and git show")
-  assert(REVIEW:find("fresh checkout", 1, true) ~= nil,
-    "the full review must retain its own checkout wording")
-  assert(REVIEW:find("{{.worktree}}", 1, true) ~= nil,
-    "the full review must retain its worktree placeholder")
+  assert(POSTURE_DIFF:find("fresh checkout", 1, true) ~= nil,
+    "the full review's diff posture must retain its own checkout wording")
+  assert(POSTURE_DIFF:find("{{.worktree}}", 1, true) ~= nil,
+    "the full review's diff posture must retain its worktree placeholder")
 end
 
 -- A freshly made review checkout has no `o/3p` cache — the same gap
@@ -322,7 +323,7 @@ end
 -- templates must send a reviewer to `--make fetch` (and, for any
 -- test, `--make build`) before that checkout's first test runs.
 local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
-  for _, tmpl in ipairs({REVIEW, REVIEW_SCRIPT}) do
+  for _, tmpl in ipairs({POSTURE_DIFF, REVIEW_SCRIPT}) do
     assert(tmpl:find(
         "That checkout has no `o/3p` cache yet — run "
         .. "{{.bootstrap_phrase}}", 1, true) ~= nil,
