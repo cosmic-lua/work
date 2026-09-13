@@ -1,29 +1,3 @@
-## Evidence
-
-A builder's deliverable is a pushed branch; the PR is board bookkeeping.
-Today the builder brief's step 8 (`_work/brieftext.tl`, "Open a PR
-from `<BRANCH>`") makes every builder reach GitHub itself, so each
-needs a GitHub write path (the `gh` CLI, or this environment's MCP
-tools loaded by hand) and the orchestrator appends the mechanism to
-every prompt (2026-09-06 work4: nine prompts, PR cosmic-lua/work#44 is
-the interim doc fix). The board already owns the credentials and the
-client: `_work/api.tl:241` reads `GITHUB_TOKEN`/`GH_TOKEN`, `api.call`
-is one authenticated REST call, and `_work/gh.tl` wraps `pull`,
-`checks`, `reviews`, `head_checks` over it. Only GETs exist:
-`_work/api.tl:4` "Every call the board makes is a GET"; the ETag cache
-(`read_cache` at :90) is keyed by method and only consulted for GET
-(`:245`), so a write path is a small addition, not a redesign.
-
-`take ID --pr N` (`_work/gittake.tl`) records a PR number the caller
-already has; nothing creates one. Line counts (`wc -l`, main,
-2026-09-06): `_work/api.tl` 335, `_work/gh.tl` 323, `_work/gittake.tl`
-171, `_work/gitcommands.tl` 187, `_work/brieftext.tl` 370 (after #44),
-`_work/api_test.tl` 165 (its fake is a `{status, headers, body}` table
-passed to the pure reconcile path — `api.call`'s live fetch is not
-faked), `_work/gh_test.tl` 84, `_work/gittake_test.tl` 93.
-
-## Change
-
 `gitboard take ID --open [--body FILE]`: the orchestrator's handover
 for a diff whose PR does not exist yet. gitboard opens the PR and then
 records it exactly as `--pr N` does today.
@@ -72,10 +46,3 @@ records it exactly as `--pr N` does today.
   `_work/brieftext_test.tl`: the builder brief no longer contains
   `create_pull_request` and does contain `take ID --open` (update the
   case #44 added).
-
-## Non-goals
-
-No change to what the review brief says (that is the sibling item on
-`verdict` landing the PR). No auto-merge, no merge, no review posting.
-The builder still pushes with git — the branch is theirs; only the PR
-moves to the board.
