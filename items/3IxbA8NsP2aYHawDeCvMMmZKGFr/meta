@@ -1,3 +1,4 @@
 title: docs/design/casts.md's prose total (51) drifted from cast-sites.tsv (44): derive it in --reconcile
 parent: 3IQtewgN78SnlsiBLPgF1i3VNKE
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: docs/design/casts.md docs/design/cast-sites.tsv _build/cast_sites_test.tl
