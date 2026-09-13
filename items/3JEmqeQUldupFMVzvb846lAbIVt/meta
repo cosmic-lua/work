@@ -1,6 +1,6 @@
 title: ghland: a 405 refusal can still arm auto-merge on a head that is not the judged one
 parent: 3J1McPs5zvrKSLKuKOCf6jEUJBu
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 1469382b5dc289ca8f4e17e3cdf66eb43be7f34c
 external_url: https://github.com/cosmic-lua/work/pull/144
 verdict: accept
@@ -8,3 +8,4 @@ verdict_head: 1469382b5dc289ca8f4e17e3cdf66eb43be7f34c
 landed_head: 614ce9761d468459caabd44a6d7525233a6ee264
 resolution: completed
 builders: 70d39cbfc815e0bea9aebd6693a855b0
+touches: _work/ghland.tl
