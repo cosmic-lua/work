@@ -1,6 +1,7 @@
 title: _perf has no literal scenario, so the reader every pin and ratchet floor goes through is unmeasured
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1363
 resolution: completed
 builders: ea3679a0-7f9f-5c45-a6b9-32cc3a700d2c
+touches: _perf/bench/literal_bench.tl _perf/bench/format_bench.tl 3p/cosmos/cosmos_pin.tl _perf/perf_test.tl
