@@ -1,5 +1,3 @@
-## Change
-
 Expose SQLite user-defined functions on `cosmic.sqlite`, so a cosmic program can
 write SQL functions in Teal.
 
@@ -56,9 +54,3 @@ the wrapper first would mean shipping a documented-defect API and then breaking 
 - determinism is not expressible at all today;
 - BLOB and TEXT are indistinguishable, and the chosen blob representation decides
   what a UDF argument's Teal type actually is.
-
-## Non-goals
-
-- No extension registration; that is a separate item.
-- No new C. If the boundary needs more than the two blocking items provide, that is
-  a finding for those items, not work here.
