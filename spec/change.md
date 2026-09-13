@@ -1,5 +1,3 @@
-## Change
-
 Open specs on this board still name verbs the tool no longer has —
 `compare`, `block`, `unblock`, `hold`, `unhold` — and the `blocked_by`
 edge. Sweep them: `gitboard find "gitboard compare"`, `find "gitboard
