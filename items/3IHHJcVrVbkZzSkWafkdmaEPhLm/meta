@@ -1,6 +1,7 @@
 title: cosmopolitan: header edits never rebuild — o//depend is never generated, staling every incremental C measurement
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: whilp/cosmopolitan
+repo: whilp/cosmopolitan
 pr: 270
 resolution: completed
 builders: claude-sched-2026-08-23T1638
+touches: third_party/sqlite3/tclsqlite.h third_party/sqlite3/qrf.h
