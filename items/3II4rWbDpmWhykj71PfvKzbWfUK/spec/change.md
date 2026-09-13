@@ -1,5 +1,3 @@
-## Change
-
 Measured 2026-08-30 (`_work/gitgraph.tl`): `cmd_new` (line 29) declares
 `spec: string` but every internal caller passes nil
 (`_work/fixture.tl:99`, `_work/gitgraph_test.tl:50,111,134,136`,
@@ -16,10 +14,3 @@ pass `""`) and apply it consistently to every nil-admitted parameter of
 `---`/`@param`/`@return` style, stating purpose and the convention
 chosen. No behavior change: existing tests stay green and the type
 check (`--check types`, warnings are errors) is the gate.
-
-## Non-goals
-
-No new parameters, no flag changes, no edits to `cmd_block` or any
-other verb in the file (qoxdjXJp owns `cmd_block`; TVMAtmvh will later
-extend `cmd_new` behavior — keep this diff mechanical so both rebase
-cleanly).
