@@ -1,28 +1,3 @@
-## Evidence
-
-`next` is network-bound the moment any item sits in review. Profiled
-2026-09-05 against the live board by wrapping module functions with timers
-and running `_work.gitboard.main("next")` in-process (script kept with the
-profile: `bin/cosmic prof.lua next`): total 1,340 ms, of which
-`_work.gh.head_checks` was 1,139 ms in ONE call; the whole-board load was
-125 ms and everything else under 10 ms each. `show` on the same board, which
-does not read CI, was 233 ms. Measured from the shell the same minute:
-`next` best-of-three 0.937 s, `show` 0.194 s.
-
-The call is `_work/gitview.tl:59` `ci_states`: one `gh.head_checks(s, i.pr,
-i.repo)` per open review-stage item with a PR, every render, with no cache
-between renders — `grep -n "cache\|etag\|fresh" _work/gh.tl` matches nothing.
-At three items in review that is three sequential GitHub round trips through
-the session proxy, 3–4 s, on the verb every orchestrator loop starts with.
-The lanes observation already solved the same shape: `_work/lanes.tl`
-records the last observation with `FRESH_WINDOW_S = 15 * 60` (line 44),
-`GITBOARD_LANES_FRESH` (line 49) to override, and `sync` reuses it inside
-the window (`gitboard-sync: lanes: skipped (observed 444s ago, within the
-900s freshness window)`), stored in the cache database's `lanes` table
-(cosmic-lua/work#5).
-
-## Change
-
 CI state becomes an observation with a freshness window, like lanes, read
 by `next`/`show` from the cache and refreshed at most once per window.
 
@@ -60,9 +35,3 @@ by `next`/`show` from the cache and refreshed at most once per window.
    with the live stub returning a new state leaves the row showing that
    state and head with no further call from the next render. Expected for the builder's own check: `next` on a board with
    review items within a second of `show`.
-
-## Non-goals
-
-Caching `head_checks` for the deciding verbs; changing the `gitboard-next:`
-output; the whole-board load's own cost (the cache-served reads item
-«BZCt_Z5l7»).
