@@ -2,3 +2,4 @@ title: docs search trigram: a trigram column over names, record fields, signatur
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
 repo: cosmic-lua/cosmic
 touches: cosmic/doc/search.tl cosmic/doc/types.tl cosmic/doc/search_test.tl _perf/bench/docs_bench.tl
+depends_on: 3IfBBCiSB6QBLluI6ziSo6ce5pY
