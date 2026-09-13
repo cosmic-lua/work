@@ -1,2 +1,3 @@
 title: cmd/cosmic's -- pre-scan drops an optional-arg flag's own terminated value — cosmic --docs -- '--recipe' silently ignores the query
 parent: 3ItQ4xOmSviLE8A967ILbjXBhTY
+touches: cmd/cosmic/main.tl _cli/args.tl
