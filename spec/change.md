@@ -1,5 +1,3 @@
-## Change
-
 Ready when: `test -f _tool/surface.tl && echo READY` prints `READY`.
 
 Add `_tool/surface_diff.tl` and `_tool/surface_diff_test.tl`, touching no other
@@ -15,9 +13,3 @@ retyped, and module-removed deltas once each, while M counts added and
 module-added deltas once each. Tests freeze all five kinds, mixed ordering,
 retypes, empty/equal surfaces, exact blocks, verdict counts, and breaking
 classification. Keep the combined change between 250 and 330 lines.
-
-## Non-goals
-
-No extraction, ZIP access, CLI/exit codes, semantic type comparison, baseline,
-or compatibility policy beyond classifying the five delta kinds.
-
