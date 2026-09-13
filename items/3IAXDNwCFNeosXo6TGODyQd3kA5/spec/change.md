@@ -1,13 +1,3 @@
-## Goal
-
-G5, via the cosmic.fuzz epic (3I1j7yQA, "Children" item 5): crash
-isolation via `cosmic.child`, so a C-layer fault (a segfault or hang
-inside a binding a property calls into — `re`, `json`, `compress`,
-`zip`) is attributed to the input that caused it instead of killing
-the whole fuzz run with no attribution.
-
-## Change
-
 Add crash isolation to `_fuzz/driver.tl` (215 lines measured 2026-08-20
 via `wc -l _fuzz/driver.tl`, 285 lines of headroom under the 500-line
 cap) with no changes to any `*_fuzz_test.tl` file — isolation is the
@@ -87,53 +77,3 @@ Design, to build in `_fuzz/driver.tl`:
     the same file becomes a no-op inside the child. If it matches,
     fall through to the existing loop body unchanged (this call IS the
     isolated child; do not spawn another).
-
-## Non-goals
-
-- No change to any `*_fuzz_test.tl` file — isolation is unconditional
-  in `driver.tl` and needs no `Options.isolate` flag or per-file edit.
-- No per-iteration subprocess spawning — isolation is per-PROPERTY
-  (one child per `driver.run` call); only a confirmed crash triggers
-  further (per-iteration) bisection respawns.
-- No change to the existing VM instruction-budget hook
-  (`arm_budget`/`disarm_budget`) — it remains the primary hang defense
-  when the hook slot is free; `timeout_ms` is only the wall-clock
-  backstop for when it is not (under the instrumented coverage stage).
-- No minimization (`shrink.shrink`) of a crashing input — the crash
-  case reports the raw input at the bisected iteration, unminimized.
-  Shrinking a crash safely (running `shrink.shrink` itself inside
-  isolation) is follow-up work, not this item's.
-- No corpus persistence (`testdata/`, item 6) and no discard accounting
-  (item 7) — separate children.
-- No `cosmic.fuzz` publishing move (item 8, still blocked on the
-  placement decision the epic's own spec has not yet settled).
-- No change to `cosmic.child` or `cosmic/child/*.tl` — `Result` already
-  carries every field this item needs (spiked above).
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `bin/cosmic --make test _fuzz/driver_test.tl` passes, including three
-  new tests: `test_a_crashing_check_is_attributed_to_its_iteration`
-  (a `check` that self-signals SIGSEGV via `cosmo.unix.kill` on a
-  specific drawn input; asserts the returned failure message contains
-  `"crashed: signal 11"` and the exact iteration/seed that reproduces
-  it), `test_a_hanging_check_is_reported_as_a_timeout` (a `check` that
-  loops with the VM hook artificially disabled — reuse
-  `test_the_budget_hook_is_cleared_between_runs`'s pattern for holding
-  the hook slot — asserting the message contains `"hung: exceeded"`),
-  and `test_other_properties_in_the_file_are_skipped_when_isolating`
-  (sets `FUZZ_ISOLATE` to a name that does not match `opts.name` and
-  asserts `run` returns `true` with a "skipped" message and never
-  calls `gen`/`check`).
-- `bin/cosmic --make test _fuzz` still passes and its wall time (the
-  `wall:` line `--make test` prints) is under 30s — a loose ceiling
-  confirming the per-property spawn did not regress the suite into the
-  per-iteration cost this item rejected.
-
-## Enablement
-
-none needed — the design above is fully specified (exact env var
-names, exact argv, exact message formats, exact bisection bound), and
-the file-length and cast/lint conventions are existing gates
-(`--make ci`) with headroom already measured above.
