@@ -1,3 +1,5 @@
 title: Decide: symmetric encryption API shape for cosmic.crypto (research item)
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: docs/decisions/dNN-symmetric-encryption-api.md skills/decide/SKILL.md tool/net/definitions.lua cosmic/crypto.tl cosmic/hash.tl 3p/cosmos/cosmos_pin.tl
+access: cosmic-lua/cosmopolitan
