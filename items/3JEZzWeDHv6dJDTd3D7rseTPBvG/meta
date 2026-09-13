@@ -1,3 +1,5 @@
 title: G7 activation: an htmx web-app eval task, G7's measured-by and win condition, and its rank — owner's decision, evidence attached
 parent: 3JEZx1R26VPmXtTlh60E0IQYMun
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: docs/guides/htmx.md _eval/tasks/htmx-todo.md _eval/suite.tl docs/goals.md _perf/bench/http_server_bench.tl skills/work/decompose.md
+access: cosmic-lua/work

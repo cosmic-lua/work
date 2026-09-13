@@ -1,0 +1,2 @@
+- Deciding the rank. Proposing it.
+- Running the eval round (the `agent-eval` skill, after the suite bump).
