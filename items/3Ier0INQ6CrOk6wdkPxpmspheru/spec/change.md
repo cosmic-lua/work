@@ -1,5 +1,3 @@
-## Change
-
 Settle whether cosmic will make any compatibility commitment for its standard
 library, and record the answer.
 
@@ -54,9 +52,3 @@ Whichever is chosen, the record settles:
 Use the `decide` skill for the record's form and the amend-versus-supersede rule.
 Amendment is the likely shape for D10 since this bounds its scope rather than
 reversing it, but that is the record's call.
-
-## Non-goals
-
-- No API changes. This item produces a decision record and a goals edit, not a
-  stdlib edit.
-- No package system. That is the item this one blocks.
