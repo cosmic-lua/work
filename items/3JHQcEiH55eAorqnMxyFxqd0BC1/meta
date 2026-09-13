@@ -2,4 +2,6 @@ title: pin: bump bin/gitboard.pin to the release carrying the format-5 retire
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 repo: cosmic-lua/cosmic
 handover_head: 219803f554cb10624001c647b39ce577d8385a14
+verdict: accept
+verdict_head: 219803f554cb10624001c647b39ce577d8385a14
 builders: f852d375a64c1ec10030bd46681879a6
