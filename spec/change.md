@@ -1,22 +1,3 @@
-## Goal
-
-G8 — the flow system: a constraint a spec imposes must be checkable by a
-command, or the review is the only gate and PR #1264 happens again (two
-of five new files 14–73% over the spec's own 200-line cap, four green CI
-runs, unnoticed until review).
-
-## Evidence
-
-PR #1264 (item 3HyCSe5U): the spec's `Change` stated a 200-line per-file
-cap in prose; `--make lint` enforces only the blanket 500-line cap; the
-PR body's size claim answered the 500 question, not the 200 one; no gate
-sat between. The gap is general: a numeric bound stated in `Change`
-prose is invisible to every mechanism the flow has — the acceptance-
-quoting convention, the reviewer's checklist, and CI all key on
-`Acceptance` commands.
-
-## Change
-
 The countermeasure is the docs rung, and the spec grammar stays out of
 prose-parsing — measured reason recorded below. One file,
 `skills/work/decompose.md` (204 lines, 296 of headroom;
@@ -56,26 +37,3 @@ the imposed-vs-described distinction for a parser; a competent reader
 applies it trivially. What IS mechanizable stays: the bound, once in
 Acceptance, is a command the existing quoting convention and reviewer
 read already gate.
-
-## Non-goals
-
-- no `_work/spec.tl` or `gitboard check` change, and no new spec
-  section or structured `cap:` stanza — the rule rides the Acceptance
-  grammar that already exists.
-- no relitigation of the 500-line lint cap or any repo-wide size gate.
-- no retroactive edits to landed specs; the rule binds refinement from
-  now on.
-
-## Acceptance
-
-- `grep -c "wc -l" skills/work/decompose.md` prints ≥ 2 (the bullet's
-  corollary and the clauses paragraph).
-- `grep -c "committed tree" skills/work/decompose.md` prints ≥ 1 (the
-  run-literally rule).
-- `bin/cosmic --make ci` ends `ci: PASS`.
-
-## Enablement
-
-none needed — a self-contained docs edit; anchors, line numbers, and
-headroom measured above; the rejected-core reasoning is recorded so the
-next session does not re-probe it.
