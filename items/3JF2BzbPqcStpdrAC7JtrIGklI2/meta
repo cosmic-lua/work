@@ -1,6 +1,6 @@
 title: log ID --add FILE: append an entry without mutating the item
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: c160f4814510040da5bf46f2c96bcf222a7d4a66
 verdict: accept
 verdict_head: c160f4814510040da5bf46f2c96bcf222a7d4a66
@@ -8,3 +8,4 @@ landed_head: 619847fe11db5f86dec42df41e9608d8909e0c0d
 resolution: completed
 builders: 5d055a8bfe4d25b076c2854761bb3396 475972e2254f777a7f1948c97f6543f5
 speccers: 475972e2254f777a7f1948c97f6543f5
+touches: _work/gitlog.tl _work/gitcommands.tl _work/gitboard.tl _work/gitverbs.tl _work/fastimport.tl
