@@ -1,10 +1,10 @@
 title: casts: the 10 metatable-access sites behind an identity-compare and a metamethod-fetch helper
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1729
 verdict: accept
 verdict_head: 5cd0e95a59cc88067f2e0db1acb65c6d51945966
-verdict_spec: 56219f771adbbc7fc155e53abeaf6231d854e7e1
 resolution: completed
 builders: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7 build-EAi9_RFmX-eceb7aa0
 speccers: eceb7aa0-3d2d-5764-9ff1-b4a00ca5eaf7
+touches: docs/design/casts.md docs/design/cast-sites.tsv cosmic/sqlite/bind.tl cosmic/json.tl _types/tlast.tl 3p/tl/tl_patch/integer.tl cosmic/check.tl cosmic/sqlite/close_test.tl cosmic/fs/find_close_test.tl cosmic/searcher_tree_test.tl _cli/citations.tl _build/casts_baseline.tl _build/cast_sites_test.tl _build/casts_test.tl cosmic/sqlite/data_test.tl _types/tlast_test.tl
