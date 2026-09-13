@@ -1,0 +1,2 @@
+- No link checking of URLs; paths only.
+- No change to what any doc says beyond fixing a stale path.
