@@ -1,3 +1,4 @@
 title: gitboard new dedup item: split the _work/** (board) change from the skills/work/SKILL.md (main) mention — no such paragraph exists to extend
 parent: 3Ip8ywTHYRkfv1MwnQxxK61V4t0
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
