@@ -1,0 +1,2 @@
+- No change to the ratchet's decline rule.
+- No rebaseline of unrelated rows in this item.
