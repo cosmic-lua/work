@@ -1,7 +1,8 @@
 #!/usr/bin/env cosmic
 -- The review brief of a research handover: `result` names a board
 -- commit whose message body is the findings, and the brief judges that
--- commit — the full review, the findings verbatim beside the spec. A
+-- commit — the full review, the findings verbatim beside the spec, and
+-- a posture that checks findings rather than a diff. A
 -- product commit beside it is still the handover; a legacy spec digest
 -- in `result` names no commit and still refuses; neither recorded
 -- refuses as it always did. This sibling keeps brief_test's existing
@@ -217,6 +218,25 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
     and out:find("a numbered script", 1, true) == nil
     and out:find("git show", 1, true) == nil,
     "the full review is selected, never the mechanical script: " .. out)
+  -- The rest of the review follows the deliverable too: what a findings
+  -- review checks, and no diff-shaped instruction a research reviewer
+  -- cannot carry out — no diff to list, no guard to mutate, no worktree,
+  -- and verdict lines naming no `--repo-dir`.
+  for _, diff_only in ipairs({"The diff is the Change", "cosmic --find",
+      "Mutation-test at least one guard", "fresh checkout", "<WORKTREE>",
+      "--repo-dir", "o/3p"}) do
+    assert(out:find(diff_only, 1, true) == nil,
+      "a research review carries no diff instruction: " .. diff_only .. "\n" .. out)
+  end
+  for _, wanted in ipairs({"names its command, and the command reproduces",
+      "follows from the measurements and not past them",
+      "Nothing the spec asked to be measured is missing",
+      "prospective evidence for the item's parent chain"}) do
+    assert(out:find(wanted, 1, true) ~= nil,
+      "a research review says what a findings review checks: " .. wanted .. "\n" .. out)
+  end
+  assert(out:find("--head " .. result .. " --session session-b\n", 1, true) ~= nil,
+    "the verdict lines name the board commit and the session, nothing more: " .. out)
   -- A product commit recorded beside it is the handover: the brief
   -- judges that commit and carries no findings.
   local it = check.must(store.load(s, id))
@@ -231,6 +251,9 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
     and both:find("This is a research handover", 1, true) == nil
     and both:find("The caller has made this exact commit available", 1, true) ~= nil,
     "both recorded, the product commit is what the review judges: " .. both)
+  assert(both:find("Mutation-test at least one guard", 1, true) ~= nil
+    and both:find("--repo-dir", 1, true) ~= nil,
+    "and takes the diff posture, mutation step and --repo-dir included: " .. both)
   -- Neither recorded refuses exactly as before.
   it = check.must(store.load(s, id))
   it.handover_head, it.result = "", ""
@@ -332,6 +355,16 @@ commit's message body verbatim beside the spec it answers.]], 1, true) ~= nil, p
   assert(brieftext_review.REVIEW:find("{{.reviewing}}", 1, true) ~= nil
     and brieftext_review.REVIEW:find("The caller has made", 1, true) == nil,
     "the full review splices its section rather than carrying one wording")
+  assert(brieftext_review.REVIEW:find("{{.posture}}", 1, true) ~= nil
+    and brieftext_review.REVIEW:find("Mutation-test", 1, true) == nil
+    and brieftext_review.REVIEW:find("{{.worktree}}", 1, true) == nil,
+    "the full review splices its posture rather than carrying one wording")
+  assert(brieftext_review.POSTURE_DIFF:find("--repo-dir {{.worktree}}", 1, true) ~= nil,
+    "the diff posture mutates from the reviewer's worktree and records against it")
+  assert(brieftext_review.POSTURE_RESEARCH:find("{{.worktree}}", 1, true) == nil
+    and brieftext_review.POSTURE_RESEARCH:find("--repo-dir", 1, true) == nil
+    and brieftext_review.POSTURE_RESEARCH:find("Mutation-test", 1, true) == nil,
+    "the research posture has no worktree, no --repo-dir and no mutation step")
   assert(brieftext_review.REVIEWING_RESEARCH:find("{{.findings}}", 1, true) ~= nil,
     "the research wording carries the findings")
   assert(brieftext_review.REVIEWING_DIFF:find("{{.claim_base}}..{{.head_sha}}", 1, true) ~= nil,

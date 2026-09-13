@@ -14,6 +14,8 @@ local record brieftmpl_fields
   review_script: {string}
   reviewing_diff: {string}
   reviewing_research: {string}
+  posture_diff: {string}
+  posture_research: {string}
   round: {string}
 end
 
@@ -74,12 +76,7 @@ local M: brieftmpl_fields = {
     "<REVIEWING>",
     "<SPEC>",
     "<ROUND_CONTEXT>",
-    "<HEAD_SHA>",
-    "<TEST_CMD_PHRASE>",
-    "<WORKTREE>",
-    "<BOARD_DIR>",
-    "<REVIEW_SESSION>",
-    "<BOOTSTRAP_PHRASE>",
+    "<POSTURE>",
     "<GITBOARD_CMD>",
   },
   review_script = {
@@ -105,6 +102,23 @@ local M: brieftmpl_fields = {
     "<BOARD_DIR>",
     "<HEAD_SHA>",
     "<FINDINGS>",
+  },
+  posture_diff = {
+    "<HEAD_SHA>",
+    "<TEST_CMD_PHRASE>",
+    "<WORKTREE>",
+    "<BOARD_DIR>",
+    "<REVIEW_SESSION>",
+    "<BOOTSTRAP_PHRASE>",
+    "<GITBOARD_CMD>",
+    "<ITEM_ID>",
+  },
+  posture_research = {
+    "<HEAD_SHA>",
+    "<BOARD_DIR>",
+    "<REVIEW_SESSION>",
+    "<GITBOARD_CMD>",
+    "<ITEM_ID>",
   },
   round = {
     "<ROUND_NUMBER>",

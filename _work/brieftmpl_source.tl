@@ -33,6 +33,10 @@ local UNITS < const >: {Unit} = {
     text = brieftext_review.REVIEWING_DIFF},
   {name = "reviewing_research", type_name = "ReviewingResearch",
     text = brieftext_review.REVIEWING_RESEARCH},
+  {name = "posture_diff", type_name = "PostureDiff",
+    text = brieftext_review.POSTURE_DIFF},
+  {name = "posture_research", type_name = "PostureResearch",
+    text = brieftext_review.POSTURE_RESEARCH},
   {name = "round", type_name = "Round", text = brieftext_review.ROUND},
 }
 
