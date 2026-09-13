@@ -13,17 +13,22 @@ local transport = require("_work.gittransport")
 --- and how many Acceptance sections were dropped.
 local function counts(outcome: gitmigrate.Outcome): string
   return ("moved=%d change=%d non-goals=%d body=%d empty-change=%d "
-    .. "dropped-acceptance=%d"):format(outcome.moved, outcome.with_change,
-    outcome.with_non_goals, outcome.with_body, outcome.no_change,
-    outcome.dropped)
+    .. "dropped-acceptance=%d skipped=%d remaining=%d"):format(outcome.moved,
+    outcome.with_change, outcome.with_non_goals, outcome.with_body,
+    outcome.no_change, outcome.dropped, outcome.skipped, outcome.remaining)
 end
 
 local function cmd_migrate(dir: string, remote: string,
-    execute: boolean): integer
-  local outcome, merr = gitmigrate.migrate(dir)
+    execute: boolean, limit?: integer, only?: string): integer
+  local outcome, merr = gitmigrate.migrate(dir, nil, limit, only)
   if outcome == nil then return gate.verdict_line("migrate", false, merr) end
   if outcome.current then
     return gate.verdict_line("migrate", true, "board format is already current")
+  end
+  if outcome.applied and outcome.remaining > 0 then
+    return gate.verdict_line("migrate", true,
+      ("local-only batch applied; %s; the marker moves with the last batch")
+      :format(counts(outcome)))
   end
   if outcome.applied then
     return gate.verdict_line("migrate", true,
@@ -61,6 +66,11 @@ local function cmd_migrate(dir: string, remote: string,
       return gate.verdict_line("migrate", false, result.detail)
     end
   end
+  if outcome.remaining > 0 then
+    return gate.verdict_line("migrate", true,
+      ("batch published and confirmed atomically; %s; the marker moves "
+        .. "with the last batch"):format(counts(outcome)))
+  end
   local rebuilt, berr = cache.rebuild(dir)
   if rebuilt == nil then
     return gate.verdict_line("migrate", false,
@@ -77,7 +87,8 @@ local function cmd_migrate(dir: string, remote: string,
 end
 
 local record gitmigrate_cli
-  cmd_migrate: function(dir: string, remote: string, execute: boolean): integer
+  cmd_migrate: function(dir: string, remote: string, execute: boolean,
+  limit?: integer, only?: string): integer
 end
 
 local M: gitmigrate_cli = {cmd_migrate = cmd_migrate}

@@ -2,10 +2,15 @@
 --- prose as the `spec/` subtree of two blobs (`change.md`,
 --- `non-goals.md`) and carries what the prose used to declare as
 --- fields: the paths a Change names (`touches`) and the repositories
---- an Access section names (`access`). Every item ref advances in the
---- same atomic prepared transaction as the format marker, so either
---- every ref and the marker move or none does, and nothing is left in
---- two shapes.
+--- an Access section names (`access`). Every item ref advances in an
+--- atomic prepared transaction, and the format marker in the one that
+--- leaves nothing unmigrated: a caller whose transport takes every ref
+--- at once moves them all with the marker, and a caller whose transport
+--- caps a push at some number of ref updates moves them in batches
+--- (`limit`, `only`) the marker follows last. Between batches the board
+--- refuses the format-5 build, so no reader sees two shapes; a rerun
+--- skips every tip already carrying its migration commit, so nothing
+--- that landed is rewritten.
 ---
 --- One format-4 `spec.md` becomes, per item: the `change` section's
 --- text as `spec/change.md`, the `non-goals` section's as
@@ -36,7 +41,7 @@ local record Outcome
   current: boolean
   applied: boolean
   transaction: prepared.Transaction | nil
-  --- Item refs rewritten (every one on the board).
+  --- Item refs rewritten in this transaction.
   moved: integer
   --- Items ending with a non-empty `spec/change.md`.
   with_change: integer
@@ -48,6 +53,11 @@ local record Outcome
   no_change: integer
   --- `Acceptance` sections dropped rather than carried.
   dropped: integer
+  --- Tips already carrying their migration commit, left alone.
+  skipped: integer
+  --- Unmigrated items this transaction did not take (`limit`, `only`);
+  --- the marker moves only when this is zero.
+  remaining: integer
 end
 
 --- One `spec.md` classified: the two blobs, the commit body, and how
@@ -202,14 +212,19 @@ local function format_commit(root: string, prior: string,
       op = "migrate"})
 end
 
+--- The subject every migration commit carries, and the mark a rerun
+--- recognises an already-migrated tip by.
+local function migration_subject(it: item.Item): string
+  return ("migrate %s to format %s"):format(it.id:sub(-8), format.CURRENT)
+end
+
 --- The item's migration commit: its format-5 tree on top of `tip`,
 --- the classified body as the message's remainder, both dates `at`.
 local function migration_commit(root: string, it: item.Item,
     classified: Classified, tip: string, at: integer): string | nil, string
   local tree, terr = itemtree.build_tree(root, it, classified.spec, true)
   if tree == nil then return nil, terr end
-  local message = ("migrate %s to format %s"):format(it.id:sub(-8),
-    format.CURRENT)
+  local message = migration_subject(it)
   if classified.body ~= "" then
     message = message .. "\n\n" .. classified.body
   end
@@ -221,13 +236,28 @@ local function migration_commit(root: string, it: item.Item,
       committer_date = date, op = "migrate"})
 end
 
-local function migrate(root: string, now?: integer): Outcome | nil, string
+--- One batch of the cutover. `limit` caps how many unmigrated items
+--- this transaction rewrites and `only` restricts it to one ref
+--- namespace (`ended`, `items`); a tip that IS a migration commit to
+--- the current format — its subject says so, and an empty spec writes
+--- no `spec/` subtree to look for — is skipped, so a run after a
+--- partial push never rewrites what landed. The marker rides only the batch that
+--- leaves nothing unmigrated: until then the board keeps refusing the
+--- format-5 build, which is the same dark window a single push has.
+--- @param root string The board checkout
+--- @param now integer | nil The run's clock, `os.time()` by default
+--- @param limit integer | nil At most this many rewrites, 0 or nil for all
+--- @param only string | nil A ref namespace under `refs/heads/`, "" for all
+--- @return Outcome | nil The outcome
+--- @return string The error when nil
+local function migrate(root: string, now?: integer, limit?: integer,
+    only?: string): Outcome | nil, string
   local state, serr = format.inspect(root)
   if state == nil then return nil, serr end
   local text = (state.content or ""):gsub("%s+$", "")
   local outcome: Outcome = {current = false, applied = false, transaction = nil,
     moved = 0, with_change = 0, with_non_goals = 0, with_body = 0,
-    no_change = 0, dropped = 0}
+    no_change = 0, dropped = 0, skipped = 0, remaining = 0}
   if text == format.CURRENT then
     outcome.current, outcome.applied = true, true
     return outcome, ""
@@ -239,6 +269,7 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
   if state.sha == refs.ZERO_SHA then
     return nil, "cannot migrate a missing board format marker"
   end
+  local marker_sha = state.sha
 
   local board, berr = gitread.list(root, true)
   if board == nil then return nil, berr end
@@ -253,9 +284,33 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
   local queries: {string} = {}
   for _, it in ipairs(board.items) do
     queries[#queries + 1] = board.shas_by_id[it.id] .. ":spec.md"
+    queries[#queries + 1] = board.shas_by_id[it.id]
   end
   local blobs, lerr = gitobj.cat_file_batch(root, queries)
   if blobs == nil then return nil, lerr end
+  -- The owners the board has seen come from the WHOLE board's prose,
+  -- however the batches fall: an unmigrated tip's `spec.md`, and for a
+  -- tip that already carries its migration commit the `spec.md` its
+  -- parent still holds — the exact text the single push would have
+  -- read, Acceptance sections included. Without this a later batch
+  -- forgets an owner only an earlier batch's item vouched for, and
+  -- writes a different `access` than the single push.
+  local subjects: {string: string} = {}
+  local migrated: {string} = {}
+  for _, it in ipairs(board.items) do
+    local tip = board.shas_by_id[it.id]
+    local head = blobs[tip]
+    local subject = ""
+    if head ~= nil and head.otype == "commit" then
+      subject = head.content:match("\n\n([^\n]*)") or ""
+    end
+    subjects[tip] = subject
+    if subject == migration_subject(it) then
+      migrated[#migrated + 1] = tip .. "^:spec.md"
+    end
+  end
+  local earlier, eerr = gitobj.cat_file_batch(root, migrated)
+  if earlier == nil then return nil, eerr end
   local bodies: {string} = {}
   for _, q in ipairs(queries) do
     local entry = blobs[q]
@@ -263,14 +318,31 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
       bodies[#bodies + 1] = entry.content
     end
   end
+  for _, q in ipairs(migrated) do
+    local entry = earlier[q]
+    if entry ~= nil and entry.otype == "blob" then
+      bodies[#bodies + 1] = entry.content
+    end
+  end
   local owners = known_owners(board.items, bodies)
+  local prefix = (only or "") ~= "" and ("refs/heads/" .. only .. "/") or ""
   for _, it in ipairs(board.items) do
     local tip = board.shas_by_id[it.id]
     local target = board.refs_by_id[it.id]
+    local subject = subjects[tip]
     local entry = blobs[tip .. ":spec.md"]
     local body = ""
     if entry ~= nil and entry.otype == "blob" then
       body = entry.content
+    end
+    if subject == migration_subject(it) then
+      outcome.skipped = outcome.skipped + 1
+      goto continue
+    end
+    if (prefix ~= "" and target:sub(1, #prefix) ~= prefix)
+    or ((limit or 0) > 0 and outcome.moved >= limit) then
+      outcome.remaining = outcome.remaining + 1
+      goto continue
     end
     local classified = classify(body)
     it.touches = declared_touches(classified.spec.change)
@@ -294,11 +366,17 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
       outcome.with_body = outcome.with_body + 1
     end
     outcome.dropped = outcome.dropped + classified.dropped
+    ::continue::
   end
-  local next_format, ferr = format_commit(root, state.sha, at)
-  if next_format == nil then return nil, ferr end
-  updates[#updates + 1] = {ref = "refs/heads/board/format",
-    expected = state.sha, next = next_format}
+  if outcome.remaining == 0 then
+    local next_format, ferr = format_commit(root, marker_sha, at)
+    if next_format == nil then return nil, ferr end
+    updates[#updates + 1] = {ref = "refs/heads/board/format",
+      expected = marker_sha, next = next_format}
+  end
+  if #updates == 0 then
+    return nil, "nothing to migrate in this selection"
+  end
 
   local tx, perr = prepared.prepare(root, updates,
     ("migrate board format %s to %s"):format(format.PREVIOUS, format.CURRENT))
@@ -309,6 +387,10 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
   end
   local promoted, proerr = prepared.promote_local(root, tx)
   if not promoted then return nil, proerr end
+  if outcome.remaining > 0 then
+    outcome.applied = true
+    return outcome, ""
+  end
   local rebuilt, rerr = cache.rebuild(root)
   if rebuilt == nil then
     return nil, ("format migrated, but cache rebuild failed: %s"):format(rerr)
@@ -326,7 +408,8 @@ local record gitmigrate
   declared_access: function(text: string, own: string,
   owners: {string: boolean}): {string}
   known_owners: function(items: {item.Item}, bodies: {string}): {string: boolean}
-  migrate: function(root: string, now?: integer): Outcome | nil, string
+  migrate: function(root: string, now?: integer, limit?: integer,
+  only?: string): Outcome | nil, string
 end
 
 local M: gitmigrate = {
