@@ -1,5 +1,3 @@
-## Change
-
 Wire the queued-accept decision logic «fmFu_8dce» (PR #1701) adds into
 `_work/gitview.tl`'s live `next` path, the same way `ci_states` was
 wired into `cmd_next` for CI-awareness — this PR's own Non-goals
@@ -47,9 +45,3 @@ signature) as the new `QueueStates` parameter «fmFu_8dce»'s
 recorded PR renders as queued through the live path; one without does
 not — mirroring however `ci_states`'s own live-path test (if one
 exists in this file) is structured.
-
-## Non-goals
-
-No change to `ci_states`, `next_action`, or the decision logic
-«fmFu_8dce» already built — this item only threads the existing
-function through to the live command.
