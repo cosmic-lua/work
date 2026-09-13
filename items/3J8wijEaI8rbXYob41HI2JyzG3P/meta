@@ -1,6 +1,6 @@
 title: CLI tests: a reusable literal-entrypoint contract harness
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: fae625376dab6e815c7832ed1f8a2cf1606bd06c
 external_url: https://github.com/cosmic-lua/cosmic/pull/1831
 verdict: accept
@@ -8,3 +8,4 @@ verdict_head: fae625376dab6e815c7832ed1f8a2cf1606bd06c
 landed_head: ed4cf9a50af6712af3cd9f1ff30d010a5932e9f9
 resolution: completed
 builders: 13adca796a8db5cb6dda8fef09dd97ec
+access: cosmic-lua/cosmopolitan cosmic-lua/work
