@@ -62,16 +62,23 @@ local function blocking_tails(change: string): {string}
   return out
 end
 
---- One line per open item whose Change names an item as blocking
---- that its `depends_on` does not declare, naming every such item
---- and the `depend` that declares it. A tail that resolves to no item
---- on the board is prose about something else and is left alone.
+--- One line per open item whose Change names an OPEN item as
+--- blocking that its `depends_on` does not declare, naming every such
+--- item and the `depend` that declares it. A tail that resolves to no
+--- item on the board is prose about something else and is left alone;
+--- a blocker that has already resolved is left alone too — there is
+--- no dependency left to declare, `depend` refuses a finished target,
+--- and the prose is history the item's own Change may still tell.
 --- @param all {item.Item} Every item
 --- @param specs {string: itemtree.Spec} Each item's prose, by id
 --- @return {string} The findings, possibly empty
 local function undeclared_blockers(all: {item.Item},
     specs: {string: itemtree.Spec}): {string}
   local ids = ids_by_tail(all)
+  local by_id: {string: item.Item} = {}
+  for _, it in ipairs(all) do
+    by_id[it.id] = it
+  end
   local out: {string} = {}
   for _, it in ipairs(all) do
     if item.is_open(it) then
@@ -84,7 +91,8 @@ local function undeclared_blockers(all: {item.Item},
       local repairs: {string} = {}
       for _, bare in ipairs(blocking_tails(sp ~= nil and sp.change or "")) do
         local blocker = ids[bare]
-        if blocker ~= nil and blocker ~= it.id and not declared[blocker] then
+        if blocker ~= nil and blocker ~= it.id and not declared[blocker]
+        and item.is_open(by_id[blocker]) then
           missing[#missing + 1] = tail.handle(blocker)
           repairs[#repairs + 1] = ("`gitboard depend %s %s`"):format(
             it.id:sub(1, 8), blocker:sub(1, 8))

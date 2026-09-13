@@ -129,6 +129,31 @@ local function test_a_prose_blocker_without_a_dependency_is_reported()
   assert(after == 0, "declared, the finding clears: " .. printed_after)
 end
 
+-- A prose blocker that has already resolved is no finding: there is
+-- no dependency left to declare, and the repair the report would
+-- print — `gitboard depend` on a finished target — is one the verb
+-- refuses. Measured on the live board, two of the four items this
+-- report first found named one resolved item.
+local function test_a_resolved_prose_blocker_is_not_reported()
+  local s = init_state_repo("fsck-resolved-blocker")
+  local root, leaf = root_with_leaf(s)
+  local blocker = fixture.file_item(s, "the slice this one waited on", root)
+  local done = check.must(store.load(s, blocker))
+  done.resolution = "completed"
+  assert(storewrite.save(s, done, "fixture: resolved", nil))
+  local it = check.must(store.load(s, leaf))
+  assert(storewrite.save(s, it, "fixture: prose naming a resolved blocker", {
+        change = ("Blocked on %s, which has landed.\n"):format(tail.handle(blocker)),
+        non_goals = "",
+      }))
+  fixture.caller_publish(s)
+  assert(store.close(s))
+  local code, printed = fsck_and_capture(s)
+  assert(code == 0, "a resolved blocker is history, not a finding: " .. printed)
+  assert(gitdepend.cmd_depend(s, leaf, blocker) ~= 0,
+    "and the repair the report would have printed is one the verb refuses")
+end
+
 -- A `depends_on` cycle the verb would have refused, put on the refs
 -- past it, is reported once — one line naming every member — rather
 -- than refused: an audit reports what is.
