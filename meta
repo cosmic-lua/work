@@ -1,6 +1,7 @@
 title: casts: type the box merge boundary over BoxOptions, closing 20 any-map sites in quicksand/box
 parent: 3IOK2cxG8In8dwhcolQpa4i1SiD
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1379
 resolution: completed
 builders: f3fbcf94-e4f2-5cbb-8d9d-373d8007b973 fe3b1d86-cb64-535a-95aa-8be88712c47d
+touches: cosmic/quicksand/box/merge.tl cosmic/quicksand/box/init.tl cosmic/quicksand/box/merge_test.tl cosmic/quicksand/box/init_test.tl _build/casts_baseline.tl
