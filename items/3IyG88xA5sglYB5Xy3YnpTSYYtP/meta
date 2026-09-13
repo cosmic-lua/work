@@ -1,5 +1,6 @@
 title: lint: justification markers read from the AST — throws:/exits: gated alongside assert:/cast:, no hits inside strings
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
 builders: build-npTS_YYtP-f6f470de
+touches: _tool/lint.tl _cli/lint.tl _tool/lint_test.tl cosmic/x.tl _build/throws_baseline.tl
