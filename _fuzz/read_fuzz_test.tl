@@ -19,6 +19,7 @@
 
 local check = require("cosmic.check")
 local driver = require("_fuzz.driver")
+local flow = require("_work.flow")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
 local item = require("_work.item")
@@ -67,7 +68,12 @@ local MAX_ORDER < const > = 5
 
 --- A fixed pool of ids: which items and which order/root-list entries
 --- use which is what the generator randomizes.
-local ID_POOL < const >: {string} = {"a", "b", "c", "d", "e", "f", "g", "h"}
+--- `flow.LANE_PARENT` sits in the pool so a drawn parent, with a
+--- drawn repair title, can make an item a lane repair — the shape
+--- `_work.readddl`'s stage view ranks at `STAGE_REPAIR`, otherwise
+--- unreachable from letter ids and `x` titles.
+local ID_POOL < const >: {string} = {"a", "b", "c", "d", "e", "f", "g", "h",
+  flow.LANE_PARENT}
 
 --- The `verdict` values the schema's own CHECK constraint allows —
 --- the only three a generated item may draw.
@@ -88,10 +94,8 @@ end
 --- Build one adversarial item: a real id from the pool, a parent drawn
 --- from the same pool (itself, a sibling, or a dangling id), an
 --- `order` list drawn the same way, and randomized stage-affecting
---- fields. A lane-repair `key`, when drawn, is derived from the item's
---- OWN id ("k-" .. id) rather than drawn independently — two open
---- items sharing a key is refused at load (`one_open_item_per_key`),
---- and a key tied to the id can never collide.
+--- fields; a parent drawn as `flow.LANE_PARENT` together with a
+--- drawn repair title makes the item a lane repair.
 --- @param src source.Recorder The source to draw from
 --- @param pool {string} The id pool
 --- @param id string This item's own id (also in the pool)
@@ -111,12 +115,9 @@ local function adversarial_item(src: source.Recorder, pool: {string},
     pr = 1
   end
   local verdict = VERDICTS[src:int(1, #VERDICTS)]
-  local key = ""
-  if src:int(1, 4) == 1 then
-    key = "k-" .. id
-  end
   return {
-    id = id, title = "x", parent = parent, repo = "", base = "", key = key,
+    id = id, title = src:int(1, 3) == 1 and flow.repair_title("x") or "x",
+    parent = parent, repo = "", base = "",
     order = id_list(src, pool),
     claim = claim, builders = {}, speccers = {}, reviewer = "", pr = pr,
     result = "", verdict = verdict, verdict_head = "",
@@ -140,11 +141,11 @@ local function gen_graph(src: source.Recorder): string
     local id = pool[src:int(1, #pool)]
     local it = adversarial_item(src, pool, id)
     put(out, id)
+    put(out, it.title)
     put(out, it.parent)
     put(out, it.claim)
     put(out, tostring(it.pr))
     put(out, it.verdict)
-    put(out, it.key)
     put(out, tostring(#it.order))
     for _, o in ipairs(it.order) do
       put(out, o)
@@ -187,14 +188,14 @@ local function decode_graph(blob: string): Graph | nil, string
     if id == nil or id == "" then
       break
     end
+    local title = take(c)
     local parent = take(c)
     local claim = take(c)
     local pr_text = take(c)
     local verdict = take(c)
-    local key = take(c)
     local norder_text = take(c)
-    if parent == nil or claim == nil or pr_text == nil or verdict == nil
-    or key == nil or norder_text == nil then
+    if title == nil or parent == nil or claim == nil or pr_text == nil
+    or verdict == nil or norder_text == nil then
       return nil, "malformed item"
     end
     local pr = math.tointeger(tonumber(pr_text))
@@ -213,8 +214,8 @@ local function decode_graph(blob: string): Graph | nil, string
     if not seen[id] then
       seen[id] = true
       items[#items + 1] = {
-        id = id, title = "x", parent = parent, repo = "", base = "",
-        key = key, order = order,
+        id = id, title = title, parent = parent, repo = "", base = "",
+        order = order,
         claim = claim, builders = {}, speccers = {},
         reviewer = "", pr = pr, result = "", verdict = verdict,
         verdict_head = "", resolution = "",

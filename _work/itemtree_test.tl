@@ -61,7 +61,6 @@ local function full_item(): item.Item
         parent = parent,
         repo = "cosmic-lua/cosmic",
         base = "main",
-        key = "release.yml",
         order = child1 .. " " .. child2,
         claim = "session-a",
         claim_batch = ("ef"):rep(20),
@@ -95,7 +94,6 @@ local function test_meta_round_trips_every_scalar_field()
   assert(parsed.repo == it.repo and parsed.base == it.base,
     "repo and base are their own lines as of format 5")
   assert(parsed.target == nil, "and nothing writes a collapsed target line")
-  assert(parsed.key == it.key)
   assert(parsed.claim == nil, "projected claim facts never ride in item history")
   assert(parsed.claim_base == nil,
     "projected claim bases never ride in item history")

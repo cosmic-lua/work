@@ -281,6 +281,28 @@ local function test_review_debt_refusal_names_a_handover_not_a_diff()
     "a diff's wording is unchanged: " .. tostring(diff_refusal))
 end
 
+-- The one carve-out: a lane repair — G8's child titled as
+-- `flow.repair_title` writes, the same predicate `_work.readddl`'s
+-- stage view ranks it by — is never held behind review debt, because
+-- a red lane's fix cannot wait on a queue it did not grow. G8's other
+-- children are ordinary work and wait like everyone else: on the live
+-- board that outcome holds dozens of them.
+local function test_review_debt_never_holds_a_lane_repair_back()
+  local diffed = make_item({claim = "other", builders = "other", pr = 3})
+  local repair = make_item({parent = flow.LANE_PARENT,
+      title = flow.repair_title("release.yml")})
+  local lodger = make_item({parent = flow.LANE_PARENT})
+  local c = fixture.make_index({diffed, repair, lodger})
+  local refusal, rerr = gate.review_debt_refusal(c, {diffed, repair, lodger},
+    "me", repair)
+  assert(rerr == "", rerr)
+  assert(refusal == nil, "a lane repair is exempt: " .. tostring(refusal))
+  local held, herr = gate.review_debt_refusal(c, {diffed, repair, lodger},
+    "me", lodger)
+  assert(herr == "", herr)
+  assert(held ~= nil, "an ordinary child of G8 is not")
+end
+
 -- The distance guard: named on either involvement list refuses,
 -- either half is enough, and an unnamed session is never involved.
 local function test_distance_refusal_covers_builders_and_speccers()

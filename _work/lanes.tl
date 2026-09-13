@@ -8,10 +8,11 @@
 --- A red lane mints; a green one closes an UNCLAIMED repair and
 --- leaves a claimed one alone — the monitor never undoes a builder's
 --- claim, and it never mints twice for one lane, because the repair
---- item's `lane` field is the idempotency key `mint` searches on.
+--- item's title names the lane and is what `mint` searches on.
 local api = require("_work.api")
 local cachequery = require("_work.cachequery")
 local env = require("cosmic.env")
+local flow = require("_work.flow")
 local freshness = require("_work.freshness")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
@@ -29,10 +30,6 @@ local time = require("cosmic.time")
 --- `cmd_sync`'s printed lines both walk this list, so a reader always
 --- sees the same lane in the same place.
 local LANES: {string} = {"release.yml", "fuzz.yml", "docs.yml"}
-
---- Where a red lane's repair items are filed: G8, the flow-system
---- outcome this mechanism serves.
-local LANE_PARENT < const > = "3HyRdT1JQS7pCPgF3sZi2Deo66q"
 
 --- How long a real observation stays fresh before `at_sync` is
 --- willing to spend another GET on it. The lanes themselves move on a
@@ -224,29 +221,37 @@ local function record(s: store.Store, facts: {string: string}): boolean, string
     s.board_digest ~= "" and s.board_digest or nil)
 end
 
+--- The one title `file_repair` writes for a lane's repair, and the one
+--- `is_repair_for` searches on: a lane repair is keyed by its title.
+--- @param lane string Workflow filename
+--- @return string The title
+local function repair_title(lane: string): string
+  return flow.repair_title(lane)
+end
+
 --- Whether `it` is the open repair item for `lane` — the search
 --- `mint` runs before ever filing one, which is what keeps five red
 --- days costing one item instead of five.
 --- @param it item.Item The item
 --- @param lane string Workflow filename
---- @return boolean True when it is open and carries this lane as its `key`
+--- @return boolean True when it is open and titled as this lane's repair
 local function is_repair_for(it: item.Item, lane: string): boolean
-  return item.is_open(it) and (it.key or "") == lane
+  return item.is_open(it) and it.title == repair_title(lane)
 end
 
---- File one repair item for a red lane, carrying the lane as its
---- idempotency key.
+--- File one repair item for a red lane, under `flow.LANE_PARENT` and
+--- titled so `is_repair_for` finds it next time.
 --- @param s store.Store The store
 --- @param lane string Workflow filename
 --- @return boolean True on success
 --- @return string Error message
 local function file_repair(s: store.Store, lane: string): boolean, string
-  local title = ("lane repair: %s is red"):format(lane)
+  local title = repair_title(lane)
   local it: item.Item = {
-    id = ksuid.new(), title = title, parent = LANE_PARENT, repo = "",
+    id = ksuid.new(), title = title, parent = flow.LANE_PARENT, repo = "",
     order = {}, claim = "",
     builders = {}, reviewer = "", pr = 0, verdict = "", verdict_head = "",
-    resolution = "", key = lane,
+    resolution = "",
   }
   local bad = item.problems(it)
   if #bad > 0 then
@@ -304,11 +309,6 @@ end
 
 local record lanes
   LANES: {string}
-  --- Exported for tests only: `mint`'s idempotency key search and
-  --- `file_repair`'s parent both close over the local, and a test that
-  --- wants to place the real repair parent (the way G8 already is on
-  --- the live board) needs the same id rather than a second literal.
-  LANE_PARENT: string
   --- Exported for tests only: the freshness window and its override,
   --- so a test drives the exact bound rather than a guessed copy of it.
   FRESH_WINDOW_S: integer
@@ -329,7 +329,6 @@ end
 
 local M: lanes = {
   LANES = LANES,
-  LANE_PARENT = LANE_PARENT,
   FRESH_WINDOW_S = FRESH_WINDOW_S,
   FRESH_ENV = FRESH_ENV,
   LOW_REMAINING = LOW_REMAINING,

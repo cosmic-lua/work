@@ -153,16 +153,19 @@ end
 local function test_stage_runs_accepted_to_todo()
   local board = make({})
   local outcome = make({parent = board.id})
-  board.order = {outcome.id}
+  local lane = make({id = flow.LANE_PARENT, parent = board.id})
+  board.order = {outcome.id, lane.id}
   local accepted = make({parent = outcome.id, claim = "s", pr = 3, verdict = "accept"})
   local review = make({parent = outcome.id, claim = "s", pr = 3})
   local rework = make({parent = outcome.id, claim = "s", pr = 3,
       verdict = "request changes"})
   local building = make({parent = outcome.id, claim = "s"})
-  local repair = make({parent = outcome.id, key = "lane-x"})
+  local repair = make({parent = lane.id, title = flow.repair_title("release.yml")})
+  -- G8's ordinary children are not repairs: the title is the identity.
+  local lodger = make({parent = lane.id})
   local todo = make({parent = outcome.id})
-  local idx = make_index({board, outcome, accepted, review, rework, building,
-      repair, todo})
+  local idx = make_index({board, outcome, lane, accepted, review, rework, building,
+      repair, lodger, todo})
 
   local cases = {
     {it = accepted, stage = flow.STAGE_ACCEPTED},
@@ -170,6 +173,7 @@ local function test_stage_runs_accepted_to_todo()
     {it = rework, stage = flow.STAGE_REWORK},
     {it = building, stage = flow.STAGE_BUILDING},
     {it = repair, stage = flow.STAGE_REPAIR},
+    {it = lodger, stage = flow.STAGE_TODO},
     {it = todo, stage = flow.STAGE_TODO},
   }
   for _, c in ipairs(cases) do
@@ -182,8 +186,9 @@ local function test_stage_runs_accepted_to_todo()
 end
 
 -- The unified queue: stage first — accepted, review, rework, building,
--- lane repair, todo — then rank path within a stage, age last. Two
--- outcomes (o1 before o2 in the board's own order) give the todo
+-- lane repair (the item titled as one under `lane`, the outcome standing
+-- at `flow.LANE_PARENT`), todo — then rank path within a stage, age last.
+-- Two outcomes (o1 before o2 in the board's own order) give the todo
 -- bucket a real tie to break: `todo_b` (under o1) outranks both
 -- `todo_a` and `under_container` (under o2, at different depths —
 -- ranking by outcome first means depth past it never matters), and
@@ -193,18 +198,19 @@ local function test_queue_orders_stage_then_rank_then_age()
   local board = make({})
   local o1 = make({parent = board.id})
   local o2 = make({parent = board.id})
-  board.order = {o1.id, o2.id}
+  local lane = make({id = flow.LANE_PARENT, parent = board.id})
+  board.order = {o1.id, o2.id, lane.id}
   local accepted = make({parent = o1.id, claim = "s", pr = 3, verdict = "accept"})
   local review = make({parent = o1.id, claim = "s", pr = 3})
   local rework = make({parent = o1.id, claim = "s", pr = 3, verdict = "request changes"})
   local building = make({parent = o1.id, claim = "s"})
-  local repair = make({parent = o2.id, key = "lane-x"})
+  local repair = make({parent = lane.id, title = flow.repair_title("release.yml")})
   local todo_a = make({parent = o2.id})
   local todo_b = make({parent = o1.id})
   local container = make({parent = o2.id})
   local under_container = make({parent = container.id})
   local done = make({parent = o1.id, resolution = "completed"})
-  local idx = make_index({board, o1, o2, accepted, review, rework, building,
+  local idx = make_index({board, o1, o2, lane, accepted, review, rework, building,
       repair, todo_a, todo_b, container, under_container, done})
 
   local want = {accepted.id, review.id, rework.id, building.id, repair.id,

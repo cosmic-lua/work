@@ -5,7 +5,7 @@
 --- GRAPH verbs proper (`new`, `attach`); `set` moves no edge, and
 --- `gitgraph` re-exports it so every caller keeps resolving.
 ---
---- Flow fields (claim, pr, verdict, resolution, parent, key) have their
+--- Flow fields (claim, pr, verdict, resolution, parent) have their
 --- own verbs and gates; `set` refuses them by not existing for them —
 --- the dispatcher's flag spec never declares those long names on this
 --- command, so passing one is an unrecognized-flag refusal before `set`

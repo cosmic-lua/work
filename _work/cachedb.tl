@@ -57,9 +57,12 @@ local type Cache = index.Index
 --- `claim_base`/commit-evidence columns. Bumped to 8 for format 4's
 --- shared `refs/heads/claim-batches/*` objects and item bridge pointers: even
 --- where the SQL columns themselves remain unchanged, claim state is decoded
---- through a different representation. The cache is disposable: this is a
---- rebuild boundary, never an in-place data migration.
-local SCHEMA_VERSION < const > = 9
+--- through a different representation. Bumped to 10 for `key` leaving
+--- `items` (a lane repair is known by its parentage now): belt-and-
+--- suspenders once more, the fingerprint already moved with the DDL.
+--- The cache is disposable: this is a rebuild boundary, never an
+--- in-place data migration.
+local SCHEMA_VERSION < const > = 10
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
