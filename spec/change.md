@@ -1,49 +1,3 @@
-# cosmic.http core: listen, serve one connection at a time with keep-alive, a typed Request/Response over cosmo.http and cosmic.net
-
-## Goal
-
-The surface half of the inversion: `require("cosmic.http")` — a typed,
-documented HTTP/1.1 server that owns the socket and the loop and hands
-every request to one handler function, with `cosmo.http` parsing the
-wire. v1 serves one connection at a time (keep-alive within it); the
-concurrency model is a separate decision, and this module's handler
-signature is what that decision must not change.
-
-## Evidence
-
-No module exists:
-
-```
-$ ls cosmic/http 2>&1
-ls: cannot access 'cosmic/http': No such file or directory
-$ ls cosmic/ | grep -c '^http'
-0
-```
-
-What it builds on, each measured:
-
-- `cosmic/net/init.tl:268` `local function listen_tcp(addr: Address,
-  port: integer, opts?: ListenOptions): Socket | nil, string`;
-  `cosmic/net/socket.tl:64` `local record Socket is stream.Reader,
-  stream.Writer` with `:accept` (`:118`), `:recv` (`:95`), `:send_all`
-  (`:85`), `:set_timeout_ms` (`:135`, SO_RCVTIMEO+SO_SNDTIMEO),
-  `:close` (`:71`).
-- `cosmic/fetch/headers.tl:13` `normalize(raw: {string: any}):
-  {string: string}, {string: {string}}` — lowercase names, repeats
-  joined `", "` / kept in order. Reuse it for request headers: the
-  binding emits `Fetch`'s shape by design.
-- `cosmic/url.tl:125` `parse(url: string): Url | nil, string` and `:63`
-  `parse_query` for the request target.
-- `cosmo.GetHttpReason` (`definitions.lua:2929`),
-  `cosmo.FormatHttpDateTime` (`:2893`) for the status line and `Date`.
-- `docs/guides/recipes.md:126-189` — the hand-rolled recipe this
-  replaces; it states "there is no HTTP server module, on purpose".
-
-Sizing: `cosmic/net/init.tl` and `socket.tl` are each 478 lines (`wc -l`)
-— the 500-line cap is real; this module is a directory from day one.
-
-## Change
-
 Ready when: `grep -c '"http"' _types/gentype.tl` prints `1`.
 
 That is the pin-bump child landed (it adds `"http"` to the MODULES list
@@ -132,17 +86,3 @@ New directory module `cosmic/http/`:
 Gate: `bin/cosmic --make ci` ends `ci: PASS`; the new test is
 `UNAVAILABLE` only where `loopback-listen` is (the `linux-ci` profile
 makes it mandatory).
-
-## Non-goals
-
-- Chunked request bodies, streaming/chunked responses, SSE — the
-  streaming child.
-- Routing, forms, cookies, static files — their own children.
-- Concurrency: one connection at a time. No threads, no fork, no poll.
-- TLS. `Server` takes a `net.Socket` listener only in v1.
-- Reading `HX-*` anything.
-
-## Access
-
-- cosmic-lua/cosmic: read+write.
-- cosmic-lua/cosmopolitan: read-only (`cosmo.http` contract as landed).
