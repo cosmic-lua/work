@@ -1,5 +1,3 @@
-## Change
-
 Let a Lua-defined SQL function be marked deterministic.
 
 `lsqlite3`'s `db_register_function` passes only `SQLITE_UTF8` to
@@ -35,8 +33,3 @@ convention that a binding change and its annotation land together.
 
 Gate: `make -j$(nproc) o//tool/lua/test`, with a case proving a deterministic UDF
 is usable in an index on an expression and a volatile one is refused there.
-
-## Non-goals
-
-- No change to how values cross the UDF boundary; that is the blob/text item.
-- No change to the default (volatile).

@@ -1,0 +1,2 @@
+- No change to how values cross the UDF boundary; that is the blob/text item.
+- No change to the default (volatile).
