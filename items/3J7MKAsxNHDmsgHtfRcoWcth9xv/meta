@@ -1,9 +1,10 @@
 title: rewrite: non-writing preview validates replacements and reports refusals
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 handover_head: 5826ef4f5b149a1cfab9091cb689edd254dff80f
 verdict: accept
 verdict_head: 5826ef4f5b149a1cfab9091cb689edd254dff80f
 resolution: completed
 builders: d83b0a168499ffd0e236da3871162bef 7b47bb431081ba8b39ba1c3239f8ab89 5c44041b4e248f1623ca43352de13ebf
 speccers: d83b0a168499ffd0e236da3871162bef
+touches: _cli/args.tl _cli/parse.tl cmd/cosmic/main.tl _cli/rewrite_mode.tl _build/make_boundary.tl _cli/rewrite.tl cosmic/ast/rewrite.tl _cli/rewrite_test.tl _cli/rewrite_preview_test.tl docs/guides/formatting.md cosmic/ast/init_example.tl _build/make_boundary_test.tl
