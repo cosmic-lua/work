@@ -1,3 +1,4 @@
 title: cosmic.csv: encode/decode module (first slice of #500's remaining checklist)
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/csv.tl /home/user/cosmopolitan/AGENTS.md cosmic/csv_test.tl cosmic/csv_example.tl cosmic/errno_test.tl
