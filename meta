@@ -1,6 +1,7 @@
 title: tl patch: is-dispatch over metatable<T> against table-kinded targets — sketch validated
 parent: 3ISJI4Lgn9UobC9gFoEk04B1HON
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1439
 resolution: completed
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+touches: 3p/tl/tl_patch/narrow.tl 3p/tl/tl_patch.tl _make/patch.tl o/3p/tl/tl.lua cosmic/teal_narrowing_test.tl
