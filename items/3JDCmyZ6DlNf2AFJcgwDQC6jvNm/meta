@@ -1,3 +1,6 @@
 title: fetch reuse 4a: deterministic verified-TLS test server and release fixture
 parent: 3JDCmvGvZMN5A3NPa05M6ZHvV4I
-target: cosmic-lua/cosmopolitan@master
+repo: cosmic-lua/cosmopolitan
+base: master
+touches: tool/lua/fetch_test_server.c tool/lua/BUILD.mk tool/lua/fetch_test_protocol.c/.h .github/workflows/release.yml _perf/fixture/fetch_server_pin.tl
+access: cosmic-lua/cosmic cosmic-lua/work
