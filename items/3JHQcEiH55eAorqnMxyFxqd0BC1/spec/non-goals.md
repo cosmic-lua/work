@@ -1,0 +1,2 @@
+- No change to `bin/gitboard`, `bin/cosmic.pin`, or any workflow.
+- No change to `skills/work/SKILL.md`.
