@@ -1,6 +1,6 @@
 title: review brief: the posture and mutation steps follow the deliverable too, so a research reviewer is not told to mutate a board commit
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: d019193aff2047d0fad4de91ac67e79bb04a9c41
 handover_head: 3607243d3ae8f12ded5d646a324f6661aedd8e0d
 verdict: accept
@@ -8,3 +8,4 @@ verdict_head: 3607243d3ae8f12ded5d646a324f6661aedd8e0d
 landed_head: df98b0679eb4aded6543075c44761559f297b8c3
 resolution: completed
 builders: 811b4f8ed5602e5797408ad5898547b0
+touches: _work/brieftext_review.tl _work/briefctx.tl _work/brieftmpl_source.tl _work/briefcontext.tl _work/brief_research_test.tl
