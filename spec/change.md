@@ -1,5 +1,3 @@
-## Change
-
 A warm `show` and `next` each spawn one `git cat-file --batch` to read
 every open item's spec body from git — 269 blobs on the live board
 today (`_work/gitview.tl`'s `read_specs` → `store.read_specs` →
