@@ -1,17 +1,3 @@
-## Goal
-
-G3 — honest nil. `_cli/returns.tl` carries a hand-rolled Teal type grammar
-(`parse_atom`/`parse_type`/`parse_list`/`params_open`/`skip_balanced`) that two
-invariants now depend on: the `fallible-returns` lint and the `nil_return_lines`
-ratchet. A shape that grammar mis-reads is silently wrong in both directions —
-a missed diagnostic, or a false accusation on correct code — and nothing in the
-tree finds those shapes. Both rounds of review on 3IVHXoDw found one by hand:
-round 1 a token blacklist (`{function(): T}`, `Box<function(): T>`, a function
-type after `,` in a return list), round 2 a lexer artifact (`>>`). The same
-wrong turn twice is the trigger for a countermeasure.
-
-## Change
-
 Three confirmed defects in the SHARED grammar. Defects 1 and 2 were
 reproduced against `5978f451` and are fixed on whilp/cosmic#1471's head
 `844da8a9`; defect 3 was introduced by that fix and is open. Whatever
@@ -68,16 +54,3 @@ matching half — counting `end`s that arrive with an empty stack — catches.
 Both halves are a few lines beside the existing ratchet test and would have
 caught round one, round two and round three before a reviewer did. Build this
 before, or instead of, the fuller differential against tl's own parser.
-
-## Non-goals
-
-- Do not move `_build/nil_returns_baseline.tl` as part of this: neither defect
-  reaches a committed file today (verified — the pre-fix and post-fix detectors
-  produce byte-identical baselines), so a fix that moves the number means
-  something else changed too.
-
-## Acceptance
-
-- The three reproductions above return the correct counts.
-- A gate exists that would have failed on any of the three defects before
-  review did; the residual assertion above is the measured minimum.
