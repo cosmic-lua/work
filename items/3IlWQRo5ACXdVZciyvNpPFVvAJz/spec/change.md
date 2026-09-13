@@ -1,0 +1,3 @@
+- The seven `proc.fork()` producers → `check.must(proc.fork())`.
+- `caps_test.tl:55, :59` → `check.must(caps.number_of(…))`.
+- `io_test.tl:103` → `out[#out + 1] = check.must(line)`.
