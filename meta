@@ -1,6 +1,7 @@
 title: an evidence-only slice cannot hand over: check requires a PR, and decompose.md says research needs none
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1417
 resolution: completed
 builders: 35ba7161-3dfb-5d17-83df-1f0a82a00b1b
+touches: skills/work/review.md _work/gitboard.tl _work/gitverbs.tl _work/spec.tl _work/gitverdict.tl _work/guidance.tl _work/gitverbs_test.tl _work/gitverdict_test.tl
