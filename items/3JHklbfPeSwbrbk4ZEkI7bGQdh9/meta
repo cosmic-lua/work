@@ -1,0 +1,4 @@
+title: new --parent leaves repo unset despite the help's promised default, and claim then leases against the item's own ref
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/work
+touches: _work/gitverbs.tl _work/gitclaim_cli.tl
