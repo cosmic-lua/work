@@ -1,5 +1,6 @@
 title: multi-token --- reads: declaration is a silent no-op; env_vars_test never re-runs
 parent: 3HyRdGk0liOSXEXjHRReYYEUxdi
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1241
 resolution: completed
+touches: _make/imports.tl _make/imports_test.tl _make/graph_test.tl _build/env_vars_test.tl
