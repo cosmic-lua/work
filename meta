@@ -1,3 +1,6 @@
 title: deps projection 1: exact ordering, ownership and cache-lifecycle tests
 parent: 3JDEb7AbODYUb9xm5gwRojFmibe
-target: cosmic-lua/cosmic@main
+repo: cosmic-lua/cosmic
+base: main
+touches: _make/deps_projection_test.tl _make/deps_test.tl
+access: cosmic-lua/work
