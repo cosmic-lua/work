@@ -1,24 +1,3 @@
-## Evidence
-
-Every builder this pass spent its first 30–40 tool calls (of 27–173)
-bootstrapping its worktree — `bin/cosmic --make fetch`, `--make build`,
-then re-reading the tree — before its first edit (`_tool/friction.tl`
-"first edit at call N": 7, 11, 22, 33, 35, 39, 40, 42, 77 across the
-pass). The orchestrator already creates the worktree by hand
-(`git worktree add -b <id8> <path> origin/<base>`) and pastes the path
-into `<WORKTREE>`; the builder brief then says "Bootstrap it first"
-(`_work/brieftext.tl`, the "Where to work" section). The bootstrap is
-deterministic and needs no judgment, so an agent paying for it in
-tokens is pure cost; done by the orchestrator in one shell command it
-costs zero agent calls. Doing that by hand is the wrong systematic
-level: it lives in one session's habit, not the tool.
-
-`wc -l` (2026-09-06, main): `_work/gitcommands.tl` 187,
-`_work/gitverbs.tl` 411, `_work/doctrine.tl` ~460, `_work/brief.tl`
-~397 (after #55), `_work/brieftext.tl` ~374.
-
-## Change
-
 `gitboard worktree ID [--root DIR] [--ref REF...]`: after `take`, the
 orchestrator's one command that makes the builder's checkout.
 
@@ -63,9 +42,3 @@ without a checkout and survives later fetches. Then bootstraps: for a cosmic
   the test sets so no real fetch runs. `_work/brief_test.tl` is at
   500/500 — the `<WORKTREE>` fill test goes in
   `_work/brief_rework_test.tl`.
-
-## Non-goals
-
-No worktree removal verb (the orchestrator's `git worktree remove`
-stays), no change to `take`, no bootstrap for a repo the tool does not
-know.
