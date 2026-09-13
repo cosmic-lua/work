@@ -1,4 +1,5 @@
 title: cast_sites --reconcile: an inserted cast re-keys its shifted siblings by text, never carries a class onto the wrong row
 parent: 3IvKOEqsL8zOfTJMcenHpoMGzj7
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
+touches: _build/cast_sites.tl _build/cast_sites_test.tl
