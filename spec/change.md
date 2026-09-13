@@ -1,18 +1,3 @@
-> Capture note, 2026-08-20: this is the cosmic.fuzz epic's child 3
-> (3I1j7yQA), specced now that child 2 (3I7PCerj, draw-recording
-> source + replay) has landed — its own refinement note said child 3
-> "is specced next AFTER 2 lands... its shape depends on the
-> recorded-draw structure 2 commits to."
-
-## Goal
-
-G5 — the cosmic.fuzz epic's minimization deliverable: a failing fuzz
-run reports a *minimized* input instead of the raw generated one, so a
-user does not hand-bisect a multi-hundred-byte failure (epic
-3I1j7yQA, "Children" item 3).
-
-## Change
-
 Measured 2026-08-20 at `d97cb5f0`: `_fuzz/driver.tl` is 211 lines (289
 lines of headroom under the 500-line cap) and `_fuzz/source.tl` is 101
 lines, unchanged by this slice. `_fuzz/source.tl`'s `Draw` record
@@ -72,53 +57,3 @@ new source-level primitive is required.
    iteration, input, draws, detail), so existing message-shape
    assertions in `_fuzz/driver_test.tl` keep passing; only the values
    substituted into `input=` and `draws=` change.
-
-## Non-goals
-
-- no corpus persistence (`testdata/`, a sibling child), no crash
-  isolation via `cosmic.child` (a sibling child), no coverage-guided
-  generation, no discard accounting (`assume()`), no `cosmic.fuzz`
-  publishing move. `_fuzz/shrink.tl` stays internal to `_fuzz`, same
-  as `_fuzz/source.tl`.
-- does not classify failures by cause: a candidate that fails `check`
-  for *any* reason (a different assertion, a different thrown error,
-  even a budget-exceeded from `driver.arm_budget`) counts as "still
-  fails" during shrinking. A shrunk report describing a different
-  failure than the original is a known limitation of this slice, not
-  a bug to fix here.
-- does not change `_fuzz/source.tl` — `Draw`, `new`, and `replay` are
-  read-only inputs to this slice.
-- does not touch the six `*_fuzz_test.tl` generator bodies.
-- no change to `Options`, `bytes`, or `mutate`.
-
-## Acceptance
-
-- `bin/cosmic --make test _fuzz/` ends `test: PASS` over all fuzz
-  files, including new tests in `_fuzz/shrink_test.tl`:
-  - a property that fails whenever `driver.bytes(src, 64)` produces a
-    string longer than 5 bytes shrinks to an input of exactly 6 bytes.
-  - a property that fails whenever a drawn `src:int(0, 1000)` exceeds
-    200 shrinks that draw to exactly 201.
-  - a property whose generator diverges under replay (draws a variable
-    number of values depending on an earlier draw) shrinks without
-    throwing — `shrink` returns normally, not an error.
-  - a stress case whose original draws exceed 5000 entries shrinks
-    within `MAX_SHRINK_ATTEMPTS` calls to `still_fails` (assert
-    `attempts <= 20000`).
-- `bin/cosmic --make test _fuzz/driver_test.tl` still passes unchanged
-  (message-shape assertions unaffected) plus a new
-  `test_failure_message_reports_a_minimized_input` asserting the
-  reported `input=` is no longer than a small bound (≤ 8 base64 bytes)
-  for a property that fails on any input longer than 2 bytes, given a
-  256-byte-capable generator.
-- `git grep -c "^local MAX_SHRINK_ATTEMPTS" -- _fuzz/shrink.tl` prints 1
-  (the constant's declaration; it is read from several loop conditions
-  in the same file, so a plain `-c "MAX_SHRINK_ATTEMPTS"` prints more
-  than 1 and is not the intended check).
-- `bin/cosmic --make ci` ends `ci: PASS`.
-
-## Enablement
-
-none needed — `_fuzz/source.tl`'s `Draw` record and `replay` (landed
-by child 2, 3I7PCerj, PR #1290) are the only prerequisites and both
-are already on `main`.
