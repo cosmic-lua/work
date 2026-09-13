@@ -1,5 +1,3 @@
-## Change
-
 Board renders lead with the KSUID's tail — the last 8 characters,
 which are pure entropy and a literal substring of the id, so the
 rendered handle greps item files, branch logs, and PR bodies
@@ -59,13 +57,3 @@ The pieces, in order:
    pinning the `or:` alternate line's FULL rendered format (a prior
    review found no test covers it — reverting that line's format
    left every render test green; close that gap here).
-
-## Non-goals
-
-Mutation verdict lines (`gitboard-take: 3IbDFQzq is yours ...`),
-refusal texts, commit subjects, `flow item=` key=value lines, item
-files, and guidance strings are log/parsing contracts and machine
-data — untouched (run `_work/flowstats_test.tl` to prove the
-grammars). Ids in those surfaces stay the full id or the head
-prefix as today. No new stored fields — the tail is derived, always.
-No color, no petnames (both recorded as rejected).
