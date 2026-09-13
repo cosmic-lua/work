@@ -1,14 +1,3 @@
-## Goal
-
-The release compare step's bare-load skew class fails the PR that
-introduces it, not the release lane days later. Third sighting in
-24h: run.tl's version_info (killed 08-26's run; #1415),
-literal_bench's two-arg literal.format (would have killed 08-27's;
-#1420), gate.tl's triage_many (inert only because gate.tl never runs
-bare).
-
-## Change
-
 `_perf/skew_test.tl` — one test that type-checks every non-test
 `_perf/**/*.tl` under the pinned bootstrap binary
 (`o/bootstrap/cosmic`), in ONE `--check types` invocation (the check
@@ -39,25 +28,3 @@ Shape:
 - failure message names the class and the remedy — reach a new cosmic
   API from `_perf/**` through a tolerant map view + capability probe
   (pattern: _perf/bench/literal_bench.tl) — quoting the child stderr.
-
-## Non-goals
-
-Option 2 from the capture (measure the previous release with its own
-embedded scenarios — self-consistent but loses like-for-like) and
-option 3 (a lint taxing new API uses — noisy, version-blind). No
-change to gate.tl's triage_many: the sweep covers it. No release.yml
-change.
-
-## Acceptance
-
-`--make ci` PASS with the new test in the suite. The sweep passes on
-today's tree under bootstrap afad5b5. A deliberate two-arg
-literal.format planted in a scratch copy of a bench file fails it
-(verified once by hand, not committed). Cost: one child process,
-~30 files, seconds added to `--make test`.
-
-## Enablement
-
-None: the bootstrap already lands on every `bin/cosmic` entry and
-survives `--make clean`; the test needs no new mechanism, no pin, no
-network.
