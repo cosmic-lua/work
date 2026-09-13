@@ -1,4 +1,6 @@
 title: doctrine: state the reviewer's verdict as the one board verb an agent runs
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
+touches: _work/doctrine.tl _work/doctrine_test.tl
