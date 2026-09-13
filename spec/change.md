@@ -1,13 +1,3 @@
-## Goal
-
-G3 — an honest type layer. D23 closed the throw exemption list: "**No
-other `cosmic.*` module may throw or exit.** The only other sanctioned
-throws are D22's." `cosmic.time` needs a seat on that list (item
-3IPXQcgW, which this unblocks), and taking one without amending the
-record would make the record false.
-
-## Change
-
 Amend `docs/decisions/d23-check-throws.md` — an AMEND, not a
 supersession: D23's call stands and a fact under it moved, so the
 original body stays exactly as written and a final
@@ -68,53 +58,3 @@ is 464 lines; the only in-tree references to D23 outside the record and
 its index are `AGENTS.md:237` and
 `docs/decisions/d20-naming-charter.md:124`
 (`grep -rn 'd23-check-throws\|D23' --include='*.md' --include='*.tl' .`).
-
-## Non-goals
-
-- **Do not edit `cosmic/time.tl`.** That is 3IPXQcgW, which this item
-  unblocks; a doctrine change that lands inside the diff it licenses
-  proves nothing.
-- **Do not reopen D22 or D23's substance.** `check`'s exemption and the
-  CSPRNG's stand; this is about whether the list is closed.
-- **Do not widen this to "when may library code throw" in general.**
-  The question is one shape, evidenced by one site.
-- **Do not bless the tree's two existing undocumented library throws.**
-  `cosmic/embed/init.tl:186` (`assert(loadfile("/zip/main.user.lua"))`)
-  and `cosmic/quicksand/proxy/serve.tl:374`
-  (`if not listen_fd then assert(listen()) end`) are REACHABLE failures,
-  not unreachable-nil asserts, so the new rule must not admit them and
-  the amendment must not mention them as though it did. They are filed
-  separately as board item 3IQfhI33.
-  (`git ls-files 'cosmic/*.tl' 'cosmic/**/*.tl' | grep -v '_test\.tl$\|_example\.tl$\|_benchmark\.tl$' | xargs grep -n 'assert('`
-  reports 24 hits, 22 of them inside `---` doc comments; those two are
-  the only executable ones, measured 2026-08-26.)
-- **Do not add a lint for the `-- assert:` comment.** The convention is
-  doctrine here; enforcing it is separate work, noted on board item
-  3IQfhI33 and out of this diff.
-- **Do not hand-edit `docs/decisions/README.md`'s table rows.**
-  `_docs/derive.tl` owns them.
-
-## Acceptance
-
-- `grep -c '^- \*\*amended' docs/decisions/d23-check-throws.md`
-  reports `1` (today `0`).
-- `grep '^- \*\*status:\*\*' docs/decisions/d23-check-throws.md`
-  reports a line beginning `- **status:** amended 2026-08` (today
-  `- **status:** active`).
-- `bin/cosmic _docs/derive.tl && git diff --quiet docs/decisions/README.md`
-  exits 0 — the index was regenerated and committed, so a second run is
-  a no-op.
-- `bin/cosmic --make test _build/docs_test.tl` ends `test: PASS`.
-- `grep -n 'never throw from library code' AGENTS.md` shows line 237
-  naming three sanctioned shapes, not two.
-- `git diff --name-only origin/main` lists exactly
-  `AGENTS.md`, `docs/decisions/README.md` and
-  `docs/decisions/d23-check-throws.md` — no `cosmic/**` file.
-- `bin/cosmic --make ci` ends `ci: PASS`.
-
-## Enablement
-
-none needed. The `decide` skill (`skills/decide/SKILL.md`) is the form
-and the amend-versus-supersede rule; D23 and D22 are the records in
-scope; `_docs/derive.tl` and `_build/docs_test.tl` are the index gate,
-and the `decide` skill's `## mechanics` gives both commands.
