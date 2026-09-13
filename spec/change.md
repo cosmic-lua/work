@@ -1,5 +1,3 @@
-## Change
-
 Measured 2026-08-30 on the current board head (post-#1539):
 `cmd_block` (`_work/gitgraph.tl:164+`) stores reasons per blocker in
 the item's `block_reason` map (`_work/item.tl:59` declares
@@ -27,9 +25,3 @@ Tests in `_work/gitgraph_test.tl`: re-block with a new reason updates
 with the identical reason refuses without committing; unblock still
 clears the map entry. Mutation-verify the compare (make the update
 path fire on identical reasons too, watch the no-op test go red).
-
-## Non-goals
-
-No new verbs or flags. No change to unblock, the deadlock check, or
-the require-a-reason refusal. cmd_new/cmd_attach untouched (recently
-reworked by #1539 — rebase cleanly on current board).
