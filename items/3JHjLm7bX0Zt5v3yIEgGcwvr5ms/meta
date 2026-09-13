@@ -1,5 +1,6 @@
 title: migrate6: replay every item ref's history into refs/heads/state and push it in fast-forward steps, the marker riding the last
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
+resolution: not-planned
 touches: _work/gitmigrate6.tl _work/gitmigrate6_cli.tl _work/gitcommands.tl _work/gitboard.tl
 depends_on: 3JHjLZPi0ZR5RfHiBTpMWf6e5uh 3JHjLQOy34Cgi0VFju04KCZB3Hz
