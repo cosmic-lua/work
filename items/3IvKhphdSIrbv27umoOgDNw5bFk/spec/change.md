@@ -1,5 +1,3 @@
-## Change
-
 New `cosmic/ast/walk.tl` (public, `cosmic.ast.walk`), depending on
 `cosmic.ast.node`'s `Node` record (item filed alongside this one under
 the same outcome — take that one first). Port two things from
@@ -42,25 +40,3 @@ session found and fixed by actually running the spike, not by reading
    character at the reported position (trust it only when it's a real
    close-bracket: `)`, `]`, `}`), otherwise recurse to the real
    leftmost/rightmost descendant leaf token instead.
-
-## Non-goals
-
-No matcher, no rewrite/splice here. `span_start`/`span_end` take
-`Node`; deriving a byte offset from `(y, x)` for splicing is the
-rewrite item's job (it also needs the source text, which this module
-does not hold).
-
-## Acceptance
-
-Reproduce this session's regression trio as real test cases in
-`cosmic/ast/walk_test.tl`, since each one is a specific bug that was
-found and fixed, not a hypothetical:
-- `return a --[[ keep this ]] + b` — `span_end` on the `return`
-  statement must land on `b` (col of `b`'s own last character), not on
-  the enclosing block's `end` three lines later.
-- `os.execute(cmd)` — `span_end` on the outer call must land on the
-  closing `)`.
-- `if v == nil then return 1 end` — `span_end` on the `if` statement
-  must land on its own closing `end`, recovered via the `if_block`'s
-  `body` (a `statements` node) rather than the `if` node's own
-  (untrustworthy, non-bracket) `yend`/`xend`.
