@@ -5,5 +5,7 @@ claim_batch: d93d0c2a0771cfc1803cb427b9e88b634c45b088
 handover_head: a7b5ca51dce48e22a4dba42eaa38bae637ef7774
 verdict: accept
 verdict_head: a7b5ca51dce48e22a4dba42eaa38bae637ef7774
+landed_head: 6560e341271403c4e019fd551579acbb18965efe
+resolution: completed
 builders: 829b71e40aa0bf2ed23e6d766161a7ef
 touches: docs/design/storage.md README.md
