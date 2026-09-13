@@ -1,5 +1,3 @@
-## Change
-
 Give `lsqlite3` a per-connection extension registration entry point, so a caller can
 ask for an extension by name.
 
@@ -35,10 +33,3 @@ the caller and defeats the design.
 
 Gate: `make -j$(nproc) o//tool/lua/test`, with cases for each of the three
 outcomes.
-
-## Non-goals
-
-- No change to which extensions are registered by default; that is the cosmic
-  item's decision and this item leaves the existing `zipfile` call alone.
-- No extraction work — this item consumes the registry, it does not build it.
-- No UDF changes.
