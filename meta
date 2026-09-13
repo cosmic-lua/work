@@ -1,6 +1,7 @@
 title: JSON ASCII 1: compatibility matrix and deterministic differential corpus
 parent: 3JDHcYe1whiQnoUvqfAEw74nBaa
-target: cosmic-lua/cosmopolitan@master
+repo: cosmic-lua/cosmopolitan
+base: master
 claim_batch: f08551f4cace0c04db51180b695966322b3c1a74
 handover_head: 49163af8e61961de865902f529e53bc0347bf670
 external_url: https://github.com/cosmic-lua/cosmopolitan/pull/393
@@ -9,3 +10,5 @@ verdict_head: 49163af8e61961de865902f529e53bc0347bf670
 landed_head: 6c32f7a07cb7272300b2e06e06ac9db85360e024
 resolution: completed
 builders: a93b528f451f0a64220f4a5846dc2afc 36ad14e7c9e6ddfa1b02ae9e0c86515b
+touches: tool/lua/test_ljson_ascii.lua tool/lua/testdata/json_ascii_corpus.lua tool/lua/BUILD.mk
+access: cosmic-lua/cosmic cosmic-lua/work
