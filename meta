@@ -1,6 +1,7 @@
 title: nil-flow census: prototype a strict tl mode and classify every unguarded T|nil sink
 parent: 3IODJgkObjfhsxqMPEgFPIM6RHR
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1376
 resolution: completed
 builders: 29896fcf-c494-5d80-a7e8-0f10f26debda f3fbcf94-e4f2-5cbb-8d9d-373d8007b973
+touches: docs/design/nil-flow.md docs/design/casts.md o/3p/tl/tl.lua 3p/tl/tl_pin.tl _build/size.tl o/3p/tl/tl.tl _types/gentl.tl docs/guides/checking.md docs/design/nil-flow-sites.tsv
