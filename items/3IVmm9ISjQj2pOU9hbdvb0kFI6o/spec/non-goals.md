@@ -1,0 +1,2 @@
+- No machinery change; `store.publish` is correct as merged.
+- No change to `SKILL.md` or `loop.md`.
