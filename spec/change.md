@@ -1,5 +1,3 @@
-## Change
-
 Make SQLite's own `ext/misc` extensions available to the library as a named
 registry, by extracting the ones already inlined in `shell.c` into standalone
 translation units.
@@ -57,11 +55,3 @@ not register anything by default.
 
 Gate: `make -j$(nproc) o//tool/lua/test`, plus the registry/alias agreement test,
 plus a size delta per batch — seventeen extensions is not free and G9 ratchets it.
-
-## Non-goals
-
-- **Registers nothing.** Making an extension available is not making it active; the
-  per-connection registration API is its own item.
-- No behaviour change for `zipfile`'s current unconditional registration; that break
-  belongs to the cosmic API item.
-- No new third-party code — every byte here is already vendored.
