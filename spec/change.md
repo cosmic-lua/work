@@ -1,14 +1,3 @@
-## Goal
-
-G8 — the flow system (parent 3HyRdT1J). Concurrent sessions do not
-duplicate refinement: the dispatch half of the collision 3IVEqtkH
-recorded, complementing 3IUFODun's write half (`spec --base`). A plan
-item one session is refining is skipped by every other session's
-`next` while the refiner keeps committing, and is anyone's again an
-hour after they stop.
-
-## Change
-
 Six source files and one new test file, all on the `board` branch.
 
 **1. `_work/health.tl` (207 lines) — the refine lease.** Add
@@ -68,35 +57,3 @@ and pure boards:
   claimant reports without a duplicate mutation.
 - `test_ready_arrival_clears_the_claim` — `cmd_move` plan -> ready on
   a claimed item leaves `claim` empty.
-
-## Non-goals
-
-- No claim guard on a rightward move of a plan item somebody else is
-  refining: `set_in_place` already refuses a live claim overwrite,
-  and takeover semantics stay the existing `--force --why` rules.
-- No `record_builder` from a refine claim: `set_in_place` does not
-  record builders, which is what take-mode uses — a refiner stays
-  eligible to review the eventual build.
-- No change to `pullables`/`unheld`, the 4-hour do lease, or the
-  review lease.
-- No new item field: the existing `claim` carries the lease, and the
-  phase says which lease applies.
-- No edit to 3IUFODun's territory (`cmd_spec`, `store.tl`): this diff
-  touches `cmd_move`, not `cmd_spec`, so the two merge independently.
-
-## Acceptance
-
-- `bin/cosmic --make ci` from the board worktree ends `ci: PASS`.
-- `bin/cosmic --make test _work/refine_claim_test.tl
-  _work/intake_test.tl _work/gittake_test.tl _work/action_test.tl
-  _work/converge_test.tl` passes, including the four tests above.
-- `wc -l` of every touched file is at most 500; `_work/action.tl`
-  stays at 495 (measured 2026-08-27: health 207, intake 211, action
-  495, gittake 146, gitverbs 329, guidance 154).
-
-## Enablement
-
-none needed — board-branch modules only, gated by `bin/cosmic --make
-ci` from the worktree exactly as the board workflow gates pushes, no
-blocker items. 3IUFODun (in flight) is complementary, not a
-dependency: different functions, independently mergeable.
