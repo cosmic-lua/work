@@ -1,5 +1,3 @@
-## Change
-
 Board ids gain a legible derived display: the raw id8 renders chunked,
 and every item carries a hash-derived alias in an unambiguous
 alphabet, accepted as input — all derived by pure function, never
@@ -35,13 +33,3 @@ The change, one new module plus render/dispatch touches:
    (8 Crockford chars, optional hyphen), fall back to
    `alias.resolve` over `store.list`. `store.tl` is untouched (it is
    at the 500-line cap).
-
-## Non-goals
-
-Ids themselves, item filenames, commit subjects, and every verdict-
-line and log grammar are UNCHANGED — the alias appears only in
-`show`/`next`/status renders and as accepted input; it never enters
-committed text (the log's fixed grammars are a parsing contract:
-flowstats ships against them). No color rendering (considered and
-rejected: not needed). No petname word list (considered and set
-aside: same mechanics, worse density).
