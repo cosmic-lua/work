@@ -90,15 +90,30 @@ end
 --- that has none or whose tip is unknown — the whole-board counterpart
 --- to `read_spec`, so a readiness pass over every item costs one more
 --- `cat-file --batch` instead of one process per item.
+---
+--- On format 6 every id reads as `<head>:items/<id>/spec/*`; `native_mode`
+--- says which layout the given shas name, and a caller that knows (the
+--- store's own `state_head`, or the board a rebuild already classified)
+--- passes it rather than paying for a marker read here. A NATIVE read
+--- fails CLOSED: an unreadable marker, an unreadable batch, or an item
+--- subtree with no `meta` throws rather than answering empty prose, since
+--- this function is infallible by type and a silent "" would read as an
+--- item with no spec — the one answer a corrupt native board must not
+--- produce. The legacy half keeps its tolerant empty answer, where an
+--- absent tip is ordinary rather than corruption.
 --- @param root string The repository root
---- @param shas_by_id {string: string} Each item's tip sha, from `list`
+--- @param shas_by_id {string: string} Each item's tip sha, from `list` —
+--- on format 6, the one state head every id is read at
 --- @param ids {string} Item ids to read, in any order
+--- @param native_mode boolean | nil Whether these shas name format-6 state
+--- commits; nil reads the marker to find out, and throws its refusal
 --- @return {string: itemtree.Spec} Prose by id, both fields "" when absent
 local function read_specs(root: string, shas_by_id: {string: string},
     ids: {string}, native_mode?: boolean): {string: itemtree.Spec}
   local is_native = native_mode
   if is_native == nil then
     local head, err = format.state_head(root)
+    -- throws: an infallible-by-type read cannot report an unknown board format
     if head == nil then error(err, 0) end
     is_native = head ~= ""
   end
@@ -115,6 +130,7 @@ local function read_specs(root: string, shas_by_id: {string: string},
       end
     end
     local batch, err = gitobj.cat_file_batch(root, queries)
+    -- throws: a native prose read must not answer "" for an unread board
     if batch == nil then error(err, 0) end
     do
       for _, id in ipairs(ids) do
@@ -122,6 +138,7 @@ local function read_specs(root: string, shas_by_id: {string: string},
         if sha ~= nil then
           local meta = batch[sha .. ":items/" .. id .. "/meta"]
           if meta == nil or meta.otype ~= "blob" then
+            -- throws: prose without `meta` is a corrupt item, not an empty spec
             error("native item " .. id .. " has no readable meta at " .. sha, 0)
           end
           local prefix = sha .. ":items/" .. id .. "/spec/"
