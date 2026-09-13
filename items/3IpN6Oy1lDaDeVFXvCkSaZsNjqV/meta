@@ -1,3 +1,5 @@
 title: doctrine: a derived file the spec regenerates by command is not a disjointness blocker
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
+touches: _work/doctrine.tl _work/doctrine_test.tl
