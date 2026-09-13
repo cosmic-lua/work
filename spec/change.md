@@ -1,14 +1,3 @@
-## Goal
-
-G3 — an honest type layer, no escape hatches (docs/goals.md), via the epic "measure
-and drive down the as-cast count" (board item 3HyArM3A). This is wave 6's own
-prerequisite step, from that epic's wave plan: "Re-measure this class first: the
-census counted [narrowing-gap] against the documented narrowing limits, and one of
-those limits (early-exit `is`) is measured false — #1191 landed the correction, so
-some of the 86 may already be removable with no patch at all."
-
-## Change
-
 Every site in the tree tagged with one of the four `narrowing-gap`-family reason
 strings, measured 2026-08-19 (`git grep -n -- "-- cast: pcall result\|-- cast: or
 fallback does not narrow\|-- cast: tuple element\|-- cast: record union after guard"
@@ -49,35 +38,3 @@ Do not touch any site outside the 22 listed above, even one carrying a similar r
 string discovered while editing a file in the list (e.g. a second `tuple element` site
 in a file already on the list IS in scope only if it appears in the line list above;
 one that turns up elsewhere is out of scope — file it as a new capture instead).
-
-## Non-goals
-
-- No `3p/tl/tl_patch.tl` changes and no upstream `tl` proposal — this slice is a
-  re-classification against the ALREADY-corrected narrowing rules (#1191), not new
-  narrowing capability. A site that needs a patch to be removable is confirmed
-  un-removable today and stays out of scope for a future, separately-sized wave.
-- No change to `cosmic/teal_narrowing_test.tl` or AGENTS.md/docs/guides/checking.md —
-  #1191 already corrected those; this slice does not touch narrowing documentation.
-- No change to any file's logic beyond deleting a cast and its comment — a site that
-  "almost" checks clean except for an unrelated nearby issue is left with its cast
-  intact, not partially refactored.
-
-## Acceptance
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- For every site actually deleted, run `bin/cosmic --make run _build/casts.tl
-  --baseline` to regenerate `_build/casts_baseline.tl`, then confirm the ratchet
-  tightened: `grep -oE '= [0-9]+' _build/casts_baseline.tl | awk '{s+=$2} END {print
-  s}'` prints a number strictly below today's 445.
-- The PR description states, per file, how many of that file's listed sites were
-  removed vs. kept (e.g. "cosmic/time.tl: 6 listed, 2 removed, 4 kept — the tuple
-  element cast on a `nil`-narrowed multi-return still has no expression-level guard").
-- `git grep -c -- "-- cast:" -- "*.tl" | awk -F: '{s+=$NF} END {print s}'` after the
-  change matches the new `_build/casts_baseline.tl` total exactly (the tree and the
-  gate never drift — `TREES` already covers every listed file).
-
-## Enablement
-
-none needed — the corrected narrowing rules are already documented in
-`cosmic/teal_narrowing_test.tl` and AGENTS.md; this slice applies them, it does not
-discover new ones. `bin/cosmic --check types <file>` is the existing gate command.
