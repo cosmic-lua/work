@@ -1,6 +1,7 @@
 title: sqlite: typed column accessors on Row, closing the 9 from-any casts every column read costs
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1371
 resolution: completed
 builders: 32b1737c-76aa-5e69-b536-01404c9c3648
+touches: cosmic/sqlite/column.tl cosmic/sqlite/init.tl cosmic/sqlite/bind.tl _tool/doc/index.tl cosmic/sqlite/column_test.tl cosmic/sqlite/advanced_test.tl cosmic/sqlite/close_test.tl cosmic/sqlite/init_test.tl _build/casts_baseline.tl
