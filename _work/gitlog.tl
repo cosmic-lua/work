@@ -15,8 +15,18 @@
 --- an item no longer has to wait for a mutation to ride along with.
 --- That shape is why it writes its own stream (`_work.fastimport`)
 --- instead of going through `_work.storewrite.save`, whose per-path
---- diff finds nothing to write and reports the no-op.
+--- diff finds nothing to write and reports the no-op — which is also
+--- why it runs the claim fence itself: an entry lands a commit on the
+--- item's ref, and a ref under a live claim is the holder's to move,
+--- so a foreign append is refused exactly as every other mutation of
+--- a claimed item is (`_work.gitclaimgate`), with `--force --why` the
+--- one audited way past it. The fence is what keeps the claim's
+--- staleness horizon honest: an item's freshness is its ref's newest
+--- commit, so a stranger who could append would keep a dead claim
+--- alive by writing notes; the holder's own entries advancing it is
+--- right, since the holder is active.
 local cache = require("_work.cache")
+local claimgate = require("_work.gitclaimgate")
 local fastimport = require("_work.fastimport")
 local format = require("_work.format")
 local fs = require("cosmic.fs")
@@ -149,9 +159,17 @@ end
 --- @param id string The item id, already resolved by the dispatcher
 --- @param file string Path to the file holding the entry's prose
 --- @param session string | nil The session to attribute the entry to
+--- @param force boolean | nil Append past another session's live claim
+--- @param why string | nil Why --force was needed
 --- @return integer Exit code
 local function cmd_log_add(s: store.Store, id: string, file: string,
-    session?: string): integer
+    session?: string, force?: boolean, why?: string): integer
+  local frc = force or false
+  local rsn = why or ""
+  local forced = gate.force_refusal(frc, rsn)
+  if forced then
+    return verdict_line("log", false, "REFUSED: " .. forced)
+  end
   local body, rerr = fs.read(file)
   if body == nil then
     return verdict_line("log", false, rerr)
@@ -178,6 +196,13 @@ local function cmd_log_add(s: store.Store, id: string, file: string,
   if it == nil then
     return verdict_line("log", false, lerr)
   end
+  -- The same fence `gitgate.commit_and_publish` runs for every other
+  -- item-ref mutation, over the claim state `store.load` just leased:
+  -- a live claim held by someone else refuses the append.
+  local refusal = claimgate.mutation_refusal(s, it, session or "", frc, rsn)
+  if refusal ~= nil then
+    return verdict_line("log", false, refusal)
+  end
   local ref, tip = s.leased_ref[id], s.leased_sha[id]
   if ref == nil or tip == nil or tip == refs.ZERO_SHA then
     return verdict_line("log", false,
@@ -187,11 +212,14 @@ local function cmd_log_add(s: store.Store, id: string, file: string,
   if (session or "") ~= "" then
     author_name, author_email = session, session .. "@board"
   end
-  local subject = entry_subject(id, session or "")
+  -- A forced append carries its reason in the subject, the way every
+  -- forced mutation's subject does, so the audit travels with the
+  -- commit rather than with the session.
+  local subject = entry_subject(id, session or "") .. gate.forced_suffix(frc, rsn)
   local now = fastimport.git_date_now()
   -- The epoch second the commit itself carries, so the lease and the
   -- `events` row the patch records name the same instant git does.
-  local written_at = math.tointeger(tonumber(now:match("^(%d+)"))) or os.time()
+  local written_at = fastimport.git_date_seconds(now)
   -- Read the cache's state BEFORE anything moves: that is the proof it
   -- was current immediately beforehand, which is what makes patching
   -- one item safe rather than trusting a maybe-stale file. `store.load`
@@ -225,6 +253,14 @@ local function cmd_log_add(s: store.Store, id: string, file: string,
         .. "state)"):format(ref))
   end
   storewrite.add_pending(s, {ref = ref, old = tip})
+  -- Advance the store's lease past the write, the way `storewrite.save`
+  -- does after its own: a later write through this same handle has to
+  -- lease against the entry's commit, not the tip it was appended to.
+  -- The item's fields did not move, so its snapshot is re-taken as is.
+  s.fresh_lease = ""
+  s.leased_sha[id] = moved
+  s.leased_item[id] = store.snapshot_item(it)
+  s.written_at = written_at
   -- `written` names the one id that gained a commit, which is what
   -- earns it the lease change and the `events` row; the item's fields
   -- are patched from `it` exactly as observed, and nil for the spec
@@ -261,7 +297,7 @@ local record gitlog
   entry_subject: function(id: string, session: string): string
   cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
   cmd_log_add: function(s: store.Store, id: string, file: string,
-  session?: string): integer
+  session?: string, force?: boolean, why?: string): integer
 end
 
 local M: gitlog = {

@@ -196,13 +196,14 @@ local function test_help_documents_the_id_forms()
     "help should explain why work branches include the claim\ngot: " .. printed)
 end
 
--- The ten verbs that only stage a `commit_and_publish` transaction
--- say so in their own help, naming the follow-up that actually
--- pushes; `claim` already carries --execute and its own authority
--- wording, so the constant must not be sprayed onto it too.
+-- The eleven verbs that only stage a mutation for `publish` — ten
+-- through `commit_and_publish`, and `log --add` through its own
+-- stream — say so in their own help, naming the follow-up that
+-- actually pushes; `claim` already carries --execute and its own
+-- authority wording, so the constant must not be sprayed onto it too.
 local function test_help_names_the_prepare_only_verbs()
   for _, verb in ipairs({"new", "attach", "rank", "set", "spec", "depend",
-      "undepend", "take", "verdict", "done"}) do
+      "undepend", "take", "verdict", "done", "log"}) do
     local code, printed = gitboard_and_capture("help", verb)
     assert(code == 0, ("help %s should exit 0, got %d"):format(verb, code))
     assert(printed:find("only PREPARES", 1, true) ~= nil,

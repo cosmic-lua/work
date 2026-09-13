@@ -185,6 +185,17 @@ local function test_git_date_now_shape()
   assert(tonumber(hh) < 24 and tonumber(mm) < 60, "got: " .. d)
 end
 
+-- The epoch second a date carries is read back from the date itself,
+-- so a write's lease and cache row name the instant its commit does;
+-- a date with no epoch in it falls back to the clock rather than nil.
+local function test_git_date_seconds_reads_the_epoch_back()
+  assert(fastimport.git_date_seconds("1700000000 +0100") == 1700000000)
+  assert(fastimport.git_date_seconds(fastimport.git_date_now()) <= os.time())
+  local fallback = fastimport.git_date_seconds("not a date")
+  assert(fallback >= os.time() - 5 and fallback <= os.time(),
+    ("the wall clock: %d"):format(fallback))
+end
+
 -- The stream text for one KNOWN item, pinned byte for byte: a
 -- `commit` line naming the ref, `author`/`committer` lines, a `data`
 -- block holding the message plus its `Op:` trailer (with its own

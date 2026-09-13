@@ -358,7 +358,7 @@ local record gitverbs
   force: boolean, why: string, by?: string): integer
   cmd_log: function(s: store.Store, id: string, oneline?: boolean): integer
   cmd_log_add: function(s: store.Store, id: string, file: string,
-  session?: string): integer
+  session?: string, force?: boolean, why?: string): integer
   cmd_depend: function(s: store.Store, id: string, on: string,
   session?: string, force?: boolean, why?: string): integer
   cmd_undepend: function(s: store.Store, id: string, on: string,

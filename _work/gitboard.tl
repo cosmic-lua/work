@@ -324,7 +324,8 @@ local function main(...: string): integer
     local who, werr = claimcli.resolve_optional_caller(
       d.parsed.values["session"] or "")
     if who == nil then return gate.verdict_line("log", false, "REFUSED: " .. werr) end
-    return gitlog.cmd_log_add(s, id, add, who)
+    return gitlog.cmd_log_add(s, id, add, who,
+      d.parsed.switches["force"], d.parsed.values["why"] or "")
   end
   if d.command == "attach" then
     local parent, perr = resolve_id(s, d.parsed.args[2] or "")

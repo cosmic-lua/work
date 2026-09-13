@@ -149,7 +149,7 @@ end
 --- @return string Error message
 local function save_batch(req: Request): Outcome | nil, string
   local now = fastimport.git_date_now()
-  local written_at = math.tointeger(tonumber(now:match("^(%d+)"))) or os.time()
+  local written_at = fastimport.git_date_seconds(now)
   local out: Outcome = {pushes = {}, new_ref = {}, new_sha = {}, changed = false,
     seq_changed = false, new_seq_sha = "", written_at = written_at}
   local commits: {fastimport.CommitPlan} = {}

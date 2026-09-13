@@ -386,13 +386,20 @@ local CSPEC: flags.CommandSpec = {
         .. "the commit it\nwrites carries the prose and nothing else — no "
         .. "field, no spec, no rank moves — so an\nobservation needs no "
         .. "other mutation to ride along with. An entry is immutable; a\n"
-        .. "correction is another entry.",
+        .. "correction is another entry. An item under another session's "
+        .. "live claim is\nthe holder's to append to: a foreign --add "
+        .. "needs --force --why, like every other\nmutation of a claimed "
+        .. "item.\n\n"
+        .. "With --add, " .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "oneline", help = "subjects only, one line per entry"},
           {long = "add", arg = "FILE",
             help = "append FILE as one entry, leaving the item unchanged"},
           {long = "session", arg = "ID", help = "minted identity the entry "
-            .. "is attributed to; default $GITBOARD_SESSION"}}}},
+            .. "is attributed to; default $GITBOARD_SESSION"},
+          {long = "force", help = "append past another session's live claim "
+            .. "— audited repair only"},
+          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "publish", summary = "render or execute one prepared unit's atomic push",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
         summary = "render one prepared transaction, claim batch, or draft as one "
@@ -433,7 +440,7 @@ local CSPEC: flags.CommandSpec = {
 local DRAFTABLE < const >: {string: boolean} = {
   next = true, brief = true, new = true, attach = true, rank = true,
   set = true, spec = true, worktree = true, take = true, verdict = true,
-  done = true, show = true, find = true,
+  done = true, show = true, find = true, log = true,
 }
 for _, command in ipairs(CSPEC.commands) do
   if DRAFTABLE[command.name] then
