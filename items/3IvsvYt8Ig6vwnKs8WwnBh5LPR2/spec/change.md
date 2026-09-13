@@ -1,5 +1,3 @@
-## Change
-
 `_perf/gate.tl`'s compare and selfcheck re-measure a flagged scenario
 by re-running the bench, and that re-run spawns whatever binary the
 environment names (`PERF_BIN`, and for gitboard's bench
