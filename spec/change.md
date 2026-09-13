@@ -1,5 +1,3 @@
-## Change
-
 Enable boolean opt-in TLS reuse for fully buffered direct requests, after the
 wrapper/instrument child and the four native prerequisites are complete.
 Step 6 of `uQsI_Q5CM`, cosmic-lua/cosmopolitan master. Explicit table pools,
@@ -54,11 +52,3 @@ same cosmic payload/harness and explicit runtime hashes. Full compare must pass
 and TLS session must show a noise-qualified gain under optimize's rules. Record
 actual outputs before shipping. If no gain, retain earlier correctness repairs
 but reject this optimization rather than relax any test or default.
-
-## Access
-
-Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
-cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
-read cosmic-lua/work for the parent design and prerequisite evidence, supplied
-by the orchestrator in the builder brief. The implementation PR targets only
-the repository assigned to this item; agents do not mutate the board.
