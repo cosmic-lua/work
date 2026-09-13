@@ -14,6 +14,7 @@ local graph = require("_work.gitgraph")
 local itemtree = require("_work.itemtree")
 local prepared = require("_work.prepared")
 local refs = require("_work.refs")
+local specmod = require("_work.spec")
 local store = require("_work.store")
 
 --- The run's own clock — nothing inside the content below is this date.
@@ -21,7 +22,10 @@ local NOW < const > = 1700000000
 
 --- A sidecar with every kind of section a format-4 spec carried: a
 --- title, a Change with a `###` subsection naming paths, walls, an
---- Acceptance block to drop, and Evidence and Access to carry.
+--- Acceptance block to drop, and Evidence and Access to carry. The
+--- Access section also carries the shapes the loose read-side rule
+--- mistakes for repositories — a path fragment, a URL's tail, a file
+--- with an extension — none of which may reach the field.
 local RICH < const > = [[
 # The leaf
 
@@ -48,16 +52,19 @@ Measured 2024-01-02: 1046 items.
 
 ## Access
 
-- acme/other
+- acme/other — `docs/decisions/d1-why.md`, and
+  https://github.com/acme/upstream/blob/main/tool/net/x.c
 - acme/self
-- Acme/Tool
+- Acme/Tool (see bin/cosmic.pin), an either/or like algorithm/contract
 ]]
 
 local CHANGE_BLOB < const > = "Do the thing in `_work/a.tl` and `_work/b_test.tl`.\n\n"
 .. "### Files\n\n| `_work/c.tl` | grows |\n| --- | --- |\n"
 
 local BODY < const > = "# The leaf\n\n## Evidence\n\nMeasured 2024-01-02: 1046 items.\n\n"
-.. "## Access\n\n- acme/other\n- acme/self\n- Acme/Tool"
+.. "## Access\n\n- acme/other — `docs/decisions/d1-why.md`, and\n"
+.. "  https://github.com/acme/upstream/blob/main/tool/net/x.c\n- acme/self\n"
+.. "- Acme/Tool (see bin/cosmic.pin), an either/or like algorithm/contract"
 
 local PLAIN < const > = "Just prose.\n\nMore of it.\n"
 
@@ -198,8 +205,13 @@ local function test_leaf_prose_becomes_two_blobs_two_fields_and_a_body()
   local it = check.must(store.load(s, b.leaf))
   assert(table.concat(it.touches, " ") == "_work/a.tl _work/b_test.tl _work/c.tl",
     table.concat(it.touches, " "))
-  assert(table.concat(it.access, " ") == "acme/other acme/tool",
+  assert(table.concat(it.access, " ") == "acme/other acme/tool acme/upstream",
     table.concat(it.access, " "))
+  -- The loose read-side rule saw more than that; the write kept less.
+  assert(specmod.declared_repos(RICH)["docs/decisions"]
+    and specmod.declared_repos(RICH)["bin/cosmic.pin"]
+    and specmod.declared_repos(RICH)["algorithm/contract"],
+    "the read-side rule is still loose, which is why the write filters")
   assert(#it.depends_on == 0 and it.repo == "acme/self" and it.base == "main")
   assert(it.decode_problems == nil, table.concat(it.decode_problems or {}, "; "))
   check.must(store.close(s))

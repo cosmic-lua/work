@@ -100,20 +100,69 @@ local function classify(text: string): Classified
   }
 end
 
---- The `access` field the prose declared: every repository the
+--- The `access` field the prose declared: the repositories the
 --- `## Access` section names, sorted for a deterministic tree, minus
 --- the item's own `repo` — that one is read access by definition.
+---
+--- `spec.declared_repos` is the READ-side rule and deliberately loose:
+--- a spurious extra there only makes a reference look MORE declared.
+--- Written into a field it would be durable garbage — measured over
+--- the live board its 50-odd distinct tokens are five repositories and
+--- forty-five path fragments (`docs/decisions`, `tool/net`,
+--- `bin/cosmic.pin`, `github.com/cosmic-lua`). So the write keeps a
+--- candidate only when the section names it unambiguously as a
+--- repository: as the slug of a `github.com` URL, or as an
+--- `owner/name` standing as a WHOLE token — not the prefix of a longer
+--- path, not carrying a file extension — under an owner the board
+--- KNOWS (`known_owners`): prose with a slash in it (`algorithm/contract`,
+--- `tool/lua`, a branch name) survives the token rule, and what tells a
+--- repository from it is that a grant names an owner the board has
+--- seen — one an item lands under, or one a URL on the board names.
 --- @param text string The whole `spec.md`
 --- @param own string The item's `repo`, "" when unset
+--- @param owners {string: boolean} The board's known owners, lower-cased
 --- @return {string} Sorted slugs
-local function declared_access(text: string, own: string): {string}
+local function declared_access(text: string, own: string,
+    owners: {string: boolean}): {string}
+  local section = (spec.sections(text)["access"] or ""):lower()
+  local whole: {string: boolean} = {}
+  for token in section:gmatch("[^%s`()%[%]<>\"']+") do
+    local bare = token:gsub("[,.;:]+$", "")
+    if bare:match("^[%w%-]+/[%w%-_]+$") then
+      whole[bare] = true
+    end
+  end
   local out: {string} = {}
   for slug in pairs(spec.declared_repos(text)) do
-    if slug ~= own:lower() then
+    local by_url = section:find("github.com/" .. slug, 1, true) ~= nil
+    or section:find("github.com:" .. slug, 1, true) ~= nil
+    local owner = slug:match("^([^/]+)/")
+    if slug ~= own:lower() and (by_url or (whole[slug] and owners[owner])) then
       out[#out + 1] = slug
     end
   end
   table.sort(out)
+  return out
+end
+
+--- The owners a board has seen: the owner half of every item's `repo`,
+--- and of every repository a `github.com` URL anywhere in any spec
+--- reaches. A URL is unambiguous, so its owner vouches for a bare
+--- mention elsewhere.
+--- @param items {item.Item} Every item on the board
+--- @param bodies {string} Every spec blob, any order
+--- @return {string: boolean} Lower-cased owners
+local function known_owners(items: {item.Item}, bodies: {string}): {string: boolean}
+  local out: {string: boolean} = {}
+  for _, it in ipairs(items) do
+    local owner = (it.repo or ""):match("^([^/]+)/")
+    if owner then out[owner:lower()] = true end
+  end
+  for _, body in ipairs(bodies) do
+    for _, slug in ipairs(spec.reached_repos(body)) do
+      out[slug:match("^([^/]+)/")] = true
+    end
+  end
   return out
 end
 
@@ -201,6 +250,14 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
   end
   local blobs, lerr = gitobj.cat_file_batch(root, queries)
   if blobs == nil then return nil, lerr end
+  local bodies: {string} = {}
+  for _, q in ipairs(queries) do
+    local entry = blobs[q]
+    if entry ~= nil and entry.otype == "blob" then
+      bodies[#bodies + 1] = entry.content
+    end
+  end
+  local owners = known_owners(board.items, bodies)
   for _, it in ipairs(board.items) do
     local tip = board.shas_by_id[it.id]
     local target = board.refs_by_id[it.id]
@@ -211,7 +268,7 @@ local function migrate(root: string, now?: integer): Outcome | nil, string
     end
     local classified = classify(body)
     it.touches = declared_touches(classified.spec.change)
-    it.access = declared_access(body, it.repo or "")
+    it.access = declared_access(body, it.repo or "", owners)
     it.depends_on = {}
     local next_tip, nerr = migration_commit(root, it, classified, tip, at)
     if next_tip == nil then
@@ -260,8 +317,16 @@ local record gitmigrate
   type Outcome = Outcome
   type Classified = Classified
   classify: function(text: string): Classified
+  declared_access: function(text: string, own: string,
+  owners: {string: boolean}): {string}
+  known_owners: function(items: {item.Item}, bodies: {string}): {string: boolean}
   migrate: function(root: string, now?: integer): Outcome | nil, string
 end
 
-local M: gitmigrate = {classify = classify, migrate = migrate}
+local M: gitmigrate = {
+  classify = classify,
+  declared_access = declared_access,
+  known_owners = known_owners,
+  migrate = migrate,
+}
 return M
