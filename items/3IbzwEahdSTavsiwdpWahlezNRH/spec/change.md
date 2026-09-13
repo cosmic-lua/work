@@ -1,5 +1,3 @@
-## Change
-
 Evidence (2026-08-30): when a change relocates or deletes a
 mechanism, prose asserting the old one outlives it — item 3IZaO4Vj
 needed three sweep rounds to find 23 stale sites after the identity
@@ -13,8 +11,3 @@ carry their commands. Place it beside the existing "measured, not
 inferred" prose so it reads as the same rule applied to removals.
 Wording stays in the file's voice (lowercase, compact). Nothing else
 in the file moves.
-
-## Non-goals
-
-No mechanical gate (a follow-up may argue for one; this is the doc
-half). No edits to AGENTS.md or other skills.
