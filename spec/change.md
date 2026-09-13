@@ -1,0 +1,1 @@
+`bin/gitboard.pin`: `url` → `https://github.com/cosmic-lua/work/releases/download/2026-09-06-edeebf5/gitboard`, `sha256` → `fa9d16149e3b9f18c3b4629ec4c3feb23fb781641b00b4a6c873f0b2f5620594`, both lines together, nothing else. Verify with `bin/gitboard help brief` from the checkout: the pinned binary downloads, verifies, and runs; paste the verdict line in the PR body.
