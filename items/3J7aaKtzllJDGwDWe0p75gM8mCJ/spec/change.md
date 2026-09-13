@@ -1,5 +1,3 @@
-## Change
-
 Add `_tool/surface_scan.tl` and `_tool/surface_scan_test.tl`, and touch no
 other product file. Export a fallible
 `scan(source: string, path: string): {Member} | nil, string`; each `Member`
@@ -32,9 +30,3 @@ field regressions for aliases, direct array headers, nested interfaces, and
 macroexp initializers, including the existing Cosmic spellings named by the
 review. Keep the combined change at or below 500 lines; bounce rather than
 adding another module or surface kind.
-
-## Non-goals
-
-No filesystem/module visibility, shard ownership, surface keys, diff/render,
-ZIP reading, CLI wiring, emitted alias/interface/array-header/initializer
-members, alias target interpretation, or semantic type equivalence.
