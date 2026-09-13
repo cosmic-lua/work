@@ -1,3 +1,4 @@
 title: check.must sweep: the 179 test and example sites that carry an unguarded T | nil
 parent: 3IPXRRd2dukH8aVP73VM5U2X7wl
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: cosmic/time_parse_test.tl cosmic/fetch/verbs_test.tl cosmic/embed_test.tl cosmic/embed_advanced_test.tl cosmic/tty_pty_test.tl cosmic/fs/path_test.tl cosmic/fd_test.tl cosmic/check_test.tl _tool/doc/index_test.tl _perf/gate_test.tl 3p/tl/tl_test.tl
