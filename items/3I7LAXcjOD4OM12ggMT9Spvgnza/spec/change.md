@@ -1,13 +1,3 @@
-## Goal
-
-G2 — contained where the platform can enforce it, via the sandbox epic's
-R4: missing paths are tolerated at open time, never pre-checked. The
-pre-check is a TOCTOU (a path vanishing between check and open still
-kills the whole restrict) and dangling symlinks pass it then fail the
-open.
-
-## Change
-
 Move `optional` from a pre-filter to the open itself. Measured
 2026-08-19 at `f420391`:
 
@@ -38,24 +28,3 @@ Move `optional` from a pre-filter to the open itself. Measured
    wrong). Existing tests already skip cleanly where landlock is
    unavailable (this repo's sandboxed CI kernel returns ENOSYS,
    measured); CI's ubuntu runners exercise the real paths.
-
-## Non-goals
-
-- `_cli/grants.tl`'s own presence filter (lines ~249–255) stays — it
-  encodes grant-shape judgment, not this mechanism; deleting it is its
-  own follow-up once this lands.
-- no change to the `Fs` record's public shape: `optional: boolean`
-  keeps its name and meaning; only WHERE it acts moves.
-- no report/strict changes — that is the sibling R1 slice.
-
-## Acceptance
-
-- `bin/cosmic --make test cosmic/sandbox/landlock_test.tl cosmic/sandbox/init_test.tl`
-  ends `test: PASS (2 files)`.
-- `git grep -c "present_only\|effective_fs" -- cosmic/` prints nothing.
-- `bin/cosmic --make ci` ends `ci: PASS`.
-
-## Enablement
-
-none needed — every touched line is named from measurement; the errno
-narrowing idiom (`errno.is_code`) is the stdlib's documented pattern.
