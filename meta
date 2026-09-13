@@ -1,6 +1,7 @@
 title: migrate to runner mode, batch 2/7: _cli, _make
 parent: 3IOCdooEOElQSPH42nr5xOrAQVn
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1459
 resolution: completed
 builders: 05f7c552-0c90-51cb-99b3-e018759c6ed5
+touches: _make/resolution_test.tl _cli/citations_test.tl
