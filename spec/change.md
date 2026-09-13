@@ -1,5 +1,3 @@
-## Change
-
 Extract the position→type report plumbing `cosmic/_teal_discard.tl`
 already has (proven working end to end — it is what powers
 `cosmic.teal.check`/`compile`'s discarded-error diagnostics today)
@@ -71,20 +69,3 @@ non-nilable local (`is_nilable_at` false), a `T | nil` local at its use
 position (true), and a position with no report entry — outside
 `report_types` mode, or a bad `y`/`x` — returning nil/false rather than
 throwing.
-
-## Non-goals
-
-Not wiring this into `cosmic.ast` (`«Xp0T_KLQ0»`/`«8b2w_hfv3»`'s own
-conclusion: the lookup belongs beside `cosmic.teal`'s checked-
-environment machinery, not inside `cosmic.ast`'s syntax-only layer). Not
-adding a type-filter predicate to `cosmic.ast.match`
-(`«8b2w_hfv3»`'s own Non-goals — this item only makes the primitive
-those Non-goals name reachable). Not extending `_types/gentl.tl` to
-curate colon-defined methods. Not exposing `cosmic._teal_types` on the
-public `cosmic.teal` surface — it stays `_`-internal, required only by
-other `cosmic/_teal_*.tl` shards, same visibility class as its siblings.
-Not rebuilding the nil-flow census.
-
-## Access
-
-cosmic-lua/cosmic, read and write on a branch; no other repository.
