@@ -4,6 +4,67 @@ An item's spec says what to build. What was measured, what was
 learned, and what happened along the way live in the item's own commit
 history, never in its spec.
 
+## Landed
+
+Every step of the plan at the end of this record has landed, all on
+2026-09-13. The plan is kept as it was written; this section names what
+each step became and where it left the plan.
+
+1. **Doctrine and briefs agree** — #143, the change that introduced
+   this record.
+2. **The format-5 reader and writer** — #154 (the `spec/` tree;
+   `touches`, `access` and `depends_on` with their cache columns and
+   hydration; `target` unpacked; `verdict_spec` gone, and with it
+   `gitshow`'s verdict-moved branch; `result` re-typed to a board
+   commit; format 4 still readable) and #155 (`depend`/`undepend` with
+   the cycle check, `set --touches`/`--access`, `next` and `take` gated
+   on `depends_on`). The log is #150 (`log ID` reads the ref's
+   history), #153 (`log ID --add` appends an entry) and #157 (the
+   append fenced behind the claim). A research deliverable's board
+   commit is briefed, judged and completed through #158, #159, #160,
+   #161 and #162.
+3. **Release and pin bump** — cosmic#1852. The plan put the pin ahead
+   of the migration's code; a format-5 build refuses a format-4 board
+   outright, so pinning first would have darkened every clone for as
+   long as the migration took to build. The pin waited for the release
+   carrying `migrate` and the migration ran from it the moment it
+   merged. cosmic#1855 pins the release carrying the retire.
+4. **The migration** — #163 is the transform, #164 the batching it
+   actually ran with. 1425 refs (702 `items/*`, 723 `ended/*`; the
+   plan's 1360 had grown), 425 `## Acceptance` sections dropped, in
+   **31 atomic batches of at most 50 refs with the marker riding the
+   last one** rather than the single push the plan named: the
+   session's egress proxy refused the 1425-ref receive-pack POST with
+   a bare `403` (1, 10 and 50 ref updates pass, 100 fail, a 6 MB body
+   passes), and the shipped code would have rewritten an
+   already-migrated tip with an empty Change on a rerun. cosmic's D49
+   records the decision and D47 carries the amendment.
+5. **Retire** — split where its spec said to cut. #165 removed the
+   format-4 reader, the `migrate` verb, `spec.revision`, the four
+   path parsers and the Ready-when mechanism, rewired every reader
+   onto `touches` and `access`, and gave `fsck` the prose-blocker
+   report plus a `depends_on` cycle report; #166 took `key` out of
+   the schema.
+
+What deviated from the plan, beyond the batched push:
+
+- **`access` is written from a repository-shaped token only** — a
+  `github.com` URL's slug, or a whole `owner/name` under an owner the
+  board already knows — because the read-side rule yields forty-five
+  path fragments beside the five real repositories. Batched, the
+  known-owner set is drawn from the whole board's text (an unmigrated
+  tip's `spec.md`, a migrated tip's parent's), so the batches write
+  the trees one push would have.
+- **`fsck`'s prose-blocker report names only an open blocker.**
+  `depend` refuses a finished target, so a resolved blocker's mention
+  is history, not an undeclared dependency. `depends_on` was left
+  empty by the migration; the two real prose dependencies the report
+  surfaced were declared by hand after the pin bump.
+- **Lane repairs are identified by title, not parentage.** Their parent
+  is the outcome ordinary items are filed under, so parentage alone
+  would have promoted nine of those to the repair stage. Nothing on the
+  board had ever carried a `key`.
+
 ## The rule
 
 A spec is prospective and is replaced. A measurement is retrospective
@@ -232,6 +293,9 @@ dates it claims inside itself. It stays indexed by `find` and readable
 through `git log`. Acceptance is dropped; it remains in history.
 
 ## The order these land in
+
+This is the plan as it stood before any of it was built, kept as
+written; the Landed section at the top records what each step became.
 
 They are ranked siblings under one container, each depending on the one
 before it — the `depends_on` relation item 2 builds, recorded in prose
