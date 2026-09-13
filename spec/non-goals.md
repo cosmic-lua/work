@@ -1,0 +1,2 @@
+- No change to `cosmic.template`'s API. This item adds a caller, not a feature.
+- No template discovery inside packages or archives.

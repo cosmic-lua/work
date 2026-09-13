@@ -1,5 +1,3 @@
-## Change
-
 Give templates a position-declared kind in the project model, so a `*.tmpl` in the
 tree compiles to a module without the project writing a generator by hand.
 
@@ -32,8 +30,3 @@ Add `*.tmpl` to that vocabulary: a template at `x/y.tmpl` compiles to the module
 Do not pull this before there are real templates. A convention is forever, and the
 evidence that the hand-written generator is repetitive should come from projects
 that wrote one — not from predicting they will.
-
-## Non-goals
-
-- No change to `cosmic.template`'s API. This item adds a caller, not a feature.
-- No template discovery inside packages or archives.
