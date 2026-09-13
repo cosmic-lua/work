@@ -1,0 +1,3 @@
+title: _perf: a contention scenario — N disjoint writers on one head, retries per publish
+parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
+touches: _perf/bench/contention_bench.tl README.md
