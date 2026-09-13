@@ -1,0 +1,2 @@
+- No change to `_cli/returns.tl`'s lint or the shared grammar.
+- No change to what the walk counts as a lying return.
