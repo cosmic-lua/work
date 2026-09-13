@@ -1,3 +1,5 @@
 title: delete the migrate verb and the edges carry-forward now that the board is on layout 2
 parent: 3IvL38OFVsroR6cGpPb0ePUzFHX
-target: cosmic-lua/work@main
+repo: cosmic-lua/work
+base: main
+touches: _work/storemigrate.tl _work/itemtree.tl _work/gitread.tl _work/gitobj.tl _work/fastimport.tl _work/gitfsck.tl _work/itemtree_test.tl

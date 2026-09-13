@@ -1,5 +1,3 @@
-## Change
-
 The live board is on layout 2 and no reader interprets any edge kind,
 so the generic `edges/<kind>/<id>` carry-forward exists only for
 `gitboard migrate` to read layout-1 trees. Delete both: the `migrate`
