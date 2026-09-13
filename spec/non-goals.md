@@ -1,0 +1,2 @@
+- No scenario or check change; the harness's numbers are untouched.
+- No file outside `_perf/`.
