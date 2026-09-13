@@ -1,6 +1,6 @@
 title: review bounce: name the tempting unsafe fix and its boundary guard
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: 06a4eb871c5a1e5d9dc3e64c9e919c1a3b78712d
 handover_head: ec5cb390ef66124e00007f8bd0f55128c017fc39
 external_url: https://github.com/cosmic-lua/work/pull/130
@@ -9,3 +9,4 @@ verdict_head: ec5cb390ef66124e00007f8bd0f55128c017fc39
 landed_head: b3463980355cd02e94126d0671ed14faff4f3966
 resolution: completed
 builders: 300bc5ef5440871a1192711e9dae4170
+touches: _work/brieftext_review.tl _work/brieftext_test.tl
