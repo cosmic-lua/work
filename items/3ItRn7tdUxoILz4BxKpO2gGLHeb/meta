@@ -2,3 +2,4 @@ title: cosmic.github: typed pull, review, check-run and workflow-run readers, po
 parent: 3IvL3eLKmAvbo7wy5j787Ez91h9
 repo: cosmic-lua/cosmic
 touches: cosmic/github/pulls.tl _work/review.tl cosmic/github/checks.tl cosmic/github/actions.tl _work/gh_test.tl
+depends_on: 3ItBZ0aGEdb0Lhe0qE9Z6LrdQVQ
