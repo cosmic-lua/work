@@ -1,4 +1,5 @@
 title: cosmic --upgrade apply: inline the wrappers at the call sites by token span, format, report again
 parent: 3ItbajbrSQgL9uxhN7sfAIiQ5k1
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 speccers: dda1840b-c349-51e6-b0ca-ba810058a66a
+touches: cosmic/_teal_discard.tl cosmic/ast/rewrite.tl _tool/inline.tl _cli/upgrade.tl _tool/inline_test.tl
