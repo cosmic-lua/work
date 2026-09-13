@@ -1,3 +1,6 @@
 title: deps projection 2: checked cold and repeated dependency benchmarks
 parent: 3JDEb1FFGt6Kw92rokUyHQYgJGD
-target: cosmic-lua/cosmic@main
+repo: cosmic-lua/cosmic
+base: main
+touches: _perf/bench/deps_bench.tl _perf/bench/testdata/deps_driver.lua
+access: cosmic-lua/work
