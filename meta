@@ -1,3 +1,5 @@
 title: wrap_server: a single-cert TLS server socket-wrap binding, blocked on MBEDTLS_SSL_SRV_C
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+touches: third_party/mbedtls3/include/mbedtls/mbedtls_config.h tool/net/definitions.lua
+access: cosmic-lua/cosmic
