@@ -1,4 +1,4 @@
 title: a spec that relocates a rule must inventory every site asserting the old mechanism
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
