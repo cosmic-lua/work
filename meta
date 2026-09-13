@@ -1,6 +1,7 @@
 title: casts: render the positional-struct annotation gentype degrades to any, and drop the three sigaction casts that no longer narrow
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1372
 resolution: completed
 builders: b40d5aa8-3577-5790-bd40-0638632db5a9
+touches: _types/gentype_inline.tl cosmic/url.tl _types/gentype_render.tl _types/gentype_inline_test.tl _types/gentype_test.tl cosmic/signal.tl o/_types/types_gen/cosmo/unix.d.tl _build/casts_baseline.tl
