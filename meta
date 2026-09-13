@@ -1,3 +1,4 @@
 title: redbean: TLS server worker SIGSEGVs on any ClientHello carrying SNI — NULL p_sni context in mbedtls_ssl_conf_sni
 parent: 3HyRdY4sPAYZ6xkwrXCh5BnsH7B
-target: cosmic-lua/cosmopolitan
+repo: cosmic-lua/cosmopolitan
+access: cosmic-lua/cosmic
