@@ -22,8 +22,8 @@ Render each subsequent indexed call from the same saved plan. Execute it through
 the GitHub connector, replacing symbolic prior-call SHA references with the actual
 returned values. A draft creates one tree/commit per transition and advances state
 once. Deletions rebuild the affected tree without requiring a null literal value.
-Re-render the final call immediately before executing it: its deadline must still
-hold. A stale branch rejects the non-forced update; prepare a new attempt after
+Re-render the final call immediately before executing it: its expected-head and
+deadline guards must still hold. A stale branch rejects the non-forced update; prepare a new attempt after
 refreshing, never combine calls from different attempts.
   gitboard publish --from-plan attempt.literal --published RETURNED_COMMIT_SHA
   gitboard refresh --execute
@@ -40,9 +40,18 @@ Migration is explicit:
   gitboard migrate6 plan --checkpoint checkpoint.literal
   gitboard migrate6 verify-source --checkpoint checkpoint.literal
 Planning writes only local candidate objects and a checkpoint. It never cuts over
-the board. Before the final snapshot, legacy ref creation, updates and deletion
-must be blocked for every writer. Activation requires an exact source-ref-set
-recheck and a shell atomic update of state and the format marker. The release must
+the board. An offline checkpoint cannot acquire a retroactive freeze proof.
+For a production snapshot, the owner first installs the legacy-write ruleset:
+  gitboard migrate6 plan --remote origin --freeze-ruleset ID --checkpoint frozen.literal
+This explicitly queries the ruleset through authenticated gh before and after
+a fresh fetch. The supported ruleset covers items/**, ended/**, claim-batches/**,
+and board/seq, refuses creation/update/deletion, and has no bypass or exclusions.
+Inspect staged pushes, then execute only when the cutover is ready:
+  gitboard migrate6 activation-plan --checkpoint frozen.literal --limit 100
+  gitboard migrate6 publish --checkpoint frozen.literal --limit 100 --execute
+Execution rechecks the live ruleset and complete source ref set, stages ancestors,
+then atomically updates state and the format marker. Shell Git needs write
+authentication; connector-only atomic activation is unavailable. The release must
 support both old and new layouts before a pin changes. After native writes begin,
 the old refs are an archive, not a rollback target.
 ]]

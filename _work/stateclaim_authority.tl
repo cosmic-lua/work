@@ -19,8 +19,14 @@ local function current(s: store.Store, id: string, session: string): claim.State
   return st, ""
 end
 local function historical(s: store.Store, id: string, control: string, st: claim.State): string
-  local lineage, err = child.run({"git", "merge-base", "--is-ancestor", control, st.control}, {cwd = s.root})
-  if lineage == nil or not lineage.ok then return err ~= nil and err ~= "" and err or "receipt control is not canonical history" end
+  local lineage, err = child.run({"git", "rev-list", "--first-parent", st.control}, {cwd = s.root})
+  if lineage == nil then return err end
+  if not lineage.ok then return "cannot inspect canonical receipt history: " .. lineage.stderr end
+  local canonical = false
+  for sha in lineage.stdout:gmatch("([^\n]+)") do
+    if sha == control then canonical = true; break end
+  end
+  if not canonical then return "receipt control is not canonical first-parent history" end
   local old, oerr = boardread.load(s.root, control, id)
   if old == nil then return oerr end
   if old.claim == nil or old.claim.id ~= st.root or old.claim.holder ~= st.holder

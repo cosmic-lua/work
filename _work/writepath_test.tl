@@ -77,13 +77,12 @@ local function count_gitread_load(): Counter
   return counter
 end
 
--- `new` on a remote-mode fixture takes one canonical `for-each-ref`
--- snapshot (`store.list`, inside `cmd_new`). The successor is prepared,
--- not confirmed, so it neither patches the canonical cache nor takes a
--- second canonical snapshot. The cache is warmed
--- first so `similar_lines`'s own `cache.open` finds a file already
--- valid at the snapshot `store.list` just took, the same way a real
--- run's second-and-later mutation always does.
+-- The fixture's Store.open already captured the canonical board snapshot.
+-- `new` consumes it once; only the narrow format compatibility check
+-- enumerates refs inside this measured section. The duplicate search reuses
+-- the captured digest. The successor is prepared,
+-- not confirmed, so no extra read or canonical cache patch follows the write.
+-- stateread_start_test separately measures cold open through first read.
 local function test_new_reads_the_board_once_and_rereads_only_the_written_ref()
   local a, _b = fixture.init_shared("new-load-count")
   local warm = check.must(cache.rebuild(a.root))
@@ -97,10 +96,12 @@ local function test_new_reads_the_board_once_and_rereads_only_the_written_ref()
 
   assert(rc == 0, "new should be accepted")
   assert(ld.n == 0, "new must never fall back to a per-item load: got " .. ld.n)
-  assert(fe.n == 2, ("new should pay one board snapshot plus the duplicate "
-      .. "search's guarded cache open, and must not patch an unconfirmed "
+  assert(fe.n == 1, ("new must reuse its startup snapshot and pay only the narrow "
+      .. "format compatibility check, and must not patch an unconfirmed "
       .. "successor into the cache: got %d")
     :format(fe.n))
+  assert(fe.calls[1] == table.concat({"refs/heads/items", "refs/heads/ended",
+        "refs/heads/board/format"}, ","), "the remaining read must be the narrow format compatibility check")
 end
 
 -- `rank` on the same kind of fixture: the defect this item's Evidence

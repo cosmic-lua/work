@@ -10,6 +10,7 @@ local refs = require("_work.refs")
 local store = require("_work.store")
 local projection = require("_work.stateplan_git")
 local tx = require("_work.statetransaction")
+local stategate = require("_work.stategate")
 local staging = require("_work.statestaging")
 
 local function transition(s: store.Store, changes: {tx.Change}, message: string,
@@ -39,6 +40,10 @@ local function transition(s: store.Store, changes: {tx.Change}, message: string,
       staging_sha = s.state_head, transitions = {change}})
   if frozen == nil then return false, err end
   change = frozen.transitions[1]
+  if bounded then
+    local allowed, gerr = stategate.check(s.root, s.state_head, change)
+    if not allowed then return false, gerr end
+  end
   local ops: {fastimport.Op} = {}
   for _, op in ipairs(changes) do ops[#ops + 1] = {path = op.path, content = not op.delete and op.content or nil} end
   local temporary = "refs/gitboard/staging/" .. codec.encode_hex(rand.bytes(16))

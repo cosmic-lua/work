@@ -63,7 +63,8 @@ local type Cache = index.Index
 --- suspenders once more, the fingerprint already moved with the DDL.
 --- The cache is disposable: this is a rebuild boundary, never an
 --- in-place data migration.
-local SCHEMA_VERSION < const > = 11
+--- Version 12 invalidates pre-clock native claim projections.
+local SCHEMA_VERSION < const > = 12
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -126,7 +127,7 @@ CREATE TABLE ci_checks (
 --- guard's own otherwise-fresh `for-each-ref` is skipped — reads it
 --- from here rather than repeating the list (`_work.gitview.list_via_cache`,
 --- which also wants the same snapshot's committer dates).
-local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board", "refs/heads/state"}
+local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}
 
 --- The cache file's path for a given store root.
 --- @param root string The store's root
@@ -201,13 +202,11 @@ end
 --- @return string | nil The digest
 --- @return string Error message
 local function fresh_digest(root: string): string | nil, string
-  local head, herr = format.state_head(root)
+  local entries, err = refs_snapshot(root)
+  if entries == nil then return nil, err end
+  local head, herr = format.state_head(root, entries)
   if head == nil then return nil, herr end
   if head ~= "" then return head, "" end
-  local entries, err = refs_snapshot(root)
-  if entries == nil then
-    return nil, err
-  end
   return digest_of(entries), ""
 end
 

@@ -51,8 +51,12 @@ end
 
 local function marker(root: string, parent: string, date: string): string | nil, string
   if parent ~= "" then
-    local existing = source.git(root, {"show", parent .. ":format"})
+    local existing, err = source.git(root, {"show", parent .. ":format"})
+    if existing == nil then return nil, "cannot read destination format marker: " .. err end
     if existing == "6\n" then return parent, "" end
+    if existing ~= "5\n" then
+      return nil, "unsupported destination format marker " .. string.format("%q", existing) .. "; expected 5 or 6"
+    end
   end
   local blob, err = gitobj.hash_object_write(root, "6\n")
   if blob == nil then return nil, err end

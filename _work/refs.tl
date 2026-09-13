@@ -370,10 +370,12 @@ local function fetch_prune(root: string): boolean, string
   return true
 end
 
---- The four mirror refspecs for a configured board remote.
+--- Legacy namespace mirrors tolerate absent refs. Native transport requests
+--- exact state and board/format refs together through statepublish.fetch_argv;
+--- installing an exact state refspec here would break legacy boards without it,
+--- while a state* wildcard would also mirror unrelated state-prefixed branches.
 local function fetch_refspecs(remote: string): {string}
   return {
-    ("+refs/heads/state*:refs/remotes/%s/state*"):format(remote),
     ("+refs/heads/items/*:refs/remotes/%s/items/*"):format(remote),
     ("+refs/heads/ended/*:refs/remotes/%s/ended/*"):format(remote),
     ("+refs/heads/claims/*:refs/remotes/%s/claims/*"):format(remote),

@@ -1,0 +1,45 @@
+#!/usr/bin/env cosmic
+-- A native mutation reuses `store.list`'s exact item/claim snapshot instead
+-- of paying for another whole-board ls-tree/cat-file read per protected item.
+local check = require("cosmic.check")
+local child = require("cosmic.child")
+local env = require("cosmic.env")
+local fixture = require("_work.fixture")
+local fs = require("cosmic.fs")
+local gate = require("_work.gitclaimgate")
+local item = require("_work.item")
+local ksuid = require("_work.ksuid")
+local publish = require("_work.publish")
+local stateinit = require("_work.stateinit")
+local store = require("_work.store")
+local write = require("_work.storewrite")
+
+local function test_native_list_snapshot_claim_gate_spawns_no_git()
+  local root = fs.join(fixture.tmpdir, "native-claimgate-process-count")
+  assert(fs.remove_all(root) and fs.make_dirs(root))
+  assert(stateinit.init(root))
+  fixture.git(root, {"config", "gitboard.mode", "local"})
+  local s = check.must(store.open(root))
+  local it = check.must(item.decode({id = ksuid.new(), title = "unclaimed"}))
+  assert(write.save(s, it, "new") and publish.publish(s))
+  local listed = check.must(store.list(s))
+  assert(#listed == 2)
+  local target = listed[1].id == it.id and listed[1] or listed[2]
+  local fresh = check.must(item.decode({id = ksuid.new(), title = "fresh"}))
+  assert(gate.mutation_refusal(s, fresh, "session", false, "") == nil)
+  assert(s.state_reads["items/" .. fresh.id] == ("0"):rep(40)
+    and s.state_reads["claims/" .. fresh.id] == ("0"):rep(40))
+  local old_path = os.getenv("PATH") or ""
+  local real_git = (check.must(child.run({"sh", "-c", "command -v git"})).stdout:gsub("%s+$", ""))
+  local wrappers = fs.join(fixture.tmpdir, "native-claimgate-git-wrap")
+  local count = fs.join(fixture.tmpdir, "native-claimgate-git-count")
+  assert(fs.remove_all(wrappers) and fs.make_dirs(wrappers) and fs.write(count, ""))
+  assert(fs.write(fs.join(wrappers, "git"),
+      ("#!/bin/sh\nprintf x >> '%s'\nexec '%s' \"$@\"\n"):format(count, real_git)))
+  assert(fs.set_mode(fs.join(wrappers, "git"), fs.octal("755")))
+  assert(env.set("PATH", wrappers .. ":" .. old_path))
+  local refusal = gate.mutation_refusal(s, target, "session", false, "")
+  assert(env.set("PATH", old_path))
+  assert(refusal == nil)
+  assert(check.must(fs.read(count)) == "", "listed native claim gate spawned git")
+end

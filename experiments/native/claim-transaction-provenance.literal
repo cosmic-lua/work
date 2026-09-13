@@ -1,0 +1,20 @@
+return {
+  ["arguments"] = "experiments/native-state/mutations.tl\n_work/stateclaim_authority.tl\n_work/stateclaim_authority_test.tl\n_work/stateplan_receipts_test.tl",
+  ["catalog"] = {
+    ["expired_claim_authority"] = {["after"] = "if claim.status(st, os.time()) ~= \"active\" and false then", ["before"] = "if claim.status(st, os.time()) ~= \"active\" then", ["file"] = "_work/stateclaim_authority.tl", ["test"] = "_work/stateclaim_authority_test.tl"},
+    ["expiry_never_releases"] = {["after"] = "if now >= st.expires_at and false then", ["before"] = "if now >= st.expires_at then", ["file"] = "_work/claim.tl", ["test"] = "_work/stateclaim_test.tl"},
+    ["final_connector_deadline_boundary"] = {["after"] = "if index == #chain and plan.publish_by > 0 and (now or os.time()) > plan.publish_by then", ["before"] = "if index == #chain and plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then", ["file"] = "_work/stateplan.tl", ["test"] = "_work/stateplan_test.tl"},
+    ["local_head_as_remote_canonical"] = {["after"] = "local entries, herr = refs.for_each_ref_raw(dir, {\"refs/heads/state\"})", ["before"] = "local entries, herr = refs.for_each_ref(dir, {\"refs/heads/state\"})", ["file"] = "_work/format.tl", ["test"] = "_work/stateread_test.tl"},
+    ["local_publication_deadline_boundary"] = {["after"] = "if plan.publish_by > 0 and (now or os.time()) > plan.publish_by then return nil, \"prepared claim expired before publication\" end", ["before"] = "if plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then return nil, \"prepared claim expired before publication\" end", ["file"] = "_work/stateplan.tl", ["test"] = "_work/stateplan_test.tl"},
+    ["mutable_frozen_transaction"] = {["after"] = "local copy, cerr = value, raw:sub(1, 0)", ["before"] = "local copy, cerr = decode(raw)", ["file"] = "_work/statetransaction.tl", ["test"] = "_work/stateplan_test.tl"},
+    ["omitted_claim_read_fence"] = {["after"] = "if actual ~= dependency.id and false then return false, \"LOST_RACE: \" .. dependency.path end", ["before"] = "if actual ~= dependency.id then return false, \"LOST_RACE: \" .. dependency.path end", ["file"] = "_work/stateplan.tl", ["test"] = "_work/stateplan_test.tl"},
+    ["receipt_reacquisition_identity"] = {["after"] = "old.claim.holder ~= st.holder", ["before"] = "old.claim.id ~= st.root or old.claim.holder ~= st.holder", ["file"] = "_work/stateclaim_authority.tl", ["test"] = "_work/stateclaim_authority_test.tl"},
+    ["renewal_changes_acquisition_identity"] = {["after"] = "next_claim = {id = codec.encode_hex(rand.bytes(20)), holder = old.holder, acquired_at = old.acquired_at,", ["before"] = "next_claim = {id = old.id, holder = old.holder, acquired_at = old.acquired_at,", ["file"] = "_work/stateclaim.tl", ["test"] = "_work/stateclaim_test.tl"},
+    ["second_parent_receipt_authority"] = {["after"] = "{\"git\", \"rev-list\", st.control}", ["before"] = "{\"git\", \"rev-list\", \"--first-parent\", st.control}", ["file"] = "_work/stateclaim_authority.tl", ["test"] = "_work/stateclaim_authority_test.tl"},
+    ["stale_snapshot_authority"] = {["after"] = "local head, herr = s.state_head, ref:sub(1, 0)", ["before"] = "local head, herr = refs.read_ref(s.root, ref)", ["file"] = "_work/stateclaim_authority.tl", ["test"] = "_work/stateclaim_authority_test.tl"},
+    ["tip_only_receipt"] = {["after"] = "for index = #normalized.transitions, #normalized.transitions, -1 do", ["before"] = "for index = #normalized.transitions, 1, -1 do", ["file"] = "_work/stateplan_receipts.tl", ["test"] = "_work/stateplan_receipts_test.tl"},
+  },
+  ["revision"] = "0e3701fd93076d7f174f408a08d6a2a45086e2c1",
+  ["runtime"] = "/workspace/scratch/27a6dfdb63ab/work-format6/o/bootstrap/cosmic",
+  ["source_snapshot"] = "source-snapshot/_work",
+}

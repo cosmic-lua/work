@@ -122,11 +122,43 @@ local function snapshot(root: string, receipt: Receipt): Receipt | nil, string
       tip = receipt.tip, remote = receipt.remote, target_url = receipt.target_url, repository = receipt.repository,
       transitions = receipt.transitions, published = ""}, refs.ZERO_SHA)
 end
+local function retire(root: string, receipt: Receipt): boolean, string
+  local destination = "refs/gitboard/quarantined/lost-race/" .. receipt.id
+  local prior, perr = refs.read_ref(root, destination)
+  if prior == nil then return false, perr end
+  if prior ~= refs.ZERO_SHA and prior ~= receipt.sha then return false, "lost-race quarantine already names another receipt" end
+  local live, lerr = refs.read_ref(root, receipt.ref)
+  if live == nil then return false, lerr end
+  if live == refs.ZERO_SHA then
+    if prior == receipt.sha then return true, "" end
+    return false, "receipt disappeared without a matching retirement"
+  end
+  if live ~= receipt.sha then return false, "receipt advanced; refusing to retire a different snapshot" end
+  return refs.update_refs_atomic(root, {
+      {ref = destination, expected = prior, next = receipt.sha},
+      {ref = receipt.ref, expected = receipt.sha, next = refs.ZERO_SHA}})
+end
+local function was_retired(root: string, ref: string, tip: string): boolean, string
+  local identity = ref:match("^refs/gitboard/prepared/(.+)$") or ref:match("^refs/gitboard/drafts/(.+)$")
+  if identity == nil then return false, "" end
+  local sha, err = refs.read_ref(root, "refs/gitboard/quarantined/lost-race/" .. identity)
+  if sha == nil then return false, err end
+  if sha == refs.ZERO_SHA then return false, "" end
+  local got, gerr = gitobj.cat_file_batch(root, {sha .. ":manifest"})
+  if got == nil then return false, gerr end
+  local blob = got[sha .. ":manifest"]
+  if blob == nil or blob.otype ~= "blob" then return false, "invalid retired receipt" end
+  local decoded, derr = literal.decode_object(blob.content)
+  if decoded == nil then return false, derr end
+  return decoded.format == VERSION and decoded.ref == ref and decoded.tip == tip, ""
+end
 local function remove(root: string, receipt: Receipt): boolean, string
   return refs.update_ref(root, receipt.ref, refs.ZERO_SHA, receipt.sha)
 end
 local record Module
   type Receipt = Receipt
+  retire: function(string, Receipt): boolean, string
+  was_retired: function(string, string, string): boolean, string
   target_url: function(string, string): string
   snapshot: function(string, Receipt): Receipt | nil, string
   active: function(string): Receipt | nil
@@ -139,5 +171,5 @@ local record Module
   list: function(root: string, kind?: string): {Receipt} | nil, string
   remove: function(string, Receipt): boolean, string
 end
-local M: Module = {target_url = target_url, snapshot = snapshot, active = active, activate = activate, repository = repository, frozen = frozen, write = write, create = create, load = read, list = list, remove = remove}
+local M: Module = {was_retired = was_retired, retire = retire, target_url = target_url, snapshot = snapshot, active = active, activate = activate, repository = repository, frozen = frozen, write = write, create = create, load = read, list = list, remove = remove}
 return M

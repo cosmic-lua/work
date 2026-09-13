@@ -1,6 +1,4 @@
 --- Native claims: policy evaluated for the entire set before a transition exists.
-local codec = require("cosmic.codec")
-local rand = require("cosmic.rand")
 local boardread = require("_work.boardread")
 local boardtree = require("_work.boardtree")
 local claim = require("_work.claim")
@@ -57,7 +55,7 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
           denial = "product base must be a full commit id"
         else
           operation = claim.status(st, now) == "active" and "force" or "acquire"
-          next_claim = {id = codec.encode_hex(rand.bytes(20)), holder = caller,
+          next_claim = {id = boardtree.mint_claim_id(), holder = caller,
             acquired_at = now, renewed_at = now, expires_at = now + claim.LEASE_S,
             product_base = req.product_base}
         end

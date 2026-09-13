@@ -11,11 +11,12 @@ local record boardread
     logs: {string: string} tree: string claim_blob: string
   end
   record View
+    projected_at: integer
     head: string items: {item.Item} items_by_id: {string: item.Item}
     specs_by_id: {string: itemtree.Spec} claims_by_id: {string: boardtree.Claim}
-    logs_by_id: {string: {string: string}} item_tree_by_id: {string: string}
+    logs_by_id: {string: {string: string}} raw_logs_by_id: {string: {string: string}}
+    item_tree_by_id: {string: string}
     claim_blob_by_id: {string: string} entries: {boardtree.Entry}
-    marks: {string: string}
   end
   list: function(root: string, head: string, now?: integer): View | nil, string
   load: function(string, string, string): Decoded | nil, string
@@ -24,6 +25,7 @@ local type Decoded = boardread.Decoded
 local type View = boardread.View
 
 local function list(root: string, head: string, now?: integer): View | nil, string
+  local projected_at = now or os.time()
   local all_entries, err = boardtree.snapshot_tree_entries(root, head)
   if all_entries == nil then return nil, err end
   local entries: {boardtree.Entry} = {}
@@ -34,7 +36,12 @@ local function list(root: string, head: string, now?: integer): View | nil, stri
     if e.mode ~= "040000" and e.mode ~= "40000" then entries[#entries + 1] = e end
   end
   local queries: {string} = {}
-  for _, e in ipairs(entries) do queries[#queries + 1] = e.sha end
+  for _, e in ipairs(entries) do
+    -- Migration marks are retained evidence, not part of the live projection.
+    -- Fsck validates their canonical literal separately; ordinary reads avoid
+    -- materialising the potentially large map.
+    if e.path ~= "migration/marks" then queries[#queries + 1] = e.sha end
+  end
   local blobs, berr = gitobj.cat_file_batch(root, queries)
   if blobs == nil then return nil, berr end
   local metas: {string: {string: string}} = {}
@@ -42,9 +49,9 @@ local function list(root: string, head: string, now?: integer): View | nil, stri
   local edges: {string: {string: {string: string}}} = {}
   local specs: {string: itemtree.Spec} = {}
   local logs: {string: {string: string}} = {}
+  local raw_logs: {string: {string: string}} = {}
   local claims: {string: boardtree.Claim} = {}
   local claim_shas: {string: string} = {}
-  local marks: {string: string} = {}
   local ids: {string: boolean} = {}
   for _, e in ipairs(entries) do
     local content = blobs[e.sha] and blobs[e.sha].content or ""
@@ -64,7 +71,10 @@ local function list(root: string, head: string, now?: integer): View | nil, stri
           edges[id][kind][target] = content
         end
         local logid = e.path:match("^items/[^/]+/log/([^/]+)%.md$")
-        if logid ~= nil then logs[id] = logs[id] or {}; logs[id][logid] = content end
+        if logid ~= nil then
+          raw_logs[id] = raw_logs[id] or {}; raw_logs[id][logid] = content
+          if content ~= "" then logs[id] = logs[id] or {}; logs[id][logid] = content end
+        end
       end
     else
       local claim_id = e.path:match("^claims/([^/]+)$")
@@ -72,23 +82,19 @@ local function list(root: string, head: string, now?: integer): View | nil, stri
         local st, cerr = boardtree.decode_claim(content)
         if st == nil then return nil, "claims/" .. claim_id .. ": " .. (cerr or "invalid claim") end
         claims[claim_id], claim_shas[claim_id] = st, e.sha
-      elseif e.path == "migration/marks" then
-        local decoded, merr = boardtree.decode_marks(content)
-        if decoded == nil then return nil, merr end
-        marks = decoded
       end
     end
   end
-  local out: View = {head = head, items = {}, items_by_id = {}, specs_by_id = specs,
-    claims_by_id = claims, logs_by_id = logs, item_tree_by_id = item_trees,
-    claim_blob_by_id = claim_shas, entries = entries, marks = marks}
+  local out: View = {head = head, projected_at = projected_at, items = {}, items_by_id = {}, specs_by_id = specs,
+    claims_by_id = claims, logs_by_id = logs, raw_logs_by_id = raw_logs, item_tree_by_id = item_trees,
+    claim_blob_by_id = claim_shas, entries = entries}
   local sorted: {string} = {}; for id in pairs(ids) do sorted[#sorted + 1] = id end; table.sort(sorted)
   for _, id in ipairs(sorted) do
     if metas[id] == nil then return nil, "items/" .. id .. " has no meta" end
     local it = itemtree.to_item(id, metas[id], false, orders[id] or {}, edges[id] or {})
     local st = claims[id]
     if st ~= nil then
-      local at = now or os.time()
+      local at = projected_at
       if st.renewed_at > at + 300 then return nil, "claim for " .. id .. " is more than five minutes in the future" end
       it.claim_base, it.claim_batch = st.product_base, st.id
       if at < st.expires_at then it.claim = st.holder end
@@ -97,6 +103,7 @@ local function list(root: string, head: string, now?: integer): View | nil, stri
     if out.item_tree_by_id[id] == nil then return nil, "items/" .. id .. " has no tree" end
     out.specs_by_id[id] = out.specs_by_id[id] or {change = "", non_goals = ""}
     out.logs_by_id[id] = out.logs_by_id[id] or {}
+    out.raw_logs_by_id[id] = out.raw_logs_by_id[id] or {}
   end
   return out
 end

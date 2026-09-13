@@ -9,6 +9,18 @@ local receipts = require("_work.stateplan_receipts")
 local hash = require("cosmic.hash")
 local codec = require("cosmic.codec")
 local saved = require("_work.stateplan_file")
+local fs = require("cosmic.fs")
+local record Guard
+  publish_by: integer
+  expected_head: string
+  rule: string
+end
+local record Call
+  id: string
+  tool: string
+  arguments: {string: any}
+  guard: Guard | nil
+end
 local type Gate = function(string, string, tx.Transition): boolean, string
 local record Plan
   format: string
@@ -18,7 +30,7 @@ local record Plan
   base_tree: string
   candidate: string
   publish_by: integer
-  calls: {calls.Call}
+  calls: {Call}
   snapshots: {{{string: any}}}
 end
 local function fence(root: string, head: string, transition: tx.Transition, gate?: Gate): boolean, string
@@ -33,8 +45,8 @@ local function fence(root: string, head: string, transition: tx.Transition, gate
   end
   return true, ""
 end
-local function render(plan: Plan): {calls.Call} | nil, string
-  local out: {calls.Call} = {}
+local function render(plan: Plan): {Call} | nil, string
+  local out: {Call} = {}
   local parent, base = plan.expected_head, plan.base_tree
   for index, transition in ipairs(plan.frozen.transitions) do
     local group = literal.sequence() as {{string: any}} -- cast: explicit empty connector sequence
@@ -73,13 +85,15 @@ local function render(plan: Plan): {calls.Call} | nil, string
         message = transition.message}}
     parent = "$" .. id .. ".sha"
   end
-  out[#out + 1] = {id = "publish", tool = "github_update_ref", guard = {publish_by = plan.publish_by,
-      rule = "if nonzero, current time must be strictly before deadline"}, arguments = {
+  out[#out + 1] = {id = "publish", tool = "github_update_ref", guard = {publish_by = plan.publish_by, expected_head = plan.expected_head,
+      rule = "remote head must equal expected_head; if nonzero, current time must be strictly before deadline"}, arguments = {
       repository_full_name = plan.frozen.repository, branch_name = plan.frozen.branch, sha = parent, force = false}}
   return out, ""
 end
 local function validate(plan: Plan): boolean, string
-  if plan.format ~= "gitboard-state-plan-v1" then return false, "unsupported state plan" end
+  if plan.format ~= "gitboard-state-plan-v2" then
+    return false, "unsupported state plan; regenerate a new attempt from its frozen transaction"
+  end
   local ok, err = tx.validate(plan.frozen)
   if not ok then return false, err end
   if not objects.checked_sha(plan.expected_head, false) or not objects.checked_sha(plan.base_tree, false)
@@ -120,36 +134,32 @@ local function build(root: string, frozen: tx.Frozen, head: string, gate?: Gate,
     if tree == nil then return nil, terr end
     local candidate, cerr = projection.commit(root, parent, tree, transition)
     if candidate == nil then return nil, cerr end
-    local listing, lerr = git.run(root, {"ls-tree", "-r", "-z", candidate})
-    if listing == nil then return nil, lerr end
-    local entries = literal.sequence() as {{string: any}} -- cast: explicit empty connector sequence
-    for mode, sha, path in listing:gmatch("(%d+) blob ([0-9a-f]+)\t([^%z]+)%z") do
-      local entry: {string: any} = {path = path, mode = mode, type = "blob", sha = sha}
-      for _, change in ipairs(transition.changes) do
-        if change.path == path and not change.delete then entry.sha = nil; entry.content = change.content end
-      end
-      entries[#entries + 1] = entry
-    end
+    local entries, lerr = projection.snapshot(root, candidate, transition.changes)
+    if entries == nil then return nil, lerr end
     snapshots[#snapshots + 1] = entries
     parent = candidate
   end
   local complete, cerr = receipts.complete_chain(root, parent, copy)
   if not complete then return nil, cerr end
-  local plan: Plan = {format = "gitboard-state-plan-v1", frozen = copy, expected_head = head, expected_commit = expected_commit,
+  local plan: Plan = {format = "gitboard-state-plan-v2", frozen = copy, expected_head = head, expected_commit = expected_commit,
     base_tree = base, candidate = parent, publish_by = deadline, calls = {}, snapshots = snapshots}
   local rendered, rerr = render(plan)
   if rendered == nil then return nil, rerr end
   plan.calls = rendered
   return plan, ""
 end
-local function connector_calls(plan: Plan, repository?: string, branch?: string): {calls.Call} | nil, string
+--- @param plan Exact saved attempt whose calls are regenerated and checked.
+--- @return Fresh call records with execution guards, bound to that attempt.
+local function connector_calls(plan: Plan, repository?: string, branch?: string): {Call} | nil, string
   local ok, err = validate(plan)
   if not ok then return nil, err end
   if (repository ~= nil and repository ~= plan.frozen.repository)
   or (branch ~= nil and branch ~= plan.frozen.branch) then return nil, "plan destination differs" end
   return render(plan)
 end
-local function connector_call(plan: Plan, index: integer, now?: integer): calls.Call | nil, string
+--- @param index One-based call index in the frozen publication chain.
+--- @return Connector arguments after the final-call deadline check.
+local function connector_call(plan: Plan, index: integer, now?: integer): Call | nil, string
   local chain, err = connector_calls(plan)
   if chain == nil then return nil, err end
   if index < 1 or index > #chain then return nil, "call index outside plan" end
@@ -157,7 +167,6 @@ local function connector_call(plan: Plan, index: integer, now?: integer): calls.
     return nil, "prepared claim expired before publication"
   end
   local call = chain[index]
-  call.guard = nil
   return call, ""
 end
 local function validate_local(root: string, plan: Plan): boolean, string
@@ -171,16 +180,8 @@ local function validate_local(root: string, plan: Plan): boolean, string
   for index, transition in ipairs(plan.frozen.transitions) do
     local tip, terr = git.oid(root, plan.candidate .. "~" .. tostring(#plan.frozen.transitions - index))
     if tip == nil then return false, terr end
-    local listing, lerr = git.run(root, {"ls-tree", "-r", "-z", tip})
-    if listing == nil then return false, lerr end
-    local entries = literal.sequence() as {{string: any}} -- cast: explicit empty connector sequence
-    for mode, sha, path in listing:gmatch("(%d+) blob ([0-9a-f]+)\t([^%z]+)%z") do
-      local entry: {string: any} = {path = path, mode = mode, type = "blob", sha = sha}
-      for _, change in ipairs(transition.changes) do
-        if change.path == path and not change.delete then entry.sha = nil; entry.content = change.content end
-      end
-      entries[#entries + 1] = entry
-    end
+    local entries, lerr = projection.snapshot(root, tip, transition.changes)
+    if entries == nil then return false, lerr end
     if literal.encode(entries) ~= literal.encode(plan.snapshots[index]) then return false, "saved snapshot differs from candidate tree" end
   end
   return true, ""
@@ -201,7 +202,6 @@ local function save(path: string, plan: Plan): boolean, string
   return saved.write_once(path, raw)
 end
 local function load_saved(path: string): Plan | nil, string
-  local fs = require("cosmic.fs")
   local raw, err = fs.read(path)
   if raw == nil then return nil, err end
   local decoded, derr = literal.decode_object(raw)
@@ -219,13 +219,14 @@ local function load_saved(path: string): Plan | nil, string
 end
 local record Module
   type Plan = Plan
+  type Call = Call
   type Gate = Gate
   fence: function(root: string, head: string, transition: tx.Transition, gate?: Gate): boolean, string
   build: function(root: string, frozen: tx.Frozen, head: string, gate?: Gate, now?: integer): Plan | nil, string
   validate: function(Plan): boolean, string
   validate_local: function(string, Plan): boolean, string
-  connector_calls: function(plan: Plan, repository?: string, branch?: string): {calls.Call} | nil, string
-  connector_call: function(plan: Plan, index: integer, now?: integer): calls.Call | nil, string
+  connector_calls: function(plan: Plan, repository?: string, branch?: string): {Call} | nil, string
+  connector_call: function(plan: Plan, index: integer, now?: integer): Call | nil, string
   local_candidate: function(root: string, plan: Plan, now?: integer): string | nil, string
   save: function(string, Plan): boolean, string
   load: function(string): Plan | nil, string

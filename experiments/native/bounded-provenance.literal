@@ -1,0 +1,11 @@
+return {
+  ["arguments"] = "experiments/native/bounded-mutations.tl\n_work/graphguards.tl\n_work/stategate.tl\n_work/stategate_test.tl",
+  ["catalog"] = {
+    ["containers_count_as_doing"] = {["after"] = "and ((it.claim or \"\") ~= \"\"", ["before"] = "and not parents[it.id] and ((it.claim or \"\") ~= \"\"", ["file"] = "_work/stategate.tl", ["test"] = "_work/stategate_test.tl"},
+    ["missing_handover_workload"] = {["after"] = "or false", ["before"] = "or (it.handover_head or \"\") ~= \"\" or (it.result or \"\") ~= \"\"", ["file"] = "_work/stategate.tl", ["test"] = "_work/stategate_test.tl"},
+    ["pre_state_only_doing_bound"] = {["after"] = "previous >= flow.DOING_LIMIT and projected >= 0", ["before"] = "projected > flow.DOING_LIMIT and projected > previous", ["file"] = "_work/stategate.tl", ["test"] = "_work/stategate_test.tl"},
+  },
+  ["revision"] = "0e3701fd93076d7f174f408a08d6a2a45086e2c1",
+  ["runtime"] = "/workspace/scratch/27a6dfdb63ab/work-format6/o/bootstrap/cosmic",
+  ["source_snapshot"] = "source-snapshot/_work",
+}

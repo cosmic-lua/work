@@ -8,12 +8,33 @@ local function problems(root: string, head: string): {string}
   local view, err = boardread.list(root, head)
   if view == nil then return {err} end
   local out: {string} = {}
-  local batch, berr = gitobj.cat_file_batch(root, {head .. ":format"})
+  local queries: {string} = {head .. ":format"}
+  local marks_sha = ""
+  for _, entry in ipairs(view.entries) do
+    if entry.path == "migration/marks" then
+      marks_sha = entry.sha
+      queries[#queries + 1] = marks_sha
+    end
+  end
+  local batch, berr = gitobj.cat_file_batch(root, queries)
   if batch == nil then out[#out + 1] = berr
   else
     local marker = batch[head .. ":format"]
-    if marker == nil or marker.content ~= "6\n" then
-      out[#out + 1] = "state: expected canonical format 6 blob"
+    local shown = marker ~= nil and marker.content:gsub("\\", "\\\\")
+    :gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t") or ""
+    local actual = marker == nil and "<missing>"
+    or marker.otype ~= "blob" and "<" .. marker.otype .. ">" or '"' .. shown .. '"'
+    if marker == nil or marker.otype ~= "blob" or marker.content ~= "6\n" then
+      out[#out + 1] = "state: format is " .. actual .. ", expected canonical \"6\\n\""
+    end
+    if marks_sha ~= "" then
+      local marks = batch[marks_sha]
+      if marks == nil or marks.otype ~= "blob" then
+        out[#out + 1] = "migration/marks: unreadable blob"
+      else
+        local decoded, merr = boardtree.decode_marks(marks.content)
+        if decoded == nil then out[#out + 1] = "migration/marks: " .. merr end
+      end
     end
   end
   for id in pairs(view.claims_by_id) do
@@ -22,7 +43,7 @@ local function problems(root: string, head: string): {string}
   for _, it in ipairs(view.items) do
     if not ksuid.is_id(it.id) then out[#out + 1] = "items/" .. it.id .. ": invalid item id" end
     local rebuilt, rerr = boardtree.rebuild_item(root, it, view.specs_by_id[it.id],
-      view.logs_by_id[it.id], view.item_tree_by_id[it.id])
+      view.raw_logs_by_id[it.id], view.item_tree_by_id[it.id])
     if rebuilt == nil then out[#out + 1] = "items/" .. it.id .. ": " .. rerr
     elseif rebuilt ~= view.item_tree_by_id[it.id] then
       out[#out + 1] = "items/" .. it.id .. ": canonical form drifted"

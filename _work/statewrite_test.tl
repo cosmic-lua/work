@@ -51,7 +51,6 @@ local function test_native_save_log_and_no_legacy_refs()
   assert(#check.must(staging.list(root)) == 0)
   assert(store.close(s))
 end
-test_native_save_log_and_no_legacy_refs()
 
 local function test_disjoint_rebase_and_conflicting_reads()
   local root = setup("native-write-race")
@@ -74,9 +73,13 @@ local function test_disjoint_rebase_and_conflicting_reads()
   local fresh = check.must(store.load(current, a.id)); fresh.title = "winner"
   assert(write.save(current, fresh, "set winner") and publish.publish(current))
   local ok, err = publish.publish(loser)
-  assert(not ok and err:find("LOST_RACE", 1, true))
+  assert(not ok and err == store.LOST_RACE, err)
+  assert(loser.state_receipt == "" and loser.state_head == current.state_head)
+  assert(#check.must(staging.list(root)) == 0)
+  local recovered = check.must(store.load(loser, a.id)); recovered.title = "retry after reread"
+  assert(write.save(loser, recovered, "retry after race") and publish.publish(loser))
+  assert(#check.must(staging.list(root)) == 0)
 end
-test_disjoint_rebase_and_conflicting_reads()
 
 local function test_draft_whole_chain()
   local root = setup("native-write-draft")
@@ -101,8 +104,6 @@ local function test_draft_whole_chain()
   local history = check.must(boardhistory.read(root, current.state_head))
   assert(#history.events_by_id[a.id] == 2)
 end
-
-test_draft_whole_chain()
 
 local function test_remote_preparation_confirmation()
   local root = setup("native-write-remote")
@@ -130,4 +131,29 @@ local function test_remote_preparation_confirmation()
   assert(check.must(store.load(s, a.id)).title == "remote pending")
   assert(#check.must(staging.list(root)) == 0)
 end
-test_remote_preparation_confirmation()
+
+local function test_confirmation_keeps_receipts_when_destination_changes()
+  local root = setup("native-write-destination")
+  local original_url = fs.join(fixture.tmpdir, "expected-board.git")
+  local alternate_url = fs.join(fixture.tmpdir, "different-board.git")
+  assert(check.must(child.run({"git", "remote", "add", "origin", original_url}, {cwd = root})).ok)
+  assert(check.must(child.run({"git", "config", "gitboard.repository", "fixture/board"}, {cwd = root})).ok)
+  local s = check.must(store.open(root))
+  local a = new_item("bound destination")
+  assert(write.save(s, a, "new destination-bound"))
+  local receipt = check.must(staging.load(root, s.state_receipt))
+  local projected = check.must(statepublish.build(root, receipt))
+  assert(refs.update_ref(root, "refs/heads/state", projected.candidate, projected.expected_head))
+  assert(check.must(child.run({"git", "remote", "set-url", "origin", alternate_url}, {cwd = root})).ok)
+  local wrong_url, uerr = statepublish.refresh(root, "origin")
+  assert(not wrong_url and uerr == "prepared remote URL differs", uerr)
+  assert(check.must(refs.read_ref(root, receipt.ref)) == receipt.sha)
+  assert(check.must(child.run({"git", "remote", "set-url", "origin", original_url}, {cwd = root})).ok)
+  assert(check.must(child.run({"git", "config", "gitboard.repository", "fixture/other"}, {cwd = root})).ok)
+  local wrong_repo, rerr = statepublish.refresh(root, "origin")
+  assert(not wrong_repo and rerr == "prepared repository destination differs", rerr)
+  assert(check.must(refs.read_ref(root, receipt.ref)) == receipt.sha)
+  assert(check.must(child.run({"git", "config", "gitboard.repository", "fixture/board"}, {cwd = root})).ok)
+  assert(statepublish.refresh(root, "origin"))
+  assert(check.must(refs.read_ref(root, receipt.ref)) == refs.ZERO_SHA)
+end

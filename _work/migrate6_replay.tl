@@ -6,6 +6,7 @@ local codec = require("cosmic.codec")
 local fastimport = require("_work.fastimport")
 local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
+local gitreadlog = require("_work.gitreadlog")
 local itemtree = require("_work.itemtree")
 local ksuid = require("cosmic.ksuid")
 local source = require("_work.migrate6_source")
@@ -69,8 +70,8 @@ local function modify(path: string, text: string): string
   return "M 100644 inline " .. path .. "\n" .. fastimport.data_block(text)
 end
 
-local function event_block(event: source.Event, index: integer, ops: string, base: string): string
-  local lines: {string} = {"commit " .. REF .. "\nmark :" .. tostring(index) .. "\n",
+local function event_block(event: source.Event, index: integer, ops: string, base: string, ref: string): string
+  local lines: {string} = {"commit " .. ref .. "\nmark :" .. tostring(index) .. "\n",
     "author " .. event.author .. "\n", "committer " .. event.committer .. "\n",
     fastimport.data_block(event.message)}
   if index > 1 then lines[#lines + 1] = "from :" .. tostring(index - 1) .. "\n"
@@ -112,9 +113,15 @@ end
 local function replay(root: string, events: {source.Event}, workdir: string,
     previous?: Result): Result | nil, string
   if #events == 0 then return nil, "no item history to migrate" end
-  -- A crash may leave this disposable ref behind. No public ref is touched.
-  local _, derr = source.git(root, {"update-ref", "-d", REF})
-  if derr ~= "" then return nil, derr end
+  -- Replay into a fresh private ref: a completed prior candidate must never
+  -- be rewound to the intermediate history tip when a checkpoint is retried.
+  -- Only the completed second stream is promoted, with a local CAS.
+  local observed, oerr = source.git(root, {"for-each-ref", "--format=%(objectname)", REF})
+  if observed == nil then return nil, oerr end
+  local expected = observed:gsub("%s+$", "")
+  if expected == "" then expected = ("0"):rep(40) end
+  local attempt = ksuid.new()
+  local ref = "refs/gitboard/migrate6/attempt-" .. attempt
   local products: {string: Product} = {}
   local current: {string: Product} = {}
   local claims: {string: string} = {}
@@ -127,10 +134,13 @@ local function replay(root: string, events: {source.Event}, workdir: string,
       if previous.marks[event.sha] ~= nil then
         local p, err = product(root, event.tree)
         if p == nil then return nil, err end
-        current[event.id], products[event.tree] = p, p
-        local text, cerr = lease(root, p.batch, event.id)
-        if text == nil then return nil, cerr end
-        claims[event.id] = text
+        products[event.tree] = p
+        for _, id in ipairs(event.ids or {event.id}) do
+          current[id] = p
+          local text, cerr = lease(root, p.batch, id)
+          if text == nil then return nil, cerr end
+          claims[id] = text
+        end
       else pending[#pending + 1] = event end
     end
     local entries, err = boardtree.snapshot_entries(root, previous.head)
@@ -158,33 +168,36 @@ local function replay(root: string, events: {source.Event}, workdir: string,
       if loaded == nil then return nil, err end
       p, products[event.tree] = loaded, loaded
     end
-    local claim_text, cerr = lease(root, p.batch, event.id)
-    if claim_text == nil then return nil, "claim " .. event.id .. ": " .. cerr end
-    local old = current[event.id]
-    local item_logs = logs[event.id] or {}
-    logs[event.id] = item_logs
-    if old ~= nil and old.signature == p.signature
-    and (claims[event.id] or "") == claim_text then
-      local entropy = codec.decode_hex(event.sha:sub(1, 32))
-      local logid, lerr = ksuid.encode(math.max(1400000000, event.seconds), entropy)
-      if logid == nil then return nil, lerr end
-      item_logs[logid] = event.message:match("\n\n(.*)$") or ""
+    local ops: {string} = {}
+    for _, member in ipairs(event.ids or {event.id}) do
+      local claim_text, cerr = lease(root, p.batch, member)
+      if claim_text == nil then return nil, "claim " .. member .. ": " .. cerr end
+      local old = current[member]
+      local item_logs = logs[member] or {}
+      logs[member] = item_logs
+      if old ~= nil and old.signature == p.signature
+      and (claims[member] or "") == claim_text then
+        local entropy = codec.decode_hex(event.sha:sub(1, 32))
+        local logid, lerr = ksuid.encode(math.max(1400000000, event.seconds), entropy)
+        if logid == nil then return nil, lerr end
+        item_logs[logid] = gitreadlog.prose_of(event.message:match("\n\n(.*)$") or "")
+      end
+      local path = "items/" .. member .. "/"
+      ops[#ops + 1] = "M 040000 " .. p.tree .. " " .. path:sub(1, -2) .. "\n"
+      ops[#ops + 1] = modify(path .. "meta", p.meta)
+      local names: {string} = {}
+      for id in pairs(item_logs) do names[#names + 1] = id end
+      table.sort(names)
+      for _, id in ipairs(names) do ops[#ops + 1] = modify(path .. "log/" .. id .. ".md", item_logs[id]) end
+      if claim_text ~= "" then ops[#ops + 1] = modify("claims/" .. member, claim_text)
+      else ops[#ops + 1] = "D claims/" .. member .. "\n" end
+      current[member], claims[member] = p, claim_text
     end
-    local path = "items/" .. event.id .. "/"
-    local ops: {string} = {"M 040000 " .. p.tree .. " " .. path:sub(1, -2) .. "\n",
-      modify(path .. "meta", p.meta)}
-    local names: {string} = {}
-    for id in pairs(item_logs) do names[#names + 1] = id end
-    table.sort(names)
-    for _, id in ipairs(names) do ops[#ops + 1] = modify(path .. "log/" .. id .. ".md", item_logs[id]) end
-    if claim_text ~= "" then ops[#ops + 1] = modify("claims/" .. event.id, claim_text)
-    else ops[#ops + 1] = "D claims/" .. event.id .. "\n" end
     if index == 1 and base == "" then ops[#ops + 1] = modify("format", "6\n") end
-    stream[#stream + 1] = event_block(event, index, table.concat(ops), base)
-    current[event.id], claims[event.id] = p, claim_text
+    stream[#stream + 1] = event_block(event, index, table.concat(ops), base, ref)
   end
   stream[#stream + 1] = "done\n"
-  local marks_path = fs.join(workdir, "git-marks.tmp")
+  local marks_path = fs.join(workdir, "git-marks-" .. attempt .. ".tmp")
   local imported, ierr = source.git(root,
     {"fast-import", "--quiet", "--done", "--export-marks=" .. marks_path}, table.concat(stream))
   if imported == nil then return nil, ierr end
@@ -196,7 +209,7 @@ local function replay(root: string, events: {source.Event}, workdir: string,
   if previous ~= nil then
     for old, new in pairs(previous.marks) do marks[old] = new end
   end
-  local actual, aerr = source.git(root, {"rev-parse", REF})
+  local actual, aerr = source.git(root, {"rev-parse", ref})
   if actual == nil then return nil, aerr end
   if actual:gsub("%s+$", "") ~= replayed_head then return nil, "replay ref did not advance" end
   local encoded, eerr = boardtree.encode_marks(marks)
@@ -209,16 +222,23 @@ local function replay(root: string, events: {source.Event}, workdir: string,
     final_ops[#final_ops + 1] = modify("items/" .. id .. "/meta", remap_meta(current[id].meta, marks))
     if claims[id] ~= "" then final_ops[#final_ops + 1] = modify("claims/" .. id, claims[id]) end
   end
-  local final = "commit " .. REF .. "\nauthor gitboard <gitboard@board> " ..
+  local final = "commit " .. ref .. "\nauthor gitboard <gitboard@board> " ..
   tostring(events[#events].seconds) .. " +0000\ncommitter gitboard <gitboard@board> " ..
   tostring(events[#events].seconds) .. " +0000\n" ..
   fastimport.data_block("migrate6: preserve marks and remap board evidence\n\nOp: migrate6\n") ..
   "from " .. replayed_head .. "\n" .. table.concat(final_ops) .. "done\n"
   local finished, ferr = source.git(root, {"fast-import", "--quiet", "--done"}, final)
   if finished == nil then return nil, ferr end
-  local head, herr = source.git(root, {"rev-parse", REF})
+  local head, herr = source.git(root, {"rev-parse", ref})
   if head == nil then return nil, herr end
-  return {head = head:gsub("%s+$", ""), replayed_head = replayed_head,
+  head = head:gsub("%s+$", "")
+  local promoted, perr = source.git(root, {"update-ref", REF, head, expected})
+  if promoted == nil then return nil, "migration candidate changed during replay: " .. perr end
+  local retired, derr = source.git(root, {"update-ref", "-d", ref, head})
+  if retired == nil then return nil, derr end
+  local removed, remove_err = fs.remove(marks_path)
+  if not removed then return nil, remove_err end
+  return {head = head, replayed_head = replayed_head,
     marks = marks, count = #events}, ""
 end
 

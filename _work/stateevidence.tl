@@ -3,14 +3,11 @@ local child = require("cosmic.child")
 local evidence = require("_work.commit_evidence")
 local gitobj = require("_work.gitobj")
 local itemtree = require("_work.itemtree")
-
-local function valid_id(id: string): boolean
-  return #id == 27 and id:match("^[%w]+$") ~= nil
-end
+local ksuid = require("_work.ksuid")
 
 local function read_spec(root: string, sha: string, id: string): itemtree.Spec
   local out: itemtree.Spec = {change = "", non_goals = ""}
-  if not valid_id(id) or #sha ~= 40 or not sha:match("^[0-9a-f]+$") then return out end
+  if not ksuid.is_id(id) or #sha ~= 40 or not sha:match("^[0-9a-f]+$") then return out end
   local prefix = sha .. ":items/" .. id .. "/spec/"
   local batch = gitobj.cat_file_batch(root, {prefix .. "change.md", prefix .. "non-goals.md"})
   if batch == nil then return out end
@@ -22,9 +19,15 @@ end
 
 local function verify(root: string, head: string, result: string,
     id: string): string | nil, string
-  if not valid_id(id) then return nil, "invalid evidence item id" end
+  if not ksuid.is_id(id) then return nil, "invalid evidence item id" end
   local lineage, err = evidence.verify_lineage(root, result, head)
   if lineage == nil then return nil, err end
+  local history, herr = child.run({"git", "rev-list", "--first-parent", lineage.head}, {cwd = root})
+  if history == nil then return nil, herr end
+  if not history.ok then return nil, history.stderr end
+  if not ("\n" .. history.stdout):find("\n" .. lineage.base .. "\n", 1, true) then
+    return nil, "research result is not on the board's first-parent history"
+  end
   local diff, derr = child.run({"git", "diff-tree", "--root", "--no-commit-id",
       "--name-only", "-r", "-z", lineage.base, "--", "items/" .. id,
       "claims/" .. id}, {cwd = root})

@@ -1,4 +1,5 @@
 --- Patch the disposable native index from exact item/claim paths and event tips.
+local stateread_clock = require("_work.stateread_clock")
 local boardread = require("_work.boardread")
 local boardhistory = require("_work.boardhistory")
 local cachedb = require("_work.cachedb")
@@ -31,12 +32,16 @@ local function patch(root: string, before: string | nil, head: string): boolean,
   if rows == nil then local _ok, _err = db:close(); return false, rerr end
   for row in rows do old[row.path as string] = row.oid as string end -- cast: from any (strict SQLite text columns)
   local old_items: {string: string} = {}
-  local items, ierr = db:query("SELECT id,tip FROM items")
+  local old_claims: {string: string} = {}
+  local items, ierr = db:query("SELECT id,tip,claim FROM items")
   if items == nil then local _ok, _err = db:close(); return false, ierr end
-  for row in items do old_items[row.id as string] = row.tip as string end -- cast: from any (strict SQLite text columns)
+  for row in items do
+    old_items[row.id as string] = row.tip as string -- cast: from any (strict SQLite text columns)
+    old_claims[row.id as string] = row.claim as string -- cast: from any (strict SQLite text columns)
+  end
   local changed: {string: boolean} = {}
   for _, it in ipairs(view.items) do
-    if old_items[it.id] ~= history.tip_by_id[it.id]
+    if old_items[it.id] ~= history.tip_by_id[it.id] or old_claims[it.id] ~= (it.claim or "")
     or old["items/" .. it.id] ~= view.item_tree_by_id[it.id]
     or old["claims/" .. it.id] ~= (view.claim_blob_by_id[it.id] or refs.ZERO_SHA) then
       changed[it.id] = true
@@ -74,6 +79,7 @@ local function patch(root: string, before: string | nil, head: string): boolean,
       end
       local rebuilt, reerr = index_rank.refill(c)
       if rebuilt then rebuilt, reerr = readddl.refill_role(c) end
+      if rebuilt then rebuilt, reerr = stateread_clock.record_projection(tx, view) end
       if rebuilt then rebuilt, reerr = cachedb.meta_set(tx, "refs_digest", head) end
       return rebuilt, reerr
     end)

@@ -3,7 +3,16 @@
 This draft implements the storage design from PRs #169 and #170 alongside the
 existing format-5 board. The live board remains on format 5. Start an isolated
 native board with `gitboard init --local --format 6`; run `gitboard help native`
-for the publication and migration workflow.
+for the publication and migration workflow. [Review decisions and scope](../../experiments/native/REVIEW.md)
+records the response to the two implementation reviews.
+
+The code is tracked under board container `3JHjIHZci3VOBQhQVBOyDA5DbKm`
+(`«yDA5_DbKm»`). This integrated draft covers the implementation and proof
+components in plan steps 1–9. Release/pinning, the actual frozen cutover, and
+retirement (steps 10–12) remain separate work. Board handover and acceptance of
+the individual children must be recorded through the board's review flow; this
+PR's existence does not close them. The independent area reviews are part of
+that review, not a substitute for the board record.
 
 ## Review map
 
@@ -26,7 +35,13 @@ for compatibility while this replacement is reviewed.
 ## Connector constraints
 
 The connector exposes tree creation, commit creation, and a non-forced branch
-update. A saved attempt freezes the complete ordered transition chain. The final
+update. Specifically, the emitted `github_create_tree`, `github_create_commit`,
+and `github_update_ref` calls target the ChatGPT Work GitHub connector used for
+this implementation. Other GitHub MCP servers need an executor mapping with
+equivalent object-creation and final-ref-update semantics; these call names are
+not a universal GitHub MCP vocabulary.
+
+A saved attempt freezes the complete ordered transition chain. The final
 branch update is the publication point. A disjoint change may produce a new
 attempt against the current head; an overlapping dependency refuses replay.
 Refresh verifies the complete published chain rather than treating a transaction
@@ -44,14 +59,27 @@ an unsupported deletion field. The caller executes indexed connector calls from
 the same saved plan, substitutes returned object SHAs, rechecks the deadline at
 the final call, and reports the returned commit for subsequent confirmation.
 
+A connector exposing only `push_files` is not currently supported. Publishing
+each draft transition with a separate `push_files` call would expose a partial
+draft before the final transition. An adapter must preserve the entire ordered
+commit chain and publish its tip once; merely reaching the same final tree does
+not satisfy that contract.
+
 ## Migration and rollout boundary
 
-`migrate6 plan`, `show`, and `verify-source` operate locally. The publication
-module separately requires a destination-bound freeze witness, an independent
-verifier, a complete fetched legacy-ref comparison, staged uploads, and a final
-atomic shell push of state plus the format marker. The CLI does not accept a
-boolean that claims a remote ruleset has been verified. A production ruleset
-verifier and cutover procedure still need integration review.
+An ordinary `migrate6 plan`, `show`, or `verify-source` operates locally.
+`plan --freeze-ruleset ID` explicitly queries GitHub through authenticated `gh`
+before and after a fresh fetch, binding the observed ruleset and source map to
+the checkpoint. It refuses bypass actors, exclusions, unsupported coverage, or
+missing creation/update/deletion restrictions. An offline checkpoint cannot
+be upgraded with a retroactive freeze assertion.
+
+`activation-plan` renders the staged pushes; `publish --execute` invokes the
+concrete verifier, compares the complete fetched legacy ref set, stages the
+history, rechecks, and atomically pushes state plus the format marker. The CLI
+accepts no caller-supplied boolean verifier. Shell publication still requires
+Git write authentication. Provider fixtures validate the verifier's decisions;
+no production freeze or activation was executed in this environment.
 
 The replay preserves legacy history, accumulated log-only events, imported claim
 acquisition identities, and evidence mappings. Append-only catchup preserves
@@ -61,18 +89,27 @@ This draft does not activate the live state branch, freeze legacy refs, update
 the Cosmic gitboard pin, or remove either existing transport. The pin should move
 only after a compatible release is validated and the coordinated cutover is ready.
 
-## Validation at draft creation
+## Validation and review follow-up
 
-Focused native tests have exercised local and bare-remote publication, multi-item
-transactions, draft chains, disjoint and conflicting writers, connector-plan
-replay, claim/worktree receipt lifecycles, native CLI reads, and migration restart
-and activation. Six migration semantic mutants were killed: message preservation,
-acquisition identity, added source refs, accumulated logs, shallow history, and
-the final activation source recheck.
+[Connector validation](../../experiments/native/VALIDATION.md) records real
+publication on the synthetic `validation/gitboard-format6-20260913` branch.
+The updated v2 planner revalidates those publications with unchanged frozen
+transaction bytes; v1 saved plans require explicit regeneration.
 
-The full repository gate and final saved-plan CLI regression are being rerun
-after integration. The first full gate found formatting/lint issues and a binary
-packaging failure; it was not green. Broader native transaction/claim mutation
-testing, a full-board migration audit, and actual connector execution against a
-separate synthetic branch remain outstanding. This is a reviewable implementation
-checkpoint, not a completed cutover or a merge-ready release.
+[Migration validation](../../experiments/native/MIGRATION_VALIDATION.md) records
+the exact frozen source inventory, replay and evidence limits.
+[Semantic mutation evidence](../../experiments/native/MUTATIONS.md) records
+assertion failures and passing controls. The expanded campaigns are rerun from
+the published follow-up checkpoint so their revision is retrievable.
+
+Review fixes include shared startup snapshots, claim gates using loaded leases,
+shared graph checks, actual CLI claim capacity, deterministic trailers, bounded
+receipt lookup with explicit absence proof, exact lost-race retirement, and
+fail-closed native read errors. Fresh-process legacy read counts versus main
+are 5 versus 7 for a cold list, 3 versus 3 for resolve/load, and 3 versus 2 for
+a warm-cache list. The remaining warm-cache process validates the marker from
+Git; derived SQLite data cannot select the storage format.
+
+The repository gate passed all 1,016 tests, formatting, lint, and CI. Expanded
+mutation runs will use this published follow-up checkpoint. The draft remains subject to fresh review, the board's handover
+flow, and separately authorized release/cutover work.

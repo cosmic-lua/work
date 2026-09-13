@@ -7,6 +7,7 @@ local record Event
   sha: string
   ref: string
   id: string
+  ids: {string}
   parent: string
   tree: string
   author: string
@@ -94,7 +95,7 @@ local function parse(sha: string, ref: string, id: string, raw: string): Event |
   end
   local seconds = math.tointeger(tonumber(committer:match(" (%-?%d+) [%+%-]%d%d%d%d$")))
   if seconds == nil then return nil, "invalid source date " .. sha end
-  return {sha = sha, ref = ref, id = id, parent = header:match("\nparent ([0-9a-f]+)") or "",
+  return {sha = sha, ref = ref, id = id, ids = {id}, parent = header:match("\nparent ([0-9a-f]+)") or "",
     tree = tree, author = author, committer = committer, seconds = seconds, message = message}, ""
 end
 
@@ -118,7 +119,10 @@ local function events(root: string, refs: {string: string}, prefix: string): {Ev
       if objects == nil then return nil, oerr end
       for _, sha in ipairs(shas) do
         if by_sha[sha] ~= nil then
-          if by_sha[sha].id ~= id then return nil, "shared source commit has multiple item ids: " .. sha end
+          local shared = by_sha[sha]
+          local present = false
+          for _, member in ipairs(shared.ids) do if member == id then present = true end end
+          if not present then shared.ids[#shared.ids + 1] = id; table.sort(shared.ids) end
         else
           if objects[sha] == nil or objects[sha].otype ~= "commit" then
             return nil, "missing source commit " .. sha

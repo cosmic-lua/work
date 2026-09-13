@@ -1,4 +1,5 @@
 --- Native board projections shared by store, cache, and history readers.
+local stateread_clock = require("_work.stateread_clock")
 local boardread = require("_work.boardread")
 local boardhistory = require("_work.boardhistory")
 local refs = require("_work.refs")
@@ -33,7 +34,7 @@ local function fill_events(db: sqlite.Database, root: string, head: string,
           {e.item, seqs[e.item], e.sha, e.at, e.verb, e.session, e.pr, e.subject, e.item})
         if not ok then return false, ierr end
       end
-      return true, ""
+      return stateread_clock.record_projection(tx, view)
     end)
 end
 

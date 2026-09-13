@@ -1,20 +1,23 @@
---- The item store: every item lives as a git ref — `refs/heads/items/<id>` for an ordinary
---- item, `refs/heads/ended/<id>` for one resolved before this rule (`ended/` is legacy:
---- read, never written) — whose tip commit's tree is the item's current state
---- (`_work.itemtree`'s canonical shape) and whose parent chain is its history. A resolution
---- sets `resolution` on whichever ref the item already lives on; it never moves the ref.
---- There is no working tree to hold them: `open` needs only a git repository, and a
---- mutation writes git objects and updates refs directly, never a file. Publishing that to
---- a remote, and reading the log back, live in `_work.publish`, which calls back into
---- `git`/`git_ok` here for the same deterministic tool identity every store call uses.
+--- Read-facing store over one explicitly selected board format. Format 5 loads
+--- items from items/<id> or legacy ended/<id> refs. Format 6 reads one immutable
+--- state head, projecting items and claims from their paths without hydrating refs.
+--- Git objects remain truth; the SQLite index is a disposable read projection.
 ---
+--- `_work.gitread` owns Git decoding; `_work.cache` owns the query mirror. This
+--- module opens repositories, resolves ids, loads items/specs, and records observed
+--- leases and independent item snapshots. `_work.storewrite` owns legacy mutation
+--- bookkeeping and requires this module for Store and its exported helpers; the
+--- dependency never runs back from this module to storewrite. Native transitions
+--- are prepared by `_work.statewrite` and published through `_work.statepublish`.
+--- `NOOP_PREFIX`, `snapshot_item`, `stage`, and `read_spec` are the shared boundary.
+local stateread_start = require("_work.stateread_start")
 local boardhistory = require("_work.boardhistory")
+local stateread_clock = require("_work.stateread_clock")
 local boardread = require("_work.boardread")
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local cachequery = require("_work.cachequery")
 local child = require("cosmic.child")
-local format = require("_work.format")
 local fs = require("cosmic.fs")
 local gitdedupe = require("_work.gitdedupe")
 local gitread = require("_work.gitread")
@@ -24,25 +27,17 @@ local item = require("_work.item")
 local refs = require("_work.refs")
 local storeinit = require("_work.storeinit")
 
---- One open state repository. Every field but `root` is working state
---- a single verb invocation accumulates: the session and `Op:` trailer the next `save`
---- should credit, whether it is bounded, the lease (ref + tip) each id was last observed
---- at, a SNAPSHOT of each id's item as observed (`leased_item` — independent of whatever a
---- caller goes on to mutate `load`'s/`list`'s own returned `item.Item` into, since `save`'s
---- fast-import diff needs the ORIGINAL fields to compare against), each id's committer date
---- from whichever ref snapshot a caller already took (`touched_at` — `_work.publish.touched_at`
---- reads it first, falling back to its own one-ref process only for an id no snapshot named),
---- `refs/heads/board/seq`'s own observed tip, the refs a completed `save` still owes
---- `publish` a push for, and every id the most recent `list` found filed under both
---- `refs/heads/items` and `refs/heads/ended` at once (`gitread.Duplicate` — `fsck` is the only
---- reader; `list`'s ref-snapshot digest, and `resolve`'s and `list`'s own one-shot leases, live
---- here too). The board's own outcome ranking carries no separate lease of its own any
---- more — it is the board item's `.order` field, leased exactly like any other item's through
---- `leased_ref`/`leased_sha`.
---- Declared here, alongside the read half, since `_work.storewrite`'s `save` mutates the
---- same fields this module's `load`/`list` populate.
+--- Invocation-local read and write observations. Legacy leases name per-item
+--- refs; native state_head names the whole snapshot, state_reads records exact
+--- item/claim path OIDs, and state_receipt names a prepared successor. leased_item
+--- is independent of caller mutations; touched_at and leased_sha retain exact
+--- path-attributed history. Pending refs and observed_seq belong to legacy writes.
 ---
+--- remote_url/remote_present memoize ad hoc Git remote discovery within this
+--- invocation. Their read flags distinguish an unasked question from an empty or
+--- failed result; they do not memoize mutable board state across snapshots.
 local record Store
+  startup: stateread_start.Start | nil
   root: string
   state_head: string
   state_receipt: string
@@ -150,9 +145,9 @@ local function open(root: string): Store | nil, string
   if not fs.is_present(fs.join(root, ".git")) then
     return nil, ("not a git repository: %s"):format(root)
   end
-  local head, herr = format.state_head(root)
-  if head == nil then return nil, herr end
-  return {root = root, state_head = head, state_receipt = "", state_reads = {}, session = "", op = "", bounded = false, leased_ref = {},
+  local startup, err = stateread_start.open(root)
+  if startup == nil then return nil, err end
+  return {root = root, startup = startup, state_head = startup.head, state_receipt = "", state_reads = {}, session = "", op = "", bounded = false, leased_ref = {},
     leased_sha = {}, leased_item = {}, touched_at = {}, written_at = 0, observed_seq = "",
     pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
     remote_url = "", remote_url_ok = false, remote_url_read = false,
@@ -182,10 +177,18 @@ local function resolve(s: Store, prefix: string): string | nil, string
     if #matches == 0 then return nil, "no item matches " .. prefix end
     return nil, prefix .. " is ambiguous: " .. table.concat(matches, " ")
   end
-  local found, ferr = refs.for_each_ref(s.root,
-    {"refs/heads/items/" .. prefix .. "*", "refs/heads/ended/" .. prefix .. "*"})
-  if found == nil then
-    return nil, ferr
+  local startup = s.startup
+  local found: {refs.RefEntry} = {}
+  if startup ~= nil then
+    for _, entry in ipairs(startup.snapshot) do
+      local id = entry.refname:match("^refs/heads/items/(.+)$") or entry.refname:match("^refs/heads/ended/(.+)$")
+      if id ~= nil and id:sub(1, #prefix) == prefix then found[#found + 1] = entry end
+    end
+  else
+    local fresh, err = refs.for_each_ref(s.root,
+      {"refs/heads/items/" .. prefix .. "*", "refs/heads/ended/" .. prefix .. "*"})
+    if fresh == nil then return nil, err end
+    found = fresh
   end
   local matches: {string} = {}
   local seen: {string: boolean} = {}
@@ -214,9 +217,7 @@ end
 --- @return itemtree.Spec The prose, both fields "" when it has none
 local function read_spec(s: Store, id: string): itemtree.Spec
   if s.state_head ~= "" then
-    local view = boardread.list(s.root, s.state_head)
-    if view ~= nil then return view.specs_by_id[id] or {change = "", non_goals = ""} end
-    return {change = "", non_goals = ""}
+    return gitreadspec.read_specs(s.root, {[id] = s.state_head}, {id}, true)[id]
   end
   local ref = s.leased_ref[id]
   if ref ~= nil then
@@ -235,11 +236,11 @@ end
 --- @return {string: itemtree.Spec} Prose by id, both fields "" when absent
 local function read_specs(s: Store, ids: {string}): {string: itemtree.Spec}
   if s.state_head ~= "" then
-    local view = boardread.list(s.root, s.state_head)
-    if view ~= nil then return view.specs_by_id end
-    return {}
+    local heads: {string: string} = {}
+    for _, id in ipairs(ids) do heads[id] = s.state_head end
+    return gitreadspec.read_specs(s.root, heads, ids, true)
   end
-  return gitreadspec.read_specs(s.root, s.leased_sha, ids)
+  return gitreadspec.read_specs(s.root, s.leased_sha, ids, false)
 end
 
 --- Snapshot fields before a caller mutates them. Unknown edges survive the
@@ -286,7 +287,11 @@ local function load_item(s: Store, id: string): item.Item | nil, string
   end
   local ref, sha = gitread.lease_decode(s.fresh_lease, id)
   s.fresh_lease = ""
-  local loaded, err = gitread.load(s.root, id, ref, sha)
+  local startup = s.startup
+  s.startup = nil
+  if startup ~= nil and ref == "" then ref, sha = stateread_start.lease(s.root, startup, id) end
+  local loaded, err = gitread.load(s.root, id, ref, sha, nil, startup and startup.reader)
+  local _closed, _cerr = stateread_start.close(startup)
   if loaded == nil then
     return nil, err
   end
@@ -295,29 +300,38 @@ local function load_item(s: Store, id: string): item.Item | nil, string
   return loaded.it
 end
 
---- Open the board cache and hold it on `s.index` for the rest of this
---- invocation — idempotent, so every caller (`list`, `read`) reaches
---- the SAME connection rather than each opening its own:
---- `_work.cache.open` takes the one `for-each-ref` snapshot below as
---- its own freshness digest and rebuilds from git only on a mismatch,
---- so `_work.gitread.list` runs only from the cache's own `rebuild`.
---- Every `_work.read` call a verb makes goes through the handle this
---- returns.
---- @param s Store The store
---- @return cache.Cache | nil The open cache
---- @return string Error message
+--- One cache handle per invocation. The first read consumes open's canonical
+--- snapshot and scoped batch reader; later reads take a fresh ref snapshot when
+--- reopening. Native clock expiry invalidates an otherwise unchanged head.
 local function ensure_index(s: Store): cache.Cache | nil, string
   local existing = s.index
   if existing ~= nil then
-    return existing, ""
+    if stateread_clock.fresh(existing.db) then return existing, "" end
+    local closed, err = cache.close(existing)
+    if not closed then return nil, err end
+    s.index = nil
   end
-  local found, ferr = refs.for_each_ref(s.root, cachedb.WATCH_PATTERNS)
+  local startup = s.startup
+  s.startup = nil
+  local found: {refs.RefEntry} | nil = startup and startup.snapshot
   if found == nil then
-    return nil, ferr
+    -- After a write or clock expiry the startup snapshot has been consumed.
+    -- Native rebuilds still need the exact state ref in this fresh snapshot.
+    local patterns: {string} = {}
+    for _, pattern in ipairs(cachedb.WATCH_PATTERNS) do patterns[#patterns + 1] = pattern end
+    if s.state_head ~= "" then patterns[#patterns + 1] = "refs/heads/state" end
+    local fresh, err = refs.for_each_ref(s.root, patterns)
+    if fresh == nil then return nil, err end
+    found = fresh
   end
   local known_digest = s.state_head ~= "" and s.state_head or cachedb.digest_of(found)
   local duplicates = gitdedupe.of(s.root, found)
-  local c, cerr = cache.open(s.root, known_digest)
+  local c, cerr = cache.open(s.root, known_digest, found, startup and startup.reader)
+  local cleaned, clean_err = stateread_start.close(startup)
+  if not cleaned then
+    if c ~= nil then local _ok, _err = cache.close(c) end
+    return nil, clean_err
+  end
   if c == nil then
     return nil, cerr
   end
@@ -331,23 +345,16 @@ local function ensure_index(s: Store): cache.Cache | nil, string
   return c, ""
 end
 
---- The open board cache `read.*` reads through — `ensure_index`,
---- opening and hydrating it on first call, a bare field read on every
---- one after.
---- @param s Store The store
---- @return cache.Cache | nil The open cache
---- @return string Error message
+--- Open/reuse the invocation's clock-valid query projection.
 local function read(s: Store): cache.Cache | nil, string
   return ensure_index(s)
 end
 
---- Close the cache `read`/`list` opened, when one is open; a no-op
---- otherwise. Every invocation that opened one closes it before
---- exiting.
---- @param s Store The store
---- @return boolean True on success
---- @return string Error message
+--- Close the scoped startup reader and the invocation's cache, when present.
 local function close(s: Store): boolean, string
+  local closed, err = stateread_start.close(s.startup)
+  s.startup = nil
+  if not closed then return false, err end
   local c = s.index
   if c == nil then
     return true, ""
@@ -436,7 +443,10 @@ end
 --- @param _spec string | nil Unused; kept for signature compatibility
 --- @return boolean True when the item may be written
 --- @return string Error message
-local function stage(_s: Store, it: item.Item, _spec?: string): boolean, string
+local function stage(s: Store, it: item.Item, _spec?: string): boolean, string
+  local closed, err = stateread_start.close(s.startup)
+  s.startup = nil
+  if not closed then return false, err end
   local bad = item.problems(it)
   if #bad > 0 then
     return false, table.concat(bad, "; ")

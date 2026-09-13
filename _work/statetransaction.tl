@@ -3,7 +3,7 @@ local literal = require("_work.singlehead_literal")
 local objects = require("_work.singlehead_objects")
 local fs = require("cosmic.fs")
 local saved = require("_work.stateplan_file")
-local git = require("_work.singlehead_git")
+local trailer_codec = require("_work.stateplan_trailers")
 local record Dependency
   path: string
   id: string
@@ -45,7 +45,10 @@ local function path_ok(path: string): boolean
   and not ("/" .. path .. "/"):find("/../", 1, true)
   and not ("/" .. path .. "/"):find("/./", 1, true)
 end
-local function validate(value: Frozen): boolean, string
+--- @param value Frozen transaction, including its exact destination and chain.
+--- @param assembling Permit absent reserved trailers only before initial freezing.
+--- @return Whether all fields and reserved trailer identities are coherent.
+local function validate(value: Frozen, assembling?: boolean): boolean, string
   if value.format ~= FORMAT then return false, "unsupported state transaction" end
   local repository = objects.checked_repository(value.repository)
   local branch = objects.checked_branch(value.branch)
@@ -55,7 +58,7 @@ local function validate(value: Frozen): boolean, string
   or not value.transaction:match("^[A-Za-z0-9_-]+$")
   or #value.transitions == 0 then return false, "invalid transaction identity" end
   for _, transition in ipairs(value.transitions) do
-    local trailers, terr = git.run(".", {"interpret-trailers", "--parse"}, transition.message)
+    local trailers, terr = trailer_codec.parse(transition.message)
     if trailers == nil then return false, terr end
     local logical: string | nil = nil
     local authors, transactions, transaction_id = 0, 0, ""
@@ -68,8 +71,12 @@ local function validate(value: Frozen): boolean, string
     if logical ~= nil and logical ~= (encoded_author or ""):gsub("\n$", "") then
       return false, "logical author differs from frozen author"
     end
-    if authors > 1 or (authors == 1 and (transactions ~= 1 or transaction_id ~= value.transaction)) then
+    if authors > 1 or transactions > 1 or (transactions == 1 and transaction_id ~= value.transaction)
+    or (authors == 1 and transactions ~= 1) then
       return false, "reserved publication trailers conflict"
+    end
+    if not assembling and (transactions ~= 1 or authors ~= 1) then
+      return false, "frozen transition requires exactly one Transaction and Gitboard-Author trailer"
     end
     if not objects.checked_sha(transition.base, false) or transition.publish_by < 0
     or (transition.bounded and transition.gate == "") then return false, "invalid transition fence" end
@@ -114,19 +121,25 @@ local function decode(raw: string): Frozen | nil, string
   if canonical ~= raw then return nil, "transaction is not canonical" end
   return frozen, ""
 end
+--- @param value Staged transitions; supplied reserved trailers must already agree.
+--- @return A copied, canonical chain whose reserved trailers are complete.
 local function freeze(value: Frozen): Frozen | nil, string
-  local raw, err = encode(value)
+  local ok, verr = validate(value, true)
+  if not ok then return nil, verr end
+  local raw, err = literal.encode(value)
   if raw == nil then return nil, err end
-  local copy, cerr = decode(raw)
-  if copy == nil then return nil, cerr end
+  local decoded, cerr = literal.decode_object(raw)
+  if decoded == nil then return nil, cerr end
+  local copy = decoded as Frozen -- cast: deep copy of the validated staged chain
   for _, transition in ipairs(copy.transitions) do
     local author = (literal.encode(transition.author) or ""):gsub("\n$", "")
-    local message, merr = git.run(".", {"interpret-trailers", "--if-exists", "replace",
-        "--trailer", "Transaction: " .. copy.transaction, "--trailer", "Gitboard-Author: " .. author}, transition.message)
+    local message, merr = trailer_codec.bind(transition.message, copy.transaction, author)
     if message == nil then return nil, merr end
     transition.message = message
     table.sort(transition.changes, function(a: Change, b: Change): boolean return a.path < b.path end)
   end
+  local valid, ferr = validate(copy)
+  if not valid then return nil, ferr end
   return copy, ""
 end
 local function digest(value: Frozen): string | nil, string

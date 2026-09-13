@@ -38,6 +38,8 @@
 --- mutation's `store.save`, and `_work.publish` that wraps its fetches
 --- with `around_fetch` — a `Store` dependency here would close a cycle
 --- against both.
+local stateread_clock = require("_work.stateread_clock")
+local gitbatch = require("_work.gitbatch")
 local statecache = require("_work.stateread_cache")
 local format = require("_work.format")
 local cachedb = require("_work.cachedb")
@@ -80,7 +82,7 @@ local rebuild = cacherebuild.rebuild
 --- otherwise-fresh `for-each-ref` when given
 --- @return Cache | nil The cache
 --- @return string Error message
-local function open(root: string, known_digest?: string): Cache | nil, string
+local function open(root: string, known_digest?: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Cache | nil, string
   local path = cachedb.path_of(root)
   if fs.is_file(path) then
     local db = cachedb.open_conn(path)
@@ -90,7 +92,7 @@ local function open(root: string, known_digest?: string): Cache | nil, string
         fresh = cachedb.fresh_digest(root)
       end
       local expected_fp = cachedb.expected_schema_fingerprint()
-      if fresh ~= nil and cachedb.db_user_version(db) == SCHEMA_VERSION
+      if fresh ~= nil and stateread_clock.fresh(db) and cachedb.db_user_version(db) == SCHEMA_VERSION
       and cachedb.meta_get(db, "refs_digest") == fresh
       and expected_fp ~= nil and cachedb.meta_get(db, "schema_fingerprint") == expected_fp then
         return {db = db, specs = {}, load_problems = {}}
@@ -99,7 +101,7 @@ local function open(root: string, known_digest?: string): Cache | nil, string
     end
   end
   cachedb.wipe(root)
-  return rebuild(root)
+  return rebuild(root, snapshot, reader)
 end
 
 --- On any error patching an already-open cache — a genuine SQLite
@@ -251,7 +253,8 @@ local function after_save(root: string, before_digest: string | nil,
     items: {item.Item}, spec_body: string | nil, message: string,
     written: {string: string}, written_at?: integer)
   local native = format.state_head(root)
-  if native ~= nil and native ~= "" then
+  if native == nil then cachedb.wipe(root); return end
+  if native ~= "" then
     local patched, _err = statecache.patch(root, before_digest, native)
     if not patched then cachedb.wipe(root) end
     return
@@ -407,25 +410,28 @@ end
 local function around_fetch(root: string, fetch_fn: function(): boolean, string): boolean, string
   local path = cachedb.path_of(root)
   local before_entries: {refs.RefEntry} | nil = nil
+  local before_native = ""
   if fs.is_file(path) then
     before_entries = cachedb.refs_snapshot(root)
+    if before_entries ~= nil then
+      local prior = format.state_head(root, before_entries)
+      if prior == nil then
+        -- Fetch may repair invalid state; discard its cache rather than label it legacy.
+        cachedb.wipe(root)
+        before_entries = nil
+      else before_native = prior end
+    end
   end
   local ok, err = fetch_fn()
-  if not ok or before_entries == nil then
-    return ok, err
-  end
-  local native = format.state_head(root)
-  if native ~= nil and native ~= "" then
-    local before = ""
-    for _, entry in ipairs(before_entries) do
-      if entry.refname == "refs/heads/state" then before = entry.sha end
-    end
-    local patched, _perr = statecache.patch(root, before, native)
+  if not ok then return false, err end
+  local after_entries, aerr = cachedb.refs_snapshot(root)
+  if after_entries == nil then cachedb.wipe(root); return false, aerr end
+  local native, nerr = format.state_head(root, after_entries)
+  if native == nil then cachedb.wipe(root); return false, nerr end
+  if before_entries == nil then return ok, err end
+  if native ~= "" then
+    local patched, _perr = statecache.patch(root, before_native, native)
     if not patched then cachedb.wipe(root) end
-    return ok, err
-  end
-  local after_entries = cachedb.refs_snapshot(root)
-  if after_entries == nil then
     return ok, err
   end
   local before_shas = cachedb.shas_by_item(before_entries)
@@ -442,8 +448,8 @@ local record cache
   type Cache = Cache
   SCHEMA_VERSION: integer
   path_of: function(root: string): string
-  open: function(root: string, known_digest?: string): Cache | nil, string
-  rebuild: function(root: string): Cache | nil, string
+  open: function(root: string, known_digest?: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Cache | nil, string
+  rebuild: function(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Cache | nil, string
   close: function(c: Cache): boolean, string
   guard: function(root: string, known_digest?: string): string | nil
   after_save: function(root: string, before_digest: string | nil,

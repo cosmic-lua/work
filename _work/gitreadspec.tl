@@ -95,9 +95,14 @@ end
 --- @param ids {string} Item ids to read, in any order
 --- @return {string: itemtree.Spec} Prose by id, both fields "" when absent
 local function read_specs(root: string, shas_by_id: {string: string},
-    ids: {string}): {string: itemtree.Spec}
-  local head = format.state_head(root)
-  if head ~= nil and head ~= "" then
+    ids: {string}, native_mode?: boolean): {string: itemtree.Spec}
+  local is_native = native_mode
+  if is_native == nil then
+    local head, err = format.state_head(root)
+    if head == nil then error(err, 0) end
+    is_native = head ~= ""
+  end
+  if is_native then
     local native: {string: itemtree.Spec} = {}
     local queries: {string} = {}
     for _, id in ipairs(ids) do
@@ -106,13 +111,19 @@ local function read_specs(root: string, shas_by_id: {string: string},
       if sha ~= nil then
         local prefix = sha .. ":items/" .. id .. "/spec/"
         queries[#queries + 1], queries[#queries + 2] = prefix .. "change.md", prefix .. "non-goals.md"
+        queries[#queries + 1] = sha .. ":items/" .. id .. "/meta"
       end
     end
-    local batch = gitobj.cat_file_batch(root, queries)
-    if batch ~= nil then
+    local batch, err = gitobj.cat_file_batch(root, queries)
+    if batch == nil then error(err, 0) end
+    do
       for _, id in ipairs(ids) do
         local sha = shas_by_id[id]
         if sha ~= nil then
+          local meta = batch[sha .. ":items/" .. id .. "/meta"]
+          if meta == nil or meta.otype ~= "blob" then
+            error("native item " .. id .. " has no readable meta at " .. sha, 0)
+          end
           local prefix = sha .. ":items/" .. id .. "/spec/"
           local change, non_goals = batch[prefix .. "change.md"], batch[prefix .. "non-goals.md"]
           if change ~= nil then native[id].change = change.content end
@@ -152,7 +163,7 @@ end
 local record gitreadspec
   read_spec: function(root: string, candidates: {string}): itemtree.Spec
   read_specs: function(root: string, shas_by_id: {string: string},
-  ids: {string}): {string: itemtree.Spec}
+  ids: {string}, native_mode?: boolean): {string: itemtree.Spec}
 end
 
 local M: gitreadspec = {

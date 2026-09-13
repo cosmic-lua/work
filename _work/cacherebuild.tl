@@ -18,6 +18,8 @@ local cachedb = require("_work.cachedb")
 local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
+local gitbatch = require("_work.gitbatch")
+local refs = require("_work.refs")
 local gitread = require("_work.gitread")
 local gitreadspec = require("_work.gitreadspec")
 local spec = require("_work.spec")
@@ -103,8 +105,8 @@ end
 --- @param root string The store's root
 --- @return Cache | nil The freshly built cache
 --- @return string Error message
-local function rebuild(root: string): Cache | nil, string
-  local board, berr = gitread.list(root)
+local function rebuild(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Cache | nil, string
+  local board, berr = gitread.list(root, snapshot, reader)
   if board == nil then
     return nil, berr
   end
@@ -116,7 +118,7 @@ local function rebuild(root: string): Cache | nil, string
   -- holds (`spec.document`) — `find.build` reads `Cache.specs`.
   local specs: {string: string} = {}
   local native_view = board.native_view
-  local prose = native_view ~= nil and native_view.specs_by_id or gitreadspec.read_specs(root, board.shas_by_id, ids)
+  local prose = native_view ~= nil and native_view.specs_by_id or gitreadspec.read_specs(root, board.shas_by_id, ids, false)
   for id, sp in pairs(prose) do
     specs[id] = spec.document(sp)
   end
@@ -205,7 +207,7 @@ end
 local record cacherebuild
   fill: function(db: sqlite.Database, root: string, board: gitread.Board,
   specs: {string: string}): boolean, string
-  rebuild: function(root: string): Cache | nil, string
+  rebuild: function(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Cache | nil, string
 end
 
 local M: cacherebuild = {

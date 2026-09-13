@@ -1,5 +1,4 @@
 --- Native publication CLI. Connector calls are emitted only from immutable plans.
-local math = math
 local literal = require("_work.singlehead_literal")
 local staging = require("_work.statestaging")
 local statepublish = require("_work.statepublish")
@@ -26,6 +25,9 @@ end
 local function cmd_publish(s: store.Store, selectors: {string}, remote: string, execute: boolean,
     plan_path?: string, from_plan?: string, call_index?: string, published_sha?: string,
     repository?: string): integer
+  if (from_plan or "") == "" and ((call_index or "") ~= "" or (published_sha or "") ~= "") then
+    return gate.verdict_line("publish", false, "--call and --published require --from-plan")
+  end
   local saved: plans.Plan = nil
   local receipt: staging.Receipt = nil
   if (from_plan or "") ~= "" then
@@ -44,6 +46,21 @@ local function cmd_publish(s: store.Store, selectors: {string}, remote: string, 
     if selected == nil then return gate.verdict_line("publish", false, err) end
     if (repository or "") ~= "" and repository ~= selected.repository then
       return gate.verdict_line("publish", false, "prepared repository destination differs")
+    end
+    if selected.remote ~= remote then
+      return gate.verdict_line("publish", false, "prepared transaction destination differs")
+    end
+    if execute and (plan_path or "") == "" then
+      local frozen, ferr = staging.snapshot(s.root, selected)
+      if frozen == nil then return gate.verdict_line("publish", false, ferr) end
+      local ok, eerr = statepublish.execute(s.root, frozen)
+      if not ok then return gate.verdict_line("publish", false, eerr) end
+      if refs.board_mode(s.root) == "local" then
+        local refreshed, rerr = statepublish.sync(s, nil, frozen)
+        return gate.verdict_line("publish", refreshed, rerr)
+      end
+      gate.verdict_line("publish", true, eerr)
+      return 2
     end
     local projected, perr = statepublish.build(s.root, selected, remote)
     if projected == nil then return gate.verdict_line("publish", false, perr) end
@@ -96,7 +113,7 @@ local function cmd_publish(s: store.Store, selectors: {string}, remote: string, 
     local ok, err = statepublish.execute(s.root, receipt)
     if not ok then return gate.verdict_line("publish", false, err) end
     if refs.board_mode(s.root) == "local" then
-      local refreshed, rerr = statepublish.sync(s)
+      local refreshed, rerr = statepublish.sync(s, nil, receipt)
       return gate.verdict_line("publish", refreshed, rerr)
     end
     gate.verdict_line("publish", true, err)

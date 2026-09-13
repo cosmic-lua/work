@@ -199,6 +199,16 @@ exit 0
   local old_client, olderr = source.git(root, {"push", "origin", b .. ":refs/heads/items/new"})
   assert(old_client == nil and olderr:find("legacy freeze", 1, true), "freeze blocks legacy creation")
   local plan = check.must(publisher.prepare_activation(root, cp, "origin", 1, proof, verify))
+  local future_blob = check.must(gitobj.hash_object_write(root, "9\n"))
+  local future_tree = check.must(gitobj.mktree_write(root,
+      {{mode = "100644", otype = "blob", name = "format", sha = future_blob}}))
+  local future, future_err = publisher.plan(root, cp, "origin", 1, future_tree)
+  assert(future == nil and future_err:find("expected 5 or 6", 1, true), "future format must never be downgraded")
+  local unreadable, unreadable_err = publisher.plan(root, cp, "origin", 1, a)
+  assert(unreadable == nil and unreadable_err:find("cannot read destination format marker", 1, true))
+  local late: publisher.FreezeProof = {destination = remote, witness = witness, frozen_at = cp.snapshot_at + 1}
+  local late_plan, late_error = publisher.prepare_activation(root, cp, "origin", 1, late, verify)
+  assert(late_plan == nil and late_error:find("before the source snapshot", 1, true), "post-snapshot freeze is refused")
   assert(#plan.stages == 2 and plan.activation[3] == "--atomic")
   local first: {string} = {}
   for i = 2, #plan.stages[1] do first[#first + 1] = plan.stages[1][i] end
@@ -228,4 +238,82 @@ exit 0
   assert(fs.write(witness, "#!/bin/sh\nexit 0\n", {mode = 493}))
   refused, drift = publisher.prepare_activation(root, cp, "origin", 1, proof, verify)
   assert(refused == nil and drift:find("freeze verification refused", 1, true))
+end
+
+local function test_catch_up_checks_live_destination_and_refuses_missing_state()
+  local root = repo("catchup-live")
+  commit(root, "refs/heads/items/a", "", "title: a\n", "new a\n")
+  local cp = check.must(migrate6.run(root))
+  local remote = fs.join(fixture.tmpdir, "migrate6-catchup-live-remote.git")
+  assert(fs.remove_all(remote))
+  fixture.git(root, {"clone", "--bare", "--quiet", root, remote})
+  fixture.git(root, {"remote", "add", "origin", remote})
+  fixture.git(root, {"update-ref", "refs/remotes/origin/state", cp.head})
+  local ok, err = migrate6.validate_catch_up(root, cp, "refs/remotes/origin/state")
+  assert(not ok and err:find("confirmed state head", 1, true), "missing destination state cannot use stale tracking evidence")
+  check.must(source.git(root, {"push", "origin", cp.head .. ":refs/heads/state"}))
+  assert(migrate6.validate_catch_up(root, cp, "refs/remotes/origin/state"))
+  commit(remote, "refs/heads/state", cp.head, "title: native\n", "native write\n")
+  ok, err = migrate6.validate_catch_up(root, cp, "refs/remotes/origin/state")
+  assert(not ok and err:find("native", 1, true), "fresh destination head overrides stale local tracking ref")
+end
+
+local function test_cli_publish_requires_execute_and_verified_checkpoint()
+  local cli = require("_work.migrate6_cli")
+  local root = repo("cli")
+  commit(root, "refs/heads/items/a", "", "title: a\n", "new a\n")
+  local cp = check.must(migrate6.run(root))
+  local remote = fs.join(fixture.tmpdir, "migrate6-cli-remote.git")
+  assert(fs.remove_all(remote))
+  fixture.git(root, {"clone", "--bare", "--quiet", root, remote})
+  fixture.git(root, {"remote", "add", "origin", remote})
+  local path = fs.join(root, "o/migrate6/checkpoint.literal")
+  assert(cli.run(root, {"publish"}, {checkpoint = path, remote = "origin"}, {}) == 0)
+  assert(check.must(source.git(remote, {"for-each-ref", "--format=%(objectname)", "refs/heads/state"})) == "")
+  assert(cli.run(root, {"publish"}, {checkpoint = path, remote = "origin"}, {execute = true}) ~= 0)
+  assert(check.must(source.git(remote, {"for-each-ref", "--format=%(objectname)", "refs/heads/state"})) == "")
+  assert(cp.freeze == nil)
+  cp.phase, cp.head, cp.replayed_head, cp.activation, cp.marks, cp.count = "frozen", "", "", "", {}, 0
+  assert(fs.write(path, check.must(require("_work.singlehead_literal").encode(cp)), {atomic = true}))
+  assert(cli.run(root, {"show"}, {checkpoint = path, remote = "origin"}, {}) == 0,
+    "incomplete checkpoint remains inspectable before replay has a head")
+end
+
+local function test_shared_source_history_replays_once_for_every_item_path()
+  local root = repo("shared-history")
+  local shared = commit(root, "refs/heads/items/a", "", "title: shared\n", "new shared\n")
+  fixture.git(root, {"update-ref", "refs/heads/ended/b", shared})
+  local a = commit(root, "refs/heads/items/a", shared, "title: a\n", "edit a\n", 1700000010)
+  local b = commit(root, "refs/heads/ended/b", shared, "title: b\n", "edit b\n", 1700000020)
+  local cp = check.must(migrate6.run(root))
+  assert(cp.count == 3 and cp.marks[shared] ~= nil)
+  assert(cp.marks[a] ~= cp.marks[b])
+  local attributed = check.must(source.git(root, {"diff-tree", "--root", "--no-commit-id", "--name-only", "-r", cp.marks[shared]}))
+  assert(attributed:find("items/a/meta", 1, true) and attributed:find("items/b/meta", 1, true),
+    "a shared old SHA maps to one event attributed to both source item histories")
+  assert(check.must(source.git(root, {"show", cp.head .. ":items/a/meta"})) == "title: a\n")
+  assert(check.must(source.git(root, {"show", cp.head .. ":items/b/meta"})) == "title: b\n")
+end
+
+local function test_restart_preserves_completed_candidate_until_success()
+  local wire = require("_work.singlehead_literal")
+  local root = repo("completed-restart")
+  commit(root, "refs/heads/items/a", "", "title: a\n", "new a\n")
+  local cp = check.must(migrate6.run(root))
+  local expected = cp.head
+  local events = check.must(source.events(root, cp.sources, cp.prefix))
+  events[1].tree = ("0"):rep(40)
+  local failed = replay.replay(root, events, fs.join(root, "o/migrate6"))
+  assert(failed == nil)
+  assert(check.must(source.git(root, {"rev-parse", "refs/gitboard/migrate6/replay"})) == expected .. "\n",
+    "a failed replay must preserve the previous completed private candidate")
+  local checkout = fs.join(fixture.tmpdir, "migrate6-completed-checkout")
+  assert(fs.remove_all(checkout))
+  fixture.git(root, {"worktree", "add", "--detach", checkout, expected})
+  cp.phase, cp.head, cp.replayed_head, cp.activation, cp.marks, cp.count = "frozen", "", "", "", {}, 0
+  assert(fs.write(fs.join(root, "o/migrate6/checkpoint.literal"), check.must(wire.encode(cp)), {atomic = true}))
+  local restored = check.must(migrate6.run(root))
+  assert(restored.head == expected, "completed candidate plus frozen checkpoint restarts identically")
+  assert(check.must(source.git(root, {"for-each-ref", "--format=%(refname)", "refs/gitboard/migrate6/attempt-"})) == "",
+    "successful restart retires its temporary replay ref")
 end

@@ -1,0 +1,14 @@
+return {
+  ["expired_claim_authority"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["expiry_never_releases"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["final_connector_deadline_boundary"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["local_head_as_remote_canonical"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["local_publication_deadline_boundary"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["mutable_frozen_transaction"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["omitted_claim_read_fence"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["receipt_reacquisition_identity"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["renewal_changes_acquisition_identity"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["second_parent_receipt_authority"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["stale_snapshot_authority"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["tip_only_receipt"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+}

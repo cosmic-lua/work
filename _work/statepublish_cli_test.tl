@@ -51,4 +51,3 @@ local function test_saved_plan_survives_draft_advance()
   assert(kept.sha == advanced.sha and #kept.transitions == 2)
   assert(#check.must(staging.list(root, "prepared")) == 0)
 end
-test_saved_plan_survives_draft_advance()

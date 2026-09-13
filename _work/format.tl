@@ -70,11 +70,21 @@ end
 --- @param dir string Board repository
 --- @return Inspection | nil Marker and board presence
 --- @return string Error message
-local function inspect(dir: string): Inspection | nil, string
-  local found, ferr = refs.for_each_ref(dir,
-    {"refs/heads/items", "refs/heads/ended", "refs/heads/board/format"})
+local CONTENT_BY_SHA: {string: string} = {}
+--- Immutable marker content may be carried from a validated cache snapshot.
+local function remember(sha: string, content: string)
+  CONTENT_BY_SHA[sha] = content
+end
+local function known_content(sha: string): string | nil
+  return CONTENT_BY_SHA[sha]
+end
+local function inspect(dir: string, snapshot?: {refs.RefEntry}): Inspection | nil, string
+  local found = snapshot
   if found == nil then
-    return nil, ferr
+    local fresh, ferr = refs.for_each_ref(dir,
+      {"refs/heads/items", "refs/heads/ended", "refs/heads/board/format"})
+    if fresh == nil then return nil, ferr end
+    found = fresh
   end
   local format_sha = ""
   local has_items = false
@@ -89,6 +99,8 @@ local function inspect(dir: string): Inspection | nil, string
   if format_sha == "" then
     return {content = "", sha = refs.ZERO_SHA, has_items = has_items}, ""
   end
+  local known = CONTENT_BY_SHA[format_sha]
+  if known ~= nil then return {content = known, sha = format_sha, has_items = has_items}, "" end
   local objects, oerr = gitobj.cat_file_batch(dir, {format_sha .. ":format"})
   if objects == nil then
     return nil, oerr
@@ -98,17 +110,23 @@ local function inspect(dir: string): Inspection | nil, string
     return nil, ("refs/heads/board/format has no readable format blob at %s")
     :format(format_sha)
   end
+  CONTENT_BY_SHA[format_sha] = blob_entry.content
   return {content = blob_entry.content, sha = format_sha,
     has_items = has_items}, ""
 end
 
 --- Native reads activate only on the explicit marker, never a staged branch.
-local function state_head(dir: string): string | nil, string
-  local marker, err = inspect(dir)
+local function state_head(dir: string, snapshot?: {refs.RefEntry}): string | nil, string
+  local marker, err = inspect(dir, snapshot)
   if marker == nil then return nil, err end
   local denied = refusal(marker.content, marker.has_items)
   if denied ~= nil then return nil, denied end
   if marker.content:gsub("%s+$", "") ~= "6" then return "", "" end
+  if snapshot ~= nil then
+    for _, entry in ipairs(snapshot) do
+      if entry.refname == "refs/heads/state" then return entry.sha, "" end
+    end
+  end
   local entries, herr = refs.for_each_ref(dir, {"refs/heads/state"})
   if entries == nil then return nil, herr end
   local head = refs.ZERO_SHA
@@ -116,7 +134,13 @@ local function state_head(dir: string): string | nil, string
     if entry.refname == "refs/heads/state" then head = entry.sha end
   end
   if head == refs.ZERO_SHA then
-    return nil, "format 6 requires refs/heads/state"
+    local remote = refs.board_remote(dir)
+    local argv = {"git", "fetch", "--atomic", remote,
+      "+refs/heads/state:refs/remotes/" .. remote .. "/state",
+      "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
+    local quoted: {string} = {}
+    for _, word in ipairs(argv) do quoted[#quoted + 1] = "'" .. word:gsub("'", "'\"'\"'") .. "'" end
+    return nil, "format 6 requires refs/heads/state; fetch the native snapshot: " .. table.concat(quoted, " ")
   end
   return head, ""
 end
@@ -213,17 +237,20 @@ local function ensure(dir: string): boolean, string
 end
 
 local record format
-  state_head: function(dir: string): string | nil, string
+  remember: function(sha: string, content: string)
+  known_content: function(sha: string): string | nil
+  state_head: function(dir: string, snapshot?: {refs.RefEntry}): string | nil, string
   CURRENT: string
   type Inspection = Inspection
   blob: function(): string
   refusal: function(found: string, has_items: boolean): string | nil
-  inspect: function(dir: string): Inspection | nil, string
+  inspect: function(dir: string, snapshot?: {refs.RefEntry}): Inspection | nil, string
   require_current: function(dir: string): boolean, string
   ensure: function(dir: string): boolean, string
 end
 
 local M: format = {
+  remember = remember, known_content = known_content,
   state_head = state_head,
   CURRENT = CURRENT,
   blob = blob,

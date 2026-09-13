@@ -1,0 +1,5 @@
+return {
+  ["containers_count_as_doing"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["missing_handover_workload"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["pre_state_only_doing_bound"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+}

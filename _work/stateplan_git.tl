@@ -3,6 +3,7 @@ local git = require("_work.singlehead_git")
 local tx = require("_work.statetransaction")
 local fs = require("cosmic.fs")
 local literal = require("_work.singlehead_literal")
+local trailer_codec = require("_work.stateplan_trailers")
 local ZERO < const > = string.rep("0", 40)
 local function path_id(root: string, head: string, path: string): string | nil, string
   if not tx.path_ok(path) then return nil, "invalid dependency path" end
@@ -43,6 +44,32 @@ local function commit(root: string, parent: string, tree: string, transition: tx
       GIT_AUTHOR_DATE = transition.author.date, GIT_COMMITTER_NAME = "gitboard",
       GIT_COMMITTER_EMAIL = "gitboard@localhost", GIT_COMMITTER_DATE = transition.author.date})
 end
+--- @param head Exact candidate tree whose complete leaf list must be preserved.
+--- @param changes Frozen changed blobs to inline instead of referencing their SHA.
+--- @return Every leaf, or refusal for unsupported entries such as gitlinks.
+local function snapshot(root: string, head: string, changes: {tx.Change}): {{string: any}} | nil, string
+  local listing, err = git.run(root, {"ls-tree", "-r", "-z", head})
+  if listing == nil then return nil, err end
+  local entries = literal.sequence() as {{string: any}} -- cast: explicit connector sequence
+  local offset = 1
+  while offset <= #listing do
+    local ending = listing:find("\0", offset, true)
+    if ending == nil then return nil, "unterminated native tree entry" end
+    local row = listing:sub(offset, ending - 1)
+    local mode, kind, sha, path = row:match("^(%d+) (%w+) ([0-9a-f]+)\t(.+)$")
+    if mode == nil or kind ~= "blob" or #sha ~= 40
+    or (mode ~= "100644" and mode ~= "100755" and mode ~= "120000") or not tx.path_ok(path) then
+      return nil, "unsupported native tree entry; refusing to omit it"
+    end
+    local entry: {string: any} = {path = path, mode = mode, type = "blob", sha = sha}
+    for _, change in ipairs(changes) do
+      if change.path == path and not change.delete then entry.sha = nil; entry.content = change.content end
+    end
+    entries[#entries + 1] = entry
+    offset = ending + 1
+  end
+  return entries, ""
+end
 local function capture(root: string, base: string, tip: string, dependencies: {tx.Dependency},
     publish_by?: integer, bounded?: boolean, gate?: string): tx.Transition | nil, string
   local raw, err = git.run(root, {"diff-tree", "--no-commit-id", "--no-renames", "-r", "--raw", "-z", base, tip})
@@ -73,7 +100,7 @@ local function capture(root: string, base: string, tip: string, dependencies: {t
   local name, email, date = rawcommit:match("\nauthor (.-) <([^>]+)> ([^\n]+)\n")
   local message = rawcommit:match("\n\n(.*)$")
   if name == nil or message == nil then return nil, "malformed transition commit" end
-  local trailers, terr = git.run(root, {"interpret-trailers", "--parse"}, message)
+  local trailers, terr = trailer_codec.parse(message)
   if trailers == nil then return nil, terr end
   local logical = ("\n" .. trailers):match("\nGitboard%-Author: ([^\n]+)")
   if logical ~= nil then
@@ -91,7 +118,8 @@ local record Module
   path_id: function(string, string, string): string | nil, string
   apply: function(string, string, {tx.Change}): string | nil, string
   commit: function(string, string, string, tx.Transition): string | nil, string
+  snapshot: function(string, string, {tx.Change}): {{string: any}} | nil, string
   capture: function(root: string, base: string, tip: string, dependencies: {tx.Dependency}, publish_by?: integer, bounded?: boolean, gate?: string): tx.Transition | nil, string
 end
-local M: Module = {path_id = path_id, apply = apply, commit = commit, capture = capture}
+local M: Module = {path_id = path_id, apply = apply, commit = commit, capture = capture, snapshot = snapshot}
 return M

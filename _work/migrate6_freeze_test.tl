@@ -1,0 +1,55 @@
+#!/usr/bin/env cosmic
+local check = require("cosmic.check")
+local fs = require("cosmic.fs")
+local json = require("cosmic.json")
+local fixture = require("_work.fixture")
+local freeze = require("_work.migrate6_freeze")
+
+local function response(date?: string, change?: string): string
+  local body: {string: any} = {id = 12, target = "branch", enforcement = "active", source_type = "Repository",
+    source = "owner/repo", updated_at = "2026-09-13T10:00:00Z", bypass_actors = {},
+    conditions = {ref_name = {include = {"refs/heads/items/**", "refs/heads/ended/**",
+          "refs/heads/claim-batches/**", "refs/heads/board/seq"}, exclude = {}}},
+    rules = {{type = "creation"}, {type = "update", parameters = {update_allows_fetch_and_merge = false}}, {type = "deletion"}}}
+  if change == "missing-bypass" then body.bypass_actors = nil end
+  if change == "disabled" then body.enforcement = "disabled" end
+  if change == "new-update" then body.updated_at = "2026-09-13T10:00:01Z" end
+  return "HTTP/2.0 200 OK\r\nDate: " .. (date or "Sun, 13 Sep 2026 10:00:02 GMT") .. "\r\n\r\n" .. check.must(json.encode(body))
+end
+
+local function test_freeze_rejects_missing_access_and_changed_or_reordered_observations()
+  local url = "git@github.com:owner/repo.git"
+  local before = check.must(freeze.inspect(response(), url, "owner/repo", 12))
+  assert(freeze.inspect(response(nil, "missing-bypass"), url, "owner/repo", 12) == nil)
+  assert(freeze.inspect(response(nil, "disabled"), url, "owner/repo", 12) == nil)
+  local changed = check.must(freeze.inspect(response(nil, "new-update"), url, "owner/repo", 12))
+  assert(not freeze.brackets(before, changed), "a changed ruleset cannot attest the earlier snapshot")
+  local earlier = check.must(freeze.inspect(response("Sun, 13 Sep 2026 10:00:01 GMT"), url, "owner/repo", 12))
+  assert(not freeze.brackets(before, earlier), "server observations must bracket fetch in order")
+  assert(freeze.repository("https://elsewhere.test/owner/repo.git") == nil)
+end
+
+local function test_freeze_observes_before_fresh_fetch_and_binds_destination_and_refset()
+  local root = fs.join(fixture.tmpdir, "migrate6-freeze")
+  assert(fs.remove_all(root)); assert(fs.make_dirs(root)); fixture.git(root, {"init", "-q"})
+  fixture.git(root, {"remote", "add", "origin", "https://github.com/owner/repo.git"})
+  local steps: {string} = {}
+  local function provider(repo: string, id: integer): string | nil, string
+    assert(repo == "owner/repo" and id == 12)
+    steps[#steps + 1] = "observe"
+    return response(), ""
+  end
+  local function fetcher(_root: string, url: string, prefix: string): boolean, string
+    assert(#steps == 1 and steps[1] == "observe", "freeze must be observed before fresh source acquisition")
+    assert(url == "https://github.com/owner/repo.git" and prefix:match("^refs/gitboard/migrate6/source%-"))
+    steps[#steps + 1] = "fetch"
+    return true, ""
+  end
+  local snap = check.must(freeze.snapshot(root, "origin", 12, provider, fetcher))
+  assert(table.concat(steps, ",") == "observe,fetch,observe")
+  assert(freeze.verify(root, "origin", snap.proof, snap.sources, provider))
+  local changed = {[snap.proof.prefix .. "items/a"] = string.rep("a", 40)}
+  assert(not freeze.verify(root, "origin", snap.proof, changed, provider), "snapshot source digest is immutable")
+  fixture.git(root, {"remote", "set-url", "--push", "origin", "git@github.com:owner/repo.git"})
+  assert(not freeze.verify(root, "origin", snap.proof, snap.sources, provider), "exact push destination is bound")
+end

@@ -181,26 +181,61 @@ end
 --- @return Loaded | nil The item, its ref and its tip
 --- @return string Error message; "no item <id>" when absent
 local function load_item(root: string, id: string,
-    known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
-  local head, herr = format.state_head(root)
-  if head == nil then return nil, herr end
-  if head ~= "" then
-    local view, verr = boardread.list(root, head)
-    if view == nil then return nil, verr end
-    local it = view.items_by_id[id]
-    if it == nil then return nil, "no item " .. id end
-    local history, hierr = boardhistory.read(root, head)
-    if history == nil then return nil, hierr end
-    return {it = it, ref = "refs/heads/state", sha = history.tip_by_id[id] or head}
+    known_ref?: string, known_sha?: string, now?: integer, reader?: gitbatch.BatchSession): Loaded | nil, string
+  if known_ref == "refs/heads/state" and known_sha ~= nil and known_sha ~= "" then
+    local loaded, err = boardread.load(root, known_sha, id)
+    if loaded == nil then return nil, err end
+    return {it = loaded.it, ref = known_ref, sha = known_sha}
+  end
+  local sess = reader
+  if sess == nil then
+    local opened, err = gitbatch.batch_session(root)
+    if opened == nil then return nil, err end
+    sess = opened
   end
   local ref, sha = known_ref, known_sha
   if ref == nil or ref == "" or sha == nil or sha == "" then
-    local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id})
+    local found, ferr = refs.for_each_ref(root, {"refs/heads/items/" .. id, "refs/heads/ended/" .. id,
+        "refs/heads/board/format", "refs/heads/state"})
     if found == nil then
-      return nil, ferr
+      return gitbatch.session_fail(sess, ferr)
     end
+    local marker_sha, head = "", ""
+    for _, entry in ipairs(found) do
+      if entry.refname == "refs/heads/board/format" then marker_sha = entry.sha end
+      if entry.refname == "refs/heads/state" then head = entry.sha end
+    end
+    local marker_text = ""
+    if marker_sha ~= "" then
+      local marker, merr = sess:request({marker_sha .. ":format"})
+      if marker == nil then return gitbatch.session_fail(sess, merr) end
+      local blob = marker[marker_sha .. ":format"]
+      if blob == nil then return gitbatch.session_fail(sess, "format marker is unreadable") end
+      marker_text = blob.content
+    end
+    local denied = format.refusal(marker_text, false)
+    if denied ~= nil then return gitbatch.session_fail(sess, denied) end
+    if marker_text:gsub("%s+$", "") == "6" then
+      local _closed, close_err = sess:close()
+      if not _closed then return nil, close_err end
+      if head == "" then return nil, "format 6 requires refs/heads/state" end
+      local view, verr = boardread.list(root, head)
+      if view == nil then return nil, verr end
+      local it = view.items_by_id[id]
+      if it == nil then return nil, "no item " .. id end
+      local history, hierr = boardhistory.read(root, head)
+      if history == nil then return nil, hierr end
+      return {it = it, ref = "refs/heads/state", sha = history.tip_by_id[id] or head}
+    end
+    local item_refs: {refs.RefEntry} = {}
+    for _, entry in ipairs(found) do
+      if entry.refname == "refs/heads/items/" .. id or entry.refname == "refs/heads/ended/" .. id then
+        item_refs[#item_refs + 1] = entry
+      end
+    end
+    found = item_refs
     if #found == 0 then
-      return nil, ("no item %s"):format(id)
+      return gitbatch.session_fail(sess, ("no item %s"):format(id))
     end
     ref, sha = found[1].refname, found[1].sha
     if #found > 1 then
@@ -211,10 +246,6 @@ local function load_item(root: string, id: string,
       local kept = pick_duplicate(root, items_e, ended_e)
       ref, sha = kept.refname, kept.sha
     end
-  end
-  local sess, serr = gitbatch.batch_session(root)
-  if sess == nil then
-    return nil, serr
   end
   local batch, berr = sess:request({sha .. ":meta", sha .. ":held", sha .. ":order", sha .. ":edges"})
   if batch == nil then return gitbatch.session_fail(sess, berr) end
@@ -263,25 +294,18 @@ end
 --- @return Board | nil The board
 --- @return string Error message naming the first genuinely corrupt
 --- item, or the format refusal
-local function list(root: string): Board | nil, string
-  local head, herr = format.state_head(root)
-  if head == nil then return nil, herr end
-  if head ~= "" then
-    local view, verr = boardread.list(root, head)
-    if view == nil then return nil, verr end
-    local history, hierr = boardhistory.read(root, head)
-    if history == nil then return nil, hierr end
-    local native_refs: {string: string} = {}
-    for _, it in ipairs(view.items) do native_refs[it.id] = "refs/heads/state" end
-    return {native_view = view, native_history = history, items = view.items, refs_by_id = native_refs,
-      shas_by_id = history.tip_by_id, touched_by_id = history.touched_by_id,
-      seq_sha = "", duplicates = {}, refs_digest = head}
-  end
-  local found, ferr = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board", "refs/heads/state"})
+local function list(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Board | nil, string
+  local found = snapshot
   if found == nil then
-    return nil, ferr
+    local fresh, err = refs.for_each_ref(root, {"refs/heads/items", "refs/heads/ended", "refs/heads/board", "refs/heads/state"})
+    if fresh == nil then return nil, err end
+    found = fresh
   end
-  local refs_digest = cachedb.digest_of(found)
+  local legacy_refs: {refs.RefEntry} = {}
+  for _, entry in ipairs(found) do
+    if entry.refname ~= "refs/heads/state" then legacy_refs[#legacy_refs + 1] = entry end
+  end
+  local refs_digest = cachedb.digest_of(legacy_refs)
   local items_by_id: {string: refs.RefEntry} = {}
   local ended_by_id: {string: refs.RefEntry} = {}
   local board_refs = gitboardstate.refs_new()
@@ -336,9 +360,11 @@ local function list(root: string): Board | nil, string
     queries[#queries + 1] = r.sha .. ":order"
     queries[#queries + 1] = r.sha .. ":edges"
   end
-  local sess, serr = gitbatch.batch_session(root)
+  local sess = reader
   if sess == nil then
-    return nil, serr
+    local opened, err = gitbatch.batch_session(root)
+    if opened == nil then return nil, err end
+    sess = opened
   end
   local batch, berr = sess:request(queries)
   if batch == nil then return gitbatch.session_fail(sess, berr) end
@@ -346,6 +372,24 @@ local function list(root: string): Board | nil, string
   local frefusal = format.refusal(format_content, #item_refs > 0)
   if frefusal ~= nil then
     return gitbatch.session_fail(sess, frefusal)
+  end
+  if format_content:gsub("%s+$", "") == "6" then
+    local _closed, close_err = sess:close()
+    if not _closed then return nil, close_err end
+    local head = ""
+    for _, entry in ipairs(found) do
+      if entry.refname == "refs/heads/state" then head = entry.sha end
+    end
+    if head == "" then return nil, "format 6 requires refs/heads/state" end
+    local view, verr = boardread.list(root, head)
+    if view == nil then return nil, verr end
+    local history, hierr = boardhistory.read(root, head)
+    if history == nil then return nil, hierr end
+    local native_refs: {string: string} = {}
+    for _, it in ipairs(view.items) do native_refs[it.id] = "refs/heads/state" end
+    return {native_view = view, native_history = history, items = view.items, refs_by_id = native_refs,
+      shas_by_id = history.tip_by_id, touched_by_id = history.touched_by_id,
+      seq_sha = "", duplicates = {}, refs_digest = head}
   end
   local kinds_by_id: {string: {string: string}} = {}
   local kind_queries: {string} = {}
@@ -410,8 +454,8 @@ local record gitread
   lease_encode: function(id: string, ref: string, sha: string): string
   lease_decode: function(ticket: string, id: string): string, string
   load: function(root: string, id: string,
-  known_ref?: string, known_sha?: string, now?: integer): Loaded | nil, string
-  list: function(root: string): Board | nil, string
+  known_ref?: string, known_sha?: string, now?: integer, reader?: gitbatch.BatchSession): Loaded | nil, string
+  list: function(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession): Board | nil, string
   -- Exported only for `_work.gitreadmany.load_many` to reuse without
   -- duplicating this module's own read-path primitives.
   edge_kinds: function(edges_content: string): {string: string}

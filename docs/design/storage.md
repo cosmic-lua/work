@@ -181,22 +181,24 @@ $ git update-ref refs/heads/state HEAD
 
 ## One commit, one mutation
 
-A mutation is one commit. Its parent is the staging base — the fetched
-`refs/remotes/<remote>/state`. Its author is the session, its
-committer gitboard, its subject the verb grammar `_work/events.tl`'s
-`parse_subject` already reads (verb, ` by ` session, `head:`), which
-classifies nothing it cannot parse rather than refusing. The
-`Op: <verb>` trailer stays exactly as it is, and one trailer is added: `Transaction: <id>`, the prepared
-transaction's id, read back with `git interpret-trailers --parse` and
-never by text search. It locates a candidate; what proves the attempt
-landed is its content (`## Drafts and prepared transactions`).
+A mutation is one commit, parented to the fetched `refs/remotes/<remote>/state`.
+Its logical author is the session. Shell publication writes that Git author and a
+gitboard committer; a connector that cannot set authors uses its provider's physical identity.
+Its subject follows `_work/events.tl`'s grammar (verb, ` by ` session, `head:`),
+which classifies nothing it cannot parse rather than refusing. `Op: <verb>` stays unchanged.
+`Transaction: <id>` names the prepared transaction. `Gitboard-Author: <literal>` carries
+the canonical single-line `cosmic.literal` record `{name, email, date}` on both executors.
+These reserved trailers occur exactly once in the final contiguous trailer block;
+rendering and parsing are independent of ambient Git trailer configuration.
+Parsed transaction identity locates a candidate; content proves publication
+(`## Drafts and prepared transactions`). Confirmation checks the logical author and
+complete message, not equality of the provider's physical author and the session.
+Logical authorship is writer-supplied provenance, not authentication; imports retain original authors/messages.
 
-A `log --add` entry writes `items/<id>/log/<ksuid>.md` **and** carries
-the same text in the commit body, so `git log -- items/<id>` and the
-tree both show it. In format 5 the entry is a tree-identical commit
-(`_work/fastimport.tl`'s empty-`ops` shape); on one branch that is
-indistinguishable from a no-op, and the path is what makes
-`git log -- items/<id>` an item's history.
+A `log --add` entry writes `items/<id>/log/<ksuid>.md` and carries the same text
+in the commit body, so `git log -- items/<id>` and the tree both show it.
+In format 5 it is a tree-identical commit (`_work/fastimport.tl`'s empty-`ops` shape);
+on one branch that is a no-op, and the path makes `git log -- items/<id>` an item's history.
 
 A claim batch is one commit writing every member's `claims/<id>`;
 `renew` rewrites them in one commit, `drop` deletes them in one. The
@@ -381,19 +383,19 @@ shell-git only.
   that commit makes;
 - a commit whose grafted subtree equals its parent's — format 5's
   `Op: log` entry, or any other tree-identical event — materialised as
-  `items/<id>/log/<ksuid>.md` carrying the body, so every replayed
-  commit is an event the path walk attributes; and every graft carries
-  the item's existing `log/` entries forward, since the historical tree
-  never held them;
+  `items/<id>/log/<ksuid>.md` carrying prose with legacy trailers removed, so every
+  replayed commit remains path-attributed. Each graft carries existing `log/` entries
+  forward, since historical trees never held them. Trailer-only administrative events
+  have empty attribution files, preserving marks and item-tip identity. Readers omit
+  empty bodies from displayed notes; a trailer such as `Op: import` is never note text;
 - `--export-marks` kept as `migration/marks`, and in a final commit
   every `result`, `verdict_head` and `landed_head` naming a replayed
   commit rewritten through it, and every item's current lease — active
   or expired but not dropped — written as `claims/<id>` with its
   acquisition commit as `id`.
 
-The run is checkpointed: `o/migrate6/checkpoint.literal` records every
-source tip, the marks and the replayed head, so a rerun reports
-`identical` or refuses, and a moved source ref is named, not resampled.
+The checkpoint `o/migrate6/checkpoint.literal` records every source tip, marks and
+replayed head. A rerun reports `identical` or refuses, naming moved source refs.
 
 The push is one ref, but the stream is 14350 commits and one body may
 exceed what the proxy accepts. So push ancestors of the tip in turn —
@@ -494,7 +496,5 @@ records what pinning ahead of the migration's code cost: every clone
 dark until it was built. Here 11 follows 10 follows 9 with nothing in
 between.
 
-Retire waits for a confirmed live board: read and written through
-`state` by real sessions. Until then the old refs are the fallback;
-after the first native write they are an archive, since rolling back
-would lose that write. Deleting them is the owner's irreversible step.
+Retire waits for real sessions to read and write `state`. Old refs are a fallback until
+the first native write, then an archive. Deleting them is the owner's irreversible step.

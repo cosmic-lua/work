@@ -88,7 +88,6 @@ local function test_frozen_chain_receipt_and_connector()
   assert(not plans.save(saved, plan))
   assert(check.must(plans.load(saved)).candidate == plan.candidate)
 end
-test_frozen_chain_receipt_and_connector()
 local function test_path_fence_precedes_bounded_gate_and_retry_is_new()
   local root = fs.join(fixture.tmpdir, "fences")
   local base = initial(root)
@@ -111,7 +110,6 @@ local function test_path_fence_precedes_bounded_gate_and_retry_is_new()
   assert(called and retried.expected_head == unrelated and original.expected_head == base)
   assert(check.must(projection.path_id(root, retried.candidate, "items/b/body")) ~= ZERO)
 end
-test_path_fence_precedes_bounded_gate_and_retry_is_new()
 local function test_deadline_delete_author_and_read_dependency()
   local root = fs.join(fixture.tmpdir, "deadline")
   local base = initial(root)
@@ -135,7 +133,6 @@ local function test_deadline_delete_author_and_read_dependency()
   remove.dependencies = {}
   assert(not tx.validate(frozen(one, {remove})))
 end
-test_deadline_delete_author_and_read_dependency()
 local function test_reserved_trailers_and_unsorted_changes()
   local root = fs.join(fixture.tmpdir, "reserved")
   local base = initial(root)
@@ -153,5 +150,16 @@ local function test_reserved_trailers_and_unsorted_changes()
   change.message = "edit\n\nGitboard-Author: " .. author .. "\n"
   assert(not tx.freeze(frozen(base, {change})))
 end
-test_reserved_trailers_and_unsorted_changes()
 print("stateplan_test: ok")
+
+local function test_deletion_refuses_inherited_gitlink()
+  local root = fs.join(fixture.tmpdir, "gitlink-deletion")
+  local base = initial(root)
+  local blob = check.must(git.text(root, {"hash-object", "-w", "--stdin"}, "remove me"))
+  local tree = check.must(git.text(root, {"mktree"}, "100644 blob " .. blob .. "\tremove\n160000 commit " .. base .. "\tunsupported-submodule\n"))
+  local inherited = check.must(objects.make_commit(root, tree, "inherited gitlink\n", base))
+  local change = transition(inherited, "remove", "", blob)
+  change.changes[1].delete = true
+  local plan, err = plans.build(root, frozen(inherited, {change}), inherited)
+  assert(plan == nil and err:find("unsupported native tree entry", 1, true), "deletion must never silently omit an inherited gitlink")
+end

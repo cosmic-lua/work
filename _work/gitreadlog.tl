@@ -184,7 +184,8 @@ end
 
 --- Read an item's native first-parent history, including claim path changes.
 local function read_state_history(root: string, head: string, id: string): {Entry} | nil, string
-  local r, err = child.run({"git", "log", "--first-parent", "--reverse",
+  local r, err = child.run({"git", "-c", "core.commentChar=#", "-c", "trailer.separators=:",
+      "-c", "trailer.Gitboard-Author.key=Gitboard-Author", "log", "--first-parent", "--reverse",
       "--format=" .. RS .. "%(trailers:key=Gitboard-Author,valueonly,unfold)" .. US .. FIELDS,
       head, "--", "items/" .. id, "claims/" .. id}, {cwd = root})
   if r == nil then return nil, err end

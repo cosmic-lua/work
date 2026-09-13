@@ -53,4 +53,15 @@ local function test_research_evidence_requires_item_attribution()
   assert(accepted == nil and err:find("event of this item", 1, true))
   assert(select(1, stateevidence.verify(root, head, result, id)) == nil,
     "a speculative future result cannot be evidence on the fetched head")
+  local original_tree = check.must(gitobj.cat_file_batch(root, {head}))[head].content:match("^tree ([0-9a-f]+)")
+  assert(original_tree ~= nil)
+  local primary = check.must(gitobj.commit_tree(root, {tree = original_tree, parents = {head},
+        message = "ordinary board continuation", author_name = "gitboard", author_email = "g@board",
+        committer_name = "gitboard", committer_email = "g@board"}))
+  local merged = check.must(gitobj.commit_tree(root, {tree = tree, parents = {primary, result},
+        message = "merge foreign evidence", author_name = "gitboard", author_email = "g@board",
+        committer_name = "gitboard", committer_email = "g@board"}))
+  local secondary, serr = stateevidence.verify(root, merged, result, id)
+  assert(secondary == nil and serr:find("first-parent", 1, true),
+    "second-parent reachability must not grant board evidence identity")
 end

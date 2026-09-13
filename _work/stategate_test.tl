@@ -2,57 +2,132 @@
 local boardtree = require("_work.boardtree")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
-local env = require("cosmic.env")
+local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local stategate = require("_work.stategate")
 local tx = require("_work.statetransaction")
 
-local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
-local config = fs.join(tmpdir, "stategate-gitconfig-empty")
-assert(fs.write(config, "") and env.set("GIT_CONFIG_GLOBAL", config)
-  and env.set("GIT_CONFIG_NOSYSTEM", "1"))
-
-local function bounded(gate: string): tx.Transition
-  return {base = ("a"):rep(40), dependencies = {{path = "format", id = ("b"):rep(40)}},
-    changes = {{path = "format", mode = "100644", content = "6\n", delete = false}},
-    message = "test", author = {name = "test", email = "test@example", date = "1700000001 +0000"},
+local root = fs.join(fixture.tmpdir, "native-bounded-flow")
+assert(fs.remove_all(root) and fs.make_dirs(root))
+assert(check.must(child.run({"git", "init", "-q", root})).ok)
+local function fresh(parent: string): item.Item
+  return check.must(item.decode({id = ksuid.new(), title = "bounded fixture", parent = parent}))
+end
+local function snapshot(items: {item.Item}): string
+  local entries: {gitobj.TreeEntry} = {}
+  for _, it in ipairs(items) do
+    entries[#entries + 1] = {mode = "40000", otype = "tree", name = it.id,
+      sha = check.must(boardtree.build_item(root, it, nil, nil, true))}
+  end
+  return check.must(gitobj.mktree_write(root, {
+        {mode = "100644", otype = "blob", name = "format", sha = check.must(gitobj.hash_object_write(root, "6\n"))},
+        {mode = "40000", otype = "tree", name = "items", sha = check.must(gitobj.mktree_write(root, entries))}}))
+end
+local function mutation(gate: string, changed: {item.Item}): tx.Transition
+  local changes: {tx.Change} = {}
+  for _, it in ipairs(changed) do
+    changes[#changes + 1] = {path = "items/" .. it.id .. "/meta", mode = "100644",
+      content = itemtree.encode_meta(it), delete = false}
+  end
+  return {base = ("a"):rep(40), dependencies = {}, changes = changes, message = "bounded fixture",
+    author = {name = "test", email = "test@board", date = "1700000000 +0000"},
     publish_by = 0, bounded = true, gate = gate}
 end
-
-local function full_board(): string, string
-  local root = fs.join(tmpdir, "stategate-board")
-  assert(fs.remove_all(root) and fs.make_dirs(root))
-  local init = check.must(child.run({"git", "init", "-q", root})); assert(init.ok, init.stderr)
-  local item_entries: {gitobj.TreeEntry} = {}; local claim_entries: {gitobj.TreeEntry} = {}
-  for n = 1, 10 do
-    local id = check.must(ksuid.encode(1700000000 + n, string.char(n):rep(16)))
-    local it = check.must(item.decode({id = id, title = "doing " .. n}))
-    local tree = check.must(boardtree.build_item(root, it, nil, nil, true))
-    item_entries[#item_entries + 1] = {mode = "40000", otype = "tree", sha = tree, name = id}
-    local raw = check.must(boardtree.encode_claim({id = ("%02x"):format(n):rep(20), holder = "s" .. n,
-          acquired_at = 1700000000, renewed_at = 1700000000, expires_at = 2000000000,
-          product_base = ("c"):rep(40)}))
-    claim_entries[#claim_entries + 1] = {mode = "100644", otype = "blob",
-      sha = check.must(gitobj.hash_object_write(root, raw)), name = id}
+local function seed(count: integer): {item.Item}, item.Item, item.Item
+  local board = fresh("")
+  local outcome = fresh(board.id)
+  local first, second = fresh(outcome.id), fresh(outcome.id)
+  local all: {item.Item} = {board, outcome, first, second}
+  for i = 1, count do
+    local it = fresh(outcome.id)
+    if i % 3 == 0 then it.pr = i
+    elseif i % 3 == 1 then it.handover_head = ("b"):rep(40)
+    else it.result = ("c"):rep(40) end
+    all[#all + 1] = it
   end
-  local items = check.must(gitobj.mktree_write(root, item_entries))
-  local claims = check.must(gitobj.mktree_write(root, claim_entries))
-  local format = check.must(gitobj.hash_object_write(root, "6\n"))
-  local tree = check.must(gitobj.mktree_write(root, {
-        {mode = "100644", otype = "blob", sha = format, name = "format"},
-        {mode = "40000", otype = "tree", sha = items, name = "items"},
-        {mode = "40000", otype = "tree", sha = claims, name = "claims"}}))
-  local head = check.must(gitobj.commit_tree(root, {tree = tree, parents = {}, message = "seed",
-        author_name = "test", author_email = "test@example", author_date = "1700000001 +0000",
-        committer_name = "test", committer_email = "test@example", committer_date = "1700000001 +0000", op = "seed"}))
-  return root, head
+  return all, first, second
 end
 
-local root, head = full_board()
-local ok, err = stategate.check(root, head, bounded("doing-bound"))
-assert(not ok and err == "doing bound reached", err)
-local unknown, uerr = stategate.check(root, head, bounded("future-gate"))
-assert(not unknown and uerr == "unknown bounded gate: future-gate")
+local function test_bound_counts_handover_and_result()
+  local all, target = seed(10)
+  local head = snapshot(all)
+  target.handover_head = ("d"):rep(40)
+  local ok, err = stategate.check(root, head, mutation("doing-bound", {target}))
+  assert(not ok and err == "doing bound reached", err)
+  local unknown, uerr = stategate.check(root, head, mutation("future-gate", {target}))
+  assert(not unknown and uerr == "unknown bounded gate: future-gate", uerr)
+end
+
+local function test_bound_projects_the_complete_batch()
+  local all, first, second = seed(9)
+  local head = snapshot(all)
+  first.handover_head = ("d"):rep(40)
+  second.result = ("e"):rep(40)
+  local ok, err = stategate.check(root, head, mutation("take", {first, second}))
+  assert(not ok and err == "doing bound reached", err)
+end
+
+local function test_finishing_never_consumes_another_slot()
+  local all = seed(11)
+  local head = snapshot(all)
+  local already = all[#all]
+  already.title = "finishing existing work"
+  local ok, err = stategate.check(root, head, mutation("take", {already}))
+  assert(ok, err)
+end
+
+local function test_nonwork_does_not_consume_capacity()
+  local all, target = seed(0)
+  all[1].handover_head = ("b"):rep(40)
+  all[2].pr = 1
+  for _ = 1, 12 do
+    local container = fresh(all[2].id)
+    container.handover_head = ("b"):rep(40)
+    all[#all + 1] = container
+    all[#all + 1] = fresh(container.id)
+  end
+  local head = snapshot(all)
+  target.handover_head = ("d"):rep(40)
+  local ok, err = stategate.check(root, head, mutation("doing-bound", {target}))
+  assert(ok, err)
+end
+local function test_replay_uses_the_shared_dependency_cycle_guard()
+  local all, first, second = seed(0)
+  second.depends_on = {first.id}
+  local head = snapshot(all)
+  first.depends_on = {second.id}
+  local ok, err = stategate.check(root, head, mutation("depend", {first}))
+  assert(not ok and err:find("dependency cycle", 1, true), err)
+end
+
+local function test_attach_replay_checks_only_the_changed_parent_edge()
+  local all, first, second = seed(0)
+  local head = snapshot(all)
+  first.parent = second.id
+  all[1].order = {all[2].id}
+  local ok, err = stategate.check(root, head, mutation("attach", {first, all[1]}))
+  assert(ok, err)
+  local after = snapshot(all)
+  second.parent = first.id
+  local cyclic, cerr = stategate.check(root, after, mutation("attach", {second}))
+  assert(not cyclic and cerr:find("would make a cycle", 1, true), cerr)
+end
+local function test_attach_replay_preserves_containering_and_item_checks()
+  local all, first = seed(0)
+  local retired = fresh(all[1].id); retired.resolution = "completed"
+  all[#all + 1] = retired
+  local head = snapshot(all)
+  first.parent = retired.id
+  local ok, err = stategate.check(root, head, mutation("attach", {first}))
+  assert(not ok and err:find("parent must be reopened", 1, true), err)
+  retired.resolution = ""
+  local repaired, rerr = stategate.check(root, head, mutation("attach", {first, retired}))
+  assert(repaired, rerr)
+  first.title = ""
+  local malformed, merr = stategate.check(root, head, mutation("attach", {first, retired}))
+  assert(not malformed and merr:find("title", 1, true), merr)
+end

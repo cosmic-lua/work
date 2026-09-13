@@ -94,6 +94,11 @@ local function test_native_read_and_explicit_activation()
   -- Confirmed remote tracking state wins over a speculative local successor.
   assert(refs.update_ref(root, "refs/remotes/origin/board/format", marker, refs.ZERO_SHA))
   assert(refs.update_ref(root, "refs/remotes/origin/state", head, refs.ZERO_SHA))
+  local legacy_blob = check.must(gitobj.hash_object_write(root, "5\n"))
+  local legacy_tree = check.must(gitobj.mktree_write(root,
+      {{mode = "100644", otype = "blob", sha = legacy_blob, name = "format"}}))
+  local legacy_marker = commit(root, legacy_tree, {}, "local speculative marker")
+  assert(refs.update_ref(root, "refs/heads/board/format", legacy_marker, marker))
   assert(refs.set_board_mode(root, "remote"))
   assert(check.must(format.state_head(root)) == head)
   local remote = check.must(store.open(root))
@@ -101,9 +106,66 @@ local function test_native_read_and_explicit_activation()
   assert(remote.state_head == head and remote.leased_sha[id] == head)
   assert(store.close(remote))
   assert(refs.set_board_mode(root, "local"))
+  assert(refs.update_ref(root, "refs/heads/board/format", marker, legacy_marker))
   assert(refs.update_ref(root, "refs/heads/state", refs.ZERO_SHA, revised_head))
   local missing, err = store.open(root)
   assert(missing == nil and err:find("requires refs/heads/state", 1, true))
 end
 
-test_native_read_and_explicit_activation()
+local function test_unchanged_head_reprojects_claim_at_expiry_and_clock_rewind()
+  local root = fs.join(fixture.tmpdir, "native-read-expiry")
+  assert(fs.remove_all(root) and fs.make_dirs(root))
+  assert(check.must(child.run({"git", "init", "-q", root})).ok)
+  local id = check.must(ksuid.encode(1700000000, ("b"):rep(16)))
+  local it = check.must(item.decode({id = id, title = "Timed native claim"}))
+  local tree = check.must(boardtree.build_item(root, it, nil, nil, true))
+  local items = check.must(gitobj.mktree_write(root, {{mode = "40000", otype = "tree", sha = tree, name = id}}))
+  local renewed, expiry = 1700001000, 1700002000
+  local claim = check.must(boardtree.encode_claim({id = ("a"):rep(40), holder = "session-a",
+        acquired_at = renewed, renewed_at = renewed, expires_at = expiry, product_base = ("b"):rep(40)}))
+  local claim_blob = check.must(gitobj.hash_object_write(root, claim))
+  local claims = check.must(gitobj.mktree_write(root, {{mode = "100644", otype = "blob", sha = claim_blob, name = id}}))
+  local marker_blob = check.must(gitobj.hash_object_write(root, "6\n"))
+  local marker_tree = check.must(gitobj.mktree_write(root, {{mode = "100644", otype = "blob", sha = marker_blob, name = "format"}}))
+  local marker = commit(root, marker_tree, {}, "format 6")
+  local whole = check.must(gitobj.mktree_write(root, {
+        {mode = "40000", otype = "tree", sha = items, name = "items"},
+        {mode = "40000", otype = "tree", sha = claims, name = "claims"},
+        {mode = "100644", otype = "blob", sha = marker_blob, name = "format"}}))
+  local head = commit(root, whole, {}, "claim " .. id .. " by session-a")
+  assert(refs.update_ref(root, "refs/heads/state", head, refs.ZERO_SHA))
+  assert(refs.update_ref(root, "refs/heads/board/format", marker, refs.ZERO_SHA))
+  local clock = expiry - 1
+  local original_time = os.time
+  os.time = function(): integer return clock end
+  local ok, err = pcall(function()
+      local s = check.must(store.open(root))
+      assert(check.must(store.list(s))[1].claim == "session-a")
+      local before = check.must(store.read(s))
+      assert(cachedb.meta_get(before.db, "native_valid_until") == tostring(expiry))
+      assert(before.db:exec("DELETE FROM cache_meta WHERE k IN ('native_projected_at','native_valid_until')"))
+      assert(check.must(store.list(s))[1].claim == "session-a", "pre-clock native caches are rebuilt")
+      local rebuilt = check.must(store.read(s))
+      assert(cachedb.meta_get(rebuilt.db, "native_valid_until") == tostring(expiry))
+      clock = expiry
+      assert(check.must(store.list(s))[1].claim == "", "open handle expires at the exact boundary")
+      assert(check.must(store.load(s, id)).claim == "", "load agrees with the projected index")
+      assert(s.state_head == head and check.must(format.state_head(root)) == head)
+      local expired = check.must(store.read(s))
+      local row = expired.db:query_one("SELECT state FROM state WHERE id=?", {id})
+      assert(row ~= nil and row.state == "todo")
+      assert(store.close(s))
+      local reopened = check.must(store.open(root))
+      assert(check.must(store.list(reopened))[1].claim == "", "same-head persisted cache stays expired")
+      clock = expiry - 1
+      assert(check.must(store.list(reopened))[1].claim == "session-a", "clock rewind reprojects authority")
+      clock = renewed - 301
+      local future, future_err = store.list(reopened)
+      assert(future == nil and future_err:find("future", 1, true) ~= nil)
+      clock = renewed - 300
+      assert(check.must(store.list(reopened))[1].claim == "session-a", "future refusal clears at accepted clock boundary")
+      assert(store.close(reopened))
+    end)
+  os.time = original_time
+  assert(ok, err)
+end

@@ -2,9 +2,11 @@
 --- changes the public state or format refs. Activation belongs to a separately
 --- verified shell executor, after a complete remote refset and freeze recheck.
 local fs = require("cosmic.fs")
+local hash = require("cosmic.hash")
 local wire = require("_work.singlehead_literal")
 local source = require("_work.migrate6_source")
 local replay = require("_work.migrate6_replay")
+local freeze = require("_work.migrate6_freeze")
 
 local record Checkpoint
   version: string
@@ -18,12 +20,15 @@ local record Checkpoint
   replayed_head: string
   activation: string
   count: integer
+  freeze: freeze.Proof
 end
 local record Options
   prefix: string
   checkpoint: string
   catch_up: boolean
   state_ref: string
+  remote: string
+  freeze: freeze.Proof
 end
 
 local function sha_map(raw: any): boolean
@@ -43,7 +48,8 @@ local function read(path: string): Checkpoint | nil, string
   local activation, count = raw.activation, raw.count
   local repository = raw.repository
   local snapshot_at = raw.snapshot_at
-  if raw.version ~= "migrate6-v1" or (raw.phase ~= "frozen" and raw.phase ~= "planned")
+  if raw.version == "migrate6-v1" then return nil, "older migration replay semantics; choose a new checkpoint path and replay again" end
+  if raw.version ~= "migrate6-v2" or (raw.phase ~= "frozen" and raw.phase ~= "planned")
   or not (prefix is string) or not sha_map(raw.sources) or not sha_map(raw.marks)
   or not (head is string) or not (replayed_head is string)
   or not (activation is string) or not (count is integer) then
@@ -53,6 +59,11 @@ local function read(path: string): Checkpoint | nil, string
   if not (snapshot_at is integer) or snapshot_at < 1 then return nil, "checkpoint lacks snapshot time" end
   if raw.phase == "planned" and (#head ~= 40 or #activation ~= 40) then
     return nil, "invalid planned migration head"
+  end
+  if raw.freeze ~= nil then
+    local proof, ferr = freeze.decode(raw.freeze)
+    if proof == nil then return nil, ferr end
+    if proof.prefix ~= prefix then return nil, "freeze proof checkpoint prefix differs" end
   end
   return raw as Checkpoint, "" -- cast: literal fields checked above
 end
@@ -70,12 +81,32 @@ local function validate_sources(root: string, checkpoint: Checkpoint): boolean, 
 end
 
 local function validate_catch_up(root: string, checkpoint: Checkpoint,
-    state_ref?: string): boolean, string
+    state_ref?: string, remote?: string): boolean, string
   local ref = state_ref or (checkpoint.prefix .. "state")
-  local actual, err = source.git(root, {"for-each-ref", "--format=%(objectname)", ref})
-  if actual == nil then return false, err end
-  local head = actual:gsub("%s+$", "")
-  if head ~= "" and head ~= checkpoint.activation then
+  local selected = remote or ref:match("^refs/remotes/([^/]+)/state$")
+  local head = ""
+  if selected ~= nil then
+    local url, uerr = source.git(root, {"remote", "get-url", "--push", selected})
+    if url == nil then return false, uerr end
+    local destination = url:gsub("%s+$", "")
+    local advertised, aerr = source.git(root, {"ls-remote", "--refs", destination, "refs/heads/state"})
+    if advertised == nil then return false, aerr end
+    head = advertised:match("^([0-9a-f]+)%s+refs/heads/state\n$") or ""
+    if head ~= "" then
+      local fetched, ferr = source.git(root, {"fetch", "--no-tags", destination,
+          "refs/heads/state:refs/gitboard/migrate6/catchup-state"})
+      if fetched == nil then return false, ferr end
+      local confirmed, cerr = source.git(root, {"ls-remote", "--refs", destination, "refs/heads/state"})
+      if confirmed == nil then return false, cerr end
+      if confirmed ~= advertised then return false, "destination state moved during catch-up verification" end
+    end
+  elseif ref == "refs/heads/state" then
+    local actual, err = source.git(root, {"for-each-ref", "--format=%(objectname)", ref})
+    if actual == nil then return false, err end
+    head = actual:gsub("%s+$", "")
+  else return false, "catch-up requires a destination remote for confirmed state verification" end
+  if head == "" then return false, "catch-up refuses without a confirmed state head" end
+  if head ~= checkpoint.activation then
     local ancestor = source.git(root, {"merge-base", "--is-ancestor", head, checkpoint.activation})
     if ancestor ~= nil then return true, "" end
     local _, drift = validate_sources(root, checkpoint)
@@ -97,6 +128,13 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
   local snapshot_at = os.time()
   local refs, serr = source.snapshot(root, prefix)
   if refs == nil then return nil, serr end
+  if opts.freeze ~= nil then
+    local encoded, err = wire.encode(refs)
+    if encoded == nil then return nil, err end
+    if opts.freeze.prefix ~= prefix or opts.freeze.source_digest ~= hash.sha256_hex(encoded) then
+      return nil, "freeze witness source snapshot differs"
+    end
+  end
   local valid, ierr = source.integrity(root, refs)
   if not valid then return nil, ierr end
   local checkpoint: Checkpoint | nil = nil
@@ -108,7 +146,7 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
     local same, drift = source.compare(old.sources, refs)
     if not same then
       if not opts.catch_up then return nil, drift end
-      local safe, e = validate_catch_up(root, old, opts.state_ref)
+      local safe, e = validate_catch_up(root, old, opts.state_ref, opts.remote)
       if not safe then return nil, e end
       local history, herr = source.events(root, refs, prefix)
       if history == nil then return nil, herr end
@@ -119,7 +157,12 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
           return nil, drift .. "; rewritten/deleted source history requires hand reconciliation: " .. sha
         end
       end
-      old.sources, old.phase, old.snapshot_at = refs, "frozen", snapshot_at
+      old.sources, old.phase, old.snapshot_at, old.freeze = refs, "frozen", snapshot_at, opts.freeze
+      local saved, saveerr = save(path, old)
+      if not saved then return nil, saveerr end
+    end
+    if opts.freeze ~= nil then
+      old.freeze = opts.freeze
       local saved, saveerr = save(path, old)
       if not saved then return nil, saveerr end
     end
@@ -133,8 +176,8 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
     end
   end
   if checkpoint == nil then
-    checkpoint = {version = "migrate6-v1", repository = repository, snapshot_at = snapshot_at, phase = "frozen", prefix = prefix,
-      sources = refs, marks = {}, head = "", replayed_head = "", activation = "", count = 0}
+    checkpoint = {version = "migrate6-v2", repository = repository, snapshot_at = snapshot_at, phase = "frozen", prefix = prefix,
+      sources = refs, marks = {}, head = "", replayed_head = "", activation = "", count = 0, freeze = opts.freeze}
     local saved, err = save(path, checkpoint)
     if not saved then return nil, err end
   end
@@ -165,7 +208,7 @@ local record Migrate6
   run: function(root: string, opts?: Options): Checkpoint | nil, string
   read: function(string): Checkpoint | nil, string
   validate_sources: function(string, Checkpoint): boolean, string
-  validate_catch_up: function(root: string, cp: Checkpoint, state_ref?: string): boolean, string
+  validate_catch_up: function(root: string, cp: Checkpoint, state_ref?: string, remote?: string): boolean, string
 end
 local M: Migrate6 = {run = run, read = read, validate_sources = validate_sources,
   validate_catch_up = validate_catch_up}

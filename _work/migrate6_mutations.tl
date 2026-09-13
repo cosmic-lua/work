@@ -1,6 +1,7 @@
 #!/usr/bin/env cosmic
 --- Isolated semantic mutation checks for the migration proof. Invoke with the
---- pinned runtime, repository root, and an existing compiled migration test.
+--- pinned runtime and repository root. The direct test tail is generated from
+--- current sources, so stale compiled tests cannot disguise a surviving mutant.
 --- Every mutant gets its own source copy; the shared checkout is never edited.
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -12,8 +13,19 @@ local record Case
   before: string
   after: string
   test: string
+  test_file: string
 end
 local cases: {string: Case} = {
+  prose_only = {file = "migrate6_replay.tl", before = "gitreadlog.prose_of(event.message:match(\"\\n\\n(.*)$\") or \"\")",
+    after = "(gitreadlog.prose_of(\"\") or \"\") .. (event.message:match(\"\\n\\n(.*)$\") or \"\")",
+    test_file = "migrate6_logs_test.tl", test = "test_migration_preserves_prose_and_empty_attribution_without_fake_notes"},
+  pre_snapshot_freeze = {file = "migrate6_publish.tl", before = "proof.frozen_at > cp.snapshot_at",
+    after = "proof.frozen_at > cp.snapshot_at and false", test = "test_synthetic_freeze_staged_seed_and_atomic_activation"},
+  observation_order = {file = "migrate6_freeze.tl", before = "after.observed_at < before.observed_at",
+    after = "after.observed_at < before.observed_at and false", test_file = "migrate6_freeze_test.tl",
+    test = "test_freeze_rejects_missing_access_and_changed_or_reordered_observations"},
+  missing_live_state = {file = "migrate6.tl", before = "if head == \"\" then return false, \"catch-up refuses without a confirmed state head\" end",
+    after = "if head == \"\" then return true, \"\" end", test = "test_catch_up_checks_live_destination_and_refuses_missing_state"},
   exact_message = {file = "migrate6_replay.tl", before = "fastimport.data_block(event.message)",
     after = "fastimport.data_block(event.message .. \"\\n\")",
     test = "test_migration_exact_history_logs_marks_and_offline_restart"},
@@ -29,13 +41,19 @@ local cases: {string: Case} = {
   activation_recheck = {file = "migrate6_publish.tl", before = "if not same then return nil, drift end",
     after = "if not same and false then return nil, drift end",
     test = "test_synthetic_freeze_staged_seed_and_atomic_activation"},
+  shared_history = {file = "migrate6_source.tl", before = "if not present then shared.ids[#shared.ids + 1] = id;",
+    after = "if not present and false then shared.ids[#shared.ids + 1] = id;",
+    test = "test_shared_source_history_replays_once_for_every_item_path"},
+  interrupted_candidate = {file = "migrate6_replay.tl", before = "local attempt = ksuid.new()",
+    after = "local _dropped, _drop_err = source.git(root, {\"update-ref\", \"-d\", REF})\n  local attempt = ksuid.new()",
+    test = "test_restart_preserves_completed_candidate_until_success"},
 }
 
 local function main(...: string): integer
   local args = {...}
   local runtime, root = args[1], args[2]
   assert(runtime ~= nil and root ~= nil, "usage: migrate6_mutations.tl RUNTIME REPOSITORY")
-  local scratch = assert(fs.temp_dir("/tmp/migrate6-mutants-XXXXXX"))
+  local scratch = assert(fs.temp_dir(fs.join(env.get("TEST_TMPDIR") or "/tmp", "migrate6-mutants-XXXXXX")))
   local results: {string: string} = {}
   local names: {string} = {}
   for name in pairs(cases) do names[#names + 1] = name end
@@ -55,7 +73,12 @@ local function main(...: string): integer
     assert(checked.ok, "mutant must typecheck: " .. name .. " " .. checked.stderr)
     local temp = fs.join(isolated, "tmp")
     assert(fs.make_dirs(temp))
-    local ran = assert(child.run({runtime, fs.join(root, "o/_work/migrate6_test.lua")},
+    local test_body = assert(fs.read(fs.join(isolated, "_work", case.test_file or "migrate6_test.tl")))
+    assert(test_body:find("local function " .. case.test .. "(", 1, true), "unknown mutant test")
+    local direct = fs.join(isolated, "direct_test.tl")
+    assert(fs.write(direct, test_body .. "\nos.exit(require(\"cosmic.test\").main({{name=\"" ..
+        case.test .. "\", fn=" .. case.test .. "}}))\n"))
+    local ran = assert(child.run({runtime, direct},
         {cwd = isolated, env = env.list({set = {TEST_TMPDIR = temp, COSMIC_TEST_FILTER = case.test}})}))
     assert(not ran.ok and ran.stdout:find("1 checks: 0 passed", 1, true),
       "semantic mutant survived or failed outside its test: " .. name .. " " .. ran.stdout .. ran.stderr)

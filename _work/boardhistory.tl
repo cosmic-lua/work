@@ -30,7 +30,8 @@ local function logical_author(value: string, fallback: string): string
 end
 
 local function read(root: string, head: string): History | nil, string
-  local r, err = child.run({"git", "log", "--first-parent",
+  local r, err = child.run({"git", "-c", "core.commentChar=#", "-c", "trailer.separators=:",
+      "-c", "trailer.Gitboard-Author.key=Gitboard-Author", "log", "--first-parent",
       "--format=%x1e%H%x00%ct%x00%an <%ae>%x00%s%x00%(trailers:key=Gitboard-Author,valueonly,unfold)",
       "--name-only", head}, {cwd = root})
   if r == nil then return nil, err end

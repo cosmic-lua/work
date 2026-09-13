@@ -10,6 +10,7 @@
 --- A refused publish drops every one of them, so anything a mutation
 --- touches beyond its subject travels with it rather than being
 --- committed alongside.
+local graphguards = require("_work.graphguards")
 local cache = require("_work.cache")
 local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
@@ -349,7 +350,7 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: itemtree.
   storewrite.set_session(s, session or "")
   storewrite.set_op(s, verb)
   local native_bounded = s.state_head ~= "" and
-  (verb == "depend" or verb == "attach" or verb == "done" or verb == "rank")
+  (verb == "depend" or verb == "attach" or verb == "take")
   storewrite.set_bounded(s, bounded or native_bounded)
   -- Read before the write moves anything, so `after_save` below has
   -- proof the cache was valid immediately beforehand — see
@@ -449,7 +450,7 @@ local function containered(c: Index, parent: item.Item): {item.Item} | nil, stri
   if role == nil then
     return nil, rerr
   end
-  local reopened = role == "outcome" and (parent.resolution or "") ~= ""
+  local reopened = graphguards.reopen(parent, role)
   if not reopened then return {}, "" end
   parent.resolution = ""
   return {parent}, ""

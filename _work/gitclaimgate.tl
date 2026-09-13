@@ -13,12 +13,37 @@ local store = require("_work.store")
 local function mutation_refusal(s: store.Store, it: item.Item,
     session: string, force: boolean, why: string): string | nil
   if (s.state_head or "") ~= "" then
-    local got, err = boardread.list(s.root, s.state_head)
+    local before = s.leased_item[it.id]
+    local item_path, claim_path = "items/" .. it.id, "claims/" .. it.id
+    if before ~= nil and s.state_reads[item_path] ~= nil
+    and s.state_reads[claim_path] ~= nil then
+      local holder = before.claim or ""
+      if holder == "" or holder == (session or "") then return nil end
+      if not (force or false) then return "REFUSED: item is frozen by " .. holder end
+      if (why or ""):match("^%s*$") then return "REFUSED: forced mutation requires --why" end
+      return nil
+    end
+    -- A freshly minted item has no loaded snapshot. Prove BOTH canonical
+    -- paths absent and record the zero fences; the argument alone is never
+    -- evidence that an id is new.
+    local item_oid, ierr = boardtree.path_id(s.root, s.state_head, item_path)
+    if item_oid == nil then return "REFUSED: cannot inspect claim: " .. ierr end
+    local claim_oid, cerr = boardtree.path_id(s.root, s.state_head, claim_path)
+    if claim_oid == nil then return "REFUSED: cannot inspect claim: " .. cerr end
+    s.state_reads[item_path], s.state_reads[claim_path] = item_oid, claim_oid
+    if item_oid == boardtree.ZERO_SHA then
+      if claim_oid ~= boardtree.ZERO_SHA then
+        return "REFUSED: absent item has a canonical claim"
+      end
+      return nil
+    end
+    -- A caller that bypassed list but names an existing item still receives
+    -- the full exact canonical claim check.
+    local got, err = boardread.load(s.root, s.state_head, it.id)
     if got == nil then return "REFUSED: cannot inspect claim: " .. err end
-    s.state_reads["items/" .. it.id] = got.item_tree_by_id[it.id] or boardtree.ZERO_SHA
-    s.state_reads["claims/" .. it.id] = got.claim_blob_by_id[it.id] or boardtree.ZERO_SHA
-    local denial = claim.mutation_refusal(stateclaim.state(got.claims_by_id[it.id]),
-      session or "", os.time(), force or false, why or "")
+    s.state_reads[item_path], s.state_reads[claim_path] = got.tree, got.claim_blob
+    local denial = claim.mutation_refusal(stateclaim.state(got.claim), session or "",
+      os.time(), force or false, why or "")
     return denial ~= nil and "REFUSED: " .. denial or nil
   end
   local before = s.leased_item[it.id]
