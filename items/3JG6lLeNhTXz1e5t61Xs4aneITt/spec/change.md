@@ -1,7 +1,3 @@
-# brief review: the shared request-changes tail still speaks diff to a research reviewer
-
-## Change
-
 After #158, #160 and #162 the research review renders its own opening, its
 own posture and its own final report, and the diff form is byte-identical to
 before. One diff-shaped sentence survives in the SHARED tail of `REVIEW`
@@ -17,10 +13,3 @@ byte-for-byte the current sentence so the diff render digest
 (`b3b6993ae9ce04ab0abaf4c8f54f4ff8ab7dea21697ef6e71e714e7ab7447fb3` against
 `brieftmpl_test`'s fixture facts) does not move. Pin the research wording in
 `brief_research_test` and `brieftmpl_test`.
-
-## Non-goals
-
-- No other sentence moves; the diff render stays byte-identical.
-- `POSTURE_RESEARCH`'s hard line break mid-paragraph ("...reproduction
-  worktree above.\nThe checkout that holds...") is cosmetic and may ride
-  along, but is not the item.
