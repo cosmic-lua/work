@@ -1,31 +1,3 @@
-## Finding
-
-`cosmic.sandbox.merge()` (`cosmic/sandbox/init.tl`) silently drops the
-`net` section entirely from its result — it was never wired in when net
-landed (PR #1596) — and, as of item `3I7LKuM2` (handle «X8Ro_I6Dl»,
-"sandbox: the facade reaches ABI 9"), now also drops the new `scope`
-section the same way. No test covers merging either section.
-
-## Symptom
-
-`sandbox.merge({net = {...}}, {other = {...}})` silently loses the `net`
-policy from the result with no error — the caller gets a merged Options
-table that looks complete but is missing a section they explicitly
-passed. Same for `scope` after `3I7LKuM2` lands. Any caller relying on
-`merge()` to compose a `net` or `scope` policy across two Options values
-(e.g. a base project policy merged with a per-call override) silently
-loses that half of the policy.
-
-## Provenance
-
-Surfaced 2026-08-31 while building item `3I7LKuM2` (handle «X8Ro_I6Dl»)
-— the builder noticed `merge()` had no `net` handling already (a
-pre-existing gap from PR #1596) and confirmed the new `scope` section
-they were adding had the identical gap, but fixing `merge()` was outside
-that item's `## Change`. Left alone there; filed here as its own gap.
-
-## Change
-
 Confirmed against current `main`
 (`cosmic/sandbox/init.tl`, `merge()` at lines 377-405, `merged_list` at
 lines 354-367) by running a real `merge()` call through the tree's own
@@ -106,33 +78,3 @@ in `cosmic/sandbox/init.tl`:
 No other file changes: `apply()`, `validate()`, and the `Report`/`Section`
 records are untouched — this is scoped to `merge()`'s composition logic
 and its test.
-
-## Non-goals
-
-`scope` is explicitly NOT fixed here. Checked against the current `main`
-tree:
-
-```
-$ grep -n 'type Options' -A 10 cosmic/sandbox/init.tl
-local record Options
-  fs: Fs
-  sys: Sys
-  net: Net
-  best_effort: boolean
-  allow_unenforced: boolean
-  strict: boolean
-  no_new_privs: boolean
-end
-
-$ grep -rn 'scope' cosmic/sandbox/
-(no output)
-```
-
-`Options` has no `scope` field at all yet, and no `scope` reference
-exists anywhere under `cosmic/sandbox/` — PR #1600 (item `3I7LKuM2`,
-handle «X8Ro_I6Dl»), which introduces it, has not landed on `main`. Do
-not add `scope` handling to `merge()` speculatively against a shape that
-might still change in review. Once #1600 merges, re-verify (with the
-same kind of `merge()` probe used above, against the landed `scope`
-field) whether the identical drop applies and, if so, fix it as its own
-follow-up — do not assume this Change already covers it.
