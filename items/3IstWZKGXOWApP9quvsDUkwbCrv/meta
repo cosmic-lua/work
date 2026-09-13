@@ -1,3 +1,5 @@
 title: cosmic-lua/cosmic's board branch is a stale predecessor of cosmic-lua/work: mark or remove it
 parent: 3IvL2wUvcjnmW8CFTHMrV1061nP
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: _work/gitowner.tl
+access: cosmic-lua/work
