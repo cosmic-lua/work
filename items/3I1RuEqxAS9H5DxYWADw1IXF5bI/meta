@@ -1,5 +1,6 @@
 title: a test that reads the tree without declaring it: perf_test replays a cached PASS over 16 changed bench modules
 parent: 3HyRdGk0liOSXEXjHRReYYEUxdi
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1279
 resolution: completed
+touches: _cli/reads_lint.tl _cli/pattern_args.tl _cli/returns.tl _cli/visibility.tl _cli/lint.tl _cli/reads_lint_test.tl _cli/returns_test.tl cosmic/fs/glob_test.tl cosmic/fs/find.tl _perf/perf_test.tl
