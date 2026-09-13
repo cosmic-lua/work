@@ -1,6 +1,6 @@
 title: ghwrite_test: drop the vestigial GITHUB_TOKEN stubbing — the codec stopped reading it in ae840934
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
-target: cosmic-lua/work
+repo: cosmic-lua/work
 claim_batch: 54128d50d210b69e39e4180172d4a9a948e75f2b
 handover_head: e3bca1946c95fa72081c446cf9c225fc7bd077ef
 external_url: https://github.com/cosmic-lua/work/pull/147
@@ -9,3 +9,4 @@ verdict_head: e3bca1946c95fa72081c446cf9c225fc7bd077ef
 landed_head: 38989079616c14ced873148e968ceae120ab96fb
 resolution: completed
 builders: 46e3ea03c5be254817acaab1f4921b5a
+touches: _work/ghwrite_test.tl
