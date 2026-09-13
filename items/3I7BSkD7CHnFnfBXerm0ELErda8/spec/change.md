@@ -1,13 +1,3 @@
-> Capture note, 2026-08-19: this spec was refined to the ready bar while `plan` sat over limit (18/12) and `new --parent` was refused. Attach under 3HyArM3A (the G3 cast epic) when plan drains; the verification below ran against a worktree at f420391 and is dated.
-
-## Goal
-
-G3 — an honest type layer, no escape hatches, via the epic "measure and
-drive down the as-cast count" (parent). This is the epic's wave 3: the
-checker-verified pure deletions.
-
-## Change
-
 Delete 12 `as` casts that the checker no longer needs — the cast and its
 `-- cast:` justification comment come off the line together, nothing else
 on the line changes. Measured 2026-08-19 at `f420391` (main), these are
@@ -40,25 +30,3 @@ The census's wave 3 also named "enum rows (3)"; measured today, no
 deletable enum-reason site remains (`git grep -in -- "-- cast:.*enum"`
 returns only widenings, boundary translations, and one pairs()-erasure —
 all justified). Wave 3 is these 12 sites, no more.
-
-## Non-goals
-
-- no other cast site moves, whatever the neighboring diff invites — the
-  remaining 443 are other waves' work.
-- no type or record changes: `types.File`, `Verb`, and `sse.Event` stay
-  exactly as declared.
-- no change to `_build/casts.tl` (the gate) beyond the baseline regen it
-  prints; the `TREES` list is settled (PR #1276).
-
-## Acceptance
-
-- `bin/cosmic --make test _make/law_test.tl _make/policy_test.tl _make/project_test.tl _make/stage_test.tl cosmic/sse_test.tl` ends `test: PASS (5 files)`.
-- `git grep -c -- "-- cast:" -- "*.tl" | awk -F: '{s+=$NF} END {print s}'` prints 443.
-- `bin/cosmic --make ci` ends `ci: PASS` — which includes the cast
-  ratchet agreeing with the regenerated baseline.
-
-## Enablement
-
-none needed — pure deletion under an existing gate; the ratchet's own
-failure message names the regen command quoted above, and the
-deletability claim is pre-verified against the current tree (see Change).
