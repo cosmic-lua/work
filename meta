@@ -1,4 +1,4 @@
 title: gitboard: a base-merge between accept and merge leaves a permanent head-mismatch warning with no way to re-affirm the verdict
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 resolution: not-planned
