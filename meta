@@ -1,3 +1,4 @@
 title: a decision record's identity is a ksuid handle, not the next free number
 parent: 3HyRcrR35sYRwZl3guddvOBhFoK
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
+touches: docs/decisions/d46-http-engine-is-a-cosmo-binding.md _docs/derive.tl _build/docs_test.tl skills/decide/SKILL.md docs/decisions/d26-decision-records.md
