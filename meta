@@ -5,5 +5,7 @@ claim_batch: 2eb05d11e3073d92dd36546d30ca8fcebb714f97
 handover_head: a33bc1fb4cfa8f6e1f5dab0d4c72a57699b405e0
 verdict: accept
 verdict_head: a33bc1fb4cfa8f6e1f5dab0d4c72a57699b405e0
+landed_head: 03ffedb6e594c06e419a870284c89b163dd93829
+resolution: completed
 builders: be21c1ebddacb42302460088b126aaba
 access: cosmic-lua/cosmic
