@@ -1,5 +1,6 @@
 title: sandbox: race-free fs.optional — ENOENT tolerated at rule open, the exists() pre-filter deleted
 parent: 3I1IfJ228vyPoO9rhbHhc6RjxJB
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1283
 resolution: completed
+touches: cosmic/sandbox/landlock.tl cosmic/sandbox/plan.tl cosmic/sandbox/init.tl cosmic/sandbox/landlock_test.tl
