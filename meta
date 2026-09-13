@@ -1,3 +1,4 @@
 title: pin: bump bin/gitboard.pin to a release that understands format 5
 parent: 3JEx0YH5oitHW0AGqyeLtqETBmJ
 target: cosmic-lua/cosmic
+claim_batch: ca8815babcff130db265e8fd1eb5008c3251daf3
