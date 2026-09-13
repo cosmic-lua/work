@@ -9,7 +9,9 @@
 --- bookkeeping and requires this module for Store and its exported helpers; the
 --- dependency never runs back from this module to storewrite. Native transitions
 --- are prepared by `_work.statewrite` and published through `_work.statepublish`.
---- `NOOP_PREFIX`, `snapshot_item`, `stage`, and `read_spec` are the shared boundary.
+--- `NOOP_PREFIX`, `snapshot_item`, `stage`, and `read_spec` are the shared boundary;
+--- the two pure item helpers behind `snapshot_item`/`flagged_summary` live in
+--- `_work.storeitem`, re-exported here so every caller keeps one entry point.
 local stateread_start = require("_work.stateread_start")
 local boardhistory = require("_work.boardhistory")
 local stateread_clock = require("_work.stateread_clock")
@@ -26,12 +28,23 @@ local itemtree = require("_work.itemtree")
 local item = require("_work.item")
 local refs = require("_work.refs")
 local storeinit = require("_work.storeinit")
+local storeitem = require("_work.storeitem")
 
 --- Invocation-local read and write observations. Legacy leases name per-item
---- refs; native state_head names the whole snapshot, state_reads records exact
---- item/claim path OIDs, and state_receipt names a prepared successor. leased_item
---- is independent of caller mutations; touched_at and leased_sha retain exact
---- path-attributed history. Pending refs and observed_seq belong to legacy writes.
+--- refs; native state_head names the whole snapshot, and state_receipt names a
+--- prepared successor. leased_item is independent of caller mutations; touched_at
+--- and leased_sha retain exact path-attributed history. Pending refs and
+--- observed_seq belong to legacy writes.
+---
+--- The two native path tables differ deliberately. `state_paths` is every
+--- `items/<id>`/`claims/<id>` OID a whole-board read LOADED, so a later
+--- decision can look one up without another Git process. `state_reads` is the
+--- FENCE: only the paths a mutation read to DECIDE, which publication compares
+--- between its staging base and the fetched head. Fencing everything a read
+--- touched would make every pair of writers conflict — the cost one branch
+--- exists to avoid; a mutation whose GATE reads beyond the items it writes is
+--- protected by re-running that gate against the fetched head instead
+--- (`_work.stategate`).
 ---
 --- remote_url/remote_present memoize ad hoc Git remote discovery within this
 --- invocation. Their read flags distinguish an unasked question from an empty or
@@ -41,6 +54,7 @@ local record Store
   root: string
   state_head: string
   state_receipt: string
+  state_paths: {string: string}
   state_reads: {string: string}
   session: string
   op: string
@@ -147,7 +161,7 @@ local function open(root: string): Store | nil, string
   end
   local startup, err = stateread_start.open(root)
   if startup == nil then return nil, err end
-  return {root = root, startup = startup, state_head = startup.head, state_receipt = "", state_reads = {}, session = "", op = "", bounded = false, leased_ref = {},
+  return {root = root, startup = startup, state_head = startup.head, state_receipt = "", state_paths = {}, state_reads = {}, session = "", op = "", bounded = false, leased_ref = {},
     leased_sha = {}, leased_item = {}, touched_at = {}, written_at = 0, observed_seq = "",
     pending = {}, duplicates = {}, board_digest = "", fresh_lease = "",
     remote_url = "", remote_url_ok = false, remote_url_read = false,
@@ -243,28 +257,6 @@ local function read_specs(s: Store, ids: {string}): {string: itemtree.Spec}
   return gitreadspec.read_specs(s.root, s.leased_sha, ids, false)
 end
 
---- Snapshot fields before a caller mutates them. Unknown edges survive the
---- legacy literal codec through an explicit independent deep copy.
-local function snapshot_item(it: item.Item): item.Item | nil
-  local copy, _err = item.decode(item.encode(it))
-  if copy == nil then
-    return nil
-  end
-  local other_edges = it.other_edges
-  if other_edges ~= nil then
-    local edges_copy: {string: {string: string}} = {}
-    for kind, idmap in pairs(other_edges) do
-      local inner: {string: string} = {}
-      for id, content in pairs(idmap) do
-        inner[id] = content
-      end
-      edges_copy[kind] = inner
-    end
-    copy.other_edges = edges_copy
-  end
-  return copy
-end
-
 --- Load one item, remembering its ref and tip as the lease `save`
 --- writes against next, and a snapshot of its fields as observed —
 --- the baseline `save`'s fast-import diff compares the mutated item
@@ -280,8 +272,10 @@ local function load_item(s: Store, id: string): item.Item | nil, string
     local history, herr = boardhistory.read(s.root, s.state_head)
     if history == nil then return nil, herr end
     s.leased_ref[id], s.leased_sha[id] = "refs/heads/state", history.tip_by_id[id] or s.state_head
+    -- Loading one item IS reading it to decide: both of its paths are fenced.
+    s.state_paths["items/" .. id], s.state_paths["claims/" .. id] = loaded.tree, loaded.claim_blob
     s.state_reads["items/" .. id], s.state_reads["claims/" .. id] = loaded.tree, loaded.claim_blob
-    s.leased_item[id] = snapshot_item(loaded.it)
+    s.leased_item[id] = storeitem.snapshot(loaded.it)
     s.touched_at[id] = history.touched_by_id[id] or 0
     return loaded.it, ""
   end
@@ -296,7 +290,7 @@ local function load_item(s: Store, id: string): item.Item | nil, string
     return nil, err
   end
   s.leased_ref[id], s.leased_sha[id] = loaded.ref, loaded.sha
-  s.leased_item[id] = snapshot_item(loaded.it)
+  s.leased_item[id] = storeitem.snapshot(loaded.it)
   return loaded.it
 end
 
@@ -394,12 +388,13 @@ local function list(s: Store): {item.Item} | nil, string
     s.touched_at[id] = ls.touched_at[id]
   end
   for _, it in ipairs(all) do
-    s.leased_item[it.id] = snapshot_item(it)
+    s.leased_item[it.id] = storeitem.snapshot(it)
   end
   if s.state_head ~= "" then
+    -- Loaded, not fenced: see the `Store` doc on the two path tables.
     local paths, perr = c.db:query("SELECT path,oid FROM state_paths")
     if paths == nil then return nil, perr end
-    for row in paths do s.state_reads[row.path as string] = row.oid as string end -- cast: from any (strict SQLite text columns)
+    for row in paths do s.state_paths[row.path as string] = row.oid as string end -- cast: from any (strict SQLite text columns)
   end
   s.observed_seq = ls.seq_sha
   return all
@@ -414,24 +409,6 @@ end
 --- @return {gitread.Duplicate} The duplicates `list` found, possibly empty
 local function duplicates(s: Store): {gitread.Duplicate}
   return s.duplicates
-end
-
---- One line summarizing every item `list` flagged, in list order; ""
---- when nothing was.
---- @param items {item.Item} Items from `list`
---- @return string "N unreadable/flagged: <id8> — <reason>[; ...]", or ""
-local function flagged_summary(items: {item.Item}): string
-  local parts: {string} = {}
-  for _, it in ipairs(items) do
-    if item.is_flagged(it) then
-      parts[#parts + 1] = ("%s — %s"):format(it.id:sub(1, 8),
-        table.concat(it.decode_problems or {}, ", "))
-    end
-  end
-  if #parts == 0 then
-    return ""
-  end
-  return ("%d unreadable/flagged: %s"):format(#parts, table.concat(parts, "; "))
 end
 
 --- Validate an item well enough to write. `_work.storewrite.save` calls
@@ -488,12 +465,12 @@ local M: store = {
   resolve = resolve,
   read_spec = read_spec,
   read_specs = read_specs,
-  snapshot_item = snapshot_item,
+  snapshot_item = storeitem.snapshot,
   list = list,
   read = read,
   close = close,
   duplicates = duplicates,
-  flagged_summary = flagged_summary,
+  flagged_summary = storeitem.flagged_summary,
   stage = stage,
 }
 

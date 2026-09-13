@@ -81,7 +81,7 @@ local function transition(s: store.Store, changes: {tx.Change}, message: string,
   for path in pairs(s.state_reads) do
     local oid, oerr = boardtree.path_id(s.root, tip, path)
     if oid == nil then return false, oerr end
-    s.state_reads[path] = oid
+    s.state_reads[path], s.state_paths[path] = oid, oid
   end
   s.bounded = false
   s.written_at = fastimport.git_date_seconds(now)
@@ -89,12 +89,23 @@ local function transition(s: store.Store, changes: {tx.Change}, message: string,
   return true, ""
 end
 
+--- Fence both of an item's canonical paths at the staging base, taking the OID
+--- from whatever a whole-board read already loaded and paying for an `ls-tree`
+--- only for a path no read has named yet (a freshly minted item, say).
+--- @param s store.Store The store, whose `state_reads` this records into
+--- @param id string The item id about to be written
+--- @return boolean True when both paths are fenced
+--- @return string Error message
 local function observe(s: store.Store, id: string): boolean, string
   for _, path in ipairs({"items/" .. id, "claims/" .. id}) do
     if s.state_reads[path] == nil then
-      local oid, err = boardtree.path_id(s.root, s.state_head, path)
-      if oid == nil then return false, err end
-      s.state_reads[path] = oid
+      local known = s.state_paths[path]
+      if known ~= nil then s.state_reads[path] = known
+      else
+        local oid, err = boardtree.path_id(s.root, s.state_head, path)
+        if oid == nil then return false, err end
+        s.state_paths[path], s.state_reads[path] = oid, oid
+      end
     end
   end
   return true, ""

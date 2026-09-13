@@ -52,7 +52,9 @@ local function run(s: store.Store, ids: {string}, all: {item.Item},
     end
     return gate.verdict_line(verb, true, "active claims held; leases unchanged")
   end
-  for _, dependency in ipairs(result.dependencies) do s.state_reads[dependency.path] = dependency.id end
+  for _, dependency in ipairs(result.dependencies) do
+    s.state_paths[dependency.path], s.state_reads[dependency.path] = dependency.id, dependency.id
+  end
   local message = "claim " .. action .. " by " .. caller
   if force then message = message .. "\n\nForce-Why: " .. why end
   s.session, s.op = caller, verb

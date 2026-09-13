@@ -157,7 +157,7 @@ end
 local function reset(s: store.Store): boolean, string
   local current, err = head(s.root, refs.board_remote(s.root))
   if current == nil then return false, err end
-  s.state_head = current; s.state_receipt = ""; s.state_reads = {}; s.bounded = false
+  s.state_head = current; s.state_receipt = ""; s.state_paths = {}; s.state_reads = {}; s.bounded = false
   s.leased_item = {}; s.leased_sha = {}; s.leased_ref = {}; s.touched_at = {}
   return store.close(s)
 end
@@ -179,7 +179,7 @@ local function sync(s: store.Store, execute_fetch?: boolean, published?: staging
   if current == nil then return false, herr end
   s.state_head = current
   s.state_receipt = ""
-  s.state_reads = {}
+  s.state_paths = {}; s.state_reads = {}
   s.leased_item = {}; s.leased_sha = {}; s.leased_ref = {}; s.touched_at = {}
   local _closed, _cerr = store.close(s)
   return ok, err
@@ -222,7 +222,7 @@ local function publish(s: store.Store, execute_push?: boolean): boolean, string
   end
   local current, herr = head(s.root, receipt.remote)
   if current == nil then return false, herr end
-  s.state_head = current; s.state_receipt = ""; s.state_reads = {}
+  s.state_head = current; s.state_receipt = ""; s.state_paths = {}; s.state_reads = {}
   s.leased_item = {}; s.leased_sha = {}; s.leased_ref = {}
   local _closed, _cerr = store.close(s)
   return true, "prepared " .. receipt.ref .. "\npublish: gitboard publish " .. receipt.id
