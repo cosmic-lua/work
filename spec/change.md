@@ -1,5 +1,3 @@
-## Change
-
 Decompose the name-level surface and `cosmic --diff OLD` outcome into six
 bounded children: token scanning, tree assembly, comparison/rendering, pinned
 parser-schema preparation, archive loading, and CLI activation. The children
@@ -21,9 +19,3 @@ CLI reads it.
 Every child has a file allowlist and a changed-line budget. A builder that
 needs another subsystem returns to the orchestrator; it does not widen its
 slice. Each landed child receives a fresh-context review of its exact commit.
-
-## Non-goals
-
-No implementation in this container. No surface baseline/ratchet, gone-name
-wrapper tree, consumer scan, upgrade command, network access, or source rewrite.
-
