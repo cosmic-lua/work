@@ -1,6 +1,7 @@
 title: codec compare rows are state-split: derive per-scenario noise floors from cross-window A/A history
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1485
 resolution: completed
 builders: 0b13d2b4-bb26-5bc1-8635-407acd85452c e532d9f6-4b7d-5145-9534-7c6759ebc0d8 0b13d2b4-bb26-5bc1-8635-407acd85452c/3IUBNQZZ
+touches: _perf/compare.tl _perf/gate.tl _perf/compare_test.tl
