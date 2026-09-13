@@ -1,5 +1,3 @@
-## Change
-
 Move `--docs` search onto FTS5, replacing the substring scan and hand-rolled scoring
 in `cosmic/doc/query.tl`.
 
@@ -129,12 +127,3 @@ Search results for 'walk':
   _cli.nilreturn.Walk (record)  (internal)
   _cli.nilreturn.NilReturnModule.walk (method)  (internal)
 ```
-
-## Non-goals
-
-- No change to what the doc index contains or to `_tool/doc`'s extraction half
-  (identifier-fragment matching over names and example bodies is its own item).
-- No change to `--docs`'s output format.
-- No vector or semantic search.
-- Not shipping a SQLite file in the artifact — measured above, revisit from the perf
-  reading.

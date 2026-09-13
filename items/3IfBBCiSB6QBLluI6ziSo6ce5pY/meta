@@ -1,5 +1,6 @@
 title: cosmic.doc.search: move --docs off substring matching onto FTS5 and bm25
 parent: 3ItPHhmtHkdFQmVIJLjGYL85k9N
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 builders: builder-So6c_e5pY-orch9
 speccers: 80b60d4f-02ad-583a-8853-bfb89e121856
+touches: cosmic/doc/query.tl bin/cosmic.pin 3p/cosmos/cosmos_pin.tl .docs/index.lua cmd/cosmic/embed_gen.tl _cli/main_handlers.tl cosmic/sqlite/zipfile_test.tl _tool/records.tl cosmic/doc/search.tl cosmic/doc/types.tl cosmic/doc/search_test.tl _perf/bench/docs_bench.tl
