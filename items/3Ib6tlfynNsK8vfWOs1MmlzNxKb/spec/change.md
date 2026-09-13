@@ -1,5 +1,3 @@
-## Change
-
 `_work/flowstats.tl` learns the third verdict kind, so a rejected-
 then-completed item's rework is counted rather than silently skipped.
 
@@ -23,9 +21,3 @@ The change, in `_work/flowstats.tl` and `_work/flowstats_test.tl`:
    clears by the verb, so a fresh take) → verdict(accept) → done
    yields rounds=2 and contributes 1/2 to rework; the existing
    accept/request-changes cases unchanged.
-
-## Non-goals
-
-No change to any verb or verdict-line format; no re-reading of items
-files (the log stays the sole input); the summary line's key set is
-unchanged — reject only feeds the existing rounds/rework numbers.
