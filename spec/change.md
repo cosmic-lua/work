@@ -1,5 +1,3 @@
-## Change
-
 `_work/*.tl` reads every SQLite column with `row.x as string -- cast:
 from any (sqlite row)`: 88 sites today (`grep -c "cast: from any
 (sqlite row)" _work/*.tl`), growing with every view the read model
