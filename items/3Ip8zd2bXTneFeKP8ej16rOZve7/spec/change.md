@@ -1,5 +1,3 @@
-## Change
-
 `_cli/nilreturn.tl:318-325` treats EVERY identifier spelled `type` as a
 possible alias and hands it to `skip_type_alias` (118-134), which decides by
 what FOLLOWS: `NAME =` then a type. A field access `t.type` at the end of a
@@ -46,48 +44,3 @@ the existing fixture root rather than a new test if the file nears the cap):
 - `_cli/returns_test.tl` (221 lines): `local x = t.macroexp` followed by a
   line `foo(1)` yields no diagnostic before and after — pins the alignment
   is behaviour-preserving.
-
-## Evidence
-
-Tree `_cli/nilreturn.tl` and `_cli/returns.tl` compiled from `origin/main`
-and run under `o/bootstrap/cosmic probe2.lua` (`teal.compile_cached` on both
-files, then `walk` on each fixture):
-```
-type_then_assign: lines= residual=0 underflow=1
-type_then_record_assign: lines= residual=1 underflow=0
-```
-where `type_then_assign` is
-```
-local function outer(): string | nil
-  local t = {type = 1}
-  local k = t.type
-  handler = function(): string
-    return nil
-  end
-  return k and "x" or nil
-end
-print(outer())
-```
-(expected: `lines=5`, balanced — `handler` lies) and `type_then_record_assign` is
-```
-local t = {type = 1}
-local k = t.type
-record = record or {}
-print(k)
-```
-(expected: no lines, balanced). The gate that turns this into a CI failure:
-`git show origin/main:_build/nil_returns_test.tl | grep -n "unbalanced"` —
-`test_the_walk_balances_over_every_committed_file` asserts `#bad == 0`.
-Branch under change: `git show origin/main:_cli/nilreturn.tl | sed -n 318,325p`
-```
-    elseif t.kind == "identifier" and tk == "type" then
-      local after, body = skip_type_alias(tokens, i)
-```
-Divergence: `sed -n 286,301p` of `_cli/returns.tl` vs `sed -n 217,236p` of `_cli/nilreturn.tl` on `origin/main`.
-
-## Non-goals
-
-`parse_atom` (`_cli/returns.tl:150-165`) still reads a named alias as never
-admitting nil, so `local type Maybe = string | nil` + `return nil` counts as a
-lie (measured in the same probe: `control_local_type: lines=3`). Different
-rule, different item.
