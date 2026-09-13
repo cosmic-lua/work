@@ -1,5 +1,3 @@
-## Change
-
 Make BLOB and TEXT distinguishable at the Lua value boundary, in this
 repo (cosmic-lua/cosmopolitan) only — the ergonomic distinct type
 that consumes this is a separate cosmic-repo follow-up (see below).
@@ -98,14 +96,3 @@ C-boundary contract here, typed wrapper fix as its own change there).
 
 Gate: `make -j$(nproc) o//tool/lua/test`, with the round-trip cases
 above.
-
-## Non-goals
-
-- No determinism work; that is its own item.
-- No change to how NULL arrives (`lua_pushnil` is correct and cosmic's
-  nil-flow doctrine already covers it).
-- No wrapper type, no bind-dispatch change, and no other
-  `cosmic.sqlite` work in this item — see Follow-up above.
-- No fix or test for the `SQLITE_INTEGER` string fallback — it is
-  dead code on this build (see Evidence above), not a defect to
-  settle here or in any follow-up.
