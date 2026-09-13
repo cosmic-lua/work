@@ -1,5 +1,3 @@
-## Change
-
 `cosmic.ast` gains a narrow, structural require-alias resolver:
 `cosmic.ast.requires(parsed: Parsed): {string: string}` (new function
 in `cosmic/ast/init.tl`, implementation in a new `cosmic/ast/requires.tl`
@@ -45,18 +43,3 @@ a function body (not returned — top-level only); a re-assigned alias
 the scope limit: still returned as bound to `cosmic.hash`, since
 tracking reassignment is explicitly out of scope, not a bug); a file
 with no requires at all (empty table, not nil).
-
-## Non-goals
-
-No shadowing, re-assignment, or loop-variable resolution — see
-`«HlZW_zWbs»` for why that is materially larger work, tracked
-separately if a future consumer needs it. No resolution of an alias
-bound to another local rather than directly to `require(...)`.
-
-## Access
-
-cosmic-lua/cosmic, read and write on a branch; no other repository.
-
-## Ready when
-
-Pullable now — `cosmic.ast.parse`/`.match`/`.walk` are all `done`.
