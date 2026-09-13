@@ -1,6 +1,7 @@
 title: compile seam: runner-mode test files get the generated tail, in the checker and the chunk
 parent: 3IOCIBGeYoISEhI0VJPwZmqduSZ
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1446
 resolution: completed
 builders: 0177c77f-81b5-5fbc-9731-86abcfb395ca
+touches: _tool/seam.tl cosmic/test.tl _tool/seam_test.tl docs/decisions/d29-tests-run-because-defined.md
