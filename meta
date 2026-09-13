@@ -1,6 +1,7 @@
 title: first ci run predictably fails on fmt/lint; the build trailer hint arrives too late
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1351
 resolution: completed
 builders: magical-bell
+touches: _make/stage.tl _make/init.tl _make/stage_test.tl _make/converge.tl
