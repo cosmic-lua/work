@@ -113,6 +113,10 @@ local CSPEC: flags.CommandSpec = {
           {long = "spec-file", arg = "FILE", help = "spec markdown sidecar"},
           {long = "repo", arg = "OWNER/NAME",
             help = "the repo its PR lands in; default is the board's origin"},
+          {long = "touches", arg = "PATH", repeated = true,
+            help = "a file this change is expected to touch (repeatable)"},
+          {long = "access", arg = "OWNER/NAME", repeated = true,
+            help = "a repository this work needs beyond --repo (repeatable)"},
           {long = "session", arg = "SESSION",
             help = "minted holder identity when PARENT is claimed"},
           {long = "force", help = "override a claimed-parent write gate"},
@@ -150,11 +154,16 @@ local CSPEC: flags.CommandSpec = {
             help = "minted holder identity for claimed items"},
           {long = "force", help = "audited repair of another holder's item"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
-    {name = "set", summary = "repair ID's title, repo and/or base "
-      .. "(at least one; nothing else moves here)",
+    {name = "set", summary = "repair ID's title, repo, base, touches "
+      .. "and/or access (at least one; nothing else moves here)",
       spec = {usage = "ID [options]",
-        summary = "repair ID's title, repo and/or base "
+        summary = "repair ID's title, repo, base, touches and/or access "
         .. "(at least one; nothing else moves here).\n\n"
+        .. "--touches and --access are repeatable, and each REPLACES its "
+        .. "whole list rather than\nappending to it: `set` repairs a field "
+        .. "to what the caller states. `depends_on` is not\nhere — it has "
+        .. "its own verb, `depend`, because the cycle check belongs in one "
+        .. "place.\n\n"
         .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "title", arg = "TITLE", help = "the item's title"},
@@ -163,6 +172,12 @@ local CSPEC: flags.CommandSpec = {
             .. "carries no repo"},
           {long = "base", arg = "BRANCH",
             help = "the branch its PR targets"},
+          {long = "touches", arg = "PATH", repeated = true,
+            help = "a file this change is expected to touch (repeatable; "
+            .. "replaces the list)"},
+          {long = "access", arg = "OWNER/NAME", repeated = true,
+            help = "a repository this work needs beyond --repo "
+            .. "(repeatable; replaces the list)"},
           {long = "session", arg = "SESSION",
             help = "minted holder identity for a claimed item"},
           {long = "force", help = "audited repair of another holder's item"},
@@ -179,6 +194,33 @@ local CSPEC: flags.CommandSpec = {
             .. "the environment"},
           {long = "force", help = "rewrite another session's LIVE claim's "
             .. "spec (a stale one needs no force)"},
+          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
+    {name = "depend", summary = "record that ID may not start before ON",
+      spec = {usage = "ID ON [options]",
+        summary = "record that ID may not start before ON.\n\n"
+        .. "Dependency gates whether ID is startable and has no effect on "
+        .. "rank: `next` skips ID\nand `take` refuses it while ON is still "
+        .. "open. ON's `done` frees it with no further\nverb, and ID stays "
+        .. "workable rather than becoming a container. A cycle is refused "
+        .. "here,\nnaming the path it would close. See `help depends`.\n\n"
+        .. PREPARES_ONLY,
+        flags = {dir_flag(),
+          {long = "session", arg = "SESSION",
+            help = "the session making the write. Omit to derive it from "
+            .. "the environment"},
+          {long = "force", help = "audited repair of another holder's item"},
+          {long = "why", arg = "REASON", help = "why --force was needed"}}}},
+    {name = "undepend", summary = "withdraw ID's dependency on ON",
+      spec = {usage = "ID ON [options]",
+        summary = "withdraw ID's dependency on ON.\n\n"
+        .. "A dependency that is already absent is a success that writes "
+        .. "nothing. See `help depends`.\n\n"
+        .. PREPARES_ONLY,
+        flags = {dir_flag(),
+          {long = "session", arg = "SESSION",
+            help = "the session making the write. Omit to derive it from "
+            .. "the environment"},
+          {long = "force", help = "audited repair of another holder's item"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "next", summary = "the one next action to take now, and what "
       .. "the kind of action means",

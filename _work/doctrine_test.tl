@@ -115,18 +115,55 @@ local function test_claim_doctrine_has_no_partial_batch_or_take_acquisition()
     "take is handover, never acquisition")
 end
 
-local function test_bar_states_the_ready_when_convention()
+-- A precondition is a DEPENDENCY, and the bar says so: the prose
+-- convention it replaced described a criterion a spec stated and the
+-- tool re-read, which nothing writes any more.
+local function test_bar_routes_a_precondition_to_the_depend_verb()
   local page = doctrine.page("bar")
   assert(page ~= nil, "the bar topic renders")
-  assert(page:find("Ready when:", 1, true) ~= nil,
-    "the bar topic names the Ready when convention")
-  assert(page:find("\"Ready\nwhen: `CMD` prints `OUT`.\"", 1, true) ~= nil,
-    "the bar topic states the evaluated shape")
-  assert(page:find(
-      "`next` skips a not-ready head and offers the\n"
-      .. "next candidate instead. A direct claim is only a lease",
-      1, true) ~= nil,
-    "next checks readiness while a direct claim remains only a lease")
+  assert(page:find("A precondition is a DEPENDENCY, not prose.", 1, true) ~= nil,
+    "the bar topic states the relation: " .. page)
+  assert(page:find("`gitboard depend <THIS>\n<THAT>`", 1, true) ~= nil,
+    "and names the verb that records it: " .. page)
+  assert(page:find("\"Ready\nwhen: `CMD` prints `OUT`.\"", 1, true) == nil,
+    "the retired prose convention is gone from the bar: " .. page)
+end
+
+-- The relation has its own page, beside `order` rather than inside it:
+-- rank says where in the queue, dependency whether it may start.
+local function test_depends_page_states_the_relation_and_its_effects()
+  local page = doctrine.page("depends")
+  assert(page ~= nil, "the depends topic renders")
+  assert(page:find("set of zero or more item ids", 1, true) ~= nil,
+    "it states what the field holds: " .. page)
+  assert(page:find("SEPARATE relation from rank", 1, true) ~= nil,
+    "and that it does not move rank: " .. page)
+  assert(page:find("`next` skips the item", 1, true) ~= nil
+    and page:find("`take` refuses it", 1, true) ~= nil,
+    "and names both gates: " .. page)
+  assert(page:find("stays WORKABLE", 1, true) ~= nil,
+    "a waiter does not become a container: " .. page)
+  assert(page:find("is itself an item to depend on", 1, true) ~= nil,
+    "an external precondition is an item: " .. page)
+  assert(page:find("`depend ID ON`", 1, true) ~= nil
+    and page:find("`undepend ID ON`", 1, true) ~= nil,
+    "and names both verbs in the form they take: " .. page)
+end
+
+-- The two passages that used to route a blocking question through
+-- parentage name the verb instead, in the positional form it takes —
+-- an `--on` flag would be a usage nothing accepts.
+local function test_the_build_and_review_pages_name_the_depend_verb()
+  for _, name in ipairs({"build", "review"}) do
+    local page = doctrine.page(name)
+    assert(page ~= nil, ("the %s topic renders"):format(name))
+    assert(page:find("depend <", 1, true) ~= nil,
+      ("the %s page names the verb: %s"):format(name, page))
+    assert(page:find("--on", 1, true) == nil,
+      ("and never as a flag the verb has no such thing as: %s"):format(page))
+    assert(page:find("(`help depends`)", 1, true) ~= nil,
+      ("and points at the topic that explains it: %s"):format(page))
+  end
 end
 
 local function test_bar_forbids_a_change_with_two_mechanisms()

@@ -88,16 +88,13 @@ Change that adds a cast, a nil-admitting return, or a new source
 file names the ratchet rows it will add, so the builder's first
 gate is its last.
 
-Ready when: a Change whose earliest valid start depends on a fact
-outside the tree — a calendar day, a release having shipped, a lane
-gone green, a pin bumped — states that fact as a command and the
-output that means ready, in prose at the top of `## Change`: "Ready
-when: `CMD` prints `OUT`." The tool checks it rather than a puller
-reading it by eye — `next` skips a not-ready head and offers the
-next candidate instead. A direct claim is only a lease, not proof of
-readiness, so its caller must check the criterion before building.
-No field, no date, no other verb: the criterion is
-whatever the command prints, and it ages with the spec.
+A precondition is a DEPENDENCY, not prose. A Change whose earliest
+valid start waits on a fact outside the tree — a release having
+shipped, a lane gone green, a pin bumped — waits on the ITEM that
+makes the fact true: file that item and `gitboard depend <THIS>
+<THAT>`. `next` then skips this one and names what holds it, and
+`take` refuses it, without anyone re-reading a criterion by eye. See
+`help depends`.
 
 Sizing: one PR one session holds in its head (~400 changed lines is
 the smell threshold, not a rule). An "and" between two independent

@@ -52,6 +52,9 @@ local seed_mod = require("_work.seed")
 
 local type Item = item.Item
 local type Index = index.Index
+--- Items by their own id, as `_work.item.by_id` builds it — the cache
+--- `Index` above is a different thing entirely.
+local type ItemIndex = item.Index
 local type Action = decision.Action
 local type Specs = intake.Specs
 
@@ -98,6 +101,13 @@ local record Phased
   --- the counters tallied, so a caller can never print a count and a
   --- name list that disagree.
   ci_names: string
+  --- Todo items stepped over because a declared dependency is not done.
+  --- A silent skip would read as a bug, so the count is reported and
+  --- the holding dependency named.
+  blocked: integer
+  --- One label per item counted in `blocked`, on the same rule as
+  --- `ci_names`: built from the items the counter tallied.
+  blocked_names: string
 end
 
 --- CI check-run state by item id ("green" | "red" | "running" |
@@ -135,6 +145,25 @@ local function held_names(doing: {Item}, session: string,
   return table.concat(out, ", ")
 end
 
+--- The declared dependencies still holding `i` back: the ids in its
+--- `depends_on` naming no item on the board, or naming one still open.
+--- Empty on almost every item, which is why the walk pays for itself.
+--- Dependency gates whether an item may START and never touches rank,
+--- so this is read beside the spec bar rather than folded into ranking.
+--- @param i Item The item
+--- @param items ItemIndex Every item by id
+--- @return {string} The blocking ids, in declared order
+local function unresolved_deps(i: Item, items: ItemIndex): {string}
+  local out: {string} = {}
+  for _, dep in ipairs(i.depends_on or {}) do
+    local blocker = items[dep]
+    if blocker == nil or item.is_open(blocker) then
+      out[#out + 1] = dep
+    end
+  end
+  return out
+end
+
 --- Whether a todo item passes the pure half of the spec bar: ranked,
 --- spec sections filled. The take gate asks more (the chain traces);
 --- this is the half a pure walk can answer, and a candidate the gate
@@ -146,9 +175,15 @@ end
 --- @param ranked boolean The item's own `queue` row's `ranked` column
 --- @param id string The item's id
 --- @param specs Specs Spec sidecar body, by item id
+--- @param items ItemIndex Every item by id, for the dependency check
 --- @return boolean True when the item may be offered as a pull
-local function passes_bar(ranked: boolean, id: string, specs: Specs): boolean
+local function passes_bar(ranked: boolean, id: string, specs: Specs,
+    items: ItemIndex): boolean
   if not ranked then
+    return false
+  end
+  local i = items[id]
+  if i ~= nil and #unresolved_deps(i, items) > 0 then
     return false
   end
   return #flow.ready_gaps(specs[id] or "") == 0
@@ -192,6 +227,8 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
   local ci_running = 0
   local ci_red = 0
   local ci_blocked: {string} = {}
+  local blocked = 0
+  local dep_blocked: {string} = {}
   for _, row in ipairs(rows) do
     local i = by_id[row.id]
     if i ~= nil then
@@ -264,8 +301,18 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
         end
       else
         -- STAGE_REPAIR or STAGE_TODO: the spec bar gates both.
-        local pb = passes_bar(row.ranked, row.id, specs)
-        if not pb then
+        local pb = passes_bar(row.ranked, row.id, specs, by_id)
+        local waits = unresolved_deps(i, by_id)
+        if #waits > 0 then
+          -- Counted and named rather than silently skipped: a session
+          -- reading this needs to see WHICH dependency holds each one,
+          -- or the absence looks like a bug.
+          blocked = blocked + 1
+          local short: {string} = {}
+          for _, dep in ipairs(waits) do short[#short + 1] = dep:sub(1, 8) end
+          dep_blocked[#dep_blocked + 1] = ("%s waits on %s"):format(
+            i.id:sub(1, 8), table.concat(short, " "))
+        elseif not pb then
           -- A todo item below the bar is refinement's to answer, and the
           -- intake half owns that; the queue steps past it silently.
         elseif stage == flow.STAGE_REPAIR then
@@ -299,12 +346,14 @@ local function phased_action(c: Index, items: {Item}, specs: Specs,
     return {action = primary, held = held, reviewing = reviewing,
       queued = queued, suppressed = suppressed,
       ci_running = ci_running, ci_red = ci_red,
-      ci_names = table.concat(ci_blocked, ", ")}, ""
+      ci_names = table.concat(ci_blocked, ", "),
+      blocked = blocked, blocked_names = table.concat(dep_blocked, ", ")}, ""
   end
   return {held = held, reviewing = reviewing, queued = queued,
     suppressed = suppressed,
     ci_running = ci_running, ci_red = ci_red,
-    ci_names = table.concat(ci_blocked, ", ")}, ""
+    ci_names = table.concat(ci_blocked, ", "),
+    blocked = blocked, blocked_names = table.concat(dep_blocked, ", ")}, ""
 end
 
 --- The one action to take now, right to left. Ages are optional the
@@ -388,6 +437,16 @@ local function next_action(c: Index, items: {Item}, specs: Specs,
       :format(ph.held, held_names(doing, who, aged)),
     }, ""
   end
+  -- A dependency holding the queue is real, resolvable work, so it
+  -- outranks the generic answer: the move is to finish the blocker, and
+  -- naming it is what tells a session that rather than "nothing here".
+  if ph.blocked > 0 then
+    return {
+      kind = "none",
+      reason = ("%d item(s) wait on a dependency and nothing else fires: %s")
+      :format(ph.blocked, ph.blocked_names),
+    }, ""
+  end
   return {
     kind = "none",
     reason = "nothing in flight, nothing passing the spec bar, and "
@@ -401,7 +460,8 @@ local record action
   type Specs = Specs
   type CiStates = CiStates
   type QueueStates = QueueStates
-  passes_bar: function(ranked: boolean, id: string, specs: Specs): boolean
+  passes_bar: function(ranked: boolean, id: string, specs: Specs,
+  items: ItemIndex): boolean
   phased_action: function(c: Index, items: {Item}, specs: Specs,
   session: string, ages: health.Ages, review_ages: health.Ages,
   seed: string, ci?: CiStates, merge_queue?: QueueStates): Phased | nil, string

@@ -264,20 +264,20 @@ end
 
 --- Where the fact a retired spec section used to carry now lives —
 --- the second half of `split`'s refusal, one line per case. `access`
---- and `ready when` name the field that replaced them; everything else
---- was retrospective, and a measurement or a narrative is a log entry.
---- The two field refusals deliberately name NO verb: the flags that
---- declare them are their own change, and a refusal naming a flag this
---- build does not have is worse than one naming only the fact.
+--- and `ready when` name the field that replaced them AND the verb that
+--- declares it, so a refusal is also the repair; everything else was
+--- retrospective, and a measurement or a narrative is a log entry.
 --- @param heading string The heading's own text, as written
 --- @return string The refusal
 local function retired_section(heading: string): string
   local lowered = heading:lower()
   if lowered == "access" then
-    return "access is a declared field now, not a spec section"
+    return "access is a declared field now, not a spec section: "
+    .. "gitboard set ID --access OWNER/NAME"
   end
   if lowered == "ready when" then
-    return "a precondition is a dependency, not a section"
+    return "a precondition is a dependency, not a section: "
+    .. "gitboard depend ID ON ID"
   end
   return ("%s is not a spec section — a measurement or a narrative is a log "
     .. "entry: gitboard log ID --add FILE"):format(heading)

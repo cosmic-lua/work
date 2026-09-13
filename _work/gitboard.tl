@@ -13,6 +13,8 @@ local commands = require("_work.gitcommands")
 local doctrine = require("_work.doctrine")
 local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
+local gitdepend = require("_work.gitdepend")
+local gitinit = require("_work.gitinit")
 local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
@@ -150,62 +152,10 @@ local function main(...: string): integer
     return claimcli.cmd_session(d.parsed.args[1] or "")
   end
   if d.command == "init" then
-    local dir = d.parsed.values["dir"] or "."
-    local remote_name = d.parsed.values["remote-name"] or ""
-    if d.parsed.switches["remote"] and d.parsed.switches["local"] then
-      return gate.verdict_line("init", false,
-        "REFUSED: choose at most one of --remote and --local")
-    end
-    if d.parsed.switches["local"] and remote_name ~= "" then
-      return gate.verdict_line("init", false,
-        "REFUSED: --remote-name belongs to a remote-backed board")
-    end
-    -- Existing clones must select their namespace before initialization reads
-    -- any board ref. A brand-new directory has no repository config yet, so it
-    -- is initialized first and marked immediately afterward.
-    local mode_set = false
-    local remote_set = false
-    if fs.is_dir(fs.join(dir, ".git")) and remote_name ~= "" then
-      local configured, cerr = refs.set_board_remote(dir, remote_name)
-      if not configured then return gate.verdict_line("init", false, cerr) end
-      remote_set = true
-    end
-    if fs.is_dir(fs.join(dir, ".git"))
-    and (d.parsed.switches["remote"] or d.parsed.switches["local"]) then
-      local configured, cerr: boolean, string
-      if d.parsed.switches["remote"] then
-        configured, cerr = refs.set_board_mode(dir, "remote")
-      else
-        configured, cerr = refs.set_board_mode(dir, "local")
-      end
-      if not configured then return gate.verdict_line("init", false, cerr) end
-      mode_set = true
-    end
-    local ok, err = store.init_repo(dir)
-    if not ok then
-      return gate.verdict_line("init", false, err)
-    end
-    if not mode_set
-    and (d.parsed.switches["remote"] or d.parsed.switches["local"]) then
-      local configured, cerr: boolean, string
-      if d.parsed.switches["remote"] then
-        configured, cerr = refs.set_board_mode(dir, "remote")
-      else
-        configured, cerr = refs.set_board_mode(dir, "local")
-      end
-      if not configured then return gate.verdict_line("init", false, cerr) end
-    end
-    if remote_name ~= "" and not remote_set then
-      local configured, cerr = refs.set_board_remote(dir, remote_name)
-      if not configured then return gate.verdict_line("init", false, cerr) end
-    end
-    if remote_name ~= "" then
-      local remote_mode, merr = refs.set_board_mode(dir, "remote")
-      if not remote_mode then return gate.verdict_line("init", false, merr) end
-    end
-    return gate.verdict_line("init", true,
-      ("state repository ready at %s (%s%s)"):format(dir, refs.board_mode(dir),
-        refs.board_mode(dir) == "remote" and ", " .. refs.board_remote(dir) or ""))
+    return gitinit.cmd_init(d.parsed.values["dir"] or ".",
+      d.parsed.switches["remote"] or false,
+      d.parsed.switches["local"] or false,
+      d.parsed.values["remote-name"] or "")
   end
   local dir = d.parsed.values["dir"] or "."
   local explicit_remote = d.parsed.values["remote"] or ""
@@ -358,7 +308,7 @@ local function main(...: string): integer
     if who == nil then return gate.verdict_line("new", false, "REFUSED: " .. werr) end
     return graph.cmd_new(s, title, parent, prose, d.parsed.values["repo"] or "",
       d.parsed.switches["force"], d.parsed.values["why"] or "", before, after,
-      who)
+      who, d.parsed.lists["touches"], d.parsed.lists["access"])
   end
   local input = d.parsed.args[1] or ""
   local id, rerr = resolve_id(s, input)
@@ -414,7 +364,8 @@ local function main(...: string): integer
     if who == nil then return gate.verdict_line("set", false, "REFUSED: " .. werr) end
     return graph.cmd_set(s, id, d.parsed.values["title"],
       d.parsed.values["repo"], d.parsed.values["base"], who,
-      d.parsed.switches["force"], d.parsed.values["why"] or "")
+      d.parsed.switches["force"], d.parsed.values["why"] or "",
+      d.parsed.lists["touches"], d.parsed.lists["access"])
   end
   if d.command == "spec" then
     local file = d.parsed.args[2]
@@ -427,6 +378,24 @@ local function main(...: string): integer
     if who == nil then return gate.verdict_line("spec", false, "REFUSED: " .. werr) end
     return gitspec.cmd_spec(s, id, file, d.parsed.values["base"] or "", who,
       d.parsed.switches["force"], d.parsed.values["why"] or "")
+  end
+  -- Both verbs take the same two id slots and the same flags, so the
+  -- only thing the dispatch chooses is which body to call.
+  if d.command == "depend" or d.command == "undepend" then
+    local on, oerr = resolve_id(s, d.parsed.args[2] or "")
+    if on == nil then
+      io.stderr:write(tostring(oerr) .. "\n")
+      return 1
+    end
+    local who, werr = claimcli.resolve_optional_caller(
+      d.parsed.values["session"] or "")
+    if who == nil then
+      return gate.verdict_line(d.command, false, "REFUSED: " .. werr)
+    end
+    local edge = d.command == "depend" and gitdepend.cmd_depend
+    or gitdepend.cmd_undepend
+    return edge(s, id, on, who, d.parsed.switches["force"],
+      d.parsed.values["why"] or "")
   end
   if d.command == "worktree" then
     local who = session.resolve(d.parsed.values["session"])
