@@ -1,6 +1,7 @@
 title: cosmos pin bump: consume the base64 loop pins (cosmopolitan #281+#282) from the first release carrying 3977e62f
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1426
 resolution: completed
 builders: 7b2d5794-d8f2-5252-98a4-78fd6c9236e6
+touches: 3p/cosmos/cosmos_pin.tl
