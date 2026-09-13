@@ -1,5 +1,6 @@
 title: quicksand proxy: an overlong port converts to nil and reaches dial as an integer
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1306
 resolution: completed
+touches: cosmic/quicksand/proxy/http.tl cosmic/quicksand/proxy/http_test.tl
