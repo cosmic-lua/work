@@ -1,35 +1,3 @@
-## Problem
-
-`cosmic/fs/walk.tl:75` stats every entry with
-`unix.stat(AT_SYMLINK_NOFOLLOW)`, wraps it (`types.wrap`) and builds a
-fresh `Entry` table, before the visitor has said whether it wants any
-of that. The dirent `d_type` — already the second return of
-`DirHandle:read()` (`cosmic/fs/types.tl:112-115`) — answers the walk's
-own only question, "is this a real directory". Probe numbers from the
-2026-08-23 research pass recorded on this item's parent (200 iters,
-scouting numbers, not the gate): raw d_type walk 81µs; walk +
-stat-per-entry 276µs; today's `fs.visit` 429-447µs; a lazy prototype
-171µs when the visitor never touches `e.stat` (−62%) and 354µs when it
-does (−21%).
-
-`cosmic/fs/find.tl:200-236` already runs this exact engine — d_type
-decides `DT_DIR` (descend, no stat) vs. a known non-directory kind (no
-stat) vs. `DT_UNKNOWN` (stat fallback, needed to classify) — and
-`cosmic/embed/init.tl:128-141` repeats the same shape. `walk.tl` is the
-one directory-scanning path in the tree that still stats everything
-unconditionally.
-
-This is the contract-adjacent half of the parent hypothesis, and the
-exact wall whilp/cosmic#469 stopped at: "walk() hands every visitor a
-full WalkStat, per its documented contract … a future pass could
-revisit them with an explicitly lazy-stat visitor API, but that's a
-bigger, contract-changing effort out of scope here." Its sibling item
-(routing `fs.find` through the existing d_type engine) already landed
-above — this item is the remaining, contract-changing half, and
-touches `cosmic/fs/walk.tl` and `cosmic/fs/types.tl`.
-
-## Change
-
 This item makes one call: `Entry.stat` becomes a lazy, memoized method
 (`function(self): Stat | nil, string`), not an eager field, and
 `walk_entries` classifies from `d_type` instead of stat-ing
@@ -397,25 +365,3 @@ Update the doc comments this rewrite makes stale:
   this function already sets `failure` and returns `"stop"` on other
   errors (line 85-86), so treat a stat failure the same way rather
   than silently continuing.
-
-## Non-goals
-
-- No new `_perf/bench/fs_bench.tl` scenario for the stat-touching path
-  (`e:stat()` called on every entry). `fs_walk_tree`'s visitor reads
-  only `e.path` and is the gate for the stat-free win this item
-  targets; pricing the stat-touching −21% side with a companion
-  scenario is real, independent work — a separate item, not folded in
-  here.
-- No rewrite of `cosmic/fs/find.tl`'s own traversal engine beyond
-  `find_info`'s mechanical `Entry.stat` migration above — `find`/
-  `find_iter`/`glob` already run their own d_type-based loop
-  (`find.tl:151-255`) and are untouched by this item.
-- No attempt to discover or migrate callers outside this repo — D41's
-  consequences section records that cost; it is not this item's to
-  close.
-- `_tool/coverage/report.tl` (499 lines after the net −1 edit above)
-  and `_make/artifact.tl` (500 lines after the net +1 edit above) land
-  with one line or zero lines of headroom under the 500-line cap as a
-  direct result of this migration — any future change to either file
-  inherits that, and will need its own trim; that is a cost this item
-  accepts, not a problem it solves.
