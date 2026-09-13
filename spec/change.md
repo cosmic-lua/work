@@ -1,5 +1,3 @@
-## Change
-
 Ready when: the gone tree exists on main (`ls cosmic/_gone/`; sibling
 item `7SGj_Mojk`).
 
@@ -67,9 +65,3 @@ line and the `-- gone` line, and the empty-index path.
 former is near the cap — measure) asserts the two hint strings for
 the two messages above against a fixture index, and that the generic
 hint still returns for an unknown key.
-
-## Non-goals
-
-No change to what the checker accepts; hints only. No `--docs` page
-for gone names (a possible follow-up: `--docs cosmic.string.truncate`
-serving the wrapper's doc line).
