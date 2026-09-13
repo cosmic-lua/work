@@ -1,6 +1,7 @@
 title: delete the number-to-integer cast bucket: 13 sites, 5 already stale, 6 math.tointeger, 2 a curated tl.Error field
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1369
 resolution: completed
 builders: df22ed61-bbfc-55ea-a8dd-527935441eaf
+touches: cosmic/instrument.tl cosmic/quicksand/proxy/serve_test.tl _tool/coverage/lines.tl
