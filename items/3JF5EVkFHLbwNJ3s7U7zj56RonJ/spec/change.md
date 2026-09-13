@@ -1,7 +1,3 @@
-# verbs: split the spec on write, declare dependencies, gate on them
-
-## Change
-
 Depends on `02-tree-and-fields`: that item lands the format-5 tree, the
 `touches`/`access`/`depends_on` fields and `itemtree.Spec`, and this one is the
 first thing that writes and reads them through a verb.
@@ -186,31 +182,3 @@ expectations beyond the two verbs appearing. Add `.cosmic-coverage` rows for
 `_work/gitdepend.tl` and hand-edit the rows this moves — `_work/spec.tl`
 (`{["covered"] = 58, ["total"] = 60}`), `_work/gitspec.tl`, `_work/action.tl`,
 `_work/gitready.tl` — rather than running `--make coverage --baseline`.
-
-## Non-goals
-
-- Nothing reads `touches` or `access` yet. `_work/overlap.tl`'s collision
-  detection and `_work/briefmeasure.tl`'s headroom table keep extracting paths
-  from prose, and `_work/gitready.tl:61`
-  (`local function undeclared_repos(it: item.Item, body: string): {string}`)
-  keeps reading `## Access` out of the text, because no item carries the fields
-  until `05-migration` fills them. `06-retire` switches the readers and deletes
-  the extractors.
-- No `fsck` report on dependencies here. The cycle refusal at the mutation is
-  this item; D48's derived report — a `change` naming an id as blocking that is
-  not in `depends_on` — needs `touches`-era prose and lands in `06-retire`.
-- The board cannot be operated with these verbs until `05-migration` has run:
-  `02-tree-and-fields` set the marker this build demands to `5`, and the live
-  board reads `4`. Every test here runs against a fixture board
-  (`_work/fixture.tl`), never the live one.
-- No change to rank, to `attach`, or to how a container's role is derived. A
-  waiter stays workable by doing nothing: `depends_on` is not parentage.
-
-## Access
-
-- cosmic-lua/cosmic — `docs/decisions/d48-dependency-is-its-own-relation.md`
-  (the relation, the refusals, and the no-effect-on-rank rule this implements)
-  and `docs/decisions/d47-spec-declares-intent-only.md` (the two prose blobs and
-  the no-escape-hatch rule the `split` refusal enforces). Both were numbered one
-  lower in an earlier draft of this spec, before an unrelated D46 landed on main
-  and pushed them up.
