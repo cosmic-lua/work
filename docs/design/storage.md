@@ -126,8 +126,7 @@ items/<id>/log/<ksuid>.md an appended entry (`log ID --add FILE`)
 claims/<id>               the recorded lease: id, holder, acquired_at,
                           renewed_at, expires_at, product_base —
                           one `key: value` per line
-migration/marks           written once by the migration: `<old> <new>`
-                          per replayed commit, the evidence bridge
+migration/marks           `<old> <new>` per replayed commit, written once
 ```
 
 `spec/change.md` and `spec/non-goals.md` carry over from format 5
