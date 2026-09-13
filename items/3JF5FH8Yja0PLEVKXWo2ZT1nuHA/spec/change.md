@@ -1,7 +1,3 @@
-# pin: bump bin/gitboard.pin to a release that understands format 5
-
-## Change
-
 Depends on `03-verbs` AND on `05-migration`'s CODE having merged: the release
 this pins must carry `02-tree-and-fields`, `03-verbs` and the `migrate` verb,
 because no clone can read or write a format-5 board until its pinned build
@@ -103,20 +99,3 @@ $ rm -rf o/bootstrap && bin/gitboard help | head -1
 $ o/bootstrap/gitboard help | grep -c "depend"   # the verbs 03-verbs added
 $ o/bootstrap/gitboard help | grep -c "migrate"  # the verb 05-migration added
 ```
-
-## Non-goals
-
-- No change to `bin/gitboard`, to cosmic's `bin/cosmic.pin`, or to any workflow
-  in either repository. The release mechanism already produces what this pins.
-- The migration is not run here. This item ends with a pin that can run it;
-  `05-migration`'s run, from this pin, is the next thing that happens.
-- No change to cosmic's `skills/work/SKILL.md`. The skill points at the tool
-  and restates none of its verbs, so the two new verbs reach every session
-  through this pin alone.
-
-## Access
-
-- cosmic-lua/work — the release this pins is published there
-  (`https://github.com/cosmic-lua/work/releases`), its tag and `SHA256SUMS` are
-  what the two lines carry, and `03-verbs` (the item this depends on) is a
-  change to that repository.
