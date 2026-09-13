@@ -52,7 +52,8 @@ end
 
 --- The repositories a spec reaches (`spec.reached_repos`) that are
 --- neither the item's own `repo` field nor declared as its read
---- access (`spec.declared_repos`) — an undeclared source
+--- access, by either spelling — its `access` field or the
+--- `## Access` prose an unmigrated sidecar carries — an undeclared source
 --- strands a claim before it starts and a review just as surely,
 --- since neither session's grant is anything this board can see. The
 --- item's own `repo` is the one exemption that needs no declaring: it
@@ -61,7 +62,15 @@ end
 --- @param body string Its spec sidecar
 --- @return {string} Undeclared repo slugs, in first-seen order
 local function undeclared_repos(it: item.Item, body: string): {string}
+  -- Both spellings of the declaration, unioned: the item's `access`
+  -- field, and the `## Access` prose an unmigrated sidecar still
+  -- carries. `_work.gitowner.repo_problem` reads the same pair, for
+  -- the reason its header states — the union only ever recognizes MORE
+  -- declarations, so the move costs no item its escape.
   local declared = spec.declared_repos(body)
+  for _, repo in ipairs(it.access or {}) do
+    declared[repo:lower()] = true
+  end
   local own = (it.repo or ""):lower()
   local out: {string} = {}
   for _, repo in ipairs(spec.reached_repos(body)) do

@@ -193,7 +193,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if prose ~= nil then
     declared = spec.document(prose)
   end
-  local foreign = owner.repo_problem(s, it.repo, declared, "")
+  local foreign = owner.repo_problem(s, it.repo, declared, it.access, "")
   if foreign then
     return gate.verdict_line("new", false, "REFUSED: " .. foreign)
   end

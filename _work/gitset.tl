@@ -79,8 +79,9 @@ local function cmd_set(s: store.Store, id: string, title: string | nil,
         "REFUSED: --repo cannot be empty — clearing it is not supported; "
         .. "set --repo <owner>/<name> to change it")
     end
+    local granted = access or it.access
     local foreign = owner.repo_problem(s, repo,
-      spec.document(store.read_spec(s, id)), id)
+      spec.document(store.read_spec(s, id)), granted, id)
     if foreign then
       return gate.verdict_line("set", false, "REFUSED: " .. foreign)
     end
