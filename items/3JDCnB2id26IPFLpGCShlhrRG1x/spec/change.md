@@ -1,5 +1,3 @@
-## Change
-
 Fix destination and private-network isolation in buffered Fetch's existing
 HTTP keepalive path. This is step 1 of `uQsI_Q5CM`; land in
 cosmic-lua/cosmopolitan on master. Read that parent's full design for the fixed
@@ -54,15 +52,3 @@ Run `make -j$(nproc) o//tool/lua/test` and
 printed 301 and 3799). Native helper code must compile in both contexts.
 Mutation-check each route/policy comparison by removing it and watching its own
 regression fail. No public binding/type/ratchet signature changes in this PR.
-
-## Non-goals
-
-No TLS pooling, parser rewrite, stream changes, hidden retries or default change.
-
-## Access
-
-Read cosmic-lua/cosmic for wrappers, benchmarks, pins and skills; read
-cosmic-lua/cosmopolitan for transport sources, native tests and release evidence;
-read cosmic-lua/work for the parent design and prerequisite evidence, supplied
-by the orchestrator in the builder brief. The implementation PR targets only
-the repository assigned to this item; agents do not mutate the board.
