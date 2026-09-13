@@ -1,6 +1,6 @@
 title: verdict accept: land through ghwrite when the caller has explicitly opted into provider transport
 parent: 3J1McPs5zvrKSLKuKOCf6jEUJBu
-target: cosmic-lua/work
+repo: cosmic-lua/work
 handover_head: 61ec14ddb77b3a41a69729fc86c54420b7a5d2a9
 external_url: https://github.com/cosmic-lua/work/pull/142
 verdict: accept
