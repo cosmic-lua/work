@@ -1,6 +1,7 @@
 title: casts lint counts a -- cast: inside a string literal, so the baseline carries a row for fixture text
 parent: 3HyRcW05wBip6Wqcz145bUQBTyj
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1374
 resolution: completed
 builders: 2b784d51-f281-51f3-9291-6047eaef9411
+touches: _cli/lint.tl _build/casts.tl cosmic/compress.tl _build/casts_test.tl cosmic/quoted.tl _build/casts_baseline.tl
