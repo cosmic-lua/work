@@ -4,6 +4,7 @@
 --- overlapping loser. All publication uses ordinary non-forced local pushes.
 local check = require("cosmic.check")
 local fs = require("cosmic.fs")
+local testfixture = require("_work.fixture")
 local git = require("_work.singlehead_git")
 local objects = require("_work.singlehead_objects")
 local plans = require("_work.singlehead_plan")
@@ -52,7 +53,7 @@ local function build(root: string, head: string, id: string,
 end
 
 local function test_nonforced_races_retry_only_disjoint_original_transaction()
-  local tmp = assert(os.getenv("TEST_TMPDIR"))
+  local tmp = testfixture.tmpdir
   local source, envelope = fs.join(tmp, "source"), fs.join(tmp, "envelope.git")
   assert(fs.make_dirs(source) and fs.make_dirs(envelope))
   git_ok(source, {"init", "--quiet", "--object-format=sha1"})

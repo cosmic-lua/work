@@ -1,9 +1,10 @@
 #!/usr/bin/env cosmic
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local testfixture = require("_work.fixture")
 local binding = require("_work.singlehead_binding")
 
-local root = fs.join(assert(os.getenv("TEST_TMPDIR")), "singlehead-binding")
+local root = fs.join(testfixture.tmpdir, "singlehead-binding")
 assert(fs.make_dirs(root))
 local function git(...: string)
   local r = assert(child.run({"git", ...}, {cwd = root}))

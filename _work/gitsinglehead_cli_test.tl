@@ -4,13 +4,14 @@
 --- no provider or network is contacted.
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local testfixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
 local objects = require("_work.singlehead_objects")
 local plans = require("_work.singlehead_plan")
 local literal = require("_work.singlehead_literal")
 local refs = require("_work.refs")
 
-local tmp = assert(os.getenv("TEST_TMPDIR"))
+local tmp = testfixture.tmpdir
 local board = fs.join(tmp, "board")
 assert(fs.make_dirs(board))
 local command_count = 0

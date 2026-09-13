@@ -4,11 +4,12 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local testfixture = require("_work.fixture")
 local hydrate = require("_work.singlehead_hydrate")
 local objects = require("_work.singlehead_objects")
 local refs = require("_work.refs")
 
-local BASE < const > = assert(os.getenv("TEST_TMPDIR"))
+local BASE < const > = testfixture.tmpdir
 local REPOSITORY < const > = "example/board"
 local BRANCH < const > = "envelope"
 local ENVELOPE_REF < const > = "refs/remotes/origin/" .. BRANCH

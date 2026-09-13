@@ -5,11 +5,12 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local codec = require("cosmic.codec")
 local fs = require("cosmic.fs")
+local testfixture = require("_work.fixture")
 local git = require("_work.singlehead_git")
 local objects = require("_work.singlehead_objects")
 local refs = require("_work.refs")
 
-local BASE < const > = assert(os.getenv("TEST_TMPDIR"))
+local BASE < const > = testfixture.tmpdir
 local REPOSITORY < const > = "example/board"
 local BRANCH < const > = "envelope-poc"
 local ITEM < const > = "refs/heads/items/adversarial"
