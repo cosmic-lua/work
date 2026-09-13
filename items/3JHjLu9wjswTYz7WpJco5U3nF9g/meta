@@ -2,3 +2,4 @@ title: pin: bump bin/gitboard.pin to the release carrying migrate6 and the forma
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/cosmic
 touches: bin/gitboard.pin
+depends_on: 3JHjLm7bX0Zt5v3yIEgGcwvr5ms
