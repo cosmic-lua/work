@@ -1,31 +1,3 @@
-## Evidence
-
-`bin/gitboard next` (2026-09-06 18:20Z, board at 94e41c5) recommended
-«5P4r_VUqR» as "highest-ranked todo item passing the spec bar" while
-that spec's `## Change` opened with a Ready-when naming «omzs_ww5P»
-and «SmAQinD», neither done. Caught by hand, 3 orchestrator calls;
-an unattended pass would have pulled, briefed, and bootstrapped a
-builder for work that cannot start.
-
-The doctrine already makes the sentence a command: `git grep -n 'Ready
-when' -- _work/doctrine.tl` → 167 ("states that fact as a command and
-the output that means ready, in prose at the top of `## Change`") and
-199 ("a `Ready when` command runs first, and not ready is a bare
-drop"). The mechanism is puller discipline: a take-then-drop cycle at
-best, a wasted pull at worst; the tool never runs it.
-
-The one place a spec's tree-facts are already evaluated and rendered
-on a read: `git grep -n 'absent: \|tight: ' -- _work/overlap.tl` → 165,
-171, inside `headroom_lines` (`_work/overlap.tl:161`), consumed by
-`_work/gitshow.tl:299`. The two gates a pull passes: `_work/gitready.tl:113`
-`ready_problems` (what `take` refuses on, `_work/gitverbs.tl:199`) and
-`_work/gitview.tl:213` `act.passes_bar` inside the PURE `next_report`;
-`next`'s live half is `next_report_live` (`_work/gitview.tl:419`).
-Sizes: `wc -l _work/overlap.tl _work/gitready.tl _work/gitview.tl` →
-265, 184, 490 (gitview is tight: 10 lines left).
-
-## Change
-
 One mechanism: `_work/overlap.tl` gains `ready_when(body): string | nil`.
 It finds, in the `## Change` section, the first sentence beginning
 `Ready when:`; when that sentence carries at least two backtick spans,
@@ -62,10 +34,3 @@ in place to state the evaluated shape — "Ready when: `CMD` prints
 so the drop-bare sentence at 199 is replaced by "the tool checks it".
 `_work/doctrine_test.tl:74-88` asserts the old wording; update those
 assertions to the new sentences.
-
-## Non-goals
-
-No new item field, no date, no dependency edges between items — the
-criterion stays whatever the command prints. No evaluation on `show`
-(a read that must stay cheap) and none for candidates below the head.
-No change to `absent:`/`tight:` lines.
