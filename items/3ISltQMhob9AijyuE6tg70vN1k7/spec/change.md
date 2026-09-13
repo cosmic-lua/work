@@ -1,9 +1,3 @@
-## Goal
-G8 — the flow system. A research slice's deliverable is recorded
-evidence and follow-up items, and today the tool has no handover that
-carries it: `move ID check` demands a PR the slice does not have.
-
-## Change
 **The pick, of the three the capture named: option 1 — `check` accepts a
 slice with no PR, reviewed against the item's recorded evidence.** The
 skill on `main` already says so and the tool is the half that
@@ -73,50 +67,3 @@ gives 333, 256, 226, 152, 335, 182.
    `_work/gitverdict_test.tl`: `accept` on a PR-less item in `check`
    ends the item (`phase` empty, `resolution` `completed`) rather than
    moving it to `land`.
-
-## Non-goals
-- Do NOT edit anything under `skills/work/**` on `main`, and do NOT
-  open a PR against `main`. This slice is `board`-branch machinery
-  only; `review.md` already sanctions the PR-less research handover.
-  Its one now-stale clause — that the reviewer then runs `done ID`,
-  where this change ends the item inside the accept — is filed as its
-  own capture and is not this slice's to fix.
-- Do NOT change `gate.land_refusal` (`_work/gitgate.tl` lines 274–290).
-  A force-move into `land` with no PR stays refused; the fix is that
-  an evidence accept never goes there.
-- Do NOT change `spec.READY_SECTIONS`. `## Result` is read where it is
-  needed and is NOT added to the ready bar — a code slice must not
-  start owing one.
-- Do NOT relax the `--claim` refusal on a handover to `check`, and do
-  NOT change `gitverdict`'s builder-distance refusal (line ~142). The
-  review distance binds evidence slices exactly as it binds diffs.
-- Do NOT touch `items/**`. This is a machinery change; no board state
-  moves in the diff.
-- Do NOT rebase or force-push `board`.
-
-## Acceptance
-Run from the `board` worktree, on the slice's branch off `board`:
-
-- `bin/cosmic --make ci` ends `ci: PASS`.
-- `bin/cosmic --make test _work/gitverbs_test.tl _work/gitverdict_test.tl`
-  passes, including the four new test functions named in `Change` (5).
-- `bin/cosmic --make run _work/gitboard.tl help move` lists `--evidence`
-  (today it does not: the same command's output contains `--claim`,
-  `--pr`, `--force`, `--why` and no `--evidence`).
-- `grep -c '"evidence"' _work/gitboard.tl` prints `1` (today: `0`).
-- `grep -c 'section_of' _work/gitverbs.tl` prints at least `1`
-  (today: `0`).
-- `wc -l _work/gitboard.tl _work/gitverbs.tl _work/gitverdict.tl
-  _work/guidance.tl` — every file ≤ 500 (today: 333, 256, 226, 152).
-
-## Enablement
-none needed. Every mechanism this change needs already exists and is
-gated: `spec.section_of` reads an arbitrary section today, the
-already-merged branch in `_work/gitverdict.tl` is a working example of
-an accept that ends an item and re-phases its parent, `cosmic.flags`
-already carries switch flags on other verbs (`--force`), and the
-board's own `--make ci` runs on every push to the branch. The one
-judgment a literal-minded session could get wrong — inferring the
-evidence handover from a missing `--pr` instead of demanding the flag
-— is stated as a wall in `Change` and checked by the "still refused
-without `--evidence`" test in (5).
