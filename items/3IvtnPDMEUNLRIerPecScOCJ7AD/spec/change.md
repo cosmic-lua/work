@@ -1,5 +1,3 @@
-## Change
-
 `refs.for_each_ref` (`_work/refs.tl`) asks git for
 `%(committerdate:unix)` on every ref, which makes git read every tip
 commit object: on the live clone's 1054 refs the snapshot costs 20 ms
