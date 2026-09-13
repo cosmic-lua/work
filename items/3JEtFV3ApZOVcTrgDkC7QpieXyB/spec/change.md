@@ -1,5 +1,3 @@
-## Change
-
 A decision record's identity is the next free number, which is a shared
 counter with no compare-and-swap. Two sessions writing concurrently both
 take it. That happened on 2026-09-12: main merged
@@ -55,18 +53,3 @@ handle.
    amend rule in the skill.
 
 New records get handles from this point. Nothing existing moves here.
-
-## Non-goals
-
-Migrating the 48 existing records or the 480 `D<n>` references across
-94 files (`grep -rlE '\bD[0-9]{1,2}\b' --include='*.md' --include='*.tl'`
-excluding `o/`) — that is the sibling item, and it is the reason this one
-keeps `D<n>` parsing rather than replacing it.
-
-The four-section form, the status vocabulary, and the amend-versus-
-supersede rule: unchanged. Only identity moves.
-
-Renaming any record's slug. A handle prefixes the slug; the slug itself
-is what it already is.
-
-The board's own item ids, which are already KSUIDs.
