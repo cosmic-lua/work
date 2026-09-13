@@ -1,5 +1,6 @@
 title: fuzz child 2: a draw-recording source — the driver drops global math.random, inputs become choice sequences
 parent: 3I1j7yQAawHLQwtQA1bp1i3tUj4
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1290
 resolution: completed
+touches: cosmic/rand.tl _fuzz/driver.tl _fuzz/source.tl _fuzz/driver_test.tl
