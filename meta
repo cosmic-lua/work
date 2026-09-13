@@ -1,6 +1,7 @@
 title: optimize: measurement.md has no cross-session rule, so a one-session tight-loop regression reads as conclusive
 parent: 3HyRcd9FVIczIYW5swnw2IXbnGA
-target: cosmic-lua/cosmic
+repo: cosmic-lua/cosmic
 pr: 1348
 resolution: completed
 builders: claude-sched-2026-08-23T2238
+touches: skills/optimize/measurement.md skills/optimize/SKILL.md
