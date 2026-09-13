@@ -1,13 +1,3 @@
-## Goal
-
-`db:exec` runs a legitimate single-statement `CREATE TRIGGER ...
-BEGIN ...; END` instead of refusing it as "multi-statement sql":
-sqlite3_prepare compiles the whole trigger as ONE statement, so the
-wrapper's refusal is a false positive with a wrong diagnosis, and no
-message points the author at exec_script.
-
-## Change
-
 Decision (from the capture's two options): teach the scan — the
 lexical rule is bounded, and the risk asymmetry decides the shape:
 over-refusal is today's annoyance, under-refusal recreates the
@@ -37,21 +27,3 @@ refused; CREATE TABLE with a `trigger` column name; quoted/bracketed
 bracket skips pinned. `init_test.tl` (or the nearest exec test file)
 gains the end-to-end case: exec creates a trigger and a row insert
 fires it.
-
-## Non-goals
-
-No message change for genuinely multi-statement input (its diagnosis
-is right); no parser — the machine recognizes exactly the one DDL
-shape that embeds statements; no bind/stmt_cache signature changes
-(both callers keep the same boolean).
-
-## Acceptance
-
-`--make ci` PASS. The capture's exact statement runs through
-db:exec and the trigger fires. Every conservative refusal above is
-pinned by a test. sqltext's coverage floor rises (skip branches now
-exercised).
-
-## Enablement
-
-None.
