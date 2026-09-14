@@ -8,11 +8,10 @@ local child = require("cosmic.child")
 local events = require("_work.events")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
-local refs = require("_work.refs")
+local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
-local BASE < const > = ("a"):rep(40)
 local HEAD < const > = ("b"):rep(40)
 
 local function test_parse_subject_commit_lifecycle()
@@ -36,20 +35,14 @@ local function test_parse_subject_keeps_legacy_history_readable()
   assert(unknown.verb == "board:" and unknown.head == "")
 end
 
-local function item_ref(s: store.Store, id: string): string
-  local found = check.must(refs.for_each_ref(s.root,
-      {"refs/heads/items/" .. id, "refs/heads/ended/" .. id}))
-  assert(#found == 1)
-  return found[1].refname
-end
-
 local function commit_handover(s: store.Store, id: string)
   local it = check.must(store.load(s, id))
-  it.repo, it.claim, it.claim_base = "acme/widgets", "session-a", BASE
+  it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12))))
+  assert(publish.publish(s))
 end
 
 local function test_cache_rebuild_matches_the_git_commit_chain()
@@ -62,10 +55,10 @@ local function test_cache_rebuild_matches_the_git_commit_chain()
   assert(storewrite.save(s, it,
       ("verdict %s request changes head:%s by reviewer-a")
       :format(leaf:sub(1, 8), HEAD:sub(1, 12))))
+  assert(publish.publish(s))
 
-  local refname = item_ref(s, leaf)
   local log = check.must(child.run(
-      {"git", "log", "--format=%H\t%s", "--reverse", refname}, {cwd = s.root}))
+      {"git", "log", "--format=%H\t%s", "--reverse", "--first-parent", s.state_head, "--", "items/" .. leaf, "claims/" .. leaf}, {cwd = s.root}))
   assert(log.ok, log.stderr)
   local expected: {string} = {}
   for line in log.stdout:gmatch("([^\n]+)") do expected[#expected + 1] = line end

@@ -24,9 +24,10 @@ local function test_native_fsck_reports_actual_format_and_validates_marks()
         committer_email = "test@board", author_date = "1700000000 +0000",
         committer_date = "1700000000 +0000", op = ""}))
   local problems = stateread_fsck.problems(root, head)
-  assert(#problems == 2, table.concat(problems, "\n"))
+  assert(#problems == 3, table.concat(problems, "\n"))
   local joined = table.concat(problems, "\n")
   assert(joined:find('format%-six%-sentinel\\n'))
   assert(joined:find('expected canonical "6\\n"', 1, true))
   assert(joined:find("migration/marks:", 1, true))
+  assert(joined:find("migration/sources: missing archive witness", 1, true))
 end

@@ -51,18 +51,7 @@ local function verify_result(s: store.Store, it: item.Item,
   end
   local native, nerr = format.state_head(s.root)
   if native == nil then return nil, nerr end
-  if native ~= "" then return stateevidence.verify(s.root, native, result, it.id) end
-  local tip = s.leased_sha[it.id] or ""
-  if tip == "" then
-    return nil, ("%s has no observed board commit — read the board first")
-    :format(id8)
-  end
-  local lineage, lerr = commit_evidence.verify_lineage(s.root, result, tip)
-  if lineage == nil then
-    return nil, ("%s's research result %s is not a commit on its own ref: %s")
-    :format(id8, result:sub(1, 12), lerr)
-  end
-  return lineage.base, ""
+  return stateevidence.verify(s.root, native, result, it.id)
 end
 
 --- Record a verdict over one locally inspectable product commit. The reviewer

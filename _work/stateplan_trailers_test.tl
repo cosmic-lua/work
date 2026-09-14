@@ -5,7 +5,7 @@ local fs = require("cosmic.fs")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
 local git = require("_work.singlehead_git")
-local objects = require("_work.singlehead_objects")
+local objects = require("_work.stateplan_objects")
 local tx = require("_work.statetransaction")
 local projection = require("_work.stateplan_git")
 local plans = require("_work.stateplan")
@@ -35,7 +35,7 @@ local function test_freeze_and_capture_ignore_ambient_trailer_configuration()
     assert(observed.message == plan.frozen.transitions[1].message)
     assert(observed.author.name == "Session")
     assert(check.must(receipts.inspect(root, plan.candidate, plan.frozen)).status == "confirmed")
-    local final_guard = check.must(plans.connector_call(plan, #plan.calls)).guard
+    local final_guard = plan.calls[#plan.calls].guard
     assert(final_guard ~= nil and final_guard.expected_head == base)
     local changed = check.must(tx.freeze(plan.frozen))
     changed.transitions[1].message = "edit\n\nTransaction: wrong\n"

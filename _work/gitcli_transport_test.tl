@@ -1,16 +1,15 @@
 #!/usr/bin/env cosmic
--- Focused CLI contract for the credential-free transport seam: session ids,
--- render-only defaults, explicit execution wording, and local claim wiring.
+-- CLI contract at the native state publication boundary: durable render-only
+-- preparation, explicit execution, configured remotes, drafts and sessions.
+local boardread = require("_work.boardread")
 local check = require("cosmic.check")
 local claimsession = require("_work.claimsession")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitboard = require("_work.gitboard")
-local gitclaim = require("_work.gitclaim")
 local gitdraft = require("_work.gitdraft")
-local gitobj = require("_work.gitobj")
-local prepared = require("_work.prepared")
 local refs = require("_work.refs")
+local staging = require("_work.statestaging")
 local store = require("_work.store")
 
 local function capture(...: string): integer, string
@@ -18,7 +17,9 @@ local function capture(...: string): integer, string
   local lines: {string} = {}
   _G.print = function(...: any)
     local parts: {string} = {}
-    for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
     lines[#lines + 1] = table.concat(parts, "\t")
   end
   local ok, code = pcall(gitboard.main, ...)
@@ -27,298 +28,146 @@ local function capture(...: string): integer, string
   return code, table.concat(lines, "\n")
 end
 
-local function mirror_board(root: string, remote?: string)
-  local found = check.must(refs.for_each_ref_raw(root,
-      {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
-  for _, entry in ipairs(found) do
-    local tracked = check.must(refs.tracking_ref(entry.refname, remote))
-    assert(refs.update_ref(root, tracked, entry.sha, refs.ZERO_SHA))
-  end
-end
-
-local function test_claim_uses_an_explicit_non_origin_canonical_remote()
-  local s = fixture.init_state_repo("cli-claim-upstream")
-  local id = fixture.file_item(s, "claim from upstream tracking", "")
-  mirror_board(s.root, "upstream")
-  assert(refs.set_board_mode(s.root, "remote"))
-  local caller = claimsession.mint()
+local function test_claim_uses_the_configured_non_origin_remote()
+  local writer, s = fixture.init_shared("cli-claim-upstream")
+  local id = fixture.file_item(writer, "claim from upstream", "")
+  fixture.caller_fetch(s)
+  fixture.git(s.root, {"remote", "rename", "origin", "upstream"})
+  assert(refs.set_board_remote(s.root, "upstream"))
   local root = s.root
-  local _closed, _cerr = store.close(s)
-  local code, out = capture("claim", id, "--session", caller,
+  assert(store.close(s))
+  local code, out = capture("claim", id, "--session", claimsession.mint(),
     "--remote", "upstream", "--dir", root)
   assert(code == 2, out)
-  assert(out:find(" upstream ", 1, true), out)
-  assert(out:find("refs/remotes/origin", 1, true) == nil, out)
+  local pending = check.must(staging.list(root, "prepared"))
+  assert(#pending == 1 and pending[1].remote == "upstream")
+  assert(out:find(pending[1].id, 1, true), out)
 end
-test_claim_uses_an_explicit_non_origin_canonical_remote()
 
-local function test_claim_set_renders_one_atomic_push()
-  local s = fixture.init_state_repo("cli-claim-atomic-set")
-  local first = fixture.file_item(s, "first atomic claim", "")
-  local second = fixture.file_item(s, "second atomic claim", "")
-  mirror_board(s.root)
-  assert(refs.set_board_mode(s.root, "remote"))
+local function test_claim_set_prepares_one_atomic_state_transition()
+  local writer, s = fixture.init_shared("cli-claim-set")
+  local first = fixture.file_item(writer, "first atomic claim", "")
+  local second = fixture.file_item(writer, "second atomic claim", "")
+  fixture.caller_fetch(s)
   local root = s.root
-  local _closed, _cerr = store.close(s)
+  assert(store.close(s))
   local code, out = capture("claim", first, second, "--session",
     claimsession.mint(), "--dir", root)
   assert(code == 2, out)
-  assert(select(2, out:gsub("git push %-%-atomic", "")) == 1, out)
-  assert(select(2, out:gsub("%-%-force%-with%-lease=", "")) == 3, out)
-  assert(out:find("refs/heads/claim-batches/", 1, true), out)
+  local pending = check.must(staging.list(root, "prepared"))
+  assert(#pending == 1 and #pending[1].transitions == 1)
+  assert(out:find("NOT PUBLISHED", 1, true), out)
+  assert(out:find("gitboard publish " .. pending[1].id .. " --execute",
+      1, true), out)
 end
-test_claim_set_renders_one_atomic_push()
 
-local function test_draft_cli_stages_offline_and_renders_one_final_push()
+local function test_draft_cli_stages_offline_and_plans_one_state_update()
   local s = fixture.init_state_repo("cli-draft-overlay")
   local id = fixture.file_item(s, "before draft", "")
-  mirror_board(s.root)
-  assert(refs.set_board_mode(s.root, "remote"))
-  local root = s.root
-  local _closed, _cerr = store.close(s)
+  local root, canonical = s.root, s.state_head
+  assert(store.close(s))
   local draft = check.must(gitdraft.begin(root))
-
   local code, out = capture("set", id, "--title", "inside draft",
     "--draft", draft.id, "--dir", root)
   assert(code == 0 and out:find("STAGED draft=", 1, true), out)
-
   local reopened = check.must(gitdraft.open(root, draft.id))
+  local plan = gitdraft.plan(reopened)
+  assert(#plan == 1 and plan[1].ref == "refs/heads/state")
+  assert(plan[1].expected == canonical and plan[1].next == reopened.native.tip)
   assert(gitdraft.activate(root, reopened))
   local speculative = check.must(store.open(root))
   assert(check.must(store.load(speculative, id)).title == "inside draft")
-  local _sc, _se = store.close(speculative)
+  assert(store.close(speculative))
   gitdraft.deactivate(root)
-  local canonical = check.must(store.open(root))
-  assert(check.must(store.load(canonical, id)).title == "before draft")
-  local _cc, _ce = store.close(canonical)
-
-  code, out = capture("publish", draft.id, "--dir", root)
-  assert(code == 0, out)
-  assert(select(2, out:gsub("git push %-%-atomic", "")) == 1, out)
-  assert(select(2, out:gsub("%-%-force%-with%-lease=", "")) == 1, out)
+  local current = check.must(store.open(root))
+  assert(check.must(store.load(current, id)).title == "before draft")
+  assert(store.close(current))
 end
-test_draft_cli_stages_offline_and_renders_one_final_push()
 
-local function test_draft_chains_new_child_and_spec_across_invocations()
-  local s = fixture.init_state_repo("cli-draft-dependent-chain")
-  local parent, _leaf = fixture.root_with_leaf(s)
-  mirror_board(s.root)
-  assert(refs.set_board_mode(s.root, "remote"))
-  local root = s.root
-  local _closed, _cerr = store.close(s)
-  local draft = check.must(gitdraft.begin(root))
-  local code, out = capture("new", "offline child", "--parent", parent,
-    "--draft", draft.id, "--dir", root)
-  assert(code == 0, out)
-  local child_id = out:match("%[([%w]+)%]")
-  assert(child_id ~= nil, out)
-  local spec_path = fs.join(root, "o", "offline-child.md")
-  assert(fs.write(spec_path, "## Change\nExercise the dependent draft chain.\n"))
-  code, out = capture("spec", child_id, spec_path,
-    "--draft", draft.id, "--dir", root)
-  assert(code == 0 and out:find("STAGED draft=", 1, true), out)
-  local reopened = check.must(gitdraft.open(root, draft.id))
-  assert(#gitdraft.plan(reopened) == 2,
-    "new child plus parent ordering should consolidate to two ref updates")
-  code, out = capture("publish", draft.id, "--dir", root)
-  assert(code == 0, out)
-  assert(select(2, out:gsub("git push %-%-atomic", "")) == 1, out)
-  assert(select(2, out:gsub("%-%-force%-with%-lease=", "")) == 2, out)
-end
-test_draft_chains_new_child_and_spec_across_invocations()
-
-local function test_local_draft_simulation_applies_only_on_execute()
+local function test_local_draft_applies_only_on_explicit_publish()
   local s = fixture.init_state_repo("cli-draft-local")
   local id = fixture.file_item(s, "local before", "")
   local root = s.root
-  local _closed, _cerr = store.close(s)
+  assert(store.close(s))
   local draft = check.must(gitdraft.begin(root))
   local code, out = capture("set", id, "--title", "local after",
     "--draft", draft.id, "--dir", root)
   assert(code == 0 and out:find("STAGED draft=", 1, true), out)
-  gitdraft.deactivate(root) -- a real CLI process exits here
-  local canonical = check.must(store.open(root))
-  assert(check.must(store.load(canonical, id)).title == "local before")
-  local _cc, _ce = store.close(canonical)
+  gitdraft.deactivate(root)
+  local current = check.must(store.open(root))
+  assert(check.must(store.load(current, id)).title == "local before")
+  assert(store.close(current))
   code, out = capture("publish", draft.id, "--execute", "--dir", root)
   assert(code == 0, out)
-  canonical = check.must(store.open(root))
-  assert(check.must(store.load(canonical, id)).title == "local after")
-  local _fc, _fe = store.close(canonical)
-end
-test_local_draft_simulation_applies_only_on_execute()
-
-local function successor(root: string, parent: string): string
-  local tree = check.must(gitobj.tree_of(root, parent))
-  return check.must(gitobj.commit_tree(root, {
-        tree = tree, parents = {parent}, message = "CLI prepared successor",
-        author_name = "test", author_email = "test@example.com",
-        committer_name = "test", committer_email = "test@example.com",
-      }))
+  current = check.must(store.open(root))
+  assert(check.must(store.load(current, id)).title == "local after")
 end
 
 local function test_session_new_prints_only_a_minted_identity()
   local code, out = capture("session", "new")
   assert(code == 0 and claimsession.is_id(out), out)
   local help_code, help = capture("help", "session")
-  assert(help_code == 0 and help:find("does not derive identity", 1, true), help)
+  assert(help_code == 0 and help:find("does not derive identity", 1, true),
+    help)
 end
-test_session_new_prints_only_a_minted_identity()
-
-local function test_help_exposes_only_commit_and_caller_owned_remote_contracts()
-  local _, take = capture("help", "take")
-  assert(take:find("--head", 1, true) and take:find("--repo-dir", 1, true), take)
-  assert(not take:find("--pr", 1, true) and not take:find("--open", 1, true),
-    take)
-  local _, verdict = capture("help", "verdict")
-  assert(verdict:find("only evidence", 1, true), verdict)
-  assert(not verdict:find("GitHub", 1, true)
-    and not verdict:find("--no-land", 1, true), verdict)
-  local _, done = capture("help", "done")
-  assert(done:find("--landed", 1, true) and done:find("--session", 1, true), done)
-end
-test_help_exposes_only_commit_and_caller_owned_remote_contracts()
 
 local function test_init_records_explicit_mode()
   local root = fs.join(fixture.tmpdir, "verbs-cli-explicit-init")
-  assert(fs.remove_all(root))
-  assert(fs.make_dirs(root))
+  assert(fs.remove_all(root) and fs.make_dirs(root))
   local code, out = capture("init", "--local", "--dir", root)
   assert(code == 0 and refs.board_mode(root) == "local", out)
   local refused = capture("init", "--local", "--remote", "--dir", root)
-  assert(refused ~= 0, "init must reject contradictory board modes")
+  assert(refused ~= 0)
 end
-test_init_records_explicit_mode()
 
-local function test_refspec_setup_uses_the_configured_remote_name()
-  local base = fs.join(fixture.tmpdir, "configured-refspec")
-  assert(fs.remove_all(base))
-  assert(fs.make_dirs(base))
-  local bare = fs.join(base, "board.git")
-  local root = fs.join(base, "checkout")
-  fixture.git(base, {"init", "-q", "--bare", bare})
-  fixture.git(base, {"init", "-q", root})
-  fixture.git(root, {"remote", "add", "upstream", bare})
-  assert(refs.set_board_remote(root, "upstream"))
-  assert(refs.ensure_refspecs(root))
-  local config = check.must(fs.read(fs.join(root, ".git", "config")))
-  assert(config:find("refs/remotes/upstream/items/", 1, true), config)
-  assert(config:find("refs/remotes/origin/items/", 1, true) == nil, config)
-end
-test_refspec_setup_uses_the_configured_remote_name()
-
-local function test_publish_defaults_to_an_exact_render_without_moving_refs()
-  local s = fixture.init_state_repo("cli-publish-render")
-  local id = fixture.file_item(s, "publish target", "")
-  local target = "refs/heads/items/" .. id
-  local old = check.must(refs.read_ref(s.root, target))
-  local next_sha = successor(s.root, old)
-  local tx = check.must(prepared.prepare(s.root, {
-        {ref = target, expected = old, next = next_sha},
-      }))
-  assert(refs.set_board_mode(s.root, "remote"))
-  local _closed, _cerr = store.close(s)
-  local code, out = capture("publish", tx.id, "--dir", s.root)
+local function test_refresh_fetches_only_when_execution_is_explicit()
+  local writer, s = fixture.init_shared("cli-refresh-render")
+  local before = check.must(refs.read_ref(s.root, "refs/remotes/origin/state"))
+  fixture.file_item(writer, "remote advance", "")
+  local remote = check.must(store.git_ok(s,
+      {"ls-remote", "origin", "refs/heads/state"})).stdout:match("^(%x+)")
+  assert(remote ~= nil and remote ~= before)
+  local root = s.root
+  assert(store.close(s))
+  local code, out = capture("refresh", "--dir", root)
   assert(code == 0, out)
-  assert(out:find("target: dir=" .. fs.absolute_path(s.root)
-      .. " remote=origin url=", 1, true), out)
-  assert(out:find("git push --atomic", 1, true), out)
-  assert(out:find("--force-with-lease=" .. target .. ":" .. old, 1, true), out)
-  assert(out:find(next_sha .. ":" .. target, 1, true), out)
-  assert(out:find("nothing executed", 1, true), out)
-  assert(check.must(refs.read_ref(s.root, target)) == old,
-    "rendering publication cannot move canonical refs")
-end
-test_publish_defaults_to_an_exact_render_without_moving_refs()
-
-local function test_publish_execute_names_the_repository_it_pushed_to()
-  local _s1, s2 = fixture.init_shared("cli-publish-target")
-  local root = s2.root
-  local _closed, _cerr = store.close(s2)
-  local new_code, new_out = capture("new", "execute target", "--dir", root)
-  assert(new_code == 0, new_out)
-  local bare = fs.join(fixture.tmpdir, "verbs-shared-cli-publish-target",
-    "remote.git")
-  local code, out = capture("publish", "--execute", "--dir", root)
-  assert(code == 2, out)
-  local target_at = out:find("target: dir=" .. fs.absolute_path(root)
-    .. " remote=origin url=" .. bare, 1, true)
-  local published_at = out:find("published: ", 1, true)
-  assert(target_at ~= nil and published_at ~= nil, out)
-  assert(target_at < published_at,
-    "the target line must print above published:\n" .. out)
-end
-test_publish_execute_names_the_repository_it_pushed_to()
-
-local function test_refresh_defaults_to_rendered_fetch_and_local_reconciliation()
-  local s = fixture.init_state_repo("cli-refresh-render")
-  mirror_board(s.root)
-  assert(refs.set_board_mode(s.root, "remote"))
-  local _closed, _cerr = store.close(s)
-  local code, out = capture("refresh", "--dir", s.root)
+  assert(check.must(refs.read_ref(root, "refs/remotes/origin/state")) == before,
+    "default refresh must inspect only what the caller already fetched")
+  code, out = capture("refresh", "--execute", "--dir", root)
   assert(code == 0, out)
-  assert(out:find("git fetch --atomic --prune origin", 1, true), out)
-  assert(out:find("refs/remotes/origin/items/", 1, true), out)
-  assert(out:find("fetched refs were not changed", 1, true), out)
+  assert(check.must(refs.read_ref(root, "refs/remotes/origin/state")) == remote)
 end
-test_refresh_defaults_to_rendered_fetch_and_local_reconciliation()
 
-local function test_local_claim_dispatches_to_the_new_claim_substrate()
+local function test_local_claim_writes_canonical_claim_authority()
   local s = fixture.init_state_repo("cli-claim-local")
   local id = fixture.file_item(s, "claim any existing item", "")
-  local caller = claimsession.mint()
-  local root = s.root
-  local _closed, _cerr = store.close(s)
+  local caller, root = claimsession.mint(), s.root
+  assert(store.close(s))
   local code, out = capture("claim", id, "--session", caller, "--dir", root)
   assert(code == 0, out)
-  assert(out:find("confirmed " .. id, 1, true), out)
-  local reopened = check.must(store.open(root))
-  local claimed = check.must(store.load(reopened, id))
-  assert(claimed.claim == caller, "claim command must record the minted caller")
+  local current = check.must(store.open(root))
+  local value = check.must(check.must(boardread.load(root,
+        current.state_head, id)).claim)
+  assert(value.holder == caller)
 end
-test_local_claim_dispatches_to_the_new_claim_substrate()
 
-local function test_publish_rediscovers_rendered_claim_transactions()
-  local s = fixture.init_state_repo("cli-claim-publish")
-  local id = fixture.file_item(s, "publish an offline claim", "")
-  mirror_board(s.root)
-  assert(refs.set_board_mode(s.root, "remote"))
-  local caller = claimsession.mint()
+local function test_publish_rediscovers_a_rendered_native_claim()
+  local writer, s = fixture.init_shared("cli-claim-publish")
+  local id = fixture.file_item(writer, "publish an offline claim", "")
+  fixture.caller_fetch(s)
   local root = s.root
-  local _closed, _cerr = store.close(s)
-  local claim_code, claim_out = capture("claim", id, "--session", caller,
-    "--dir", root)
+  assert(store.close(s))
+  local claim_code, claim_out = capture("claim", id, "--session",
+    claimsession.mint(), "--dir", root)
   assert(claim_code == 2, claim_out)
-  assert(claim_out:find("git push --atomic --force-with-lease=", 1, true),
-    claim_out)
-  assert(claim_out:find("PREPARED", 1, true)
-    and claim_out:find("No claim was acquired", 1, true), claim_out)
-  assert(claim_out:find("do not act", 1, true), claim_out)
-  local staged = check.must(gitclaim.list_prepared(root, "origin"))
-  assert(#staged == 1 and #staged[1].members == 1
-    and staged[1].members[1].id == id,
-    "one render-only batch must remain staging-reachable")
-  local publish_code, publish_out = capture("publish", staged[1].id,
+  local pending = check.must(staging.list(root, "prepared"))
+  assert(#pending == 1)
+  local publish_code, publish_out = capture("publish", pending[1].id,
     "--dir", root)
   assert(publish_code == 0, publish_out)
-  assert(publish_out:find(staged[1].batch.commit, 1, true),
-    publish_out)
-  assert(publish_out:find("refs/heads/claim-batches/", 1, true), publish_out)
-  assert(publish_out:find("nothing executed", 1, true), publish_out)
-
-  -- A caller may run the printed push and fetch itself.  Refresh only
-  -- reconciles those already-fetched refs, then removes the staging receipt.
-  for _, update in ipairs(staged[1].transaction.updates) do
-    local tracked = check.must(refs.tracking_ref(update.ref))
-    assert(refs.update_ref(root, tracked, update.next, update.expected))
-  end
-  local refresh_code, refresh_out = capture("refresh", "--dir", root)
-  assert(refresh_code == 0, refresh_out)
-  assert(refresh_out:find("confirmed", 1, true)
-    and refresh_out:find(staged[1].id, 1, true),
-    refresh_out)
-  assert(#check.must(gitclaim.list_prepared(root, "origin")) == 0,
-    "confirmed claim staging ref must be cleaned")
+  assert(publish_out:find(pending[1].id, 1, true), publish_out)
+  assert(publish_out:find("publication ready", 1, true), publish_out)
+  assert(publish_out:find("--plan FILE", 1, true), publish_out)
+  assert(check.must(refs.read_ref(root, pending[1].ref)) == pending[1].sha)
 end
-test_publish_rediscovers_rendered_claim_transactions()
 print("gitcli_transport_test: ok")

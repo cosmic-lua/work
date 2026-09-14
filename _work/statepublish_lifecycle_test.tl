@@ -12,9 +12,12 @@ local prepared = require("_work.prepared")
 local staging = require("_work.statestaging")
 local gitdraft = require("_work.gitdraft")
 local gitobj = require("_work.gitobj")
+local git = require("_work.singlehead_git")
 local refs = require("_work.refs")
 local itemtree = require("_work.itemtree")
+local projection = require("_work.stateplan_git")
 local receipts = require("_work.stateplan_receipts")
+local transaction = require("_work.statetransaction")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local function setup(name: string): string
@@ -30,7 +33,7 @@ local function test_five_failed_head_retries_retire_the_exact_attempt()
   local root = setup("native-retry-bound")
   local initial = check.must(refs.read_ref(root, "refs/heads/state"))
   assert(check.must(child.run({"git", "remote", "add", "origin", "https://example.invalid/fixture/board.git"}, {cwd = root})).ok)
-  assert(check.must(child.run({"git", "config", "gitboard.mode", "remote"}, {cwd = root})).ok)
+  assert(refs.set_board_mode(root, "remote"))
   assert(refs.update_refs_atomic(root, {
         {ref = "refs/remotes/origin/state", expected = refs.ZERO_SHA, next = initial},
         {ref = "refs/remotes/origin/board/format", expected = refs.ZERO_SHA, next = initial}}))
@@ -76,6 +79,55 @@ local function test_retirement_never_removes_an_advanced_receipt()
   assert(check.must(refs.read_ref(root, draft.staging_ref)) == current.sha)
 end
 
+local function test_new_publication_succeeds_with_an_unrelated_retained_conflict()
+  local root = setup("native-own-publication-with-old-conflict")
+  local losing = check.must(store.open(root))
+  local contested = fresh()
+  assert(write.save(losing, contested, "losing version"))
+  local losing_receipt = check.must(staging.load(root, losing.state_receipt))
+  local losing_plan = check.must(native.build(root, losing_receipt))
+  losing_receipt.published = losing_plan.candidate
+  losing_receipt = check.must(staging.write(root, losing_receipt,
+      losing_receipt.sha))
+  assert(store.close(losing))
+
+  local winning = check.must(item.decode({id = contested.id,
+        title = "winning version"}))
+  local altered = {}
+  for _, change in ipairs(losing_plan.frozen.transitions[1].changes) do
+    altered[#altered + 1] = {path = change.path, mode = change.mode,
+      content = change.path:match("/meta$") and itemtree.encode_meta(winning)
+      or change.content, delete = change.delete}
+  end
+  local conflicting_tree = check.must(projection.apply(root,
+      losing_plan.expected_head, altered))
+  local conflicting_tip = check.must(projection.commit(root,
+      losing_plan.expected_head, conflicting_tree,
+      losing_plan.frozen.transitions[1]))
+  assert(refs.update_ref(root, "refs/heads/state", conflicting_tip,
+      losing_plan.expected_head))
+  local clean, conflict = native.refresh(root, refs.board_remote(root))
+  assert(not clean and conflict:find("conflict=1", 1, true), conflict)
+  assert(check.must(staging.load(root, losing_receipt.ref)).sha
+    == losing_receipt.sha, "the older conflicting receipt remains for diagnosis")
+
+  local current = check.must(store.open(root))
+  local disjoint = fresh()
+  local disjoint_id = disjoint.id
+  assert(write.save(current, disjoint, "fresh disjoint publication"))
+  local published, detail = publish.publish(current)
+  assert(published, detail)
+  assert(detail:find("unrelated receipt warning", 1, true), detail)
+  assert(detail:find("conflict=1", 1, true), detail)
+  local remaining = check.must(staging.list(root))
+  assert(#remaining == 1 and remaining[1].sha == losing_receipt.sha,
+    "only the unrelated conflict remains")
+  local verified = check.must(store.open(root))
+  assert(check.must(store.load(verified, disjoint_id)).title
+    == "lifecycle", "the successful publication is canonical")
+  assert(store.close(verified))
+end
+
 local function test_refresh_rechecks_the_draft_after_its_ref_snapshot()
   local root = setup("native-refresh-advanced")
   local draft = check.must(gitdraft.begin(root))
@@ -100,6 +152,73 @@ local function test_refresh_rechecks_the_draft_after_its_ref_snapshot()
   staging.list = original
   assert(ok and err:find("confirmed=0 pending=1", 1, true), err)
   assert(check.must(refs.read_ref(root, draft.staging_ref)) == current.sha)
+end
+
+local function test_published_snapshot_consumes_only_the_live_draft_prefix()
+  local root = setup("native-refresh-published-draft-prefix")
+  local initial = check.must(refs.read_ref(root, "refs/heads/state"))
+  local draft = check.must(gitdraft.begin(root))
+  assert(gitdraft.activate(root, draft))
+  local s = check.must(store.open(root))
+  local it = fresh()
+  local id = it.id
+  assert(write.save(s, it, "draft prefix A") and publish.publish(s))
+  local first = check.must(staging.load(root, draft.staging_ref))
+  local snapshot = check.must(staging.snapshot(root, first))
+  local saved_snapshot = check.must(transaction.encode(check.must(staging.frozen(snapshot))))
+
+  it.title = "advanced suffix B"
+  assert(write.save(s, it, "draft suffix B") and publish.publish(s))
+  local advanced = check.must(staging.load(root, draft.staging_ref))
+  assert(#advanced.transitions == 2)
+  local advanced_tip = advanced.tip
+  gitdraft.deactivate(root)
+  assert(store.close(s))
+
+  local published, detail = native.execute(root, snapshot)
+  assert(published, detail)
+  snapshot = check.must(staging.load(root, snapshot.ref))
+  assert(check.must(transaction.encode(check.must(staging.frozen(snapshot)))) == saved_snapshot,
+    "recording publication must not change the prepared snapshot")
+
+  -- Let an unrelated writer land after A. Refresh must preserve it as the new
+  -- base for B rather than reconstructing A or publishing from the old base.
+  local disjoint_store = check.must(store.open(root))
+  local disjoint = fresh()
+  local disjoint_id = disjoint.id
+  assert(write.save(disjoint_store, disjoint, "disjoint canonical C"))
+  local disjoint_receipt = check.must(staging.load(root, disjoint_store.state_receipt))
+  assert(native.execute(root, disjoint_receipt))
+  assert(store.close(disjoint_store))
+  local after_disjoint = check.must(refs.read_ref(root, "refs/heads/state"))
+
+  local clean, report = native.refresh(root, refs.board_remote(root))
+  assert(clean and report:find("confirmed=2 pending=1 conflict=0", 1, true), report)
+  assert(check.must(refs.read_ref(root, snapshot.ref)) == refs.ZERO_SHA,
+    "the immutable A snapshot is retired only after its complete chain is proved")
+  local suffix = check.must(staging.load(root, draft.staging_ref))
+  assert(suffix.sha ~= advanced.sha and suffix.tip == advanced_tip)
+  assert(suffix.base == after_disjoint and #suffix.transitions == 1)
+  assert(suffix.transitions[1].base == after_disjoint)
+  assert(suffix.transitions[1].message:find("draft suffix B", 1, true))
+
+  local suffix_snapshot = check.must(staging.snapshot(root, suffix))
+  local suffix_plan = check.must(native.build(root, suffix_snapshot))
+  assert(#suffix_plan.frozen.transitions == 1,
+    "the next publication contains B only, never the already canonical A")
+  assert(native.execute(root, suffix_snapshot))
+  assert(native.refresh(root, refs.board_remote(root)))
+  assert(check.must(refs.read_ref(root, draft.staging_ref)) == refs.ZERO_SHA)
+  local final = check.must(refs.read_ref(root, "refs/heads/state"))
+  assert(check.must(git.text(root, {"rev-list", "--first-parent", "--count", final, "^" .. initial})) == "3")
+  local subjects = check.must(git.text(root, {"log", "--first-parent", "--format=%s", final, "^" .. initial}))
+  local _, prefix_count = subjects:gsub("draft prefix A", "")
+  local _, suffix_count = subjects:gsub("draft suffix B", "")
+  assert(prefix_count == 1 and suffix_count == 1, "A and B must each publish exactly once")
+  local verified = check.must(store.open(root))
+  assert(check.must(store.load(verified, id)).title == "advanced suffix B")
+  assert(check.must(store.load(verified, disjoint_id)).title == "lifecycle")
+  assert(store.close(verified))
 end
 
 local function test_refresh_preserves_a_published_attempt_beyond_the_search_cap()
@@ -144,7 +263,7 @@ local function test_fifth_push_lost_acknowledgement_is_confirmed_and_repeatable(
   local root = setup("native-fifth-lost-ack")
   local initial = check.must(refs.read_ref(root, "refs/heads/state"))
   assert(check.must(child.run({"git", "remote", "add", "origin", "https://example.invalid/fixture/board.git"}, {cwd = root})).ok)
-  assert(check.must(child.run({"git", "config", "gitboard.mode", "remote"}, {cwd = root})).ok)
+  assert(refs.set_board_mode(root, "remote"))
   assert(refs.update_refs_atomic(root, {
         {ref = "refs/remotes/origin/state", expected = refs.ZERO_SHA, next = initial},
         {ref = "refs/remotes/origin/board/format", expected = refs.ZERO_SHA, next = initial}}))

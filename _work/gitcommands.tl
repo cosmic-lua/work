@@ -39,31 +39,13 @@ local CSPEC: flags.CommandSpec = {
           {long = "remote-name", arg = "NAME", help = "persist the Git remote "
             .. "whose tracking refs are canonical (default: origin)"},
           {long = "local", help = "use local heads (tests and migrations)"},
-          {long = "format", arg = "5|6", help = "fresh board layout; 6 selects native state (default 5 during rollout)"}}}},
+          {long = "format", arg = "6", help = "fresh board layout (default 6)"}}}},
     {name = "session", summary = "mint an opaque per-run claim identity",
       spec = {usage = "new",
         summary = "mint an opaque per-run claim identity.\n\n"
         .. "The plain output is only the new identity, suitable for "
         .. "`export GITBOARD_SESSION=$(gitboard session new)`. Gitboard "
         .. "does not derive identity from a user, host, provider, or credential."}},
-    {name = "single-head", summary = "EXPERIMENTAL connector envelope transport",
-      spec = {usage = "configure | seed-plan | publish-plan [TRANSACTION|DRAFT] | call | refresh [options]",
-        summary = "explicit proof-of-concept transport over one envelope branch.\n\n`configure` binds this "
-        .. "checkout to one remote, repository, and branch. "
-        .. "It refuses identity changes after activation. `seed-plan` and `publish-plan` write a frozen, "
-        .. "create-once connector plan; neither calls a provider. `call` prints one indexed connector call from "
-        .. "that saved plan. `refresh` fetches only the bound envelope branch when --execute is present, "
-        .. "validates and hydrates its archived objects into canonical remote-tracking refs, then runs ordinary "
-        .. "prepared/draft/claim confirmation. Ordinary publish, refresh, and sync are guarded after configuration.",
-        flags = {dir_flag(),
-          {long = "remote", arg = "NAME", help = "configure: canonical Git remote"},
-          {long = "repository", arg = "OWNER/NAME", help = "configure: connector repository identity"},
-          {long = "branch", arg = "BRANCH", help = "configure: dedicated envelope branch"},
-          {long = "head", arg = "SHA", help = "plan: exact envelope head; default bound tracking ref"},
-          {long = "out", arg = "PLAN.literal", help = "seed-plan/publish-plan: create this frozen literal plan"},
-          {long = "plan", arg = "PLAN.literal", help = "call: frozen literal plan file"},
-          {long = "call-index", arg = "N", help = "call: zero-based connector call index"},
-          {long = "execute", help = "refresh: run the exact single-branch Git fetch before hydration"}}}},
     {name = "draft", summary = "chain mutations offline, then publish final tips once",
       spec = {usage = "begin | show [ID] | abandon [ID] [options]",
         summary = "manage a durable, clone-local board draft.\n\n"
@@ -438,6 +420,8 @@ local CSPEC: flags.CommandSpec = {
           {long = "plan", arg = "PLAN.literal", help = "native state: save one immutable connector publication plan"},
           {long = "from-plan", arg = "PLAN.literal", help = "native state: inspect or execute a saved attempt"},
           {long = "call", arg = "N", help = "native state: render zero-based call N from --from-plan"},
+          {long = "call-json", help = "native state: emit --call as a tool/arguments JSON object"},
+          {long = "head", arg = "SHA", help = "native state: just-observed remote head required for the final call"},
           {long = "published", arg = "SHA", help = "native state: associate the connector-returned tip with this attempt"},
           {long = "repository", arg = "OWNER/REPO", help = "native state: verify connector destination identity"},
           {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},

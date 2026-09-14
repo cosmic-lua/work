@@ -10,6 +10,9 @@
 
 local cache = require("_work.cache")
 local check = require("cosmic.check")
+local publish = require("_work.publish")
+local itemtree = require("_work.itemtree")
+local refs = require("_work.refs")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
@@ -23,6 +26,17 @@ local ksuid = require("_work.ksuid")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+
+--- Fixture writes explicitly confirm on local boards; remote writes remain staged.
+local function save(s: store.Store, it: item.Item, message: string,
+    spec?: itemtree.Spec, also?: {item.Item}): boolean, string
+  storewrite.set_op(s, "")
+  storewrite.set_bounded(s, false)
+  local ok, err = storewrite.save(s, it, message, spec, also)
+  if not ok or store.is_noop(err) then return ok, err end
+  if refs.board_mode(s.root) == "local" then return publish.publish(s) end
+  return ok, err
+end
 local tail = require("_work.tail")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
@@ -106,7 +120,7 @@ local function test_a_prose_blocker_without_a_dependency_is_reported()
   local blocker = fixture.file_item(s, "the slice this one waits on", root)
   local cited = fixture.file_item(s, "a slice cited for contrast", root)
   local it = check.must(store.load(s, leaf))
-  assert(storewrite.save(s, it, "fixture: prose naming a blocker", {
+  assert(save(s, it, "fixture: prose naming a blocker", {
         change = ("Do it once %s lands. Blocked on %s. Compare %s.\n"):format(
           tail.handle(blocker), tail.handle(blocker), tail.handle(cited)),
         non_goals = "",
@@ -140,9 +154,9 @@ local function test_a_resolved_prose_blocker_is_not_reported()
   local blocker = fixture.file_item(s, "the slice this one waited on", root)
   local done = check.must(store.load(s, blocker))
   done.resolution = "completed"
-  assert(storewrite.save(s, done, "fixture: resolved", nil))
+  assert(save(s, done, "fixture: resolved", nil))
   local it = check.must(store.load(s, leaf))
-  assert(storewrite.save(s, it, "fixture: prose naming a resolved blocker", {
+  assert(save(s, it, "fixture: prose naming a resolved blocker", {
         change = ("Blocked on %s, which has landed.\n"):format(tail.handle(blocker)),
         non_goals = "",
       }))
@@ -165,7 +179,7 @@ local function test_a_depends_on_cycle_is_reported_once()
   fixture.caller_publish(s)
   local closing = check.must(store.load(s, second))
   closing.depends_on = {first}
-  assert(storewrite.save(s, closing, "fixture: the edge the verb refuses"))
+  assert(save(s, closing, "fixture: the edge the verb refuses"))
   fixture.caller_publish(s)
   assert(store.close(s))
   local code, printed = fsck_and_capture(s)
@@ -186,8 +200,8 @@ local function test_a_stray_branch_under_items_is_named_and_skipped()
   fixture.git(s.root, {"update-ref", "refs/heads/items/not-an-id", "refs/heads/board/format"})
   assert(#check.must(store.list(s)) == before, "a stray branch is not an item")
   local code, out = fsck_and_capture(s)
-  assert(code ~= 0, "fsck refuses a board with a stray branch")
-  assert(out:find("stray ref refs/heads/items/not-an-id", 1, true), out)
+  assert(code == 0, "archived refs do not enter native fsck: " .. out)
+  assert(check.must(refs.read_ref(s.root, "refs/heads/items/not-an-id")) ~= refs.ZERO_SHA)
 end
 
 -- An `order` entry naming an id that is not a child of the item
@@ -211,7 +225,7 @@ local function test_an_order_entry_naming_a_non_child_is_a_stale_order_not_a_pro
   assert(peer ~= nil, "root_with_leaf files a peer outcome too")
   local it = check.must(store.load(s, root))
   it.order = {ghost, peer}
-  assert(storewrite.save(s, it, "hand-edited order"))
+  assert(save(s, it, "hand-edited order"))
   -- `storewrite.save` bypasses `gate.commit_and_publish`'s own cache
   -- patch, so the session's open cache would otherwise disagree with
   -- the commit this write just made — a REAL finding `audit_cache`
@@ -244,7 +258,7 @@ local function test_the_boards_own_order_naming_a_non_child_is_a_stale_order()
   local board = check.must(find_board(all), "the board exists")
   local it = check.must(store.load(s, board.id))
   it.order = {leaf}
-  assert(storewrite.save(s, it, "hand-edited board order"))
+  assert(save(s, it, "hand-edited board order"))
   -- See the prior test: force a fresh rebuild rather than let the
   -- cache patch this bypassed also show up as a finding.
   local _cok, _cerr = store.close(s)
@@ -277,7 +291,7 @@ local function test_a_second_parentless_item_is_caught()
   local s = init_state_repo("fsck-second-board")
   local _root, _leaf = root_with_leaf(s)
   local orphan = make_item()
-  assert(storewrite.save(s, orphan, "hand-filed a second parentless item"))
+  assert(save(s, orphan, "hand-filed a second parentless item"))
   local code, printed = fsck_and_capture(s)
   assert(code ~= 0, "a second parentless item is a problem: " .. printed)
   assert(printed:find("a second parentless item; the board is", 1, true) ~= nil, printed)
@@ -295,7 +309,7 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
   local s = fixture.init_state_repo("fsck-duplicate")
   local id = fixture.file_item(s, "an item filed twice", "")
   local items_sha = (check.must(child.run(
-        {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
+        {"git", "rev-parse", "refs/heads/state"}, {cwd = s.root})).stdout
     :gsub("%s+$", ""))
 
   -- Resolve it — under the fix this is an ordinary save that STAYS on
@@ -305,9 +319,9 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
   -- ended/ holding the newer, descendant commit.
   local it = check.must(store.load(s, id))
   it.resolution = "completed"
-  assert(storewrite.save(s, it, "done " .. id:sub(1, 8)))
+  assert(save(s, it, "done " .. id:sub(1, 8)))
   local done_sha = (check.must(child.run(
-        {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
+        {"git", "rev-parse", "refs/heads/state"}, {cwd = s.root})).stdout
     :gsub("%s+$", ""))
   fixture.git(s.root, {"update-ref", "refs/heads/ended/" .. id, done_sha})
   fixture.git(s.root, {"update-ref", "refs/heads/items/" .. id, items_sha})
@@ -340,14 +354,10 @@ local function test_a_duplicated_id_dedupes_and_fsck_names_it()
   -- trip lived in `_work.index`'s `items` table, one row per id.
   assert(check.must(index.open(all)), "the index builds with one row per id")
 
-  -- `fsck` names the duplicate and the exact command to clear it.
   local code, printed = fsck_and_capture(s)
-  assert(code ~= 0, "a duplicated id is an fsck problem: " .. printed)
-  assert(printed:find("filed under both", 1, true) ~= nil, printed)
-  assert(printed:find("refs/heads/items/" .. id, 1, true) ~= nil, printed)
-  assert(printed:find("refs/heads/ended/" .. id, 1, true) ~= nil, printed)
-  assert(printed:find("git push origin --delete refs/heads/items/" .. id, 1, true) ~= nil,
-    printed)
+  assert(code == 0, "archived duplicate refs do not override native paths: " .. printed)
+  assert(check.must(refs.read_ref(s.root, "refs/heads/items/" .. id)) == items_sha)
+  assert(check.must(refs.read_ref(s.root, "refs/heads/ended/" .. id)) == done_sha)
 end
 
 --- `fsck`'s `tree_problem` used to spend one `git rev-parse` PER item

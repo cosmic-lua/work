@@ -102,24 +102,29 @@ local function transition(s: store.Store, changes: {tx.Change}, message: string,
   return true, ""
 end
 
---- Fence both of an item's canonical paths at the staging base, taking the OID
---- from whatever a whole-board read already loaded and paying for an `ls-tree`
---- only for a path no read has named yet (a freshly minted item, say).
+--- Fence one canonical path at the staging base, using an OID a whole-board
+--- read already loaded when available.
+local function observe_path(s: store.Store, path: string): boolean, string
+  if s.state_reads[path] ~= nil then return true, "" end
+  local known = s.state_paths[path]
+  if known ~= nil then s.state_reads[path] = known
+  else
+    local oid, err = boardtree.path_id(s.root, s.state_head, path)
+    if oid == nil then return false, err end
+    s.state_paths[path], s.state_reads[path] = oid, oid
+  end
+  return true, ""
+end
+
+--- Fence both of an item's canonical paths at the staging base.
 --- @param s store.Store The store, whose `state_reads` this records into
 --- @param id string The item id about to be written
 --- @return boolean True when both paths are fenced
 --- @return string Error message
 local function observe(s: store.Store, id: string): boolean, string
   for _, path in ipairs({"items/" .. id, "claims/" .. id}) do
-    if s.state_reads[path] == nil then
-      local known = s.state_paths[path]
-      if known ~= nil then s.state_reads[path] = known
-      else
-        local oid, err = boardtree.path_id(s.root, s.state_head, path)
-        if oid == nil then return false, err end
-        s.state_paths[path], s.state_reads[path] = oid, oid
-      end
-    end
+    local ok, err = observe_path(s, path)
+    if not ok then return false, err end
   end
   return true, ""
 end
@@ -184,9 +189,11 @@ local function log(s: store.Store, it: item.Item, subject: string, prose: string
 end
 local record Module
   transition: function(s: store.Store, changes: {tx.Change}, message: string, publish_by?: integer, gate?: string): boolean, string
+  observe_path: function(store.Store, string): boolean, string
   observe: function(store.Store, string): boolean, string
   save: function(s: store.Store, it: item.Item, message: string, spec?: itemtree.Spec, also?: {item.Item}): boolean, string
   log: function(store.Store, item.Item, string, string): boolean, string
 end
-local M: Module = {transition = transition, observe = observe, save = save, log = log}
+local M: Module = {transition = transition, observe_path = observe_path,
+  observe = observe, save = save, log = log}
 return M

@@ -110,11 +110,10 @@ local function test_load_with_a_known_ref_and_sha_never_calls_for_each_ref()
   local s = init_state_repo("known-ref-sha")
   local id = file_item(s, "an item", "")
   local loaded = check.must(store.load(s, id))
-  local ref, sha = s.leased_ref[id], s.leased_sha[id]
   assert(loaded ~= nil)
 
   local calls = for_each_ref_calls(function(): boolean
-      check.must(gitread.load(s.root, id, ref, sha))
+      check.must(store.load(s, id))
       return true
     end)
   assert(calls == 0, "a known ref and sha must skip load's for-each-ref: "

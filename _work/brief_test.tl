@@ -12,7 +12,6 @@ local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local brieftext_friction = require("_work.brieftext_friction")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
 local fixture = require("_work.fixture")
 local gitinvocation = require("_work.gitinvocation")
 local gitspec = require("_work.gitspec")
@@ -35,8 +34,8 @@ local BASE < const > = ("a"):rep(40)
 local HEAD < const > = ("b"):rep(40)
 
 --- Put an item in the v3 commit-handover shape without involving a provider.
---- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
---- read time (`_work.claimprojection`), never from the item's own history,
+--- `it.claim`/`it.claim_base` are projected from the current native claim
+--- blob at read time, never from the item's own history,
 --- so the real claim comes from `fixture.claim_item` rather than a direct
 --- field assignment — a workflow transition never releases the claim, so
 --- this leaves "session-a" holding it exactly as a real handover would.
@@ -123,8 +122,7 @@ end
 --- @return string The branch `worktree ID` would create
 local function branch_of(s: store.Store, id: string): string
   local it = check.must(store.load(s, id))
-  local st = check.must(claimbatch.read_state(s.root, it.claim_batch or "", id))
-  return claim.branch(id, st.root)
+  return claim.branch(id, it.claim_batch or "")
 end
 
 local function test_tree_measurement_appends_to_builder_and_review()

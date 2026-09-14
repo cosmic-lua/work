@@ -27,6 +27,8 @@ local function snapshot(it: item.Item): item.Item | nil
   if copy == nil then
     return nil
   end
+  -- Claim fields are derived from the native claim blob, outside item.encode.
+  copy.claim, copy.claim_base, copy.claim_batch = it.claim, it.claim_base, it.claim_batch
   local other_edges = it.other_edges
   if other_edges ~= nil then
     local edges_copy: {string: {string: string}} = {}

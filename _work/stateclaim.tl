@@ -68,7 +68,9 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
     if seen[req.id] then denial = "item occurs more than once in claim set"
     elseif view.items_by_id[req.id] == nil then denial = "no such item"
     elseif action == "take" then
-      denial, held = claim.take_refusal(st, caller, now, force, why)
+      -- Acquisition never bypasses an active member of the atomic set.
+      denial, held = claim.take_refusal(st, caller, now, false, why)
+      if held then denial = "item is already claimed by this session; use renew or drop" end
       if denial == nil then
         if held then next_claim = old; operation = "hold"
         elseif #req.product_base ~= 40 or not req.product_base:match("^[0-9a-f]+$") then
@@ -132,14 +134,22 @@ local function authority(root: string, head: string): string | nil, string
   end
   return #lines > 0 and table.concat(lines, "\n") or "current-claims=0", ""
 end
+--- Keep acquisition, renewal and release recognizable in item history.
+local function message(action: Action, caller: string, why: string): string
+  local verb = action == "take" and "claim" or action
+  local out = verb .. " by " .. caller
+  if action == "drop" and why ~= "" then out = out .. "\n\nDrop-Why: " .. why end
+  return out
+end
 local record Module
   type Action = Action
   type Request = Request
   type Member = Member
   type Result = Result
   authority: function(string, string): string | nil, string
+  message: function(Action, string, string): string
   state: function(boardtree.Claim | nil): claim.State | nil
   prepare: function(string, string, {Request}, Action, string, integer, boolean, string): Result
 end
-local M: Module = {state = state, prepare = prepare, authority = authority}
+local M: Module = {state = state, prepare = prepare, authority = authority, message = message}
 return M

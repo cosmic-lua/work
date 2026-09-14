@@ -2,13 +2,10 @@
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
 local native = require("_work.stateclaim_authority")
 local claimcli = require("_work.gitclaim_cli")
 local claimsession = require("_work.claimsession")
-local gitclaim = require("_work.gitclaim")
 local gitdraft = require("_work.gitdraft")
-local batchcheck = require("_work.gitfsck_claimbatch")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
@@ -103,33 +100,9 @@ end
 --- identity; renewals change only the control/deadline.
 local function active_claim(s: store.Store, it: item.Item, session: string):
   claim.State | nil, string
-  if (s.state_head or "") ~= "" then return native.current(s, it.id, session) end
-  local holder = it.claim or ""
-  if holder == "" then
-    return nil, ("REFUSED: %s is not claimed by %s — claim it first")
-    :format(it.id:sub(-8), session)
-  end
-  local pointer = it.claim_batch or ""
-  if pointer == "" then return nil, "item has no claim batch" end
-  local st, err = claimbatch.read_state(s.root, pointer, it.id)
-  if err ~= "" then return nil, err end
-  local status = claim.status(st, os.time())
-  if status ~= "active" then
-    if status == "future" then
-      return nil, "REFUSED: claim timestamp is more than five minutes in the future"
-    end
-    return nil, ("REFUSED: %s's claim has expired — claim it again")
-    :format(it.id:sub(-8))
-  end
-  if st == nil then return nil, "active claim has no state" end
-  if st.holder ~= session then
-    return nil, ("REFUSED: %s is claimed by %s, not %s")
-    :format(it.id:sub(-8), st.holder, session)
-  end
-  return st, ""
+  return native.current(s, it.id, session)
 end
 
---- @return string Refusal, empty when the receipt options are valid
 local function options(file: string, command: string, cwd: string, review: boolean): string
   if file == "" then
     if command ~= "" or cwd ~= "" then return "invocation flags require --receipt-out" end
@@ -152,14 +125,6 @@ local function confirmed(s: store.Store, it: item.Item, session: string): claim.
   if not claimsession.is_id(session) then return nil, "receipt needs a minted session" end
   local st, err = active_claim(s, it, session)
   if st == nil then return nil, err end
-  if (s.state_head or "") ~= "" then return st, "" end
-  local problems = batchcheck.problems(s)
-  if #problems > 0 then return nil, table.concat(problems, "\n") end
-  local pending, perr = gitclaim.list_prepared(s.root, refs.board_remote(s.root))
-  if pending == nil then return nil, perr end
-  for _, p in ipairs(pending) do
-    if p.batch.commit == st.control then return nil, "claim confirmation pending; complete refresh first" end
-  end
   return st, ""
 end
 
@@ -237,23 +202,8 @@ local function read(s: store.Store, it: item.Item, kind: string, file: string,
   or values["claim-fact"] ~= st.root or values["product-base"] ~= st.product_base then
     return {}, "preparation receipt does not match current claim"
   end
-  if (s.state_head or "") ~= "" then
-    local historical = native.historical(s, it.id, values["claim-control"], st)
-    if historical ~= "" then return {}, historical end
-    local invalid = checkout(values, tree)
-    if invalid ~= "" then return {}, invalid end
-    return values, ""
-  end
-  local old, oerr = claimbatch.read_state(s.root, values["claim-control"], it.id)
-  if old == nil then return {}, "receipt control unavailable: " .. oerr end
-  if old.holder ~= st.holder or old.root ~= st.root or old.product_base ~= st.product_base then
-    return {}, "receipt control does not match acquisition"
-  end
-  local batch, berr = claimbatch.read(s.root, values["claim-control"])
-  if batch == nil then return {}, berr end
-  local canonical = refs.canonical_ref(s.root, gitclaim.batch_ref(batch.id))
-  local observed = canonical ~= nil and refs.read_ref(s.root, canonical) or ""
-  if observed ~= values["claim-control"] then return {}, "receipt control is not canonical" end
+  local historical = native.historical(s, it.id, values["claim-control"], st)
+  if historical ~= "" then return {}, historical end
   local invalid = checkout(values, tree)
   if invalid ~= "" then return {}, invalid end
   return values, ""

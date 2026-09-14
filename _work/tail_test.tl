@@ -8,12 +8,13 @@
 local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local gitobj = require("_work.gitobj")
+local format = require("_work.format")
+local projection = require("_work.stateplan_git")
 local refs = require("_work.refs")
 local tail = require("_work.tail")
 
 --- The well-known empty tree's sha — good enough content for a
 -- `resolve_glob` test, which reads ref names and shas, never a tree.
-local EMPTY_TREE < const > = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 --- A bare item ref, no store and no cache involved: one commit over
 --- the empty tree, filed directly under `refs/heads/items/<id>` —
@@ -21,12 +22,15 @@ local EMPTY_TREE < const > = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 --- @param root string The repository root
 --- @param id string The item id to file it under
 local function file_ref(root: string, id: string)
+  local head = check.must(format.state_head(root))
+  local tree = check.must(projection.apply(root, head,
+      {{path = "items/" .. id .. "/meta", mode = "100644", content = "", delete = false}}))
   local sha = check.must(gitobj.commit_tree(root, {
-        tree = EMPTY_TREE, parents = {}, message = "x",
+        tree = tree, parents = {head}, message = "x",
         author_name = "t", author_email = "t@example.com",
         committer_name = "t", committer_email = "t@example.com",
       }))
-  check.must(refs.update_ref(root, "refs/heads/items/" .. id, sha, refs.ZERO_SHA))
+  check.must(refs.update_ref(root, "refs/heads/state", sha, head))
 end
 
 --- A 27-char id with a chosen 8-char tail, so a test controls exactly
@@ -73,7 +77,7 @@ local function test_resolve_glob_matches_a_tail_exactly()
   file_ref(s.root, id)
   local resolved = check.must(tail.resolve_glob(s.root, "Q4TX9GMD"))
   assert(resolved.id == id, resolved.id)
-  assert(resolved.ref == "refs/heads/items/" .. id, resolved.ref)
+  assert(resolved.ref == "refs/heads/state", resolved.ref)
   assert(resolved.sha ~= "", "the single match's own sha leases the load that follows")
 end
 
@@ -96,7 +100,7 @@ local function test_resolve_glob_falls_back_to_case_folded_match()
   -- case-folded fallback, not the exact glob.
   local resolved = check.must(tail.resolve_glob(s.root, "q4txabcd"))
   assert(resolved.id == id, resolved.id)
-  assert(resolved.ref == "refs/heads/items/" .. id, resolved.ref)
+  assert(resolved.ref == "refs/heads/state", resolved.ref)
 end
 
 local function test_resolve_glob_refuses_a_folded_ambiguity()

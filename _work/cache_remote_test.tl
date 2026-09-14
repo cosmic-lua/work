@@ -13,7 +13,7 @@ local read = require("_work.read")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
 
-local function test_a_caller_fetch_invalidates_the_cache_until_the_next_open_rebuilds_it()
+local function test_a_caller_fetch_patches_the_cache_to_the_confirmed_native_head()
   local a, b = fixture.init_shared("outcome-rank-fetch")
   local root = fixture.file_item(a, "an outcome", "")
   fixture.caller_fetch(b)
@@ -29,13 +29,13 @@ local function test_a_caller_fetch_invalidates_the_cache_until_the_next_open_reb
   local after_raw = check.must(sqlite.open(cache.path_of(b.root)))
   local after_digest = check.must(cachedb.meta_get(after_raw, "refs_digest"))
   check.must(after_raw:close())
-  assert(after_digest == before_digest,
-    "caller-owned fetch moves refs only; the disposable cache is still stale")
+  assert(after_digest ~= before_digest and after_digest == b.state_head,
+    "native refresh patches the disposable cache to the fetched canonical head")
 
   local c = check.must(cache.open(b.root))
-  local rebuilt_digest = check.must(cachedb.meta_get(c.db, "refs_digest"))
-  assert(rebuilt_digest ~= before_digest,
-    "the next guarded cache open rebuilds against fetched canonical refs")
+  local opened_digest = check.must(cachedb.meta_get(c.db, "refs_digest"))
+  assert(opened_digest == after_digest,
+    "the next guarded cache open retains the confirmed native projection")
   local all = check.must(cachequery.items(c))
   local board_id = check.must(read.board(c))
   check.must(cache.close(c))

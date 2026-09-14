@@ -6,16 +6,12 @@ local child = require("cosmic.child")
 local claimsession = require("_work.claimsession")
 local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
-local gitclaim = require("_work.gitclaim")
+local stateclaim = require("_work.stateclaim")
 local gitdraft = require("_work.gitdraft")
 local item = require("_work.item")
-local prepared = require("_work.prepared")
 local repository_map = require("_work.repository_map")
-local refs = require("_work.refs")
-local singlehead = require("_work.gitsinglehead_config")
 local store = require("_work.store")
 local stateclaim_cli = require("_work.stateclaim_cli")
-local transport = require("_work.gittransport")
 
 local function resolve_caller(explicit: string): string | nil, string
   local caller = explicit
@@ -165,11 +161,10 @@ end
 --- An item already carrying a recorded handover additionally requires the
 --- resolved base to still reach it, so a review claim never recaptures a
 --- base the handover cannot descend from (see `handover_ancestry_refusal`).
-local function product_base(s: store.Store, it: item.Item, source_ref: string,
+local function product_base(s: store.Store, it: item.Item, _source_ref: string,
     repo_dir: string, fetch_base: boolean): string | nil, string
   if (it.repo or "") == "" then
-    if (s.state_head or "") ~= "" then return s.state_head, "" end
-    return refs.read_ref(s.root, source_ref)
+    return s.state_head, ""
   end
   local root, err = repository_map.resolve(s.root, it.repo, repo_dir)
   if root == nil then return nil, err end
@@ -211,13 +206,11 @@ end
 --- Claim or renew one atomic set of items. All requests share one clock and
 --- one batch id. Any policy refusal or stale item rejects the entire set;
 --- disjoint batches still coordinate only through their own item refs.
-local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
+local function cmd_claim(s: store.Store, ids: {string}, action: stateclaim.Action,
     explicit_session: string, remote: string, repo_dir: string,
     force: boolean, why: string, execute: boolean, fetch_base?: boolean): integer
   local verb = action == "renew" and "renew"
   or action == "drop" and "drop" or "claim"
-  local result_label = action == "renew" and "RENEWED"
-  or action == "drop" and "RELEASED" or "ACQUIRED"
   if #ids == 0 then
     return gate.verdict_line(verb, false,
       "REFUSED: at least one ID is required")
@@ -240,176 +233,17 @@ local function cmd_claim(s: store.Store, ids: {string}, action: gitclaim.Action,
   if all == nil then
     return gate.verdict_line(verb, false, aerr)
   end
-  if (s.state_head or "") ~= "" then
-    return stateclaim_cli.run(s, ids, all, action, caller, remote, force, why, execute,
-      function(it: item.Item): string | nil, string
-        return product_base(s, it, "", repo_dir, fetch_base or false)
-      end)
-  end
-  local by_id = item.by_id(all)
-  local mode = refs.board_mode(s.root)
-  local batch = claimsession.mint()
-  local now = os.time()
-  local requests: {gitclaim.Request} = {}
-  local early: {string: string} = {}
-  for _, id in ipairs(ids) do
-    local it = by_id[id]
-    if it == nil then
-      early[id] = "no such item"
-    else
-      -- Namespace is not derived from resolution: modern completed items
-      -- remain under `items`, while legacy imports may live under `ended`.
-      -- Select the one exact canonical ref the caller has made available.
-      local item_source = mode == "local" and gitclaim.target_item_ref(id)
-      or gitclaim.remote_item_ref(remote, id)
-      local ended_source = mode == "local" and gitclaim.target_item_ref(id, true)
-      or gitclaim.remote_item_ref(remote, id, true)
-      local item_sha, iserr = refs.read_ref(s.root, item_source)
-      local ended_sha, eserr = refs.read_ref(s.root, ended_source)
-      if item_sha == nil then early[id] = iserr
-      elseif ended_sha == nil then early[id] = eserr
-      elseif item_sha ~= refs.ZERO_SHA and ended_sha ~= refs.ZERO_SHA then
-        early[id] = "item exists in both items and ended namespaces"
-      end
-      local use_ended = item_sha == refs.ZERO_SHA
-      local source = use_ended and ended_source or item_source
-      local target = gitclaim.target_item_ref(id, use_ended)
-      local base = ""
-      if action == "take" then
-        local found, berr = product_base(s, it, source, repo_dir,
-          fetch_base or false)
-        if found == nil then early[id] = berr else base = found end
-      end
-      if early[id] == nil then
-        requests[#requests + 1] = {
-          root = s.root, id = id, source_ref = source, target_ref = target,
-          remote = remote, batch = batch, caller = caller, action = action,
-          product_base = base, force = force, why = why, now = now,
-        }
-      end
-    end
-  end
-  local result: gitclaim.BatchResult = next(early) ~= nil
-  and {prepared = nil, refused = early}
-  or gitclaim.prepare_batch(requests)
-  local refused_ids: {string} = {}
-  for id in pairs(result.refused) do refused_ids[#refused_ids + 1] = id end
-  table.sort(refused_ids)
-  for _, id in ipairs(refused_ids) do
-    print(("refused %s: %s"):format(id, result.refused[id]))
-  end
-  if #refused_ids > 0 or result.prepared == nil then
-    return gate.verdict_line(verb, false,
-      ("batch rejected; no item succeeded; refused=%d"):format(#refused_ids))
-  end
-  local p = result.prepared
-  local function show_members(prefix: string)
-    for _, member in ipairs(p.members) do
-      print(("%s %s claim=%s branch=%s expires=%d"):format(prefix,
-          member.id, member.claim_root, member.branch, member.expires_at))
-    end
-  end
-  if mode == "local" then
-    local ok, err = prepared.promote_local(s.root, p.transaction)
-    if not ok then
-      return gate.verdict_line(verb, false,
-        "batch rejected; no item succeeded: " .. err)
-    end
-    local closed, close_err = store.close(s)
-    if not closed then
-      return gate.verdict_line(verb, false,
-        "claim landed, but the local read model could not be invalidated: "
-        .. close_err)
-    end
-    show_members("confirmed")
-    return gate.verdict_line(verb, true,
-      ("%s confirmed=%d refused=0"):format(result_label, #p.members))
-  end
-  if singlehead.enabled(s.root) then
-    print(("PREPARED batch=%s items=%d publish-by=%d"):format(
-        p.id, #p.members, p.deadline))
-    show_members("prepared")
-    local suffix = execute and " Legacy --execute was refused. " or " "
-    gate.verdict_line(verb, true,
-      ("PREPARED=%d confirmed=0 refused=0.%sNo claim was acquired. "
-        .. "Freeze this receipt with `gitboard single-head publish-plan %s "
-        .. "--out PLAN.literal`, execute its connector calls, then run `gitboard "
-        .. "single-head refresh --execute`; do not act until refresh confirms "
-        .. "the current claim state.")
-      :format(#p.members, suffix, p.transaction.staging_ref))
-    return 2
-  end
-  local argv, perr = gitclaim.push_argv(p, remote, os.time())
-  if argv == nil then
-    return gate.verdict_line(verb, false,
-      "claim batch could not be published: " .. perr)
-  end
-  if not execute then
-    print(("PREPARED batch=%s items=%d publish-by=%d"):format(
-        p.id, #p.members, p.deadline))
-    print(transport.render_argv(argv))
-    show_members("prepared")
-    gate.verdict_line(verb, true,
-      ("PREPARED=%d confirmed=0 refused=0. No claim was acquired. "
-        .. "Run the printed atomic push, fetch, then `gitboard "
-        .. "refresh`; do not act on a prepared item until refresh reports "
-        .. "confirmed")
-      :format(#p.members))
-    return 2
-  end
-  local pushed, push_err = prepared.execute(s.root, argv)
-  if not pushed then
-    return gate.verdict_line(verb, false,
-      "claim batch publish failed; no item acquired: " .. push_err)
-  end
-  local fetched, fetch_err = prepared.execute(s.root,
-    prepared.fetch_argv(remote))
-  if not fetched then
-    gate.verdict_line(verb, false,
-      "CONFIRMATION PENDING: atomic push completed, but fetch failed: "
-      .. fetch_err .. "; do not begin work until refresh confirms it")
-    return 2
-  end
-  local outcomes, refresh_err = prepared.refresh(s.root, remote)
-  if outcomes == nil then
-    return gate.verdict_line(verb, false,
-      "claim confirmation failed: " .. refresh_err)
-  end
-  local confirmed = false
-  for _, outcome in ipairs(outcomes) do
-    if outcome.transaction.staging_ref == p.transaction.staging_ref then
-      confirmed = outcome.state == "confirmed"
-      if not confirmed then
-        return gate.verdict_line(verb, false,
-          "claim batch was not confirmed: " .. outcome.detail)
-      end
-    end
-  end
-  if not confirmed then
-    return gate.verdict_line(verb, false,
-      "claim confirmation result did not include the prepared batch")
-  end
-  if p.deadline > 0 and os.time() >= p.deadline then
-    return gate.verdict_line(verb, false,
-      "claim batch landed but expired before confirmation; no work authority granted")
-  end
-  local closed, close_err = store.close(s)
-  if not closed then
-    return gate.verdict_line(verb, false,
-      "claim landed, but the local read model could not be invalidated: "
-      .. close_err)
-  end
-  show_members("confirmed")
-  return gate.verdict_line(verb, true,
-    ("%s confirmed=%d refused=0 (Git execution explicitly requested)")
-    :format(result_label, #p.members))
+  return stateclaim_cli.run(s, ids, all, action, caller, remote, force, why, execute,
+    function(it: item.Item): string | nil, string
+      return product_base(s, it, "", repo_dir, fetch_base or false)
+    end)
 end
 
 local record gitclaim_cli
   resolve_caller: function(explicit: string): string | nil, string
   resolve_optional_caller: function(explicit: string): string | nil, string
   cmd_session: function(action: string): integer
-  cmd_claim: function(s: store.Store, ids: {string}, action: gitclaim.Action,
+  cmd_claim: function(s: store.Store, ids: {string}, action: stateclaim.Action,
   explicit_session: string, remote: string, repo_dir: string,
   force: boolean, why: string, execute: boolean, fetch_base?: boolean): integer
 end

@@ -9,6 +9,7 @@
 -- asserted here against git and then through `fsck`'s re-encode audit.
 
 local cachedb = require("_work.cachedb")
+local boardhistory = require("_work.boardhistory")
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -65,6 +66,7 @@ local function record(s: store.Store, id: string, op: string, message: string,
   apply(it)
   storewrite.set_op(s, op)
   assert(storewrite.save(s, it, message))
+  fixture.caller_publish(s)
 end
 
 --- The field change a handover records: the exact product commit.
@@ -80,8 +82,7 @@ local function test_read_history_is_oldest_first_and_bodyless_today()
   local s = init_state_repo("log-oldest")
   local _root, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
-  local entries = check.must(gitreadlog.read_history(s.root,
-      {"refs/heads/items/" .. leaf}))
+  local entries = check.must(gitreadlog.read_state_history(s.root, s.state_head, leaf))
   assert(#entries == 2, ("new then spec: %d"):format(#entries))
   assert(entries[1].subject == ("new %s a workable slice"):format(leaf:sub(1, 8)),
     entries[1].subject)
@@ -105,8 +106,7 @@ local function test_read_history_reads_the_body_a_mutation_wrote()
   record(s, leaf, "take",
     ("take %s by session-a head:%s\n\n%s"):format(leaf:sub(1, 8),
       ("b"):rep(12), prose), hand_over)
-  local entries = check.must(gitreadlog.read_history(s.root,
-      {"refs/heads/items/" .. leaf}))
+  local entries = check.must(gitreadlog.read_state_history(s.root, s.state_head, leaf))
   local last = entries[#entries]
   assert(last.body == prose, ("the prose, trailer dropped: %q"):format(last.body))
 end
@@ -132,13 +132,11 @@ local function test_read_histories_is_one_process_for_every_item()
   local _root, leaf = fixture.root_with_leaf(s)
   local peers = check.must(store.list(s))
   local ids: {string} = {}
-  local shas_by_id: {string: string} = {}
   -- The board's own first commit is subjectless of any id (`board`),
   -- so the per-item attribution below reads the items under it.
   for _, it in ipairs(peers) do
     if it.parent ~= "" then
       ids[#ids + 1] = it.id
-      shas_by_id[it.id] = s.leased_sha[it.id]
     end
   end
   assert(#ids == 3, ("two outcomes and the leaf: %d"):format(#ids))
@@ -154,7 +152,7 @@ local function test_read_histories_is_one_process_for_every_item()
   assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
   local old_path = os.getenv("PATH") or ""
   assert(env.set("PATH", wrapdir .. ":" .. old_path, true))
-  local by_id = check.must(gitreadlog.read_histories(s.root, shas_by_id, ids))
+  local by_id = check.must(boardhistory.read(s.root, s.state_head)).events_by_id
   assert(env.set("PATH", old_path, true))
   assert(#(fs.read(counter) or "") == 1,
     ("one process for the whole board: %d"):format(#(fs.read(counter) or "")))
@@ -168,8 +166,7 @@ local function test_read_histories_is_one_process_for_every_item()
   -- by id and commit by commit.
   for _, id in ipairs(ids) do
     local own = by_id[id]
-    local alone = check.must(gitreadlog.read_history(s.root,
-        {"refs/heads/items/" .. id}))
+    local alone = check.must(gitreadlog.read_state_history(s.root, s.state_head, id))
     assert(#own == #alone,
       ("%s: %d batched vs %d alone"):format(id:sub(1, 8), #own, #alone))
     for i, e in ipairs(alone) do
@@ -332,9 +329,11 @@ local function test_log_add_appends_an_entry_and_moves_no_tree()
   assert(after ~= before, "the ref moved: " .. after)
   assert(rev(s, after .. "^") == before,
     "the entry's parent is the tip it was appended to")
-  assert(rev(s, after .. "^{tree}") == before_tree,
-    ("tree-identical: %s vs %s"):format(rev(s, after .. "^{tree}"), before_tree))
-  local entries = check.must(gitreadlog.read_history(s.root, {ref}))
+  assert(rev(s, after .. "^{tree}") ~= before_tree,
+    "a native log append adds an immutable item log blob")
+  assert(rev(s, after .. ":items/" .. leaf .. "/meta") == rev(s, before .. ":items/" .. leaf .. "/meta"),
+    "a log append preserves item metadata")
+  local entries = check.must(gitreadlog.read_state_history(s.root, after, leaf))
   local last = entries[#entries]
   assert(last.subject == ("note %s by %s"):format(leaf:sub(1, 8), SESSION),
     last.subject)
@@ -368,7 +367,7 @@ local function test_log_add_leaves_the_cache_current()
     "--add", entry_file("log-add-cache-entry.md", "what the measurement said"),
     "--session", SESSION, "--dir", s.root)
   assert(code == 0, printed)
-  local after = rev(s, "refs/heads/items/" .. leaf)
+  local after = rev(s, "refs/heads/state")
   local fresh = check.must(cachedb.fresh_digest(s.root))
   local db = check.must(cachedb.open_conn(path))
   local recorded = cachedb.meta_get(db, "refs_digest")
@@ -407,7 +406,7 @@ end
 local function test_log_add_corrects_by_appending_rather_than_editing()
   local s = init_state_repo("log-add-again")
   local _root, leaf = fixture.root_with_leaf(s)
-  local ref = "refs/heads/items/" .. leaf
+  local ref = "refs/heads/state"
   assert(store.close(s))
   local first = entry_file("log-add-first.md", "measured 3x")
   local second = entry_file("log-add-second.md", "correction: measured 4x")
@@ -416,7 +415,7 @@ local function test_log_add_corrects_by_appending_rather_than_editing()
       "--add", path, "--session", SESSION, "--dir", s.root)
     assert(code == 0, printed)
   end
-  local entries = check.must(gitreadlog.read_history(s.root, {ref}))
+  local entries = check.must(gitreadlog.read_state_history(s.root, rev(s, ref), leaf))
   local notes: {Entry} = {}
   for _, e in ipairs(entries) do
     if e.subject:match("^note ") ~= nil then
@@ -435,7 +434,7 @@ end
 local function test_log_add_refuses_an_entry_with_no_prose()
   local s = init_state_repo("log-add-empty")
   local _root, leaf = fixture.root_with_leaf(s)
-  local ref = "refs/heads/items/" .. leaf
+  local ref = "refs/heads/state"
   assert(store.close(s))
   local before = rev(s, ref)
   local blank = entry_file("log-add-blank.md", "\n   \n\n")

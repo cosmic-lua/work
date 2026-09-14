@@ -51,13 +51,13 @@ local function target_url(root: string, remote: string): string
   return (result.stdout:gsub("%s+$", ""))
 end
 --- The `owner/name` a publication is bound to: the configured
---- `gitboard.repository` when set, otherwise derived from the remote's URL,
+--- `gitboard.publicationRepository` when set, otherwise derived from the remote's URL,
 --- and `local/board` for a checkout with neither.
 --- @param root string The board checkout
 --- @param remote string The configured board remote
 --- @return string The repository identity the plan is bound to
 local function repository(root: string, remote: string): string
-  local configured = child.run({"git", "config", "--get", "gitboard.repository"}, {cwd = root})
+  local configured = child.run({"git", "config", "--get", "gitboard.publicationRepository"}, {cwd = root})
   if configured ~= nil and configured.ok then return (configured.stdout:gsub("%s+$", "")) end
   local url = child.run({"git", "remote", "get-url", remote}, {cwd = root})
   if url ~= nil and url.ok then
@@ -207,9 +207,19 @@ local function retire(root: string, receipt: Receipt): boolean, string
     return false, "receipt disappeared without a matching retirement"
   end
   if live ~= receipt.sha then return false, "receipt advanced; refusing to retire a different snapshot" end
-  return refs.update_refs_atomic(root, {
+  local moved, merr = refs.update_refs_atomic(root, {
       {ref = destination, expected = prior, next = receipt.sha},
       {ref = receipt.ref, expected = receipt.sha, next = refs.ZERO_SHA}})
+  if moved then return true, "" end
+  -- Another observer may have completed this exact atomic retirement at the
+  -- CAS seam. Recognize that cooperative success, but no other destination or
+  -- surviving source can be mistaken for it.
+  local retired, rerr = refs.read_ref(root, destination)
+  if retired == nil then return false, rerr end
+  local remaining, serr = refs.read_ref(root, receipt.ref)
+  if remaining == nil then return false, serr end
+  if retired == receipt.sha and remaining == refs.ZERO_SHA then return true, "" end
+  return false, merr
 end
 --- Whether this exact attempt was retired, rather than merely missing — the
 --- difference between "a lost race dropped it" and "something else deleted it",

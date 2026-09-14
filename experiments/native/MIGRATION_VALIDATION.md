@@ -1,10 +1,11 @@
 # Full-board migration validation — 2026-09-13
 
 This was an offline audit of an independent `git clone --mirror --no-hardlinks`
-copy of the fetched cosmic-lua/work repository. No source-board refs, pending
-draft, or remote destination were changed. Native activation was simulated
-only inside the isolated audit copy; this does not attest a live freeze or
-perform a cutover.
+copy of the fetched cosmic-lua/work repository. The final current run was a
+native-only replay, fsck, and restart check. Earlier activation exercises were
+also confined to isolated audit copies. No source-board ref, pending draft,
+remote destination, production ruleset, activation marker, or consumer pin was
+changed.
 
 ## Frozen snapshot
 
@@ -12,9 +13,16 @@ perform a cutover.
 - Source prefix: `refs/remotes/origin/`.
 - Complete source set: **1,946 refs** — 707 items, 723 ended items,
   515 claim batches, and `board/seq`. The format marker is separate.
-- SHA-256 of `_work.singlehead_literal.encode(checkpoint.sources)`:
+- Historical SHA-256 of
+  `_work.singlehead_literal.encode(checkpoint.sources)`:
   `9501941dfc0df4435b497634dc16c3c66fc1bf537295a97c3ab362dad4c8decd`.
-- Candidate state:
+- SHA-256 of the canonical `migration/sources` witness:
+  `05ad92af0a53a8718b548c70c3116dc908d04b447f1b9fe86d7434884b2104d0`.
+- Replayed history head, unchanged by the witness addition:
+  `134aa92d022bbca9b818230b4680e8125e2d2968`.
+- Current final candidate:
+  `9b4e494f9d011275306be6566ed52d9722fe57a5`.
+  The prior pre-witness candidate was
   `0d21e219baef6573dca60f8dd50eea8b1ed9dce7`.
 
 ## Results
@@ -30,8 +38,10 @@ perform a cutover.
 | Materialized logs | 2,060 empty attribution files; zero visible notes; exact legacy prose semantics |
 | Recorded leases | All 120 matched acquisition ID, holder, acquisition/renewal/expiry times, and product base, including expired records |
 | Persisted marks | The canonical tree literal exactly matched the checkpoint map |
+| Retired-source witness | 1,946 canonical source refs; witness SHA-256 matched. Production-frozen witnesses also bind exact present/absent probes. |
 | Native canonical audit | Zero problems |
-| Full native `gitboard fsck` | Cache agrees with refs; `ok (1430 items)`; exit 0 |
+| Full native `gitboard fsck` | Zero problems; cache agreed with canonical Git data |
+| Unchanged-checkpoint restart | `identical`; candidate, replay head, marks, and witness unchanged |
 
 The full board exposed one shared source commit,
 `e83f3c1ac37c55ba165f68c100e580ebbcfd0238`, in two different ended-item
@@ -46,7 +56,7 @@ an interrupted attempt leaves the prior completed candidate readable. A
 separate regression covers failure, retry, and temporary-ref cleanup while a
 detached audit worktree still names the completed candidate.
 
-## Timings and restart
+## Historical timings and current restart
 
 Wall-clock measurements on this audit host, rounded to seconds:
 
@@ -58,11 +68,17 @@ Wall-clock measurements on this audit host, rounded to seconds:
 | Payload, history, and canonical audit | 37 |
 | Full native fsck, including cache comparison | 15 |
 
-The corrected v2 full frozen-checkpoint replay regenerated the same candidate
-SHA and all 13,760 marks. These are observed run times, not a throughput guarantee. Thirteen
-migration checks passed in a fresh isolated direct harness; all twelve semantic
-mutants were killed, including the previously surviving pre-snapshot guard. Strict type, format, and lint checks passed for the
-changed migration files.
+These are historical observed run times, not a throughput guarantee. The
+pre-witness v2 replay regenerated its candidate and all 13,760 marks. The
+current native-only run retained those marks and replay head, added the durable
+source witness in the final metadata commit, produced candidate
+`9b4e494f9d011275306be6566ed52d9722fe57a5`, reported zero fsck problems, and
+restarted identically.
+
+Thirteen migration checks and twelve semantic mutation kills were recorded by
+the earlier isolated harness, including the previously surviving pre-snapshot
+guard. **Current integrated migration and mutation gate totals are pending** and
+will be inserted only from the final merged checkout.
 
 ## Existing evidence caveat
 
@@ -93,18 +109,30 @@ and visible notes total zero. A separate fixture verifies two exact prose
 bodies, paragraph preservation, trailer removal, empty administrative markers,
 and the final administrative event's tip attribution.
 
-Production `plan --freeze-ruleset ID` explicitly uses authenticated `gh api`
-with `--hostname github.com`; it reads ruleset configuration before and after
-a fresh private source fetch. It requires an active repository branch ruleset,
+`prepare-freeze` must run before the board owner enables the production
+ruleset, so its durable manifest can name and create separate sacrificial
+update and delete refs. Production `plan --freeze-ruleset ID` explicitly uses
+authenticated `gh api` with `--hostname github.com`; after the ruleset is
+active it reads configuration before and after a fresh private source fetch. It
+requires an active repository branch ruleset,
 exactly the four legacy ref patterns, no exclusions or bypass actors, and
 creation/update/deletion restrictions with fetch-and-merge bypass disabled.
 Missing `bypass_actors` refuses because GitHub omits that field without ruleset
 write access. Server observation times and the unchanged ruleset digest bracket
 the fetch; the literal checkpoint binds those observations to the exact push
-destination and full source-map digest. `publish --execute` fetches and verifies
-that same live policy again and rechecks the complete destination source set
-before atomic activation. Plain plans and caller-supplied booleans cannot take
-this production path. The default publication command only renders a plan.
+destination and full source-map digest. It then attempts exact absent-ref
+creation and actual existing-ref update and deletion probes; each must fail with
+a ref-specific `GH013` ruleset rejection. Authentication and network failures
+are not proof. `publish --execute` fetches and verifies that same live policy
+again and rechecks the complete destination source set before atomic
+activation. Plain plans and caller-supplied booleans cannot take this production
+path. The default publication command only renders a plan.
+
+The candidate tree's canonical `migration/sources` literal preserves every
+retained source tip plus the exact existing and absent probe set. After a fresh
+clone explicitly fetches the retired namespaces, `fsck` can therefore report
+added, moved, removed, or unexpectedly present archive refs. Missing
+`migration/sources` alongside `migration/marks` is an fsck failure.
 
 The provider was validated with mocked HTTP responses; `gh` is unavailable in
 this audit environment, and no live ruleset was queried or changed. Public API

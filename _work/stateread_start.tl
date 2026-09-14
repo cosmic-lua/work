@@ -2,7 +2,6 @@
 --- The marker read and the first item read share the existing gitbatch process.
 local cachedb = require("_work.cachedb")
 local format = require("_work.format")
-local gitread = require("_work.gitread")
 local gitbatch = require("_work.gitbatch")
 local refs = require("_work.refs")
 local record Start
@@ -69,29 +68,10 @@ local function open(root: string): Start | nil, string
   return out, ""
 end
 
---- Resolve an item within the captured snapshot, including legacy duplicates.
-local function lease(root: string, start: Start, id: string): string, string
-  local matching: {refs.RefEntry} = {}
-  for _, entry in ipairs(start.snapshot) do
-    if entry.refname == "refs/heads/items/" .. id or entry.refname == "refs/heads/ended/" .. id then
-      matching[#matching + 1] = entry
-    end
-  end
-  if #matching == 0 then return "", "" end
-  local chosen = matching[1]
-  if #matching == 2 then
-    local items, ended = matching[1], matching[2]
-    if items.refname ~= "refs/heads/items/" .. id then items, ended = ended, items end
-    chosen = gitread.pick_duplicate(root, items, ended)
-  end
-  return chosen.refname, chosen.sha
-end
-
 local record stateread_start
   type Start = Start
-  lease: function(root: string, start: Start, id: string): string, string
   open: function(root: string): Start | nil, string
   close: function(start: Start | nil): boolean, string
 end
-local M: stateread_start = {open = open, close = close, lease = lease}
+local M: stateread_start = {open = open, close = close}
 return M

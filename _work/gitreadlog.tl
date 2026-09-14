@@ -34,6 +34,7 @@ local FIELDS < const > =
 --- the board carries today.
 local TOOL_TRAILERS < const >: {string: boolean} = {
   ["Gitboard-Author"] = true, ["Transaction"] = true, ["Op"] = true, ["Claim-Batch"] = true,
+  ["Drop-Why"] = true,
 }
 
 --- One commit on an item's ref.
@@ -201,60 +202,6 @@ local function read_state_history(root: string, head: string, id: string): {Entr
   return out
 end
 
---- Every named item's history in ONE `git log`, oldest first per item,
---- empty for an id whose tip is unknown — the whole-board counterpart
---- to `read_history`, so a board-wide pass over entries costs one
---- process instead of one per item, the same way
---- `_work.gitread.read_specs` costs one `cat-file --batch` instead of
---- one `cat-file -p` per spec. Reads against the tip SHAS rather than
---- ref names, for the same reason `read_specs` does: an object id is
---- unambiguous in either board mode. `--source` makes git name the
---- argument each commit was reached from, which is how one merged walk
---- still attributes every commit to its own item.
---- @param root string The repository root
---- @param shas_by_id {string: string} Each item's tip sha, from `list`
---- @param ids {string} Item ids to read, in any order
---- @return {string: {Entry}} | nil Entries by id, oldest first
---- @return string Error message
-local function read_histories(root: string, shas_by_id: {string: string},
-    ids: {string}): {string: {Entry}} | nil, string
-  local result: {string: {Entry}} = {}
-  local argv: {string} = {"git", "log", "--reverse", "--source",
-    "--format=" .. RS .. "%S" .. US .. FIELDS}
-  local base = #argv
-  local id_of: {string: string} = {}
-  for _, id in ipairs(ids) do
-    result[id] = {}
-    local sha = shas_by_id[id]
-    if sha ~= nil then
-      id_of[sha] = id
-      argv[#argv + 1] = sha
-    end
-  end
-  if #argv == base then
-    return result
-  end
-  local r, err = child.run(argv, {cwd = root})
-  if r == nil then
-    return nil, err
-  end
-  if not r.ok then
-    return nil, ("git log failed: %s"):format(r.stderr)
-  end
-  for _, chunk in ipairs(split(r.stdout, RS)) do
-    local source = chunk:match("^([^" .. US .. "]*)")
-    local id = id_of[source or ""]
-    if id ~= nil then
-      local e = entry_of(chunk, 1)
-      if e ~= nil then
-        local own = result[id]
-        own[#own + 1] = e
-      end
-    end
-  end
-  return result
-end
-
 --- The item's OUTCOME body: what the mutation that ended the item
 --- recorded, or what its latest handover recorded while it is still
 --- open. A resolution rides a `done <id> ...` commit; a handover rides
@@ -287,8 +234,6 @@ local record gitreadlog
   prose_of: function(body: string): string
   read_state_history: function(root: string, head: string, id: string): {Entry} | nil, string
   read_history: function(root: string, candidates: {string}): {Entry} | nil, string
-  read_histories: function(root: string, shas_by_id: {string: string},
-  ids: {string}): {string: {Entry}} | nil, string
   outcome_body: function(entries: {Entry}, resolved: boolean): string
 end
 
@@ -296,7 +241,6 @@ local M: gitreadlog = {
   prose_of = prose_of,
   read_state_history = read_state_history,
   read_history = read_history,
-  read_histories = read_histories,
   outcome_body = outcome_body,
 }
 

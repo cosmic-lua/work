@@ -1,18 +1,14 @@
 #!/usr/bin/env cosmic
--- Focused format-4 fsck coverage: a healthy shared manifest has a bridge for
--- every row, while raw Git damage is reported even when ordinary projection
--- can no longer load the item.
+--- Native fsck diagnoses claim corruption even when ordinary projection refuses.
+local boardtree = require("_work.boardtree")
+local tx = require("_work.statetransaction")
 local check = require("cosmic.check")
-local child = require("cosmic.child")
 local fixture = require("_work.fixture")
 local fsck = require("_work.gitfsck")
-local gitclaim = require("_work.gitclaim")
-local prepared = require("_work.prepared")
+local gitobj = require("_work.gitobj")
+local projection = require("_work.stateplan_git")
 local refs = require("_work.refs")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
-
-local CALLER < const > = "0123456789abcdef0123456789abcdef"
 
 local function fsck_and_capture(s: store.Store): integer, string
   local old_print = _G.print
@@ -22,57 +18,52 @@ local function fsck_and_capture(s: store.Store): integer, string
     for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
     lines[#lines + 1] = table.concat(parts, "\t")
   end
-  local code = fsck.cmd_fsck(s)
+  local ok, code = pcall(fsck.cmd_fsck, s)
   _G.print = old_print
+  assert(ok, code)
   return code, table.concat(lines, "\n")
 end
 
-local function request(s: store.Store, id: string, batch: string,
-    now: integer): gitclaim.Request
-  local ref = gitclaim.target_item_ref(id)
-  local tip = check.must(refs.read_ref(s.root, ref))
-  return {root = s.root, id = id, source_ref = ref, target_ref = ref,
-    remote = "origin", batch = batch, caller = CALLER, action = "take",
-    product_base = tip, force = false, why = "", now = now}
+local function corrupt(s: store.Store, path: string, content: string, delete: boolean)
+  local changes: {tx.Change} = {{path = path, mode = "100644", content = content, delete = delete}}
+  if delete then
+    changes = {}
+    for _, entry in ipairs(check.must(boardtree.snapshot_tree_entries(s.root, s.state_head))) do
+      if entry.mode ~= "040000" and entry.path:sub(1, #path + 1) == path .. "/" then
+        changes[#changes + 1] = {path = entry.path, mode = entry.mode, content = "", delete = true}
+      end
+    end
+    assert(#changes > 0, "remove actual item leaves")
+  end
+  local tree = check.must(projection.apply(s.root, s.state_head, changes))
+  local sha = check.must(gitobj.commit_tree(s.root, {tree = tree, parents = {s.state_head},
+        message = "external corrupt write", author_name = "test", author_email = "test@board",
+        committer_name = "test", committer_email = "test@board"}))
+  assert(refs.update_ref(s.root, "refs/heads/state", sha, s.state_head))
+  s.state_head = sha
+  assert(store.close(s))
 end
 
-local function test_claim_batches_must_have_a_bridge_for_every_member()
-  local s = fixture.init_state_repo("fsck-claim-batch-partial")
-  local _root, first = fixture.root_with_leaf(s)
-  local second = fixture.file_item(s, "second claimed item", "")
-  local second_ref = gitclaim.target_item_ref(second)
-  local before = (check.must(child.run({"git", "rev-parse", second_ref},
-        {cwd = s.root})).stdout:gsub("%s+$", ""))
-  local now = os.time()
-  local prepared_batch = gitclaim.prepare_batch({request(s, first, "batch-fsck", now),
-      request(s, second, "batch-fsck", now)}).prepared
-  assert(prepared_batch ~= nil, "the complete claim batch prepared")
-  assert(prepared.promote_local(s.root, prepared_batch.transaction))
-  assert(store.close(s))
-  local healthy, healthy_out = fsck_and_capture(s)
-  assert(healthy == 0, healthy_out)
-
-  -- Retain the manifest and one bridge, but rewind one member past its bridge:
-  -- exactly the partial external update fsck must distinguish from a healthy
-  -- atomic transaction.
-  fixture.git(s.root, {"update-ref", second_ref, before})
-  assert(store.close(s))
+local function test_a_claim_set_has_one_native_commit_and_no_orphan_members()
+  local s = fixture.init_state_repo("fsck-native-claims")
+  local first = fixture.file_item(s, "First claimed item", "")
+  local second = fixture.file_item(s, "Second claimed item", "")
+  local before = fixture.commits(s)
+  fixture.control_claim(s, {first, second}, "fsck-holder")
+  assert(fixture.commits(s) == before + 1, "the set is one mutation")
+  local healthy, report = fsck_and_capture(s)
+  assert(healthy == 0, report)
+  corrupt(s, "items/" .. second, "", true)
   local code, out = fsck_and_capture(s)
-  assert(code ~= 0, "a partial batch is corrupt: " .. out)
-  assert(out:find("claim batch", 1, true) ~= nil
-    and out:find(second:sub(1, 8), 1, true) ~= nil
-    and out:find("no first-parent claim bridge", 1, true) ~= nil, out)
+  assert(code ~= 0 and out:find(second, 1, true), "an orphan claim is named: " .. out)
 end
 
-local function test_an_unresolvable_claim_batch_pointer_is_named()
-  local s = fixture.init_state_repo("fsck-claim-batch-orphan")
-  local _root, id = fixture.root_with_leaf(s)
-  local it = check.must(store.load(s, id))
-  it.claim_batch = ("0"):rep(40)
-  assert(storewrite.save(s, it, "hand-edited missing claim batch"))
-  assert(store.close(s))
+local function test_an_unreadable_claim_blob_is_named()
+  local s = fixture.init_state_repo("fsck-native-corrupt-claim")
+  local id = fixture.file_item(s, "Broken claim", "")
+  corrupt(s, "claims/" .. id, "this is not a claim literal", false)
   local code, out = fsck_and_capture(s)
-  assert(code ~= 0, "an unresolvable claim batch pointer is corrupt: " .. out)
-  assert(out:find("claim_batch " .. ("0"):rep(40) .. " does not resolve", 1, true)
-    ~= nil, out)
+  assert(code ~= 0 and out:find("claims/" .. id, 1, true), out)
+  local it, err = store.load(s, id)
+  assert(it == nil and err:find("claims/" .. id, 1, true), "ordinary reads fail closed")
 end

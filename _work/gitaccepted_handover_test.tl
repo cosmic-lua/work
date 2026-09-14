@@ -4,8 +4,10 @@ local check = require("cosmic.check")
 local flow = require("_work.commit_flow_fixture")
 local gitboard = require("_work.gitboard")
 local gitobj = require("_work.gitobj")
-local gitread = require("_work.gitread")
+local boardread = require("_work.boardread")
 local itemtree = require("_work.itemtree")
+local projection = require("_work.stateplan_git")
+local publish = require("_work.publish")
 local read = require("_work.read")
 local refs = require("_work.refs")
 local store = require("_work.store")
@@ -26,6 +28,7 @@ local function call(s: store.Store, ...: string): integer, string
     end)
   _G.print = old_print
   if not ok then error(code, 0) end
+  assert(publish.sync(s))
   return code, table.concat(lines, "\n")
 end
 
@@ -50,7 +53,7 @@ end
 
 local function test_new_handover_requires_its_own_acceptance_before_completion()
   local s, id, p = accepted("accepted-new-head")
-  local ref = "refs/heads/items/" .. id
+  local ref = "refs/heads/state"
   local old_tip = check.must(refs.read_ref(s.root, ref))
   assert(check.must(read.substate(check.must(store.read(s)), id)) == "accepted")
   -- An external check fails: release the reviewer, reacquire for rework.
@@ -63,7 +66,7 @@ local function test_new_handover_requires_its_own_acceptance_before_completion()
   assert(reworked.handover_head == p.next_head and reworked.verdict == ""
     and reworked.verdict_head == "")
   assert(check.must(read.substate(check.must(store.read(s)), id)) == "review")
-  local historical = check.must(gitread.load(s.root, id, old_tip, old_tip)).it
+  local historical = check.must(boardread.load(s.root, old_tip, id)).it
   assert(historical.verdict == "accept" and historical.verdict_head == p.head,
     "the old acceptance remains in immutable item history")
   assert(call(s, "done", id, "completed", "--landed", p.next_head,
@@ -148,11 +151,12 @@ local function test_stale_acceptance_refuses_completion_and_can_be_rehanded()
   it.handover_head = p.next_head
   -- Reproduce already-written inconsistent metadata without passing the
   -- ordinary writer's validation; readers deliberately tolerate old facts.
-  local ref = "refs/heads/items/" .. id
+  local ref = "refs/heads/state"
   for _, judged in ipairs({"", p.head}) do
     it.verdict_head = judged
     local old = check.must(refs.read_ref(s.root, ref))
-    local tree = check.must(itemtree.build_tree(s.root, it, store.read_spec(s, id), true))
+    local tree = check.must(projection.apply(s.root, old,
+        {{path = "items/" .. id .. "/meta", mode = "100644", content = itemtree.encode_meta(it), delete = false}}))
     local tip = check.must(gitobj.commit_tree(s.root, {tree = tree, parents = {old},
           message = "historical stale acceptance", author_name = "fixture",
           author_email = "fixture@example.test", committer_name = "fixture",

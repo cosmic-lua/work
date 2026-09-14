@@ -9,6 +9,7 @@ local record Status
   candidate: string
   reason: string
   absence_proven: boolean
+  prefix: integer
 end
 --- Whether two transitions are the same publication: the changed paths and
 --- their content, the message, and the logical author — all three, because a
@@ -17,9 +18,12 @@ end
 --- @param a tx.Transition One transition
 --- @param b tx.Transition The other
 --- @return boolean True when they are the same publication
+local function transition_key(value: tx.Transition): string
+  return (literal.encode(value.changes) or "") .. "\0" .. value.message .. "\0"
+  .. (literal.encode(value.author) or "")
+end
 local function same_transition(a: tx.Transition, b: tx.Transition): boolean
-  return literal.encode(a.changes) == literal.encode(b.changes)
-  and a.message == b.message and literal.encode(a.author) == literal.encode(b.author)
+  return transition_key(a) == transition_key(b)
 end
 --- Whether `tip`'s first-parent chain carries the frozen chain WHOLE: one
 --- commit per transition, walked back in order, each compared by content. A
@@ -62,6 +66,48 @@ local function recorded_on_chain(root: string, head: string, candidate: string):
   if parents == nil then return false, perr end
   return parents:match("^([0-9a-f]+)") == candidate, ""
 end
+--- How much of a longer frozen transaction ends exactly at `tip`. Only a
+--- proper leading prefix is returned: a whole transaction is confirmation,
+--- while zero matching transitions is an unrelated or conflicting commit.
+--- @param root string The repository holding `tip`
+--- @param tip string The candidate tip
+--- @param frozen tx.Frozen The longer attempt to compare
+--- @return integer Number of exact leading transitions, zero when none
+local function leading_prefix(root: string, tip: string, frozen: tx.Frozen): integer
+  local normalized = tx.freeze(frozen)
+  if normalized == nil or #normalized.transitions < 2 then return 0 end
+  local after_base, aerr = recorded_on_chain(root, tip, normalized.transitions[1].base)
+  if not after_base or aerr ~= "" then return 0 end
+  local pattern: {string} = {}
+  local fallback: {integer} = {}
+  for index = 1, #normalized.transitions - 1 do
+    pattern[index] = transition_key(normalized.transitions[index])
+    local prior = index > 1 and fallback[index - 1] or 0
+    while prior > 0 and pattern[prior + 1] ~= pattern[index] do prior = fallback[prior] end
+    if index > 1 and pattern[prior + 1] == pattern[index] then prior = prior + 1 end
+    fallback[index] = prior
+  end
+  local reverse: {string} = {}
+  local current = tip
+  for _ = 1, #pattern do
+    if current == normalized.transitions[1].base then break end
+    local parents = git.text(root, {"rev-list", "--parents", "-n", "1", current})
+    if parents == nil then return 0 end
+    local own, parent = parents:match("^([0-9a-f]+) ([0-9a-f]+)$")
+    if own == nil then return 0 end
+    local observed = projection.capture(root, parent, current, {})
+    if observed == nil then return 0 end
+    reverse[#reverse + 1] = transition_key(observed)
+    current = parent
+  end
+  local matched = 0
+  for index = #reverse, 1, -1 do
+    local key = reverse[index]
+    while matched > 0 and pattern[matched + 1] ~= key do matched = fallback[matched] end
+    if pattern[matched + 1] == key then matched = matched + 1 end
+  end
+  return matched
+end
 --- @param head One fetched canonical head; history before the staged base is excluded.
 --- @param published_sha Optional connector-returned candidate, never proof by itself.
 --- @return Confirmed only after complete equality; truncated searches stay pending.
@@ -70,15 +116,18 @@ local function inspect(root: string, head: string, frozen: tx.Frozen,
   local normalized, err = tx.freeze(frozen)
   if normalized == nil then return nil, err end
   if current_staging_sha ~= nil and current_staging_sha ~= frozen.staging_sha then
-    return {status = "pending", candidate = "", reason = "draft advanced after publication snapshot", absence_proven = false}, ""
+    return {status = "pending", candidate = "", reason = "draft advanced after publication snapshot",
+      absence_proven = false, prefix = 0}, ""
   end
   if published_sha ~= nil and published_sha ~= "" then
     local known, kerr = recorded_on_chain(root, head, published_sha)
     if kerr ~= "" then return nil, kerr end
     if known then
       local complete, cerr = complete_chain(root, published_sha, normalized)
-      if complete then return {status = "confirmed", candidate = published_sha, reason = "", absence_proven = false}, "" end
-      return {status = "conflict", candidate = published_sha, reason = cerr, absence_proven = false}, ""
+      if complete then return {status = "confirmed", candidate = published_sha, reason = "",
+          absence_proven = false, prefix = 0}, "" end
+      return {status = "conflict", candidate = published_sha, reason = cerr,
+        absence_proven = false, prefix = 0}, ""
     end
   end
   -- Git parses the trailer block once per commit inside one subprocess. The
@@ -94,7 +143,8 @@ local function inspect(root: string, head: string, frozen: tx.Frozen,
   for sha, parsed in history:gmatch("([0-9a-f]+)%z([^%z]*)%z") do
     scanned = scanned + 1
     if scanned > SEARCH_LIMIT then
-      return {status = "pending", candidate = "", reason = "receipt search limit reached; no attempt retired", absence_proven = false}, ""
+      return {status = "pending", candidate = "", reason = "receipt search limit reached; no attempt retired",
+        absence_proven = false, prefix = 0}, ""
     end
     local located = published_sha ~= nil and sha == published_sha
     if not located then
@@ -103,16 +153,25 @@ local function inspect(root: string, head: string, frozen: tx.Frozen,
     end
     if located then
       local complete, cerr = complete_chain(root, sha, normalized)
-      if complete then return {status = "confirmed", candidate = sha, reason = "", absence_proven = false}, "" end
+      if complete then return {status = "confirmed", candidate = sha, reason = "",
+          absence_proven = false, prefix = 0}, "" end
+      local prefix = leading_prefix(root, sha, normalized)
+      if prefix > 0 and conflict == "" then
+        return {status = "prefix", candidate = sha,
+          reason = "publication contains an exact leading prefix of " .. tostring(prefix) .. " transition(s)",
+          absence_proven = false, prefix = prefix}, ""
+      end
       conflict = cerr
     end
   end
   local base_reached, berr = recorded_on_chain(root, head, normalized.transitions[1].base)
   if berr ~= "" then return nil, berr end
   if not base_reached and conflict == "" then
-    return {status = "pending", candidate = "", reason = "staged base not reached on fetched first-parent history", absence_proven = false}, ""
+    return {status = "pending", candidate = "", reason = "staged base not reached on fetched first-parent history",
+      absence_proven = false, prefix = 0}, ""
   end
-  return {status = conflict ~= "" and "conflict" or "pending", candidate = "", reason = conflict, absence_proven = conflict == "" and base_reached}, ""
+  return {status = conflict ~= "" and "conflict" or "pending", candidate = "", reason = conflict,
+    absence_proven = conflict == "" and base_reached, prefix = 0}, ""
 end
 local record Module
   type Status = Status

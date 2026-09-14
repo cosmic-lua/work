@@ -1,4 +1,16 @@
 return {
+  forced_live_overlap = {
+    file = "_work/stateclaim.tl",
+    before = 'claim.take_refusal(st, caller, now, false, why)',
+    after = 'claim.take_refusal(st, caller, now, force, why)',
+    test = "_work/gitverbs_test.tl",
+  },
+  self_overlap_acquisition = {
+    file = "_work/stateclaim.tl",
+    before = 'if held then denial = "item is already claimed by this session; use renew or drop" end',
+    after = 'if held and false then denial = "item is already claimed by this session; use renew or drop" end',
+    test = "_work/stateclaim_cli_test.tl",
+  },
   speculative_research_result = {
     file = "_work/gittake.tl",
     before = 'if native ~= "" and gitdraft.active(s.root) ~= nil then',
@@ -61,8 +73,8 @@ return {
   },
   final_connector_deadline_boundary = {
     file = "_work/stateplan.tl",
-    before = 'if index == #chain and plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then',
-    after = 'if index == #chain and plan.publish_by > 0 and (now or os.time()) > plan.publish_by then',
+    before = 'if plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then\n      return nil, "prepared claim expired before publication"',
+    after = 'if plan.publish_by > 0 and (now or os.time()) > plan.publish_by then\n      return nil, "prepared claim expired before publication"',
     test = "_work/stateplan_test.tl",
   },
   local_publication_deadline_boundary = {

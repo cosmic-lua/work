@@ -12,11 +12,10 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
+local authority = require("_work.stateclaim_authority")
 local fixture = require("_work.fixture")
-local gitclaim = require("_work.gitclaim")
 local item = require("_work.item")
-local prepared = require("_work.prepared")
+local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -92,10 +91,9 @@ local function git(root: string, args: {string}): string
 end
 
 --- A real local product checkout mapped to "acme/widgets", with a real
---- claim batch prepared and promoted for `session-a` — the shape
+--- native claim acquired and published for `session-a` — the shape
 --- `_work.brief`'s own `worktree_path` needs to derive `<WORKTREE>`: a
---- `gitboard.repository` mapping and a claim batch it can read state
---- from. Mirrors `_work/brief_review_script_test.tl`'s own
+--- `gitboard.repository` mapping and a canonical claim blob it can read. Mirrors `_work/brief_review_script_test.tl`'s own
 --- `handover_diff`.
 --- @param s store.Store The store
 --- @param leaf string The item id
@@ -111,24 +109,16 @@ local function claimed_item(s: store.Store, leaf: string): string
   local base = git(checkout, {"rev-parse", "HEAD"})
   fixture.git(s.root, {"config", "--local", "--add", "gitboard.repository",
       "acme/widgets=" .. checkout})
-  local target = gitclaim.target_item_ref(leaf)
-  local claimed = gitclaim.prepare_batch({{
-        root = s.root, id = leaf, source_ref = target, target_ref = target,
-        remote = "origin", batch = "brief-rework-" .. leaf:sub(1, 8),
-        caller = "session-a", action = "take", product_base = base,
-        force = false, why = "", now = os.time(),
-      }})
-  assert(claimed.prepared ~= nil,
-    claimed.refused[leaf] or claimed.refused.batch)
-  assert(prepared.promote_local(s.root, claimed.prepared.transaction))
+  fixture.claim_item(s, leaf, "session-a", base)
   local it = assert(store.load(s, leaf))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "fixture: map repo for worktree derivation"))
+  assert(publish.publish(s))
   return checkout
 end
 
--- `it.claim`/`it.claim_base` are projected from a claim-batch pointer at
--- read time (`_work.claimprojection`), never from the item's own history,
+-- `it.claim`/`it.claim_base` are projected from the current native claim
+-- blob at read time, never from the item's own history,
 -- so the real claim comes from `claimed_item` rather than a direct field
 -- assignment.
 --- @return string The product checkout `claimed_item` made
@@ -140,6 +130,7 @@ local function handover_item(s: store.Store, leaf: string): string
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12))))
+  assert(publish.publish(s))
   return checkout
 end
 
@@ -162,6 +153,7 @@ local function rework_item(s: store.Store, leaf: string)
   assert(storewrite.save(s, it,
       ("verdict %s request changes head:%s by reviewer-a")
       :format(leaf:sub(1, 8), HEAD:sub(1, 12))))
+  assert(publish.publish(s))
 end
 
 -- A rework hand-back fills `<BOUNCE_CONTEXT>` with the reviewer's
@@ -232,7 +224,7 @@ local function test_builder_brief_fills_worktree_once_it_exists()
   give_spec(s, leaf)
   local checkout = claimed_item(s, leaf)
   local it = assert(store.load(s, leaf))
-  local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
+  local st = check.must(authority.current(s, leaf, it.claim))
   local wt = claim.worktree(checkout, claim.branch(leaf, st.root))
   assert(fs.make_dirs(wt))
   with_product_root(function(): boolean
@@ -274,7 +266,7 @@ local function test_review_brief_fills_worktree_once_it_exists()
   local checkout = handover_item(s, leaf)
   reclaim_for_review(s, leaf)
   local it = assert(store.load(s, leaf))
-  local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
+  local st = check.must(authority.current(s, leaf, it.claim))
   local expect = claim.worktree(checkout, claim.branch(leaf, st.root))
   assert(fs.make_dirs(expect))
   with_product_root(function(): boolean
@@ -332,13 +324,14 @@ local function test_review_brief_preserves_literal_template_tokens_in_spec()
   local checkout = handover_item(s, leaf)
   reclaim_for_review(s, leaf)
   local it = assert(store.load(s, leaf))
-  local st = assert(claimbatch.read_state(s.root, it.claim_batch or "", leaf))
+  local st = check.must(authority.current(s, leaf, it.claim))
   assert(fs.make_dirs(claim.worktree(checkout, claim.branch(leaf, st.root))))
   local prose = check.must(specmod.split(
       "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
       .. "## Non-goals\nNothing else.\n"))
   local spec = specmod.document(prose)
   assert(storewrite.save(s, it, "spec literal template tokens", prose))
+  assert(publish.publish(s))
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "review", leaf)
       assert(code == 0, "a commit handover still earns its review brief")

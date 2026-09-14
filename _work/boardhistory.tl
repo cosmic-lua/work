@@ -2,6 +2,7 @@
 local child = require("cosmic.child")
 local events = require("_work.events")
 local literal = require("_work.singlehead_literal")
+local NOT_FAST_FORWARD < const > = "native history range is not a first-parent continuation"
 
 local record boardhistory
   record HistoryEvent
@@ -14,8 +15,9 @@ local record boardhistory
     tip_by_id: {string: string}
     touched_by_id: {string: integer}
   end
-  read: function(string, string): History | nil, string
+  read: function(root: string, head: string, before?: string): History | nil, string
   logical_author: function(string, string): string
+  NOT_FAST_FORWARD: string
 end
 local type HistoryEvent = boardhistory.HistoryEvent
 local type History = boardhistory.History
@@ -44,23 +46,28 @@ end
 --- configuration cannot change who a commit is attributed to.
 --- @param root string The repository holding `head`
 --- @param head string The exact commit to walk back from
+--- @param before string | nil Stop at this previously indexed first-parent head
 --- @return History | nil Events oldest-first, with each item's tip and date
 --- @return string Error message
-local function read(root: string, head: string): History | nil, string
-  local r, err = child.run({"git", "-c", "core.commentChar=#", "-c", "trailer.separators=:",
-      "-c", "trailer.Gitboard-Author.key=Gitboard-Author", "log", "--first-parent",
-      "--format=%x1e%H%x00%ct%x00%an <%ae>%x00%s%x00%(trailers:key=Gitboard-Author,valueonly,unfold)",
-      "--name-only", head}, {cwd = root})
+local function read(root: string, head: string, before?: string): History | nil, string
+  local argv = {"git", "-c", "core.commentChar=#", "-c", "trailer.separators=:",
+    "-c", "trailer.Gitboard-Author.key=Gitboard-Author", "log", "--first-parent",
+    "--format=%x1e%H%x00%ct%x00%an <%ae>%x00%s%x00%P%x00%(trailers:key=Gitboard-Author,valueonly,unfold)",
+    "--name-only", head}
+  if before ~= nil then argv[#argv + 1] = "^" .. before end
+  local r, err = child.run(argv, {cwd = root})
   if r == nil then return nil, err end
   if not r.ok then return nil, "git log failed: " .. r.stderr end
   local newest: {HistoryEvent} = {}
+  local oldest_parent = ""
   local tips: {string: string} = {}; local touched: {string: integer} = {}
   for chunk in r.stdout:gmatch("\30([^\30]+)") do
     local header, paths = chunk:match("^([^\n]*)\n(.*)$")
     if header == nil then header, paths = chunk, "" end
-    local sha, at_s, physical, subject, logical =
-    header:match("^([^\0]+)\0([^\0]+)\0([^\0]+)\0([^\0]*)\0([^\n]*)")
+    local sha, at_s, physical, subject, parents, logical =
+    header:match("^([^\0]+)\0([^\0]+)\0([^\0]+)\0([^\0]*)\0([^\0]*)\0([^\n]*)")
     if sha ~= nil then
+      oldest_parent = parents:match("^([^ ]+)") or ""
       local author = logical_author(logical or "", physical)
       local ids: {string: boolean} = {}
       for path in paths:gmatch("([^\n]+)") do
@@ -76,6 +83,9 @@ local function read(root: string, head: string): History | nil, string
       end
     end
   end
+  if before ~= nil and head ~= before and oldest_parent ~= before then
+    return nil, NOT_FAST_FORWARD
+  end
   local out: History = {events = {}, events_by_id = {}, tip_by_id = tips, touched_by_id = touched}
   for i = #newest, 1, -1 do
     local ev = newest[i]; out.events[#out.events + 1] = ev
@@ -85,5 +95,6 @@ local function read(root: string, head: string): History | nil, string
   return out
 end
 
-local M: boardhistory = {read = read, logical_author = logical_author}
+local M: boardhistory = {read = read, logical_author = logical_author,
+  NOT_FAST_FORWARD = NOT_FAST_FORWARD}
 return M

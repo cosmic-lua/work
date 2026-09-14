@@ -11,7 +11,7 @@
 --- stdout.
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
-local claimbatch = require("_work.claimbatch")
+local gitobj = require("_work.gitobj")
 local guide = require("_work.guidance")
 local health = require("_work.health")
 local index = require("_work.index")
@@ -372,12 +372,15 @@ end
 --- Format the reason carried by the current immutable drop batch. Claim
 --- bridges intentionally keep only a commit id; the batch is the fact.
 local function claim_bounce_note(s: store.Store, it: item.Item): string
-  local pointer = it.claim_batch or ""
-  if pointer == "" then return "" end
-  local batch, _err = claimbatch.read(s.root, pointer)
-  if batch == nil or batch.action ~= "drop"
-  or batch.why:match("%S") == nil then return "" end
-  return (" (last drop: %s)"):format(batch.why)
+  local history = store.history(s)
+  local rows = history and history.events_by_id[it.id] or {}
+  local last = rows[#rows]
+  if last == nil or last.verb ~= "drop" then return "" end
+  local objects = gitobj.cat_file_batch(s.root, {last.sha})
+  local commit = objects and objects[last.sha]
+  local why = commit and (commit.content:match("\nDrop%-Why: ([^\n]+)")
+    or commit.content:match("\nForce%-Why: ([^\n]+)")) or ""
+  return why ~= "" and (" (last drop: %s)"):format(why) or ""
 end
 
 --- `next_report`, but for a decided `pull` the reason carries the

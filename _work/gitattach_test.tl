@@ -10,7 +10,8 @@ local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
-local prepared = require("_work.prepared")
+local staging = require("_work.statestaging")
+local native = require("_work.statepublish")
 local refs = require("_work.refs")
 
 local init_shared = fixture.init_shared
@@ -38,27 +39,13 @@ local function test_a_reparent_survives_a_rebase()
 
   assert(graph.cmd_attach(a, leaf, other) == 0,
     "the stale caller may prepare against its fetched snapshot")
-  local pending = check.must(prepared.list(a.root))
+  local pending = check.must(staging.list(a.root))
   assert(#pending == 1, "the stale move has one durable transaction")
-  local pushed = prepared.execute(a.root, prepared.push_argv(pending[1]))
-  assert(not pushed, "the remote lease, not local preparation, rejects the race")
-  assert(prepared.execute(a.root, prepared.fetch_argv()),
-    "the caller refreshes its tracking refs after the rejected push")
-  check.must(store.close(a))
-  local outcomes = check.must(prepared.refresh(a.root))
-  assert(#outcomes == 1 and outcomes[1].state == "lost-race",
-    "refresh classifies the rejected lease")
-  assert(check.must(refs.read_ref(a.root, pending[1].staging_ref)) == refs.ZERO_SHA)
-  assert(outcomes[1].quarantine_ref == "refs/gitboard/quarantined/lost-race/"
-    .. pending[1].id)
-  assert(check.must(refs.read_ref(a.root, outcomes[1].quarantine_ref))
-    == pending[1].manifest, "the diagnosed transaction remains inspectable")
-
-  assert(graph.cmd_attach(a, leaf, other) == 0,
-    "the re-run lands against the merged board")
-  fixture.caller_publish(a)
-  local after = check.must(store.load(a, leaf))
-  assert(after.parent == other, "the re-parent landed: " .. after.parent)
+  local pushed, perr = native.execute(a.root, pending[1])
+  assert(not pushed and perr == store.LOST_RACE, "the native path fence rejects the race")
+  assert(native.sync(a))
+  assert(check.must(refs.read_ref(a.root, pending[1].ref)) == refs.ZERO_SHA,
+    "the diagnosed losing attempt is retired")
 end
 
 -- Attaching under one's own descendant would make a cycle.
@@ -100,8 +87,8 @@ local function test_attach_prunes_a_positioned_child_from_its_old_parents_order(
   local other = file_item(s, "another outcome", "")
   local before = commits(s)
   assert(graph.cmd_attach(s, leaf, other) == 0, "attach should be accepted")
-  assert(commits(s) == before + 2,
-    "one push, two commits: the leaf and the old parent it left")
+  assert(commits(s) == before + 1,
+    "one atomic native commit: the leaf and the old parent it left")
   local moved = check.must(store.load(s, leaf))
   assert(moved.parent == other, "leaf is now other's child")
   local old_parent = check.must(store.load(s, goal))
@@ -141,8 +128,8 @@ local function test_attach_before_places_and_parents_in_one_publish()
   local before = commits(s)
   assert(graph.cmd_attach(s, mover, goal, other, "") == 0,
     "attach --before should be accepted")
-  assert(commits(s) == before + 2,
-    "one push, two commits: the mover and the parent it entered")
+  assert(commits(s) == before + 1,
+    "one atomic native commit: the mover and the parent it entered")
   local moved = check.must(store.load(s, mover))
   assert(moved.parent == goal, "the mover is now goal's child")
   local reparent = check.must(store.load(s, goal))

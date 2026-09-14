@@ -51,6 +51,8 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   if refusal then
     return gate.verdict_line("done", false, "REFUSED: " .. refusal)
   end
+  local done_role, rrerr = read.role(c, it.id)
+  if done_role == nil then return gate.verdict_line("done", false, rrerr) end
   -- An open PR is work mid-review: ending the item under it makes the
   -- diff vanish from the board while it still exists on GitHub. An
   -- unreviewed PR is dropped or judged first.
@@ -160,10 +162,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     return gate.verdict_line("done", false,
       "REFUSED: --landed belongs to completed accepted work")
   end
-  local role, rerr = read.role(c, it.id)
-  if role == nil then
-    return gate.verdict_line("done", false, rerr)
-  end
+  local role = done_role
   local from = "todo"
   if role ~= "work" then
     from = role
@@ -189,7 +188,8 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   end
   local ok, err = gate.commit_and_publish(s, it, nil,
     ("done %s %s%s (from %s)%s"):format(id:sub(1, 8), reason, by_note, from,
-      gate.forced_suffix(force, why)), "done", nil, session, false, force, why)
+      gate.forced_suffix(force, why)), "done", nil, session,
+    role == "outcome" and reason == "completed", force, why)
   if not ok then
     return gate.verdict_line("done", false, err)
   end

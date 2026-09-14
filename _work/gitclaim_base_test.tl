@@ -1,115 +1,95 @@
 #!/usr/bin/env cosmic
--- New acquisitions resolve today's target; lease updates retain their base.
+-- Fresh acquisitions resolve the current base; renew and drop retain one
+-- acquisition identity and never accept a replacement base.
+local boardread = require("_work.boardread")
+local boardtree = require("_work.boardtree")
 local check = require("cosmic.check")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
 local fixture = require("_work.fixture")
-local gitclaim = require("_work.gitclaim")
 local gitclaim_cli = require("_work.gitclaim_cli")
 local graph = require("_work.gitgraph")
-local prepared = require("_work.prepared")
 local product_fixture = require("_work.commit_flow_fixture")
-local refs = require("_work.refs")
+local stateclaim = require("_work.stateclaim")
+local statepublish = require("_work.statepublish")
+local statewrite = require("_work.statewrite")
 local store = require("_work.store")
 
 local CALLER < const > = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 local BASE < const > = "0123456789012345678901234567890123456789"
 local NEXT_BASE < const > = string.rep("a", 40)
-local NOW < const > = os.time() - claim.LEASE_S - 10
+local NOW < const > = os.time() - claim.LEASE_S + 60
 
-local function reopen(s: store.Store): store.Store
-  assert(store.close(s))
-  local opened = check.must(store.open(s.root))
-  local _items = check.must(store.list(opened)) -- exercise the durable cache
-  return opened
+local function recorded(s: store.Store, id: string): boardtree.Claim | nil
+  return check.must(boardread.load(s.root, s.state_head, id)).claim
 end
 
-local function fact(s: store.Store, id: string): claimbatch.Fact
-  local it = check.must(store.load(s, id))
-  return check.must(claimbatch.read_fact(s.root, it.claim_batch or "", id))
+local function apply(s: store.Store, id: string, action: stateclaim.Action,
+    base: string, now: integer): stateclaim.Member
+  local result = stateclaim.prepare(s.root, s.state_head,
+    {{id = id, product_base = base}}, action, CALLER, now, false, "")
+  assert(next(result.refused) == nil, result.refused[id] or result.refused.batch)
+  for _, dependency in ipairs(result.dependencies) do
+    s.state_paths[dependency.path], s.state_reads[dependency.path] =
+    dependency.id, dependency.id
+  end
+  assert(statewrite.transition(s, result.changes, "claim base fixture",
+      result.publish_by))
+  assert(statepublish.publish(s))
+  return result.members[1]
 end
 
-local function cmd_claim(s: store.Store, id: string, action: gitclaim.Action,
-    product_root?: string)
-  assert(gitclaim_cli.cmd_claim(s, {id}, action, CALLER, "origin",
-      product_root or "", false, "", false) == 0)
-end
-
-local function test_repaired_target_replaces_released_board_base()
-  local s = fixture.init_state_repo("claim-base-repaired")
-  local _, id = fixture.root_with_leaf(s)
-  local item_tip = check.must(refs.read_ref(s.root, gitclaim.target_item_ref(id)))
-  cmd_claim(s, id, "take")
-  s = reopen(s)
-  assert(fact(s, id).product_base == item_tip,
-    "repo-less acquisition records the current item commit")
-  cmd_claim(s, id, "drop")
-  s = reopen(s)
-  assert(fact(s, id).action == "drop" and fact(s, id).product_base == item_tip)
-
-  local product = product_fixture.product("claim-base-repaired")
-  assert(product.base ~= item_tip, "product main must differ from board history")
-  assert(graph.cmd_set(s, id, nil, "acme/widgets", "main") == 0)
-  s = reopen(s)
-  local repaired = check.must(store.load(s, id))
-  assert(repaired.repo == "acme/widgets" and repaired.base == "main")
-  assert(fact(s, id).product_base == item_tip,
-    "target repair retains the historical claim fact until acquisition")
-  cmd_claim(s, id, "take", product.root)
-  s = reopen(s)
-  local acquired = fact(s, id)
-  assert(acquired.action == "acquire" and acquired.product_base == product.base,
-    "fresh acquisition must use product main, not the released board base")
-  assert(store.close(s))
-end
-
-local function test_repo_less_reacquisition_uses_current_item_commit()
+local function test_repo_less_acquisition_records_the_current_state()
   local s = fixture.init_state_repo("claim-base-board-only")
   local id = fixture.file_item(s, "board-only work", "")
-  cmd_claim(s, id, "take")
-  cmd_claim(s, id, "drop")
-  s = reopen(s)
-  local old_base = fact(s, id).product_base
-  local current = check.must(refs.read_ref(s.root, gitclaim.target_item_ref(id)))
-  assert(current ~= old_base, "claim/drop advances item history")
-  cmd_claim(s, id, "take")
-  s = reopen(s)
-  assert(fact(s, id).product_base == current,
-    "repo-less reacquisition uses the item commit resolved for this request")
-  assert(store.close(s))
+  local base = s.state_head
+  fixture.claim_item(s, id, CALLER)
+  local value = check.must(recorded(s, id))
+  assert(value.product_base == base)
 end
 
-local function apply(s: store.Store, id: string, action: gitclaim.Action,
-    base: string, now: integer): claimbatch.Row
-  local ref = gitclaim.target_item_ref(id)
-  local result = gitclaim.prepare_batch({{
-        root = s.root, id = id, source_ref = ref, target_ref = ref,
-        remote = "origin", batch = action .. "-" .. tostring(now),
-        caller = CALLER, action = action, product_base = base,
-        force = false, why = "", now = now,
-      }})
-  assert(result.prepared ~= nil, result.refused[id] or result.refused.batch)
-  assert(prepared.promote_local(s.root, result.prepared.transaction))
-  return result.prepared.batch.rows[1]
+local function test_repo_less_reacquisition_uses_the_new_current_state()
+  local s = fixture.init_state_repo("claim-base-reacquire")
+  local id = fixture.file_item(s, "reacquired work", "")
+  fixture.claim_item(s, id, CALLER)
+  local first = check.must(recorded(s, id))
+  fixture.drop_claim(s, id, CALLER, "released")
+  local current = s.state_head
+  fixture.claim_item(s, id, CALLER)
+  local second = check.must(recorded(s, id))
+  assert(second.product_base == current)
+  assert(second.product_base ~= first.product_base)
 end
 
-local function test_expired_acquisition_changes_base_but_renew_drop_preserve_it()
+local function test_repaired_product_target_replaces_the_released_board_base()
+  local s = fixture.init_state_repo("claim-base-repaired")
+  local _, id = fixture.root_with_leaf(s)
+  fixture.claim_item(s, id, CALLER)
+  local board_base = check.must(recorded(s, id)).product_base
+  fixture.drop_claim(s, id, CALLER, "switching to product work")
+  local product = product_fixture.product("claim-base-repaired")
+  assert(graph.cmd_set(s, id, nil, "acme/widgets", "main") == 0)
+  assert(gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+      product.root, false, "", false) == 0)
+  local value = check.must(recorded(s, id))
+  assert(value.product_base == product.base)
+  assert(value.product_base ~= board_base)
+end
+
+local function test_expired_take_changes_base_but_renew_and_drop_keep_identity()
   local s = fixture.init_state_repo("claim-base-operations")
   local id = fixture.file_item(s, "operation bases", "")
-  assert(apply(s, id, "take", BASE, NOW).product_base == BASE)
-  s = reopen(s)
-  local acquired = apply(s, id, "take", NEXT_BASE, NOW + claim.LEASE_S)
-  assert(acquired.product_base == NEXT_BASE,
-    "expired history cannot override a fresh acquisition's resolved base")
-  s = reopen(s)
+  local acquired = apply(s, id, "take", BASE, NOW)
+  local first = check.must(recorded(s, id))
+  assert(first.product_base == BASE and first.id == acquired.claim_root)
+
+  local taken = apply(s, id, "take", NEXT_BASE, NOW + claim.LEASE_S)
+  local second = check.must(recorded(s, id))
+  assert(second.product_base == NEXT_BASE and second.id == taken.claim_root)
+  assert(second.id ~= first.id)
+
   local renewed = apply(s, id, "renew", BASE, NOW + claim.LEASE_S + 1)
-  assert(renewed.product_base == NEXT_BASE,
-    "renew retains the lease base even if the request supplies another")
-  s = reopen(s)
+  local third = check.must(recorded(s, id))
+  assert(third.product_base == NEXT_BASE and renewed.claim_root == second.id)
   local dropped = apply(s, id, "drop", BASE, NOW + claim.LEASE_S + 2)
-  assert(dropped.product_base == NEXT_BASE,
-    "drop retains the lease base even if the request supplies another")
-  s = reopen(s)
-  assert(fact(s, id).product_base == NEXT_BASE)
-  assert(store.close(s))
+  assert(dropped.claim_root == second.id and recorded(s, id) == nil)
 end

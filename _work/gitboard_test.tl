@@ -155,6 +155,7 @@ local function test_attach_resolves_a_handle_form_parent()
   local leaf = file_item(s, "a workable slice", "")
   assert(gitboard.main("attach", leaf, tail.handle(root), "--dir", s.root) == 0,
     "a handle-form parent should resolve")
+  fixture.caller_fetch(s)
   local it = check.must(store.load(s, leaf))
   assert(it.parent == root, "and the attach actually landed")
 end
@@ -315,8 +316,8 @@ local function test_a_mixed_case_handle_resolves_through_the_fallback()
     error(code, 0)
   end
   assert(code == 0, "a mixed-case handle should resolve through the fallback")
-  assert(fallback_calls == 1,
-    "expected exactly one fallback for-each-ref call, got " .. fallback_calls)
+  assert(fallback_calls == 0,
+    "native handle resolution must not scan retired ref namespaces: " .. fallback_calls)
 end
 
 -- The cache only helps when it already carries the id: an item newer
@@ -382,12 +383,14 @@ local function test_depend_resolves_a_handle_form_blocker()
   local blocker = file_item(s, "the blocker", root)
   assert(gitboard.main("depend", tail.handle(waiter), tail.handle(blocker),
       "--dir", s.root) == 0, "both slots should accept a handle")
+  fixture.caller_fetch(s)
   local it = check.must(store.load(s, waiter))
   assert(#(it.depends_on or {}) == 1 and it.depends_on[1] == blocker,
     "and the edge actually landed: " .. table.concat(it.depends_on or {}, ","))
   -- `undepend` rides the same branch and the same resolution.
   assert(gitboard.main("undepend", tail.handle(waiter), tail.handle(blocker),
       "--dir", s.root) == 0, "undepend takes the same two slots")
+  fixture.caller_fetch(s)
   assert(#(check.must(store.load(s, waiter)).depends_on or {}) == 0,
     "and withdrew it")
 end
@@ -414,6 +417,7 @@ local function test_set_collects_each_declared_list_flag_occurrence()
   assert(gitboard.main("set", leaf, "--touches", "_work/a.tl",
       "--touches", "_work/b.tl", "--access", "cosmic-lua/cosmic",
       "--dir", s.root) == 0, "both flags should parse")
+  fixture.caller_fetch(s)
   local it = check.must(store.load(s, leaf))
   assert(#it.touches == 2 and it.touches[2] == "_work/b.tl",
     "each --touches is one entry: " .. table.concat(it.touches, " "))

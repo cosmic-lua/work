@@ -355,19 +355,7 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
   local outcome = ""
   local resolved = (it.resolution or "") ~= ""
   if resolved or (it.handover_head or "") ~= "" or (it.result or "") ~= "" then
-    local ref = s.leased_ref[id]
-    local candidates: {string} = {"refs/heads/items/" .. id,
-      "refs/heads/ended/" .. id}
-    if ref ~= nil then
-      candidates = {ref}
-    end
-    local entries: {gitreadlog.Entry} | nil
-    local eerr = ""
-    if s.state_head ~= "" then
-      entries, eerr = gitreadlog.read_state_history(s.root, s.state_head, id)
-    else
-      entries, eerr = gitreadlog.read_history(s.root, candidates)
-    end
+    local entries, eerr = gitreadlog.read_state_history(s.root, s.state_head, id)
     if entries == nil then
       return verdict_line("show", false, eerr)
     end

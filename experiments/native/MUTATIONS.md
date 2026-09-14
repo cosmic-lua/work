@@ -1,20 +1,31 @@
 # Native semantic mutation checks — 2026-09-13
 
-The initial campaigns killed **12 claim/transaction/read mutants and 3 bounded-policy
-mutants**. Both campaigns had zero surviving, invalid, or non-assertion-error
-mutants. Every target test passed before mutation and again after restoring the
-original source. These reports precede the second-review fixes. The expanded
-15-case main and 7-case bounded/retry catalogs are ready; their final runs will
-use the published follow-up checkpoint without source overlays.
+The initial campaigns killed **12 claim/transaction/read mutants and 3
+bounded-policy mutants**. Both campaigns had zero surviving, invalid, or
+non-assertion-error mutants. Every target test passed before mutation and again
+after restoring the original source. These reports are immutable historical
+evidence from before the later review fixes.
 
 | Campaign | Killed | Results | Exact source and substitutions |
 | --- | ---: | --- | --- |
 | Claim, transaction, and canonical read | 12/12 | [Literal results](claim-transaction-results.literal) | [Provenance](claim-transaction-provenance.literal) |
 | Bounded workload policy | 3/3 | [Literal results](bounded-results.literal) | [Provenance](bounded-provenance.literal) |
 
-The separate migration campaign reports 12 kills through
-[`migration_mutations.tl`](migration_mutations.tl); those are not
-included in the 12+3 counts above.
+A separate historical migration campaign recorded 12 kills. The consolidated
+runner now has six catalogs:
+
+| Catalog | File |
+| --- | --- |
+| Main native semantics | [`mutations.tl`](mutations.tl) |
+| Bounded gates and retries | [`bounded-mutations.tl`](bounded-mutations.tl) |
+| Migration | [`migration-mutations.tl`](migration-mutations.tl) |
+| Read projection | [`read-mutations.tl`](read-mutations.tl) |
+| Publication | [`publication-mutations.tl`](publication-mutations.tl) |
+| CLI boundaries | [`cli-mutations.tl`](cli-mutations.tl) |
+
+Migration uses the shared runner with `migration-mutations.tl`. **Current
+six-catalog gate: pending the final integrated checkout.** Final killed,
+surviving, invalid, and error totals will be recorded only from that run.
 
 ## Method and scope
 
@@ -50,21 +61,21 @@ result was counted as a kill.
 
 ## Reproduction
 
-With the referenced changes present in the checkout:
+Run each current catalog from the repository root:
 
 ```sh
-bin/cosmic experiments/native/mutation_check.tl experiments/native/mutations.tl \
-  _work/stateclaim_authority.tl _work/stateclaim_authority_test.tl \
-  _work/stateplan_receipts_test.tl
-
-bin/cosmic experiments/native/mutation_check.tl experiments/native/bounded-mutations.tl \
-  _work/graphguards.tl _work/stategate.tl _work/stategate_test.tl
+for catalog in mutations bounded-mutations migration-mutations \
+  read-mutations publication-mutations cli-mutations; do
+  bin/cosmic experiments/native/mutation_check.tl \
+    "experiments/native/${catalog}.tl"
+done
 ```
 
 Each run writes `results.literal`, `provenance.literal`, the frozen source snapshot,
 strict-compilation logs, and baseline/mutant/restored fresh-execution logs under
 `o/native-state-mutations/<run>/`. The completed runs were
 `J4OLkAfpXfdVR7bAxv2zrrol6tuaHZ13` and
-`ywPJ1kpvoCKsspb0ch7PWq4459mPlzvk`, respectively. The runner/catalog were consolidated
-from `experiments/native-state` into this directory after those executions;
-recorded provenance retains the paths used at execution time.
+`ywPJ1kpvoCKsspb0ch7PWq4459mPlzvk`, respectively. Those commands used source
+overlays recorded in the provenance literals. The runner/catalog were
+consolidated from `experiments/native-state` into this directory after those
+executions; recorded provenance retains the paths used at execution time.

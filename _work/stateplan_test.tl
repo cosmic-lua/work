@@ -3,12 +3,13 @@ local check = require("cosmic.check")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local git = require("_work.singlehead_git")
-local objects = require("_work.singlehead_objects")
+local objects = require("_work.stateplan_objects")
 local tx = require("_work.statetransaction")
 local projection = require("_work.stateplan_git")
 local plans = require("_work.stateplan")
 local receipts = require("_work.stateplan_receipts")
 local literal = require("_work.singlehead_literal")
+local json = require("cosmic.json")
 local ZERO < const > = string.rep("0", 40)
 local function replay(root: string, plan: plans.Plan): string
   local outputs: {string: string} = {}
@@ -74,6 +75,19 @@ local function test_frozen_chain_receipt_and_connector()
   assert(plan.calls[3].arguments.base_tree_sha == "$tree_1_1.sha")
   assert(plan.calls[4].arguments.parent_sha == "$commit_1.sha")
   assert(plan.calls[5].arguments.force == false)
+  assert(plan.calls[1].tool == "github_create_tree")
+  assert(plan.calls[2].tool == "github_create_commit"
+    and plan.calls[2].arguments.repository_full_name == "example/board")
+  assert(plan.calls[5].tool == "github_update_ref"
+    and plan.calls[5].arguments.repository_full_name == "example/board")
+  local executable = check.must(plans.connector_call(plan, 1))
+  assert(executable.guard == nil);
+  (executable.arguments.tree_elements as {{string: any}})[1].path = "mutated" -- cast: generated call shape
+  local rerendered = check.must(plans.connector_call(plan, 1))
+  assert((rerendered.arguments.tree_elements as {{string: any}})[1].path == "items/a/body") -- cast: generated call shape
+  local adapted = check.must(json.decode(check.must(plans.connector_json(plan, 1)))) as {string: any} -- cast: generated JSON call object
+  local adapted_arguments = adapted.arguments
+  assert(adapted.tool == "github_create_tree" and adapted.guard == nil and adapted_arguments is {string: any})
   local status = check.must(receipts.inspect(root, plan.candidate, value, plan.candidate, base))
   assert(status.status == "confirmed")
   local advanced = check.must(receipts.inspect(root, plan.candidate, value, plan.candidate, staged))
@@ -87,6 +101,12 @@ local function test_frozen_chain_receipt_and_connector()
   assert(plans.save(saved, plan))
   assert(not plans.save(saved, plan))
   assert(check.must(plans.load(saved)).candidate == plan.candidate)
+  local wrapper = check.must(literal.decode_object(check.must(fs.read(saved))))
+  wrapper.sha256 = string.rep("0", 64)
+  local corrupt = saved .. ".corrupt"
+  assert(fs.write(corrupt, check.must(literal.encode(wrapper))))
+  local loaded, lerr = plans.load(corrupt)
+  assert(loaded == nil and lerr:find("integrity", 1, true), lerr)
 end
 local function test_path_fence_precedes_bounded_gate_and_retry_is_new()
   local root = fs.join(fixture.tmpdir, "fences")
@@ -122,8 +142,10 @@ local function test_deadline_delete_author_and_read_dependency()
   local connector_tip = replay(root, plan)
   assert(check.must(git.oid(root, connector_tip .. "^{tree}")) == check.must(git.oid(root, plan.candidate .. "^{tree}")))
   assert(check.must(receipts.inspect(root, connector_tip, plan.frozen)).status == "confirmed")
-  assert(plans.connector_call(plan, #plan.calls, 99))
-  assert(not plans.connector_call(plan, #plan.calls, 100))
+  assert(plans.connector_call(plan, #plan.calls, 99, plan.expected_head))
+  assert(not plans.connector_call(plan, #plan.calls, 99))
+  assert(not plans.connector_call(plan, #plan.calls, 99, string.rep("1", 40)))
+  assert(not plans.connector_call(plan, #plan.calls, 100, plan.expected_head))
   assert(not plans.local_candidate(root, plan, 100))
   assert(check.must(projection.path_id(root, plan.candidate, "items/a/body")) == ZERO)
   assert(receipts.complete_chain(root, plan.candidate, plan.frozen))
@@ -162,4 +184,46 @@ local function test_deletion_refuses_inherited_gitlink()
   change.changes[1].delete = true
   local plan, err = plans.build(root, frozen(inherited, {change}), inherited)
   assert(plan == nil and err:find("unsupported native tree entry", 1, true), "deletion must never silently omit an inherited gitlink")
+end
+
+local function test_deletion_snapshot_preserves_executable_and_symlink_modes()
+  local root = fs.join(fixture.tmpdir, "deletion-modes")
+  local base = initial(root)
+  local seeded = {
+    {path = "remove", mode = "100644", content = "gone", delete = false},
+    {path = "run", mode = "100755", content = "#!/bin/sh\n", delete = false},
+    {path = "link", mode = "120000", content = "run", delete = false},
+  }
+  local one = check.must(projection.commit(root, base,
+      check.must(projection.apply(root, base, seeded)), transition(base, "seed", "unused", ZERO)))
+  local remove = transition(one, "remove", "", check.must(projection.path_id(root, one, "remove")))
+  remove.changes[1].delete = true
+  local plan = check.must(plans.build(root, frozen(one, {remove}), one))
+  local elements = plan.calls[1].arguments.tree_elements as {{string: any}} -- cast: generated call shape
+  local modes: {string: string} = {}
+  for _, entry in ipairs(elements) do modes[entry.path as string] = entry.mode as string end -- cast: generated tree entry fields
+  assert(modes.run == "100755" and modes.link == "120000" and modes.remove == nil)
+  local connector_tip = replay(root, plan)
+  assert(check.must(git.oid(root, connector_tip .. "^{tree}")) == check.must(git.oid(root, plan.candidate .. "^{tree}")))
+end
+
+local function test_shell_candidate_requires_physical_author_but_connector_receipt_does_not()
+  local root = fs.join(fixture.tmpdir, "physical-author")
+  local base = initial(root)
+  local value = frozen(base, {transition(base, "items/a/body", "one", ZERO)})
+  local plan = check.must(plans.build(root, value, base))
+  local tree = check.must(git.oid(root, plan.candidate .. "^{tree}"))
+  local connector = check.must(git.text(root, {"commit-tree", tree, "-p", base},
+      plan.frozen.transitions[1].message, {
+        GIT_AUTHOR_NAME = "Connector", GIT_AUTHOR_EMAIL = "connector@example.test",
+        GIT_AUTHOR_DATE = "1700000000 +0000", GIT_COMMITTER_NAME = "Connector",
+        GIT_COMMITTER_EMAIL = "connector@example.test", GIT_COMMITTER_DATE = "1700000000 +0000"}))
+  assert(check.must(receipts.inspect(root, connector, plan.frozen, connector)).status == "confirmed")
+  local pending = check.must(receipts.inspect(root, base, plan.frozen, connector))
+  assert(pending.status == "pending" and pending.absence_proven,
+    "a returned commit with unknown update outcome is safe to retry only after fetched absence")
+  assert(plans.build(root, plan.frozen, base), "the proven-absent update can be replanned from the same frozen transaction")
+  plan.candidate = connector
+  local ok, err = plans.validate_local(root, plan)
+  assert(not ok and err:find("physical author", 1, true), err)
 end

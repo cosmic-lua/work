@@ -4,6 +4,7 @@
 local gitobj = require("_work.gitobj")
 local migrate6 = require("_work.migrate6")
 local source = require("_work.migrate6_source")
+local probes = require("_work.migrate6_probes")
 
 local record FreezeProof
   destination: string
@@ -181,6 +182,11 @@ local function verify_sources(root: string, cp: migrate6.Checkpoint,
   end
   local actual, aerr = remote_refs(root, destination)
   if actual == nil then return nil, aerr end
+  if cp.freeze ~= nil then
+    local filtered, ferr = probes.filter(actual, "refs/heads/", cp.freeze.probes)
+    if filtered == nil then return nil, ferr end
+    actual = filtered
+  end
   local same, drift = source.compare(legacy(cp.sources, cp.prefix), legacy(actual, "refs/heads/"))
   if not same then return nil, drift end
   local complete, cerr = source.integrity(root, legacy(actual, "refs/heads/"))

@@ -2,6 +2,7 @@ local check = require("cosmic.check")
 local fs = require("cosmic.fs")
 local child = require("cosmic.child")
 local fixture = require("_work.fixture")
+local claimcli = require("_work.gitclaim_cli")
 local init = require("_work.stateinit")
 local refs = require("_work.refs")
 local store = require("_work.store")
@@ -10,6 +11,20 @@ local claim = require("_work.claim")
 local receipt = require("_work.preparation_receipt")
 local staging = require("_work.statestaging")
 local boardread = require("_work.boardread")
+
+-- `claim` is mutual exclusion, so it may reserve an unranked item whose spec
+-- is still empty. The readiness and workability recheck belongs to `take`.
+local function test_direct_claim_is_exclusion_only()
+  local s = fixture.init_state_repo("native-direct-claim")
+  local id = fixture.file_item(s, "Unranked and unspecced", "")
+  local prose = store.read_spec(s, id)
+  assert(prose.change == "" and prose.non_goals == "")
+  local who = "0123456789abcdef0123456789abcdef"
+  assert(claimcli.cmd_claim(s, {id}, "take", who, "origin", "", false,
+      "", false) == 0)
+  assert(check.must(store.load(s, id)).claim == who)
+end
+
 local function test_native_cli_claim_worktree_and_release()
   local root = fs.join(fixture.tmpdir, "native-cli-lifecycle")
   assert(fs.remove_all(root)); assert(fs.make_dirs(root)); assert(init.init(root)); assert(refs.set_board_mode(root, "local"))
@@ -46,6 +61,9 @@ local function test_native_cli_claim_worktree_and_release()
   local stale, stale_err = native.current(check.must(store.open(root)), id, who)
   assert(stale == nil and stale_err ~= "")
   local head = check.must(refs.read_ref(root, "refs/heads/state")); assert(check.must(boardread.list(root, head)).claims_by_id[id] == nil)
+  local released = check.must(child.run({"git", "-C", root, "show", "-s", "--format=%B", head}))
+  assert(released.ok and released.stdout:match("^drop by ") ~= nil, released.stdout)
+  assert(released.stdout:find("Drop-Why: done", 1, true) ~= nil, released.stdout)
 end
 
 local function test_native_remote_claim_publication()
@@ -78,4 +96,31 @@ local function test_native_remote_claim_publication()
   cli({"drop", id, "--session", who, "--why", "done", "--execute"})
   local head = check.must(refs.read_ref(root, "refs/remotes/origin/state")); assert(check.must(boardread.list(root, head)).claims_by_id[id] == nil)
 
+end
+
+local function test_mixed_self_overlap_rejects_the_complete_cli_acquisition()
+  local s = fixture.init_state_repo("native-self-overlap")
+  local first = fixture.file_item(s, "Already held", "")
+  local second = fixture.file_item(s, "Still free", "")
+  local who = "0123456789abcdef0123456789abcdef"
+  local function cli(ids: {string}, expected: integer): string
+    local argv = {"o/bin/gitboard", "claim"}
+    for _, id in ipairs(ids) do argv[#argv + 1] = id end
+    argv[#argv + 1] = "--session"; argv[#argv + 1] = who
+    argv[#argv + 1] = "--dir"; argv[#argv + 1] = s.root
+    local result = check.must(child.run(argv))
+    assert(result.code == expected, result.stdout .. result.stderr)
+    return result.stdout
+  end
+  cli({first}, 0)
+  local before = check.must(refs.read_ref(s.root, "refs/heads/state"))
+  local before_claim = check.must(boardread.list(s.root, before)).claims_by_id[first]
+  assert(before_claim ~= nil)
+  local output = cli({second, first}, 1)
+  assert(output:find("batch rejected; no item succeeded", 1, true), output)
+  assert(check.must(refs.read_ref(s.root, "refs/heads/state")) == before)
+  local after = check.must(boardread.list(s.root, before))
+  assert(after.claims_by_id[first].id == before_claim.id)
+  assert(after.claims_by_id[second] == nil)
+  assert(#check.must(staging.list(s.root)) == 0)
 end

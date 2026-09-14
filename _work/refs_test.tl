@@ -17,12 +17,12 @@ local function test_for_each_ref_parses_the_committer_date()
   -- `before` once the commit already exists lets a second boundary
   -- land between the two and read `touched` as earlier than `before`.
   local before = os.time()
-  local id = fixture.file_item(s, "an outcome", "")
-  local found = check.must(refs.for_each_ref(s.root, {"refs/heads/items/" .. id}))
+  local _id = fixture.file_item(s, "an outcome", "")
+  local found = check.must(refs.for_each_ref(s.root, {"refs/heads/state"}))
   local after = os.time()
-  assert(#found == 1, "the fixture item's own ref, and only it: " .. #found)
+  assert(#found == 1, "the canonical native state ref, and only it: " .. #found)
   local entry = found[1]
-  assert(entry.refname == "refs/heads/items/" .. id, entry.refname)
+  assert(entry.refname == "refs/heads/state", entry.refname)
   assert(entry.sha ~= "", "the object still parses alongside it")
   assert(entry.touched >= before and entry.touched <= after,
     ("the third field should parse as the write's own committer date: "
@@ -31,8 +31,8 @@ end
 
 local function test_atomic_checks_only_and_failed_witness_preserve_all_refs()
   local s = fixture.init_state_repo("refs-atomic-checks")
-  local id = fixture.file_item(s, "witness", "")
-  local witness = "refs/heads/items/" .. id
+  local _id = fixture.file_item(s, "witness", "")
+  local witness = "refs/heads/state"
   local sha = check.must(refs.read_ref(s.root, witness))
   assert(refs.update_refs_atomic(s.root, {}, {{ref = witness, expected = sha}}))
   local ok = refs.update_refs_atomic(s.root, {},

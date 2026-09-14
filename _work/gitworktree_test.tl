@@ -11,10 +11,7 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
-local gitclaim = require("_work.gitclaim")
-local claimbatch = require("_work.claimbatch")
-local prepared = require("_work.prepared")
-local refs = require("_work.refs")
+local authority = require("_work.stateclaim_authority")
 local store = require("_work.store")
 local worktree = require("_work.gitworktree")
 
@@ -93,24 +90,14 @@ local function make_loud_checkout(name: string): string
   return checkout
 end
 
---- Give `id` a real locally-confirmed claim bridge for worktree tests.
+--- Give `id` a real locally-confirmed native claim for worktree tests.
 local function claim_as(s: store.Store, id: string, session: string,
     product_base?: string)
-  local target = gitclaim.target_item_ref(id)
-  local tip = check.must(refs.read_ref(s.root, target))
-  local result = gitclaim.prepare_batch({{
-        root = s.root, id = id, source_ref = target, target_ref = target,
-        remote = "origin", batch = "fixture-" .. id:sub(-8),
-        caller = session, action = "take", product_base = product_base or tip,
-        force = false, why = "", now = os.time(),
-      }})
-  assert(result.prepared ~= nil, result.refused[id] or result.refused.batch)
-  assert(prepared.promote_local(s.root, result.prepared.transaction))
+  fixture.claim_item(s, id, session, product_base)
 end
 
 local function branch_of(s: store.Store, id: string): string
-  local it = check.must(store.load(s, id))
-  local st = check.must(claimbatch.read_state(s.root, it.claim_batch or "", id))
+  local st = check.must(authority.current(s, id, SESSION))
   return claim.branch(id, st.root)
 end
 
@@ -386,8 +373,8 @@ local function test_worktree_refuses_when_unclaimed()
   _G.print = old_print
   local out = table.concat(lines, "\n")
   assert(code ~= 0, "an unclaimed item is refused")
-  assert(out:find("is not claimed by " .. SESSION, 1, true) ~= nil,
-    "the refusal names the caller session: " .. out)
+  assert(out:find("current claim is not active", 1, true) ~= nil,
+    "the refusal identifies the absent current lease: " .. out)
   assert(not fs.is_dir(expect), "no worktree directory was created")
   local has_branch = child.run({"git", "rev-parse", "--verify", "--quiet",
       "refs/heads/" .. id8}, {cwd = checkout})
@@ -395,8 +382,7 @@ local function test_worktree_refuses_when_unclaimed()
     "no branch was created in the checkout")
 end
 
--- A claim held by a DIFFERENT session refuses too, naming whose claim
--- it actually is rather than only who was refused.
+-- A claim held by a DIFFERENT session refuses with a foreign-lease reason.
 local function test_worktree_refuses_a_different_sessions_claim()
   local checkout = make_checkout("foreign", "none")
   local s, leaf = item_with_repo("wt-foreign", checkout)
@@ -416,8 +402,8 @@ local function test_worktree_refuses_a_different_sessions_claim()
   _G.print = old_print
   local out = table.concat(lines, "\n")
   assert(code ~= 0, "a different session's claim is refused")
-  assert(out:find(SESSION, 1, true) ~= nil,
-    "the refusal names whose claim it is: " .. out)
+  assert(out:find("current claim belongs to another session", 1, true) ~= nil,
+    "the refusal identifies a foreign current lease: " .. out)
   assert(not fs.is_dir(expect), "no worktree directory was created")
   local has_branch = child.run({"git", "rev-parse", "--verify", "--quiet",
       "refs/heads/" .. branch}, {cwd = checkout})
@@ -426,29 +412,26 @@ local function test_worktree_refuses_a_different_sessions_claim()
 end
 
 -- The holder field can remain after the two-hour lease expires. Worktree
--- derives the control timestamp from Git history and refuses that stale field
+-- reads the native lease deadline and refuses that stale field
 -- rather than treating it as authorization to work offline.
 local function test_worktree_refuses_an_expired_claim()
   local checkout = make_checkout("expired", "none")
   local s = fixture.init_state_repo("wt-expired")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(graph.cmd_set(s, leaf, nil, "acme/widgets", "main") == 0)
-  local target = gitclaim.target_item_ref(leaf)
   local base = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
   local caller = ("a"):rep(32)
-  local result = gitclaim.prepare_batch({{
-        root = s.root, id = leaf, source_ref = target, target_ref = target,
-        remote = "origin", batch = "expired", caller = caller,
-        action = "take", product_base = (base.stdout:gsub("%s+$", "")),
-        force = false, why = "", now = os.time() - claim.LEASE_S - 1,
-      }})
-  assert(result.prepared ~= nil, result.refused[leaf] or result.refused.batch)
-  local p = result.prepared
-  assert(prepared.promote_local(s.root, p.transaction))
+  local clock = os.time
+  local expired_at = clock() - claim.LEASE_S - 1
+  os.time = function(): integer return expired_at end
+  local ok, identity = pcall(fixture.claim_item, s, leaf, caller,
+    (base.stdout:gsub("%s+$", "")))
+  os.time = clock
+  assert(ok, identity)
   local _closed, _cerr = store.close(s)
   local reopened = check.must(store.open(s.root))
   assert(worktree.cmd_worktree(reopened, leaf, caller, checkout, {}, false,
       false) ~= 0, "an expired claim cannot authorize a worktree")
-  local path = fs.join(fs.dirname(checkout), "wt", p.members[1].branch)
+  local path = fs.join(fs.dirname(checkout), "wt", claim.branch(leaf, identity))
   assert(not fs.is_dir(path), "no worktree was created for the expired lease")
 end

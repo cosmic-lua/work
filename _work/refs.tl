@@ -376,11 +376,8 @@ end
 --- while a state* wildcard would also mirror unrelated state-prefixed branches.
 local function fetch_refspecs(remote: string): {string}
   return {
-    ("+refs/heads/items/*:refs/remotes/%s/items/*"):format(remote),
-    ("+refs/heads/ended/*:refs/remotes/%s/ended/*"):format(remote),
-    ("+refs/heads/claims/*:refs/remotes/%s/claims/*"):format(remote),
-    ("+refs/heads/board/*:refs/remotes/%s/board/*"):format(remote),
-    ("+refs/heads/claim-batches/*:refs/remotes/%s/claim-batches/*"):format(remote),
+    ("+refs/heads/state:refs/remotes/%s/state"):format(remote),
+    ("+refs/heads/board/format:refs/remotes/%s/board/format"):format(remote),
   }
 end
 

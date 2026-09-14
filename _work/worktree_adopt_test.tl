@@ -13,7 +13,9 @@ local brief = require("_work.brief")
 local claim = require("_work.claim")
 local fixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
-local gitclaim = require("_work.gitclaim")
+local stateclaim = require("_work.stateclaim")
+local statewrite = require("_work.statewrite")
+local authority = require("_work.stateclaim_authority")
 local gitdraft = require("_work.gitdraft")
 local graph = require("_work.gitgraph")
 local receipt = require("_work.preparation_receipt")
@@ -283,14 +285,20 @@ local function test_live_authority_refuses_draft_overlay_wrong_holder_expiry_and
           local now = os.time()
           os.time = function(): integer return now + claim.LEASE_S + 1 end
         else
-          local target = gitclaim.target_item_ref(c.id)
-          local p = check.must(gitclaim.prepare_batch({{root = c.s.root, id = c.id, source_ref = target,
-                  target_ref = target, remote = "origin", batch = "pending-renewal", caller = SESSION,
-                  action = "renew", product_base = "", force = false, why = "", now = os.time() + 1}}).prepared)
-          for _, update in ipairs(p.transaction.updates) do
-            if fault == "pending" or update.ref == target then
-              fixture.git(c.s.root, {"update-ref", update.ref, update.next})
-            end
+          fixture.drop_claim(c.s, c.id, SESSION, "before speculative reacquisition")
+          local canonical = c.s.state_head
+          local next_claim = stateclaim.prepare(c.s.root, canonical,
+            {{id = c.id, product_base = c.base}}, "take", SESSION, os.time(), false, "")
+          assert(next(next_claim.refused) == nil)
+          for _, dependency in ipairs(next_claim.dependencies) do
+            c.s.state_reads[dependency.path] = dependency.id
+          end
+          assert(statewrite.transition(c.s, next_claim.changes, "speculative acquisition", next_claim.publish_by))
+          fixture.git(c.s.root, {"update-ref", "refs/remotes/origin/state", canonical})
+          fixture.git(c.s.root, {"update-ref", "refs/remotes/origin/board/format", canonical})
+          assert(refsmod.set_board_mode(c.s.root, "remote"))
+          if fault == "unconfirmed" then
+            fixture.git(c.s.root, {"update-ref", "refs/heads/state", c.s.state_head})
           end
         end
         local before, original = value(c.s.root, "show-ref"), child.run
@@ -303,6 +311,24 @@ local function test_live_authority_refuses_draft_overlay_wrong_holder_expiry_and
         assert(check.must(fs.read(c.file)) == old and value(c.s.root, "show-ref") == before)
       end)
   end
+end
+
+local function test_pending_renewal_preserves_current_acquisition_authority()
+  fresh("pending-renewal", function(c: Case)
+      good(c)
+      local current = check.must(authority.current(c.s, c.id, SESSION))
+      local renewal = stateclaim.prepare(c.s.root, c.s.state_head,
+        {{id = c.id, product_base = ""}}, "renew", SESSION, os.time() + 1, false, "")
+      assert(next(renewal.refused) == nil and #renewal.changes == 1)
+      for _, dependency in ipairs(renewal.dependencies) do
+        c.s.state_reads[dependency.path] = dependency.id
+      end
+      assert(statewrite.transition(c.s, renewal.changes, "pending renewal", renewal.publish_by))
+      local still_current = check.must(authority.current(c.s, c.id, SESSION))
+      assert(still_current.root == current.root and still_current.expires_at == current.expires_at)
+      local code, out = run(c, c.path)
+      assert(code == 0, "pending renewal cannot invalidate the current canonical lease: " .. out)
+    end)
 end
 
 local function test_options_unsupported_targets_and_legacy_compatibility()

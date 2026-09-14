@@ -13,14 +13,11 @@ local item = require("_work.item")
 local sqlite = require("cosmic.sqlite")
 local tail = require("_work.tail")
 
---- `leases`' result: every id's write lease, plus the board-wide
---- `refs/heads/board/seq` tip a bounded mutation's own compare-and-swap
---- push is made against.
+--- Every native item’s path-attributed history tip and timestamp.
 local record Leases
   refs_by_id: {string: string}
   shas_by_id: {string: string}
   touched_at: {string: integer}
-  seq_sha: string
 end
 
 --- Every observed lane's last recorded conclusion, "" for a lane never
@@ -322,15 +319,9 @@ local function items(c: cache.Cache): {item.Item} | nil, string
   return out, ""
 end
 
---- Every item's write lease, straight from the cache's own `items`
---- rows — the ref it lives on, the tip a mutation's compare-and-swap
---- push is made against, and that tip's committer date — plus
---- `refs/heads/board/seq`'s own recorded tip, `cache_meta.seq_sha`
---- ("" for a board that has never minted a short key, or a cache built
---- before this field existed). `_work.store.list`'s cache-backed
---- hydration of `leased_ref`/`leased_sha`/`touched_at`/`observed_seq`.
+--- Native history observations from the query projection, used by store.list.
 --- @param c cache.Cache The open cache
---- @return Leases | nil Every id's lease, and the seq ref's own tip
+--- @return Leases | nil Every item’s native history observation
 --- @return string Error message
 local function leases(c: cache.Cache): Leases | nil, string
   local rows, err = c.db:query("SELECT id, ref, tip, touched_at FROM items")
@@ -350,8 +341,7 @@ local function leases(c: cache.Cache): Leases | nil, string
   if rerr then
     return nil, rerr
   end
-  return {refs_by_id = refs_by_id, shas_by_id = shas_by_id, touched_at = touched_at,
-    seq_sha = cachedb.meta_get(c.db, "seq_sha") or ""}, ""
+  return {refs_by_id = refs_by_id, shas_by_id = shas_by_id, touched_at = touched_at}, ""
 end
 
 --- `find TEXT...`: every hit for the joined query, ranked, one line

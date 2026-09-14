@@ -2,6 +2,7 @@
 local boardtree = require("_work.boardtree")
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local format = require("_work.format")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
@@ -22,6 +23,13 @@ local function init(root: string): boolean, string
     local made, err = child.run({"git", "init", "-q", root})
     if made == nil then return false, err end
     if not made.ok then return false, made.stderr end
+  end
+  local canonical, cerr = format.inspect(root)
+  if canonical == nil then return false, cerr end
+  if canonical.sha ~= refs.ZERO_SHA then
+    local head, herr = format.state_head(root)
+    if head == nil then return false, herr end
+    return refs.ensure_refspecs(root)
   end
   local present, perr = refs.for_each_ref_raw(root,
     {"refs/heads/items", "refs/heads/ended", "refs/heads/claim-batches",

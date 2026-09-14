@@ -2,6 +2,8 @@
 local fd = require("cosmic.fd")
 local fs = require("cosmic.fs")
 local rand = require("cosmic.rand")
+local literal = require("_work.singlehead_literal")
+local objects = require("_work.stateplan_objects")
 --- Publish `raw` at `path` exactly once and durably: written to a private
 --- temporary, fsynced, then hard-linked into place, so a path that already
 --- holds an attempt fails rather than being overwritten and no reader ever sees
@@ -45,8 +47,51 @@ local function write_once(path: string, raw: string): boolean, string
   local dclosed, dcerr = dir:close()
   return dsynced and dclosed, not dsynced and dserr or dcerr
 end
+--- Save one canonical literal value through the same create-once boundary.
+local function save_value(path: string, value: any): boolean, string
+  local raw, err = literal.encode(value)
+  if raw == nil then return false, err end
+  return write_once(path, raw)
+end
+
+--- Load one canonical literal object, refusing alternate encodings.
+local function load_value(path: string): {string: any} | nil, string
+  local raw, err = fs.read(path)
+  if raw == nil then return nil, err end
+  local value, verr = literal.decode_object(raw)
+  if value == nil then return nil, verr end
+  if literal.encode(value) ~= raw then return nil, "saved value is not canonical" end
+  return value, ""
+end
+
+--- Seal a saved plan over its canonical payload. The caller still validates
+--- the typed value after loading; this helper owns only immutable byte IO.
+local function save_sealed(path: string, value: any): boolean, string
+  local payload, err = literal.encode(value)
+  if payload == nil then return false, err end
+  return save_value(path, {plan = value, sha256 = objects.sha256(payload)})
+end
+
+--- Load and verify a sealed canonical value.
+local function load_sealed(path: string): {string: any} | nil, string
+  local envelope, err = load_value(path)
+  if envelope == nil then return nil, err end
+  local value, sha = envelope.plan, envelope.sha256
+  if not (value is {string: any}) or not (sha is string) then
+    return nil, "malformed sealed saved value"
+  end
+  local payload, perr = literal.encode(value)
+  if payload == nil then return nil, perr end
+  if objects.sha256(payload) ~= sha then return nil, "saved value integrity check failed" end
+  return value, ""
+end
 local record Module
   write_once: function(string, string): boolean, string
+  save_value: function(string, any): boolean, string
+  load_value: function(string): {string: any} | nil, string
+  save_sealed: function(string, any): boolean, string
+  load_sealed: function(string): {string: any} | nil, string
 end
-local M: Module = {write_once = write_once}
+local M: Module = {write_once = write_once, save_value = save_value,
+  load_value = load_value, save_sealed = save_sealed, load_sealed = load_sealed}
 return M

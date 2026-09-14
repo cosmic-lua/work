@@ -4,11 +4,13 @@ local gate = require("_work.gitgate")
 local refs = require("_work.refs")
 local migrate = require("_work.migrate6")
 local freeze = require("_work.migrate6_freeze")
+local probes = require("_work.migrate6_probes")
 local publish = require("_work.migrate6_publish")
 local diagnostics = require("_work.migrate6_diagnostics")
 local literal = require("_work.singlehead_literal")
 
---- `gitboard migrate6`: `plan` and `show` read and report locally, `plan
+--- `gitboard migrate6`: `prepare-freeze` seeds sacrificial refs before an
+--- owner enables the ruleset; `plan
 --- --freeze-ruleset ID` binds an observed and probed legacy-write freeze to the
 --- source snapshot, `verify-source` and `verify-remote` re-compare the ref set,
 --- `activation-plan` renders the staged pushes, and `publish --execute` is the
@@ -23,10 +25,18 @@ local literal = require("_work.singlehead_literal")
 local function run(root: string, args: {string}, values: {string: string}, switches: {string: boolean}): integer
   local action = args[1] or "plan"
   local path = values.checkpoint or fs.join(root, "o/migrate6/checkpoint.literal")
+  local probes_path = values["freeze-probes"] or (path .. ".freeze-probes.literal")
   local remote = values.remote or refs.board_remote(root)
   local cp: migrate.Checkpoint | nil = nil
   local err = ""
-  if action == "plan" then
+  if action == "prepare-freeze" then
+    local destination, derr = freeze.destination(root, remote)
+    if destination == nil then return gate.verdict_line("migrate6", false, derr) end
+    local manifest, merr = probes.prepare(root, destination, probes_path, nil, nil)
+    if manifest == nil then return gate.verdict_line("migrate6", false, merr) end
+    return gate.verdict_line("migrate6", true,
+      "sacrificial refs seeded; enable the freeze, then run plan --freeze-ruleset ID")
+  elseif action == "plan" then
     local prefix = values.prefix or (refs.board_mode(root) == "local" and "refs/heads/"
       or "refs/remotes/" .. remote .. "/")
     local proof: freeze.Proof = nil
@@ -34,13 +44,27 @@ local function run(root: string, args: {string}, values: {string: string}, switc
       local id = tonumber(values["freeze-ruleset"])
       if id == nil or id < 1 or id % 1 ~= 0 then return gate.verdict_line("migrate6", false, "freeze-ruleset must be a positive integer") end
       local previous_prefix: string = nil
+      local previous_probes: probes.Manifest = nil
       if fs.is_present(path) then
         local previous, perr = migrate.read(path)
         if previous == nil then return gate.verdict_line("migrate6", false, perr) end
         if previous.freeze == nil then return gate.verdict_line("migrate6", false, "offline checkpoint cannot acquire a retroactive freeze; choose a new checkpoint path") end
         previous_prefix = previous.prefix
+        previous_probes = previous.freeze.probes
       end
-      local snapshot, serr = freeze.snapshot(root, remote, id as integer, nil, nil, previous_prefix) -- cast: integral id checked
+      local manifest, merr = probes.read(probes_path)
+      if manifest == nil then return gate.verdict_line("migrate6", false,
+          "prepare-freeze must seed sacrificial refs before enabling the ruleset: " .. merr) end
+      if previous_probes ~= nil then
+        local prior, prior_err = probes.digest(previous_probes)
+        if prior == nil then return gate.verdict_line("migrate6", false, prior_err) end
+        local current, current_err = probes.digest(manifest)
+        if current == nil then return gate.verdict_line("migrate6", false, current_err) end
+        if prior ~= current then return gate.verdict_line("migrate6", false,
+            "freeze probe manifest differs from checkpoint; reuse the original manifest") end
+      end
+      local snapshot, serr = freeze.snapshot(root, remote, id as integer, -- cast: tonumber result is integral and positive
+        manifest, nil, nil, previous_prefix)
       if snapshot == nil then return gate.verdict_line("migrate6", false, serr) end
       prefix, proof = snapshot.proof.prefix, snapshot.proof
     end
@@ -77,7 +101,7 @@ local function run(root: string, args: {string}, values: {string: string}, switc
     print(encoded)
     return gate.verdict_line("migrate6", true, "review only; publish --execute re-verifies gh freeze and complete destination source set")
   elseif action ~= "plan" and action ~= "show" then
-    return gate.verdict_line("migrate6", false, "action must be plan, show, verify-source, verify-remote, activation-plan, or publish")
+    return gate.verdict_line("migrate6", false, "action must be prepare-freeze, plan, show, verify-source, verify-remote, activation-plan, or publish")
   end
   if cp == nil then return gate.verdict_line("migrate6", false, "checkpoint unavailable") end
   local report: diagnostics.Report = {fields = {}, results = {}, count = 0}

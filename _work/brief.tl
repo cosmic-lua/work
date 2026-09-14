@@ -35,7 +35,6 @@ local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
 local child = require("cosmic.child")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
@@ -228,12 +227,10 @@ end
 --- @param s store.Store The store
 --- @param it item.Item The item under brief
 --- @return string The branch, "" when it cannot be derived
-local function claim_branch(s: store.Store, it: item.Item): string
+local function claim_branch(_s: store.Store, it: item.Item): string
   local pointer = it.claim_batch or ""
   if pointer == "" then return "" end
-  local st, _serr = claimbatch.read_state(s.root, pointer, it.id)
-  if st == nil then return "" end
-  return claim.branch(it.id, st.root)
+  return claim.branch(it.id, pointer)
 end
 
 --- The checkout `worktree ID` makes for this item's claim: the same

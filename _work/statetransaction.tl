@@ -1,7 +1,6 @@
 --- Canonical, immutable format-6 ordered transaction snapshots.
 local literal = require("_work.singlehead_literal")
-local objects = require("_work.singlehead_objects")
-local fs = require("cosmic.fs")
+local objects = require("_work.stateplan_objects")
 local saved = require("_work.stateplan_file")
 local trailer_codec = require("_work.stateplan_trailers")
 local record Dependency
@@ -177,17 +176,19 @@ end
 --- @return boolean True when it was written
 --- @return string Error message
 local function save(path: string, value: Frozen): boolean, string
-  local raw, err = encode(value)
-  if raw == nil then return false, err end
-  return saved.write_once(path, raw)
+  local ok, err = validate(value)
+  if not ok then return false, err end
+  return saved.save_value(path, value)
 end
 --- A saved attempt back from disk, through the same canonical decode.
 --- @param path string The saved attempt's path
 --- @return Frozen | nil The transaction
 --- @return string Error message
 local function load_saved(path: string): Frozen | nil, string
-  local raw, err = fs.read(path)
-  if raw == nil then return nil, err end
+  local value, err = saved.load_value(path)
+  if value == nil then return nil, err end
+  local raw, rerr = literal.encode(value)
+  if raw == nil then return nil, rerr end
   return decode(raw)
 end
 local record Module

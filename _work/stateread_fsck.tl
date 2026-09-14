@@ -3,6 +3,8 @@ local boardread = require("_work.boardread")
 local boardtree = require("_work.boardtree")
 local gitobj = require("_work.gitobj")
 local ksuid = require("_work.ksuid")
+local archive = require("_work.migrate6_archive")
+local refs = require("_work.refs")
 
 --- Everything wrong with one format-6 head, in sorted order and mutating
 --- nothing: a `format` blob that is not canonically `6`, retained migration
@@ -18,10 +20,14 @@ local function problems(root: string, head: string): {string}
   local out: {string} = {}
   local queries: {string} = {head .. ":format"}
   local marks_sha = ""
+  local sources_sha = ""
   for _, entry in ipairs(view.entries) do
     if entry.path == "migration/marks" then
       marks_sha = entry.sha
       queries[#queries + 1] = marks_sha
+    elseif entry.path == "migration/sources" then
+      sources_sha = entry.sha
+      queries[#queries + 1] = sources_sha
     end
   end
   local batch, berr = gitobj.cat_file_batch(root, queries)
@@ -42,6 +48,21 @@ local function problems(root: string, head: string): {string}
       else
         local decoded, merr = boardtree.decode_marks(marks.content)
         if decoded == nil then out[#out + 1] = "migration/marks: " .. merr end
+      end
+    end
+    if marks_sha ~= "" and sources_sha == "" then
+      out[#out + 1] = "migration/sources: missing archive witness"
+    end
+    if sources_sha ~= "" then
+      local sources = batch[sources_sha]
+      if sources == nil or sources.otype ~= "blob" then
+        out[#out + 1] = "migration/sources: unreadable blob"
+      else
+        local prefix = refs.board_mode(root) == "local" and "refs/heads/"
+        or "refs/remotes/" .. refs.board_remote(root) .. "/"
+        for _, problem in ipairs(archive.problems(root, sources.content, prefix)) do
+          out[#out + 1] = problem
+        end
       end
     end
   end

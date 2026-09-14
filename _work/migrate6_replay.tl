@@ -86,31 +86,12 @@ local function lease(root: string, batch: string, id: string): string | nil, str
       expires_at = st.expires_at, product_base = st.product_base})
 end
 
---- One fast-import `M 100644 inline` op writing `text` at `path`.
+--- One shared fast-import op writing `text` at `path`.
 --- @param path string The path to write
 --- @param text string Its exact content
---- @return string The stream fragment
-local function modify(path: string, text: string): string
-  return "M 100644 inline " .. path .. "\n" .. fastimport.data_block(text)
-end
-
---- One replayed commit as a fast-import block: the source's own author,
---- committer and message verbatim, this event's tree ops, and its place in the
---- single chain being built.
---- @param event source.Event The source commit being replayed
---- @param index integer Its position in the merged order, used as its mark
---- @param ops string The tree ops this commit applies
---- @param base string The commit to start the chain from, "" for the first
---- @param ref string The private ref this attempt builds
---- @return string The stream fragment
-local function event_block(event: source.Event, index: integer, ops: string, base: string, ref: string): string
-  local lines: {string} = {"commit " .. ref .. "\nmark :" .. tostring(index) .. "\n",
-    "author " .. event.author .. "\n", "committer " .. event.committer .. "\n",
-    fastimport.data_block(event.message)}
-  if index > 1 then lines[#lines + 1] = "from :" .. tostring(index - 1) .. "\n"
-  elseif base ~= "" then lines[#lines + 1] = "from " .. base .. "\n" end
-  lines[#lines + 1] = ops
-  return table.concat(lines)
+--- @return fastimport.Op The shared stream plan op
+local function modify(path: string, text: string): fastimport.Op
+  return {path = path, content = text}
 end
 
 --- One item's `meta` with every `result`, `verdict_head` and `landed_head`
@@ -163,7 +144,7 @@ end
 --- @return Result | nil The candidate head, the marks and the event count
 --- @return string Error message
 local function replay(root: string, events: {source.Event}, workdir: string,
-    previous?: Result): Result | nil, string
+    previous?: Result, archive?: string): Result | nil, string
   if #events == 0 then return nil, "no item history to migrate" end
   -- Replay into a fresh private ref: a completed prior candidate must never
   -- be rewound to the intermediate history tip when a checkpoint is retried.
@@ -178,7 +159,7 @@ local function replay(root: string, events: {source.Event}, workdir: string,
   local current: {string: Product} = {}
   local claims: {string: string} = {}
   local logs: {string: {string: string}} = {}
-  local stream: {string} = {}
+  local plans: {fastimport.CommitPlan} = {}
   local pending: {source.Event} = {}
   local base = previous and previous.head or ""
   if previous ~= nil then
@@ -211,7 +192,6 @@ local function replay(root: string, events: {source.Event}, workdir: string,
         logs[id][name] = blobs[entry.sha].content
       end
     end
-    if #pending == 0 then return previous, "" end
   else pending = events end
   for index, event in ipairs(pending) do
     local p = products[event.tree]
@@ -220,7 +200,7 @@ local function replay(root: string, events: {source.Event}, workdir: string,
       if loaded == nil then return nil, err end
       p, products[event.tree] = loaded, loaded
     end
-    local ops: {string} = {}
+    local ops: {fastimport.Op} = {}
     for _, member in ipairs(event.ids or {event.id}) do
       local claim_text, cerr = lease(root, p.batch, member)
       if claim_text == nil then return nil, "claim " .. member .. ": " .. cerr end
@@ -235,38 +215,51 @@ local function replay(root: string, events: {source.Event}, workdir: string,
         item_logs[logid] = gitreadlog.prose_of(event.message:match("\n\n(.*)$") or "")
       end
       local path = "items/" .. member .. "/"
-      ops[#ops + 1] = "M 040000 " .. p.tree .. " " .. path:sub(1, -2) .. "\n"
+      ops[#ops + 1] = {path = path:sub(1, -2), tree = p.tree}
       ops[#ops + 1] = modify(path .. "meta", p.meta)
       local names: {string} = {}
       for id in pairs(item_logs) do names[#names + 1] = id end
       table.sort(names)
       for _, id in ipairs(names) do ops[#ops + 1] = modify(path .. "log/" .. id .. ".md", item_logs[id]) end
       if claim_text ~= "" then ops[#ops + 1] = modify("claims/" .. member, claim_text)
-      else ops[#ops + 1] = "D claims/" .. member .. "\n" end
+      else ops[#ops + 1] = {path = "claims/" .. member, content = nil} end
       current[member], claims[member] = p, claim_text
     end
     if index == 1 and base == "" then ops[#ops + 1] = modify("format", "6\n") end
-    stream[#stream + 1] = event_block(event, index, table.concat(ops), base, ref)
+    plans[#plans + 1] = {ref = ref, mark = ":" .. tostring(index),
+      from = index > 1 and (":" .. tostring(index - 1)) or base,
+      author_raw = event.author, committer_raw = event.committer,
+      message = event.message, verbatim = true, ops = {}}
+    plans[#plans].ops = ops
   end
-  stream[#stream + 1] = "done\n"
-  local marks_path = fs.join(workdir, "git-marks-" .. attempt .. ".tmp")
-  local imported, ierr = source.git(root,
-    {"fast-import", "--quiet", "--done", "--export-marks=" .. marks_path}, table.concat(stream))
-  if imported == nil then return nil, ierr end
-  local raw, rerr = fs.read(marks_path)
-  if raw == nil then return nil, rerr end
-  local marks, merr = parse_marks(raw, pending)
-  if marks == nil then return nil, merr end
-  local replayed_head = marks[pending[#pending].sha]
-  if previous ~= nil then
-    for old, new in pairs(previous.marks) do marks[old] = new end
+  local marks: {string: string} = {}
+  local replayed_head = ""
+  local marks_path = ""
+  if #pending > 0 then
+    marks_path = fs.join(workdir, "git-marks-" .. attempt .. ".tmp")
+    local imported, ierr = source.git(root,
+      {"fast-import", "--quiet", "--done", "--export-marks=" .. marks_path}, fastimport.build_stream(plans))
+    if imported == nil then return nil, ierr end
+    local raw, rerr = fs.read(marks_path)
+    if raw == nil then return nil, rerr end
+    local parsed, merr = parse_marks(raw, pending)
+    if parsed == nil then return nil, merr end
+    marks = parsed
+    replayed_head = marks[pending[#pending].sha]
+    if previous ~= nil then
+      for old, new in pairs(previous.marks) do marks[old] = new end
+    end
+    local actual, aerr = source.git(root, {"rev-parse", ref})
+    if actual == nil then return nil, aerr end
+    if actual:gsub("%s+$", "") ~= replayed_head then return nil, "replay ref did not advance" end
+  else
+    if previous == nil then return nil, "migration replay has no pending history" end
+    marks, replayed_head = previous.marks, previous.replayed_head
   end
-  local actual, aerr = source.git(root, {"rev-parse", ref})
-  if actual == nil then return nil, aerr end
-  if actual:gsub("%s+$", "") ~= replayed_head then return nil, "replay ref did not advance" end
   local encoded, eerr = boardtree.encode_marks(marks)
   if encoded == nil then return nil, eerr end
-  local final_ops: {string} = {modify("migration/marks", encoded)}
+  local final_ops: {fastimport.Op} = {modify("migration/marks", encoded)}
+  if archive ~= nil then final_ops[#final_ops + 1] = modify("migration/sources", archive) end
   local ids: {string} = {}
   for id in pairs(current) do ids[#ids + 1] = id end
   table.sort(ids)
@@ -274,12 +267,14 @@ local function replay(root: string, events: {source.Event}, workdir: string,
     final_ops[#final_ops + 1] = modify("items/" .. id .. "/meta", remap_meta(current[id].meta, marks))
     if claims[id] ~= "" then final_ops[#final_ops + 1] = modify("claims/" .. id, claims[id]) end
   end
-  local final = "commit " .. ref .. "\nauthor gitboard <gitboard@board> " ..
-  tostring(events[#events].seconds) .. " +0000\ncommitter gitboard <gitboard@board> " ..
-  tostring(events[#events].seconds) .. " +0000\n" ..
-  fastimport.data_block("migrate6: preserve marks and remap board evidence\n\nOp: migrate6\n") ..
-  "from " .. replayed_head .. "\n" .. table.concat(final_ops) .. "done\n"
-  local finished, ferr = source.git(root, {"fast-import", "--quiet", "--done"}, final)
+  local identity = "gitboard <gitboard@board> " .. tostring(events[#events].seconds) .. " +0000"
+  local final: fastimport.CommitPlan = {ref = ref, from = replayed_head,
+    author_raw = identity, committer_raw = identity,
+    message = "migrate6: preserve marks and remap board evidence\n\nOp: migrate6\n",
+    verbatim = true, ops = {}}
+  final.ops = final_ops
+  local finished, ferr = source.git(root, {"fast-import", "--quiet", "--done"},
+    fastimport.build_stream({final}))
   if finished == nil then return nil, ferr end
   local head, herr = source.git(root, {"rev-parse", ref})
   if head == nil then return nil, herr end
@@ -288,8 +283,10 @@ local function replay(root: string, events: {source.Event}, workdir: string,
   if promoted == nil then return nil, "migration candidate changed during replay: " .. perr end
   local retired, derr = source.git(root, {"update-ref", "-d", ref, head})
   if retired == nil then return nil, derr end
-  local removed, remove_err = fs.remove(marks_path)
-  if not removed then return nil, remove_err end
+  if marks_path ~= "" then
+    local removed, remove_err = fs.remove(marks_path)
+    if not removed then return nil, remove_err end
+  end
   return {head = head, replayed_head = replayed_head,
     marks = marks, count = #events}, ""
 end
@@ -297,7 +294,7 @@ end
 local record Replay
   type Result = Result
   replay: function(root: string, events: {source.Event}, workdir: string,
-  previous?: Result): Result | nil, string
+  previous?: Result, archive?: string): Result | nil, string
   remap_meta: function(string, {string: string}): string
   parse_marks: function(string, {source.Event}): {string: string} | nil, string
 end

@@ -71,12 +71,14 @@ local function run(s: store.Store, ids: {string}, all: {item.Item},
   for _, dependency in ipairs(result.dependencies) do
     s.state_paths[dependency.path], s.state_reads[dependency.path] = dependency.id, dependency.id
   end
-  local message = "claim " .. action .. " by " .. caller
+  local message = stateclaim.message(action, caller, why)
   if force then message = message .. "\n\nForce-Why: " .. why end
   s.session, s.op = caller, verb
-  s.bounded = action == "take"
-  local ok, err = statewrite.transition(s, result.changes, message, result.publish_by,
-    action == "take" and "doing-bound" or "")
+  -- Direct claim establishes exclusion only. Pull readiness belongs to the
+  -- `take` path; a claim may deliberately reserve unranked or unspecced work
+  -- while its caller rechecks the measured facts before building.
+  local ok, err = statewrite.transition(s, result.changes, message,
+    result.publish_by)
   if not ok then return gate.verdict_line(verb, false, err) end
   local landed, lerr = publish.publish(s, execute)
   if not landed then return gate.verdict_line(verb, false, lerr) end

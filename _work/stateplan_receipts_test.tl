@@ -4,7 +4,7 @@ local check = require("cosmic.check")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local git = require("_work.singlehead_git")
-local objects = require("_work.singlehead_objects")
+local objects = require("_work.stateplan_objects")
 local tx = require("_work.statetransaction")
 local projection = require("_work.stateplan_git")
 local plans = require("_work.stateplan")
@@ -28,6 +28,22 @@ local function test_exact_final_transition_does_not_authorize_counterfeit_prefix
     transaction = "prefix-proof", staging_sha = base, transitions = {first, second}}
   local plan = check.must(plans.build(root, frozen, base))
   assert(check.must(receipts.inspect(root, plan.candidate, plan.frozen)).status == "confirmed")
+  local published_prefix = check.must(git.oid(root, plan.candidate .. "~1"))
+  local prefix = check.must(receipts.inspect(root, published_prefix, plan.frozen))
+  assert(prefix.status == "prefix" and prefix.prefix == 1,
+    "an exact proper leading chain remains distinguishable from full confirmation")
+  assert(check.must(receipts.inspect(root, published_prefix, plan.frozen,
+        published_prefix)).status == "conflict",
+    "a provider-returned final SHA is never silently downgraded to a partial publication")
+  local malformed_suffix = check.must(tx.freeze(plan.frozen)).transitions[2]
+  malformed_suffix.changes[1].content = "counterfeit second transition"
+  local malformed_tree = check.must(projection.apply(root, published_prefix,
+      malformed_suffix.changes))
+  local malformed_tip = check.must(projection.commit(root, published_prefix,
+      malformed_tree, malformed_suffix))
+  assert(check.must(receipts.inspect(root, malformed_tip,
+        plan.frozen)).status == "conflict",
+    "a newer malformed same-transaction commit must not expose an older valid prefix")
   local counterfeit = check.must(tx.freeze(plan.frozen)).transitions[1]
   counterfeit.message = "a different earlier operation\n"
   local false_prefix = check.must(projection.commit(root, base, first_tree, counterfeit))

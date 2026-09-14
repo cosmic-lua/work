@@ -26,8 +26,9 @@ CLI integration tests cover that adapter and real local draft refs.
 
 Every final call was rendered again immediately before execution, including the
 claim deadline check. Object SHA placeholders were replaced only with results
-from that attempt's earlier calls. The provider-generated commit SHAs differ
-from local candidates, while their trees and frozen transitions match.
+from that attempt's earlier calls. The provider-generated final commit SHA was
+recorded before the sole non-forced ref update. Provider commit SHAs differ from
+local candidates, while their trees and frozen transitions match.
 
 ## Published evidence
 
@@ -52,9 +53,10 @@ to the connector's JSON arguments, not a storage format.
 
 ## Revalidation after review
 
-Native publication plans now use schema v2 and include `expected_head` in the
-final call's guard. Old v1 plans are refused with regeneration guidance; their
-immutable bytes are not rewritten in place.
+The first post-review plans used schema v2 and carried `expected_head` in saved
+client-side guard state. Old v1 plans were refused with regeneration guidance;
+their immutable bytes were not rewritten in place. This is historical plan
+evidence, not a claim that `expected_head` was a connector tool argument.
 
 `revalidate_v2.tl` rebuilt new v2 plans from all six original frozen snapshots
 ([final literal results](connector-v2-final-results.literal)).
@@ -65,3 +67,48 @@ pending. This was local revalidation of the recorded connector proof, with no
 additional remote writes. It validates compatibility of the updated planner and
 receipt checker; the original remote executions used v1 plans with non-forced
 final updates.
+
+## Native-only integration
+
+The v3 planner was revalidated against the same remote head with all six original
+frozen transactions unchanged ([literal results](connector-v3-results.literal)).
+The four published chains still confirm; the two unpublished attempts stay pending.
+The current remote head was checked with `git ls-remote`. This is a read-only
+compatibility check; it does not describe a new remote execution of v3 calls.
+
+V3 emits the Work connector short names `github_create_tree`,
+`github_create_commit`, and `github_update_ref`, which the executor maps to the
+corresponding `mcp__codex_apps__...` tools. Every call uses
+`repository_full_name`; no call supplies a physical author, expected head, or
+deadline. `--call-json` is a stdout-only adapter. The final indexed call requires
+a freshly observed `--head SHA`; the caller checks the saved head and deadline
+immediately before execution and must retain `force=false`.
+
+When an update acknowledgement is lost or otherwise unknown, recovery starts
+with refresh. Confirmation requires the exact complete transition chain in
+fetched first-parent history; a returned SHA or matching trailer is insufficient.
+For an advanced draft, an exact canonical proper prefix may consume only that
+prefix and leave a CAS-updated, rebased suffix pending, while saved snapshots
+remain immutable.
+
+`native_connector_cycle_test.tl` exercises the production CLI with an isolated
+bare Git remote and a faithful connector emulator. It covers claim confirmation,
+a three-transition draft, published evidence, handover, verdict, completion, drop,
+and refresh recovery when the final update lands but its acknowledgement is lost.
+The emulator sets a different physical Git author and preserves the logical
+trailer; shell-versus-plan comparison requires identical trees and messages.
+This complements the real connector proof above without weakening the production
+CLI's fixed `state` destination.
+
+`_perf/native_contention.tl` measures production shell publication with disjoint
+writers, five attempts per writer, and no backoff:
+
+| Writers | Successful | Exhausted | Attempts per writer |
+| ---: | ---: | ---: | --- |
+| 2 | 2 | 0 | 2, 1 |
+| 4 | 4 | 0 | 3, 1, 2, 4 |
+| 8 | 5 | 3 | 5, 5, 3, 1, 5, 2, 4, 5 |
+
+These are one local contention run, not throughput guarantees. Eight-way contention
+can exhaust the designed retry budget; this is evidence for the D50 policy review,
+not a change to the design's five-attempt/no-backoff rule.

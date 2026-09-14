@@ -10,12 +10,8 @@
 local gitobj = require("_work.gitobj")
 local refs = require("_work.refs")
 
---- Format 4 records one acquisition as a parentless shared commit under the
---- append-only `refs/heads/claim-batches/<batch-id>` namespace. Each member's
---- item ref advances through a first-parent bridge naming that same batch,
---- making the requested set an atomic shared fact rather than unrelated item
---- mutations.
-local CURRENT < const > = "5"
+--- Native state stores every item and claim under one canonical commit.
+local CURRENT < const > = "6"
 
 --- The `format` blob's content: the version text plus its own
 --- trailing newline, the same shape every other text blob this store
@@ -41,7 +37,7 @@ end
 --- @return string | nil The refusal
 local function refusal(found: string, has_items: boolean): string | nil
   local trimmed = (found or ""):gsub("%s+$", "")
-  if trimmed == CURRENT or trimmed == "6" then
+  if trimmed == CURRENT then
     return nil
   end
   if trimmed == "" then
@@ -82,7 +78,7 @@ local function inspect(dir: string, snapshot?: {refs.RefEntry}): Inspection | ni
   local found = snapshot
   if found == nil then
     local fresh, ferr = refs.for_each_ref(dir,
-      {"refs/heads/items", "refs/heads/ended", "refs/heads/board/format"})
+      {"refs/heads/state", "refs/heads/board/format"})
     if fresh == nil then return nil, ferr end
     found = fresh
   end
@@ -91,8 +87,7 @@ local function inspect(dir: string, snapshot?: {refs.RefEntry}): Inspection | ni
   for _, entry in ipairs(found) do
     if entry.refname == "refs/heads/board/format" then
       format_sha = entry.sha
-    elseif entry.refname:match("^refs/heads/items/") ~= nil
-    or entry.refname:match("^refs/heads/ended/") ~= nil then
+    elseif entry.refname == "refs/heads/state" then
       has_items = true
     end
   end
@@ -117,11 +112,18 @@ end
 
 --- Native reads activate only on the explicit marker, never a staged branch.
 local function state_head(dir: string, snapshot?: {refs.RefEntry}): string | nil, string
+  if snapshot == nil then
+    local found, ferr = refs.for_each_ref(dir, {"refs/heads/state", "refs/heads/board/format"})
+    if found == nil then return nil, ferr end
+    snapshot = found
+  end
   local marker, err = inspect(dir, snapshot)
   if marker == nil then return nil, err end
   local denied = refusal(marker.content, marker.has_items)
   if denied ~= nil then return nil, denied end
-  if marker.content:gsub("%s+$", "") ~= "6" then return "", "" end
+  if marker.content:gsub("%s+$", "") ~= "6" then
+    return nil, "refs/heads/board/format is missing — run `gitboard init` first"
+  end
   if snapshot ~= nil then
     for _, entry in ipairs(snapshot) do
       if entry.refname == "refs/heads/state" then return entry.sha, "" end
@@ -167,75 +169,6 @@ local function require_current(dir: string): boolean, string
   return true, ""
 end
 
---- Create `refs/heads/board/format` locally when this repository has
---- none yet. Publication is deliberately absent: initialization only
---- creates Git objects and local refs, and the caller owns transport.
---- A repository that already carries the ref locally is untouched.
---- @param dir string The directory to prepare
---- @return boolean True on success
---- @return string Error message
-local function ensure(dir: string): boolean, string
-  local found, ferr = refs.for_each_ref(dir, {"refs/heads/board/format"})
-  if found == nil then
-    return false, ferr
-  end
-  if #found == 0 then
-    -- A remote-backed brand-new board has no fetched canonical marker until
-    -- its caller publishes and fetches the seed. The local marker prepared by
-    -- an earlier `init` is still authoritative for INIT IDEMPOTENCY only: do
-    -- not try to recreate it with a ZERO_SHA lease on the second call. Normal
-    -- readers continue to ignore this local head in remote mode.
-    local local_found, lerr =
-    refs.for_each_ref_raw(dir, {"refs/heads/board/format"})
-    if local_found == nil then
-      return false, lerr
-    end
-    if #local_found > 0 then
-      local local_sha = local_found[1].sha
-      local raw, rerr = gitobj.cat_file_batch(dir, {local_sha .. ":format"})
-      if raw == nil then
-        return false, rerr
-      end
-      local local_blob = raw[local_sha .. ":format"]
-      if local_blob == nil or local_blob.otype ~= "blob" then
-        return false, "local refs/heads/board/format has no readable format blob"
-      end
-      local denied = refusal(local_blob.content, true)
-      if denied ~= nil then
-        return false, denied
-      end
-      return true, ""
-    end
-    -- The blob and tree this commit points at must actually exist in
-    -- the odb before `commit_tree`/the push below can use them — the
-    -- writing forms, not the pure id computation `_work.gitobj` uses
-    -- everywhere an id only needs comparing, never creating.
-    local blob_sha, berr = gitobj.hash_object_write(dir, blob())
-    if blob_sha == nil then
-      return false, berr
-    end
-    local tree_sha, terr = gitobj.mktree_write(dir,
-      {{mode = "100644", otype = "blob", sha = blob_sha, name = "format"}})
-    if tree_sha == nil then
-      return false, terr
-    end
-    local commit_sha, cerr = gitobj.commit_tree(dir, {
-        tree = tree_sha, parents = {}, message = "format " .. CURRENT,
-        author_name = "Claude", author_email = "noreply@anthropic.com",
-        committer_name = "Claude", committer_email = "noreply@anthropic.com",
-      })
-    if commit_sha == nil then
-      return false, cerr
-    end
-    local moved, uerr =
-    refs.update_ref(dir, "refs/heads/board/format", commit_sha, refs.ZERO_SHA)
-    if not moved then
-      return false, uerr
-    end
-  end
-  return true
-end
-
 local record format
   remember: function(sha: string, content: string)
   known_content: function(sha: string): string | nil
@@ -246,7 +179,6 @@ local record format
   refusal: function(found: string, has_items: boolean): string | nil
   inspect: function(dir: string, snapshot?: {refs.RefEntry}): Inspection | nil, string
   require_current: function(dir: string): boolean, string
-  ensure: function(dir: string): boolean, string
 end
 
 local M: format = {
@@ -257,7 +189,6 @@ local M: format = {
   refusal = refusal,
   inspect = inspect,
   require_current = require_current,
-  ensure = ensure,
 }
 
 return M

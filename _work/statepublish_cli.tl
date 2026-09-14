@@ -43,12 +43,20 @@ end
 --- @param call_index string | nil Which call of that plan to render
 --- @param published_sha string | nil The commit the connector returned
 --- @param repository string | nil The repository the caller expects
+--- @param observed_head string | nil The remote head read immediately before the final call
+--- @param call_json boolean | nil Emit the ephemeral call envelope as JSON
 --- @return integer The verdict line's exit status
 local function cmd_publish(s: store.Store, selectors: {string}, remote: string, execute: boolean,
     plan_path?: string, from_plan?: string, call_index?: string, published_sha?: string,
-    repository?: string): integer
+    repository?: string, observed_head?: string, call_json?: boolean): integer
   if (from_plan or "") == "" and ((call_index or "") ~= "" or (published_sha or "") ~= "") then
     return gate.verdict_line("publish", false, "--call and --published require --from-plan")
+  end
+  if (observed_head or "") ~= "" and ((from_plan or "") == "" or (call_index or "") == "") then
+    return gate.verdict_line("publish", false, "--head requires --from-plan and --call")
+  end
+  if call_json and (call_index or "") == "" then
+    return gate.verdict_line("publish", false, "--call-json requires --call")
   end
   local saved: plans.Plan = nil
   local receipt: staging.Receipt = nil
@@ -102,9 +110,14 @@ local function cmd_publish(s: store.Store, selectors: {string}, remote: string, 
     if (from_plan or "") == "" then return gate.verdict_line("publish", false, "--call requires --from-plan") end
     local index = math.tointeger(tonumber(call_index))
     if index == nil or index < 0 then return gate.verdict_line("publish", false, "call index must be a nonnegative integer") end
-    local call, err = plans.connector_call(saved, index + 1)
-    if call == nil then return gate.verdict_line("publish", false, err) end
-    local raw, rerr = literal.encode(call)
+    local head = (observed_head or "") ~= "" and observed_head or nil
+    local raw, rerr: string | nil, string
+    if call_json then raw, rerr = plans.connector_json(saved, index + 1, nil, head)
+    else
+      local call, err = plans.connector_call(saved, index + 1, nil, head)
+      if call == nil then return gate.verdict_line("publish", false, err) end
+      raw, rerr = literal.encode(call)
+    end
     if raw == nil then return gate.verdict_line("publish", false, rerr) end
     print(raw)
     return 0
@@ -115,17 +128,22 @@ local function cmd_publish(s: store.Store, selectors: {string}, remote: string, 
     end
     local all, err = staging.list(s.root)
     if all == nil then return gate.verdict_line("publish", false, err) end
-    local recorded = false
+    local matching: {staging.Receipt} = {}
     for _, candidate in ipairs(all) do
       if candidate.transaction == saved.frozen.transaction and candidate.tip == saved.frozen.staging_sha
-      and candidate.kind == "prepared" then
-        candidate.published = published_sha
-        local updated, uerr = staging.write(s.root, candidate, candidate.sha)
-        if updated == nil then return gate.verdict_line("publish", false, uerr) end
-        recorded = true
+      and candidate.kind == "prepared" and candidate.repository == saved.frozen.repository
+      and candidate.remote == saved.frozen.remote then
+        local frozen = staging.frozen(candidate)
+        if frozen ~= nil and literal.encode(frozen) == literal.encode(saved.frozen) then
+          matching[#matching + 1] = candidate
+        end
       end
     end
-    if not recorded then return gate.verdict_line("publish", false, "saved attempt receipt is missing") end
+    if #matching ~= 1 then return gate.verdict_line("publish", false, "saved attempt receipt is missing or ambiguous") end
+    local candidate = matching[1]
+    candidate.published = published_sha
+    local updated, uerr = staging.write(s.root, candidate, candidate.sha)
+    if updated == nil then return gate.verdict_line("publish", false, uerr) end
     return gate.verdict_line("publish", true, "returned commit recorded; refresh must verify fetched history")
   end
   if execute then
@@ -149,7 +167,7 @@ end
 local record Module
   cmd_publish: function(s: store.Store, selectors: {string}, remote: string, execute: boolean,
   plan_path?: string, from_plan?: string, call_index?: string, published_sha?: string,
-  repository?: string): integer
+  repository?: string, observed_head?: string, call_json?: boolean): integer
 end
 local M: Module = {cmd_publish = cmd_publish}
 return M

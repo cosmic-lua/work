@@ -36,23 +36,35 @@ local function patch(root: string, before: string | nil, head: string): boolean,
   end
   local view, verr = boardread.list(root, head)
   if view == nil then local _ok, _err = db:close(); return false, verr end
-  local history, herr = boardhistory.read(root, head)
-  if history == nil then local _ok, _err = db:close(); return false, herr end
+  local history, herr = boardhistory.read(root, head, before)
+  if history == nil then
+    local _ok, _err = db:close()
+    if herr == boardhistory.NOT_FAST_FORWARD then return true, "" end
+    return false, herr
+  end
   local old: {string: string} = {}
   local rows, rerr = db:query("SELECT path,oid FROM state_paths")
   if rows == nil then local _ok, _err = db:close(); return false, rerr end
   for row in rows do old[row.path as string] = row.oid as string end -- cast: from any (strict SQLite text columns)
   local old_items: {string: string} = {}
   local old_claims: {string: string} = {}
-  local items, ierr = db:query("SELECT id,tip,claim FROM items")
+  local old_dates: {string: integer} = {}
+  local items, ierr = db:query("SELECT id,tip,claim,touched_at FROM items")
   if items == nil then local _ok, _err = db:close(); return false, ierr end
   for row in items do
     old_items[row.id as string] = row.tip as string -- cast: from any (strict SQLite text columns)
     old_claims[row.id as string] = row.claim as string -- cast: from any (strict SQLite text columns)
+    old_dates[row.id as string] = row.touched_at as integer -- cast: strict SQLite integer column
+  end
+  local sequences: {string: integer} = {}
+  local seq_rows, serr = db:query("SELECT item,MAX(seq) AS seq FROM events GROUP BY item")
+  if seq_rows == nil then local _ok, _err = db:close(); return false, serr end
+  for row in seq_rows do
+    sequences[row.item as string] = row.seq as integer -- cast: strict SQLite sequence column
   end
   local changed: {string: boolean} = {}
   for _, it in ipairs(view.items) do
-    if old_items[it.id] ~= history.tip_by_id[it.id] or old_claims[it.id] ~= (it.claim or "")
+    if old_items[it.id] ~= (history.tip_by_id[it.id] or old_items[it.id]) or old_claims[it.id] ~= (it.claim or "")
     or old["items/" .. it.id] ~= view.item_tree_by_id[it.id]
     or old["claims/" .. it.id] ~= (view.claim_blob_by_id[it.id] or refs.ZERO_SHA) then
       changed[it.id] = true
@@ -64,26 +76,26 @@ local function patch(root: string, before: string | nil, head: string): boolean,
   local ok, perr = db:transaction(function(tx: sqlite.Database): boolean, string
       local c: cachedb.Cache = {db = tx, specs = {}, load_problems = {}}
       for id in pairs(changed) do
-        local deleted, derr = tx:exec("DELETE FROM events WHERE item=?", {id})
-        if not deleted then return false, derr end
-        deleted, derr = tx:exec("DELETE FROM state_paths WHERE path IN (?,?)", {"items/" .. id, "claims/" .. id})
+        local deleted, derr = tx:exec("DELETE FROM state_paths WHERE path IN (?,?)", {"items/" .. id, "claims/" .. id})
         if not deleted then return false, derr end
         local it = view.items_by_id[id]
         if it == nil then
+          deleted, derr = tx:exec("DELETE FROM events WHERE item=?", {id})
+          if not deleted then return false, derr end
           deleted, derr = index.delete_item(tx, id)
           if deleted then deleted, derr = find.remove_item(c, id) end
           if not deleted then return false, derr end
         else
           local patched, paerr = cachedb.patch_item(c, it, spec.document(view.specs_by_id[id]),
-            {ref = "refs/heads/state", tip = history.tip_by_id[id] or head,
-              touched_at = history.touched_by_id[id] or 0})
+            {ref = "refs/heads/state", tip = history.tip_by_id[id] or old_items[id] or head,
+              touched_at = history.touched_by_id[id] or old_dates[id] or 0})
           if not patched then return false, paerr end
           patched, paerr = tx:exec("INSERT INTO state_paths(path,oid) VALUES (?,?),(?,?)",
             {"items/" .. id, view.item_tree_by_id[id], "claims/" .. id, view.claim_blob_by_id[id] or refs.ZERO_SHA})
           if not patched then return false, paerr end
           for seq, ev in ipairs(history.events_by_id[id] or {}) do
             patched, paerr = tx:exec("INSERT INTO events(item,seq,sha,at,verb,session,pr,subject) VALUES (?,?,?,?,?,?,?,?)",
-              {id, seq, ev.sha, ev.at, ev.verb, ev.session, ev.pr, ev.subject})
+              {id, (sequences[id] or 0) + seq, ev.sha, ev.at, ev.verb, ev.session, ev.pr, ev.subject})
             if not patched then return false, paerr end
           end
         end

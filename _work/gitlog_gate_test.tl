@@ -75,7 +75,7 @@ end
 local function test_log_add_is_fenced_by_another_sessions_live_claim()
   local s = init_state_repo("log-gate-claim")
   local _root, leaf = fixture.root_with_leaf(s)
-  local ref = "refs/heads/items/" .. leaf
+  local ref = "refs/heads/state"
   fixture.claim_item(s, leaf, HOLDER)
   local claimed_tip = rev(s, ref)
 
@@ -106,7 +106,7 @@ local function test_log_add_is_fenced_by_another_sessions_live_claim()
   assert(forced_code == 0, "a stated reason is the audited way past: " .. forced)
   assert(rev(s, ref) ~= holder_tip, "the forced entry landed")
 
-  local entries = check.must(gitreadlog.read_history(s.root, {ref}))
+  local entries = check.must(gitreadlog.read_state_history(s.root, rev(s, ref), leaf))
   local last = entries[#entries]
   assert(last.subject == ("note %s by %s (forced: the holder asked for the "
       .. "measurement)"):format(leaf:sub(1, 8), STRANGER),
@@ -136,7 +136,7 @@ end
 local function test_log_add_advances_the_stores_lease()
   local s = init_state_repo("log-gate-lease")
   local _root, leaf = fixture.root_with_leaf(s)
-  local ref = "refs/heads/items/" .. leaf
+  local ref = "refs/heads/state"
   local _it = check.must(store.load(s, leaf))
   local before = s.leased_sha[leaf]
   assert(store.close(s))

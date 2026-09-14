@@ -4,9 +4,11 @@ local stategate = require("_work.stategate")
 local refs = require("_work.refs")
 local prepared = require("_work.prepared")
 local staging = require("_work.statestaging")
+local tx = require("_work.statetransaction")
 local plan = require("_work.stateplan")
 local proof = require("_work.stateplan_receipts")
 local store = require("_work.store")
+local cache = require("_work.cache")
 --- The board head a publication races against: the branch itself in local
 --- mode, the tracking ref in remote mode — never a prepared local successor.
 --- @param root string The board checkout
@@ -67,6 +69,39 @@ local function lost(root: string, receipt: staging.Receipt): string
   local retired, err = staging.retire(root, receipt)
   if not retired then return "lost race, but receipt was retained: " .. err end
   return store.LOST_RACE
+end
+--- Preserve the unpublished suffix of a live draft after an immutable snapshot
+--- published its exact leading prefix. The receipt ref moves under CAS before
+--- the snapshot can be retired, so a crash leaves either the whole old draft
+--- or the durable suffix. The speculative tip remains retained unchanged.
+--- @param root string The board checkout
+--- @param receipt staging.Receipt The exact live draft manifest inspected
+--- @param current string The fetched canonical head after the prefix
+--- @param count integer Number of published leading transitions
+--- @return staging.Receipt | nil The rewritten suffix receipt
+--- @return string Error message
+local function consume_prefix(root: string, receipt: staging.Receipt,
+    current: string, count: integer): staging.Receipt | nil, string
+  if receipt.kind ~= "draft" or count < 1 or count >= #receipt.transitions then
+    return nil, "invalid published draft prefix"
+  end
+  local frozen, err = staging.frozen(receipt)
+  if frozen == nil then return nil, err end
+  local remaining: {tx.Transition} = {}
+  for index = count + 1, #frozen.transitions do
+    remaining[#remaining + 1] = frozen.transitions[index]
+  end
+  remaining[1].base = current
+  receipt.base = current
+  receipt.transitions = remaining
+  receipt.published = ""
+  local rewritten, werr = staging.write(root, receipt, receipt.sha)
+  if rewritten == nil then return nil, werr end
+  local active = staging.active(root)
+  if active ~= nil and active.ref == receipt.ref and active.sha == receipt.sha then
+    staging.activate(root, rewritten)
+  end
+  return rewritten, ""
 end
 --- One publishable attempt against the head as it is now: the destination
 --- re-checked, an already-published attempt named as such rather than
@@ -169,13 +204,18 @@ end
 --- Report every outstanding attempt against the fetched head, and claim
 --- authority separately from it: a confirmed attempt retires its local ref, a
 --- conflicting one is reported and kept, and a draft that advanced since its
---- publication snapshot stays pending rather than being confirmed by it.
+--- publication snapshot stays pending rather than being confirmed by it. When
+--- `published` names this invocation's attempt, its complete-chain proof alone
+--- decides that publication's result; other receipt conflicts remain visible
+--- as informational work for a later refresh.
 --- Publication is not authority — the current `claims/<id>` blobs are.
 --- @param root string The board checkout
 --- @param remote string The configured board remote
+--- @param published staging.Receipt | nil This invocation's published attempt
 --- @return boolean True when nothing conflicts
 --- @return string The counts and the current claim authority
-local function refresh(root: string, remote: string): boolean, string
+local function refresh(root: string, remote: string,
+    published?: staging.Receipt): boolean, string
   local all, err = staging.list(root)
   if all == nil then return false, err end
   local current, herr = head(root, remote)
@@ -206,6 +246,10 @@ local function refresh(root: string, remote: string): boolean, string
         if observed ~= refs.ZERO_SHA then pending = pending + 1; goto continue end
       end
       confirmed = confirmed + 1
+    elseif status.status == "prefix" and receipt.kind == "draft" then
+      local rewritten, rerr = consume_prefix(root, receipt, current, status.prefix)
+      if rewritten == nil then return false, "published draft prefix was retained whole: " .. rerr end
+      pending = pending + 1
     elseif status.status == "conflict" then conflicts = conflicts + 1
     elseif status.absence_proven then
       local candidate, cerr = build(root, receipt, remote)
@@ -214,11 +258,24 @@ local function refresh(root: string, remote: string): boolean, string
     else pending = pending + 1 end
     ::continue::
   end
-  if lost_races > 0 then return false, store.LOST_RACE end
+  local own_confirmed = false
+  if published ~= nil then
+    local own, oerr = inspect_current(root, published, published.published)
+    if own == nil then return false, oerr end
+    if own.status ~= "confirmed" then
+      return false, "publication is not confirmed: " .. own.reason
+    end
+    own_confirmed = true
+  end
+  if lost_races > 0 and not own_confirmed then return false, store.LOST_RACE end
   local authority, aerr = stateclaim.authority(root, current)
   if authority == nil then return false, aerr end
-  return conflicts == 0, ("confirmed=%d pending=%d conflict=%d\n%s")
+  local report = ("confirmed=%d pending=%d conflict=%d\n%s")
   :format(confirmed, pending, conflicts, authority)
+  if own_confirmed and (lost_races > 0 or conflicts > 0) then
+    return true, "publication confirmed; unrelated receipt warning\n" .. report
+  end
+  return conflicts == 0, report
 end
 --- Drop everything this invocation staged or observed and re-sync to the
 --- current head — what a lost race leaves behind, so the verb re-reads and
@@ -247,14 +304,7 @@ local function sync(s: store.Store, execute_fetch?: boolean, published?: staging
     local ok, err = prepared.execute(s.root, fetch_argv(remote))
     if not ok then return false, err end
   end
-  local ok, err = refresh(s.root, remote)
-  if not ok and err == store.LOST_RACE and published ~= nil then
-    local observed, oerr = inspect_current(s.root, published, published.published)
-    if observed == nil then return false, oerr end
-    if observed.status == "confirmed" then
-      ok, err = true, "publication confirmed; unrelated stale attempts retired"
-    end
-  end
+  local ok, err = refresh(s.root, remote, published)
   local current, herr = head(s.root, remote)
   if current == nil then return false, herr end
   s.state_head = current
@@ -262,6 +312,7 @@ local function sync(s: store.Store, execute_fetch?: boolean, published?: staging
   s.state_paths = {}; s.state_reads = {}
   s.leased_item = {}; s.leased_sha = {}; s.leased_ref = {}; s.touched_at = {}
   local _closed, _cerr = store.close(s)
+  cache.after_fetch(s.root, current)
   return ok, err
 end
 --- Publish whatever this invocation prepared. A draft is staged, not published;
@@ -322,7 +373,7 @@ local record Module
   build: function(root: string, receipt: staging.Receipt, remote?: string): plan.Plan | nil, string
   push_argv: function(staging.Receipt, string): {string}
   execute: function(string, staging.Receipt): boolean, string
-  refresh: function(string, string): boolean, string
+  refresh: function(string, string, published?: staging.Receipt): boolean, string
   sync: function(s: store.Store, execute_fetch?: boolean, published?: staging.Receipt): boolean, string
   publish: function(s: store.Store, execute_push?: boolean): boolean, string
 end

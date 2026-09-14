@@ -18,7 +18,6 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gh = require("_work.gh")
 local gitread = require("_work.gitread")
-local gitreadspec = require("_work.gitreadspec")
 local itemtree = require("_work.itemtree")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
@@ -69,10 +68,9 @@ local function count_gitread_load(): Counter
   local counter: Counter = {n = 0, restore = function()
       gitread.load = original
     end}
-  gitread.load = function(root: string, id: string, known_ref?: string,
-      known_sha?: string): gitread.Loaded | nil, string
+  gitread.load = function(root: string, id: string): gitread.Loaded | nil, string
     counter.n = counter.n + 1
-    return original(root, id, known_ref, known_sha)
+    return original(root, id)
   end
   return counter
 end
@@ -100,8 +98,7 @@ local function test_new_reads_the_board_once_and_rereads_only_the_written_ref()
       .. "format compatibility check, and must not patch an unconfirmed "
       .. "successor into the cache: got %d")
     :format(fe.n))
-  assert(fe.calls[1] == table.concat({"refs/heads/items", "refs/heads/ended",
-        "refs/heads/board/format"}, ","), "the remaining read must be the narrow format compatibility check")
+  assert(fe.calls[1] == "refs/heads/state,refs/heads/board/format", "the remaining read must be the narrow format compatibility check")
 end
 
 -- `rank` on the same kind of fixture: the defect this item's Evidence
@@ -175,10 +172,16 @@ local function test_rank_reads_the_board_once_not_twice()
   assert(fe.n == 2, ("rank should take one board snapshot and one narrow "
       .. "format-marker read: got %d (%s)")
     :format(fe.n, table.concat(fe.calls, "; ")))
-  assert(fe.calls[1] == table.concat({"refs/heads/items", "refs/heads/ended",
-        "refs/heads/board"}, ","), "first read must be the canonical board snapshot")
-  assert(fe.calls[2] == "refs/heads/items,refs/heads/ended,refs/heads/board/format",
-    "second read must be the narrow write compatibility check")
+  for _, call in ipairs(fe.calls) do
+    local seen: {string: boolean} = {}
+    for name in call:gmatch("[^,]+") do
+      assert(name == "refs/heads/state" or name == "refs/heads/board/format",
+        "native writes must never scan retired item namespaces: " .. call)
+      seen[name] = true
+    end
+    assert(seen["refs/heads/state"] and seen["refs/heads/board/format"],
+      "each read contains the native head and activation marker")
+  end
 end
 
 -- `new` never asks git for the minted id's prose: the id being minted
@@ -189,16 +192,15 @@ end
 -- tolerated.
 local function test_new_never_reads_spec_md_for_the_minted_id()
   local a = fixture.init_state_repo("new-no-spec-read")
-  local original = gitreadspec.read_spec
-  gitreadspec.read_spec = function(_root: string,
-      _candidates: {string}): itemtree.Spec
+  local original = store.read_spec
+  store.read_spec = function(_s: store.Store, _id: string): itemtree.Spec
     error("gitreadspec.read_spec must never be asked about an id new is "
       .. "still minting")
   end
   local ok, result = pcall(function(): integer
       return graph.cmd_new(a, "no spec read", "", SPEC_BODY, "")
     end)
-  gitreadspec.read_spec = original
+  store.read_spec = original
   assert(ok, "new must not read the prose of the id it is minting: "
     .. tostring(result))
   assert(result == 0, "new should still be accepted")

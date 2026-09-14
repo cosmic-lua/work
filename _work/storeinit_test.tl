@@ -13,6 +13,7 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local publish = require("_work.publish")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -38,8 +39,7 @@ local function git(cwd: string, argv: {string})
 end
 
 -- init_repo prepares a fresh directory whole: a git repository
--- (created when none is there) — there is no `items/` directory to
--- create, since every item lives as a ref, not a file.
+-- (created when none is there), with one native state tree.
 local function test_init_repo_creates_a_fresh_git_repo()
   local root = fs.join(tmpdir, "init-fresh")
   assert(fs.remove_all(root))
@@ -100,21 +100,15 @@ local function test_init_repo_writes_fetch_refspecs_when_origin_exists()
   git(tmpdir, {"clone", "-q", bare, "init-origin-clone"})
   assert(store.init_repo(dir))
   local upstream = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items",
-        "refs/heads/board"}, {cwd = bare}))
+      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/state",
+        "refs/heads/board/format"}, {cwd = bare}))
   assert(upstream.ok and upstream.stdout == "",
     "init prepares local refs but performs no authenticated publication")
   local r = check.must(child.run({"git", "config", "--get-all", "remote.origin.fetch"},
       {cwd = dir}))
   assert(r.ok, "git config failed: " .. r.stderr)
-  assert(r.stdout:find(
-      "refs/heads/items/%*:refs/remotes/origin/items/%*") ~= nil, r.stdout)
-  assert(r.stdout:find(
-      "refs/heads/ended/%*:refs/remotes/origin/ended/%*") ~= nil, r.stdout)
-  assert(r.stdout:find(
-      "refs/heads/claims/%*:refs/remotes/origin/claims/%*") ~= nil, r.stdout)
-  assert(r.stdout:find(
-      "refs/heads/board/%*:refs/remotes/origin/board/%*") ~= nil, r.stdout)
+  assert(r.stdout:find("refs/heads/state:refs/remotes/origin/state", 1, true), r.stdout)
+  assert(r.stdout:find("refs/heads/board/format:refs/remotes/origin/board/format", 1, true), r.stdout)
   -- ADDED, not substituted: the clone's own default refspec for its
   -- checked-out branch survives, so a plain `git pull` on the
   -- machinery keeps working after `init_repo` runs.
@@ -182,6 +176,7 @@ local function seed_one_item(s: store.Store)
   local id = check.must(ksuid.encode(1700000000, ("\0"):rep(16)))
   local it = check.must(item.decode({id = id, title = "a seeded item"}))
   assert(storewrite.save(s, it, "seed"))
+  assert(publish.publish(s))
 end
 
 -- A board whose marker names a version other than the one this tool
@@ -194,7 +189,7 @@ local function test_list_refuses_a_wrong_format_version()
   local s = check.must(store.open(root))
   seed_one_item(s)
   rewrite_format(root, "99\n")
-  local all, lerr = store.list(s)
+  local all, lerr = store.open(root)
   assert(all == nil, "a board on a version this tool does not know is refused")
   assert(lerr:find("99", 1, true) ~= nil and lerr:find(format.CURRENT, 1, true) ~= nil,
     "the refusal names both versions: " .. lerr)
@@ -209,26 +204,20 @@ local function test_list_refuses_a_missing_marker_with_items_present()
   local s = check.must(store.open(root))
   seed_one_item(s)
   git(root, {"update-ref", "-d", "refs/heads/board/format"})
-  local all, lerr = store.list(s)
+  assert(store.close(s))
+  local all, lerr = store.open(root)
   assert(all == nil, "a board with items and no marker is refused")
   assert(lerr:find("format", 1, true) ~= nil, "got: " .. lerr)
 end
 
--- The same board, empty (nothing ever filed, no marker, no board
--- item), before `init_repo` has ever run: a plain `git init` with
--- nothing else on it has nothing to be inconsistent with — so this is
--- fine, not a refusal. `init_repo` is what writes the marker AND the
--- board item together, so there is no longer a mid-way state where one
--- exists and the other does not — a truly virgin repository is the
--- only "empty, no marker" case left to test.
-local function test_list_accepts_a_missing_marker_on_an_empty_board()
+-- An ordinary Git repository is not a board until native init writes both refs.
+local function test_open_refuses_an_uninitialized_git_repository()
   local root = fs.join(tmpdir, "format-missing-empty")
   assert(fs.remove_all(root))
   assert(fs.make_dirs(root))
   git(root, {"init", "-q"})
-  local s = check.must(store.open(root))
-  local all = check.must(store.list(s))
-  assert(#all == 0, "an empty board with no marker still reads: " .. #all)
+  local unopened, err = store.open(root)
+  assert(unopened == nil and err:find("init", 1, true), "an uninitialized repo has no native board")
 end
 
 --- Run gitboard.main(...) and capture exactly what it prints via

@@ -24,9 +24,9 @@ return {
     test = "_work/stateclaim_capacity_test.tl",
   },
   missing_handover_workload = {
-    file = "_work/stategate.tl",
-    before = 'or (it.handover_head or "") ~= "" or (it.result or "") ~= ""',
-    after = 'or false',
+    file = "_work/indexddl.tl",
+    before = "WHEN claim <> '' OR handover_head <> '' OR pr <> 0 OR result <> ''",
+    after = "WHEN claim <> '' OR pr <> 0",
     test = "_work/stategate_test.tl",
   },
   pre_state_only_doing_bound = {
@@ -36,9 +36,9 @@ return {
     test = "_work/stategate_test.tl",
   },
   containers_count_as_doing = {
-    file = "_work/stategate.tl",
-    before = 'and not parents[it.id] and ((it.claim or "") ~= ""',
-    after = 'and ((it.claim or "") ~= ""',
+    file = "_work/indexddl.tl",
+    before = 'AND NOT EXISTS (SELECT 1 FROM open_items c WHERE c.parent = i.id);',
+    after = ';',
     test = "_work/stategate_test.tl",
   },
 }

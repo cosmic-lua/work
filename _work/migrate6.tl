@@ -7,6 +7,8 @@ local wire = require("_work.singlehead_literal")
 local source = require("_work.migrate6_source")
 local replay = require("_work.migrate6_replay")
 local freeze = require("_work.migrate6_freeze")
+local probes = require("_work.migrate6_probes")
+local archive = require("_work.migrate6_archive")
 
 local record Checkpoint
   version: string
@@ -75,6 +77,7 @@ local function read(path: string): Checkpoint | nil, string
     local proof, ferr = freeze.decode(raw.freeze)
     if proof == nil then return nil, ferr end
     if proof.prefix ~= prefix then return nil, "freeze proof checkpoint prefix differs" end
+    raw.freeze = proof
   end
   return raw as Checkpoint, "" -- cast: literal fields checked above
 end
@@ -102,6 +105,11 @@ end
 local function validate_sources(root: string, checkpoint: Checkpoint): boolean, string
   local actual, err = source.snapshot(root, checkpoint.prefix)
   if actual == nil then return false, err end
+  if checkpoint.freeze ~= nil then
+    local filtered, ferr = probes.filter(actual, checkpoint.prefix, checkpoint.freeze.probes)
+    if filtered == nil then return false, ferr end
+    actual = filtered
+  end
   return source.compare(checkpoint.sources, actual)
 end
 
@@ -175,6 +183,9 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
   local refs, serr = source.snapshot(root, prefix)
   if refs == nil then return nil, serr end
   if opts.freeze ~= nil then
+    local filtered, ferr = probes.filter(refs, prefix, opts.freeze.probes)
+    if filtered == nil then return nil, ferr end
+    refs = filtered
     local encoded, err = wire.encode(refs)
     if encoded == nil then return nil, err end
     if opts.freeze.prefix ~= prefix or opts.freeze.source_digest ~= hash.sha256_hex(encoded) then
@@ -183,6 +194,9 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
   end
   local valid, ierr = source.integrity(root, refs)
   if not valid then return nil, ierr end
+  local manifest: probes.Manifest = opts.freeze and opts.freeze.probes or nil
+  local archive_text, archive_err = archive.build(refs, prefix, manifest)
+  if archive_text == nil then return nil, archive_err end
   local checkpoint: Checkpoint | nil = nil
   if fs.is_present(path) then
     local old, err = read(path)
@@ -218,7 +232,13 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
       if present == nil then return nil, "checkpoint replay head is missing" end
       local complete, cerr = source.integrity(root, {["replay"] = old.head})
       if not complete then return nil, cerr end
-      return old, "identical"
+      local prior = source.git(root, {"show", old.head .. ":migration/sources"})
+      if prior == archive_text then return old, "identical" end
+      -- Upgrade an already completed pre-witness checkpoint by deterministically
+      -- rebuilding only its final metadata commit from the preserved replay tip.
+      old.phase = "frozen"
+      local saved, saveerr = save(path, old)
+      if not saved then return nil, saveerr end
     end
   end
   if checkpoint == nil then
@@ -236,7 +256,7 @@ local function run(root: string, options?: Options): Checkpoint | nil, string
     previous = {head = checkpoint.head, replayed_head = checkpoint.replayed_head,
       marks = checkpoint.marks, count = checkpoint.count}
   end
-  local result, rerr = replay.replay(root, events, workdir, previous)
+  local result, rerr = replay.replay(root, events, workdir, previous, archive_text)
   if result == nil then return nil, rerr end
   local same, drift = validate_sources(root, checkpoint)
   if not same then return nil, drift end

@@ -22,10 +22,11 @@ local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
-local prepared = require("_work.prepared")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local refs = require("_work.refs")
+local staging = require("_work.statestaging")
+local native = require("_work.statepublish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
@@ -66,71 +67,64 @@ end
 -- identity.
 local function test_a_lost_race_drops_the_mutation_and_refuses()
   local a, b = init_shared("gate-lost")
-  -- `a` moves the remote forward, so `b`'s push below is rejected
-  -- against a remote it has not seen. Bounded, standing for a real
-  -- take of new work: two brand-new items never share a ref on their
-  -- own, so the shared refs/heads/board/seq lease every bounded save
-  -- advances is what puts them in each other's way here.
-  local touched = make_item()
+  local id = fixture.file_item(a, "shared race target", "")
+  fixture.caller_fetch(b)
+  local touched = check.must(store.load(a, id))
+  touched.title = "the winner"
   storewrite.set_bounded(a, true)
   assert(storewrite.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
   fixture.caller_publish(a)
 
-  local mine = make_item()
+  local mine = check.must(store.load(b, id))
+  mine.title = "the loser"
   local ok, err = gate.commit_and_publish(b, mine, SPEC_TOUCH,
-    ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
+    ("spec %s"):format(mine.id:sub(1, 8)), "set")
   assert(ok, "the stale mutation may be prepared locally: " .. tostring(err))
-  local pending = check.must(prepared.list(b.root))
+  local pending = check.must(staging.list(b.root))
   assert(#pending == 1, "the stale mutation has one durable transaction")
-  assert(not prepared.execute(b.root, prepared.push_argv(pending[1])),
-    "the caller's leased push detects the lost race")
-  assert(prepared.execute(b.root, prepared.fetch_argv()),
-    "the caller fetches the winner after the rejected push")
-  check.must(store.close(b))
-  local outcomes = check.must(prepared.refresh(b.root))
-  assert(#outcomes == 1 and outcomes[1].state == "lost-race",
-    "refresh records the lost-race diagnosis without replaying")
-  local merged = check.must(store.list(b))
-  assert(item.by_id(merged)[touched.id] ~= nil,
-    "the checkout was re-synced onto the winner's state")
-  assert(item.by_id(merged)[mine.id] == nil,
-    "and the dropped mutation is gone whole")
+  local pushed, perr = native.execute(b.root, pending[1])
+  assert(not pushed and perr == store.LOST_RACE,
+    "the native path fence detects the lost race")
+  assert(native.sync(b), "the checkout re-syncs to the winner")
+  assert(check.must(store.load(b, id)).title == "the winner",
+    "the checkout was re-synced and the mutation dropped whole")
 end
 
 -- The re-run is the compare-and-swap completing: the same mutation,
 -- decided and committed again against the merged state, publishes.
 local function test_the_rerun_publishes_against_the_merged_state()
   local a, b = init_shared("gate-rerun")
-  local touched = make_item()
+  local id = fixture.file_item(a, "shared rerun target", "")
+  fixture.caller_fetch(b)
+  local touched = check.must(store.load(a, id))
+  touched.title = "the winner"
   storewrite.set_bounded(a, true)
   assert(storewrite.save(a, touched, "a moves the remote forward"))
   assert(publish.publish(a))
   fixture.caller_publish(a)
 
-  local mine = make_item()
+  local mine = check.must(store.load(b, id))
+  mine.title = "the eventual winner"
   local ok, err = gate.commit_and_publish(b, mine, SPEC_TOUCH,
-    ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
+    ("spec %s"):format(mine.id:sub(1, 8)), "set")
   assert(ok, "the stale mutation prepares: " .. tostring(err))
-  local pending = check.must(prepared.list(b.root))
+  local pending = check.must(staging.list(b.root))
   assert(#pending == 1)
-  assert(not prepared.execute(b.root, prepared.push_argv(pending[1])))
-  assert(prepared.execute(b.root, prepared.fetch_argv()))
-  check.must(store.close(b))
-  local outcomes = check.must(prepared.refresh(b.root))
-  assert(#outcomes == 1 and outcomes[1].state == "lost-race")
-  assert(check.must(refs.read_ref(b.root, pending[1].staging_ref)) == refs.ZERO_SHA)
-  assert(outcomes[1].quarantine_ref == "refs/gitboard/quarantined/lost-race/"
-    .. pending[1].id)
-  assert(check.must(refs.read_ref(b.root, outcomes[1].quarantine_ref))
-    == pending[1].manifest, "the diagnosed transaction remains inspectable")
+  local pushed, perr = native.execute(b.root, pending[1])
+  assert(not pushed and perr == store.LOST_RACE)
+  assert(native.sync(b))
+  assert(check.must(refs.read_ref(b.root, pending[1].ref)) == refs.ZERO_SHA)
+  local quarantine = "refs/gitboard/quarantined/lost-race/" .. pending[1].id
+  assert(check.must(refs.read_ref(b.root, quarantine))
+    == pending[1].sha, "the diagnosed transaction remains inspectable")
   check.must(store.list(b))
   local again, aerr = gate.commit_and_publish(b, mine, SPEC_TOUCH,
-    ("spec %s"):format(mine.id:sub(1, 8)), "new", nil, nil, true)
+    ("spec %s"):format(mine.id:sub(1, 8)), "set")
   assert(again, "the re-run prepares against merged state: " .. tostring(aerr))
   fixture.caller_publish(b)
   fixture.caller_fetch(a)
-  assert(check.must(store.load(a, mine.id)).id == mine.id,
+  assert(check.must(store.load(a, mine.id)).title == "the eventual winner",
     "and the mutation reaches the remote")
 end
 
@@ -144,7 +138,8 @@ local function test_commit_surfaces_remote_transport_but_local_stays_quiet()
   local ok, detail = gate.commit_and_publish(remote, remote_item, nil,
     "new remote item", "new")
   _G.print = old_print
-  assert(ok and detail:find("publish: git push", 1, true) ~= nil, detail)
+  assert(ok and detail:find("gitboard publish", 1, true) ~= nil, detail)
+  assert(detail:find("NOT PUBLISHED", 1, true) ~= nil, detail)
   assert(seen == detail, "the returned transport plan is printed verbatim")
 
   local local_store = init_state_repo("gate-local-quiet")
@@ -154,8 +149,8 @@ local function test_commit_surfaces_remote_transport_but_local_stays_quiet()
   local lok, ldetail = gate.commit_and_publish(local_store, local_item, nil,
     "new local item", "new")
   _G.print = old_print
-  assert(lok and ldetail == "" and seen == "",
-    "local-only publication remains a quiet success")
+  assert(lok and ldetail:find("confirmed=1", 1, true) ~= nil, ldetail)
+  assert(seen == ldetail, "local publication prints its confirmation")
 end
 
 -- Graph writes include their parent/order side in the same claim check. The
@@ -391,6 +386,7 @@ local function test_a_board_with_no_origin_skips_the_owner_rule()
   local it = check.must(store.load(s, leaf))
   it.repo = "whilp/cosmopolitan"
   assert(storewrite.save(s, it, "fixture: a repo on a local-only board"))
+  assert(publish.publish(s))
   assert(owner.board_owner(s) == nil, "no origin, no owner")
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 0, "nothing to compare against: "
@@ -442,7 +438,7 @@ local function test_a_dependency_naming_no_item_is_a_ready_problem()
   local it = check.must(store.load(s, leaf))
   it.depends_on = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
   assert(storewrite.save(s, it, "fixture: a dependency on nothing"))
-  fixture.caller_publish(s)
+  assert(publish.publish(s))
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 1 and problems[1]:find("not on the board", 1, true) ~= nil,
     "an id naming nothing is reported: " .. table.concat(problems, "; "))

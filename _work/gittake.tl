@@ -20,7 +20,6 @@ local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
 local health = require("_work.health")
 local item = require("_work.item")
-local gitreadspec = require("_work.gitreadspec")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 local format = require("_work.format")
@@ -236,8 +235,7 @@ local function take_result(s: store.Store, it: item.Item, session: string,
   -- the first handover the tip IS the handover commit and never equals
   -- the recorded parent again. A legacy 40-hex digest resolves to no
   -- object, compares unequal, and is re-typed by this very handover.
-  local recorded = gitreadspec.read_spec(s.root, {it.result or ""})
-  if native ~= "" then recorded = stateevidence.read_spec(s.root, it.result or "", it.id) end
+  local recorded = stateevidence.read_spec(s.root, it.result or "", it.id)
   if recorded.change == body.change and recorded.non_goals == body.non_goals
   and (it.result or "") ~= "" and verdict ~= "request changes" then
     return gate.verdict_line("take", true,

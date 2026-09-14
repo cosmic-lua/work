@@ -34,8 +34,8 @@ local function test_new_after_files_and_places_in_one_publish()
     "new --parent --after should be accepted")
   local after = check.must(store.list(s))
   assert(#after == before_count + 1, "exactly one item was filed")
-  assert(commits(s) == before_commits + 2,
-    "one push, two commits: the new item and the parent it entered")
+  assert(commits(s) == before_commits + 1,
+    "one native commit atomically writes the new item and parent order")
   local found: string = nil
   for _, i in ipairs(after) do
     if i.parent == goal and i.id ~= leaf then
@@ -64,8 +64,8 @@ local function test_new_with_no_parent_places_among_the_boards_outcomes()
   local before_commits = commits(s)
   assert(graph.cmd_new(s, "a sibling outcome", "", nil, "", nil, "", goal, "") == 0,
     "new --before goal with no --parent places it among the board's outcomes")
-  assert(commits(s) == before_commits + 2,
-    "one push, two commits: the new outcome and the board's own order")
+  assert(commits(s) == before_commits + 1,
+    "one native commit atomically writes the new outcome and board order")
   local all = check.must(store.list(s))
   local c = check.must(store.read(s))
   local board_id = check.must(read.board(c))

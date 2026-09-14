@@ -7,8 +7,9 @@ local flags = require("cosmic.flags")
 local function extend(spec: flags.CommandSpec)
   spec.commands[#spec.commands + 1] = {name = "migrate6",
     summary = "prepare, audit, and explicitly publish a frozen native-board migration",
-    spec = {usage = "plan | show | verify-source | verify-remote | activation-plan | publish [options]",
-      summary = "plan creates a checkpoint and native candidate locally. It does not publish or "
+    spec = {usage = "prepare-freeze | plan | show | verify-source | verify-remote | activation-plan | publish [options]",
+      summary = "prepare-freeze seeds bound sacrificial refs before the owner enables the ruleset. "
+      .. "plan creates a checkpoint and native candidate locally. It does not publish or "
       .. "activate the board. Source drift refuses a resume. Live activation requires an enforced "
       .. "legacy-write freeze verified through gh and a complete source-ref recheck. "
       .. "Publication runs only with publish --execute. See help native.",
@@ -18,6 +19,7 @@ local function extend(spec: flags.CommandSpec)
         {long = "prefix", arg = "REFS/", help = "source namespace; default canonical local or remote board refs"},
         {long = "remote", arg = "REMOTE", help = "configured migration push remote; default board remote"},
         {long = "freeze-ruleset", arg = "ID", help = "verify this GitHub ruleset before a fresh source fetch; requires authenticated gh"},
+        {long = "freeze-probes", arg = "FILE.literal", help = "durable sacrificial-ref manifest; default CHECKPOINT.freeze-probes.literal"},
         {long = "limit", arg = "N", default = "100", help = "maximum commit interval between staged state pushes"},
         {long = "execute", help = "with publish, verify the freeze and source set, then push and activate"},
         {long = "catch-up", help = "append newly observed legacy history before native writes begin"}}}}

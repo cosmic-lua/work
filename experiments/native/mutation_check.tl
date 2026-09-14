@@ -1,6 +1,6 @@
 #!/usr/bin/env cosmic
 --- Native semantic mutations in an isolated HEAD plus explicit source overlays.
---- Run with bin/cosmic experiments/native/mutation_check.tl [CATALOG [OVERLAY...]].
+--- Run with the actual runtime and this path, then CATALOG and optional OVERLAY paths.
 local child = require("cosmic.child")
 local check = require("cosmic.check")
 local fs = require("cosmic.fs")
@@ -51,10 +51,10 @@ local function checked_catalog(path: string): {string: Mutation}
   return cases
 end
 
-local function replace_once(source: string, before: string, after: string): string
+local function replace_once(source: string, before: string, after: string): string | nil, string
   local first, last = source:find(before, 1, true)
-  assert(first ~= nil, "mutation source no longer matches")
-  assert(source:find(before, last + 1, true) == nil, "mutation source is ambiguous")
+  if first == nil then return nil, "mutation source no longer matches" end
+  if source:find(before, last + 1, true) ~= nil then return nil, "mutation source is ambiguous" end
   return source:sub(1, first - 1) .. after .. source:sub(last + 1)
 end
 
@@ -121,7 +121,8 @@ local function experiment(runtime: string, root: string, output: string,
     id: string, mutation: Mutation): Result
   local path = fs.join(root, mutation.file)
   local original = assert(fs.read(path))
-  local changed = replace_once(original, mutation.before, mutation.after)
+  local changed, match_err = replace_once(original, mutation.before, mutation.after)
+  if changed == nil then return {outcome = "invalid", evidence = match_err} end
   assert(fs.write(path, changed))
   local checked = run({runtime, "--check", "types", mutation.file}, root)
   assert(fs.write(fs.join(output, id .. "-compile.log"), checked.stdout .. checked.stderr))
@@ -194,9 +195,6 @@ local function main(...: string): integer
   print("Evidence: " .. output)
   local revision = run({"git", "rev-parse", "HEAD"}, source)
   assert(revision.ok, revision.stderr)
-  assert(fs.write(fs.join(output, "provenance.literal"), assert(literal.format({
-            revision = revision.stdout:gsub("%s+$", ""), runtime = runtime,
-            source_snapshot = "source-snapshot/_work", catalog = cases, arguments = table.concat(args, "\n")}))))
   local checkout = fs.join(output, "checkout")
   local made = run({"git", "worktree", "add", "--detach", checkout,
       (revision.stdout:gsub("%s+$", ""))}, source)
@@ -207,7 +205,26 @@ local function main(...: string): integer
     assert(path:match("^_work/[a-z0-9_]+%.tl$"), "unsafe source overlay")
     assert(fs.write(fs.join(checkout, path), assert(fs.read(fs.join(source, path)))))
   end
-  assert(fs.copy_tree(fs.join(checkout, "_work"), fs.join(output, "source-snapshot/_work")))
+  -- The index records the precise tracked source with any requested overlays.
+  -- Git object identities replace a duplicate, unbounded source-tree snapshot.
+  local added = run({"git", "add", "--", "_work"}, checkout)
+  assert(added.ok, added.stderr)
+  local source_tree = run({"git", "write-tree"}, checkout)
+  assert(source_tree.ok, source_tree.stderr)
+  local catalog_sha = run({"git", "hash-object", catalog}, source)
+  assert(catalog_sha.ok, catalog_sha.stderr)
+  local overlays: {string: string} = {}
+  for index = 2, #args do
+    local sha = run({"git", "hash-object", args[index]}, source)
+    assert(sha.ok, sha.stderr)
+    overlays[args[index]] = sha.stdout:gsub("%s+$", "")
+  end
+  assert(fs.write(fs.join(output, "provenance.literal"), assert(literal.format({
+            revision = revision.stdout:gsub("%s+$", ""),
+            source_tree_sha = source_tree.stdout:gsub("%s+$", ""),
+            catalog_blob_sha = catalog_sha.stdout:gsub("%s+$", ""),
+            runtime = runtime, overlays = overlays, catalog = cases,
+            arguments = table.concat(args, "\n")}))))
   local ok, results = pcall(check_all, runtime, checkout, output, cases)
   local cleaned = run({"git", "worktree", "remove", "--force", checkout}, source)
   assert(cleaned.ok, cleaned.stderr)

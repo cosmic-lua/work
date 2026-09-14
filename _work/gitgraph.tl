@@ -28,6 +28,7 @@
 local graphguards = require("_work.graphguards")
 local cachequery = require("_work.cachequery")
 local gate = require("_work.gitgate")
+local claimgate = require("_work.gitclaimgate")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
@@ -297,6 +298,17 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   local parent_refusal = graphguards.attach_refusal(index, id, parent)
   if parent_refusal ~= nil then return gate.verdict_line("attach", false, parent_refusal) end
   local old_parent_id = it.parent or ""
+  -- A bare attach may change both parents' derived roles without changing
+  -- either parent tree. Authorize and fence that whole-item membership before
+  -- moving the child, including the old parent it leaves.
+  for _, protected in ipairs({parent, old_parent_id}) do
+    local parent_to_check = index[protected]
+    if protected ~= "" and parent_to_check ~= nil then
+      local denial = claimgate.mutation_refusal(s, parent_to_check,
+        claim_session or "", frc, rsn)
+      if denial ~= nil then return gate.verdict_line("attach", false, denial) end
+    end
+  end
   it.parent = parent
   -- Adoption makes a leaf workable: it is todo by derivation, with
   -- nothing to write. Triage answers one cheap question — is this
