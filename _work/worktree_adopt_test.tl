@@ -1,9 +1,9 @@
 #!/usr/bin/env cosmic
--- Adoption's success paths, its claim/authority checks, and unsupported
--- targets. `_work/worktree_adopt_refusal_test.tl` carries the checkout
--- refusal, manual/review, real-alias, and submodule cases — split out
--- so the ~47 independent `fresh()` fixture repositories both files
--- build together run across two processes instead of one.
+-- Adoption's success paths and final post-build checks. Live authority
+-- and unsupported-target cases continue in
+-- `_work/worktree_adopt_authority_test.tl`; checkout refusal, manual/review,
+-- real-alias, and submodule cases remain in
+-- `_work/worktree_adopt_refusal_test.tl`.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
@@ -13,9 +13,6 @@ local brief = require("_work.brief")
 local claim = require("_work.claim")
 local fixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
-local stateclaim = require("_work.stateclaim")
-local statewrite = require("_work.statewrite")
-local authority = require("_work.stateclaim_authority")
 local gitdraft = require("_work.gitdraft")
 local graph = require("_work.gitgraph")
 local receipt = require("_work.preparation_receipt")
@@ -265,96 +262,4 @@ local function test_final_checkout_and_private_runtime_changes_precede_refs_and_
         assert(not r.ok, "post-build validation must precede refs")
       end)
   end
-end
-
-local function test_live_authority_refuses_draft_overlay_wrong_holder_expiry_and_pending()
-  for _, fault in ipairs({"draft", "overlay", "holder", "expired", "pending", "unconfirmed"}) do
-    fresh("authority-" .. fault, function(c: Case)
-        good(c)
-        local old = check.must(fs.read(c.file))
-        if fault == "draft" then
-          local d = check.must(gitdraft.begin(c.s.root))
-          assert(env.set("GITBOARD_DRAFT", d.id))
-          assert(gitdraft.activate(c.s.root, d))
-        elseif fault == "overlay" then
-          refsmod.set_overlay(c.s.root, check.must(refsmod.for_each_ref(c.s.root, {"refs/heads"})))
-        elseif fault == "holder" then
-          fixture.drop_claim(c.s, c.id, SESSION, "different holder")
-          fixture.claim_item(c.s, c.id, string.rep("2", 32), c.base)
-        elseif fault == "expired" then
-          local now = os.time()
-          os.time = function(): integer return now + claim.LEASE_S + 1 end
-        else
-          fixture.drop_claim(c.s, c.id, SESSION, "before speculative reacquisition")
-          local canonical = c.s.state_head
-          local next_claim = stateclaim.prepare(c.s.root, canonical,
-            {{id = c.id, product_base = c.base}}, "take", SESSION, os.time(), false, "")
-          assert(next(next_claim.refused) == nil)
-          for _, dependency in ipairs(next_claim.dependencies) do
-            c.s.state_reads[dependency.path] = dependency.id
-          end
-          assert(statewrite.transition(c.s, next_claim.changes, "speculative acquisition", next_claim.publish_by))
-          fixture.git(c.s.root, {"update-ref", "refs/remotes/origin/state", canonical})
-          fixture.git(c.s.root, {"update-ref", "refs/remotes/origin/board/format", canonical})
-          assert(refsmod.set_board_mode(c.s.root, "remote"))
-          if fault == "unconfirmed" then
-            fixture.git(c.s.root, {"update-ref", "refs/heads/state", c.s.state_head})
-          end
-        end
-        local before, original = value(c.s.root, "show-ref"), child.run
-        child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
-          assert(argv[1] == "git", fault .. ": bad authority cannot execute runtime")
-          return original(argv, opts)
-        end
-        local code, out = run(c, c.path)
-        assert(code ~= 0, fault .. ": " .. out)
-        assert(check.must(fs.read(c.file)) == old and value(c.s.root, "show-ref") == before)
-      end)
-  end
-end
-
-local function test_pending_renewal_preserves_current_acquisition_authority()
-  fresh("pending-renewal", function(c: Case)
-      good(c)
-      local current = check.must(authority.current(c.s, c.id, SESSION))
-      local renewal = stateclaim.prepare(c.s.root, c.s.state_head,
-        {{id = c.id, product_base = ""}}, "renew", SESSION, os.time() + 1, false, "")
-      assert(next(renewal.refused) == nil and #renewal.changes == 1)
-      for _, dependency in ipairs(renewal.dependencies) do
-        c.s.state_reads[dependency.path] = dependency.id
-      end
-      assert(statewrite.transition(c.s, renewal.changes, "pending renewal", renewal.publish_by))
-      local still_current = check.must(authority.current(c.s, c.id, SESSION))
-      assert(still_current.root == current.root and still_current.expires_at == current.expires_at)
-      local code, out = run(c, c.path)
-      assert(code == 0, "pending renewal cannot invalidate the current canonical lease: " .. out)
-    end)
-end
-
-local function test_options_unsupported_targets_and_legacy_compatibility()
-  for _, kind in ipairs({"legacy", "absent", "make", "cosmopolitan"}) do
-    fresh("compat-" .. kind, function(c: Case)
-        good(c)
-        local code, out = run(c, c.path)
-        assert(code ~= 0 and out:find("require a tracked pinned cosmic target", 1, true), out)
-      end, kind)
-    fresh("unsupported-fetch-" .. kind, function(c: Case)
-        local code, out = run(c, nil, true)
-        assert(code ~= 0 and out:find("require a tracked pinned cosmic target", 1, true), out)
-      end, kind)
-  end
-  fresh("options", function(c: Case)
-      for _, args in ipairs({{"--adopt", ""}, {"--adopt", c.path}, {"--receipt-out", ""},
-          {"--review", "--adopt", c.path, "--receipt-out", c.file}}) do
-        local code = capture(function(): integer
-            local argv = {"worktree", c.id, "--dir", c.s.root, "--session", SESSION}
-            for _, word in ipairs(args) do argv[#argv + 1] = word end
-            return gitboard.main(table.unpack(argv))
-          end)
-        assert(code ~= 0 and not fs.is_dir(c.path))
-      end
-      assert(env.set("GITBOARD_WORKTREE_BOOTSTRAP", "0"))
-      assert(run(c, c.path) ~= 0 and run(c, nil, true) ~= 0)
-      good(c)
-    end)
 end
