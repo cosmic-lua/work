@@ -73,6 +73,18 @@ local function test_existing_accept_cannot_be_rewritten_by_raw_commit()
   denied(s, commit, "accepted verdict cannot be changed")
 end
 
+local function test_new_verified_handover_supersedes_an_old_accept()
+  local s, id, product = review_ready("snapshot-accepted-superseded")
+  assert(verdict.cmd_verdict_commit(s, id, "accept", product.head,
+      flow.REVIEWER, false, "", product.root) == 0)
+  assert(flow.claim(s, id, flow.REVIEWER, product, "drop") == 0)
+  assert(flow.claim(s, id, flow.BUILDER, product) == 0)
+  assert(flow.handover(s, id, flow.BUILDER, product, product.next_head) == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.handover_head == product.next_head and (it.verdict or "") == ""
+    and (it.verdict_head or "") == "")
+end
+
 local function accepted_research(name: string): store.Store, string,
   flow.Product, string
   local s, id, product = flow.fresh(name)

@@ -48,6 +48,8 @@ local function protocol_action(s: store.Store, commit: string, remote: string,
   if planned == nil then return gate.verdict_line("publish", false, err) end
   local plan, report = planned.plan, planned.report
   if action == "begin" then
+    local retained, rerr = workspace.retain(s.root, commit)
+    if not retained then return gate.verdict_line("publish", false, rerr) end
     local state: recovery.Recovery
     if fs.is_present(path) then
       local loaded, lerr = recovery.load(path)

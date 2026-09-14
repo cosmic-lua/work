@@ -128,6 +128,22 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
     before: boardread.View, after: boardread.View, ids: {string: boolean},
     author: string, repair: boolean): boolean, string
   local needs: {string: boolean} = {}
+  local old_root, new_root = "", ""
+  for _, it in ipairs(before.items) do
+    if item.is_parentless(it) then
+      if old_root ~= "" then return false, "canonical board has multiple parentless items" end
+      old_root = it.id
+    end
+  end
+  for _, it in ipairs(after.items) do
+    if item.is_parentless(it) then
+      if new_root ~= "" then return false, "snapshot creates a second parentless item" end
+      new_root = it.id
+    end
+  end
+  if old_root == "" or new_root ~= old_root then
+    return false, "snapshot changes the canonical board root"
+  end
   for id in pairs(ids) do
     local old, new = before.items_by_id[id], after.items_by_id[id]
     if old == nil then needs.new = true end
@@ -141,16 +157,26 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
       local landing_changed = old == nil and ((new.resolution or "") ~= ""
         or (new.landed_head or "") ~= "") or old ~= nil and
       (old.resolution ~= new.resolution or old.landed_head ~= new.landed_head)
-      if old == nil and (handover_changed or verdict_changed or landing_changed)
-      and not repair then
+      if old == nil and (handover_changed or verdict_changed or landing_changed) then
         return false, "new item carries workflow evidence: " .. id
+      end
+      if old == nil then
+        needs.attach = true
+        if #(new.depends_on or {}) > 0 then needs.depend = true end
       end
       if old ~= nil and (not appended(old.builders or {}, new.builders or {})
         or not appended(old.speccers or {}, new.speccers or {})) then
         return false, "workflow attribution is append-only: " .. id
       end
       if old ~= nil and old.verdict == "accept" and verdict_changed then
-        return false, "accepted verdict cannot be changed: " .. id
+        local new_product_handover = (new.handover_head or "") ~= ""
+        and (new.verdict or "") == "" and (new.verdict_head or "") == ""
+        and (handover_changed and new.handover_head ~= old.handover_head
+          or old.handover_head == new.handover_head
+          and old.verdict_head ~= new.handover_head)
+        if not new_product_handover then
+          return false, "accepted verdict cannot be changed: " .. id
+        end
       end
       if old ~= nil and old.parent ~= new.parent then needs.attach = true end
       if old ~= nil and table.concat(old.depends_on or {}, "\0") ~=

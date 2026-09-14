@@ -64,11 +64,18 @@ local function destination_ok(value: Destination): boolean, string
   return true, ""
 end
 
+local function git_date_ok(value: string): boolean
+  local epoch, hour, minute = value:match("^(%-?%d+) [+-](%d%d)(%d%d)$")
+  return epoch ~= nil and math.tointeger(tonumber(epoch)) ~= nil
+  and tonumber(hour) <= 23 and tonumber(minute) <= 59
+end
+
 local function author_ok(value: Author): boolean
   return value.name ~= "" and value.email ~= "" and value.date ~= ""
   and value.name:find("[\n\r<>]") == nil
   and value.email:find("[\n\r<>]") == nil
   and value.date:find("[\n\r]") == nil
+  and git_date_ok(value.date)
 end
 
 --- Read the canonical logical author carried by an ordinary board commit.

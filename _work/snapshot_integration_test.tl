@@ -26,14 +26,20 @@ local function setup(name: string): string
   return root
 end
 
-local function new_item(title: string): item.Item
-  return check.must(item.decode({id = ksuid.new(), title = title}))
+local function new_item(s: store.Store, title: string): item.Item
+  for _, candidate in ipairs(check.must(store.list(s))) do
+    if item.is_parentless(candidate) then
+      return check.must(item.decode({id = ksuid.new(), title = title,
+            parent = candidate.id}))
+    end
+  end
+  error("fixture board has no root", 0)
 end
 
 local function test_multiple_writes_are_one_commit_and_reversion_disappears()
   local root = setup("snapshot-compose")
   local seed = check.must(store.open(root))
-  local it = new_item("original")
+  local it = new_item(seed, "original")
   write.set_session(seed, "composer")
   assert(write.save(seed, it, "create item") and publication.publish(seed, nil))
   local base = seed.state_head
@@ -69,7 +75,7 @@ end
 local function test_any_head_advance_conflicts_and_can_be_abandoned()
   local root = setup("snapshot-whole-head")
   local s = check.must(store.open(root))
-  local it = new_item("candidate")
+  local it = new_item(s, "candidate")
   write.set_session(s, "composer")
   assert(write.save(s, it, "candidate"))
   local candidate = check.must(workspace.read(root))
@@ -90,10 +96,64 @@ local function test_any_head_advance_conflicts_and_can_be_abandoned()
         "refs/gitboard/conflicts/" .. candidate.commit)) == candidate.commit)
 end
 
+local function test_raw_commit_conflict_retains_supported_abandonment()
+  local root = setup("snapshot-raw-conflict")
+  local s = check.must(store.open(root))
+  local it = new_item(s, "raw candidate")
+  write.set_session(s, "composer")
+  assert(write.save(s, it, "raw candidate"))
+  local candidate = check.must(workspace.read(root))
+  assert(refs.update_ref(root, workspace.REF, refs.ZERO_SHA, candidate.commit))
+  local tree = check.must(child.run({"git", "rev-parse",
+        candidate.parent .. "^{tree}"}, {cwd = root})).stdout:gsub("%s+$", "")
+  local moved = check.must(child.run({"git", "-c", "user.name=test", "-c",
+        "user.email=test@example.com", "commit-tree", tree, "-p", candidate.parent},
+      {cwd = root, stdin = "competing snapshot\n"})).stdout:gsub("%s+$", "")
+  assert(refs.update_ref(root, "refs/heads/state", moved, candidate.parent))
+  local ok, err = publication.execute(root, candidate.commit, "origin", nil)
+  assert(not ok and err:find("advanced", 1, true), err)
+  assert(check.must(workspace.read(root)).commit == candidate.commit,
+    "raw publication adopts the exact commit before it freezes")
+  assert(gitboard.main("snapshot", "--abandon", candidate.commit,
+      "--dir", root) == 0)
+  assert(workspace.read(root) == nil)
+end
+
+local function test_raw_commit_retention_refuses_legacy_inflight_state()
+  local root = setup("snapshot-raw-legacy")
+  local s = check.must(store.open(root))
+  local it = new_item(s, "raw legacy conflict")
+  write.set_session(s, "composer")
+  assert(write.save(s, it, "raw legacy conflict"))
+  local candidate = check.must(workspace.read(root))
+  assert(workspace.clear(root, candidate.commit))
+  assert(refs.update_ref(root, "refs/gitboard/drafts/legacy", candidate.commit,
+      refs.ZERO_SHA))
+  local ok, err = publication.execute(root, candidate.commit, "origin", nil)
+  assert(not ok and err:find("obsolete format-6", 1, true), err)
+  assert(workspace.read(root) == nil
+    and not fs.is_present(workspace.recovery_path(root)))
+end
+
+local function test_protocol_begin_retains_a_raw_commit_for_recovery()
+  local root = setup("snapshot-protocol-raw")
+  local s = check.must(store.open(root))
+  local it = new_item(s, "protocol raw candidate")
+  write.set_session(s, "composer")
+  assert(write.save(s, it, "protocol raw candidate"))
+  local candidate = check.must(workspace.read(root))
+  assert(workspace.clear(root, candidate.commit))
+  assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
+      "", "", nil) == 0)
+  assert(check.must(workspace.read(root)).commit == candidate.commit)
+  assert(recovery.clear(workspace.recovery_path(root)))
+  assert(workspace.clear(root, candidate.commit))
+end
+
 local function test_claim_authority_and_deadline_come_from_canonical_before()
   local root = setup("snapshot-claim-authority")
   local seed = check.must(store.open(root))
-  local it = new_item("claimed")
+  local it = new_item(seed, "claimed")
   assert(write.save(seed, it, "create") and publication.publish(seed, nil))
   local s = check.must(store.open(root))
   local now = os.time()
@@ -119,7 +179,7 @@ end
 local function test_foreign_item_change_and_obsolete_plan_refuse()
   local root = setup("snapshot-foreign")
   local seed = check.must(store.open(root))
-  local it = new_item("foreign")
+  local it = new_item(seed, "foreign")
   assert(write.save(seed, it, "create") and publication.publish(seed, nil))
   local holder = check.must(store.open(root))
   local now = os.time()
@@ -150,7 +210,7 @@ No unrelated work.
 local function test_preflight_distinguishes_new_and_existing_spec_issues()
   local root = setup("snapshot-preflight")
   local seed = check.must(store.open(root))
-  local old = new_item("old issue")
+  local old = new_item(seed, "old issue")
   assert(write.save(seed, old, "create old issue"))
   local first = check.must(workspace.read(root)).commit
   local planned, err = publication.plan(root, first, "origin", nil)
@@ -175,10 +235,10 @@ end
 local function test_preflight_reports_new_undeclared_access_with_old_gaps()
   local root = setup("snapshot-preflight-access")
   local seed = check.must(store.open(root))
-  local old = new_item("old issue")
+  local old = new_item(seed, "old issue")
   assert(write.save(seed, old, "seed old issue") and publication.publish(seed, nil))
   local s = check.must(store.open(root))
-  local reached = new_item("new access issue")
+  local reached = new_item(s, "new access issue")
   assert(write.save(s, reached, "add reached repository", {
         change = BAD_SPEC:match("## Change\n\n(.-)\n\n## Non%-goals") or "",
         non_goals = "No unrelated work."}))
@@ -193,11 +253,11 @@ end
 local function test_raw_new_item_cannot_arrive_with_forged_workflow_evidence()
   local root = setup("snapshot-raw-evidence")
   local s = check.must(store.open(root))
-  local it = new_item("forged")
+  local it = new_item(s, "forged")
   it.handover_head = string.rep("a", 40)
   it.builders = {"forger"}
   write.set_session(s, "forger")
-  assert(write.save(s, it, "raw forged handover"))
+  assert(write.save(s, it, "raw forged handover\n\nForce-Why: fixture attack"))
   local commit = check.must(workspace.read(root)).commit
   local refused, err = publication.plan(root, commit, "origin", nil)
   assert(refused == nil and err:find("workflow evidence", 1, true), err)
@@ -214,10 +274,41 @@ local function test_raw_new_item_cannot_arrive_with_forged_workflow_evidence()
   assert(denied == nil and derr:find("lacks current handover evidence", 1, true), derr)
 end
 
+local function test_raw_new_items_must_preserve_the_board_graph()
+  local second_root = setup("snapshot-second-root")
+  local roots = check.must(store.open(second_root))
+  local orphan = check.must(item.decode({id = ksuid.new(), title = "second root"}))
+  write.set_session(roots, "forger")
+  assert(write.save(roots, orphan, "raw second root"))
+  local root_commit = check.must(workspace.read(second_root)).commit
+  local refused, rerr = publication.plan(second_root, root_commit, "origin", nil)
+  assert(refused == nil and rerr:find("second parentless", 1, true), rerr)
+
+  local missing_root = setup("snapshot-missing-parent")
+  local missing = check.must(store.open(missing_root))
+  local dangling = check.must(item.decode({id = ksuid.new(), title = "dangling",
+        parent = ksuid.new()}))
+  write.set_session(missing, "forger")
+  assert(write.save(missing, dangling, "raw missing parent"))
+  local missing_commit = check.must(workspace.read(missing_root)).commit
+  local denied, derr = publication.plan(missing_root, missing_commit, "origin", nil)
+  assert(denied == nil and derr:find("parent chain is broken", 1, true), derr)
+
+  local cycle_root = setup("snapshot-new-dependency-cycle")
+  local cyclic = check.must(store.open(cycle_root))
+  local left, right = new_item(cyclic, "left"), new_item(cyclic, "right")
+  left.depends_on, right.depends_on = {right.id}, {left.id}
+  write.set_session(cyclic, "forger")
+  assert(write.save(cyclic, left, "raw dependency cycle", nil, {right}))
+  local cycle_commit = check.must(workspace.read(cycle_root)).commit
+  local blocked, berr = publication.plan(cycle_root, cycle_commit, "origin", nil)
+  assert(blocked == nil and berr:find("dependency cycle", 1, true), berr)
+end
+
 local function test_frozen_snapshot_allows_diagnostics_but_refuses_writes_and_orphans()
   local root = setup("snapshot-diagnostic-freeze")
   local s = check.must(store.open(root))
-  local it = new_item("diagnostic")
+  local it = new_item(s, "diagnostic")
   write.set_session(s, "holder")
   assert(write.save(s, it, "diagnostic candidate"))
   local candidate = check.must(workspace.read(root))
@@ -236,7 +327,7 @@ end
 local function test_protocol_restart_can_inspect_an_expired_frozen_claim_before_update()
   local root = setup("snapshot-expired-restart")
   local seed = check.must(store.open(root))
-  local it = new_item("expiring claim")
+  local it = new_item(seed, "expiring claim")
   assert(write.save(seed, it, "create") and publication.publish(seed, nil))
   local s = check.must(store.open(root))
   local now = os.time()
@@ -259,7 +350,7 @@ end
 local function test_protocol_refuses_a_custom_recovery_path()
   local root = setup("snapshot-custom-recovery")
   local s = check.must(store.open(root))
-  local it = new_item("custom recovery")
+  local it = new_item(s, "custom recovery")
   write.set_session(s, "holder")
   assert(write.save(s, it, "custom recovery candidate"))
   local candidate = check.must(workspace.read(root))
@@ -274,7 +365,7 @@ local function test_publication_freeze_is_shared_across_linked_worktrees()
   local linked = fs.join(fixture.tmpdir, "snapshot-common-freeze-linked")
   assert(fs.remove_all(linked))
   local s = check.must(store.open(root))
-  local it = new_item("shared freeze")
+  local it = new_item(s, "shared freeze")
   write.set_session(s, "holder")
   assert(write.save(s, it, "shared freeze candidate"))
   local candidate = check.must(workspace.read(root))
@@ -304,7 +395,7 @@ local function test_shell_cli_publish_runs_push_fetch_and_confirmation()
           "+refs/heads/board/format:refs/remotes/origin/board/format"}, {cwd = root})).ok)
   assert(refs.set_board_mode(root, "remote"))
   local s = check.must(store.open(root))
-  local it = new_item("shell cycle")
+  local it = new_item(s, "shell cycle")
   write.set_session(s, "shell")
   assert(write.save(s, it, "one shell snapshot"))
   local commit = check.must(workspace.read(root)).commit

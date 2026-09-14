@@ -10,7 +10,7 @@ Evaluate `_work/snapshot_work_runner.js` first, then this file inside one Work
   })
 
 The protocol callback spools CLI JSON to a transient file and reads it in
-bounded base64 chunks. This avoids treating truncated exec output as a plan.
+bounded JSON string chunks. This avoids treating truncated exec output as a plan.
 */
 (function (root) {
   "use strict";

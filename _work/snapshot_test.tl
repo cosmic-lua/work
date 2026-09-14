@@ -78,6 +78,22 @@ local function test_capture_requires_validation_and_rejects_merges()
 end
 test_capture_requires_validation_and_rejects_merges()
 
+local function test_capture_rejects_a_malformed_logical_author_date()
+  local root, base = repo("malformed-author-date")
+  local tree = check.must(projection.apply(root, base,
+      {{path = "item", mode = "100644", content = "changed", delete = false}}))
+  local malformed = check.must(literal.encode({name = AUTHOR.name,
+        email = AUTHOR.email, date = "nonsense"})):gsub("\n$", "")
+  local candidate = check.must(git.text(root, {"commit-tree", tree, "-p", base},
+      "bad date\n\nGitboard-Author: " .. malformed .. "\n", {
+        GIT_AUTHOR_NAME = AUTHOR.name, GIT_AUTHOR_EMAIL = AUTHOR.email,
+        GIT_AUTHOR_DATE = AUTHOR.date, GIT_COMMITTER_NAME = "gitboard",
+        GIT_COMMITTER_EMAIL = "gitboard@localhost", GIT_COMMITTER_DATE = AUTHOR.date}))
+  local identity, err = snapshot.commit_identity(root, candidate)
+  assert(identity == nil and err:find("logical author", 1, true), err)
+end
+test_capture_rejects_a_malformed_logical_author_date()
+
 local function test_small_large_board_snapshot_is_exactly_three_calls()
   local root, base = repo("large", 120)
   local candidate = commit(root, base, "changed", "new")

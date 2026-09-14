@@ -145,6 +145,13 @@ Work runner and callback example under development on this PR:
   update and restricted all writes to the isolated branch. Both confirmed
   results reported only the affected item and empty spec-issue arrays.
 
+The Work bridge at `df37e777d` also transferred a 36,000-byte JSON payload
+containing 12,000 CJK characters through the actual Work execution tools.
+The recovered string matched exactly, and cleanup of its owned temporary
+file and directory succeeded. This local transfer proof made no connector
+writes and covers the large-response path beyond the inline publication
+exercise above.
+
 The broader retained suite at `43fdcf198` reports 924 passing and 135 failing
 tests across 160 files. Updating obsolete workflow assumptions and closing
 final-state validation gaps remains in progress; this is not a green final

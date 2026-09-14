@@ -187,6 +187,8 @@ local function execute(root: string, commit: string, remote: string,
     local planned, perr = plan(root, commit, remote, now)
     if planned == nil then return false, perr end
     frozen, report = planned.plan, planned.report
+    local retained, rerr = workspace.retain(root, commit)
+    if not retained then return false, rerr end
     state, err = recovery.begin(path, frozen)
     if state == nil then return false, err end
   end

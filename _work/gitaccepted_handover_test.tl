@@ -168,8 +168,9 @@ local function test_stale_acceptance_refuses_completion_and_can_be_rehanded()
       "--session", flow.REVIEWER, "--force", "--why", "repair")
     assert(code ~= 0 and out:find("acceptance must name the current handover", 1, true), out)
   end
-  assert(call(s, "take", id, "--head", p.next_head, "--repo-dir", p.root,
-      "--session", flow.REVIEWER) == 0)
+  local code, out = call(s, "take", id, "--head", p.next_head,
+    "--repo-dir", p.root, "--session", flow.REVIEWER)
+  assert(code == 0, out)
   s = reopen(s)
   it = check.must(store.load(s, id))
   assert(it.verdict == "" and it.verdict_head == "" and it.handover_head == p.next_head)

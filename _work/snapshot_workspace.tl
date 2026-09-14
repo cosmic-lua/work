@@ -41,6 +41,24 @@ local function old_inflight(root: string): boolean, string
   return #found > 0, ""
 end
 
+--- Retain an explicitly supplied ordinary commit as this clone's proposal.
+--- Raw COMMIT publication needs the same restart and abandonment path as a
+--- proposal composed by board verbs.
+local function retain(root: string, commit: string): boolean, string
+  local current, err = read(root)
+  if current ~= nil then
+    if current.commit == commit then return true, "" end
+    return false, "a different local snapshot proposal already exists"
+  end
+  if err ~= "" then return false, err end
+  local old, oerr = old_inflight(root)
+  if oerr ~= "" then return false, oerr end
+  if old then
+    return false, "REFUSED: obsolete format-6 transaction/draft is still in flight; publish or abandon it with the older gitboard before retaining a snapshot"
+  end
+  return refs.update_ref(root, REF, commit, refs.ZERO_SHA)
+end
+
 local function recovery_present(path: string): boolean
   return fs.is_present(path) or fs.is_present(path .. ".candidate")
   or fs.is_present(path .. ".updating")
@@ -189,6 +207,7 @@ local record Module
   recovery_path: function(string): string
   canonical_head: function(string): string | nil, string
   read: function(string): Candidate | nil, string
+  retain: function(string, string): boolean, string
   activate: function(string, boolean | nil): Candidate | nil, string
   compose: function(string, string, string, string, {tx.Change}, string): string | nil, string
   clear: function(string, string): boolean, string
@@ -196,7 +215,7 @@ local record Module
   retain_conflict: function(string, Candidate): boolean, string
 end
 local M: Module = {REF = REF, recovery_path = recovery_path,
-  canonical_head = canonical_head, read = read,
+  canonical_head = canonical_head, read = read, retain = retain,
   activate = activate, compose = compose, clear = clear,
   resummary = resummary, retain_conflict = retain_conflict}
 return M
