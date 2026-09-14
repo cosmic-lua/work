@@ -155,18 +155,20 @@ test_a_head_that_is_neither_the_handover_nor_the_result()
 
 local function test_a_result_off_the_items_own_ref_is_refused()
   local s, id, p = research_ready("verdict-research-off-ref")
-  -- Another item's tip: a commit this board resolves, in no way part of
-  -- this item's ref history — the shape a mis-recorded `result` takes.
-  local all = check.must(store.list(s))
+  -- The parent of this item's first event is a published board ancestor that
+  -- deterministically predates the item. An arbitrary other item's tip can be
+  -- the same whole-board snapshot that first introduced this item.
   local history = check.must(boardhistory.read(s.root, s.state_head))
-  local elsewhere = ""
-  for _, other in ipairs(all) do
-    if other.id ~= id and (history.tip_by_id[other.id] or "") ~= "" then
-      elsewhere = history.tip_by_id[other.id]
-    end
-  end
+  local own = history.events_by_id[id] or {}
+  assert(#own > 0, "the fixture found this item's first published event")
+  local parent = check.must(store.git_ok(s,
+      {"rev-parse", "--verify", own[1].sha .. "^"}))
+  local elsewhere = (parent.stdout:gsub("%s+$", ""))
   assert(check.must(commit_evidence.commit_id(s.root, elsewhere)) == elsewhere,
-    "the fixture found a board commit off this item's ref")
+    "the fixture found a published ancestor before this item")
+  local query = elsewhere .. ":items/" .. id
+  assert(check.must(gitobj.cat_file_batch(s.root, {query}))[query] == nil,
+    "the selected ancestor truly predates the target item")
   local it = check.must(store.load(s, id))
   it.result = elsewhere
   local tree = check.must(projection.apply(s.root, s.state_head, {{
