@@ -18,7 +18,8 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
-local prepared = require("_work.prepared")
+local staging = require("_work.statestaging")
+local native = require("_work.statepublish")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
@@ -68,11 +69,12 @@ end
 --- @param path string File path relative to root, e.g. "_work/x.tl"
 --- @param content string Content
 local function seed_tracked_file(root: string, path: string, content: string)
+  fixture.git(root, {"symbolic-ref", "HEAD", "refs/heads/machinery"})
   assert(fs.make_dirs(fs.dirname(fs.join(root, path))))
   assert(fs.write(fs.join(root, path), content))
   fixture.git(root, {"add", "-A"})
   fixture.git(root, {"commit", "-q", "-m", "seed " .. path})
-  fixture.git(root, {"push", "-q", "origin", "HEAD"})
+  fixture.git(root, {"push", "-q", "origin", "HEAD:refs/heads/machinery"})
 end
 
 --- Bring the checked-out branch's working tree level with `origin`,
@@ -81,12 +83,9 @@ end
 --- `refs/heads/ended` and `refs/heads/board` and touches no working tree at all.
 --- @param root string Checkout root
 local function pull_branch(root: string)
-  local branch = check.must(child.run({"git", "symbolic-ref", "--short", "HEAD"},
-      {cwd = root}))
-  assert(branch.ok, "git symbolic-ref failed: " .. branch.stderr)
-  fixture.git(root, {"fetch", "-q", "origin"})
-  fixture.git(root, {"merge", "-q", "--ff-only",
-      "origin/" .. (branch.stdout:gsub("%s+$", ""))})
+  fixture.git(root, {"fetch", "-q", "origin",
+      "+refs/heads/machinery:refs/remotes/origin/machinery"})
+  fixture.git(root, {"checkout", "-q", "-B", "machinery", "origin/machinery"})
 end
 
 -- A modified-but-uncommitted `_work/**` file sitting dirty in the
@@ -134,7 +133,7 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   local base = make_item()
   assert(storewrite.save(a, base, "seed a common base"))
   local staged, instructions = publish.publish(a)
-  assert(staged and instructions:find("git push", 1, true) ~= nil,
+  assert(staged and instructions:find("gitboard publish", 1, true) ~= nil,
     "default publication returns caller instructions")
   fixture.caller_publish(a)
   fixture.caller_fetch(b)
@@ -158,18 +157,11 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   assert(storewrite.save(b, wb, "b loses the race"))
   local ok = publish.publish(b)
   assert(ok, "the local successor is staged before transport")
-  local transactions = check.must(prepared.list(b.root))
+  local transactions = check.must(staging.list(b.root))
   assert(#transactions == 1, "one losing transaction is prepared")
-  local pushed, perr = prepared.execute(b.root,
-    prepared.push_argv(transactions[1]))
-  assert(not pushed, "the caller's leased push loses the race: " .. perr)
-  local fetched, ferr = prepared.execute(b.root, prepared.fetch_argv())
-  assert(fetched, "caller fetches the winning refs: " .. ferr)
-  local synced, err = publish.sync(b)
-  assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
-    "refresh classifies the losing transaction: " .. tostring(err))
-  assert(err:find("1 quarantined under refs/gitboard/quarantined/lost-race", 1, true), err)
-  assert(publish.sync(b), "the same quarantined loss must not fail the next sync")
+  local pushed, perr = native.execute(b.root, transactions[1])
+  assert(not pushed and perr == store.LOST_RACE, "same-path changes must lose: " .. perr)
+  assert(publish.sync(b), "refresh recovers the canonical winner")
   assert(check.must(store.load(b, base.id)).title == "a's edit wins",
     "the checkout holds the winner's state")
   local after = fs.read(dirty_path)
@@ -199,38 +191,32 @@ local function test_a_plain_clone_requires_an_explicit_caller_fetch()
   assert(fs.make_dirs(plain))
   fixture.git(plain, {"init", "-q"})
   fixture.git(plain, {"remote", "add", "origin", fs.join(base, "remote.git")})
+  local unopened, err = store.open(plain)
+  assert(unopened == nil and err:find("format", 1, true), "unfetched native state refuses: " .. err)
+  fixture.git(plain, {"fetch", "--atomic", "origin",
+      "+refs/heads/state:refs/remotes/origin/state",
+      "+refs/heads/board/format:refs/remotes/origin/board/format"})
   local p = check.must(store.open(plain))
-  assert(#check.must(store.list(p)) == 0,
-    "an unfetched remote checkout sees no items before refresh")
+  local before = #check.must(store.list(p))
+  file_item(a, "later item requires explicit fetch", "")
   assert(publish.sync(p), "default refresh performs no transport")
-  assert(#check.must(store.list(p)) == 0,
+  assert(#check.must(store.list(p)) == before,
     "default refresh leaves the clone's fetched refs untouched")
   assert(publish.sync(p, true), "explicit execution fetches board refs")
-  local remote_items = child.run({"git", "for-each-ref", "refs/heads/items"},
-    {cwd = fs.join(base, "remote.git")})
-  local expected = 0
-  for _ in (remote_items and remote_items.stdout or ""):gmatch("[^\n]+") do
-    expected = expected + 1
-  end
-  assert(expected > 0, "the remote holds the filed item")
-  assert(#check.must(store.list(p)) == expected,
-    "after sync the plain clone lists every remote item")
+  assert(#check.must(store.list(p)) == before + 1,
+    "after explicit sync the plain clone lists the new remote item")
 end
 
 local function test_an_overlapping_dirty_file_no_longer_blocks_sync()
   local a, b = init_shared("dirty-overlap")
-  assert(fs.make_dirs(fs.join(a.root, "_work")))
-  assert(fs.write(fs.join(a.root, "_work", "z.tl"), "-- base\n"))
-  fixture.git(a.root, {"add", "-A"})
-  fixture.git(a.root, {"commit", "-q", "-m", "seed _work/z.tl"})
-  fixture.git(a.root, {"push", "-q", "origin", "HEAD"})
+  seed_tracked_file(a.root, fs.join("_work", "z.tl"), "-- base\n")
   pull_branch(b.root)
   assert(publish.sync(b))
 
   assert(fs.write(fs.join(a.root, "_work", "z.tl"), "-- a's change\n"))
   fixture.git(a.root, {"add", "-A"})
   fixture.git(a.root, {"commit", "-q", "-m", "a changes _work/z.tl"})
-  fixture.git(a.root, {"push", "-q", "origin", "HEAD"})
+  fixture.git(a.root, {"push", "-q", "origin", "HEAD:refs/heads/machinery"})
 
   local dirty_path = fs.join(b.root, "_work", "z.tl")
   assert(fs.write(dirty_path, "-- b's uncommitted change\n"))
@@ -254,16 +240,19 @@ local function test_an_unreachable_remote_only_matters_when_execution_is_explici
 end
 
 local function test_default_mutation_instructions_name_the_configured_remote()
-  local s = fixture.init_state_repo("configured-remote-instructions")
+  local s = init_shared("configured-remote-instructions")
+  fixture.git(s.root, {"remote", "rename", "origin", "upstream"})
+  assert(refs.set_board_remote(s.root, "upstream"))
+  s = check.must(store.open(s.root))
   local it = make_item()
   assert(storewrite.save(s, it, "prepare against configured remote"))
-  assert(refs.set_board_remote(s.root, "upstream"))
-  assert(refs.set_board_mode(s.root, "remote"))
   local ok, instructions = publish.publish(s)
   assert(ok, instructions)
-  assert(instructions:find(" upstream ", 1, true), instructions)
-  assert(instructions:find("refs/remotes/upstream/", 1, true), instructions)
-  assert(instructions:find("refs/remotes/origin/", 1, true) == nil, instructions)
+  local receipt = check.must(staging.list(s.root))[1]
+  assert(receipt ~= nil)
+  assert(receipt.remote == "upstream", "the printed attempt remains bound to the configured remote")
+  assert(instructions:find(receipt.id, 1, true), instructions)
+  assert(table.concat(native.fetch_argv(receipt.remote), " "):find("refs/remotes/upstream/", 1, true))
 end
 
 -- A caller reading only the three transport lines could mistake
@@ -276,9 +265,8 @@ local function test_default_mutation_instructions_say_the_board_is_unchanged()
   local ok, instructions = publish.publish(a)
   assert(ok, instructions)
   assert(instructions:find("prepared ", 1, true), instructions)
-  assert(instructions:find("publish: git push", 1, true), instructions)
-  assert(instructions:find("refresh refs: git fetch", 1, true), instructions)
+  assert(instructions:find("publish: gitboard publish ", 1, true), instructions)
   assert(instructions:find("NOT PUBLISHED", 1, true), instructions)
-  assert(instructions:find("gitboard publish --execute", 1, true), instructions)
-  assert(instructions:find("gitboard refresh --execute", 1, true), instructions)
+  assert(instructions:find(" --execute", 1, true), instructions)
+  assert(instructions:find("refresh to confirm the complete transition chain", 1, true), instructions)
 end

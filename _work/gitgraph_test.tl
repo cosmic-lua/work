@@ -33,8 +33,8 @@ local function test_a_claim_freezes_decomposition_except_for_its_holder()
   local before = commits(s)
   assert(graph.cmd_new(s, "a sub-slice", leaf, nil, "", false, nil,
       nil, nil, "session-A") == 0)
-  assert(commits(s) == before + 2,
-    ("the child and its parent's new order are two commits: %d -> %d")
+  assert(commits(s) == before + 1,
+    ("the child and its parent's new order share one state commit: %d -> %d")
     :format(before, commits(s)))
   local parent = check.must(store.load(s, leaf))
   assert(parent.claim == "session-A",

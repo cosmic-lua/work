@@ -19,8 +19,10 @@ local gitobj = require("_work.gitobj")
 local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local lanes = require("_work.lanes")
+local publish = require("_work.publish")
 local read = require("_work.read")
 local refs = require("_work.refs")
+local projection = require("_work.stateplan_git")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -117,15 +119,15 @@ local function test_record_writes_only_on_change()
   assert(lanes.read_state(s)["fuzz.yml"] == "failure")
 end
 
--- Every board mutation commits under the bot identity, not the host's
+-- Every board mutation commits under the board identity, not the host's
 -- ambient git config or a name GitHub renders "Unverified" —
 -- `store.tl`'s shared GIT_DEFAULTS. A lane sync no longer commits at
 -- all (it writes the cache's local `lanes` table), so this now checks
 -- only the one call site left that does.
-local function test_board_commits_carry_the_claude_identity()
+local function test_board_commits_carry_the_board_identity()
   local s = init_state_repo("identity")
   fixture.file_item(s, "an outcome", "")
-  assert(fixture.commit_author_email(s) == "noreply@anthropic.com",
+  assert(fixture.commit_author_email(s) == "gitboard@board",
     "item mutation author: " .. fixture.commit_author_email(s))
 end
 
@@ -147,27 +149,33 @@ local function test_report_surfaces_a_record_failure()
     .. table.concat(lines, " | "))
 end
 
--- Symmetric case: an item ref whose tip commit carries no `meta` blob
--- at all makes `mint`'s `store.list` fail (the one shape `list`
+-- Symmetric case: a canonical state commit carrying no `meta` blob for
+-- one item makes `mint`'s `store.list` fail (the one shape `list`
 -- treats as genuine corruption, `_work/gitread.tl`'s `build_item`),
 -- without touching `record`, which writes to a different ref
 -- entirely. `report` must surface this one too.
 local function test_report_surfaces_a_mint_failure()
   local s = init_state_repo("report-mint-fails")
   local id = fixture.file_item(s, "a corrupt item", "")
-  local empty_tree = check.must(gitobj.mktree(s.root, {}))
+  local parent = s.state_head
+  local corrupt_tree = check.must(projection.apply(s.root, parent, {
+        {path = "items/" .. id .. "/meta", mode = "100644", content = "",
+          delete = true},
+        {path = "items/" .. id .. "/spec/change.md", mode = "100644",
+          content = "orphaned prose\n", delete = false},
+      }))
   local bogus_sha = check.must(gitobj.commit_tree(s.root, {
-        tree = empty_tree, parents = {}, message = "corrupt: no meta",
+        tree = corrupt_tree, parents = {parent}, message = "corrupt: no meta",
         author_name = "test", author_email = "test@example.com",
         committer_name = "test", committer_email = "test@example.com",
       }))
-  assert(store.git_ok(s, {"update-ref", "refs/heads/items/" .. id, bogus_sha}))
-  -- The raw ref update above bypasses the store entirely — `s.index`,
+  assert(store.git_ok(s, {"update-ref", "refs/heads/state", bogus_sha, parent}))
+  -- The raw state update above bypasses the store entirely — `s.index`,
   -- opened again by `file_item`'s own trailing `store.list`, still
   -- reflects the board from before it. Closed here so `report`'s own
   -- `store.list` (through `mint`) reopens fresh against the corrupt
-  -- ref this update just wrote, rather than reusing a connection that
-  -- never saw it move.
+  -- state commit this update just wrote, rather than reusing a
+  -- connection that never saw it move.
   local _cok, _cerr = store.close(s)
   local lines = lanes.report(s, RED)
   local found = false
@@ -204,11 +212,7 @@ local function test_a_minted_repair_is_offered_and_admitted()
   local parent = check.must(item.decode({id = flow.LANE_PARENT,
         title = "lane repair outcome", parent = board_id}))
   assert(storewrite.save(s, parent, "new " .. parent.id:sub(1, 8) .. " lane repairs"))
-  -- Straight through `storewrite.save`, bypassing the cache patch AND
-  -- the lease `commit_and_publish` would otherwise have refreshed —
-  -- closed here so `cmd_rank` below reads a fresh lease rather than
-  -- fast-importing against the sha this save already moved past.
-  local _cok, _cerr = store.close(s)
+  assert(publish.publish(s))
   assert(gitrank.cmd_rank(s, parent.id, "", "", true) == 0,
     "rank should be accepted")
 

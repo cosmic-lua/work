@@ -117,6 +117,7 @@ local function fresh(name: string): store.Store, string, Product
   it.repo = "acme/widgets"
   it.base = "main"
   assert(storewrite.save(s, it, "set product repository"))
+  fixture.caller_publish(s)
   return s, id, p
 end
 

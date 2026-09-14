@@ -6,12 +6,11 @@
 local check = require("cosmic.check")
 local child = require("cosmic.child")
 local claim = require("_work.claim")
-local claimbatch = require("_work.claimbatch")
+local authority = require("_work.stateclaim_authority")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local graph = require("_work.gitgraph")
-local gitclaim = require("_work.gitclaim")
-local prepared = require("_work.prepared")
+local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
@@ -139,21 +138,13 @@ local function item_with_pr(name: string, pr: integer,
   local product_base = (base.stdout:gsub("%s+$", ""))
   it.handover_head = (handed.stdout:gsub("%s+$", ""))
   assert(storewrite.save(s, it, "fixture: review handover for worktree"))
-  local target = gitclaim.target_item_ref(leaf)
-  local result = gitclaim.prepare_batch({{
-        root = s.root, id = leaf, source_ref = target, target_ref = target,
-        remote = "origin", batch = "fixture-" .. leaf:sub(-8), caller = SESSION,
-        action = "take", product_base = product_base, force = false, why = "",
-        now = os.time(),
-      }})
-  assert(result.prepared ~= nil, result.refused[leaf] or result.refused.batch)
-  assert(prepared.promote_local(s.root, result.prepared.transaction))
+  assert(publish.publish(s))
+  fixture.claim_item(s, leaf, SESSION, product_base)
   return s, leaf
 end
 
 local function branch_of(s: store.Store, id: string): string
-  local it = check.must(store.load(s, id))
-  local st = check.must(claimbatch.read_state(s.root, it.claim_batch or "", id))
+  local st = check.must(authority.current(s, id, SESSION))
   return claim.branch(id, st.root)
 end
 
@@ -237,8 +228,8 @@ local function test_worktree_review_refuses_a_different_sessions_claim()
   _G.print = old_print
   local out = table.concat(lines, "\n")
   assert(code ~= 0, "a different session's review claim is refused")
-  assert(out:find(SESSION, 1, true) ~= nil,
-    "the refusal names whose claim it is: " .. out)
+  assert(out:find("current claim belongs to another session", 1, true) ~= nil,
+    "the refusal identifies a foreign current lease: " .. out)
   assert(not fs.is_dir(expect), "no worktree directory was created")
 end
 

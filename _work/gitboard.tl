@@ -18,7 +18,6 @@ local gitinit = require("_work.gitinit")
 local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
-local gitread = require("_work.gitread")
 local gitdone = require("_work.gitdone")
 local gitlog = require("_work.gitlog")
 local draftcli = require("_work.gitdraft_cli")
@@ -27,13 +26,13 @@ local gitspec = require("_work.gitspec")
 local transport = require("_work.gittransport")
 local gittake = require("_work.gittake")
 local gitworktree = require("_work.gitworktree")
-local singlehead = require("_work.gitsinglehead")
-local singleconfig = require("_work.gitsinglehead_config")
 local publish = require("_work.publish")
 local rank = require("_work.gitrank")
 local refs = require("_work.refs")
 local session = require("_work.session")
 local store = require("_work.store")
+local statepublish_cli = require("_work.statepublish_cli")
+local statecli = require("_work.statecli")
 local tail = require("_work.tail")
 local vrd = require("_work.gitverdict")
 local show = require("_work.gitshow")
@@ -66,23 +65,7 @@ local function resolve_id(s: store.Store, input: string): string | nil, string
   if id ~= nil or not tail.is_tail_shape(input) then
     return id, rerr
   end
-  local cached, cerr = cachequery.resolve_tail(s.root, input)
-  if cerr ~= "" then
-    return nil, cerr
-  end
-  if cached ~= nil then
-    return cached, ""
-  end
-  local resolved, gerr = tail.resolve_glob(s.root, input)
-  if resolved == nil then
-    return nil, gerr
-  end
-  -- The one-shot ticket `resolve`'s own prefix match sets, so a
-  -- handle costs `load` no for-each-ref of its own either.
-  if resolved.ref ~= "" and resolved.sha ~= "" then
-    s.fresh_lease = gitread.lease_encode(resolved.id, resolved.ref, resolved.sha)
-  end
-  return resolved.id, ""
+  return statecli.resolve(s, input)
 end
 
 local CSPEC: flags.CommandSpec = commands.CSPEC
@@ -153,19 +136,15 @@ local function main(...: string): integer
     return claimcli.cmd_session(d.parsed.args[1] or "")
   end
   if d.command == "init" then
-    local blocked = singleconfig.command_guard(d.parsed.values["dir"] or ".", "init")
-    if blocked ~= "" then return gate.verdict_line("init", false, "REFUSED: " .. blocked) end
     return gitinit.cmd_init(d.parsed.values["dir"] or ".",
       d.parsed.switches["remote"] or false,
       d.parsed.switches["local"] or false,
-      d.parsed.values["remote-name"] or "")
+      d.parsed.values["remote-name"] or "", d.parsed.values["format"])
   end
   local dir = d.parsed.values["dir"] or "."
-  if d.command == "single-head" then return singlehead.cmd_single_head(dir,
+  if d.command == "migrate6" then return statecli.migration(dir,
       d.parsed.args, d.parsed.values, d.parsed.switches) end
   local explicit_remote = d.parsed.values["remote"] or ""
-  local blocked = singleconfig.command_guard(dir, d.command, explicit_remote)
-  if blocked ~= "" then return gate.verdict_line(d.command, false, "REFUSED: " .. blocked) end
   if explicit_remote ~= "" then
     local selected, selerr = refs.use_remote(dir, explicit_remote)
     if not selected then return gate.verdict_line(d.command or "gitboard", false,
@@ -180,9 +159,6 @@ local function main(...: string): integer
     d.parsed.values["draft"])
   if selected_draft == nil then
     return gate.verdict_line(d.command, false, "REFUSED: " .. draft_err)
-  end
-  if singleconfig.mutation_needs_draft(dir, d.command, selected_draft, d.parsed.values["add"] ~= nil) then
-    return gate.verdict_line(d.command, false, "REFUSED: item mutations on the experimental single-head backend require a remote-mode draft; run `gitboard draft begin` and pass --draft")
   end
   local s, serr = store.open(dir)
   if s == nil then
@@ -208,6 +184,13 @@ local function main(...: string): integer
   if d.command == "publish" then
     local selectors = d.parsed.args
     if #selectors == 0 and selected_draft ~= "" then selectors = {selected_draft} end
+    if s.state_head ~= "" then
+      return statepublish_cli.cmd_publish(s, selectors, remote,
+        d.parsed.switches["execute"] or false, d.parsed.values["plan"] or "",
+        d.parsed.values["from-plan"] or "", d.parsed.values["call"] or "",
+        d.parsed.values["published"] or "", d.parsed.values["repository"] or "",
+        d.parsed.values["head"] or "", d.parsed.switches["call-json"] or false)
+    end
     return transport.cmd_publish(s, selectors,
       remote,
       d.parsed.switches["execute"] or false)
@@ -423,6 +406,10 @@ local function main(...: string): integer
     end
     local it, ierr = store.load(s, id)
     if it == nil then return gate.verdict_line("take", false, ierr) end
+    if d.parsed.switches["result"] then
+      if d.parsed.values["head"] then return gate.verdict_line("take", false, "choose --head or --result") end
+      return gittake.take_result(s, it, who, 0)
+    end
     return gittake.take_handover(s, it, who, d.parsed.values["head"] or "",
       d.parsed.values["url"] or "", d.parsed.values["repo-dir"] or "")
   end

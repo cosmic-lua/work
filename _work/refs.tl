@@ -65,7 +65,8 @@ end
 --- `refs/remotes/<remote>/items/*` (and likewise for ended/board);
 --- gitboard itself never fetches.
 local function tracking_ref(target: string, remote?: string): string | nil, string
-  local tail = target:match("^refs/heads/(items/.+)$")
+  local tail = target:match("^refs/heads/(state)$")
+  or target:match("^refs/heads/(items/.+)$")
   or target:match("^refs/heads/(ended/.+)$")
   or target:match("^refs/heads/(board/.+)$")
   or target:match("^refs/heads/(claim%-batches/.+)$")
@@ -201,7 +202,8 @@ local function for_each_ref(root: string,
   local mapped: {string} = {}
   local remote = config.board_remote(root)
   for _, p in ipairs(patterns) do
-    local tail = p:match("^refs/heads/(items.*)$")
+    local tail = p:match("^refs/heads/(state)$")
+    or p:match("^refs/heads/(items.*)$")
     or p:match("^refs/heads/(ended.*)$")
     or p:match("^refs/heads/(claims.*)$")
     or p:match("^refs/heads/(board.*)$")
@@ -214,7 +216,8 @@ local function for_each_ref(root: string,
   end
   for _, e in ipairs(found) do
     local quoted = remote:gsub("([^%w])", "%%%1")
-    local tail = e.refname:match("^refs/remotes/" .. quoted .. "/(items/.+)$")
+    local tail = e.refname:match("^refs/remotes/" .. quoted .. "/(state)$")
+    or e.refname:match("^refs/remotes/" .. quoted .. "/(items/.+)$")
     or e.refname:match("^refs/remotes/" .. quoted .. "/(ended/.+)$")
     or e.refname:match("^refs/remotes/" .. quoted .. "/(claims/.+)$")
     or e.refname:match("^refs/remotes/" .. quoted .. "/(board/.+)$")
@@ -367,14 +370,14 @@ local function fetch_prune(root: string): boolean, string
   return true
 end
 
---- The four mirror refspecs for a configured board remote.
+--- Legacy namespace mirrors tolerate absent refs. Native transport requests
+--- exact state and board/format refs together through statepublish.fetch_argv;
+--- installing an exact state refspec here would break legacy boards without it,
+--- while a state* wildcard would also mirror unrelated state-prefixed branches.
 local function fetch_refspecs(remote: string): {string}
   return {
-    ("+refs/heads/items/*:refs/remotes/%s/items/*"):format(remote),
-    ("+refs/heads/ended/*:refs/remotes/%s/ended/*"):format(remote),
-    ("+refs/heads/claims/*:refs/remotes/%s/claims/*"):format(remote),
-    ("+refs/heads/board/*:refs/remotes/%s/board/*"):format(remote),
-    ("+refs/heads/claim-batches/*:refs/remotes/%s/claim-batches/*"):format(remote),
+    ("+refs/heads/state:refs/remotes/%s/state"):format(remote),
+    ("+refs/heads/board/format:refs/remotes/%s/board/format"):format(remote),
   }
 end
 

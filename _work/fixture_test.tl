@@ -5,6 +5,11 @@
 -- stub `child.run` to reproduce the exact failure text without spawning
 -- real git processes or trying to provoke the race itself.
 local child = require("cosmic.child")
+local check = require("cosmic.check")
+local refs = require("_work.refs")
+local store = require("_work.store")
+local boardread = require("_work.boardread")
+local staging = require("_work.statestaging")
 local fixture = require("_work.fixture")
 
 local LOCKED_STDERR < const > =
@@ -110,4 +115,27 @@ local function test_other_git_subcommands_are_never_retried()
   assert(not ok, "a non-worktree-add failure must not be retried")
   assert(tostring(err):find("locked", 1, true) ~= nil, tostring(err))
   assert(attempts == 1, "expected exactly one attempt, got " .. attempts .. " attempts")
+end
+
+local function test_native_fixtures_publish_and_refresh_claim_authority()
+  local one, two = fixture.init_shared("native-fixture-transport")
+  local initial = fixture.commits(one)
+  local id = fixture.file_item(one, "shared native fixture", "")
+  assert(fixture.commits(one) == initial + 1, "one mutation makes one board commit")
+  assert(#check.must(staging.list(one.root)) == 0, "caller publication confirms its receipt")
+  fixture.caller_fetch(two)
+  assert(check.must(store.load(two, id)).title == "shared native fixture")
+  local identity = fixture.claim_item(one, id, "fixture-holder")
+  fixture.caller_fetch(two)
+  local head = check.must(refs.read_ref(two.root, "refs/remotes/origin/state"))
+  local current = check.must(boardread.list(two.root, head)).claims_by_id[id]
+  assert(current ~= nil and current.id == identity and current.holder == "fixture-holder")
+  assert(fixture.control_claim(one, {id}, "fixture-holder", "renew") == identity)
+  assert(fixture.drop_claim(one, id, "fixture-holder", "finished") == identity)
+  fixture.caller_fetch(two)
+  head = check.must(refs.read_ref(two.root, "refs/remotes/origin/state"))
+  assert(check.must(boardread.list(two.root, head)).claims_by_id[id] == nil)
+  assert(#check.must(refs.for_each_ref_raw(one.root,
+        {"refs/heads/items", "refs/heads/ended", "refs/heads/claim-batches"})) == 0)
+  assert(store.close(one)); assert(store.close(two))
 end

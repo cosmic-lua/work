@@ -1,53 +1,13 @@
---- `fsck`: a read-only, offline whole-board audit — the problems no
---- other verb ever asks about because nothing else asks a WHOLE-board
---- question. `docs/design/read.md`'s "The one verb that reads git": the
---- database at `o/board.db` is the read model every other verb reads,
---- rebuilt from the refs on a digest mismatch and patched by every
---- save — `fsck` is the one place that reads git to check that model
---- AGAINST the refs it claims to derive from, rebuilding the same
---- rows into a throwaway database (`_work.cacherebuild.fill`'s own
---- fill path, reused against `:memory:`) and diffing every `items`
---- row (lease columns included), every `ranks` row, and the `events`
---- count per item against the session's own open cache.
----
---- Structural findings — a dangling `parent`, a second parentless item
---- (there is meant to be exactly one — the board), an `order` entry
---- naming an id that is not a child of the item carrying it, and a
---- parent chain broken, cyclic, or deeper than 16 levels — are
---- `_work.read.structure`'s four SQL-derivable
---- kinds, asked of the same throwaway rebuild. An `order` entry naming
---- a non-child is reported but never counted: a read that walks
---- `_work.read.children` skips straight past it, so it is not a
---- problem any read ever meets — see "stale order entries" below.
----
---- What SQL cannot answer, this module still asks directly: an item's
---- tree not re-encoding to what it was read from (a hand edit, a
---- canonical form that drifted — `tree_problem`), an open item whose
---- Change says it is blocked on an item its `depends_on` does not
---- declare, and a `depends_on` cycle (both `_work.gitfsck_depends`,
---- reported rather than refused, since a hand edit can put one on
---- the refs and an audit reports what is), an id filed under
---- both `refs/heads/items` and `refs/heads/ended` at once (the residue
---- of a resolution whose atomic push landed the create half of an
---- old-style namespace move and lost the delete half — the pushing
---- credential can create and update a branch but never delete one),
---- a stray branch under the item namespaces whose tail is not a
---- KSUID, and the stale `refs/heads/board/lanes` ref no build writes
---- any more. `store.list`'s own format check (`_work.gitread`) is the
---- board-readable precondition every other check here depends on — a
---- board this tool cannot even read is reported as the one problem it
---- is, nothing else asked.
+--- Offline native-board audit: validate the tree and claims, rebuild a disposable
+--- query projection, and compare structure, item rows and attributed history.
+--- Archived format-5 refs are migration evidence and do not affect this audit.
 local cacherebuild = require("_work.cacherebuild")
-local claimbatchfsck = require("_work.gitfsck_claimbatch")
 local dependsfsck = require("_work.gitfsck_depends")
 local gate = require("_work.gitgate")
-local gitobj = require("_work.gitobj")
+local stateread_fsck = require("_work.stateread_fsck")
 local gitread = require("_work.gitread")
 local index = require("_work.index")
-local item = require("_work.item")
-local itemtree = require("_work.itemtree")
 local read = require("_work.read")
-local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 local spec = require("_work.spec")
 local store = require("_work.store")
@@ -61,92 +21,6 @@ local ITEM_COLUMNS < const >: {string} = {
   "result", "verdict", "verdict_head", "resolution",
   "ref", "tip", "touched_at",
 }
-
---- Whether one item's tree, re-encoded from its own decoded fields,
---- hashes IDENTICALLY to the tip it was read from — the canonical
---- round trip `_work/itemtree_test.tl` tests for one item, asked here
---- of every item on the board. nil when the item carries no observed
---- lease at all (unreachable through `store.list`, kept only so this
---- stays total). `itemtree.build_tree` here is the pure, non-writing
---- form (no `write` argument) — this is a read-only audit, so nothing
---- it computes needs to actually exist in the odb, only to hash the
---- same as what is already there.
---- @param s store.Store The store
---- @param it item.Item The item
---- @param prose itemtree.Spec Its prose, both fields "" when it has none
---- @param observed_trees {string: string} Every observed commit sha
---- (`s.leased_sha`) mapped to its tree sha, from ONE
---- `gitobj.tree_of_batch` call over the whole board
---- @return string | nil The problem
-local function tree_problem(s: store.Store, it: item.Item, prose: itemtree.Spec,
-    observed_trees: {string: string}): string
-  local observed_sha = s.leased_sha[it.id]
-  if observed_sha == nil or observed_sha == "" then
-    return nil
-  end
-  local observed_tree = observed_trees[observed_sha]
-  if observed_tree == nil then
-    return ("%s: could not read its observed tree"):format(it.id:sub(1, 8))
-  end
-  local rebuilt, berr = itemtree.build_tree(s.root, it, prose)
-  if rebuilt == nil then
-    return ("%s: could not re-encode its tree: %s"):format(it.id:sub(1, 8), berr)
-  end
-  if rebuilt ~= observed_tree then
-    return ("%s: does not re-encode to the tree it was read from (%s vs %s) — "
-      .. "canonical form drifted"):format(it.id:sub(1, 8), rebuilt:sub(1, 7),
-      observed_tree:sub(1, 7))
-  end
-  return nil
-end
-
---- The stale `refs/heads/board/lanes` finding: nothing writes it any more —
---- the lane observation lives in the cache database instead — but a
---- board carried over from before that move may still have one.
---- @param s store.Store The store
---- @return string | nil The problem, nil when the ref is not there
-local function stale_lanes_ref_problem(s: store.Store): string | nil
-  local found = refs.for_each_ref(s.root, {"refs/heads/board/lanes"})
-  if found ~= nil and #found > 0 then
-    return "refs/heads/board/lanes: stale — lane observations now live in "
-    .. "the cache database (o/board.db), not a committed ref; delete it"
-  end
-  return nil
-end
-
---- Branches under the item namespaces whose tail is not a KSUID: not
---- items, skipped by every read, and worth deleting.
---- @param s store.Store The store
---- @return {string} One line per stray ref
-local function stray_ref_problems(s: store.Store): {string}
-  local out: {string} = {}
-  local found = refs.for_each_ref(s.root, {"refs/heads/items", "refs/heads/ended"})
-  for _, r in ipairs(found or {}) do
-    local tail_seg = r.refname:match("/([^/]+)$") or ""
-    if not (#tail_seg == 27 and tail_seg:match("^%w+$")) then
-      out[#out + 1] = ("stray ref %s: not an item id; delete the branch"):format(r.refname)
-    end
-  end
-  return out
-end
-
---- One line per id `list` found filed under both `refs/heads/items`
---- and `refs/heads/ended` at once, naming which ref is being read and
---- the exact command a credential with delete rights runs to clear
---- the other — the push every ordinary session makes can create and
---- update a branch but never delete one, so this repair needs a
---- different credential.
---- @param s store.Store The store, after a `list` call
---- @return {string} One line per duplicate, possibly empty
-local function duplicate_ref_problems(s: store.Store): {string}
-  local out: {string} = {}
-  for _, d in ipairs(store.duplicates(s)) do
-    out[#out + 1] = ("%s: filed under both %s and %s — reading %s; clear the other "
-      .. "with `git push origin --delete %s`"):format(
-      d.id:sub(1, 8), d.kept_ref, d.dropped_ref, d.kept_ref, d.dropped_ref)
-  end
-  return out
-end
 
 --- Every `items` row, keyed by id, every column but `id` stringified —
 --- the shape `audit_cache` diffs.
@@ -330,11 +204,7 @@ local function fail_detail(n_problems: integer, n_stale: integer): string
 end
 
 local function cmd_fsck(s: store.Store): integer
-  -- Ask the format-4 batch graph before the normal board read.  A broken
-  -- `claim_batch` intentionally makes `gitread.list` fail closed, but fsck
-  -- still has enough raw Git structure to say exactly which immutable object
-  -- or bridge is incomplete.
-  local claim_problems = claimbatchfsck.problems(s)
+  local claim_problems = stateread_fsck.problems(s.root, s.state_head)
   -- A fresh git read, never the cache-backed `store.list`: this audit's
   -- own job is checking the database against git, so it needs to
   -- rebuild the derived rows from the refs itself rather than trust
@@ -350,7 +220,6 @@ local function cmd_fsck(s: store.Store): integer
   for id, sha in pairs(board.shas_by_id) do
     s.leased_sha[id] = sha
   end
-  s.duplicates = board.duplicates
   local ids: {string} = {}
   local observed_shas: {string} = {}
   for _, it in ipairs(all) do
@@ -431,35 +300,9 @@ local function cmd_fsck(s: store.Store): integer
     local _c, _cerr = mem:close()
   end
 
-  -- One process for every item's observed tree, whatever the board's
-  -- size — the batched form of `gitobj.tree_of`, which used to cost
-  -- one `git rev-parse` PER item here.
-  local observed_trees, terr = gitobj.tree_of_batch(s.root, observed_shas)
-  if observed_trees == nil then
-    problems[#problems + 1] = ("could not read observed trees: %s"):format(terr)
-    observed_trees = {}
-  end
-  for _, it in ipairs(all) do
-    local p = tree_problem(s, it, specs[it.id]
-      or {change = "", non_goals = ""}, observed_trees)
-    if p ~= nil then
-      problems[#problems + 1] = p
-    end
-  end
   for _, p in ipairs(dependsfsck.problems(all, specs)) do
     problems[#problems + 1] = p
   end
-  local lanes_p = stale_lanes_ref_problem(s)
-  if lanes_p ~= nil then
-    problems[#problems + 1] = lanes_p
-  end
-  for _, p in ipairs(duplicate_ref_problems(s)) do
-    problems[#problems + 1] = p
-  end
-  for _, p in ipairs(stray_ref_problems(s)) do
-    problems[#problems + 1] = p
-  end
-
   for _, p in ipairs(problems) do
     print(p)
   end

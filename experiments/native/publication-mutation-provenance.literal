@@ -1,0 +1,13 @@
+return {
+  campaign = "native publication semantics",
+  catalog = "experiments/native/publication-mutations.tl",
+  command = "/workspace/scratch/27a6dfdb63ab/work-format6/o/bootstrap/cosmic experiments/native/mutation_check.tl experiments/native/publication-mutations.tl",
+  format = "gitboard-native-mutation-provenance-v1",
+  killed = 4,
+  results = "experiments/native/publication-mutation-results.literal",
+  results_sha256 = "6fe1949db1365f4a41e58aab193d67cdabf0998852c774659d1782517b3facd8",
+  runtime = "/workspace/scratch/27a6dfdb63ab/work-format6/o/bootstrap/cosmic",
+  source_revision = "0c457dd1d7d8d4c2a3f47c5af984c6d8c70b4240",
+  source_tree = "921f6f5ea50f0ccafe557bdfe66f8198b53b0857",
+  total = 4,
+}

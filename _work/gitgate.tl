@@ -10,19 +10,17 @@
 --- A refused publish drops every one of them, so anything a mutation
 --- touches beyond its subject travels with it rather than being
 --- committed alongside.
-local cache = require("_work.cache")
+local graphguards = require("_work.graphguards")
 local ciobs = require("_work.ciobs")
 local fs = require("cosmic.fs")
 local flow = require("_work.flow")
 local health = require("_work.health")
 local claimgate = require("_work.gitclaimgate")
-local gitdraft = require("_work.gitdraft")
 local index = require("_work.index")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local publish = require("_work.publish")
 local read = require("_work.read")
-local refs = require("_work.refs")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -322,10 +320,10 @@ end
 --- call makes. `session`, when the caller has one, is threaded to
 --- `save` as the write's author, through the store rather than
 --- `save`'s own fixed signature. `bounded` marks a mutation whose
---- gates read the whole board before deciding (today: a NEW take
---- against the doing bound, and a lane mint) — `save` also advances
---- and leases `refs/heads/board/seq` for one of these, so two racing
---- bounded mutations cannot both land.
+--- gates read board membership before deciding, such as a lane mint or
+--- graph edit. Publication revalidates those predicates at the fetched head
+--- before its non-forced state update. Explicit bounded compatibility pulls
+--- retain their doing gate; public handovers use item and claim fences.
 --- @param s store.Store The store
 --- @param it item.Item The mutated item
 --- @param body itemtree.Spec Replacement prose, or nil to leave the `spec/` subtree alone
@@ -348,70 +346,16 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: itemtree.
   end
   storewrite.set_session(s, session or "")
   storewrite.set_op(s, verb)
-  storewrite.set_bounded(s, bounded or false)
-  -- Read before the write moves anything, so `after_save` below has
-  -- proof the cache was valid immediately beforehand — see
-  -- `_work.cache`'s own header for why this lives here rather than
-  -- inside `storewrite.save` itself. `s.board_digest` is `store.list`'s
-  -- own ref-snapshot digest, already covering the SAME watched
-  -- namespaces the guard would otherwise re-read fresh — "" (unset,
-  -- when the caller loaded by id rather than by listing the board)
-  -- falls through to that fresh read exactly as before.
-  local before_digest = cache.guard(s.root, s.board_digest)
-  -- A pre-write snapshot of exactly the shas this save might move —
-  -- `after_save` below diffs it against `s.leased_sha` post-write to
-  -- tell which of `it`/`also` actually landed a new commit (a diff
-  -- can find nothing to write for one of them), which is the only way
-  -- to know without `_work.storewrite`/`_work.gitwrite` surfacing it.
-  -- `cache.after_save` below reindexes `items[1]`'s searchable text,
-  -- one string per item, so the prose is rendered to the document it
-  -- renders to; nil stays nil, meaning this save moved no prose.
-  local indexed: string | nil = nil
-  if body ~= nil then
-    indexed = spec.document(body)
-  end
-  local before_shas: {string: string} = {[it.id] = s.leased_sha[it.id]}
-  for _, x in ipairs(also or {}) do
-    before_shas[x.id] = s.leased_sha[x.id]
-  end
+  local native_bounded = s.state_head ~= "" and
+  (verb == "depend" or verb == "attach")
+  storewrite.set_bounded(s, bounded or native_bounded)
   local saved, serr = storewrite.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then
     return saved, serr
   end
-  -- `it` first, then `also` — the cache patches straight from these,
-  -- exactly as `storewrite.save` just wrote them, with no git read of
-  -- its own; only `it` (`items[1]`) can carry a spec change (`body`), so
-  -- that is the only slot `after_save` ever reindexes with new text.
-  local items: {item.Item} = {it}
-  for _, x in ipairs(also or {}) do
-    items[#items + 1] = x
-  end
-  local written: {string: string} = {}
-  for _, x in ipairs(items) do
-    local new_sha = s.leased_sha[x.id]
-    if new_sha ~= nil and new_sha ~= before_shas[x.id] then
-      written[x.id] = new_sha
-    end
-  end
-  -- Remote saves are only prepared; patching would expose unconfirmed data.
-  -- Local simulation has completed its CAS and may patch immediately.
-  if refs.board_mode(s.root) == "local" and gitdraft.active(s.root) == nil then
-    cache.after_save(s.root, before_digest, items, indexed, message, written,
-      s.written_at)
-  end
-  -- A local cache's digest may just have moved, while this connection's
-  -- read snapshot has not: a released prepared statement can pin it to
-  -- its prior read. A remote cache deliberately did not move, and must
-  -- not carry an open snapshot across the caller's later transport.
-  -- Closing makes the next read reopen against whichever canonical refs
-  -- exist then: a cheap reuse locally, or a digest-driven rebuild after
-  -- a remote fetch.
+  -- Close the read snapshot before publication patches the canonical cache.
   local _cok, _cerr = store.close(s)
   local published, detail = publish.publish(s)
-  if published and gitdraft.active(s.root) ~= nil then
-    cache.after_save(s.root, before_digest, items, indexed, message, written,
-      s.written_at)
-  end
   if published and (detail or "") ~= "" then print(detail) end
   return published, detail
 end
@@ -447,7 +391,7 @@ local function containered(c: Index, parent: item.Item): {item.Item} | nil, stri
   if role == nil then
     return nil, rerr
   end
-  local reopened = role == "outcome" and (parent.resolution or "") ~= ""
+  local reopened = graphguards.reopen(parent, role)
   if not reopened then return {}, "" end
   parent.resolution = ""
   return {parent}, ""

@@ -8,6 +8,7 @@
 -- too and let those from-scratch board seedings run in their own process.
 
 local check = require("cosmic.check")
+local itemtree = require("_work.itemtree")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local flow = require("_work.flow")
@@ -18,6 +19,15 @@ local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+
+--- Fixture writes explicitly confirm on local boards; remote writes remain staged.
+local function save(s: store.Store, it: item.Item, message: string,
+    spec?: itemtree.Spec, also?: {item.Item}): boolean, string
+  local ok, err = storewrite.save(s, it, message, spec, also)
+  if not ok or store.is_noop(err) then return ok, err end
+  if refs.board_mode(s.root) == "local" then return publish.publish(s) end
+  return ok, err
+end
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -103,8 +113,8 @@ local function build_shared_template(clones: integer): string
       -- performs the caller-owned bootstrap transport and fetches the
       -- canonical remote-tracking refs back.
       git(dir, {"push", "-q", "--atomic", "origin",
-          "refs/heads/items/*:refs/heads/items/*",
-          "refs/heads/board/*:refs/heads/board/*"})
+          "refs/heads/state:refs/heads/state",
+          "refs/heads/board/format:refs/heads/board/format"})
       assert(refs.fetch_prune(dir))
     end
   end
@@ -154,13 +164,13 @@ local function test_independent_item_mutations_do_not_share_a_global_lease()
   local _, clones = init_shared("cas", 2)
   local a = check.must(store.open(clones[1]))
   for i = 1, flow.DOING_LIMIT - 1 do
-    assert(storewrite.save(a, make_item(("busy-%d"):format(i)),
+    assert(save(a, make_item(("busy-%d"):format(i)),
         ("busy %d"):format(i)))
   end
   local mine = make_item()
   local yours = make_item()
-  assert(storewrite.save(a, mine, "new mine"))
-  assert(storewrite.save(a, yours, "new yours"))
+  assert(save(a, mine, "new mine"))
+  assert(save(a, yours, "new yours"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b, true))
@@ -172,13 +182,13 @@ local function test_independent_item_mutations_do_not_share_a_global_lease()
   assert(store.list(a))
   local ia = check.must(store.load(a, mine.id))
   ia.title = "mine by session-a"
-  assert(storewrite.save(a, ia, "retitle mine by session-a"))
+  assert(save(a, ia, "retitle mine by session-a"))
   assert(publish.publish(a, true))
 
   assert(store.list(b))
   local ib = check.must(store.load(b, yours.id))
   ib.title = "yours by session-b"
-  assert(storewrite.save(b, ib, "retitle yours by session-b"))
+  assert(save(b, ib, "retitle yours by session-b"))
   local ok, err = publish.publish(b, true)
   assert(ok, "independent item refs both land: " .. err)
   assert(publish.sync(a, true))
@@ -199,7 +209,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local _, clones = init_shared("atomic-multiref", 2)
   local a = check.must(store.open(clones[1]))
   local parent = make_item("original parent")
-  assert(storewrite.save(a, parent, "new parent"))
+  assert(save(a, parent, "new parent"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b, true))
@@ -209,7 +219,7 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   -- satisfied by coincidence.
   local pa = check.must(store.load(a, parent.id))
   pa.title = "retitled by a"
-  assert(storewrite.save(a, pa, "set parent title"))
+  assert(save(a, pa, "set parent title"))
   assert(publish.publish(a, true))
 
   -- b, still on the stale parent, writes a new child AND de-phases
@@ -217,12 +227,11 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local pb = check.must(store.load(b, parent.id))
   local kid = make_item()
   pb.title = "retitled by b"
-  assert(storewrite.save(b, kid, "new kid", nil, {pb}))
+  assert(save(b, kid, "new kid", nil, {pb}))
   local ok = publish.publish(b, true)
   assert(not ok, "the stale multi-ref push must be refused")
   local synced, err = publish.sync(b, true)
-  assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
-    "refresh classifies the staged multi-ref race: " .. tostring(err))
+  assert(synced, "the retired native loss leaves a readable board: " .. tostring(err))
   assert(store.load(b, kid.id) == nil,
     "the brand-new child never lands without its parent's commit")
   local after = check.must(store.load(b, parent.id))
@@ -255,37 +264,13 @@ local function test_resolution_stays_on_the_items_ref_and_sets_resolution()
   local root = init_state_repo("no-move")
   local s = check.must(store.open(root))
   local it = make_item()
-  assert(storewrite.save(s, it, "new item"))
-  local before = item_refnames(root)
-  local found_open = false
-  for _, r in ipairs(before) do
-    if r == "refs/heads/items/" .. it.id then
-      found_open = true
-    end
-  end
-  assert(found_open, "the item starts on refs/heads/items")
-
+  assert(save(s, it, "new item"))
+  assert(#item_refnames(root) == 0, "native items do not create per-item refs")
   it.resolution = "completed"
-  assert(storewrite.save(s, it, "done " .. it.id:sub(1, 8)))
-  local after = item_refnames(root)
-  local still_open, now_ended = false, false
-  for _, r in ipairs(after) do
-    if r == "refs/heads/items/" .. it.id then
-      still_open = true
-    end
-    if r == "refs/heads/ended/" .. it.id then
-      now_ended = true
-    end
-  end
-  assert(still_open, "refs/heads/items still names it — a resolution never moves the ref")
-  assert(not now_ended, "refs/heads/ended gains no new entry")
-  local loaded = check.must(store.load(s, it.id))
-  assert(loaded.resolution == "completed", "load still finds it, resolved")
-  -- Both commits landed on the SAME ref — its own history, never split
-  -- across two refs the way an ended-move would have.
-  local events = check.must(publish.history(s, it.id))
-  assert(#events == 2, "the ref's own history holds both commits: "
-    .. #events)
+  assert(save(s, it, "done " .. it.id:sub(1, 8)))
+  assert(#item_refnames(root) == 0, "resolution does not create legacy refs")
+  assert(check.must(store.load(s, it.id)).resolution == "completed")
+  assert(#check.must(publish.history(s, it.id)) == 2, "one path-attributed history")
 end
 
 -- A legacy item — filed under `refs/heads/ended/<id>` before this rule,
@@ -297,19 +282,18 @@ local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
   local root = init_state_repo("legacy-ended")
   local s = check.must(store.open(root))
   local it = make_item()
-  assert(storewrite.save(s, it, "new item"))
+  assert(save(s, it, "new item"))
   local sha = (check.must(child.run(
-        {"git", "rev-parse", "refs/heads/items/" .. it.id}, {cwd = root})).stdout
+        {"git", "rev-parse", "refs/heads/state"}, {cwd = root})).stdout
     :gsub("%s+$", ""))
   -- Hand-file it under refs/heads/ended, the way the pre-cutover
   -- layout did, before this test ever resolves it.
   git(root, {"update-ref", "refs/heads/ended/" .. it.id, sha})
-  git(root, {"update-ref", "-d", "refs/heads/items/" .. it.id})
 
   local s2 = check.must(store.open(root))
   local loaded = check.must(store.load(s2, it.id))
   loaded.resolution = "completed"
-  assert(storewrite.save(s2, loaded, "done " .. it.id:sub(1, 8)))
+  assert(save(s2, loaded, "done " .. it.id:sub(1, 8)))
 
   local after = item_refnames(root)
   local still_ended, now_items = false, false
@@ -321,7 +305,8 @@ local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
       now_items = true
     end
   end
-  assert(still_ended, "the legacy item stays under refs/heads/ended")
+  assert(still_ended, "the archived ended ref remains reachable")
+  assert(check.must(refs.read_ref(root, "refs/heads/ended/" .. it.id)) == sha, "archive tip never changes")
   assert(not now_items, "resolving it never creates a refs/heads/items entry")
   local reloaded = check.must(store.load(s2, it.id))
   assert(reloaded.resolution == "completed", "the resolution field is set")

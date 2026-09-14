@@ -10,11 +10,15 @@ local claimcli = require("_work.gitclaim_cli")
 local claimsession = require("_work.claimsession")
 local fixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
-local gitclaim = require("_work.gitclaim")
+local stateclaim = require("_work.stateclaim")
+local statewrite = require("_work.statewrite")
+local authority = require("_work.stateclaim_authority")
+local boardread = require("_work.boardread")
+local staging = require("_work.statestaging")
 local gitdraft = require("_work.gitdraft")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
-local prepared = require("_work.prepared")
+local publish = require("_work.publish")
 local receipt = require("_work.preparation_receipt")
 local refs = require("_work.refs")
 local store = require("_work.store")
@@ -148,7 +152,9 @@ local function test_public_remote_flow_preserves_all_fields_and_spec()
       assert(fields["board-mode"] == "remote" and fields["board-remote"] == "origin")
       assert(fields.branch == c.branch and fields.worktree == c.path)
       assert(fields["product-root"] == c.source and fields["product-base"] == c.base)
-      assert(fields["claim-fact"] == fields["claim-control"])
+      local current = check.must(authority.current(c.s, c.id, c.session))
+      assert(fields["claim-fact"] == current.root and fields["claim-control"] == current.control)
+      assert(authority.historical(c.s, c.id, fields["claim-control"], current) == "")
       assert(fields["gitboard-command"] == "env X='a=b' sh /caller\\tool")
       assert(fields["gitboard-cwd"] == c.s.root)
       local before = value(c.s.root, "show-ref")
@@ -242,8 +248,9 @@ local function test_confirmed_renewal_preserves_receipt_but_reacquisition_does_n
       fixture.control_claim(c.s, {c.id}, c.session, "renew")
       local code, out = emit(c)
       assert(code == 0 and out:find(bytes, 1, true) ~= nil, out)
-      local it = check.must(store.load(c.s, c.id))
-      assert(it.claim_batch ~= first["claim-control"])
+      local renewed = check.must(authority.current(c.s, c.id, c.session))
+      assert(renewed.root == first["claim-fact"] and renewed.control ~= first["claim-control"])
+      assert(authority.historical(c.s, c.id, first["claim-control"], renewed) == "")
       os.time = function(): integer return now + claim.LEASE_S + 2 end
       assert(emit(c) ~= 0, "expired receipt")
       os.time = function(): integer return now + 2 end
@@ -261,6 +268,7 @@ local function test_local_receipt_rework_and_legacy_compatibility()
       local it = check.must(store.load(c.s, c.id))
       it.verdict, it.verdict_head = "request changes", c.base
       assert(storewrite.save(c.s, it, "fixture request changes"))
+      assert(publish.publish(c.s))
       acquire(c)
       assert(create(c) == 0)
       local fields = receipt.decode(check.must(fs.read(c.file)))
@@ -368,35 +376,31 @@ local function test_bootstrap_and_receipt_write_failures_preserve_checkout()
   end
 end
 
-local function test_unconfirmed_partial_and_staged_batches_refuse_preparation()
+local function test_unconfirmed_native_claim_set_refuses_preparation()
   isolated(function()
-      local c = fresh("partial", true)
+      local c = fresh("unconfirmed-native", true)
       local peer = fixture.file_item(c.s, "other member", "")
-      local reqs: {gitclaim.Request} = {}
-      for _, id in ipairs({c.id, peer}) do
-        reqs[#reqs + 1] = {root = c.s.root, id = id, source_ref = gitclaim.remote_item_ref("origin", id),
-          target_ref = gitclaim.target_item_ref(id), remote = "origin", batch = claimsession.mint(),
-          caller = c.session, action = "take", product_base = c.base, force = false, why = "", now = os.time()}
+      local canonical = c.s.state_head
+      local pending = stateclaim.prepare(c.s.root, canonical,
+        {{id = c.id, product_base = c.base}, {id = peer, product_base = c.base}},
+        "take", c.session, os.time(), false, "")
+      assert(next(pending.refused) == nil and #pending.members == 2)
+      for _, dependency in ipairs(pending.dependencies) do
+        c.s.state_reads[dependency.path] = dependency.id
       end
-      reqs[2].batch = reqs[1].batch
-      local p = check.must(gitclaim.prepare_batch(reqs).prepared)
-      paths(c, p.batch.commit)
-      assert(create(c) ~= 0 and not fs.is_dir(c.path), "unconfirmed preparation")
-      for _, update in ipairs(p.transaction.updates) do
-        if update.ref ~= gitclaim.target_item_ref(peer) then
-          git(c.s.root, {"update-ref", check.must(refs.tracking_ref(update.ref)), update.next})
-        end
-      end
-      assert(store.close(c.s))
-      assert(create(c) ~= 0 and not fs.is_dir(c.path), "partial multi-member confirmation")
-      for _, update in ipairs(p.transaction.updates) do
-        git(c.s.root, {"update-ref", check.must(refs.tracking_ref(update.ref)), update.next})
-      end
-      assert(store.close(c.s))
-      local code, out = create(c)
-      assert(code ~= 0 and out:find("confirmation pending", 1, true) ~= nil, out)
-      assert(not fs.is_dir(c.path))
-      assert(check.must(prepared.refresh(c.s.root))[1].state == "confirmed")
+      assert(statewrite.transition(c.s, pending.changes, "claim set awaiting publication", pending.publish_by))
+      paths(c, pending.members[1].claim_root)
+      assert(create(c) ~= 0 and not fs.is_dir(c.path), "staged claims are not authority")
+      -- A speculative local successor still cannot authorize a remote board.
+      git(c.s.root, {"update-ref", "refs/heads/state", c.s.state_head})
+      assert(create(c) ~= 0 and not fs.is_dir(c.path), "unfetched local state is not authority")
+      assert(check.must(boardread.list(c.s.root, canonical)).claims_by_id[c.id] == nil)
+      assert(#check.must(staging.list(c.s.root)) == 1)
+      fixture.caller_publish(c.s)
+      local current = check.must(boardread.list(c.s.root, c.s.state_head))
+      assert(current.claims_by_id[c.id] ~= nil and current.claims_by_id[peer] ~= nil,
+        "one publication reveals the complete claim set")
+      assert(#check.must(staging.list(c.s.root)) == 0)
       assert(create(c) == 0)
       refs.set_overlay(c.s.root, {})
       local denied = emit(c)

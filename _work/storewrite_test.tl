@@ -19,10 +19,19 @@ local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
-local prepared = require("_work.prepared")
+local staging = require("_work.statestaging")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+
+--- Fixture writes explicitly confirm on local boards; remote writes remain staged.
+local function save(s: store.Store, it: item.Item, message: string,
+    spec?: itemtree.Spec, also?: {item.Item}): boolean, string
+  local ok, err = storewrite.save(s, it, message, spec, also)
+  if not ok or store.is_noop(err) then return ok, err end
+  if refs.board_mode(s.root) == "local" then return publish.publish(s) end
+  return ok, err
+end
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -121,8 +130,8 @@ local function build_shared_template(clones: integer): string
       -- publish the initial format and board refs, then fetch their
       -- canonical remote-tracking names before opening the store.
       git(dir, {"push", "-q", "--atomic", "origin",
-          "refs/heads/items/*:refs/heads/items/*",
-          "refs/heads/board/*:refs/heads/board/*"})
+          "refs/heads/state:refs/heads/state",
+          "refs/heads/board/format:refs/heads/board/format"})
       assert(refs.fetch_prune(dir))
     end
   end
@@ -158,24 +167,9 @@ end
 --- board seen", now that one mutation can be more than one commit
 --- object (one per item it touches) held together only by the push.
 local function commit_count(cwd: string): integer
-  local names = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended"},
-      {cwd = cwd}))
-  assert(names.ok, "git for-each-ref failed: " .. names.stderr)
-  local refnames: {string} = {}
-  for line in names.stdout:gmatch("([^\n]+)") do
-    refnames[#refnames + 1] = line
-  end
-  if #refnames == 0 then
-    return 0
-  end
-  local argv: {string} = {"rev-list", "--count"}
-  for _, r in ipairs(refnames) do
-    argv[#argv + 1] = r
-  end
-  local r = check.must(child.run({"git", table.unpack(argv)}, {cwd = cwd}))
-  assert(r.ok, "git rev-list failed: " .. r.stderr)
-  return math.tointeger(tonumber((r.stdout:gsub("%s+$", "")))) or -1
+  local r = check.must(child.run({"git", "rev-list", "--count", "refs/heads/state"}, {cwd = cwd}))
+  assert(r.ok, r.stderr)
+  return math.tointeger(tonumber(r.stdout)) or -1
 end
 
 local counter = 0
@@ -203,12 +197,12 @@ local function test_save_load_spec_and_history()
   local s = check.must(store.open(root))
   local it = make_item("first title")
   local short = it.id:sub(1, 8)
-  assert(storewrite.save(s, it, "new " .. short, G1))
+  assert(save(s, it, "new " .. short, G1))
   local loaded = check.must(store.load(s, it.id))
   assert(loaded.title == "first title", "title: " .. loaded.title)
   assert(store.read_spec(s, it.id).change == G1.change, "spec prose")
   loaded.title = "second title"
-  assert(storewrite.save(s, loaded, "retitle " .. short .. " by session-b"))
+  assert(save(s, loaded, "retitle " .. short .. " by session-b"))
   assert(store.read_spec(s, it.id).change == G1.change,
     "a nil spec leaves the prose alone")
   local events = check.must(publish.history(s, it.id))
@@ -227,8 +221,8 @@ local function test_history_covers_the_spec_sidecar()
   local s = check.must(store.open(root))
   local it = make_item()
   local short = it.id:sub(1, 8)
-  assert(storewrite.save(s, it, "new " .. short, G1))
-  assert(storewrite.save(s, it, "spec " .. short,
+  assert(save(s, it, "new " .. short, G1))
+  assert(save(s, it, "spec " .. short,
       {change = "G8\n", non_goals = ""}))
   local events = check.must(publish.history(s, it.id))
   assert(#events == 2, "want 2 events, got " .. #events)
@@ -244,12 +238,12 @@ local function test_save_writes_every_touched_item_as_its_own_commit()
   local root = init_state_repo("atomic")
   local s = check.must(store.open(root))
   local parent = make_item("claimed-looking title")
-  assert(storewrite.save(s, parent, "new parent"))
+  assert(save(s, parent, "new parent"))
   local before = commit_count(root)
   local kid = make_item()
   parent.title = "updated parent"
-  assert(storewrite.save(s, kid, "new kid", nil, {parent}))
-  assert(commit_count(root) == before + 2,
+  assert(save(s, kid, "new kid", nil, {parent}))
+  assert(commit_count(root) == before + 1,
     ("one commit per item touched: %d -> %d"):format(before, commit_count(root)))
   assert(check.must(store.load(s, parent.id)).title == "updated parent",
     "the updated parent is in that commit")
@@ -264,9 +258,9 @@ local function test_save_succeeds_on_a_no_op()
   local root = init_state_repo("noop")
   local s = check.must(store.open(root))
   local it = make_item()
-  assert(storewrite.save(s, it, "new item"))
+  assert(save(s, it, "new item"))
   local before = commit_count(root)
-  local ok, err = storewrite.save(s, it, "take it nowhere")
+  local ok, err = save(s, check.must(store.load(s, it.id)), "take it nowhere")
   assert(ok, "an unchanged item is still a success: " .. tostring(err))
   assert(store.is_noop(err), "is_noop recognizes it: " .. err)
   assert(err:find("nothing to record", 1, true), "got: " .. err)
@@ -282,9 +276,9 @@ local function test_an_items_order_round_trips_through_save_and_load()
   local parent = make_item()
   local kid1 = make_item()
   local kid2 = make_item()
-  assert(storewrite.save(s, parent, "new parent", nil, {kid1, kid2}))
+  assert(save(s, parent, "new parent", nil, {kid1, kid2}))
   parent.order = {kid1.id, kid2.id}
-  assert(storewrite.save(s, parent, "rank the children"))
+  assert(save(s, parent, "rank the children"))
   local loaded = check.must(store.load(s, parent.id))
   assert(#loaded.order == 2 and loaded.order[1] == kid1.id and loaded.order[2] == kid2.id,
     "order round-trips in rank order: " .. table.concat(loaded.order, ","))
@@ -302,7 +296,7 @@ local function test_publish_fast_forward()
   assert(bare)
   local a = check.must(store.open(clones[1]))
   local it = make_item("session-a title")
-  assert(storewrite.save(a, it, "new item"))
+  assert(save(a, it, "new item"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b, true))
@@ -322,24 +316,23 @@ local function test_publish_drops_a_lost_edit_of_the_same_item()
   local _, clones = init_shared("conflict", 2)
   local a = check.must(store.open(clones[1]))
   local contested = make_item()
-  assert(storewrite.save(a, contested, "new contested"))
+  assert(save(a, contested, "new contested"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b, true))
 
   local ia = check.must(store.load(a, contested.id))
   ia.title = "winner title"
-  assert(storewrite.save(a, ia, "retitle contested by session-a"))
+  assert(save(a, ia, "retitle contested by session-a"))
   assert(publish.publish(a, true))
 
   local ib = check.must(store.load(b, contested.id))
   ib.pr = 7
-  assert(storewrite.save(b, ib, "set contested pr by session-b"))
+  assert(save(b, ib, "set contested pr by session-b"))
   local ok = publish.publish(b, true)
   assert(not ok, "the losing edit of the same item must be refused")
   local synced, err = publish.sync(b, true)
-  assert(not synced and err:find("lost their ref lease", 1, true) ~= nil,
-    "refresh classifies the staged successor after fetching: " .. err)
+  assert(synced, "a retired native loss does not poison a later refresh: " .. err)
 
   local after = check.must(store.load(b, contested.id))
   assert(after.title == "winner title" and after.pr == 0,
@@ -354,21 +347,22 @@ local function test_sync_ignores_an_unpublished_local_commit()
   local _, clones = init_shared("sync-overwrite", 2)
   local a = check.must(store.open(clones[1]))
   local contested = make_item()
-  assert(storewrite.save(a, contested, "new contested"))
+  assert(save(a, contested, "new contested"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
   assert(publish.sync(b, true))
 
   local ia = check.must(store.load(a, contested.id))
   ia.title = "winner title"
-  assert(storewrite.save(a, ia, "retitle contested by session-a"))
+  assert(save(a, ia, "retitle contested by session-a"))
   assert(publish.publish(a, true))
 
   -- b's own commit, never published — the hand-edit-workaround shape.
   local ib = check.must(store.load(b, contested.id))
   ib.pr = 7
-  assert(storewrite.save(b, ib, "hand-edit contested for session-b"))
-  assert(publish.sync(b, true), "explicit refresh fetches but never merges")
+  assert(save(b, ib, "hand-edit contested for session-b"))
+  local synced, serr = publish.sync(b, true)
+  assert(not synced and serr == store.LOST_RACE, "refresh reports the losing staged edit")
   assert(check.must(store.load(b, contested.id)).title == "winner title",
     "the local unpublished commit is overwritten by the remote's")
 end
@@ -388,20 +382,20 @@ local function test_publish_keeps_the_mutation_on_a_policy_rejection()
   assert(fs.set_mode(hook, fs.octal("755")))
 
   local it = make_item("session-a")
-  assert(storewrite.save(a, it, "new under policy"))
+  assert(save(a, it, "new under policy"))
   local ok, err = publish.publish(a, true)
   assert(not ok, "the rejected push must refuse")
   assert(err ~= store.LOST_RACE and not err:find("lost the push race", 1, true),
     "no race is claimed when the remote never moved: " .. err)
   assert(err:find("policy: board is read-only", 1, true),
     "the remote's own words reach the caller: " .. err)
-  local staged = check.must(prepared.list(a.root))
+  local staged = check.must(staging.list(a.root))
   assert(#staged == 1,
     "the rejected successor stays reachable through its prepared transaction")
-  assert(staged[1].updates[1].ref == "refs/heads/items/" .. it.id,
-    "the retryable transaction still targets the requested item")
+  assert(staged[1].transitions[1].changes[1].path:find(it.id, 1, true),
+    "the retryable transition still targets the requested item")
   local reachable = check.must(child.run(
-      {"git", "cat-file", "-e", staged[1].updates[1].next .. "^{commit}"},
+      {"git", "cat-file", "-e", staged[1].tip .. "^{commit}"},
       {cwd = a.root}))
   assert(reachable.ok, "the staged successor remains reachable for retry")
 end

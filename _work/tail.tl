@@ -5,12 +5,10 @@
 --- lexicographic order), so the last 8 characters are what actually
 --- distinguishes one item from its neighbors — and they are pure
 --- entropy, and a literal substring of the id, so the rendered handle
---- greps branch logs and PR bodies directly. Measured against the
---- live board (`git for-each-ref --format='%(refname)' refs/heads/items
---- refs/heads/ended`), `id:sub(20)` is collision-free across every item,
---- exact and case-folded.
+--- greps branch logs and PR bodies directly.
 local item = require("_work.item")
-local refs = require("_work.refs")
+local child = require("cosmic.child")
+local format = require("_work.format")
 
 --- An item's tail as two underscore-divided 4-char chunks, undecorated
 --- — what a machine-facing string embeds (a branch name, a minted
@@ -59,7 +57,7 @@ end
 
 --- `input` reduced to its bare 8 characters: guillemets and either
 --- divider stripped, case preserved. What an EXACT match compares
---- against — the glob patterns `glob_patterns` builds; a caller after
+--- against; a caller after
 --- a case-insensitive match folds the result itself.
 --- @param input string What a session typed
 --- @return string The normalized tail
@@ -90,113 +88,44 @@ local function join_handles(ids: {string}): string
   return table.concat(handles, " ")
 end
 
---- The `for-each-ref` glob patterns an exact tail match needs: the
---- normalized tail suffixed onto a `*` in each namespace.
---- `for-each-ref` patterns are fnmatch, so this is one process and no
---- content read — the same shape and cost as `_work.store.resolve`'s
---- own prefix glob.
---- @param input string What a session typed
---- @return {string} The two glob patterns
-local function glob_patterns(input: string): {string}
-  local t = normalize(input)
-  return {"refs/heads/items/*" .. t, "refs/heads/ended/*" .. t}
+--- Resolve an exact tail first, then a case-folded tail, against native ids.
+local function resolve_ids(ids: {string}, input: string): string | nil, string
+  local wanted = normalize(input)
+  local exact: {string} = {}
+  local folded: {string} = {}
+  for _, id in ipairs(ids) do
+    if id:sub(-8) == wanted then exact[#exact + 1] = id end
+    if id:sub(-8):lower() == wanted:lower() then folded[#folded + 1] = id end
+  end
+  local matches = #exact > 0 and exact or folded
+  if #matches == 1 then return matches[1], "" end
+  if #matches == 0 then return nil, "no item matches tail " .. input end
+  return nil, input .. " is ambiguous: " .. join_handles(matches)
 end
 
---- `found`, collapsed to distinct item ids the same way
---- `_work.store.resolve` does: an id filed under both
---- `refs/heads/items` and `refs/heads/ended` at once (the legacy
---- duplicate case `_work.gitread` picks a winner for at load time)
---- counts once towards ambiguity here. `ref`/`sha` come back set only
---- when `found` itself has exactly one entry — a genuine duplicate
---- leaves them "", so the load that follows runs
---- `_work.gitread.load_item`'s own duplicate-picking logic instead of
---- an arbitrarily chosen half.
---- @param found {refs.RefEntry} What one `for-each-ref` call returned
---- @return {string} Distinct ids, in `found`'s own order
---- @return string ref, "" unless `found` has exactly one entry
---- @return string sha, "" unless `found` has exactly one entry
-local function distinct_ids(found: {refs.RefEntry}): {string}, string, string
-  local ids: {string} = {}
-  local seen: {string: boolean} = {}
-  for _, r in ipairs(found) do
-    local id = r.refname:match("/([^/]+)$")
-    if id ~= nil and not seen[id] then
-      seen[id] = true
-      ids[#ids + 1] = id
-    end
-  end
-  local ref, sha = "", ""
-  if #found == 1 then
-    ref, sha = found[1].refname, found[1].sha
-  end
-  return ids, ref, sha
-end
-
---- What `resolve_glob` resolves a tail to: the id, plus `ref`/`sha`
---- when the match came with a one-shot lease to give `load` — "" for
---- both when it did not (a genuine `items/`+`ended/` duplicate; see
---- `distinct_ids`).
 local record Resolved
   id: string
   ref: string
   sha: string
 end
 
---- Resolve a tail against the ref layout directly — no whole-board
---- load. An exact glob first (`glob_patterns`, one process); only when
---- that matches nothing AND the tail carries a letter (case folding
---- cannot change a match on an all-digit tail, which the exact glob
---- already covers) does a case-folded fallback follow: one more
---- `for-each-ref`, over the two whole namespaces, matched in Lua
---- against every ref's own tail. Either stage's `ref`/`sha` (from
---- `distinct_ids`) are the one-shot lease
---- `_work.store.load_item` spends next, same as
---- `_work.store.resolve`'s own prefix match.
---- @param root string The repository root
---- @param input string What a session typed
---- @return Resolved | nil The resolved id, with a lease when one applies
---- @return string Error message
+--- Resolve a native tree path without loading metadata or consulting archived refs.
+--- CLI callers use resolve_ids with their invocation's already-decoded view.
 local function resolve_glob(root: string, input: string): Resolved | nil, string
-  local found, ferr = refs.for_each_ref(root, glob_patterns(input))
-  if found == nil then
-    return nil, ferr
-  end
-  local ids, ref, sha = distinct_ids(found)
-  if #ids == 1 then
-    return {id = ids[1], ref = ref, sha = sha}
-  end
-  if #ids > 1 then
-    return nil, ("%s is ambiguous: %s"):format(input, join_handles(ids))
-  end
-  local t = normalize(input)
-  if t:match("%a") == nil then
-    return nil, ("no item matches tail %s"):format(input)
-  end
-  local all_found, aerr = refs.for_each_ref(root,
-    {"refs/heads/items/*", "refs/heads/ended/*"})
-  if all_found == nil then
-    return nil, aerr
-  end
-  local folded = t:lower()
-  local ci_found: {refs.RefEntry} = {}
-  local ci_ids: {string} = {}
-  local seen: {string: boolean} = {}
-  for _, r in ipairs(all_found) do
-    local id = r.refname:match("/([^/]+)$")
-    if id ~= nil and id:sub(20):lower() == folded and not seen[id] then
-      seen[id] = true
-      ci_ids[#ci_ids + 1] = id
-      ci_found[#ci_found + 1] = r
-    end
-  end
-  if #ci_ids == 0 then
-    return nil, ("no item matches tail %s"):format(input)
-  end
-  if #ci_ids > 1 then
-    return nil, ("%s is ambiguous: %s"):format(input, join_handles(ci_ids))
-  end
-  local _, cref, csha = distinct_ids(ci_found)
-  return {id = ci_ids[1], ref = cref, sha = csha}
+  local head, err = format.state_head(root)
+  if head == nil then return nil, err end
+  local tree, terr = child.run({"git", "ls-tree", "--name-only", head .. ":items"}, {cwd = root})
+  if tree == nil then return nil, terr end
+  if not tree.ok then return nil, tree.stderr end
+  local ids: {string} = {}
+  for id in tree.stdout:gmatch("[^\n]+") do ids[#ids + 1] = id end
+  local id, ierr = resolve_ids(ids, input)
+  if id == nil then return nil, ierr end
+  local history, herr = child.run({"git", "log", "-1", "--first-parent", "--format=%H",
+      head, "--", "items/" .. id, "claims/" .. id}, {cwd = root})
+  if history == nil then return nil, herr end
+  if not history.ok then return nil, history.stderr end
+  return {id = id, ref = "refs/heads/state", sha = history.stdout:gsub("%s+$", "")}, ""
 end
 
 local record tail
@@ -206,7 +135,7 @@ local record tail
   is_tail_shape: function(input: string): boolean
   normalize: function(input: string): string
   join_handles: function(ids: {string}): string
-  glob_patterns: function(input: string): {string}
+  resolve_ids: function(ids: {string}, input: string): string | nil, string
   type Resolved = Resolved
   resolve_glob: function(root: string, input: string): Resolved | nil, string
 end
@@ -218,7 +147,7 @@ local M: tail = {
   is_tail_shape = is_tail_shape,
   normalize = normalize,
   join_handles = join_handles,
-  glob_patterns = glob_patterns,
+  resolve_ids = resolve_ids,
   resolve_glob = resolve_glob,
 }
 

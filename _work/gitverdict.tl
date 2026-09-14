@@ -7,6 +7,8 @@ local ghland = require("_work.ghland")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
+local stateevidence = require("_work.stateevidence")
+local format = require("_work.format")
 
 local KIND_ALIASES: {string: string} = {
   ["request-changes"] = "request changes",
@@ -47,17 +49,9 @@ local function verify_result(s: store.Store, it: item.Item,
     return nil, ("%s's research handover is %s, not %s — a research head is "
       .. "named exactly"):format(id8, result, given)
   end
-  local tip = s.leased_sha[it.id] or ""
-  if tip == "" then
-    return nil, ("%s has no observed board commit — read the board first")
-    :format(id8)
-  end
-  local lineage, lerr = commit_evidence.verify_lineage(s.root, result, tip)
-  if lineage == nil then
-    return nil, ("%s's research result %s is not a commit on its own ref: %s")
-    :format(id8, result:sub(1, 12), lerr)
-  end
-  return lineage.base, ""
+  local native, nerr = format.state_head(s.root)
+  if native == nil then return nil, nerr end
+  return stateevidence.verify(s.root, native, result, it.id)
 end
 
 --- Record a verdict over one locally inspectable product commit. The reviewer

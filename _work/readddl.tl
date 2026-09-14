@@ -166,16 +166,6 @@ CREATE VIEW triage AS
   WHERE NOT EXISTS (SELECT 1 FROM open_items c WHERE c.parent = o.id)
   AND (rp.placed IS NULL OR rp.placed = 0);
 
--- doing: one row, the count of open work items with a claim or a PR —
--- `_work.flow.doing_refusal`'s own count, read against `DOING_LIMIT`
--- there; this view carries the count alone, not the bound or the
--- refusal message.
-CREATE VIEW doing AS
-  SELECT COUNT(*) AS n
-  FROM workable w
-  JOIN state st ON st.id = w.id
-  WHERE st.state = 'doing';
-
 -- stale: claims and review claims past their lease, from
 -- `items.touched_at` — `_work.health.LEASE_S` (claim, 14400s/4h) and
 -- `_work.health.REVIEW_LEASE_S` (review, 3600s/1h) restated here as

@@ -14,7 +14,7 @@
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local refs = require("_work.refs")
-local store = require("_work.store")
+local stateinit = require("_work.stateinit")
 
 --- Record the board's ref namespace in the checkout's Git config.
 --- @param dir string The checkout
@@ -34,7 +34,10 @@ end
 --- @param remote_name string --remote-name's value, "" when unset
 --- @return integer Exit code
 local function cmd_init(dir: string, remote: boolean, local_mode: boolean,
-    remote_name: string): integer
+    remote_name: string, version?: string): integer
+  if version ~= nil and version ~= "6" then
+    return gate.verdict_line("init", false, "REFUSED: --format must be 6")
+  end
   if remote and local_mode then
     return gate.verdict_line("init", false,
       "REFUSED: choose at most one of --remote and --local")
@@ -56,7 +59,7 @@ local function cmd_init(dir: string, remote: boolean, local_mode: boolean,
     if not configured then return gate.verdict_line("init", false, cerr) end
     mode_set = true
   end
-  local ok, err = store.init_repo(dir)
+  local ok, err = stateinit.init(dir)
   if not ok then
     return gate.verdict_line("init", false, err)
   end
@@ -79,7 +82,7 @@ end
 
 local record gitinit
   cmd_init: function(dir: string, remote: boolean, local_mode: boolean,
-  remote_name: string): integer
+  remote_name: string, version?: string): integer
 end
 
 local M: gitinit = {

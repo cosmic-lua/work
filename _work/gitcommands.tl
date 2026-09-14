@@ -5,6 +5,7 @@
 --- file cap, so a verb's OPTIONS live beside its one-line summary
 --- rather than crowding the module that dispatches to it.
 local flags = require("cosmic.flags")
+local statecommands = require("_work.statecommands")
 
 local function dir_flag(): flags.Flag
   return {long = "dir", arg = "DIR", default = os.getenv("GITBOARD_DIR") or ".",
@@ -13,14 +14,14 @@ end
 
 local PREPARES_ONLY < const > =
 "This verb only PREPARES: it stages the mutation and prints the exact\n"
-.. "atomic push, and the board is unchanged until `gitboard publish\n"
+.. "publication command, and the board is unchanged until `gitboard publish\n"
 .. "--execute` sends it and `gitboard refresh --execute` confirms it.\n"
 .. "There is no --execute here — claim, renew and drop carry one."
 
 local CSPEC: flags.CommandSpec = {
   name = "gitboard",
   summary = "the work board over committed item files: todo, doing, done\n\n"
-  .. "offline workflow: refresh; claim a set; run its one atomic push; "
+  .. "offline workflow: refresh; claim a set; publish its one state commit; "
   .. "refresh to gain authority;\nthen `draft begin`, compose mutations, "
   .. "`draft show`, publish once, and refresh. See `help offline`.\n\n"
   .. "ids are KSUIDs; the board renders each item by its handle, the id's last 8 "
@@ -37,51 +38,35 @@ local CSPEC: flags.CommandSpec = {
           {long = "remote", help = "use caller-fetched remote-tracking refs"},
           {long = "remote-name", arg = "NAME", help = "persist the Git remote "
             .. "whose tracking refs are canonical (default: origin)"},
-          {long = "local", help = "use local heads (tests and migrations)"}}}},
+          {long = "local", help = "use local heads (tests and migrations)"},
+          {long = "format", arg = "6", help = "fresh board layout (default 6)"}}}},
     {name = "session", summary = "mint an opaque per-run claim identity",
       spec = {usage = "new",
         summary = "mint an opaque per-run claim identity.\n\n"
         .. "The plain output is only the new identity, suitable for "
         .. "`export GITBOARD_SESSION=$(gitboard session new)`. Gitboard "
         .. "does not derive identity from a user, host, provider, or credential."}},
-    {name = "single-head", summary = "EXPERIMENTAL connector envelope transport",
-      spec = {usage = "configure | seed-plan | publish-plan [TRANSACTION|DRAFT] | call | refresh [options]",
-        summary = "explicit proof-of-concept transport over one envelope branch.\n\n`configure` binds this "
-        .. "checkout to one remote, repository, and branch. "
-        .. "It refuses identity changes after activation. `seed-plan` and `publish-plan` write a frozen, "
-        .. "create-once connector plan; neither calls a provider. `call` prints one indexed connector call from "
-        .. "that saved plan. `refresh` fetches only the bound envelope branch when --execute is present, "
-        .. "validates and hydrates its archived objects into canonical remote-tracking refs, then runs ordinary "
-        .. "prepared/draft/claim confirmation. Ordinary publish, refresh, and sync are guarded after configuration.",
-        flags = {dir_flag(),
-          {long = "remote", arg = "NAME", help = "configure: canonical Git remote"},
-          {long = "repository", arg = "OWNER/NAME", help = "configure: connector repository identity"},
-          {long = "branch", arg = "BRANCH", help = "configure: dedicated envelope branch"},
-          {long = "head", arg = "SHA", help = "plan: exact envelope head; default bound tracking ref"},
-          {long = "out", arg = "PLAN.literal", help = "seed-plan/publish-plan: create this frozen literal plan"},
-          {long = "plan", arg = "PLAN.literal", help = "call: frozen literal plan file"},
-          {long = "call-index", arg = "N", help = "call: zero-based connector call index"},
-          {long = "execute", help = "refresh: run the exact single-branch Git fetch before hydration"}}}},
     {name = "draft", summary = "chain mutations offline, then publish final tips once",
       spec = {usage = "begin | show [ID] | abandon [ID] [options]",
         summary = "manage a durable, clone-local board draft.\n\n"
         .. "`begin` freezes the caller-fetched board view. Set GITBOARD_DRAFT "
         .. "to its id, then ordinary mutation verbs read and extend that "
         .. "speculative view without network access. `show` inspects the final "
-        .. "leased ref plan; `abandon` removes only local draft reachability. "
-        .. "`publish ID` prints one atomic push. See `help offline`.",
+        .. "state-branch publication plan; `abandon` removes only local draft reachability. "
+        .. "`publish ID` prints that plan. See `help offline`.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "select and bind begin to this canonical remote"},
           {long = "print-id", help = "for begin, print only the id for command substitution"}}}},
-    {name = "claim", summary = "prepare one all-or-nothing two-hour claim batch",
+    {name = "claim", summary = "prepare one all-or-nothing two-hour claim set",
       spec = {usage = "ID... [options]",
-        summary = "prepare one atomic, all-or-nothing two-hour claim set.\n\n"
-        .. "Every requested item is validated before anything is staged. The "
-        .. "batch publishes as one `git push --atomic`, with one exact lease per "
-        .. "item ref; any overlap rejects the whole set. PREPARED or PUSHED is "
-        .. "not authority: only a fetch followed by `gitboard refresh` confirming "
-        .. "every ref permits work. Gitboard never discovers or manages credentials.",
+        summary = "prepare one all-or-nothing two-hour claim set.\n\n"
+        .. "Every requested item and current claim is checked before anything is "
+        .. "staged. One state commit writes every member's `claims/<id>` file; any overlap rejects the "
+        .. "whole set. A direct claim establishes mutual exclusion, without a readiness "
+        .. "or shared-capacity gate. A prepared or submitted commit is not authority: "
+        .. "only a fetch followed by `gitboard refresh` confirms current authority. "
+        .. "Gitboard never discovers or manages credentials.",
         flags = {dir_flag(),
           {long = "session", arg = "ID", help = "minted per-run identity; "
             .. "default $GITBOARD_SESSION"},
@@ -95,12 +80,12 @@ local CSPEC: flags.CommandSpec = {
             .. "capturing the claim base; otherwise such a claim refuses"},
           {long = "execute", help = "explicitly run the exact rendered Git push "
             .. "and fetch argv using caller-configured authentication"}}}},
-    {name = "renew", summary = "prepare one atomic set of fresh two-hour leases",
+    {name = "renew", summary = "prepare one all-or-nothing set of fresh two-hour leases",
       spec = {usage = "ID... [options]",
         summary = "prepare one all-or-nothing renewal set for active claims held by this "
         .. "session.\n\nRenewal preserves the initial claim identity and work "
-        .. "branch. By default only exact\nleased Git instructions are printed; "
-        .. "--execute opts into running them.",
+        .. "branch. By default the prepared state publication is printed; "
+        .. "--execute opts into publishing and confirming it.",
         flags = {dir_flag(),
           {long = "session", arg = "ID", help = "minted per-run identity; "
             .. "default $GITBOARD_SESSION"},
@@ -326,6 +311,7 @@ local CSPEC: flags.CommandSpec = {
           {long = "session", arg = "SESSION",
             help = "minted claim identity; default $GITBOARD_SESSION"},
           {long = "head", arg = "SHA", help = "product commit handed over"},
+          {long = "result", help = "hand over this item's published board state as research evidence"},
           {long = "url", arg = "URL", help = "optional non-authoritative link"},
           {long = "repo-dir", arg = "DIR", help = "local product checkout; "
             .. "otherwise use the configured repository mapping"}}}},
@@ -333,8 +319,9 @@ local CSPEC: flags.CommandSpec = {
       .. "included, is untouched",
       spec = {usage = "ID [options]",
         summary = "prepare release of the whole-item claim without changing "
-        .. "workflow fields. By default Gitboard prints an exact leased push; "
-        .. "--execute runs ordinary Git using caller-owned authentication.",
+        .. "workflow fields. By default Gitboard prints the prepared state "
+        .. "publication; --execute publishes and confirms it using ordinary Git "
+        .. "with caller-owned authentication.",
         flags = {dir_flag(),
           {long = "why", arg = "REASON",
             help = "why the session lets go (a dead agent, a build out of "
@@ -421,10 +408,10 @@ local CSPEC: flags.CommandSpec = {
           {long = "force", help = "append past another session's live claim "
             .. "— audited repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
-    {name = "publish", summary = "render or execute one prepared unit's atomic push",
+    {name = "publish", summary = "render or execute one prepared state publication",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
-        summary = "render one prepared transaction, claim batch, or draft as one "
-        .. "exact atomic leased Git push.\n\nWith no selector, the sole prepared "
+        summary = "render one prepared transaction, claim set, or draft as one "
+        .. "exact state-branch publication.\n\nWith no selector, the sole prepared "
         .. "unit is selected; multiple units are refused. Nothing executes\n"
         .. "unless --execute is present; ordinary "
         .. "Git then owns all authentication behavior. An executed push exits "
@@ -432,6 +419,13 @@ local CSPEC: flags.CommandSpec = {
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in the push argv"},
+          {long = "plan", arg = "PLAN.literal", help = "native state: save one immutable connector publication plan"},
+          {long = "from-plan", arg = "PLAN.literal", help = "native state: inspect or execute a saved attempt"},
+          {long = "call", arg = "N", help = "native state: render zero-based call N from --from-plan"},
+          {long = "call-json", help = "native state: emit --call as a tool/arguments JSON object"},
+          {long = "head", arg = "SHA", help = "native state: just-observed remote head required for the final call"},
+          {long = "published", arg = "SHA", help = "native state: associate the connector-returned tip with this attempt"},
+          {long = "repository", arg = "OWNER/REPO", help = "native state: verify connector destination identity"},
           {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},
     {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
       spec = {summary = "confirm prepared transactions against caller-fetched "
@@ -462,6 +456,7 @@ local DRAFTABLE < const >: {string: boolean} = {
   set = true, spec = true, worktree = true, take = true, verdict = true,
   done = true, show = true, find = true, log = true,
 }
+statecommands.extend(CSPEC)
 for _, command in ipairs(CSPEC.commands) do
   if DRAFTABLE[command.name] then
     command.spec.flags = command.spec.flags or {}

@@ -4,15 +4,15 @@
 -- and records a squash landing. No remote or provider object exists.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
-local claimbatch = require("_work.claimbatch")
+local authority = require("_work.stateclaim_authority")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
-local gitclaim = require("_work.gitclaim")
+local stateclaim = require("_work.stateclaim")
 local gitdone = require("_work.gitdone")
 local gittake = require("_work.gittake")
 local gitverdict = require("_work.gitverdict")
-local prepared = require("_work.prepared")
+local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -53,16 +53,8 @@ local function product(): string, string, string, string
 end
 
 local function claim_action(s: store.Store, id: string, caller: string,
-    action: gitclaim.Action, product_base: string)
-  local target = gitclaim.target_item_ref(id)
-  local result = gitclaim.prepare_batch({{
-        root = s.root, id = id, source_ref = target, target_ref = target,
-        remote = "origin", batch = action .. "-" .. caller .. "-" .. id:sub(-8),
-        caller = caller, action = action, product_base = product_base,
-        force = false, why = "", now = os.time(),
-      }})
-  assert(result.prepared ~= nil, result.refused[id] or result.refused.batch)
-  assert(prepared.promote_local(s.root, result.prepared.transaction))
+    action: stateclaim.Action, product_base: string)
+  fixture.control_claim(s, {id}, caller, action, "", product_base)
 end
 
 local function test_commit_only_flow()
@@ -73,6 +65,7 @@ local function test_commit_only_flow()
   local it = check.must(store.load(s, leaf))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "set product repository"))
+  assert(publish.publish(s))
   claim_action(s, leaf, "run-a", "take", base)
   assert(#check.must(store.load(s, leaf)).builders == 0,
     "claim acquisition does not attribute a builder")
@@ -95,8 +88,7 @@ local function test_commit_only_flow()
     "explicit claim release preserves the workflow evidence")
   claim_action(s, leaf, "run-b", "take", base)
   reviewing = check.must(store.load(s, leaf))
-  local review_claim = check.must(claimbatch.read_state(s.root,
-      reviewing.claim_batch or "", leaf))
+  local review_claim = check.must(authority.current(s, leaf, "run-b"))
 
   assert(gitverdict.cmd_verdict_commit(s, leaf, "accept", head, "run-b",
       false, "", product_root) == 0)
@@ -126,9 +118,9 @@ local function test_commit_only_flow()
     "set title", "set", nil, "run-b")
   assert(own, oerr)
   completed = check.must(store.load(s, leaf))
-  local after_claim = check.must(claimbatch.read_state(s.root,
-      completed.claim_batch or "", leaf))
-  assert(after_claim.control == review_claim.control
+  local after_claim = check.must(authority.current(s, leaf, "run-b"))
+  assert(after_claim.root == review_claim.root
+    and after_claim.renewed_at == review_claim.renewed_at
     and after_claim.expires_at == review_claim.expires_at,
     "an ordinary holder mutation must not renew the lease")
 
@@ -138,7 +130,6 @@ local function test_commit_only_flow()
     "repair")
   assert(repaired, rerr)
 end
-test_commit_only_flow()
 
 --- `--force --landed` is an audited repair, never a silent bypass: an
 --- unverified landed commit still refuses without it, and force must
@@ -152,6 +143,7 @@ local function test_force_landed_retains_a_verified_but_unmatching_commit()
   local it = check.must(store.load(s, leaf))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "set product repository"))
+  assert(publish.publish(s))
   claim_action(s, leaf, "run-a", "take", base)
   it = check.must(store.load(s, leaf))
   assert(gittake.take_handover(s, it, "run-a", head, "", product_root) == 0)
@@ -179,4 +171,3 @@ local function test_force_landed_retains_a_verified_but_unmatching_commit()
   assert(completed.landed_head == mismatched,
     "force must record the real landed commit, never discard it")
 end
-test_force_landed_retains_a_verified_but_unmatching_commit()

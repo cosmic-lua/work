@@ -2,7 +2,7 @@
 
 gitboard has one read model, the board database, and every verb reads
 through it. Git holds the durable record and is written by mutations;
-the database is derived from the refs and is the single implementation
+the database is derived from the native state branch and is the single implementation
 of every fact the record implies. Teal holds what a verb writes, the
 policy that chooses among rows, and the rendering. No fact is derived
 twice.
@@ -13,26 +13,27 @@ Every derived fact — an item's role, state, substate, and stage, its
 rank path, the queues, the triage list, the doing count, a claim's
 age, an item's lease — is a table or a view in the board database.
 A verb opens the database, reads rows, and never reads an item from
-git. The database is rebuilt from the refs whenever the ref snapshot
-disagrees with what it last recorded, and patched by every save from
-the items the save wrote, so a read is current by construction and a
-rebuild is the only path that touches item objects in git.
+git. The database is rebuilt whenever the state head or claim-expiry
+projection disagrees with what it last recorded, and patched after a save
+from the changed paths and new first-parent history. A Store memoizes the
+decoded view and history for its current head, so repeated reads within
+one invocation share the projection. Returned items are cloned before mutation.
 
 ## What the database holds
 
 Tables, one row per fact the refs carry:
 
-- `items`: every field of an item's `meta`, plus `ref` (the branch it
-  lives on), `tip` (the commit a mutation leases against), and
-  `touched_at` (its tip's committer date). The lease a compare-and-swap
-  push is made against is read from here, so a mutation's snapshot and
-  its read are the same rows.
+- `items`: every field of an item's `meta`, plus the native state ref,
+  `tip` (its latest path-attributed commit), and `touched_at` (that
+  commit's date). Publication fences item subtree and claim blob IDs
+  against the saved base head; the item tip is historical attribution.
+- `state_paths`: the item subtree and claim blob IDs at the indexed head.
 - `ranks (parent, position, child)`: every entry of every `order` blob,
   the board's included.
 - `builders`, `speccers`: the audit lists.
 - `search`: the full-text index over titles and spec bodies. The spec
   bar reads a body from here; it is the one copy a verb consults.
-- `events`: each item's commit chain as rows, from which history, lead
+- `events`: each item's path-attributed state history as rows, from which history, lead
   time, rework, and bounces are read.
 - `ci_checks`, `lanes`: observations from GitHub and the scheduled
   workflows, written by `sync`.
@@ -65,29 +66,30 @@ Views, one per derived fact, each named for the question it answers:
 
 - **Mutations.** A verb decides what to write from the rows it read,
   builds the item, and saves it: the tree shape (`_work/itemtree.tl`),
-  the fast-import stream, the leased push, and every refusal a gate
-  makes.
+  frozen transition chain, path fences, one non-forced state update,
+  and every refusal a gate makes. Fast-import and old-ref decoding exist only
+  inside `migrate6`; normal reads and writes are native-only.
 - **Policy.** `next` walks `queue` rows and applies the right-to-left
   doctrine, the per-session tie-break, and the CI and merge-queue
   observations; intake walks `triage` and `outcomes`. The rules that
   say which row wins are code; the rows are the database's.
 - **Rendering.** `show`, the board view, briefs, and every verdict
   line format rows.
-- **Validation.** An item's per-item shape on decode.
+- **Validation.** An item's canonical native subtree shape on decode.
 
 Nothing in Teal walks a parent chain, sorts by rank, counts children,
 or classifies a state. A function that would is a view.
 
 ## Freshness
 
-`open` takes one `for-each-ref` snapshot over the item and board
-namespaces, digests it, and compares it with the digest the file
-recorded. Equal means every row is current. Unequal, a missing file, a
-schema version this build does not write, or any SQLite error on an
-open file means a rebuild from the refs, once. Every save patches the
-rows for the items it wrote and records the new digest, so a session's
-second read after its own write pays no git read. A fetch patches every
-id it moved. The incremental path and the cold rebuild must agree
+`open` snapshots the native state head and format marker and compares
+the head and claim-expiry projection with the cache. Equal means every
+row is current. Unequal, a missing file, a schema version this build
+does not write, or any SQLite error means a rebuild from state, once.
+Every save patches changed item and claim paths, reads only the new
+first-parent commit range, and records the new head. Unchanged items
+retain their historical tips and events. A non-fast-forward invalidates
+this incremental path. The incremental path and the cold rebuild must agree
 exactly, and a test holds them equal over every mutation the verbs
 make; a fuzz test holds them equal over random mutation sequences.
 
@@ -100,6 +102,14 @@ against the file the session has been reading, then reports
 reads git because its job is to check the database against git;
 nothing else has that job.
 
+On a migrated board it also decodes `migration/sources` and compares the
+explicitly fetched legacy namespaces with that canonical retired-ref witness.
+The witness records exact existing refs and exact absent creation probes, so a
+fresh clone can report an added, moved, removed, or unexpectedly present
+archive ref without relying on the migration work directory. The caller must
+fetch those namespaces before the audit. `migration/marks` without
+`migration/sources` is an integrity failure.
+
 ## Tests
 
 A derived fact is tested as a query over fixture rows loaded into an
@@ -109,6 +119,9 @@ read that follows it through the database.
 
 ## What this costs
 
-A verb's cost is one `for-each-ref` and a handful of queries against an
-open file. A cold clone, a hand-moved ref, or a schema bump costs one
-rebuild. The perf harness's verb scenarios measure both.
+A verb's cost is a snapshot check and a handful of queries against an open
+file. A cold clone, a hand-moved state ref, or a schema bump costs one rebuild.
+On the 1,430-item full-board audit, `_perf/native_reads.tl` produced the same
+counts cold and warm: 4,290 loads, 1,430 resolutions, 1,430 spec reads, and
+13,761 item events, backed by one full view read and one full history read per
+invocation. These are observed projection-reuse counts, not a latency claim.

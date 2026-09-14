@@ -6,8 +6,10 @@
 -- ancestry check would otherwise refuse much later, with no explanation.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
-local claimbatch = require("_work.claimbatch")
+local boardread = require("_work.boardread")
+local boardtree = require("_work.boardtree")
 local flow = require("_work.commit_flow_fixture")
+local statepublish = require("_work.statepublish")
 local store = require("_work.store")
 
 local function git(root: string, args: {string}): string
@@ -24,9 +26,8 @@ local function move_main(root: string, sha: string)
   git(root, {"branch", "-f", "main", sha})
 end
 
-local function fact(s: store.Store, id: string): claimbatch.Fact
-  local it = check.must(store.load(s, id))
-  return check.must(claimbatch.read_fact(s.root, it.claim_batch or "", id))
+local function fact(s: store.Store, id: string): boardtree.Claim
+  return check.must(check.must(boardread.load(s.root, s.state_head, id)).claim)
 end
 
 --- An item handed over, then dropped by its builder — an expired original
@@ -35,6 +36,7 @@ end
 local function handed_over_and_released(name: string): store.Store, string,
   flow.Product
   local s, id, p = flow.fresh(name)
+  assert(statepublish.publish(s))
   assert(flow.claim(s, id, flow.BUILDER, p) == 0)
   assert(flow.handover(s, id, flow.BUILDER, p, p.head) == 0)
   assert(flow.claim(s, id, flow.BUILDER, p, "drop") == 0)
@@ -55,7 +57,6 @@ local function test_a_base_that_cannot_reach_the_handover_refuses()
   assert(it.handover_head == p.head,
     "a refused claim must never disturb the recorded handover")
 end
-test_a_base_that_cannot_reach_the_handover_refuses()
 
 local function test_a_base_the_handover_still_descends_from_claims()
   local s, id, p = handed_over_and_released("handover-ancestry-claim")
@@ -67,16 +68,15 @@ local function test_a_base_the_handover_still_descends_from_claims()
     "a base the handover still descends from must claim normally")
   assert(fact(s, id).product_base == p.head)
 end
-test_a_base_the_handover_still_descends_from_claims()
 
 local function test_an_item_with_no_handover_is_unaffected()
   local s, id, p = flow.fresh("handover-ancestry-none")
+  assert(statepublish.publish(s))
   move_main(p.root, p.mismatch)
   local rc = flow.claim(s, id, flow.BUILDER, p)
   assert(rc == 0,
     "an item with no recorded handover has nothing for this guard to check")
 end
-test_an_item_with_no_handover_is_unaffected()
 
 --- The refusal's own suggested recovery, followed exactly, end to end: not
 --- `gitboard worktree ID --review` (which needs the very claim this refusal
@@ -116,4 +116,3 @@ local function test_the_suggested_recovery_actually_results_in_a_claim()
   assert(fact(s, id).product_base == p.head,
     "the recovered claim must capture the repositioned base, not the earlier mismatch")
 end
-test_the_suggested_recovery_actually_results_in_a_claim()

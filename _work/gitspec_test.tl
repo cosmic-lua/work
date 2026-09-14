@@ -48,10 +48,7 @@ local function test_the_spec_bar_is_the_items_own()
   local stray = check.must(store.load(s, finding))
   stray.parent = "3HyArM3A3zHuRxn3VYCvKmUZ7KW"
   assert(storewrite.save(s, stray, "hand-edited parent"))
-  -- Straight through `storewrite.save`, bypassing `gate.commit_and_publish`'s
-  -- own cache patch — closed here so the `store.list`/`store.read`
-  -- calls below reopen fresh rather than missing this hand-edit.
-  local _cok, _cerr = store.close(s)
+  assert(publish.publish(s))
   check.must(store.list(s))
   local c = check.must(store.read(s))
   assert(#check.must(read.structure(c)) > 0, "the board does have a problem")

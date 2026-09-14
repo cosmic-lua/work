@@ -26,6 +26,7 @@ local gitread = require("_work.gitread")
 local item = require("_work.item")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local publish = require("_work.publish")
 
 local init_state_repo = fixture.init_state_repo
 local file_item = fixture.file_item
@@ -105,6 +106,7 @@ local function test_items_matches_gitread_list_field_for_field_and_in_order()
   local root_it = check.must(store.load(s, root))
   root_it.order = {leaf2, leaf3, leaf1}
   assert(storewrite.save(s, root_it, "rank the children"))
+  assert(publish.publish(s))
   assert(gitrank.cmd_rank(s, root, "", "", true) == 0, "rank the outcome")
 
   local leaf_it = check.must(store.load(s, leaf1))
@@ -115,6 +117,7 @@ local function test_items_matches_gitread_list_field_for_field_and_in_order()
   leaf_it.access = {"cosmic-lua/cosmic"}
   leaf_it.depends_on = {leaf2, leaf3}
   assert(storewrite.save(s, leaf_it, "hand-edit leaf1 with an edge and a roster"))
+  assert(publish.publish(s))
 
   local want = check.must(gitread.list(s.root)).items
   local c = check.must(cache.open(s.root))
@@ -160,4 +163,3 @@ local function test_items_matches_gitread_list_field_for_field_and_in_order()
   assert(leaf1_got ~= nil and leaf1_got.other_edges == nil,
     "the cache-hydrated side carries no edge kind at all")
 end
-test_items_matches_gitread_list_field_for_field_and_in_order()

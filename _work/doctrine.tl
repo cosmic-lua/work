@@ -11,6 +11,7 @@
 --- Pure data: no git, no filesystem. `_work/doctrine_test.tl` pins
 --- that every listed topic renders and that no topic shadows a verb.
 local doctrine_bar = require("_work.doctrine_bar")
+local doctrine_native = require("_work.doctrine_native")
 
 --- One page. `body` is the prose; `title` is the one-line summary the
 --- topic list prints beside the name.
@@ -21,6 +22,7 @@ local record Page
 end
 
 local PAGES < const >: {Page} = {
+  {name = "native", title = "format-6 publication, claims, history, and migration", body = doctrine_native.BODY},
   {name = "offline", title = "claim, work offline, and publish once",
     body = [[
 Gitboard keeps authentication at the caller boundary: it never discovers, stores, or
@@ -30,31 +32,29 @@ Acquire the work set from caller-fetched state:
   export GITBOARD_SESSION=$(gitboard session new)
   gitboard refresh --execute
   gitboard claim A B C
-  # run its one printed `git push --atomic`, then
+  gitboard publish TRANSACTION --execute
   gitboard refresh --execute
-`claim A B C` prepares one parentless immutable claim-batch commit holding set, caller,
-operation, and common two-hour deadline. Its unique append-only
-`refs/heads/claim-batches/<batch-id>` names it. The batch ref and every first-parent
-item bridge publish atomically; each bridge tree stores only the batch SHA and item
-refs remain the CAS fences. ANY live
+`claim A B C` prepares one commit writing every member's `claims/<id>` file,
+holding its acquisition identity, caller, and lease deadline. One non-forced update
+of `refs/heads/state` publishes the entire batch. Item subtrees and claim blobs
+are the dependency fences. ANY live
 overlap, including this caller's claim, rejects all. Retry a changed set as a new batch;
 use separate `renew` and `drop` for held claims. PREPARED and PUSHED grant no authority.
-Only `refresh` seeing every ref confirms the batch. Work offline until its deadline.
-On a verified nonzero ref conflict, refresh reports the loss and quarantines the
-stale plan locally, preserving its manifest outside active publication plans.
-Inspect `git show <printed-quarantine-ref>:manifest`; prepare a new transaction
-from current state. Missing observations remain staged, not quarantined.
+Only `refresh` proving the complete commit and current claims confirms authority.
+Work offline until its deadline. A changed dependency refuses the mutation whole;
+refresh and prepare a new decision. A disjoint update can rebase after its bounded
+gates re-pass. An uncertain publication remains pending until fetched history proves
+whether it landed. See `help native` for the immutable connector call sequence.
 Chain dependent board mutations in a durable clone-local draft:
   export GITBOARD_DRAFT=$(gitboard draft begin --print-id)
   gitboard new ...
   gitboard spec ...
   gitboard rank ...
   gitboard draft show
-  gitboard publish "$GITBOARD_DRAFT"
-  # run the one printed atomic push, then
+  gitboard publish "$GITBOARD_DRAFT" --execute
   gitboard refresh --execute
-Drafts overlay a frozen snapshot and publish each ref's original and final ids in one atomic push.
-A rejected lease lands none; drafts never silently rebase. Claims stay outside drafts
+Drafts overlay a frozen snapshot and publish their ordered commit chain in one
+non-forced update. A failed dependency fence lands none. Claims stay outside drafts
 because unconfirmed coordination grants no authority. `draft abandon` is local-only.
 ]]},
   {name = "system", title = "the board: states, order, exits, rules",
@@ -93,9 +93,9 @@ child resolves, and the child's `done` frees it with no further verb
 session, a spent budget — and asserts the item is fine to re-offer
 as-is (`help drop`).
 
-Claims provide mutual exclusion, not shared capacity. One parentless immutable batch
-commit stores the facts once; its append-only batch ref and every item-history bridge
-publish atomically or none does. Item refs remain the fences. Any live overlap refuses
+Claims provide mutual exclusion, not shared capacity. One commit writes the complete
+batch of claim files and one non-forced state update publishes all or none.
+Item subtrees and claim blobs are the fences. Any live overlap refuses
 acquisition. Work limits remain local. See `help offline`.
 Work flows right to left — finishing beats starting — and that is
 ONE derived order, not advice: every queue ranks stage first
@@ -166,7 +166,7 @@ position may be acted on yet.
 While any of them is still open, `next` skips the item and names the
 dependency holding it, and `take` refuses it. A blocker's `done` frees
 every waiter with no second verb: `depends_on` lives on the waiter, so
-only the waiter's ref moves when the edge is declared, and nothing has
+only the waiter's item subtree changes when the edge is declared, and nothing has
 to be withdrawn once the blocker finishes.
 
 A waiter stays WORKABLE. It does not become a container and its rank
@@ -222,9 +222,8 @@ fact nobody finishes.
    your own: the verdict comes from a fresh-context review.
 
 Out-of-scope findings (a real defect, a stale doc, a gap the item
-sits next to but does not own): search first — every item is a ref, so
-`git grep -il '<phrase>' $(git for-each-ref --format='%(refname)'
-refs/heads/items refs/heads/ended)` in the board checkout answers "already
+sits next to but does not own): search first — `gitboard find '<phrase>'`
+in the board checkout answers "already
 filed?" — and cite the existing item rather than duplicate it; else
 `new "title" --spec-file F` with one paragraph of evidence, unparented.
 Filing is never refused. Then back to the item: never widen the diff
@@ -287,7 +286,7 @@ Rejection is cheap by design; wrong work merged is expensive.
 Research agents return recommendations. Applied in the product repository,
 the applying commit is handed over through `take ID --head SHA` and judged
 like any diff; recorded as board state, the findings are a `log ID --add
-FILE` entry on the item's own ref and `take ID --result` hands that commit
+FILE` entry under the item's log path and `take ID --result` hands that published commit
 over. A review judges a commit either way — which repository it lives in
 follows from the deliverable — and a research handover's brief carries the
 commit's message body verbatim beside the spec it answers. A legacy spec
@@ -304,8 +303,8 @@ One orchestrator, N builders, and the board stays with the
 orchestrator — agents never run board verbs, so no agent needs this
 checkout or push rights to this board repository:
 
-- Claim first, then spawn. `claim ID...` prepares one parentless immutable batch,
-  its append-only ref, and one first-parent item bridge per member; all publish or none.
+- Claim first, then spawn. `claim ID...` prepares one commit writing all member
+  claim files; one non-forced state update publishes the entire batch or none.
   Any live overlap, including your own, refuses acquisition: refresh and try a new set;
   use `renew` or `drop` for held claims. Only refresh grants authority. Use a distinct
   session per agent: one `gitboard session new` per agent, passed as `--session`

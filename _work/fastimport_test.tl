@@ -289,3 +289,20 @@ local function test_build_stream_omits_mark_when_unset()
   assert(stream:find("\nmark ", 1, true) == nil, stream)
   assert(stream:find("\nfrom ", 1, true) == nil, "a new item has no from: " .. stream)
 end
+
+-- Migration plans preserve raw identities/messages and graft an existing tree
+-- through the same encoder ordinary item writes use.
+local function test_build_stream_preserves_raw_identity_message_and_tree_graft()
+  local plan: fastimport.CommitPlan = {
+    ref = "refs/gitboard/migrate6/attempt", from = ":8", mark = ":9",
+    author_raw = "Legacy Person <legacy@example.test> 7 -0230",
+    committer_raw = "Commit Bot <bot@example.test> 8 +0115",
+    message = "legacy bytes without final newline", verbatim = true,
+    ops = {{path = "items/abc", tree = string.rep("a", 40)}},
+  }
+  local stream = fastimport.build_stream({plan})
+  assert(stream:find("author Legacy Person <legacy@example.test> 7 -0230\n", 1, true))
+  assert(stream:find("committer Commit Bot <bot@example.test> 8 +0115\n", 1, true))
+  assert(stream:find("data 34\nlegacy bytes without final newline\nfrom :8\n", 1, true), stream)
+  assert(stream:find("M 040000 " .. string.rep("a", 40) .. " items/abc\n", 1, true), stream)
+end

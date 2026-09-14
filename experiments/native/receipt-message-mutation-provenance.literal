@@ -1,0 +1,22 @@
+return {
+  ["campaign"] = "native receipt message supplemental",
+  ["catalog"] = "experiments/native/mutations.tl",
+  ["catalog_blob_sha"] = "f2a1f2a97055ed0f687763ea7a90aae0ee0e36ed",
+  ["command"] = "/workspace/scratch/27a6dfdb63ab/work-format6/o/bootstrap/cosmic experiments/native/mutation_check.tl o/supplemental/ignored-receipt-message.literal",
+  ["controls"] = {
+    ["baseline"] = {["checks"] = 1, ["passed"] = 1},
+    ["mutant"] = {["assertion_failures"] = 1, ["checks"] = 1, ["failed"] = 1},
+    ["restored"] = {["checks"] = 1, ["passed"] = 1},
+  },
+  ["failing_test"] = "test_message_only_mismatch_is_not_a_receipt",
+  ["format"] = "gitboard-native-mutation-provenance-v1",
+  ["killed"] = 1,
+  ["mutation"] = {["after"] = "return (literal.encode(value.changes) or \"\") .. \"\\0\"\n  .. (literal.encode(value.author) or \"\")", ["before"] = "return (literal.encode(value.changes) or \"\") .. \"\\0\" .. value.message .. \"\\0\"\n  .. (literal.encode(value.author) or \"\")", ["file"] = "_work/stateplan_receipts.tl", ["filter"] = "test_message_only_mismatch_is_not_a_receipt", ["id"] = "ignored_receipt_message", ["test"] = "_work/stateplan_receipts_test.tl"},
+  ["results"] = "experiments/native/receipt-message-mutation-results.literal",
+  ["results_sha256"] = "a1082838ed8b1baa65d67783af4c8457223fbb4a3b62dc6e88927ef3474f9184",
+  ["runtime"] = "/workspace/scratch/27a6dfdb63ab/work-format6/o/bootstrap/cosmic",
+  ["single_case_catalog_blob_sha"] = "7edf44b5d8d5a9c23db3db858efb05e1f2eb10f5",
+  ["source_revision"] = "4a8ffd5206b072d989679f4ec408e932abe6e6f9",
+  ["source_tree"] = "ff6b45835dac2bb49cb60ab23ef5fd03561f67fe",
+  ["total"] = 1,
+}

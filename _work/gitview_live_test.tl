@@ -52,12 +52,15 @@ end
 local function handed_over(s: store.Store, leaf: string, builder: string)
   fixture.give_spec(s, leaf)
   local it = check.must(store.load(s, leaf))
-  it.repo, it.claim, it.claim_base = "acme/widgets", builder, BASE
+  fixture.claim_item(s, leaf, builder, BASE)
+  it = check.must(store.load(s, leaf))
+  it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, builder))
   assert(storewrite.save(s, it,
       ("take %s by %s head:%s"):format(leaf:sub(1, 8), builder,
         HEAD:sub(1, 12))))
+  fixture.caller_publish(s)
 end
 
 --- A deliberately UNPLACED root with one workable leaf under it — the

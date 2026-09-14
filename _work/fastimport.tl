@@ -54,6 +54,9 @@ local record Op
   --- nil deletes the path; "" is a legal blob (an empty edge marker)
   --- and is NOT a delete.
   content: string
+  --- An existing tree to graft at `path` as `M 040000`; mutually exclusive
+  --- with content. Migration replay uses this to retain legacy subtrees.
+  tree: string
 end
 
 --- One commit `build_stream` writes: the ref it lands on, the parent
@@ -73,7 +76,14 @@ local record CommitPlan
   committer_name: string
   committer_email: string
   committer_date: string
+  --- Exact identity text after `author ` / `committer `. Historical replay
+  --- uses these instead of splitting names that may contain unusual bytes.
+  author_raw: string
+  committer_raw: string
   message: string
+  --- Preserve message bytes exactly instead of appending the ordinary final
+  --- newline. Historical replay has already read its bytes from the object.
+  verbatim: boolean
   op: string
   ops: {Op}
 end
@@ -222,20 +232,24 @@ local function commit_block(c: CommitPlan): string
   if (c.mark or "") ~= "" then
     parts[#parts + 1] = "mark " .. c.mark .. "\n"
   end
-  parts[#parts + 1] = ("author %s <%s> %s\n"):format(
-    c.author_name, c.author_email, c.author_date)
-  parts[#parts + 1] = ("committer %s <%s> %s\n"):format(
-    c.committer_name, c.committer_email, c.committer_date)
+  if (c.author_raw or "") ~= "" then parts[#parts + 1] = "author " .. c.author_raw .. "\n"
+  else parts[#parts + 1] = ("author %s <%s> %s\n"):format(
+      c.author_name, c.author_email, c.author_date) end
+  if (c.committer_raw or "") ~= "" then parts[#parts + 1] = "committer " .. c.committer_raw .. "\n"
+  else parts[#parts + 1] = ("committer %s <%s> %s\n"):format(
+      c.committer_name, c.committer_email, c.committer_date) end
   local msg = c.message
   if (c.op or "") ~= "" then
     msg = msg .. "\n\nOp: " .. c.op
   end
-  parts[#parts + 1] = data_block(msg .. "\n")
+  parts[#parts + 1] = data_block(c.verbatim and msg or (msg .. "\n"))
   if (c.from or "") ~= "" then
     parts[#parts + 1] = "from " .. c.from .. "\n"
   end
   for _, op in ipairs(c.ops) do
-    if op.content == nil then
+    if (op.tree or "") ~= "" then
+      parts[#parts + 1] = "M 040000 " .. op.tree .. " " .. op.path .. "\n"
+    elseif op.content == nil then
       parts[#parts + 1] = "D " .. op.path .. "\n"
     else
       parts[#parts + 1] = "M 100644 inline " .. op.path .. "\n"

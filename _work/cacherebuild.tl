@@ -1,3 +1,5 @@
+local boardread = require("_work.boardread")
+local boardhistory = require("_work.boardhistory")
 --- `_work.cache`'s cold-build path, split out to keep that module under
 --- its line cap: every item and spec the board carries,
 --- `_work.index`'s tables (including its `ranks` rows — each item's
@@ -13,12 +15,13 @@
 --- reopened final connection returns to `_work.cachedb`'s ordinary WAL
 --- rule (`open_conn`). `_work.cache.rebuild` is this module's `rebuild`
 --- re-exported unchanged — every caller still goes through there.
+local stateread = require("_work.stateread")
 local cachedb = require("_work.cachedb")
-local events = require("_work.events")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
+local gitbatch = require("_work.gitbatch")
+local refs = require("_work.refs")
 local gitread = require("_work.gitread")
-local gitreadspec = require("_work.gitreadspec")
 local spec = require("_work.spec")
 local index = require("_work.index")
 local index_rank = require("_work.index_rank")
@@ -85,11 +88,7 @@ local function fill(db: sqlite.Database, root: string, board: gitread.Board,
   if not rdok then
     return false, rderr
   end
-  local evok, everr = events.fill_rebuild(db, root, board.shas_by_id)
-  if not evok then
-    return false, everr
-  end
-  return true, ""
+  return stateread.fill_events(db, root, board.native_view.head, board.native_view, board.native_history)
 end
 
 --- Cold-build the cache file from scratch. Exported for the equality
@@ -98,8 +97,8 @@ end
 --- @param root string The store's root
 --- @return Cache | nil The freshly built cache
 --- @return string Error message
-local function rebuild(root: string): Cache | nil, string
-  local board, berr = gitread.list(root)
+local function rebuild(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession, on_read?: function(boardread.View, boardhistory.History)): Cache | nil, string
+  local board, berr = gitread.list(root, snapshot, reader)
   if board == nil then
     return nil, berr
   end
@@ -110,7 +109,9 @@ local function rebuild(root: string): Cache | nil, string
   -- One indexed text per item, rendered from the two blobs the tree
   -- holds (`spec.document`) — `find.build` reads `Cache.specs`.
   local specs: {string: string} = {}
-  for id, sp in pairs(gitreadspec.read_specs(root, board.shas_by_id, ids)) do
+  local native_view = board.native_view
+  local prose = native_view.specs_by_id
+  for id, sp in pairs(prose) do
     specs[id] = spec.document(sp)
   end
   local dir_ok, dir_err = fs.make_dirs(fs.join(root, "o"))
@@ -141,11 +142,7 @@ local function rebuild(root: string): Cache | nil, string
     local _c, _cerr = db:close()
     return nil, pverr
   end
-  local digest, digerr = cachedb.fresh_digest(root)
-  if digest == nil then
-    local _c, _cerr = db:close()
-    return nil, digerr
-  end
+  local digest = board.refs_digest
   local fp, fperr = cachedb.expected_schema_fingerprint()
   if fp == nil then
     local _c, _cerr = db:close()
@@ -157,9 +154,6 @@ local function rebuild(root: string): Cache | nil, string
   end
   if sok then
     sok, serr = cachedb.meta_set(db, "schema_fingerprint", fp)
-  end
-  if sok then
-    sok, serr = cachedb.meta_set(db, "seq_sha", board.seq_sha)
   end
   if not sok then
     local _c, _cerr = db:close()
@@ -196,13 +190,14 @@ local function rebuild(root: string): Cache | nil, string
   if reopened == nil then
     return nil, roerr
   end
+  if on_read ~= nil then on_read(board.native_view, board.native_history) end
   return {db = reopened, specs = {}, load_problems = {}}
 end
 
 local record cacherebuild
   fill: function(db: sqlite.Database, root: string, board: gitread.Board,
   specs: {string: string}): boolean, string
-  rebuild: function(root: string): Cache | nil, string
+  rebuild: function(root: string, snapshot?: {refs.RefEntry}, reader?: gitbatch.BatchSession, on_read?: function(boardread.View, boardhistory.History)): Cache | nil, string
 end
 
 local M: cacherebuild = {

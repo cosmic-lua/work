@@ -164,6 +164,13 @@ CREATE VIEW state AS
     END AS state
   FROM items;
 
+-- Shared workload projection for ordinary reads and publication revalidation.
+CREATE VIEW doing AS
+  SELECT COUNT(*) AS n
+  FROM workable w
+  JOIN state st ON st.id = w.id
+  WHERE st.state = 'doing';
+
 -- The current lifecycle is commit-only: a handover commit awaits a verdict.
 -- `pr` and `result` remain read compatibility for pre-v3 item trees only.
 CREATE VIEW substate AS

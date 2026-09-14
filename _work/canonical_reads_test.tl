@@ -1,6 +1,6 @@
 #!/usr/bin/env cosmic
 -- Canonical board reads have exactly two modes. A remote-backed board
--- reads only its caller-fetched `refs/remotes/<configured>/{items,ended,board}`
+-- reads only its caller-fetched `refs/remotes/<configured>/{state,board/format}`
 -- snapshot; local heads may be stale or hold unpublished successors.
 -- Explicit local mode reads those heads. Prepared/staging namespaces
 -- are never part of either snapshot and therefore never enter the
@@ -11,7 +11,8 @@ local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local gitobj = require("_work.gitobj")
 local gitread = require("_work.gitread")
-local gitreadmany = require("_work.gitreadmany")
+local boardread = require("_work.boardread")
+local projection = require("_work.stateplan_git")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local refs = require("_work.refs")
@@ -23,7 +24,7 @@ local tail = require("_work.tail")
 --- needed for this read-path test.
 local function seed_tracking(root: string, remote?: string)
   local found = check.must(refs.for_each_ref_raw(root,
-      {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
+      {"refs/heads/state", "refs/heads/board/format"}))
   for _, entry in ipairs(found) do
     local tracking = check.must(refs.tracking_ref(entry.refname, remote))
     assert(refs.update_ref(root, tracking, entry.sha, refs.ZERO_SHA))
@@ -44,7 +45,7 @@ local function test_remote_reads_use_the_configured_non_origin_namespace()
   local loaded = check.must(store.load(s, resolved))
   assert(loaded.title == "configured upstream")
   local found = check.must(refs.for_each_ref(seeded.root,
-      {"refs/heads/items", "refs/heads/board"}))
+      {"refs/heads/state", "refs/heads/board/format"}))
   assert(#found > 0, "canonical reader found the upstream snapshot")
   for _, entry in ipairs(found) do
     assert(entry.refname:match("^refs/heads/") ~= nil,
@@ -58,8 +59,10 @@ local function variant(root: string, original: item.Item, parent: string,
     title: string, change: string): string
   local changed = check.must(store.snapshot_item(original))
   changed.title = title
-  local tree = check.must(itemtree.build_tree(root, changed,
-      {change = change, non_goals = ""}, true))
+  changed.claim_batch = nil
+  local tree = check.must(projection.apply(root, parent, {
+        {path = "items/" .. changed.id .. "/meta", mode = "100644", content = itemtree.encode_meta(changed), delete = false},
+        {path = "items/" .. changed.id .. "/spec/change.md", mode = "100644", content = change, delete = false}}))
   return check.must(gitobj.commit_tree(root, {
         tree = tree, parents = {parent}, message = title,
         author_name = "test", author_email = "test@example.com",
@@ -82,8 +85,8 @@ local function test_remote_reads_ignore_local_heads_and_all_staging_refs()
   seed_tracking(seeded.root)
 
   local loaded = check.must(gitread.load(seeded.root, id))
-  local target = "refs/heads/items/" .. id
-  local base = loaded.sha
+  local target = "refs/heads/state"
+  local base = check.must(refs.read_ref(seeded.root, target))
   local local_sha = variant(seeded.root, loaded.it, base,
     "stale local head", "local spec\n")
   local remote_sha = variant(seeded.root, loaded.it, base,
@@ -92,21 +95,20 @@ local function test_remote_reads_ignore_local_heads_and_all_staging_refs()
   local tracking = check.must(refs.tracking_ref(target))
   assert(refs.update_ref(seeded.root, tracking, remote_sha, base))
 
-  -- A second valid item commit is reachable only from a staging ref.
-  -- If a broad ref walk accidentally indexes staging, it appears on
-  -- the board despite having no canonical item ref at all.
-  local staged_id = fixture.file_item(seeded, "staging must stay hidden", "")
-  local staged_target = "refs/heads/items/" .. staged_id
-  local staged_sha = check.must(refs.read_ref(seeded.root, staged_target))
+  -- The entire successor containing another item is reachable only from staging.
+  local local_store = check.must(store.open(seeded.root))
+  local staged_id = fixture.file_item(local_store, "staging must stay hidden", "")
+  local staged_sha = check.must(refs.read_ref(seeded.root, target))
   assert(refs.update_ref(seeded.root,
       "refs/gitboard/prepared-test/" .. staged_id, staged_sha, refs.ZERO_SHA))
-  assert(refs.update_ref(seeded.root, staged_target, refs.ZERO_SHA, staged_sha))
+  assert(refs.update_ref(seeded.root, target, local_sha, staged_sha))
+  assert(store.close(local_store))
 
   assert(refs.set_board_mode(seeded.root, "remote"))
   check.must(store.close(seeded))
 
   local found = check.must(refs.for_each_ref(seeded.root,
-      {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
+      {"refs/heads/state", "refs/heads/board/format"}))
   for _, entry in ipairs(found) do
     assert(entry.refname:match("^refs/heads/") ~= nil,
       "canonical entries retain transport-neutral target names")
@@ -116,9 +118,9 @@ local function test_remote_reads_ignore_local_heads_and_all_staging_refs()
 
   local one = check.must(gitread.load(seeded.root, id))
   assert(one.sha == remote_sha and one.it.title == "confirmed remote head")
-  local many = check.must(gitreadmany.load_many(seeded.root, {id, staged_id}))
-  assert(many[id] ~= nil and many[id].sha == remote_sha)
-  assert(many[staged_id] == nil, "staging-only items are absent from batch reads")
+  local many = check.must(boardread.list(seeded.root, remote_sha))
+  assert(many.items_by_id[id] ~= nil and many.items_by_id[id].title == "confirmed remote head")
+  assert(many.items_by_id[staged_id] == nil, "staging-only items are absent from batch reads")
   local resolved = check.must(tail.resolve_glob(seeded.root, tail.bare(id)))
   assert(resolved.sha == remote_sha, "tail resolution leases the fetched tip")
 
@@ -142,11 +144,11 @@ local function test_remote_reads_ignore_local_heads_and_all_staging_refs()
   -- The same repository can opt into explicit local simulation mode;
   -- only then does its unpublished local successor become readable.
   assert(refs.set_board_mode(seeded.root, "local"))
-  local local_store = check.must(store.open(seeded.root))
-  local local_items = check.must(store.list(local_store))
+  local local_reader = check.must(store.open(seeded.root))
+  local local_items = check.must(store.list(local_reader))
   assert(title_of(local_items, id) == "stale local head")
-  assert(store.read_spec(local_store, id).change == "local spec\n")
+  assert(store.read_spec(local_reader, id).change == "local spec\n")
   assert(title_of(local_items, staged_id) == "",
     "staging refs are not canonical in local mode either")
-  check.must(store.close(local_store))
+  check.must(store.close(local_reader))
 end

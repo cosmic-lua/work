@@ -15,10 +15,9 @@ local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local brief = require("_work.brief")
-local gitclaim = require("_work.gitclaim")
 local gitspec = require("_work.gitspec")
 local item = require("_work.item")
-local prepared = require("_work.prepared")
+local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -126,21 +125,13 @@ local function handover_diff(s: store.Store, id: string, name: string,
   local head = git(root, {"rev-parse", "HEAD"})
   git(s.root, {"config", "--local", "--add", "gitboard.repository",
       "acme/widgets=" .. root})
-  local target = gitclaim.target_item_ref(id)
-  local claimed = gitclaim.prepare_batch({{
-        root = s.root, id = id, source_ref = target, target_ref = target,
-        remote = "origin", batch = "brief-" .. name,
-        caller = "session-a", action = "take", product_base = base,
-        force = false, why = "", now = os.time(),
-      }})
-  assert(claimed.prepared ~= nil,
-    claimed.refused[id] or claimed.refused.batch)
-  assert(prepared.promote_local(s.root, claimed.prepared.transaction))
+  fixture.claim_item(s, id, "session-a", base)
   local it = check.must(store.load(s, id))
   it.repo, it.handover_head = "acme/widgets", head
   assert(item.record_involvement(it.builders, "session-a"))
   assert(storewrite.save(s, it,
       ("take %s by session-a head:%s"):format(id:sub(1, 8), head:sub(1, 12))))
+  assert(publish.publish(s))
   -- A review needs distance from the builder: drop the standing build
   -- claim (an active foreign claim refuses acquisition outright) and
   -- re-claim as the reviewer before a review brief will fill one.

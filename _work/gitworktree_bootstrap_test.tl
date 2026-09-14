@@ -11,10 +11,10 @@ local check = require("cosmic.check")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fixture = require("_work.fixture")
+local claim = require("_work.claim")
 local fs = require("cosmic.fs")
-local gitclaim = require("_work.gitclaim")
 local graph = require("_work.gitgraph")
-local prepared = require("_work.prepared")
+local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
@@ -92,15 +92,9 @@ local function fresh(name: string, kind: string, script?: string): Case
   local it = check.must(store.load(s, id))
   it.handover_head = head
   assert(storewrite.save(s, it, "fixture handover"))
-  local target = gitclaim.target_item_ref(id)
-  local claimed = gitclaim.prepare_batch({{
-        root = s.root, id = id, source_ref = target, target_ref = target,
-        remote = "origin", batch = "bootstrap-" .. name, caller = SESSION,
-        action = "take", product_base = base, force = false, why = "", now = os.time(),
-      }})
-  assert(claimed.prepared ~= nil, claimed.refused[id] or claimed.refused.batch)
-  assert(prepared.promote_local(s.root, claimed.prepared.transaction))
-  local branch = claimed.prepared.members[1].branch
+  assert(publish.publish(s))
+  local identity = fixture.claim_item(s, id, SESSION, base)
+  local branch = claim.branch(id, identity)
   return {s = s, id = id, root = root, base = base, head = head, branch = branch,
     path = fs.join(dir, "wt", branch)}
 end

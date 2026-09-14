@@ -8,8 +8,7 @@ local check = require("cosmic.check")
 local commit_flow = require("_work.commit_flow_fixture")
 local eventsmod = require("_work.events")
 local fixture = require("_work.fixture")
-local gitreadspec = require("_work.gitreadspec")
-local itemtree = require("_work.itemtree")
+local boardread = require("_work.boardread")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
@@ -370,27 +369,25 @@ local function show_and_capture(s: store.Store, id: string): integer, string
   return result, table.concat(lines, "\n")
 end
 
--- `show ID`'s spec body comes from the same batched `read_specs` that
--- already covers every open sibling — never a standalone single-object
--- read — so it renders correctly even with that single-item path
--- (`gitreadspec.read_spec`) stubbed to fail outright.
-local function test_show_id_renders_the_spec_without_gitreads_single_file_read()
+-- `show ID` shares its native projection across list, spec and item reads.
+local function test_show_id_renders_the_spec_from_one_native_projection()
   local s = init_state_repo("show-spec-from-batch")
   local id = file_item(s, "an item", "")
   give_spec(s, id)
 
-  local real_read_spec = gitreadspec.read_spec
-  gitreadspec.read_spec = function(_root: string,
-      _candidates: {string}): itemtree.Spec
-    error("gitreadspec.read_spec must not run: the prose should come from "
-      .. "the batched read_specs", 0)
+  local real_view = boardread.list
+  local reads = 0
+  boardread.list = function(root: string, head: string, now?: integer): boardread.View | nil, string
+    reads = reads + 1
+    return real_view(root, head, now)
   end
   local ok, code, out = pcall(show_and_capture, s, id)
-  gitreadspec.read_spec = real_read_spec
+  boardread.list = real_view
   if not ok then
     error(code, 0)
   end
   assert(code == 0, "show should still succeed: " .. tostring(out))
+  assert(reads <= 1, "show must share one native projection: " .. tostring(reads))
   assert(out:find("Do exactly this.", 1, true) ~= nil,
     "the spec body must render from the loaded batch: " .. out)
 end

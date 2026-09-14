@@ -88,7 +88,7 @@ local function from_wire(value: any): any | nil, string
     local present = 0
     for key in pairs(entries) do
       present = present + 1
-      local index = tonumber(key)
+      local index = tonumber(key, 10)
       if index == nil or key ~= key_of(math.tointeger(index) or -1) then
         return nil, "invalid literal sequence index"
       end

@@ -11,11 +11,10 @@
 --- is a linked worktree of another checkout (`_work.storeinit`'s
 --- `linked_worktree_refusal` — the same guard `init_repo` runs, so
 --- there is one implementation of the check, not two).
+local statewrite = require("_work.statewrite")
 local item = require("_work.item")
 local format = require("_work.format")
-local gitwrite = require("_work.gitwrite")
 local itemtree = require("_work.itemtree")
-local refs = require("_work.refs")
 local store = require("_work.store")
 local storeinit = require("_work.storeinit")
 
@@ -37,33 +36,11 @@ local function set_op(s: store.Store, op: string)
   s.op = op or ""
 end
 
---- Mark the next `save` as a BOUNDED mutation: it also advances and
---- leases `refs/heads/board/seq`, so two bounded mutations racing each
---- other cannot both land. Consumed by `save`, which resets it.
+--- Mark the next save as a bounded native transition, fencing the whole head.
 --- @param s store.Store The store
 --- @param bounded boolean Whether the next save is bounded
 local function set_bounded(s: store.Store, bounded: boolean)
   s.bounded = bounded or false
-end
-
---- Queue one ref for the next `publish`, merging with whatever this
---- checkout already owes it a push for. A second unpublished write to
---- a ref this session already queued (`save` called again before
---- `publish` — a fixture writing straight past a verb, say) must
---- still lease against the tip the REMOTE last agreed to, not the
---- intermediate value this checkout only ever held locally, so the
---- existing entry — `old` included — is left exactly as it is; there
---- is nothing else on a `PushSpec` a later write to the same ref could
---- change.
---- @param s store.Store The store
---- @param p refs.PushSpec The ref to push
-local function add_pending(s: store.Store, p: refs.PushSpec)
-  for _, existing in ipairs(s.pending) do
-    if existing.ref == p.ref then
-      return
-    end
-  end
-  s.pending[#s.pending + 1] = p
 end
 
 --- Write one item (and, when given, further items the same mutation
@@ -93,64 +70,13 @@ local function save(s: store.Store, it: item.Item, message: string,
   if not current then
     return false, ferr
   end
-  local batch: {item.Item} = {it}
-  for _, other in ipairs(also or {}) do
-    batch[#batch + 1] = other
-  end
-  for _, x in ipairs(batch) do
-    local ok, err = store.stage(s, x)
-    if not ok then
-      return false, err
-    end
-  end
-  local function read_current_spec(id: string): itemtree.Spec
-    return store.read_spec(s, id)
-  end
-  local outcome, oerr = gitwrite.save_batch({
-      root = s.root, items = batch, message = message, session = s.session,
-      op = s.op, spec_for_first = spec, leased_ref = s.leased_ref,
-      leased_sha = s.leased_sha, leased_item = s.leased_item,
-      bounded = s.bounded, seq_sha = s.observed_seq,
-      read_spec = read_current_spec,
-    })
-  if outcome == nil then
-    return false, oerr
-  end
-  s.bounded = false
-  if not outcome.changed then
-    return true, store.NOOP_PREFIX .. ("%s leaves the board unchanged"):format(message)
-  end
-  s.fresh_lease = ""
-  local written_by_id: {string: item.Item} = {}
-  for _, x in ipairs(batch) do
-    written_by_id[x.id] = x
-  end
-  for id, ref in pairs(outcome.new_ref) do
-    s.leased_ref[id] = ref
-    s.leased_sha[id] = outcome.new_sha[id]
-    -- A later save in the same store handle (another `also` batch, a
-    -- second verb call) has to diff against what THIS save just
-    -- wrote, not the state it was leased against a moment ago.
-    local written = written_by_id[id]
-    if written ~= nil then
-      s.leased_item[id] = store.snapshot_item(written)
-    end
-  end
-  s.written_at = outcome.written_at
-  if outcome.seq_changed then
-    s.observed_seq = outcome.new_seq_sha
-  end
-  for _, p in ipairs(outcome.pushes) do
-    add_pending(s, p)
-  end
-  return true, ""
+  return statewrite.save(s, it, message, spec, also)
 end
 
 local record storewrite
   set_session: function(s: store.Store, session: string)
   set_op: function(s: store.Store, op: string)
   set_bounded: function(s: store.Store, bounded: boolean)
-  add_pending: function(s: store.Store, p: refs.PushSpec)
   save: function(s: store.Store, it: item.Item, message: string,
   spec?: itemtree.Spec, also?: {item.Item}): boolean, string
 end
@@ -159,7 +85,6 @@ local M: storewrite = {
   set_session = set_session,
   set_op = set_op,
   set_bounded = set_bounded,
-  add_pending = add_pending,
   save = save,
 }
 

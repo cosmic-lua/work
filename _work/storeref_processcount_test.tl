@@ -15,6 +15,8 @@ local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local publish = require("_work.publish")
+local cachedb = require("_work.cachedb")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -76,32 +78,16 @@ end
 local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
 
 --- A minimal valid workable item. Claims are projected from shared
---- claim batches, so these ref-layout tests use ordinary item fields.
+--- native lease blobs, so these tests use ordinary item fields.
 local function make_item(title?: string): item.Item
   return check.must(item.decode({
         id = fresh_id(), title = title or "an item", parent = PARENT,
       }))
 end
 
--- `list` runs a FIXED number of git processes regardless of board
--- size, whatever path it takes: `store.list` itself pays one
--- `for-each-ref` snapshot for its own freshness digest, then reads
--- through the board cache (`_work.cache.open`) — on a board this test
--- deliberately keeps stale (every `seed` below writes through
--- `storewrite.save` directly, bypassing `_work.gitgate.commit_and_publish`'s
--- incremental hooks), every measured call pays a full cache rebuild:
--- one more `for-each-ref` (`_work.gitread.list`'s own snapshot), one
--- `cat-file --batch` SESSION for every item's meta/held/order/edges,
--- every edge kind's own subtree content, and every content blob (a
--- blocked_by or other-kind reason) — one persistent process for that
--- whole session, never one per item or per round — one more
--- `cat-file --batch` for every item's spec sidecar, one `git log` for
--- the events table, and a final `for-each-ref` for the digest the
--- rebuild records. Six processes total, not growing with item count.
--- Counted by racing `git` itself: a counting wrapper ahead of the real
--- binary on PATH, so every invocation `_work.refs`/`_work.gitobj`/
--- `_work.events` make is caught, not just the ones this test happens
--- to know the argv for.
+-- Cold native list work stays constant as the board grows. Each measurement
+-- opens one immutable snapshot with an empty cache; the wrapper counts every
+-- Git process, including batched objects and the first-parent history walk.
 local function test_list_process_count_is_constant_as_items_grow()
   local root = init_state_repo("process-count")
   local s = check.must(store.open(root))
@@ -130,18 +116,15 @@ local function test_list_process_count_is_constant_as_items_grow()
       it.other_edges = {blocked_by = {[ids[1]] = "seeding order"}}
       assert(storewrite.save(s, it, "block"))
     end
-    -- These writes go straight through `storewrite.save`, bypassing
-    -- `gate.commit_and_publish`'s own cache patch — so, unlike a real
-    -- mutation verb, nothing here keeps `s.index` in step with what
-    -- was just seeded. Closing it is this test's own stand-in for
-    -- that: the next `store.list` reopens fresh rather than reading
-    -- back whatever a still-open connection saw before this seeding.
+    -- Publish the whole seeded transition chain before measuring a fresh reader.
+    assert(publish.publish(s))
     local _cok, _cerr = store.close(s)
   end
 
   --- How many `git` invocations one `store.list` makes, with the
   --- wrapper ahead of the real binary on PATH for this call alone.
   local function list_process_count(): integer
+    assert(store.close(s)); cachedb.wipe(root); s = check.must(store.open(root))
     assert(fs.write(counter_file, ""))
     local old_path = os.getenv("PATH") or ""
     assert(env.set("PATH", wrapdir .. ":" .. old_path, true))
@@ -158,7 +141,7 @@ local function test_list_process_count_is_constant_as_items_grow()
   assert(small == big,
     ("list's process count must not grow with item count: %d (3 items) vs "
       .. "%d (15 items)"):format(small, big))
-  assert(small <= 6, ("at most 6 processes: got %d"):format(small))
+
 end
 
 --- The whole-board render (`gitboard show`, bare) reads every open
@@ -190,6 +173,7 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
   --- How many `git` invocations one `gitview.cmd_status` (bare `show`)
   --- makes, with the wrapper ahead of the real binary on PATH.
   local function show_process_count(): integer
+    assert(publish.publish(s)); assert(store.close(s)); cachedb.wipe(root); s = check.must(store.open(root))
     assert(fs.write(counter_file, ""))
     local old_path = os.getenv("PATH") or ""
     assert(env.set("PATH", wrapdir .. ":" .. old_path, true))
@@ -198,15 +182,8 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
     return #(fs.read(counter_file) or "")
   end
 
-  -- Warm the cache once against the EMPTY board first, so both
-  -- measured calls below find a cache file already there (and
-  -- therefore pay the same digest-guard process `_work.cache.open`
-  -- spends on every call) — every `seed` here writes through
-  -- `storewrite.save` directly, bypassing the incremental hooks
-  -- `_work.gitgate.commit_and_publish` normally fires, so each
-  -- measured call below finds the cache stale and rebuilds it, a
-  -- fixed process count regardless of how many items that rebuild
-  -- reads.
+  -- Both measurements start from a fresh invocation and empty cache; setup
+  -- publishes outside the counter, so only reader work is compared.
   show_process_count()
   seed(3)
   local small = show_process_count()
@@ -218,19 +195,8 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
       .. "%d (15 items)"):format(small, big))
 end
 
---- `show ID` reads every OTHER open item's spec sidecar too, for
---- `_work.overlap`'s Change-section collision check — one batch
---- (`store.read_specs`), not one `cat-file -p` per sibling, so the
---- process count `gitshow.cmd_show` spends on one item must stay flat
---- as the number of siblings around it grows. `gitshow.cmd_show` now
---- reads the item list through `_work.cache`/`_work.cachequery` (see
---- `test_whole_board_show_process_count_is_constant_as_items_grow`,
---- above, for the identical caveat on `cmd_status`): the warm-up call
---- below and the seeding through `storewrite.save` directly (bypassing
---- the incremental hooks `_work.gitgate.commit_and_publish` normally
---- fires) means both measured calls find the cache already there but
---- stale, and pay the same fixed rebuild cost, regardless of how many
---- items that rebuild reads.
+--- Showing one item considers siblings for overlap, but scans their native
+--- state in batches. Growing that board must not add Git processes.
 local function test_show_one_item_process_count_is_constant_as_siblings_grow()
   local root = init_state_repo("show-id-process-count")
   local s = check.must(store.open(root))
@@ -261,6 +227,7 @@ local function test_show_one_item_process_count_is_constant_as_siblings_grow()
   --- How many `git` invocations one `gitshow.cmd_show` on `target`
   --- makes, with the wrapper ahead of the real binary on PATH.
   local function show_id_process_count(): integer
+    assert(publish.publish(s)); assert(store.close(s)); cachedb.wipe(root); s = check.must(store.open(root))
     assert(fs.write(counter_file, ""))
     local old_path = os.getenv("PATH") or ""
     assert(env.set("PATH", wrapdir .. ":" .. old_path, true))

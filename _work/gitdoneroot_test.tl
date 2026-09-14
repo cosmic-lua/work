@@ -148,8 +148,8 @@ local function test_new_parent_under_a_done_root_reopens_it()
   assert(check.must(store.load(s, root)).resolution == "not-planned")
   local before = commits(s)
   assert(graph.cmd_new(s, "evidence it did not hold after all", root, nil, "") == 0)
-  assert(commits(s) == before + 2,
-    ("the child and the reopened root land as one push, two commits: %d -> %d")
+  assert(commits(s) == before + 1,
+    ("the child and reopened root land in one native commit: %d -> %d")
     :format(before, commits(s)))
   assert(check.must(store.load(s, root)).resolution == "",
     "filing a child under a done root clears its resolution")
@@ -166,7 +166,7 @@ local function test_attach_under_a_done_root_reopens_it()
   local wanderer = file_item(s, "a capture, moved under the done root", "")
   local before = commits(s)
   assert(graph.cmd_attach(s, wanderer, root) == 0)
-  assert(commits(s) == before + 2,
+  assert(commits(s) == before + 1,
     ("the moved item and the reopened root land as one push: %d -> %d")
     :format(before, commits(s)))
   assert(check.must(store.load(s, root)).resolution == "",

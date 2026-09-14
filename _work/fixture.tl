@@ -11,7 +11,10 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
-local gitclaim = require("_work.gitclaim")
+local stateclaim = require("_work.stateclaim")
+local statewrite = require("_work.statewrite")
+local statepublish = require("_work.statepublish")
+local staging = require("_work.statestaging")
 local graph = require("_work.gitgraph")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
@@ -33,10 +36,14 @@ local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 -- which is what a test of git behaviour wants regardless of the
 -- fence. The store itself is deliberately NOT hermetic: a real
 -- session's push needs the user's credentials and config.
+-- `GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT` carry config past any config FILE,
+-- where an ambient `url.*.insteadOf` rewrites what a test reads back: empty too.
 local hermetic_config < const > = fs.join(tmpdir, "gitconfig-empty")
 assert(fs.write(hermetic_config, ""))
 assert(env.set("GIT_CONFIG_GLOBAL", hermetic_config))
 assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
+assert(env.set("GIT_CONFIG_PARAMETERS", ""))
+assert(env.set("GIT_CONFIG_COUNT", "0"))
 
 local READY_SPEC < const > = [[
 ## Change
@@ -115,8 +122,8 @@ end
 
 --- A fresh explicitly local-only state repo: `store.init_repo` (a bare git init
 --- plus the `refs/heads/board/format` marker every board now carries),
---- nothing filed yet — every item lives as a ref, so there is nothing
---- else to seed. Tests must not inherit mode from topology: local mode
+--- with one board item under `items/` in the state tree. Tests must not
+--- inherit mode from topology: local mode
 --- is a supported simulation/migration surface, not merely "no origin".
 local function init_state_repo(name: string): store.Store
   if state_template == nil then
@@ -129,8 +136,8 @@ local function init_state_repo(name: string): store.Store
 end
 
 -- `init_shared`'s bare-plus-two-clones setup pays a bare init, two
--- clones, two pushes/fetches and two `store.init_repo` calls (one of
--- them minting the board item) EVERY time, for a starting shape that
+-- clones, a push and two fetches, and one `store.init_repo` call
+-- minting the board item EVERY time, for a starting shape that
 -- never varies. Build it once per process and copy the whole `base`
 -- tree for later calls; only the two clones' `origin` URLs need
 -- rewriting afterward, since they point at the template's own
@@ -158,8 +165,9 @@ local function build_shared_template(): string
   assert(refs.set_board_mode(dir1, "local"))
   assert(store.init_repo(dir1))
   git(dir1, {"push", "--atomic", "origin",
-      "refs/heads/items/*:refs/heads/items/*",
-      "refs/heads/board/*:refs/heads/board/*"})
+      "refs/heads/state:refs/heads/state",
+      "refs/heads/board/format:refs/heads/board/format"})
+  git(bare, {"symbolic-ref", "HEAD", "refs/heads/state"})
   assert(refs.set_board_mode(dir1, "remote"))
   assert(refs.fetch_prune(dir1))
 
@@ -170,7 +178,6 @@ local function build_shared_template(): string
   assert(refs.set_board_mode(dir2, "remote"))
   assert(refs.ensure_refspecs(dir2))
   assert(refs.fetch_prune(dir2))
-  assert(store.init_repo(dir2))
   return base
 end
 
@@ -179,8 +186,7 @@ end
 --- therefore acts as its caller: clone one initializes in explicit local
 --- mode, pushes the seed board and format refs, then switches to remote
 --- mode and fetches them into the canonical remote-tracking namespace.
---- Clone two fetches those refs before initialization, proving it observes
---- the one existing board rather than minting a second one. No production
+--- Clone two fetches those refs and opens the existing board. No production
 --- path gains implicit network behavior from this test scaffolding.
 local function init_shared(name: string): store.Store, store.Store
   if shared_template == nil then
@@ -198,61 +204,37 @@ local function init_shared(name: string): store.Store, store.Store
   return s1, s2
 end
 
---- Perform the ordinary Git transport a remote fixture's caller owes after
---- a mutating verb prepared its transaction. Local fixtures have already
---- promoted their mutation and need nothing. Keeping this explicit in the
---- harness makes production's default-print contract visible: no verb gets
---- an ambient or test-only permission to contact a remote.
---- @param s store.Store The fixture store whose plans should be published
-local function caller_publish(s: store.Store)
-  if refs.board_mode(s.root) == "local" then
-    return
-  end
-  local transactions = check.must(prepared.list(s.root))
-  for _, tx in ipairs(transactions) do
-    local ok, err = prepared.execute(s.root, prepared.push_argv(tx))
-    assert(ok, "caller push failed: " .. err)
-  end
-  -- Some provider-facing fixtures deliberately give `origin` a GitHub
-  -- read URL while retaining their local bare repository as its push URL.
-  -- Their board transport is the latter in both directions; using the
-  -- display/read URL here would leak a hermetic test onto the network.
+--- Fetch both activation refs from the fixture's local transport destination.
+local function fetch_state(s: store.Store)
+  local remote = refs.board_remote(s.root)
+  -- Provider fixtures retain a local push URL even when their read URL is GitHub.
   local pushurl = check.must(store.git_ok(s,
-      {"remote", "get-url", "--push", "origin"})).stdout:gsub("%s+$", "")
-  local fetched, ferr = prepared.execute(s.root, {"git", "fetch", "--prune",
-      pushurl,
-      "+refs/heads/items/*:refs/remotes/origin/items/*",
-      "+refs/heads/ended/*:refs/remotes/origin/ended/*",
-      "+refs/heads/board/*:refs/remotes/origin/board/*",
-      "+refs/heads/claim-batches/*:refs/remotes/origin/claim-batches/*"})
-  assert(fetched, "caller fetch failed: " .. ferr)
-  -- Transport is a caller-owned step outside the verb invocation. Drop
-  -- any cache handle the test kept open before inspecting the newly fetched
-  -- canonical snapshot, matching the fresh process a real next command gets.
-  assert(store.close(s))
-  local refreshed = check.must(prepared.refresh(s.root))
-  for _, result in ipairs(refreshed) do
-    assert(result.state == "confirmed", result.detail)
-  end
+      {"remote", "get-url", "--push", remote})).stdout:gsub("%s+$", "")
+  local argv = statepublish.fetch_argv(remote)
+  argv[4] = pushurl
+  local fetched, err = prepared.execute(s.root, argv)
+  assert(fetched, "caller fetch failed: " .. err)
 end
 
---- Fetch board refs as an explicit fixture caller, then let gitboard inspect
---- and rebuild against those already-fetched canonical refs.
---- @param s store.Store The remote fixture store to refresh
-local function caller_fetch(s: store.Store)
-  if refs.board_mode(s.root) == "local" then
-    return
+--- Publish and confirm prepared native transitions as the explicit caller.
+--- Local fixtures already promoted their mutations and need no transport.
+local function caller_publish(s: store.Store)
+  if refs.board_mode(s.root) == "local" then assert(statepublish.publish(s)); return end
+  for _, receipt in ipairs(check.must(staging.list(s.root, "prepared"))) do
+    local ok, err = statepublish.execute(s.root, receipt)
+    assert(ok, "caller push failed: " .. err)
   end
-  local pushurl = check.must(store.git_ok(s,
-      {"remote", "get-url", "--push", "origin"})).stdout:gsub("%s+$", "")
-  local fetched, ferr = prepared.execute(s.root, {"git", "fetch", "--prune",
-      pushurl,
-      "+refs/heads/items/*:refs/remotes/origin/items/*",
-      "+refs/heads/ended/*:refs/remotes/origin/ended/*",
-      "+refs/heads/board/*:refs/remotes/origin/board/*",
-      "+refs/heads/claim-batches/*:refs/remotes/origin/claim-batches/*"})
-  assert(fetched, "caller fetch failed: " .. ferr)
-  assert(require("_work.publish").sync(s))
+  fetch_state(s)
+  local synced, err = statepublish.sync(s)
+  assert(synced, "caller confirmation failed: " .. err)
+end
+
+--- Fetch the native state and activation marker as an explicit fixture caller,
+--- then confirm transactions and refresh the store's canonical snapshot.
+local function caller_fetch(s: store.Store)
+  if refs.board_mode(s.root) == "local" then assert(statepublish.sync(s)); return end
+  fetch_state(s)
+  assert(statepublish.sync(s))
 end
 
 --- Point a store's origin at GitHub for READING while its pushes keep
@@ -296,66 +278,20 @@ local function file_item(s: store.Store, title: string,
   error("new filed nothing: " .. title)
 end
 
---- Every ref name under `refs/heads/items` and `refs/heads/ended` in a store.
---- @param s store.Store The store
---- @return {string} The refnames
-local function item_refnames(s: store.Store): {string}
-  local r = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended"},
-      {cwd = s.root}))
-  assert(r.ok, "git for-each-ref failed: " .. r.stderr)
-  local out: {string} = {}
-  for line in r.stdout:gmatch("([^\n]+)") do
-    out[#out + 1] = line
-  end
-  return out
-end
-
---- How many DISTINCT commits the whole board carries, across every
---- item and ended ref — every save makes at least one brand-new
---- commit object per item it touches, so this is "how many item
---- writes has the board seen" the way a single working-tree HEAD's
---- commit count once was. A mutation that touches `also` items now
---- contributes one commit PER item it writes, not one commit overall
---- — the atomicity moved from the git commit object to the push.
---- @param s store.Store The store
---- @return integer The count, 0 for an empty board
+--- Count published board mutations on the canonical state's first-parent chain.
 local function commits(s: store.Store): integer
-  local refnames = item_refnames(s)
-  if #refnames == 0 then
-    return 0
-  end
-  local argv: {string} = {"rev-list", "--count"}
-  for _, r in ipairs(refnames) do
-    argv[#argv + 1] = r
-  end
-  local r = check.must(child.run({"git", table.unpack(argv)}, {cwd = s.root}))
-  assert(r.ok, "git rev-list failed: " .. r.stderr)
-  return math.tointeger(tonumber((r.stdout:gsub("%s+$", "")))) or -1
+  local head = check.must(statepublish.head(s.root, refs.board_remote(s.root)))
+  if head == refs.ZERO_SHA then return 0 end
+  local result = check.must(store.git_ok(s, {"rev-list", "--first-parent", "--count", head}))
+  return math.tointeger(tonumber((result.stdout:gsub("%s+$", "")))) or -1
 end
 
---- The most recently committed item (or lanes) mutation's author
---- email — what a reader (GitHub's verified badge, a `git log`)
---- actually sees a board commit as, whichever ref it landed on.
---- @param s store.Store The store
---- @return string The author email of the newest commit on the board
+--- The author email on the latest published native board commit.
 local function commit_author_email(s: store.Store): string
-  local r = check.must(child.run(
-      {"git", "for-each-ref", "--format=%(refname)", "refs/heads/items", "refs/heads/ended",
-        "refs/heads/board"}, {cwd = s.root}))
-  assert(r.ok, "git for-each-ref failed: " .. r.stderr)
-  local refnames: {string} = {}
-  for line in r.stdout:gmatch("([^\n]+)") do
-    refnames[#refnames + 1] = line
-  end
-  assert(#refnames > 0, "no commits on the board yet")
-  local argv: {string} = {"log", "-1", "--format=%ae"}
-  for _, ref in ipairs(refnames) do
-    argv[#argv + 1] = ref
-  end
-  local log = check.must(child.run({"git", table.unpack(argv)}, {cwd = s.root}))
-  assert(log.ok, "git log failed: " .. log.stderr)
-  return (log.stdout:gsub("%s+$", ""))
+  local head = check.must(statepublish.head(s.root, refs.board_remote(s.root)))
+  assert(head ~= refs.ZERO_SHA, "no commits on the board yet")
+  local result = check.must(store.git_ok(s, {"log", "-1", "--format=%ae", head}))
+  return (result.stdout:gsub("%s+$", ""))
 end
 
 --- A spec sidecar meeting the ready bar, through the spec verb.
@@ -381,42 +317,32 @@ local function root_with_leaf(s: store.Store): string, string
   return root, file_item(s, "a workable slice", root)
 end
 
-local claim_counter = 0
-
---- Establish one format-4 claim-control transaction in a fixture. Tests use
---- this instead of hand-writing the retired claim fields into item metadata.
---- The helper performs the caller-owned transport for remote fixtures so its
---- return means the same thing as a confirmed claim in production.
+--- Establish a native claim transition and perform caller-owned publication.
+--- Return the first member's stable acquisition identity, including on renew/drop.
 local function control_claim(s: store.Store, ids: {string}, holder: string,
-    action?: gitclaim.Action, why?: string, product_base?: string): string
-  claim_counter = claim_counter + 1
-  local mode = refs.board_mode(s.root)
-  local requests: {gitclaim.Request} = {}
-  local batch = ("fixture-%d-%s"):format(claim_counter, ids[1]:sub(1, 8))
-  local now = os.time()
+    action?: stateclaim.Action, why?: string, product_base?: string): string
+  local requests: {stateclaim.Request} = {}
   for _, id in ipairs(ids) do
-    local source = mode == "local" and gitclaim.target_item_ref(id)
-    or gitclaim.remote_item_ref("origin", id)
-    local tip = check.must(refs.read_ref(s.root, source))
-    requests[#requests + 1] = {root = s.root, id = id,
-      source_ref = source, target_ref = gitclaim.target_item_ref(id),
-      remote = "origin", batch = batch, caller = holder,
-      action = action or "take",
-      product_base = (action or "take") == "take"
-      and (product_base or tip) or "",
-      force = false, why = why or "", now = now}
+    check.must(store.load(s, id))
+    local tip = s.leased_sha[id] or s.state_head
+    requests[#requests + 1] = {id = id,
+      product_base = (action or "take") == "take" and (product_base or tip) or ""}
   end
-  local result = gitclaim.prepare_batch(requests)
-  assert(next(result.refused) == nil,
-    result.refused.batch or result.refused[ids[1]])
-  local p = check.must(result.prepared)
-  if mode == "local" then
-    assert(prepared.promote_local(s.root, p.transaction))
-    assert(store.close(s))
-  else
-    caller_publish(s)
+  local result = stateclaim.prepare(s.root, s.state_head, requests, action or "take",
+    holder, os.time(), false, why or "")
+  assert(next(result.refused) == nil, result.refused.batch or result.refused[ids[1]])
+  for _, dependency in ipairs(result.dependencies) do
+    s.state_paths[dependency.path], s.state_reads[dependency.path] = dependency.id, dependency.id
   end
-  return p.batch.commit
+  local session, op, bounded = s.session, s.op, s.bounded
+  s.session, s.op, s.bounded = holder, action == "renew" and "renew" or action == "drop" and "drop" or "claim", false
+  local ok, err = statewrite.transition(s, result.changes,
+    stateclaim.message(action or "take", holder, why or ""), result.publish_by)
+  assert(ok, err)
+  assert(statepublish.publish(s))
+  caller_publish(s)
+  s.session, s.op, s.bounded = session, op, bounded
+  return result.members[1].claim_root
 end
 
 local function claim_item(s: store.Store, id: string, holder: string,
@@ -428,11 +354,6 @@ local function drop_claim(s: store.Store, id: string, holder: string,
     why: string): string
   return control_claim(s, {id}, holder, "drop", why)
 end
-
--- A decomposition writes the child AND the parent it de-phases —
--- each its own commit now, but one atomic push, so half of it
--- reaching the board would never leave a parent off the board with
--- nothing decomposing it.
 
 --- An in-memory index over `items`, with `_work.index_rank` AND
 --- `_work.readddl`'s views applied, in that order — `readddl`'s own
@@ -465,7 +386,7 @@ local record fixture
   give_spec: function(s: store.Store, id: string)
   root_with_leaf: function(s: store.Store): string, string
   control_claim: function(s: store.Store, ids: {string}, holder: string,
-  action?: gitclaim.Action, why?: string, product_base?: string): string
+  action?: stateclaim.Action, why?: string, product_base?: string): string
   claim_item: function(s: store.Store, id: string, holder: string,
   product_base?: string): string
   drop_claim: function(s: store.Store, id: string, holder: string,

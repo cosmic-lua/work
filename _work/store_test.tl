@@ -10,16 +10,27 @@
 -- to seed fixtures.
 
 local check = require("cosmic.check")
+local publish = require("_work.publish")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitobj = require("_work.gitobj")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
+local projection = require("_work.stateplan_git")
 local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+
+--- Fixture writes explicitly confirm on local boards; remote writes remain staged.
+local function save(s: store.Store, it: item.Item, message: string,
+    spec?: itemtree.Spec, also?: {item.Item}): boolean, string
+  local ok, err = storewrite.save(s, it, message, spec, also)
+  if not ok or store.is_noop(err) then return ok, err end
+  if refs.board_mode(s.root) == "local" then return publish.publish(s) end
+  return ok, err
+end
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -100,21 +111,14 @@ end
 --- @param s store.Store The store
 --- @param bad item.Item An item whose `item.problems` may be non-empty
 local function write_unchecked(s: store.Store, bad: item.Item)
-  -- `true`: the tree must actually exist for `commit_tree` below to
-  -- build on it.
-  local tree_sha = check.must(itemtree.build_tree(s.root, bad, store.read_spec(s, bad.id), true))
-  local ref = s.leased_ref[bad.id] or ("refs/heads/items/" .. bad.id)
-  local parent_sha = s.leased_sha[bad.id] or refs.ZERO_SHA
-  local parents: {string} = {}
-  if parent_sha ~= refs.ZERO_SHA then
-    parents = {parent_sha}
-  end
-  local commit_sha = check.must(gitobj.commit_tree(s.root, {
-        tree = tree_sha, parents = parents, message = "hand-edit",
-        author_name = "test", author_email = "test@example.com",
-        committer_name = "test", committer_email = "test@example.com",
-      }))
-  assert(refs.update_ref(s.root, ref, commit_sha, parent_sha))
+  local tree_sha = check.must(projection.apply(s.root, s.state_head, {
+        {path = "items/" .. bad.id .. "/meta", mode = "100644", content = itemtree.encode_meta(bad), delete = false}}))
+  local commit_sha = check.must(gitobj.commit_tree(s.root, {tree = tree_sha, parents = {s.state_head},
+        message = "hand-edit", author_name = "test", author_email = "test@example.com",
+        committer_name = "test", committer_email = "test@example.com"}))
+  assert(refs.update_ref(s.root, "refs/heads/state", commit_sha, s.state_head))
+  s.state_head = commit_sha
+  assert(store.close(s))
 end
 
 -- `store.init_repo`/`open` have their own tests: `_work/storeinit_test.tl`.
@@ -124,8 +128,8 @@ local function test_resolve_prefixes()
   local s = check.must(store.open(root))
   local a = make_item()
   local b = make_item()
-  assert(storewrite.save(s, a, "new a"))
-  assert(storewrite.save(s, b, "new b"))
+  assert(save(s, a, "new a"))
+  assert(save(s, b, "new b"))
   assert(check.must(store.resolve(s, a.id)) == a.id, "full ids resolve")
   assert(check.must(store.resolve(s, a.id:sub(1, 26))) == a.id,
     "a unique prefix resolves")
@@ -145,7 +149,7 @@ local function test_resolve_leases_the_load_that_follows_a_prefix()
   local root = init_state_repo("resolve-leases-load")
   local s = check.must(store.open(root))
   local a = make_item()
-  assert(storewrite.save(s, a, "new a"))
+  assert(save(s, a, "new a"))
   local resolved = check.must(store.resolve(s, a.id:sub(1, 26)))
   assert(resolved == a.id, "the prefix resolves")
 
@@ -191,7 +195,7 @@ local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
   local root = init_state_repo("list-tolerant")
   local s = check.must(store.open(root))
   local good = make_item()
-  assert(storewrite.save(s, good, "new good"))
+  assert(save(s, good, "new good"))
   local bad = check.must(item.decode({id = fresh_id(), title = "a root"}))
   bad.reviewer = "session-x"
   local ok, serr = store.stage(s, bad)
@@ -220,7 +224,7 @@ local function test_a_flagged_item_is_repairable_through_the_tolerant_decode()
   local loaded = check.must(store.load(s, seed.id))
   assert(item.is_flagged(loaded), "the bad record still loads, flagged")
   loaded.reviewer = ""
-  assert(storewrite.save(s, loaded, "set " .. seed.id:sub(1, 8) .. " reviewer"),
+  assert(save(s, loaded, "set " .. seed.id:sub(1, 8) .. " reviewer"),
     "the repair commits: problems(it) is now empty")
   local fixed = check.must(store.load(s, seed.id))
   assert(not item.is_flagged(fixed) and fixed.reviewer == "", "clean")

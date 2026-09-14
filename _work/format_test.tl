@@ -35,7 +35,7 @@ end
 -- the same generic way any other unexpected version does, advertising
 -- no upgrade: there is no migration in this build to run.
 local function test_older_versions_refuse_without_advertising_an_upgrade()
-  for _, version in ipairs({"2", "3", "4"}) do
+  for _, version in ipairs({"2", "3", "4", "5"}) do
     local refusal = format.refusal(version, true)
     assert(refusal ~= nil)
     assert(refusal:find(version, 1, true) ~= nil, refusal)

@@ -12,8 +12,10 @@ local rank = require("_work.gitrank")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
-local prepared = require("_work.prepared")
 local refs = require("_work.refs")
+local staging = require("_work.statestaging")
+local native = require("_work.statepublish")
+local publish = require("_work.publish")
 
 local init_state_repo = fixture.init_state_repo
 local init_shared = fixture.init_shared
@@ -112,11 +114,7 @@ local function test_rank_refuses_a_done_item()
   local it = check.must(store.load(s, leaf))
   it.resolution = "not-planned"
   assert(storewrite.save(s, it, "finish leaf for the test"))
-  -- The raw save above bypasses `gitgate.commit_and_publish`'s own
-  -- cache patch, so `store.close(s)` is this test's stand-in for
-  -- it — leaving the next `store.list` below to reopen fresh instead
-  -- of missing the resolution this write just made.
-  local _cok, _cerr = store.close(s)
+  assert(publish.publish(s))
   assert(rank.cmd_rank(s, leaf, other, "", false) ~= 0,
     "a done item's position is not a repair target")
 end
@@ -146,9 +144,7 @@ local function test_rank_leaves_a_stray_entry_untouched()
   local stray = check.must(store.load(s, goal))
   stray.order = {stray.order[1], elsewhere, stray.order[2]} -- a, elsewhere, c
   assert(storewrite.save(s, stray, "hand-write a stray order entry"))
-  -- The raw save above bypasses `gitgate.commit_and_publish`'s own
-  -- cache patch, so `store.close(s)` is this test's stand-in for it.
-  local _cok, _cerr = store.close(s)
+  assert(publish.publish(s))
   assert(rank.cmd_rank(s, a, "", c, false) == 0, "a after c")
   local got = check.must(store.load(s, goal))
   assert(table.concat(got.order, ",") == table.concat({elsewhere, c, a}, ","),
@@ -187,21 +183,16 @@ local function test_an_outcome_rank_survives_a_rebase()
 
   assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
     "the stale caller may prepare against its fetched snapshot")
-  local pending = check.must(prepared.list(a.root))
+  local pending = check.must(staging.list(a.root))
   assert(#pending == 1, "the stale rank has one durable transaction")
-  local pushed = prepared.execute(a.root, prepared.push_argv(pending[1]))
-  assert(not pushed, "the remote lease, not local preparation, rejects the race")
-  assert(prepared.execute(a.root, prepared.fetch_argv()),
-    "the caller refreshes its tracking refs after the rejected push")
-  check.must(store.close(a))
-  local outcomes = check.must(prepared.refresh(a.root))
-  assert(#outcomes == 1 and outcomes[1].state == "lost-race",
-    "refresh classifies the rejected lease")
-  assert(check.must(refs.read_ref(a.root, pending[1].staging_ref)) == refs.ZERO_SHA)
-  assert(outcomes[1].quarantine_ref == "refs/gitboard/quarantined/lost-race/"
-    .. pending[1].id)
-  assert(check.must(refs.read_ref(a.root, outcomes[1].quarantine_ref))
-    == pending[1].manifest, "the diagnosed transaction remains inspectable")
+  local pushed, perr = native.execute(a.root, pending[1])
+  assert(not pushed and perr == store.LOST_RACE,
+    "the native state fence rejects the race")
+  assert(native.sync(a), "the caller refreshes after the rejected push")
+  assert(check.must(refs.read_ref(a.root, pending[1].ref)) == refs.ZERO_SHA)
+  local quarantine = "refs/gitboard/quarantined/lost-race/" .. pending[1].id
+  assert(check.must(refs.read_ref(a.root, quarantine))
+    == pending[1].sha, "the diagnosed transaction remains inspectable")
 
   assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
     "the re-run lands against the merged board")
@@ -211,4 +202,51 @@ local function test_an_outcome_rank_survives_a_rebase()
   local board_id = check.must(read.board(c))
   local got = check.must(store.load(a, board_id)).order
   assert(#got == 2 and got[1] == r2 and got[2] == r1, table.concat(got, ","))
+end
+
+local function unpositioned_rank_race(name: string): store.Store, store.Store,
+  string, string, string
+  local a, b = init_shared(name)
+  local goal, _leaf = root_with_leaf(a)
+  local other = file_item(a, "another outcome", "")
+  local target = file_item(a, "unpositioned mover", "")
+  assert(graph.cmd_attach(a, target, goal) == 0)
+  fixture.caller_publish(a)
+  fixture.caller_fetch(b)
+  return a, b, goal, other, target
+end
+
+-- Rank writes only the old parent's order. The target item is nevertheless a
+-- dependency: if an unpositioned attach moves it first, the stale rank must
+-- not leave that old order naming a non-child.
+local function test_rank_prepared_before_unpositioned_attach_loses()
+  local ranker, mover, _goal, other, target =
+  unpositioned_rank_race("rank-before-attach")
+  assert(rank.cmd_rank(ranker, target, "", "", true) == 0)
+  local pending = check.must(staging.list(ranker.root))
+  assert(#pending == 1)
+  assert(graph.cmd_attach(mover, target, other) == 0)
+  fixture.caller_publish(mover)
+  local ok, err = native.execute(ranker.root, pending[1])
+  assert(not ok and err == store.LOST_RACE,
+    "the target membership path is fenced: " .. err)
+end
+
+-- In the reverse publication order, attach's target path is disjoint from
+-- rank's parent-order write. Its bounded replay must notice that the latest
+-- old parent now ranks the target and refuse to strand that entry.
+local function test_unpositioned_attach_prepared_before_rank_loses()
+  local ranker, mover, goal, other, target =
+  unpositioned_rank_race("attach-before-rank")
+  assert(graph.cmd_attach(mover, target, other) == 0)
+  local pending = check.must(staging.list(mover.root))
+  assert(#pending == 1)
+  assert(rank.cmd_rank(ranker, target, "", "", true) == 0)
+  fixture.caller_publish(ranker)
+  local ok, err = native.execute(mover.root, pending[1])
+  assert(not ok and err == store.LOST_RACE,
+    "attach fences the old parent's membership path: " .. err)
+  fixture.caller_fetch(mover)
+  assert(check.must(store.load(mover, target)).parent == goal,
+    "the refused attach leaves target under the parent that ranks it")
 end

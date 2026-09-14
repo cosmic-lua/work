@@ -19,6 +19,7 @@
 --- one path it names, so a sidecar left under the temp name would
 --- otherwise become permanent litter.
 local cachedb_events = require("_work.cachedb_events")
+local format = require("_work.format")
 local find = require("_work.find")
 local fs = require("cosmic.fs")
 local hash = require("cosmic.hash")
@@ -62,7 +63,8 @@ local type Cache = index.Index
 --- suspenders once more, the fingerprint already moved with the DDL.
 --- The cache is disposable: this is a rebuild boundary, never an
 --- in-place data migration.
-local SCHEMA_VERSION < const > = 10
+--- Version 12 invalidates pre-clock native claim projections.
+local SCHEMA_VERSION < const > = 12
 
 --- The cache file's name under a store root's `o/`.
 local DB_FILENAME < const > = "board.db"
@@ -92,6 +94,11 @@ local DB_FILENAME < const > = "board.db"
 --- the other modules) covers it exactly as if it were written inline
 --- here.
 local EXTRA_DDL < const > = [[
+CREATE TABLE state_paths (
+  path TEXT PRIMARY KEY,
+  oid TEXT NOT NULL
+) STRICT, WITHOUT ROWID;
+
 CREATE TABLE cache_meta (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL
@@ -120,7 +127,7 @@ CREATE TABLE ci_checks (
 --- guard's own otherwise-fresh `for-each-ref` is skipped — reads it
 --- from here rather than repeating the list (`_work.gitview.list_via_cache`,
 --- which also wants the same snapshot's committer dates).
-local WATCH_PATTERNS < const >: {string} = {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}
+local WATCH_PATTERNS < const >: {string} = {"refs/heads/state", "refs/heads/board/format"}
 
 --- The cache file's path for a given store root.
 --- @param root string The store's root
@@ -196,55 +203,14 @@ end
 --- @return string Error message
 local function fresh_digest(root: string): string | nil, string
   local entries, err = refs_snapshot(root)
-  if entries == nil then
-    return nil, err
-  end
+  if entries == nil then return nil, err end
+  local head, herr = format.state_head(root, entries)
+  if head == nil then return nil, herr end
+  if head ~= "" then return head, "" end
   return digest_of(entries), ""
 end
 
---- Every watched ref's sha, keyed by ITEM id rather than refname — a
---- legacy id can still be filed under BOTH `refs/heads/items/<id>` and
---- `refs/heads/ended/<id>` at once (`_work.gitread`'s module header:
---- the residue of a resolution whose atomic push landed the create
---- half of an old-style namespace move and lost the delete half; a
---- resolution never moves a ref at all any more, so this is legacy
---- data, never something today's write path creates). Two passes,
---- `items/` first and `ended/` second so the second always overwrites
---- the first, make `ended/` the deterministic winner for such an id
---- regardless of `for-each-ref`'s own listing order — the safe
---- default `_work.gitread.pick_duplicate` also falls back to when it
---- cannot prove ancestry, though this function takes no `root` and so
---- never runs the `merge-base` check pick_duplicate can. The two can
---- therefore disagree on the rare id where `items/` truly is the
---- descendant; the consequence is bounded to this module's OWN
---- change-detection (an extra or slightly delayed patch), never to
---- the item data itself, which `_work.gitread.load_many`/`list`
---- always resolve with the real ancestry check. `refs/heads/board/*`
---- entries carry no id and are dropped here — `board/seq` and
---- `board/format` moving is caught through the whole digest instead
---- (`_work.cache.around_fetch`); the board's own outcome ranking is
---- an ordinary item's `.order` field, so a change to it moves the
---- BOARD ITEM's own sha and is caught right here like any other item.
---- @param entries {refs.RefEntry} A ref listing
---- @return {string: string} Item id -> sha
-local function shas_by_item(entries: {refs.RefEntry}): {string: string}
-  local out: {string: string} = {}
-  for _, e in ipairs(entries) do
-    local id = e.refname:match("^refs/heads/items/(.+)$")
-    if id then
-      out[id] = e.sha
-    end
-  end
-  for _, e in ipairs(entries) do
-    local id = e.refname:match("^refs/heads/ended/(.+)$")
-    if id then
-      out[id] = e.sha
-    end
-  end
-  return out
-end
-
---- Item ids whose sha differs between two `shas_by_item` maps —
+--- Item ids whose sha differs between two native path maps —
 --- appeared, disappeared, or moved, all read the same way: "this id's
 --- current sha is not what it was."
 --- @param before {string: string} Item id -> sha, pre-fetch
@@ -352,7 +318,7 @@ end
 --- `lease` nil means the caller made no lease change — an item this
 --- patch is refreshing for some OTHER reason, whose ref/tip/touched_at
 --- carry over exactly as already recorded (or, absent any prior row,
---- default to `refs/heads/items/<id>` and a zero tip, the shape a
+--- default to `refs/heads/state` and a zero tip, the shape a
 --- caller with no lease of its own to give and no earlier row to carry
 --- forward from lands).
 --- @param c Cache An open, schema-valid cache
@@ -382,7 +348,7 @@ local function patch_item(c: Cache, it: item.Item, spec_body: string | nil,
     end
   end
   local final_lease = lease or prior_lease
-  or {ref = "refs/heads/items/" .. it.id, tip = "", touched_at = 0}
+  or {ref = "refs/heads/state", tip = "", touched_at = 0}
   local dfok, dferr = c.db:exec("PRAGMA defer_foreign_keys = ON")
   if not dfok then
     return false, dferr
@@ -421,7 +387,6 @@ local record cachedb
   digest_of: function(entries: {refs.RefEntry}): string
   refs_snapshot: function(root: string): {refs.RefEntry} | nil, string
   fresh_digest: function(root: string): string | nil, string
-  shas_by_item: function(entries: {refs.RefEntry}): {string: string}
   changed_ids: function(before: {string: string}, after: {string: string}): {string}
   meta_get: function(db: sqlite.Database, k: string): string | nil
   meta_set: function(db: sqlite.Database, k: string, v: string): boolean, string
@@ -442,7 +407,6 @@ local M: cachedb = {
   digest_of = digest_of,
   refs_snapshot = refs_snapshot,
   fresh_digest = fresh_digest,
-  shas_by_item = shas_by_item,
   changed_ids = changed_ids,
   meta_get = meta_get,
   meta_set = meta_set,

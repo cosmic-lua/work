@@ -1,6 +1,6 @@
---- The state verbs: `take` (claim work, record its handover), `drop` (return a lease, the
---- item untouched), and `done` — every `cmd_*` behind `_work/gitboard.tl`'s dispatch that
---- is not a graph mutation, the sync housekeeping, or `init`. The verbs that shape the
+--- State helpers and retained internal workflow compatibility APIs.
+--- Public take dispatches directly to `_work.gittake` for handover; public
+--- claim/drop use `_work.stateclaim_cli`. The verbs that shape the
 --- graph — `new` and `attach` — are `_work.gitgraph`; the
 --- spec sidecar's own verb is `_work.gitspec`; the two takes `take` reaches by derivation
 --- — the review claim and the research handover — are `_work.gittake`; `done`'s own gates
@@ -30,7 +30,8 @@ local store = require("_work.store")
 -- none of the gates here, and its render is its own file for the same
 -- cap.
 
---- take: claim an item, record its handover, or claim its review —
+--- Internal compatibility take: claim work, record handover or claim review —
+--- this helper is not the public take command.
 --- which one is derived from the item's own facts, never declared.
 ---
 --- A take of TODO work (no claim, no PR) is the pull, and it is where

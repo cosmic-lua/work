@@ -18,6 +18,8 @@ local gitobj = require("_work.gitobj")
 local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
+local publish = require("_work.publish")
+local projection = require("_work.stateplan_git")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
 local store = require("_work.store")
@@ -46,17 +48,18 @@ local function test_a_hand_moved_ref_forces_a_rebuild()
   -- none of the incremental hooks fire and the cache file is left
   -- holding the OLD title.
   local it = check.must(store.load(s, id))
-  local old_sha = s.leased_sha[id]
+  local old_sha = s.state_head
   it.title = "changed behind the tool's back"
   -- `true`: the tree must actually exist for `commit_tree` below to
   -- build on it.
-  local tree_sha = check.must(itemtree.build_tree(s.root, it, nil, true))
+  local tree_sha = check.must(projection.apply(s.root, old_sha, {
+        {path = "items/" .. id .. "/meta", mode = "100644", content = itemtree.encode_meta(it), delete = false}}))
   local commit_sha = check.must(gitobj.commit_tree(s.root, {
         tree = tree_sha, parents = {old_sha}, message = "hand edit",
         author_name = "test", author_email = "test@example.com",
         committer_name = "test", committer_email = "test@example.com",
       }))
-  assert(store.git_ok(s, {"update-ref", "refs/heads/items/" .. id, commit_sha}))
+  assert(store.git_ok(s, {"update-ref", "refs/heads/state", commit_sha}))
 
   local c = check.must(cache.open(s.root))
   local row = check.must(c.db:query_one("SELECT title FROM items WHERE id = ?", {id}))
@@ -77,9 +80,7 @@ local function test_ranking_an_outcome_moves_the_recorded_digest()
   assert(gitrank.cmd_rank(s, root, "", "", true) == 0)
 
   local c = check.must(cache.open(s.root))
-  local found = check.must(refs.for_each_ref(s.root,
-      {"refs/heads/items", "refs/heads/ended", "refs/heads/board"}))
-  local fresh = cachedb.digest_of(found)
+  local fresh = check.must(cachedb.fresh_digest(s.root))
   assert(cachedb.meta_get(c.db, "refs_digest") == fresh,
     "the cache's recorded digest reflects the board item's own ref moving")
   check.must(cache.close(c))
@@ -257,8 +258,8 @@ local function assert_cache_matches_cold_rebuild(s: store.Store, label: string)
 end
 
 -- The equality ratchet (D6): a sequence of saves in clone A — a
--- BOUNDED save (a fresh take against the doing bound), an ENDED move
--- (done), and a RANK change (an item's own `order`) — each checked
+-- internal compatibility take, a completion, and a RANK change
+-- (an item's own `order`) — each checked
 -- against a cold rebuild; then B syncs, saves of its own, and A syncs
 -- LAST, so A's cache takes the fetch path rather than the save path,
 -- checked once more.
@@ -268,13 +269,12 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   fixture.give_spec(a, leaf_a)
   fixture.caller_fetch(b)
 
-  -- 1) BOUNDED: a fresh take against the doing bound leases and
-  -- advances refs/heads/board/seq.
+  -- 1) The retained internal workflow helper publishes through native state.
   assert(verbs.cmd_take(a, leaf_a, "session-a", 0, false, "") == 0)
   fixture.caller_publish(a)
-  assert_cache_matches_cold_rebuild(a, "after a bounded take")
+  assert_cache_matches_cold_rebuild(a, "after an internal compatibility take")
 
-  -- 2) ENDED: the item's ref moves from refs/heads/items to refs/heads/ended.
+  -- 2) Completion updates the item's metadata in canonical state.
   assert(verbs.cmd_done(a, leaf_a, "completed", true, "test: no PR to review") == 0)
   fixture.caller_publish(a)
   assert_cache_matches_cold_rebuild(a, "after an ended move")
@@ -409,6 +409,7 @@ local function test_two_processes_racing_the_cache_never_corrupts_it()
       "the next open must fully reconcile a stale cache left by the race")
   end
 
+  assert(publish.sync(s))
   local it_x = check.must(store.load(s, id_x))
   local it_y = check.must(store.load(s, id_y))
   assert(it_x.title == "x, renamed by process one", it_x.title)
@@ -458,7 +459,7 @@ local function test_store_list_after_a_save_returns_the_new_tip_without_a_git_re
   assert(gate.commit_and_publish(s, it, nil, "retitle", "set"))
 
   local real_tip = (check.must(child.run(
-        {"git", "rev-parse", "refs/heads/items/" .. id}, {cwd = s.root})).stdout
+        {"git", "rev-parse", "refs/heads/state"}, {cwd = s.root})).stdout
     :gsub("%s+$", ""))
 
   local for_each_ref_calls = 0

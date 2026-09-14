@@ -16,6 +16,7 @@
 --- runs from the proposed blocker over `depends_on`, breadth-first,
 --- bounded by `item.MAX_DEPTH` hops the same way every other walk over
 --- the graph is, and refuses when it reaches the waiter.
+local graphguards = require("_work.graphguards")
 local gate = require("_work.gitgate")
 local item = require("_work.item")
 local store = require("_work.store")
@@ -30,34 +31,6 @@ local tail = require("_work.tail")
 --- @param id string The waiter a cycle would come back to
 --- @param on string The proposed blocker the walk starts from
 --- @return {string} | nil The ids from `on` to `id`, `on` first
-local function cycle_path(index: item.Index, id: string,
-    on: string): {string} | nil
-  local frontier: {{string}} = {{on}}
-  local seen: {string: boolean} = {[on] = true}
-  for _ = 1, item.MAX_DEPTH do
-    local next_frontier: {{string}} = {}
-    for _, path in ipairs(frontier) do
-      local here = index[path[#path]]
-      for _, dep in ipairs(here ~= nil and here.depends_on or {}) do
-        local step: {string} = {}
-        for _, p in ipairs(path) do step[#step + 1] = p end
-        step[#step + 1] = dep
-        if dep == id then
-          return step
-        end
-        if not seen[dep] then
-          seen[dep] = true
-          next_frontier[#next_frontier + 1] = step
-        end
-      end
-    end
-    if #next_frontier == 0 then
-      return nil
-    end
-    frontier = next_frontier
-  end
-  return nil
-end
 
 --- The handles of `path`, joined the way a rendered chain reads.
 --- @param path {string} Item ids
@@ -140,7 +113,7 @@ local function cmd_depend(s: store.Store, id: string, on: string,
           tail.handle(id), tail.handle(on)))
     end
   end
-  local cycle = cycle_path(pair.index, id, on)
+  local cycle = graphguards.cycle_path(pair.index, id, on)
   if cycle ~= nil then
     return gate.verdict_line("depend", false,
       ("REFUSED: depending on %s would close a cycle: %s"):format(

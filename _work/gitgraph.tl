@@ -25,8 +25,10 @@
 --- `new` with no `--parent` files under the board — the one
 --- parentless item — the same position `attach` never needs to move
 --- an item TO, since only `init` creates it.
+local graphguards = require("_work.graphguards")
 local cachequery = require("_work.cachequery")
 local gate = require("_work.gitgate")
+local claimgate = require("_work.gitclaimgate")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
@@ -293,33 +295,28 @@ local function cmd_attach(s: store.Store, id: string, parent: string,
   if c == nil then
     return gate.verdict_line("attach", false, cerr)
   end
-  local reaches, rberr = read.reaches_board(c, parent_item.id)
-  if reaches == nil then
-    return gate.verdict_line("attach", false, rberr)
-  end
-  if not reaches then
-    return gate.verdict_line("attach", false,
-      ("%s's own parent chain is broken"):format(parent:sub(1, 8)))
-  end
-  local cur = parent_item
-  while cur ~= nil do
-    if cur.id == id then
-      return gate.verdict_line("attach", false,
-        ("attaching under %s would make a cycle"):format(parent:sub(1, 8)))
-    end
-    cur = index[cur.parent or ""]
-  end
+  local parent_refusal = graphguards.attach_refusal(index, id, parent)
+  if parent_refusal ~= nil then return gate.verdict_line("attach", false, parent_refusal) end
   local old_parent_id = it.parent or ""
+  -- A bare attach may change both parents' derived roles without changing
+  -- either parent tree. Authorize and fence that whole-item membership before
+  -- moving the child, including the old parent it leaves.
+  for _, protected in ipairs({parent, old_parent_id}) do
+    local parent_to_check = index[protected]
+    if protected ~= "" and parent_to_check ~= nil then
+      local denial = claimgate.mutation_refusal(s, parent_to_check,
+        claim_session or "", frc, rsn)
+      if denial ~= nil then return gate.verdict_line("attach", false, denial) end
+    end
+  end
   it.parent = parent
   -- Adoption makes a leaf workable: it is todo by derivation, with
   -- nothing to write. Triage answers one cheap question — is this
   -- real, and under which outcome — and placing an item is not
   -- committing to build it; the expensive decision is the take, where
   -- the spec bar and the doing bound bind.
-  local bad = item.problems(it)
-  if #bad > 0 then
-    return gate.verdict_line("attach", false, table.concat(bad, "; "))
-  end
+  local bad = graphguards.item_refusal(it)
+  if bad ~= nil then return gate.verdict_line("attach", false, bad) end
   local also, coerr = gate.containered(c, parent_item)
   if also == nil then
     return gate.verdict_line("attach", false, coerr)

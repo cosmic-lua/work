@@ -7,6 +7,7 @@
 --- it goes lands parented and positioned in one commit.
 local gate = require("_work.gitgate")
 local item = require("_work.item")
+local statewrite = require("_work.statewrite")
 local store = require("_work.store")
 
 --- One id's parent, described for a sibling-mismatch refusal: "the
@@ -223,6 +224,10 @@ local function cmd_rank(s: store.Store, id: string, before: string, after: strin
     return gate.verdict_line("rank", false,
       ("%s's parent is broken: no item %s"):format(id:sub(1, 8), parent_id))
   end
+  -- This writes the parent's order, but the membership decision depends on
+  -- the target still naming that parent. Fence exactly that item path.
+  local observed, oerr = statewrite.observe_path(s, "items/" .. id)
+  if not observed then return gate.verdict_line("rank", false, oerr) end
   local new_order, perr = place(parent_item.order or {}, id, before, after, last)
   if new_order == nil then
     return gate.verdict_line("rank", false, "REFUSED: " .. perr)
@@ -232,7 +237,7 @@ local function cmd_rank(s: store.Store, id: string, before: string, after: strin
   local ok, err = gate.commit_and_publish(s, parent_item, nil,
     ("rank %s %s%s"):format(id:sub(1, 8),
       describe(before, after, last, where), gate.forced_suffix(frc, rsn)),
-    "rank", nil, claim_session, false, frc, rsn)
+    "rank", nil, claim_session, true, frc, rsn)
   if not ok then
     return gate.verdict_line("rank", false, err)
   end

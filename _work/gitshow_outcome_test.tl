@@ -53,6 +53,7 @@ local function record(s: store.Store, id: string, op: string, message: string,
   apply(it)
   storewrite.set_op(s, op)
   assert(storewrite.save(s, it, message))
+  assert(publish.publish(s))
 end
 
 --- `show.show_report` over a minimal in-memory board, so the pure

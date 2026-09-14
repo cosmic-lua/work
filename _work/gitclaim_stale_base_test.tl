@@ -6,10 +6,12 @@
 -- explicit --fetch-base authorizes gitboard to run them itself.
 local check = require("cosmic.check")
 local child = require("cosmic.child")
-local claimbatch = require("_work.claimbatch")
+local boardread = require("_work.boardread")
+local boardtree = require("_work.boardtree")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitclaim_cli = require("_work.gitclaim_cli")
+local statepublish = require("_work.statepublish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -64,12 +66,12 @@ local function claiming_item(name: string): store.Store, string
   local it = check.must(store.load(s, id))
   it.repo, it.base = "acme/widgets", "main"
   assert(storewrite.save(s, it, "set product repository"))
+  assert(statepublish.publish(s))
   return s, id
 end
 
-local function fact(s: store.Store, id: string): claimbatch.Fact
-  local it = check.must(store.load(s, id))
-  return check.must(claimbatch.read_fact(s.root, it.claim_batch or "", id))
+local function fact(s: store.Store, id: string): boardtree.Claim
+  return check.must(check.must(boardread.load(s.root, s.state_head, id)).claim)
 end
 
 local function test_a_locally_stale_target_refuses_instead_of_capturing_it()
