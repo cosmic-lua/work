@@ -185,9 +185,9 @@ local function test_a_corrupted_cache_meta_page_self_heals_on_open()
   check.must(cache.close(c))
 end
 
---- A deterministic, sorted dump of one table's rows: every column,
---- rendered `k=v` pairs joined and sorted, so row order — which
---- neither side promises — never causes a false mismatch.
+--- Deterministic sorted row dump. Normalize only cache_meta's projection
+--- clock; its row, every stable value, and native_valid_until remain compared.
+--- Row order itself is irrelevant.
 --- @param db sqlite.Database The connection
 --- @param table_name string The table (or FTS5 table) to dump
 --- @return {string} One rendered line per row, sorted
@@ -201,7 +201,10 @@ local function dump(db: sqlite.Database, table_name: string): {string}
     table.sort(keys)
     local parts: {string} = {}
     for _, k in ipairs(keys) do
-      parts[#parts + 1] = k .. "=" .. tostring(row[k])
+      local value = row[k]
+      if table_name == "cache_meta" and row.k == "native_projected_at"
+      and k == "v" then value = "<projection-clock>" end
+      parts[#parts + 1] = k .. "=" .. tostring(value)
     end
     out[#out + 1] = table.concat(parts, "|")
   end
@@ -209,22 +212,18 @@ local function dump(db: sqlite.Database, table_name: string): {string}
   return out
 end
 
---- Every table the cache's schema carries — `_work.index`'s own,
---- `_work.index_rank`'s and `_work.readddl`'s maintained `rank_path`
---- and `role`, `_work.find`'s search table, and `_work.cache`'s own two.
+--- Every table from the cache, rank, read-DDL, search, and lane schemas.
+--- This includes all disposable metadata and side tables.
 local CACHE_TABLES < const >: {string} = {
   "items", "ranks", "builders", "speccers", "touches", "access", "depends_on",
   "rank_path", "role", "search", "cache_meta", "lanes",
 }
 
---- Compare `s`'s LIVE, incrementally maintained cache file against a
---- fresh cold `rebuild` of the same board, table by table — the
---- equality ratchet. Reads the live file directly (never through
---- `cache.open`, which would silently repair a mismatch instead of
---- exposing one), then forces a cold rebuild, which overwrites the
---- file with the freshly built one — so the file the next incremental
---- step patches is the just-proven-equal rebuild, not a divergent
---- leftover.
+--- Compare the live incrementally maintained cache to a cold rebuild.
+--- Reading the live file directly exposes mismatches that `cache.open` would
+--- repair. Rebuild then overwrites it, so the next incremental step patches
+--- the just-proven-equal cache rather than a divergent leftover.
+--- Every table and stable value participates in the equality ratchet.
 --- @param s store.Store The store
 --- @param label string What step this check is verifying, for the message
 local function assert_cache_matches_cold_rebuild(s: store.Store, label: string)

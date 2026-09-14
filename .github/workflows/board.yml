@@ -6,10 +6,10 @@ name: board
 # cosmic's. It gates what it can gate: the whole `--make ci` (fmt,
 # check, lint, coverage-with-tests) over this repo's tree.
 #
-# The gate is cheap here — a few seconds of tests plus the pinned
-# cosmic download — so this lane skips cosmic's fence, cache and
-# fixpoint lanes. There is no artifact to reproduce: this job builds
-# no binary.
+# The gate is one direct pinned-cosmic job, so this lane skips cosmic's
+# fence, cache and fixpoint lanes. Its full test and coverage run takes
+# about ten minutes on hosted runners. There is no artifact to reproduce:
+# this job builds no binary.
 on:
   push:
     branches: [main]
@@ -33,8 +33,9 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    # A green run takes well under a minute; anything near this is a hang.
-    timeout-minutes: 10
+    # The full 1,064-test gate needs about ten hosted minutes. Individual
+    # tests retain their 120-second timeout; this is whole-job headroom.
+    timeout-minutes: 15
     # This job IS the .cosmic-coverage recording environment for this
     # repo (see README.md). The refusal itself ships from
     # cosmic-lua/cosmic's `main`'s `_make/policy.tl`, embedded in
