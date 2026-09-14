@@ -33,7 +33,7 @@ local function handover(s: store.Store, id: string)
   it.repo = "acme/widgets"
   it.handover_head = ("b"):rep(40)
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it, "take " .. id:sub(1, 8) .. " by session-a"))
+  fixture.raw_seed_item(s, it, "take " .. id:sub(1, 8) .. " by session-a")
 end
 
 local function reclaim(s: store.Store, id: string, session: string)
@@ -77,6 +77,7 @@ local function set_repo(s: store.Store, id: string)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "set repo"))
+  fixture.caller_publish(s)
 end
 
 --- Run brief.cmd_brief and capture exactly what it prints via

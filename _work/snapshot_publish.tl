@@ -239,7 +239,10 @@ local function publish(s: store.Store, execute_now?: boolean): boolean, string
     local ok, detail = execute(s.root, candidate.commit, refs.board_remote(s.root))
     if ok then
       local head = current(s.root, refs.board_remote(s.root))
-      if head ~= nil then s.state_head = head end
+      if head ~= nil then
+        s.state_head = head
+        cache.after_fetch(s.root, head)
+      end
       s.state_receipt = ""
     end
     return ok, detail

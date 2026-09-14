@@ -43,14 +43,9 @@ local function set_bounded(s: store.Store, bounded: boolean)
   s.bounded = bounded or false
 end
 
---- Write one item (and, when given, further items the same mutation
---- touches) as one commit PER item, moved locally, and left for
---- `publish` to push together in one atomic transaction — the
---- multi-ref replacement for "every mutation is one commit": the
---- atomicity now lives at the push, not at the git commit object.
---- Each item's new tree is compared against the one its observed tip
---- already carries; the whole call is the no-op success only when
---- NOTHING moved.
+--- Write one item, plus any further items from the same mutation, into the
+--- clone's replaceable final-board snapshot. Each new tree is compared with
+--- the item as observed; the whole call is a no-op only when nothing moved.
 --- @param s store.Store The store
 --- @param it item.Item The item
 --- @param message string Commit subject, shared by every commit this call makes

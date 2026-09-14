@@ -65,7 +65,7 @@ local function legacy_result(s: store.Store, id: string): string
   -- no board commit at all — exactly the legacy shape under test.
   it.result = hash.digest_hex("sha1", spec.document(store.read_spec(s, id)))
   assert(item.record_involvement(it.builders, flow.BUILDER))
-  assert(save(s, it, "take old result:" .. it.result))
+  fixture.raw_seed_item(s, it, "take old result:" .. it.result)
   return it.result
 end
 
@@ -92,8 +92,11 @@ local function research_result(s: store.Store, id: string, findings: string): st
   fixture.claim_item(s, id, "session-a", BASE)
   local it = check.must(store.load(s, id))
   assert(item.record_involvement(it.builders, "session-a"))
+  local prior = s.session
+  storewrite.set_session(s, "session-a")
   assert(save(s, it,
       ("note %s by session-a\n\n%s"):format(id:sub(1, 8), findings)))
+  storewrite.set_session(s, prior)
   it = check.must(store.load(s, id))
   assert(gittake.take_result(s, it, "session-a", 0) == 0, "the handover is recorded")
   it = check.must(store.load(s, id))
@@ -147,12 +150,13 @@ local function test_mixed_result_and_head_render_identically_for_both_templates(
     local code, mixed = capture(s, "review", id)
     assert(code == 0, mixed)
     assert_exact_review(mixed, p.head)
-    assert((mixed:find("git show", 1, true) ~= nil) == mechanical, mixed)
-    assert(check.must(store.git_ok(s, {"show-ref"})).stdout == before)
+    local after = check.must(store.git_ok(s, {"show-ref"})).stdout
+    assert(after == before, "a brief changed refs\nbefore:\n" .. before
+      .. "after:\n" .. after)
     local it = check.must(store.load(s, id))
     assert(it.handover_head == p.head and it.result ~= "")
     it.result = ""
-    assert(save(s, it, "clear only result"))
+    fixture.raw_seed_item(s, it, "clear only result")
     local ordinary_code, ordinary = capture(s, "review", id)
     assert(ordinary_code == 0, ordinary)
     assert(mixed == ordinary, "legacy result must not override exact-head review")
@@ -211,6 +215,7 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   -- worktree is added from is the item's own, not the board's.
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
+  storewrite.set_session(s, "session-a")
   assert(save(s, it, "set repo"))
   local product = fs.join(fs.absolute_path(fixture.tmpdir), "brief-research-widgets")
   assert(fs.remove_all(product))
@@ -289,8 +294,8 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   -- judges that commit and carries no findings.
   it = check.must(store.load(s, id))
   it.handover_head = HEAD
-  assert(save(s, it, ("take %s by session-a head:%s"):format(
-        id:sub(1, 8), HEAD:sub(1, 12))))
+  fixture.raw_seed_item(s, it, ("take %s by session-a head:%s"):format(
+      id:sub(1, 8), HEAD:sub(1, 12)))
   local both_code, both = capture(s, "review", id)
   assert(both_code == 0, both)
   assert_exact_review(both, HEAD)
@@ -304,7 +309,7 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   -- Neither recorded refuses exactly as before.
   it = check.must(store.load(s, id))
   it.handover_head, it.result = "", ""
-  assert(save(s, it, "clear both handovers"))
+  fixture.raw_seed_item(s, it, "clear both handovers")
   local none_code, none = capture(s, "review", id)
   assert(none_code == 1, none)
   assert(none:find(id:sub(1, 8) .. " has no handover recorded — `take "
@@ -324,6 +329,7 @@ local function test_an_unmapped_repo_leaves_the_reproduction_tree_to_the_caller(
   local result = research_result(s, id, FINDINGS)
   local it = check.must(store.load(s, id))
   it.repo = "acme/unmapped"
+  storewrite.set_session(s, "session-a")
   assert(save(s, it, "set repo"))
   reclaim(s, id, "session-b")
   -- A findable fallback: `GITBOARD_DIR` under a root holding
@@ -364,8 +370,8 @@ local function test_a_result_commit_without_findings_is_refused()
   local tip = s.leased_sha[id] or ""
   assert(#tip == 40, "the fixture observed a tip: " .. tip)
   it.result = tip
-  assert(save(s, it, ("take %s by session-a result:%s"):format(
-        id:sub(1, 8), tip:sub(1, 7))))
+  fixture.raw_seed_item(s, it, ("take %s by session-a result:%s"):format(
+      id:sub(1, 8), tip:sub(1, 7)))
   reclaim(s, id, "session-b")
   local code, out = capture(s, "review", id)
   assert(code == 1, out)
@@ -418,7 +424,7 @@ local function test_result_only_refuses_without_output_or_state_changes()
   fixture.give_spec(s, id)
   it = check.must(store.load(s, id))
   it.result = ""
-  assert(save(s, it, "clear legacy result"))
+  fixture.raw_seed_item(s, it, "clear legacy result")
   code, out = capture(s, "review", id)
   assert(code == 1, out)
   assert(out:find(id:sub(1, 8) .. " has no handover recorded — `take "

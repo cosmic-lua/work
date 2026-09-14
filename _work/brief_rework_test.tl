@@ -109,11 +109,11 @@ local function claimed_item(s: store.Store, leaf: string): string
   local base = git(checkout, {"rev-parse", "HEAD"})
   fixture.git(s.root, {"config", "--local", "--add", "gitboard.repository",
       "acme/widgets=" .. checkout})
-  fixture.claim_item(s, leaf, "session-a", base)
   local it = assert(store.load(s, leaf))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "fixture: map repo for worktree derivation"))
   assert(publish.publish(s))
+  fixture.claim_item(s, leaf, "session-a", base)
   return checkout
 end
 
@@ -128,9 +128,8 @@ local function handover_item(s: store.Store, leaf: string): string
   local it = assert(store.load(s, leaf))
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12)))
   return checkout
 end
 
@@ -150,10 +149,9 @@ local function rework_item(s: store.Store, leaf: string)
   handover_item(s, leaf)
   local it = assert(store.load(s, leaf))
   it.claim, it.verdict_head, it.verdict = "reviewer-a", HEAD, "request changes"
-  assert(storewrite.save(s, it,
-      ("verdict %s request changes head:%s by reviewer-a")
-      :format(leaf:sub(1, 8), HEAD:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("verdict %s request changes head:%s by reviewer-a")
+    :format(leaf:sub(1, 8), HEAD:sub(1, 12)))
 end
 
 -- A rework hand-back fills `<BOUNCE_CONTEXT>` with the reviewer's
@@ -330,6 +328,7 @@ local function test_review_brief_preserves_literal_template_tokens_in_spec()
       "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
       .. "## Non-goals\nNothing else.\n"))
   local spec = specmod.document(prose)
+  storewrite.set_session(s, "reviewer-a")
   assert(storewrite.save(s, it, "spec literal template tokens", prose))
   assert(publish.publish(s))
   with_product_root(function(): boolean

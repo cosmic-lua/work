@@ -53,6 +53,7 @@ local function claimed(name: string, base: string): store.Store, string
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "fixture: set product repository"))
+  fixture.caller_publish(s)
   fixture.claim_item(s, id, BUILDER, base)
   return s, id
 end
@@ -102,7 +103,7 @@ local function test_rework_handover_replaces_the_commit_not_the_claim()
   it = check.must(store.load(s, id))
   it.verdict = "request changes"
   it.verdict_head = first
-  assert(storewrite.save(s, it, "fixture: request changes"))
+  fixture.raw_seed_item(s, it, "fixture: request changes")
   it = check.must(store.load(s, id))
   assert(gittake.take_handover(s, it, BUILDER, second, "", repo) == 0)
   local got = check.must(store.load(s, id))

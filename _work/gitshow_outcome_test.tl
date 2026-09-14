@@ -52,8 +52,7 @@ local function record(s: store.Store, id: string, op: string, message: string,
   local it = check.must(store.load(s, id))
   apply(it)
   storewrite.set_op(s, op)
-  assert(storewrite.save(s, it, message))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it, message)
 end
 
 --- `show.show_report` over a minimal in-memory board, so the pure

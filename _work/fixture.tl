@@ -23,6 +23,7 @@ local rank = require("_work.gitrank")
 local readddl = require("_work.readddl")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local workspace = require("_work.snapshot_workspace")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -236,6 +237,27 @@ local function caller_fetch(s: store.Store)
   assert(statepublish.sync(s))
 end
 
+--- Seed an intentionally historical or malformed item state for a renderer
+--- or decoder test. This is test-only Git plumbing: it bypasses snapshot
+--- publication validation so fake legacy heads can be read, while still
+--- leaving one ordinary canonical state commit and no local proposal.
+local function raw_seed_item(s: store.Store, it: item.Item, message: string)
+  local pending, perr = workspace.read(s.root)
+  assert(pending == nil and perr == "", "raw seed requires no pending snapshot")
+  local session, op, bounded = s.session, s.op, s.bounded
+  s.session, s.op, s.bounded = "fixture-seed",
+  s.op ~= "" and s.op or "fixture", false
+  local ok, err = statewrite.save(s, it, message)
+  assert(ok, err)
+  local candidate = check.must(workspace.read(s.root))
+  assert(refs.update_ref(s.root, "refs/heads/state", candidate.commit,
+      candidate.parent))
+  assert(workspace.clear(s.root, candidate.commit))
+  s.session, s.op, s.bounded = session, op, bounded
+  local synced, serr = statepublish.sync(s)
+  assert(synced, serr)
+end
+
 --- Point a store's origin at GitHub for READING while its pushes keep
 --- landing where they did: `url` becomes the https form of `slug`, so
 --- `gh.slug(s, nil)` resolves the board's owner, and `pushurl` keeps
@@ -377,6 +399,7 @@ local record fixture
   init_shared: function(name: string): store.Store, store.Store
   caller_publish: function(s: store.Store)
   caller_fetch: function(s: store.Store)
+  raw_seed_item: function(s: store.Store, it: item.Item, message: string)
   github_origin: function(s: store.Store, slug: string)
   file_item: function(s: store.Store, title: string,
   parent: string): string
@@ -401,6 +424,7 @@ local M: fixture = {
   init_shared = init_shared,
   caller_publish = caller_publish,
   caller_fetch = caller_fetch,
+  raw_seed_item = raw_seed_item,
   github_origin = github_origin,
   file_item = file_item,
   commits = commits,

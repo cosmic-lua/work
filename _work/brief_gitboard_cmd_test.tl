@@ -15,7 +15,6 @@ local gitboard = require("_work.gitboard")
 local gitinvocation = require("_work.gitinvocation")
 local item = require("_work.item")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 
 local BASE < const > = ("a"):rep(40)
 local HEAD < const > = ("b"):rep(40)
@@ -46,8 +45,8 @@ local function handover(s: store.Store, id: string)
   it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12))))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12)))
 end
 
 --- Move `id`'s claim from the builder to the reviewing session named by

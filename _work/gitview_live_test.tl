@@ -10,7 +10,6 @@ local fixture = require("_work.fixture")
 local item = require("_work.item")
 local refs = require("_work.refs")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 local verbs = require("_work.gitverbs")
 local view = require("_work.gitview")
@@ -57,10 +56,9 @@ local function handed_over(s: store.Store, leaf: string, builder: string)
   it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, builder))
-  assert(storewrite.save(s, it,
-      ("take %s by %s head:%s"):format(leaf:sub(1, 8), builder,
-        HEAD:sub(1, 12))))
-  fixture.caller_publish(s)
+  fixture.raw_seed_item(s, it,
+    ("take %s by %s head:%s"):format(leaf:sub(1, 8), builder,
+      HEAD:sub(1, 12)))
 end
 
 --- A deliberately UNPLACED root with one workable leaf under it — the

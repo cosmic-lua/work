@@ -1,4 +1,4 @@
---- One native mutation is one immutable commit and one ordered transition.
+--- Native mutations compose one replaceable final-board snapshot.
 local boardtree = require("_work.boardtree")
 local fastimport = require("_work.fastimport")
 local ksuid = require("_work.ksuid")
@@ -8,13 +8,11 @@ local store = require("_work.store")
 local workspace = require("_work.snapshot_workspace")
 local tx = require("_work.statetransaction")
 
---- Turn one mutation into one immutable commit and one frozen transition: the
---- fence from what this invocation read to decide, the message with its
---- reserved trailers bound, the bounded gate re-checked against the staging
---- base before anything is written, the commit itself, and the receipt that
---- keeps all of it publishable. Nothing here touches `refs/heads/state`:
---- publication is `_work.statepublish`'s.
---- @param s store.Store An open store on a format-6 board
+--- Apply one mutation to the clone's final-board proposal. Each call replaces
+--- the proposal commit over the same canonical parent; the latest complete
+--- tree and summary are what publication validates. Nothing here touches
+--- `refs/heads/state`: publication is `_work.snapshot_publish`'s.
+--- @param s store.Store An open native-board store
 --- @param changes {tx.Change} The paths this mutation writes or deletes
 --- @param message string The commit subject and body, before trailers
 --- @param publish_by integer | nil A claim batch's deadline, 0 for none
@@ -43,8 +41,8 @@ local function transition(s: store.Store, changes: {tx.Change}, message: string,
   return true, ""
 end
 
---- Fence one canonical path at the staging base, using an OID a whole-board
---- read already loaded when available.
+--- Remember one canonical path's observed OID, using a whole-board read when
+--- available so composition can refresh the store's local view consistently.
 local function observe_path(s: store.Store, path: string): boolean, string
   if s.state_reads[path] ~= nil then return true, "" end
   local known = s.state_paths[path]
@@ -57,7 +55,7 @@ local function observe_path(s: store.Store, path: string): boolean, string
   return true, ""
 end
 
---- Fence both of an item's canonical paths at the staging base.
+--- Observe both of an item's canonical paths before composition.
 --- @param s store.Store The store, whose `state_reads` this records into
 --- @param id string The item id about to be written
 --- @return boolean True when both paths are fenced
@@ -69,10 +67,11 @@ local function observe(s: store.Store, id: string): boolean, string
   end
   return true, ""
 end
---- One item edit (with any `also` items) as a transition: the paths come from
---- the same fast-import diff the ref layout uses, against the item as OBSERVED,
---- so an unchanged field writes nothing and an unchanged item is a no-op.
---- @param s store.Store An open store on a format-6 board
+--- Compose one item edit, plus any `also` items, into the final snapshot. The
+--- paths come from the same diff the native tree uses, against the item as
+--- observed, so an unchanged field writes nothing and an unchanged item is a
+--- no-op.
+--- @param s store.Store An open native-board store
 --- @param it item.Item The item as the verb left it
 --- @param message string The commit subject
 --- @param spec itemtree.Spec | nil Replacement prose for `it`, nil to leave it
