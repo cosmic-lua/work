@@ -239,11 +239,15 @@ local function publish(s: store.Store, execute_now?: boolean): boolean, string
     local ok, detail = execute(s.root, candidate.commit, refs.board_remote(s.root))
     if ok then
       local head = current(s.root, refs.board_remote(s.root))
-      if head ~= nil then
-        s.state_head = head
-        cache.after_fetch(s.root, head)
-      end
+      if head ~= nil then s.state_head = head end
       s.state_receipt = ""
+      s.state_paths, s.state_reads = {}, {}
+      s.leased_item, s.leased_sha, s.leased_ref, s.touched_at = {}, {}, {}, {}
+      s.native_view, s.native_history, s.native_history_head = nil, nil, ""
+      s.board_digest, s.fresh_lease = "", ""
+      refs.clear_overlay(s.root)
+      local _closed, _cerr = store.close(s)
+      if head ~= nil then cache.after_fetch(s.root, head) end
     end
     return ok, detail
   end
