@@ -16,10 +16,10 @@ local record Candidate
 end
 
 local function recovery_path(root: string): string
-  local path = git.text(root, {"rev-parse", "--git-path", "gitboard/snapshot-recovery.literal"})
-  if path == nil then return fs.join(root, ".git/gitboard/snapshot-recovery.literal") end
-  if path:sub(1, 1) == "/" then return path end
-  return fs.join(root, path)
+  local common = git.text(root, {"rev-parse", "--git-common-dir"})
+  if common == nil then return fs.join(root, ".git/gitboard/snapshot-recovery.literal") end
+  if common:sub(1, 1) ~= "/" then common = fs.join(root, common) end
+  return fs.join(common, "gitboard/snapshot-recovery.literal")
 end
 
 local function read(root: string): Candidate | nil, string

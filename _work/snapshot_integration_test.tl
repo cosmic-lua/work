@@ -151,12 +151,15 @@ local function test_preflight_distinguishes_new_and_existing_spec_issues()
   local root = setup("snapshot-preflight")
   local seed = check.must(store.open(root))
   local old = new_item("old issue")
-  assert(write.save(seed, old, "create old issue",
-      {change = BAD_SPEC:match("## Change\n\n(.-)\n\n## Non%-goals") or "", non_goals = "No unrelated work."}))
+  assert(write.save(seed, old, "create old issue"))
   local first = check.must(workspace.read(root)).commit
   local planned, err = publication.plan(root, first, "origin", nil)
-  assert(planned ~= nil and #planned.report.new_issues == 1, err)
-  assert(publication.publish(seed, nil))
+  assert(planned ~= nil and #planned.report.new_issues == 2, err)
+  assert(planned.report.new_issues[1]:find("Change is missing", 1, true)
+    and planned.report.new_issues[2]:find("Non-goals is missing", 1, true),
+    table.concat(planned.report.new_issues, "\n"))
+  local published, puberr = publication.publish(seed, nil)
+  assert(published, "publish failed: " .. tostring(puberr))
 
   local s = check.must(store.open(root))
   old = check.must(store.load(s, old.id)); old.title = "admin edit"
@@ -164,7 +167,27 @@ local function test_preflight_distinguishes_new_and_existing_spec_issues()
   local second = check.must(workspace.read(root)).commit
   local after, aerr = publication.plan(root, second, "origin", nil)
   assert(after ~= nil and #after.report.new_issues == 0
-    and #after.report.existing_issues == 1, aerr)
+    and #after.report.existing_issues == 2,
+    aerr .. " new=" .. tostring(after and #after.report.new_issues)
+    .. " existing=" .. tostring(after and #after.report.existing_issues))
+end
+
+local function test_preflight_reports_new_undeclared_access_with_old_gaps()
+  local root = setup("snapshot-preflight-access")
+  local seed = check.must(store.open(root))
+  local old = new_item("old issue")
+  assert(write.save(seed, old, "seed old issue") and publication.publish(seed, nil))
+  local s = check.must(store.open(root))
+  local reached = new_item("new access issue")
+  assert(write.save(s, reached, "add reached repository", {
+        change = BAD_SPEC:match("## Change\n\n(.-)\n\n## Non%-goals") or "",
+        non_goals = "No unrelated work."}))
+  local commit = check.must(workspace.read(root)).commit
+  local planned, err = publication.plan(root, commit, "origin", nil)
+  assert(planned ~= nil and #planned.report.existing_issues == 2
+    and #planned.report.new_issues == 1, err)
+  assert(planned.report.new_issues[1]:find("undeclared repository", 1, true),
+    planned.report.new_issues[1])
 end
 
 local function test_raw_new_item_cannot_arrive_with_forged_workflow_evidence()
@@ -223,15 +246,49 @@ local function test_protocol_restart_can_inspect_an_expired_frozen_claim_before_
   write.set_session(s, "holder")
   assert(statewrite.transition(s, result.changes, "claim by holder", result.publish_by))
   local candidate = check.must(workspace.read(root))
-  local path = workspace.recovery_path(root)
   assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
-      "", path, now) == 0)
+      "", "", now) == 0)
   assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
-      "", path, now + 7200) == 0,
+      "", "", now + 7200) == 0,
     "restart inspection uses the frozen historical validation instant")
   assert(publication_cli.protocol(s, candidate.commit, "origin", "update", "", "",
-      candidate.parent, path, now + 7200) ~= 0,
+      candidate.parent, "", now + 7200) ~= 0,
     "the current deadline remains mandatory before a new update")
+end
+
+local function test_protocol_refuses_a_custom_recovery_path()
+  local root = setup("snapshot-custom-recovery")
+  local s = check.must(store.open(root))
+  local it = new_item("custom recovery")
+  write.set_session(s, "holder")
+  assert(write.save(s, it, "custom recovery candidate"))
+  local candidate = check.must(workspace.read(root))
+  local custom = fs.join(root, "custom-recovery.literal")
+  assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
+      "", custom, nil) ~= 0)
+  assert(not fs.is_present(custom) and not fs.is_present(custom .. ".candidate"))
+end
+
+local function test_publication_freeze_is_shared_across_linked_worktrees()
+  local root = setup("snapshot-common-freeze")
+  local linked = fs.join(fixture.tmpdir, "snapshot-common-freeze-linked")
+  assert(fs.remove_all(linked))
+  local s = check.must(store.open(root))
+  local it = new_item("shared freeze")
+  write.set_session(s, "holder")
+  assert(write.save(s, it, "shared freeze candidate"))
+  local candidate = check.must(workspace.read(root))
+  assert(check.must(child.run({"git", "worktree", "add", "-q", "--detach",
+          linked, "refs/heads/state"}, {cwd = root})).ok)
+  assert(workspace.recovery_path(root) == workspace.recovery_path(linked),
+    "linked worktrees use the clone-wide recovery location")
+  local observer = check.must(store.open(linked))
+  assert(publication_cli.protocol(observer, candidate.commit, "origin", "begin", "", "",
+      "", "", nil) == 0)
+  it.title = "composition after freeze"
+  local saved, err = write.save(s, it, "must remain frozen")
+  assert(not saved and err:find("reconcile", 1, true), err)
+  assert(recovery.clear(workspace.recovery_path(root)))
 end
 
 local function test_shell_cli_publish_runs_push_fetch_and_confirmation()

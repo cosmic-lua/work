@@ -43,12 +43,21 @@ local function status(view: boardread.View, id: string, now: integer): string
   return "todo"
 end
 
-local function issue_set(view: boardread.View): {string: boolean}
+local function issue_set(view: boardread.View, board_id: string): {string: boolean}
   local out: {string: boolean} = {}
   for _, it in ipairs(view.items) do
-    local body = spec.document(view.specs_by_id[it.id])
-    for _, repo in ipairs(gitready.undeclared_repos(it, body)) do
-      out[it.id .. ": undeclared repository " .. repo] = true
+    if it.id ~= board_id then
+      local prose = view.specs_by_id[it.id]
+      for _, gap in ipairs(spec.ready_gaps(prose)) do
+        out[it.id .. ": spec " .. gap] = true
+      end
+      if not (prose.non_goals or ""):match("%S") then
+        out[it.id .. ": spec Non-goals is missing or empty"] = true
+      end
+      local body = spec.document(prose)
+      for _, repo in ipairs(gitready.undeclared_repos(it, body)) do
+        out[it.id .. ": undeclared repository " .. repo] = true
+      end
     end
   end
   return out
@@ -72,6 +81,14 @@ local function min_deadline(current: integer, value: integer): integer
   if value <= 0 then return current end
   if current == 0 or value < current then return value end
   return current
+end
+
+local function appended(old: {string}, new: {string}): boolean
+  if #new < #old then return false end
+  for i, value in ipairs(old) do
+    if new[i] ~= value then return false end
+  end
+  return true
 end
 
 local function claim_rules(before: boardread.View, after: boardread.View,
@@ -128,6 +145,13 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
       and not repair then
         return false, "new item carries workflow evidence: " .. id
       end
+      if old ~= nil and (not appended(old.builders or {}, new.builders or {})
+        or not appended(old.speccers or {}, new.speccers or {})) then
+        return false, "workflow attribution is append-only: " .. id
+      end
+      if old ~= nil and old.verdict == "accept" and verdict_changed then
+        return false, "accepted verdict cannot be changed: " .. id
+      end
       if old ~= nil and old.parent ~= new.parent then needs.attach = true end
       if old ~= nil and table.concat(old.depends_on or {}, "\0") ~=
       table.concat(new.depends_on or {}, "\0") then needs.depend = true end
@@ -163,6 +187,11 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
         return false, "verdict lacks current handover evidence: " .. id
       end
       if verdict_changed and (new.verdict_head or "") ~= "" then
+        local lease = before.claims_by_id[id]
+        if lease == nil or (old.claim or "") ~= author
+        or lease.holder ~= author then
+          return false, "verdict belongs to canonical claim holder: " .. id
+        end
         local product_evidence = (new.handover_head or "") ~= "" and new.handover_head
         or old ~= nil and (old.handover_head or "") ~= "" and old.handover_head or ""
         local research_evidence = (new.result or "") ~= "" and new.result
@@ -172,10 +201,10 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
           return false, "verdict does not name current handover evidence: " .. id
         end
         if not repair then
-          for _, prior in ipairs(old ~= nil and old.builders or new.builders or {}) do
+          for _, prior in ipairs(new.builders or {}) do
             if prior == author then return false, "verdict author built the item: " .. id end
           end
-          for _, prior in ipairs(old ~= nil and old.speccers or new.speccers or {}) do
+          for _, prior in ipairs(new.speccers or {}) do
             if prior == author then return false, "verdict author specified the item: " .. id end
           end
           if product_evidence ~= "" then
@@ -202,6 +231,18 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
         local landed, lerr = commit_evidence.verify_landing(product,
           new.claim_base or "", new.verdict_head or "", new.landed_head or "")
         if landed == nil then return false, "invalid landed evidence: " .. lerr end
+      end
+      if landing_changed and new.resolution == "completed"
+      and (new.handover_head or "") == "" and (new.result or "") ~= "" then
+        if (new.verdict_head or "") ~= new.result then
+          return false, "acceptance does not name current research evidence: " .. id
+        end
+        local verified, eerr = stateevidence.verify(root, parent,
+          new.result or "", id)
+        if verified == nil then return false, "invalid research landing evidence: " .. eerr end
+        if (new.landed_head or "") ~= new.result then
+          return false, "research landing does not name published result: " .. id
+        end
       end
       if landing_changed and new.resolution == "completed" then
         local has_child, completed_child = false, false
@@ -275,7 +316,11 @@ local function preflight(root: string, parent: string, commit: string,
     item_ids, identity.author.name, repair)
   if not gates then return nil, gerr end
   if deadline > 0 and clock >= deadline then return nil, "prepared claim expired before publication" end
-  local prior, final = issue_set(before), issue_set(after)
+  local board_id = ""
+  for _, it in ipairs(before.items) do
+    if item.is_parentless(it) then board_id = it.id; break end
+  end
+  local prior, final = issue_set(before, board_id), issue_set(after, board_id)
   local report: Report = {changed = {}, existing_issues = {}, new_issues = {}, publish_by = deadline}
   for id in pairs(item_ids) do report.changed[#report.changed + 1] = {id = id, status = status(after, id, clock)} end
   for id in pairs(claim_ids) do if not item_ids[id] then report.changed[#report.changed + 1] = {id = id, status = status(after, id, clock)} end end

@@ -22,7 +22,11 @@ end
 local function protocol_action(s: store.Store, commit: string, remote: string,
     action: string, returned_tree: string, candidate_sha: string,
     observed_head: string, recovery_override: string, now?: integer): integer
-  local path = recovery_override ~= "" and recovery_override or workspace.recovery_path(s.root)
+  if recovery_override ~= "" then
+    return gate.verdict_line("publish", false,
+      "REFUSED: --recovery is not supported; snapshot recovery has one clone-wide location")
+  end
+  local path = workspace.recovery_path(s.root)
   if action == "reconcile" then
     local outcome, oerr = snapshot_publish.reconcile_saved(s.root, commit,
       remote, path, observed_head)

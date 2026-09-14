@@ -8,6 +8,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 test("Work bridge reads large Unicode protocol JSON without browser globals", async () => {
+  const tempSnapshots = () => fs.readdirSync(os.tmpdir()).filter((name) =>
+    name.startsWith("gitboard-snapshot.")).sort();
+  const before = tempSnapshots();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-work-example."));
   const binary = path.join(root, "protocol-fixture");
   const payload = "😀λ".repeat(9000);
@@ -18,6 +21,7 @@ test("Work bridge reads large Unicode protocol JSON without browser globals", as
     ALL_TOOLS: [],
     tools: {
       exec_command: async (args) => {
+        if (/\brm\s+-f\b/.test(args.cmd)) throw new Error("rm -f rejected by Work review");
         const result = child.spawnSync("/bin/sh", ["-c", args.cmd],
           {cwd: args.workdir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024});
         return {exit_code: result.status, output: (result.stdout || "") + (result.stderr || "")};
@@ -35,5 +39,9 @@ test("Work bridge reads large Unicode protocol JSON without browser globals", as
   const result = await context.runGitboardSnapshot({root, binary,
     commit: "1".repeat(40), remote: "origin"});
   assert.equal(result.payload, payload);
+  assert.deepEqual(tempSnapshots(), before);
+  await assert.rejects(() => context.runGitboardSnapshot({root, binary,
+    commit: "1".repeat(40), remote: "origin", recovery: path.join(root, "custom")}),
+  /custom snapshot recovery paths are not supported/);
   fs.rmSync(root, {recursive: true, force: true});
 });

@@ -64,9 +64,9 @@ bounded base64 chunks. This avoids treating truncated exec output as a plan.
   }
 
   async function protocol(options, action, fields) {
+    if (options.recovery) throw new Error("custom snapshot recovery paths are not supported");
     const argv = [options.binary, "publish", options.commit, "--dir", options.root,
       "--remote", options.remote, "--protocol", action];
-    if (options.recovery) argv.push("--recovery", options.recovery);
     if (fields.returned_tree) argv.push("--returned-tree", fields.returned_tree);
     if (fields.candidate) argv.push("--candidate", fields.candidate);
     if (fields.head) argv.push("--head", fields.head);
@@ -89,10 +89,14 @@ bounded base64 chunks. This avoids treating truncated exec output as a plan.
       throw new Error("protocol wrapper returned an invalid large-output receipt");
     try { return await readJsonFile(envelope.path, options.root); }
     finally {
-      await command({cmd: "rm -f " + quote(envelope.path), workdir: options.root,
-        yield_time_ms: 30000, max_output_tokens: 1000});
-      await command({cmd: "rmdir " + quote(envelope.path.replace(/\/[^/]+$/, "")),
-        workdir: options.root, yield_time_ms: 30000, max_output_tokens: 1000});
+      const cleanup = "const fs=require('fs'),os=require('os'),p=require('path');" +
+        "const f=p.resolve(process.argv[1]),d=p.dirname(f),t=p.resolve(os.tmpdir());" +
+        "if(p.basename(f)!=='protocol.json'||p.dirname(d)!==t||!p.basename(d).startsWith('gitboard-snapshot.'))" +
+        "throw new Error('refusing unexpected protocol cleanup path');" +
+        "fs.unlinkSync(f);fs.rmdirSync(d);";
+      good(await command({cmd: ["node", "-e", cleanup, envelope.path]
+        .map(quote).join(" "), workdir: options.root, yield_time_ms: 30000,
+        max_output_tokens: 1000}), "protocol cleanup");
     }
   }
 
