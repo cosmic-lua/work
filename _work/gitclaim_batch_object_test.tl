@@ -1,16 +1,18 @@
 #!/usr/bin/env cosmic
--- Native claim sets are one fenced state transition. These races exercise the
+-- Native claim sets are one full-board snapshot. These races exercise the
 -- real remote publication path and canonical claims/<id> authority.
 local boardread = require("_work.boardread")
 local check = require("cosmic.check")
 local claim = require("_work.claim")
 local fixture = require("_work.fixture")
+local gitboard = require("_work.gitboard")
 local stateclaim = require("_work.stateclaim")
 local statepublish = require("_work.statepublish")
-local staging = require("_work.statestaging")
 local statewrite = require("_work.statewrite")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local publication = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 
 local NOW < const > = os.time()
 local BASE < const > = "0123456789012345678901234567890123456789"
@@ -26,7 +28,8 @@ local function requests(ids: {string}): {stateclaim.Request}
 end
 
 local function prepare_set(s: store.Store, ids: {string}, caller: string,
-    action?: stateclaim.Action, now?: integer): stateclaim.Result, staging.Receipt
+    action?: stateclaim.Action, now?: integer): stateclaim.Result,
+  workspace.Candidate
   for _, id in ipairs(ids) do check.must(store.load(s, id)) end
   local result = stateclaim.prepare(s.root, s.state_head, requests(ids),
     action or "take", caller, now or NOW, false, "")
@@ -35,9 +38,11 @@ local function prepare_set(s: store.Store, ids: {string}, caller: string,
     s.state_paths[dependency.path], s.state_reads[dependency.path] =
     dependency.id, dependency.id
   end
+  s.session, s.op = caller, action == "renew" and "renew"
+  or action == "drop" and "drop" or "claim"
   assert(statewrite.transition(s, result.changes, "claim set",
       result.publish_by))
-  return result, check.must(staging.load(s.root, s.state_receipt))
+  return result, check.must(workspace.read(s.root))
 end
 
 local function remote_head(s: store.Store): string
@@ -46,21 +51,21 @@ local function remote_head(s: store.Store): string
   return line:match("^(%x+)") or ""
 end
 
-local function test_one_transition_contains_every_claim_file()
+local function test_one_snapshot_contains_every_claim_file()
   local s = fixture.init_state_repo("claim-native-set")
   local a = fixture.file_item(s, "shared transition a", "")
   local b = fixture.file_item(s, "shared transition b", "")
-  local result, receipt = prepare_set(s, {a, b}, ALICE)
+  local result, candidate = prepare_set(s, {a, b}, ALICE)
   assert(#result.members == 2 and #result.changes == 2)
-  assert(#receipt.transitions == 1 and receipt.tip == s.state_head)
-  local view = check.must(boardread.list(s.root, receipt.tip, NOW))
+  assert(candidate.commit == s.state_head and candidate.claims_changed)
+  local view = check.must(boardread.list(s.root, candidate.commit, NOW))
   assert(check.must(view.claims_by_id[a]).holder == ALICE)
   assert(check.must(view.claims_by_id[b]).holder == ALICE)
   assert(view.claims_by_id[a].expires_at == result.publish_by)
   assert(view.claims_by_id[b].expires_at == result.publish_by)
 end
 
-local function test_overlapping_sets_reject_wholly_but_disjoint_sets_land()
+local function test_any_head_advance_rejects_a_claim_set_then_retry_lands()
   local winner, loser = fixture.init_shared("claim-native-races")
   local a = fixture.file_item(winner, "race a", "")
   local b = fixture.file_item(winner, "race b", "")
@@ -69,11 +74,14 @@ local function test_overlapping_sets_reject_wholly_but_disjoint_sets_land()
   fixture.caller_fetch(loser)
   local _, first = prepare_set(winner, {a, b}, ALICE)
   local _, overlap = prepare_set(loser, {b, c}, BOB)
-  assert(statepublish.execute(winner.root, first))
+  assert(publication.execute(winner.root, first.commit, "origin", nil))
   local before = remote_head(loser)
-  local ok, err = statepublish.execute(loser.root, overlap)
-  assert(not ok and err == store.LOST_RACE, err)
+  local ok, err = publication.execute(loser.root, overlap.commit,
+    "origin", nil)
+  assert(not ok and err:find("conflict", 1, true), err)
   assert(remote_head(loser) == before, "the rejected set must move no state")
+  assert(gitboard.main("snapshot", "--abandon", overlap.commit,
+      "--dir", loser.root) == 0)
   fixture.caller_fetch(loser)
   local head = check.must(statepublish.head(loser.root, "origin"))
   local view = check.must(boardread.list(loser.root, head))
@@ -83,7 +91,7 @@ local function test_overlapping_sets_reject_wholly_but_disjoint_sets_land()
 
   loser = check.must(store.open(loser.root))
   local _, disjoint = prepare_set(loser, {c, d}, BOB)
-  assert(statepublish.execute(loser.root, disjoint))
+  assert(publication.execute(loser.root, disjoint.commit, "origin", nil))
   fixture.caller_fetch(loser)
   head = check.must(statepublish.head(loser.root, "origin"))
   view = check.must(boardread.list(loser.root, head))
@@ -103,8 +111,11 @@ local function test_an_ordinary_item_write_fences_a_prepared_claim_set()
   assert(statepublish.publish(writer))
   fixture.caller_publish(writer)
 
-  local ok, err = statepublish.execute(claimant.root, pending)
-  assert(not ok and err == store.LOST_RACE, err)
+  local ok, err = publication.execute(claimant.root, pending.commit,
+    "origin", nil)
+  assert(not ok and err:find("conflict", 1, true), err)
+  assert(gitboard.main("snapshot", "--abandon", pending.commit,
+      "--dir", claimant.root) == 0)
   fixture.caller_fetch(claimant)
   local head = check.must(statepublish.head(claimant.root, "origin"))
   local view = check.must(boardread.list(claimant.root, head))

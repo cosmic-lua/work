@@ -7,6 +7,7 @@
 --- hundred lines of git plumbing, and two copies of it drift the way
 --- any duplicate does. It is required only by `*_test.tl`.
 local check = require("cosmic.check")
+local boardtree = require("_work.boardtree")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -258,6 +259,29 @@ local function raw_seed_item(s: store.Store, it: item.Item, message: string)
   assert(synced, serr)
 end
 
+--- Seed an intentionally historical native claim without passing it through
+--- current publication validation. Expiry tests use this for an acquisition
+--- that really was valid in the past, then exercise current verbs normally.
+local function raw_seed_claim(s: store.Store, id: string,
+    value: boardtree.Claim, message: string)
+  local pending, perr = workspace.read(s.root)
+  assert(pending == nil and perr == "", "raw claim seed requires no pending snapshot")
+  local content, cerr = boardtree.encode_claim(value)
+  assert(content ~= nil, cerr)
+  local session, op, bounded = s.session, s.op, s.bounded
+  s.session, s.op, s.bounded = "fixture-seed", "fixture", false
+  local ok, err = statewrite.transition(s, {{path = "claims/" .. id,
+        mode = "100644", content = content, delete = false}}, message, 0)
+  assert(ok, err)
+  local candidate = check.must(workspace.read(s.root))
+  assert(refs.update_ref(s.root, "refs/heads/state", candidate.commit,
+      candidate.parent))
+  assert(workspace.clear(s.root, candidate.commit))
+  s.session, s.op, s.bounded = session, op, bounded
+  local synced, serr = statepublish.sync(s)
+  assert(synced, serr)
+end
+
 --- Point a store's origin at GitHub for READING while its pushes keep
 --- landing where they did: `url` becomes the https form of `slug`, so
 --- `gh.slug(s, nil)` resolves the board's owner, and `pushurl` keeps
@@ -400,6 +424,8 @@ local record fixture
   caller_publish: function(s: store.Store)
   caller_fetch: function(s: store.Store)
   raw_seed_item: function(s: store.Store, it: item.Item, message: string)
+  raw_seed_claim: function(s: store.Store, id: string,
+  value: boardtree.Claim, message: string)
   github_origin: function(s: store.Store, slug: string)
   file_item: function(s: store.Store, title: string,
   parent: string): string
@@ -425,6 +451,7 @@ local M: fixture = {
   caller_publish = caller_publish,
   caller_fetch = caller_fetch,
   raw_seed_item = raw_seed_item,
+  raw_seed_claim = raw_seed_claim,
   github_origin = github_origin,
   file_item = file_item,
   commits = commits,

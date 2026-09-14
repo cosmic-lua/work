@@ -17,7 +17,6 @@ local store = require("_work.store")
 local CALLER < const > = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 local BASE < const > = "0123456789012345678901234567890123456789"
 local NEXT_BASE < const > = string.rep("a", 40)
-local NOW < const > = os.time() - claim.LEASE_S + 60
 
 local function recorded(s: store.Store, id: string): boardtree.Claim | nil
   return check.must(boardread.load(s.root, s.state_head, id)).claim
@@ -32,9 +31,13 @@ local function apply(s: store.Store, id: string, action: stateclaim.Action,
     s.state_paths[dependency.path], s.state_reads[dependency.path] =
     dependency.id, dependency.id
   end
+  local session, op = s.session, s.op
+  s.session, s.op = CALLER, action == "renew" and "renew"
+  or action == "drop" and "drop" or "claim"
   assert(statewrite.transition(s, result.changes, "claim base fixture",
       result.publish_by))
   assert(statepublish.publish(s))
+  s.session, s.op = session, op
   return result.members[1]
 end
 
@@ -78,18 +81,24 @@ end
 local function test_expired_take_changes_base_but_renew_and_drop_keep_identity()
   local s = fixture.init_state_repo("claim-base-operations")
   local id = fixture.file_item(s, "operation bases", "")
-  local acquired = apply(s, id, "take", BASE, NOW)
+  local now = os.time()
+  local acquired_id = boardtree.mint_claim_id()
+  fixture.raw_seed_claim(s, id, {id = acquired_id, holder = CALLER,
+      acquired_at = now - claim.LEASE_S - 10,
+      renewed_at = now - claim.LEASE_S - 10,
+      expires_at = now - 10, product_base = BASE},
+    "historical expired acquisition")
   local first = check.must(recorded(s, id))
-  assert(first.product_base == BASE and first.id == acquired.claim_root)
+  assert(first.product_base == BASE and first.id == acquired_id)
 
-  local taken = apply(s, id, "take", NEXT_BASE, NOW + claim.LEASE_S)
+  local taken = apply(s, id, "take", NEXT_BASE, now)
   local second = check.must(recorded(s, id))
   assert(second.product_base == NEXT_BASE and second.id == taken.claim_root)
   assert(second.id ~= first.id)
 
-  local renewed = apply(s, id, "renew", BASE, NOW + claim.LEASE_S + 1)
+  local renewed = apply(s, id, "renew", BASE, now + 1)
   local third = check.must(recorded(s, id))
   assert(third.product_base == NEXT_BASE and renewed.claim_root == second.id)
-  local dropped = apply(s, id, "drop", BASE, NOW + claim.LEASE_S + 2)
+  local dropped = apply(s, id, "drop", BASE, now + 2)
   assert(dropped.claim_root == second.id and recorded(s, id) == nil)
 end

@@ -18,10 +18,10 @@ local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
-local staging = require("_work.statestaging")
-local native = require("_work.statepublish")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
+local snapshot_publish = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -36,16 +36,15 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
-local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
-
 --- A minimal valid workable item, filed directly through the store so
 --- a test can commit and publish as two separate steps — `fixture`'s
 --- `file_item` does both at once through the `new` verb, which cannot
 --- construct a race on its own.
 --- @return item.Item
-local function make_item(): item.Item
+local function make_item(s: store.Store): item.Item
+  local parent = check.must(store.list(s))[1].id
   return check.must(item.decode({
-        id = fresh_id(), title = "an item", parent = PARENT,
+        id = fresh_id(), title = "an item", parent = parent,
       }))
 end
 
@@ -130,7 +129,7 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   -- A common base both checkouts hold before either mutates, so b's
   -- own commit below is built against state the winner's push makes
   -- stale rather than one that already contains it.
-  local base = make_item()
+  local base = make_item(a)
   assert(storewrite.save(a, base, "seed a common base"))
   local staged, instructions = publish.publish(a)
   assert(staged and instructions:find("gitboard publish", 1, true) ~= nil,
@@ -157,11 +156,13 @@ local function test_a_lost_race_preserves_unrelated_dirt()
   assert(storewrite.save(b, wb, "b loses the race"))
   local ok = publish.publish(b)
   assert(ok, "the local successor is staged before transport")
-  local transactions = check.must(staging.list(b.root))
-  assert(#transactions == 1, "one losing transaction is prepared")
-  local pushed, perr = native.execute(b.root, transactions[1])
-  assert(not pushed and perr == store.LOST_RACE, "same-path changes must lose: " .. perr)
-  assert(publish.sync(b), "refresh recovers the canonical winner")
+  local stale = check.must(workspace.read(b.root))
+  local pushed, perr = snapshot_publish.execute(b.root, stale.commit,
+    "origin", nil)
+  assert(not pushed and perr:find("conflict", 1, true), perr)
+  assert(require("_work.gitboard").main("snapshot", "--abandon", stale.commit,
+      "--dir", b.root) == 0)
+  fixture.caller_fetch(b)
   assert(check.must(store.load(b, base.id)).title == "a's edit wins",
     "the checkout holds the winner's state")
   local after = fs.read(dirty_path)
@@ -244,29 +245,32 @@ local function test_default_mutation_instructions_name_the_configured_remote()
   fixture.git(s.root, {"remote", "rename", "origin", "upstream"})
   assert(refs.set_board_remote(s.root, "upstream"))
   s = check.must(store.open(s.root))
-  local it = make_item()
+  local it = make_item(s)
   assert(storewrite.save(s, it, "prepare against configured remote"))
   local ok, instructions = publish.publish(s)
   assert(ok, instructions)
-  local receipt = check.must(staging.list(s.root))[1]
-  assert(receipt ~= nil)
-  assert(receipt.remote == "upstream", "the printed attempt remains bound to the configured remote")
-  assert(instructions:find(receipt.id, 1, true), instructions)
-  assert(table.concat(native.fetch_argv(receipt.remote), " "):find("refs/remotes/upstream/", 1, true))
+  local candidate = check.must(workspace.read(s.root))
+  local planned = check.must(snapshot_publish.plan(s.root, candidate.commit,
+      "upstream", nil))
+  assert(planned.plan.destination.remote == "upstream")
+  assert(instructions:find(candidate.commit, 1, true), instructions)
+  assert(table.concat(snapshot_publish.fetch_argv("upstream"), " ")
+    :find("refs/remotes/upstream/", 1, true))
 end
 
 -- A caller reading only the three transport lines could mistake
 -- preparation for a completed push; the render must also say the
 -- board is unchanged and name both follow-up commands.
-local function test_default_mutation_instructions_say_the_board_is_unchanged()
+local function test_default_mutation_instructions_name_the_local_snapshot()
   local a = init_shared("not-published-instructions")
-  local it = make_item()
+  local canonical = a.state_head
+  local it = make_item(a)
   assert(storewrite.save(a, it, "prepare a mutation"))
   local ok, instructions = publish.publish(a)
   assert(ok, instructions)
   assert(instructions:find("prepared ", 1, true), instructions)
   assert(instructions:find("publish: gitboard publish ", 1, true), instructions)
-  assert(instructions:find("NOT PUBLISHED", 1, true), instructions)
-  assert(instructions:find(" --execute", 1, true), instructions)
-  assert(instructions:find("refresh to confirm the complete transition chain", 1, true), instructions)
+  local candidate = check.must(workspace.read(a.root))
+  assert(instructions:find(candidate.commit, 1, true), instructions)
+  assert(a.state_head == canonical, "composition does not advance canonical state")
 end

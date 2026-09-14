@@ -1,15 +1,15 @@
 #!/usr/bin/env cosmic
--- CLI contract at the native state publication boundary: durable render-only
--- preparation, explicit execution, configured remotes, drafts and sessions.
+-- CLI contract at the native snapshot publication boundary: local composition,
+-- explicit publication, configured remotes, and sessions.
 local boardread = require("_work.boardread")
 local check = require("cosmic.check")
 local claimsession = require("_work.claimsession")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitboard = require("_work.gitboard")
-local gitdraft = require("_work.gitdraft")
 local refs = require("_work.refs")
-local staging = require("_work.statestaging")
+local snapshot_publish = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 local store = require("_work.store")
 
 local function capture(...: string): integer, string
@@ -39,9 +39,11 @@ local function test_claim_uses_the_configured_non_origin_remote()
   local code, out = capture("claim", id, "--session", claimsession.mint(),
     "--remote", "upstream", "--dir", root)
   assert(code == 2, out)
-  local pending = check.must(staging.list(root, "prepared"))
-  assert(#pending == 1 and pending[1].remote == "upstream")
-  assert(out:find(pending[1].id, 1, true), out)
+  local candidate = check.must(workspace.read(root))
+  local planned = check.must(snapshot_publish.plan(root, candidate.commit,
+      "upstream", nil))
+  assert(planned.plan.destination.remote == "upstream")
+  assert(out:find(candidate.commit, 1, true), out)
 end
 
 local function test_claim_set_prepares_one_atomic_state_transition()
@@ -54,53 +56,11 @@ local function test_claim_set_prepares_one_atomic_state_transition()
   local code, out = capture("claim", first, second, "--session",
     claimsession.mint(), "--dir", root)
   assert(code == 2, out)
-  local pending = check.must(staging.list(root, "prepared"))
-  assert(#pending == 1 and #pending[1].transitions == 1)
-  assert(out:find("NOT PUBLISHED", 1, true), out)
-  assert(out:find("gitboard publish " .. pending[1].id .. " --execute",
-      1, true), out)
-end
-
-local function test_draft_cli_stages_offline_and_plans_one_state_update()
-  local s = fixture.init_state_repo("cli-draft-overlay")
-  local id = fixture.file_item(s, "before draft", "")
-  local root, canonical = s.root, s.state_head
-  assert(store.close(s))
-  local draft = check.must(gitdraft.begin(root))
-  local code, out = capture("set", id, "--title", "inside draft",
-    "--draft", draft.id, "--dir", root)
-  assert(code == 0 and out:find("STAGED draft=", 1, true), out)
-  local reopened = check.must(gitdraft.open(root, draft.id))
-  local plan = gitdraft.plan(reopened)
-  assert(#plan == 1 and plan[1].ref == "refs/heads/state")
-  assert(plan[1].expected == canonical and plan[1].next == reopened.native.tip)
-  assert(gitdraft.activate(root, reopened))
-  local speculative = check.must(store.open(root))
-  assert(check.must(store.load(speculative, id)).title == "inside draft")
-  assert(store.close(speculative))
-  gitdraft.deactivate(root)
-  local current = check.must(store.open(root))
-  assert(check.must(store.load(current, id)).title == "before draft")
-  assert(store.close(current))
-end
-
-local function test_local_draft_applies_only_on_explicit_publish()
-  local s = fixture.init_state_repo("cli-draft-local")
-  local id = fixture.file_item(s, "local before", "")
-  local root = s.root
-  assert(store.close(s))
-  local draft = check.must(gitdraft.begin(root))
-  local code, out = capture("set", id, "--title", "local after",
-    "--draft", draft.id, "--dir", root)
-  assert(code == 0 and out:find("STAGED draft=", 1, true), out)
-  gitdraft.deactivate(root)
-  local current = check.must(store.open(root))
-  assert(check.must(store.load(current, id)).title == "local before")
-  assert(store.close(current))
-  code, out = capture("publish", draft.id, "--execute", "--dir", root)
-  assert(code == 0, out)
-  current = check.must(store.open(root))
-  assert(check.must(store.load(current, id)).title == "local after")
+  local candidate = check.must(workspace.read(root))
+  local planned = check.must(snapshot_publish.plan(root, candidate.commit,
+      refs.board_remote(root), nil))
+  assert(#planned.report.changed == 2, "one snapshot contains the whole claim set")
+  assert(out:find("gitboard publish " .. candidate.commit, 1, true), out)
 end
 
 local function test_session_new_prints_only_a_minted_identity()
@@ -160,14 +120,14 @@ local function test_publish_rediscovers_a_rendered_native_claim()
   local claim_code, claim_out = capture("claim", id, "--session",
     claimsession.mint(), "--dir", root)
   assert(claim_code == 2, claim_out)
-  local pending = check.must(staging.list(root, "prepared"))
-  assert(#pending == 1)
-  local publish_code, publish_out = capture("publish", pending[1].id,
+  local pending = check.must(workspace.read(root))
+  local publish_code, publish_out = capture("publish", pending.commit,
     "--dir", root)
   assert(publish_code == 0, publish_out)
-  assert(publish_out:find(pending[1].id, 1, true), publish_out)
-  assert(publish_out:find("publication ready", 1, true), publish_out)
-  assert(publish_out:find("--plan FILE", 1, true), publish_out)
-  assert(check.must(refs.read_ref(root, pending[1].ref)) == pending[1].sha)
+  assert(publish_out:find(pending.commit, 1, true), publish_out)
+  assert(publish_out:find("confirmed", 1, true), publish_out)
+  assert(check.must(refs.read_ref(root, "refs/remotes/origin/state"))
+    == pending.commit)
+  assert(workspace.read(root) == nil, "confirmed publication clears the proposal")
 end
 print("gitcli_transport_test: ok")

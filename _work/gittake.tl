@@ -248,6 +248,10 @@ local function take_result(s: store.Store, it: item.Item, session: string,
     return gate.verdict_line("take", true,
       ("%s already records this spec's handover — %s"):format(id8, standing))
   end
+  local involved, ierr = item.record_involvement(it.builders, session)
+  if not involved then
+    return gate.verdict_line("take", false, "REFUSED: " .. ierr)
+  end
   local digest = tip
   it.result = digest
   if verdict == "request changes" then

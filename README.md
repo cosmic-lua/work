@@ -120,11 +120,12 @@ probes. A fresh clone must fetch those legacy namespaces explicitly before
 ref. A migrated tree with `migration/marks` but no `migration/sources` fails
 `fsck`.
 
-This release includes native operation, migration plumbing, and retirement of
-the old live transports. The production sequence is: release the native-only
-binary, run that binary's `migrate6`, receive the separate production go-ahead
-for activation, activate, then change the consumer pin. Old consumers refuse
-format 6 during the activation-to-pin interval. No live cutover has been done.
+Snapshot publication retains the format-6 board tree and published history;
+an existing format-6 board does not need another data migration for this
+publication change. Migrating an older-format board is a separate operation:
+release the native-only binary, run that binary's `migrate6`, receive the
+production go-ahead for activation, activate, then change the consumer pin.
+Old consumers refuse format 6 during the activation-to-pin interval.
 Legacy refs remain an archive; after the first native write they are not a
 rollback target. Unresolvable historical evidence is reported, never silently
 replaced.
@@ -158,9 +159,11 @@ full-board audit. Both cold and warm runs observed 1,430 items, 4,290 loads,
 1,430 resolutions, 1,430 spec reads, and 13,761 item events through one full
 view read and one full history read.
 
-`experiments/native/mutation_check.tl` runs the native catalogs in isolated
-worktrees. The six catalogs cover main semantics, bounded gates, migration,
-reads, publication, and CLI behavior. A kill requires a fresh assertion
-failure with passing baseline and restored-source controls. Validation reports
-distinguish local API emulation, actual connector publication, and production
-cutover.
+The legacy catalogs under `experiments/native/` record checks of the prior
+transaction publication workflow. Reproduce those results at their recorded
+source revisions; some referenced tests are retired on this branch. Current
+snapshot validation and actual Work connector evidence are described in
+[`docs/design/snapshot-publication.md`](docs/design/snapshot-publication.md).
+A semantic mutation kill requires a fresh assertion failure with passing
+baseline and restored-source controls. Reports distinguish local API
+emulation, actual connector publication, and production cutover.

@@ -4,10 +4,9 @@
 
 local check = require("cosmic.check")
 local claimsession = require("_work.claimsession")
+local flow = require("_work.commit_flow_fixture")
 local fixture = require("_work.fixture")
-local gate = require("_work.gitgate")
 local claimcli = require("_work.gitclaim_cli")
-local item = require("_work.item")
 local store = require("_work.store")
 
 local CALLER_A < const > = "0123456789abcdef0123456789abcdef"
@@ -68,22 +67,15 @@ local function test_live_claim_cannot_be_forced_over()
 end
 
 local function test_drop_releases_only_the_claim_and_preserves_workflow_facts()
-  local s = fixture.init_state_repo("v3-claim-drop")
-  local _parent, id = fixture.root_with_leaf(s)
-  assert(claimcli.cmd_claim(s, {id}, "take", CALLER_A, "origin", "",
-      false, "", false) == 0)
-  local it = check.must(store.load(s, id))
-  it.handover_head = it.claim_base
-  it.external_url = "https://example.test/change/1"
-  assert(item.record_involvement(it.builders, CALLER_A))
-  local saved, err = gate.commit_and_publish(s, it, nil,
-    "fixture: commit-only handover", "take", nil, CALLER_A)
-  assert(saved, err)
-  assert(claimcli.cmd_claim(s, {id}, "drop", CALLER_A, "origin", "",
-      false, "finished this offline pass", false) == 0)
+  local s, id, product = flow.fresh("v3-claim-drop")
+  assert(flow.claim(s, id, flow.BUILDER, product) == 0)
+  assert(flow.handover(s, id, flow.BUILDER, product, product.head,
+      "https://example.test/change/1") == 0)
+  assert(flow.claim(s, id, flow.BUILDER, product, "drop", false,
+      "finished this offline pass") == 0)
   local dropped = check.must(store.load(s, id))
   assert(dropped.claim == "", "drop releases the lease")
-  assert(dropped.handover_head == it.claim_base
+  assert(dropped.handover_head == product.head
     and dropped.external_url == "https://example.test/change/1"
     and #dropped.builders == 1,
     "drop does not erase commit evidence, navigation, or involvement")

@@ -21,16 +21,20 @@ local function setup(name: string): string
   assert(check.must(child.run({"git", "config", "gitboard.mode", "local"}, {cwd = root})).ok)
   return root
 end
-local function new_item(title: string): item.Item
-  return check.must(item.decode({id = ksuid.new(), title = title}))
+local function new_item(title: string, parent: string): item.Item
+  return check.must(item.decode({id = ksuid.new(), title = title,
+        parent = parent}))
 end
 local function test_native_save_log_and_no_legacy_refs()
   local root = setup("native-write-save")
   local s = check.must(store.open(root))
   local base = s.state_head
-  local a, b = new_item("first"), new_item("second")
+  local board = check.must(store.list(s))[1]
+  assert(item.is_parentless(board))
+  local a, b = new_item("first", board.id), new_item("second", board.id)
   write.set_session(s, "test")
   write.set_op(s, "new")
+  assert(item.record_involvement(a.speccers, "test"))
   assert(write.save(s, a, "new both by test", {change = "Spec", non_goals = ""}, {b}))
   assert(check.must(refs.read_ref(root, "refs/heads/state")) == base)
   assert(publish.publish(s))

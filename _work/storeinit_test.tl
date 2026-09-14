@@ -174,7 +174,10 @@ end
 --- @param s store.Store The store to file into
 local function seed_one_item(s: store.Store)
   local id = check.must(ksuid.encode(1700000000, ("\0"):rep(16)))
-  local it = check.must(item.decode({id = id, title = "a seeded item"}))
+  local board = check.must(store.list(s))[1]
+  assert(item.is_parentless(board))
+  local it = check.must(item.decode({id = id, title = "a seeded item",
+        parent = board.id}))
   assert(storewrite.save(s, it, "seed"))
   assert(publish.publish(s))
 end

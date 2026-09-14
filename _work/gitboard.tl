@@ -1,8 +1,8 @@
 #!/usr/bin/env cosmic
---- Work board CLI over Git-backed item refs. Roles emerge from the graph;
+--- Work board CLI over one Git-backed board snapshot. Roles emerge from the graph;
 --- durable workflow facts are commit IDs, and authenticated remote actions
---- belong to the caller. Commands prepare and print exact Git instructions by
---- default; `--execute` runs only those ordinary Git commands. The command
+--- belong to the caller. Ordinary verbs compose one clone-local final commit;
+--- `publish COMMIT` validates, updates, fetches, and confirms it. The command
 --- table and help text live in `_work.gitcommands`.
 local flags = require("cosmic.flags")
 local fs = require("cosmic.fs")
@@ -146,6 +146,10 @@ local function main(...: string): integer
       d.parsed.values["remote-name"] or "", d.parsed.values["format"])
   end
   local dir = d.parsed.values["dir"] or "."
+  if (os.getenv("GITBOARD_DRAFT") or "") ~= "" then
+    return gate.verdict_line(d.command, false,
+      "REFUSED: GITBOARD_DRAFT selects an obsolete named draft; publish or abandon it with the older gitboard")
+  end
   if d.command == "migrate6" then return statecli.migration(dir,
       d.parsed.args, d.parsed.values, d.parsed.switches) end
   local explicit_remote = d.parsed.values["remote"] or ""

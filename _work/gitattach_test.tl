@@ -1,18 +1,18 @@
 #!/usr/bin/env cosmic
 -- How an item gains a parent: `attach` and `new --parent` share one
 -- parenting gate (`item.problems`), and this file covers both verbs'
--- surface on it — reparenting through a lost push race, the cycle
+-- surface on it — reparenting through a whole-head conflict, the cycle
 -- refusal, and an already-attached pair's no-op success. Split from
 -- `_work/gitgraph_test.tl`, which sits against the file cap.
 
 local check = require("cosmic.check")
+local gitboard = require("_work.gitboard")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
 local fixture = require("_work.fixture")
-local staging = require("_work.statestaging")
-local native = require("_work.statepublish")
-local refs = require("_work.refs")
+local publication = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 
 local init_shared = fixture.init_shared
 local init_state_repo = fixture.init_state_repo
@@ -20,14 +20,10 @@ local root_with_leaf = fixture.root_with_leaf
 local file_item = fixture.file_item
 local commits = fixture.commits
 
--- Re-parenting after a lost push race: `attach` has no WIP gate up
--- front — triage is a decision already made — so after the race the
--- RE-RUN lands exactly as the first run would have. `attach` writes
--- only the id's OWN ref (`other`, the new parent, is untouched here —
--- it carries no claim/reviewer/hold for `containered` to clear), so
--- the race has to move `leaf`'s ref itself: b re-parents it first,
--- out from under a's stale read.
-local function test_a_reparent_survives_a_rebase()
+-- A reparent composed from an old canonical head remains an exact snapshot.
+-- Another reparent advancing the head refuses it wholesale; no replay merges
+-- the stale decision, and the supported abandon path retains the proposal.
+local function test_a_reparent_conflicts_after_a_head_advance()
   local a, b = init_shared("attach-race")
   local goal, leaf = root_with_leaf(a)
   local other = file_item(a, "another leaf", goal)
@@ -39,13 +35,15 @@ local function test_a_reparent_survives_a_rebase()
 
   assert(graph.cmd_attach(a, leaf, other) == 0,
     "the stale caller may prepare against its fetched snapshot")
-  local pending = check.must(staging.list(a.root))
-  assert(#pending == 1, "the stale move has one durable transaction")
-  local pushed, perr = native.execute(a.root, pending[1])
-  assert(not pushed and perr == store.LOST_RACE, "the native path fence rejects the race")
-  assert(native.sync(a))
-  assert(check.must(refs.read_ref(a.root, pending[1].ref)) == refs.ZERO_SHA,
-    "the diagnosed losing attempt is retired")
+  local candidate = check.must(workspace.read(a.root))
+  local pushed, perr = publication.execute(a.root, candidate.commit,
+    "origin", nil)
+  assert(not pushed and perr:find("conflict", 1, true), perr)
+  assert(gitboard.main("snapshot", "--abandon", candidate.commit,
+      "--dir", a.root) == 0)
+  fixture.caller_fetch(a)
+  assert(check.must(store.load(a, leaf)).parent == another,
+    "the confirmed reparent wins without replaying the stale move")
 end
 
 -- Attaching under one's own descendant would make a cycle.

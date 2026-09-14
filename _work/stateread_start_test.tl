@@ -54,7 +54,10 @@ local function test_cold_open_shares_the_first_snapshot_and_git_batch()
   local s = fixture.init_state_repo("cold-start-processes")
   local root = s.root
   local id = check.must(ksuid.encode(1700000000, ("c"):rep(16)))
-  local it = check.must(item.decode({id = id, title = "Cold read fixture"}))
+  local board = check.must(store.list(s))[1]
+  assert(item.is_parentless(board))
+  local it = check.must(item.decode({id = id, title = "Cold read fixture",
+        parent = board.id}))
   assert(storewrite.save(s, it, "seed", {change = "Useful prose", non_goals = "No extras"}))
   assert(publish.publish(s))
   assert(store.close(s))

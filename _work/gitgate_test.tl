@@ -1,9 +1,8 @@
 #!/usr/bin/env cosmic
--- `commit_and_publish` under a lost push race: the mutation is
--- dropped whole, the checkout re-synced, and the refusal is
--- `store.LOST_RACE` — never a replay of a commit whose preconditions
--- the winner may have falsified. The re-run is the verb's, and it
--- decides afresh against the merged board — where every gate,
+-- `commit_and_publish` under a whole-head race: the exact snapshot is
+-- refused and retained for supported abandonment, never replayed after
+-- a winner may have falsified its preconditions. The re-run is the verb's,
+-- and it decides afresh against the fetched board — where every gate,
 -- the doing bound included, is re-applied. The ready bar's owner
 -- rule on an item's own `repo` is the second half of this file; the
 -- write-time half of the same rule is `_work/gitowner_test.tl`.
@@ -13,6 +12,7 @@ local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local flow = require("_work.flow")
 local gate = require("_work.gitgate")
+local gitboard = require("_work.gitboard")
 local gitdepend = require("_work.gitdepend")
 local gitdone = require("_work.gitdone")
 local gitready = require("_work.gitready")
@@ -24,9 +24,8 @@ local ksuid = require("_work.ksuid")
 local owner = require("_work.gitowner")
 local publish = require("_work.publish")
 local read = require("_work.read")
-local refs = require("_work.refs")
-local staging = require("_work.statestaging")
-local native = require("_work.statepublish")
+local publication = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
@@ -62,10 +61,25 @@ local function make_item(over?: {string: any}): item.Item
   return check.must(item.decode(t))
 end
 
--- A lost race is a refusal, not a replay: the commit is dropped, the
--- checkout holds the winner's state, and the refusal is LOST_RACE by
--- identity.
-local function test_a_lost_race_drops_the_mutation_and_refuses()
+local function board_parent(s: store.Store): string
+  for _, candidate in ipairs(check.must(store.list(s))) do
+    if item.is_parentless(candidate) then return candidate.id end
+  end
+  error("fixture board has no root", 0)
+end
+
+local function conflict_and_abandon(s: store.Store)
+  local candidate = check.must(workspace.read(s.root))
+  local ok, err = publication.execute(s.root, candidate.commit, "origin", nil)
+  assert(not ok and err:find("conflict", 1, true), err)
+  assert(gitboard.main("snapshot", "--abandon", candidate.commit,
+      "--dir", s.root) == 0)
+  fixture.caller_fetch(s)
+end
+
+-- A stale exact snapshot is a refusal, not a replay. After supported
+-- abandonment and refresh, the checkout exposes the winner's state.
+local function test_a_head_race_refuses_the_snapshot_without_replay()
   local a, b = init_shared("gate-lost")
   local id = fixture.file_item(a, "shared race target", "")
   fixture.caller_fetch(b)
@@ -81,19 +95,13 @@ local function test_a_lost_race_drops_the_mutation_and_refuses()
   local ok, err = gate.commit_and_publish(b, mine, SPEC_TOUCH,
     ("spec %s"):format(mine.id:sub(1, 8)), "set")
   assert(ok, "the stale mutation may be prepared locally: " .. tostring(err))
-  local pending = check.must(staging.list(b.root))
-  assert(#pending == 1, "the stale mutation has one durable transaction")
-  local pushed, perr = native.execute(b.root, pending[1])
-  assert(not pushed and perr == store.LOST_RACE,
-    "the native path fence detects the lost race")
-  assert(native.sync(b), "the checkout re-syncs to the winner")
+  conflict_and_abandon(b)
   assert(check.must(store.load(b, id)).title == "the winner",
     "the checkout was re-synced and the mutation dropped whole")
 end
 
--- The re-run is the compare-and-swap completing: the same mutation,
--- decided and committed again against the merged state, publishes.
-local function test_the_rerun_publishes_against_the_merged_state()
+-- The re-run is a fresh decision against the fetched state and publishes.
+local function test_the_rerun_publishes_against_the_fetched_state()
   local a, b = init_shared("gate-rerun")
   local id = fixture.file_item(a, "shared rerun target", "")
   fixture.caller_fetch(b)
@@ -109,18 +117,11 @@ local function test_the_rerun_publishes_against_the_merged_state()
   local ok, err = gate.commit_and_publish(b, mine, SPEC_TOUCH,
     ("spec %s"):format(mine.id:sub(1, 8)), "set")
   assert(ok, "the stale mutation prepares: " .. tostring(err))
-  local pending = check.must(staging.list(b.root))
-  assert(#pending == 1)
-  local pushed, perr = native.execute(b.root, pending[1])
-  assert(not pushed and perr == store.LOST_RACE)
-  assert(native.sync(b))
-  assert(check.must(refs.read_ref(b.root, pending[1].ref)) == refs.ZERO_SHA)
-  local quarantine = "refs/gitboard/quarantined/lost-race/" .. pending[1].id
-  assert(check.must(refs.read_ref(b.root, quarantine))
-    == pending[1].sha, "the diagnosed transaction remains inspectable")
-  check.must(store.list(b))
-  local again, aerr = gate.commit_and_publish(b, mine, SPEC_TOUCH,
-    ("spec %s"):format(mine.id:sub(1, 8)), "set")
+  conflict_and_abandon(b)
+  local retry = check.must(store.load(b, id))
+  retry.title = "the eventual winner"
+  local again, aerr = gate.commit_and_publish(b, retry, SPEC_TOUCH,
+    ("spec %s"):format(retry.id:sub(1, 8)), "set")
   assert(again, "the re-run prepares against merged state: " .. tostring(aerr))
   fixture.caller_publish(b)
   fixture.caller_fetch(a)
@@ -130,26 +131,26 @@ end
 
 -- Remote-backed mutations print the exact caller-owned transport plan at the
 -- common boundary; a local-only mutation remains quiet.
-local function test_commit_surfaces_remote_transport_but_local_stays_quiet()
+local function test_commit_surfaces_remote_publish_and_local_confirmation()
   local _a, remote = init_shared("gate-render-publish")
-  local remote_item = make_item()
+  local remote_item = make_item({parent = board_parent(remote)})
   local seen, old_print = "", _G.print
   _G.print = function(msg: any) seen = seen .. tostring(msg) end
   local ok, detail = gate.commit_and_publish(remote, remote_item, nil,
     "new remote item", "new")
   _G.print = old_print
   assert(ok and detail:find("gitboard publish", 1, true) ~= nil, detail)
-  assert(detail:find("NOT PUBLISHED", 1, true) ~= nil, detail)
+  assert(detail:find("prepared ", 1, true) ~= nil, detail)
   assert(seen == detail, "the returned transport plan is printed verbatim")
 
   local local_store = init_state_repo("gate-local-quiet")
-  local local_item = make_item()
+  local local_item = make_item({parent = board_parent(local_store)})
   seen, old_print = "", _G.print
   _G.print = function(msg: any) seen = seen .. tostring(msg) end
   local lok, ldetail = gate.commit_and_publish(local_store, local_item, nil,
     "new local item", "new")
   _G.print = old_print
-  assert(lok and ldetail:find("confirmed=1", 1, true) ~= nil, ldetail)
+  assert(lok and ldetail:find("confirmed ", 1, true) ~= nil, ldetail)
   assert(seen == ldetail, "local publication prints its confirmation")
 end
 
@@ -181,9 +182,10 @@ end
 -- Git coordinates only the per-item leases.
 local function test_the_merged_board_carries_all_claims_without_a_global_bound()
   local a, b = init_shared("gate-bound")
+  local parent = fixture.file_item(a, "claim-count outcome", "")
   local ids: {string} = {}
   for _ = 1, flow.DOING_LIMIT do
-    local it = make_item()
+    local it = make_item({parent = parent})
     ids[#ids + 1] = it.id
     assert(storewrite.save(a, it, "filler " .. fresh_id():sub(1, 8)))
   end
@@ -437,8 +439,7 @@ local function test_a_dependency_naming_no_item_is_a_ready_problem()
   write_spec(s, leaf, "absent", fixture.READY_SPEC)
   local it = check.must(store.load(s, leaf))
   it.depends_on = {"3HyArM3A3zHuRxn3VYCvKmUZ7KW"}
-  assert(storewrite.save(s, it, "fixture: a dependency on nothing"))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it, "fixture: a dependency on nothing")
   local problems = gitready.ready_problems(s, check.must(store.load(s, leaf)))
   assert(#problems == 1 and problems[1]:find("not on the board", 1, true) ~= nil,
     "an id naming nothing is reported: " .. table.concat(problems, "; "))

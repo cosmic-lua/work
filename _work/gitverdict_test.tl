@@ -2,12 +2,16 @@
 -- Commit-only verdict policy: the reviewer holds the whole-item claim and
 -- judges exactly the locally inspectable commit handed over by the builder.
 local check = require("cosmic.check")
+local boardhistory = require("_work.boardhistory")
 local commit_evidence = require("_work.commit_evidence")
 local flow = require("_work.commit_flow_fixture")
+local gitobj = require("_work.gitobj")
 local gittake = require("_work.gittake")
 local item = require("_work.item")
+local itemtree = require("_work.itemtree")
+local projection = require("_work.stateplan_git")
+local refs = require("_work.refs")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local verdict = require("_work.gitverdict")
 
 local function review_ready(name: string): store.Store, string,
@@ -154,17 +158,27 @@ local function test_a_result_off_the_items_own_ref_is_refused()
   -- Another item's tip: a commit this board resolves, in no way part of
   -- this item's ref history — the shape a mis-recorded `result` takes.
   local all = check.must(store.list(s))
+  local history = check.must(boardhistory.read(s.root, s.state_head))
   local elsewhere = ""
   for _, other in ipairs(all) do
-    if other.id ~= id and (s.leased_sha[other.id] or "") ~= "" then
-      elsewhere = s.leased_sha[other.id]
+    if other.id ~= id and (history.tip_by_id[other.id] or "") ~= "" then
+      elsewhere = history.tip_by_id[other.id]
     end
   end
   assert(check.must(commit_evidence.commit_id(s.root, elsewhere)) == elsewhere,
     "the fixture found a board commit off this item's ref")
   local it = check.must(store.load(s, id))
   it.result = elsewhere
-  assert(storewrite.save(s, it, "point the result off the ref"))
+  local tree = check.must(projection.apply(s.root, s.state_head, {{
+          path = "items/" .. id .. "/meta", mode = "100644",
+          content = itemtree.encode_meta(it), delete = false}}))
+  local malformed = check.must(gitobj.commit_tree(s.root, {tree = tree,
+        parents = {s.state_head}, message = "point the result off the ref",
+        author_name = "fixture", author_email = "fixture@example.test",
+        committer_name = "fixture", committer_email = "fixture@example.test"}))
+  assert(refs.update_ref(s.root, "refs/heads/state", malformed, s.state_head))
+  assert(store.close(s))
+  s = check.must(store.open(s.root))
   assert(verdict.cmd_verdict_commit(s, id, "accept", elsewhere,
       flow.REVIEWER, false, "", p.root) ~= 0)
   assert((check.must(store.load(s, id)).verdict or "") == "")

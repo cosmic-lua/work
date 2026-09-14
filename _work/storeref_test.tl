@@ -13,12 +13,14 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local flow = require("_work.flow")
 local fs = require("cosmic.fs")
+local gitboard = require("_work.gitboard")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local workspace = require("_work.snapshot_workspace")
 
 --- Fixture writes explicitly confirm on local boards; remote writes remain staged.
 local function save(s: store.Store, it: item.Item, message: string,
@@ -147,28 +149,26 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
-local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
-
 --- A minimal valid workable item. Claims are projected from shared
 --- claim batches, so these ref-layout tests use ordinary item fields.
-local function make_item(title?: string): item.Item
+local function make_item(s: store.Store, title?: string): item.Item
+  local parent = check.must(store.list(s))[1].id
   return check.must(item.decode({
-        id = fresh_id(), title = title or "an item", parent = PARENT,
+        id = fresh_id(), title = title or "an item", parent = parent,
       }))
 end
 
--- Even with enough already-claimed items to exceed the former shared
--- WIP cap, two sessions changing different item refs can both land.
--- No board-wide seq lease serializes independent work acquisition.
-local function test_independent_item_mutations_do_not_share_a_global_lease()
+-- Even disjoint edits share the exact canonical parent of a final snapshot.
+-- A stale writer conflicts, abandons, reopens, and can then apply its intent.
+local function test_independent_item_mutations_still_share_the_board_head()
   local _, clones = init_shared("cas", 2)
   local a = check.must(store.open(clones[1]))
   for i = 1, flow.DOING_LIMIT - 1 do
-    assert(save(a, make_item(("busy-%d"):format(i)),
+    assert(save(a, make_item(a, ("busy-%d"):format(i)),
         ("busy %d"):format(i)))
   end
-  local mine = make_item()
-  local yours = make_item()
+  local mine = make_item(a)
+  local yours = make_item(a)
   assert(save(a, mine, "new mine"))
   assert(save(a, yours, "new yours"))
   assert(publish.publish(a, true))
@@ -190,7 +190,15 @@ local function test_independent_item_mutations_do_not_share_a_global_lease()
   ib.title = "yours by session-b"
   assert(save(b, ib, "retitle yours by session-b"))
   local ok, err = publish.publish(b, true)
-  assert(ok, "independent item refs both land: " .. err)
+  assert(not ok and err:find("conflict", 1, true), err)
+  local stale = check.must(workspace.read(b.root))
+  assert(gitboard.main("snapshot", "--abandon", stale.commit,
+      "--dir", b.root) == 0)
+  assert(publish.sync(b, true))
+  ib = check.must(store.load(b, yours.id))
+  ib.title = "yours by session-b"
+  assert(save(b, ib, "retitle yours by session-b"))
+  assert(publish.publish(b, true))
   assert(publish.sync(a, true))
   local back = check.must(store.load(b, yours.id))
   assert(back.title == "yours by session-b", "the second independent edit lands")
@@ -208,7 +216,7 @@ end
 local function test_publish_is_atomic_across_every_ref_a_save_touched()
   local _, clones = init_shared("atomic-multiref", 2)
   local a = check.must(store.open(clones[1]))
-  local parent = make_item("original parent")
+  local parent = make_item(a, "original parent")
   assert(save(a, parent, "new parent"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
@@ -225,11 +233,14 @@ local function test_publish_is_atomic_across_every_ref_a_save_touched()
   -- b, still on the stale parent, writes a new child AND de-phases
   -- the parent in the same mutation — two commits, one save.
   local pb = check.must(store.load(b, parent.id))
-  local kid = make_item()
+  local kid = make_item(b)
   pb.title = "retitled by b"
   assert(save(b, kid, "new kid", nil, {pb}))
   local ok = publish.publish(b, true)
   assert(not ok, "the stale multi-ref push must be refused")
+  local stale = check.must(workspace.read(b.root))
+  assert(gitboard.main("snapshot", "--abandon", stale.commit,
+      "--dir", b.root) == 0)
   local synced, err = publish.sync(b, true)
   assert(synced, "the retired native loss leaves a readable board: " .. tostring(err))
   assert(store.load(b, kid.id) == nil,
@@ -263,7 +274,7 @@ end
 local function test_resolution_stays_on_the_items_ref_and_sets_resolution()
   local root = init_state_repo("no-move")
   local s = check.must(store.open(root))
-  local it = make_item()
+  local it = make_item(s)
   assert(save(s, it, "new item"))
   assert(#item_refnames(root) == 0, "native items do not create per-item refs")
   it.resolution = "completed"
@@ -281,7 +292,7 @@ end
 local function test_a_legacy_ended_item_stays_under_ended_when_resolved()
   local root = init_state_repo("legacy-ended")
   local s = check.must(store.open(root))
-  local it = make_item()
+  local it = make_item(s)
   assert(save(s, it, "new item"))
   local sha = (check.must(child.run(
         {"git", "rev-parse", "refs/heads/state"}, {cwd = root})).stdout

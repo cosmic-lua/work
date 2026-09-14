@@ -99,9 +99,18 @@ local function claim_rules(before: boardread.View, after: boardread.View,
     local old, new = before.claims_by_id[id], after.claims_by_id[id]
     if new == nil then
       if old == nil then return nil, "claim deletion has no canonical claim: " .. id end
-      if old.holder ~= author and not repair then return nil, "foreign claim drop: " .. id end
+      local refusal = claim.drop_refusal(stateclaim.state(old), author, now,
+        repair, repair and message or "")
+      if refusal ~= nil then return nil, refusal .. ": " .. id end
     elseif old == nil or old.id ~= new.id then
-      local refusal = claim.take_refusal(stateclaim.state(old), author, now, repair, repair and message or "")
+      -- Acquisition never supersedes a live claim, even with repair syntax,
+      -- and an active holder must use renew or drop instead of rotating the
+      -- claim identity or product base.
+      local refusal, held = claim.take_refusal(stateclaim.state(old), author,
+        now, false, "")
+      if held then
+        refusal = "item is already claimed by this session; use renew or drop"
+      end
       if refusal ~= nil then return nil, refusal .. ": " .. id end
       if new.holder ~= author or new.acquired_at ~= new.renewed_at
       or new.expires_at ~= new.renewed_at + claim.LEASE_S
@@ -120,6 +129,42 @@ local function claim_rules(before: boardread.View, after: boardread.View,
       end
       deadline = min_deadline(deadline, old.expires_at)
     end
+  end
+  return deadline, ""
+end
+
+--- Reproduce boardread's clock-sensitive claim projection without reading the
+--- trees again. A proposal must remain decodable at its logical author time,
+--- because recovery reconstructs the frozen plan at that instant.
+local function claim_clock_refusal(view: boardread.View,
+    now: integer): string | nil
+  for _, it in ipairs(view.items) do
+    local lease = view.claims_by_id[it.id]
+    if lease ~= nil and lease.renewed_at > now + claim.FUTURE_SKEW_S then
+      return "claim for " .. it.id .. " is more than five minutes in the future"
+    end
+  end
+  return nil
+end
+
+local function authority_rules(before: boardread.View, after: boardread.View,
+    item_ids: {string: boolean}, claim_ids: {string: boolean}, author: string,
+    message: string, now: integer): integer | nil, string
+  local deadline, cerr = claim_rules(before, after, claim_ids,
+    author, message, now)
+  if deadline == nil then return nil, cerr end
+  local repair = forced(message)
+  for id in pairs(item_ids) do
+    local lease = before.claims_by_id[id]
+    local refusal = claim.mutation_refusal(stateclaim.state(lease), author,
+      now, repair, repair and message or "")
+    if refusal ~= nil then return nil, refusal .. ": " .. id end
+    if lease ~= nil and lease.holder == author then
+      deadline = min_deadline(deadline, lease.expires_at)
+    end
+  end
+  if deadline > 0 and now >= deadline then
+    return nil, "prepared claim expired before publication"
   end
   return deadline, ""
 end
@@ -167,6 +212,21 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
       if old ~= nil and (not appended(old.builders or {}, new.builders or {})
         or not appended(old.speccers or {}, new.speccers or {})) then
         return false, "workflow attribution is append-only: " .. id
+      end
+      local old_spec = before.specs_by_id[id]
+      or {change = "", non_goals = ""}
+      local new_spec = after.specs_by_id[id]
+      or {change = "", non_goals = ""}
+      local spec_changed = old_spec.change ~= new_spec.change
+      or old_spec.non_goals ~= new_spec.non_goals
+      if spec_changed and author ~= "gitboard" then
+        local attributed = false
+        for _, prior in ipairs(new.speccers or {}) do
+          if prior == author then attributed = true end
+        end
+        if not attributed then
+          return false, "spec change lacks author attribution: " .. id
+        end
       end
       if old ~= nil and old.verdict == "accept" and verdict_changed then
         local new_product_handover = (new.handover_head or "") ~= ""
@@ -325,23 +385,24 @@ local function preflight(root: string, parent: string, commit: string,
   if next(item_ids) ~= nil and next(claim_ids) ~= nil then
     return nil, "claim acquisition/release is a separate publication boundary"
   end
-  local deadline, cerr = claim_rules(before, after, claim_ids,
+  local deadline, cerr = authority_rules(before, after, item_ids, claim_ids,
     identity.author.name, identity.message, clock)
   if deadline == nil then return nil, cerr end
-  local repair = forced(identity.message)
-  for id in pairs(item_ids) do
-    local lease = before.claims_by_id[id]
-    local refusal = claim.mutation_refusal(stateclaim.state(lease), identity.author.name,
-      clock, repair, repair and identity.message or "")
-    if refusal ~= nil then return nil, refusal .. ": " .. id end
-    if lease ~= nil and lease.holder == identity.author.name then
-      deadline = min_deadline(deadline, lease.expires_at)
-    end
+  local authored = math.tointeger(tonumber(
+      identity.author.date:match("^(%-?%d+)")))
+  if authored == nil then return nil, "snapshot author date is invalid" end
+  if authored ~= clock then
+    local historical_refusal = claim_clock_refusal(before, authored)
+    or claim_clock_refusal(after, authored)
+    if historical_refusal ~= nil then return nil, historical_refusal end
+    local historical, herr = authority_rules(before, after, item_ids,
+      claim_ids, identity.author.name, identity.message, authored)
+    if historical == nil then return nil, herr end
   end
+  local repair = forced(identity.message)
   local gates, gerr = semantic_gates(root, parent, observed.changes, before, after,
     item_ids, identity.author.name, repair)
   if not gates then return nil, gerr end
-  if deadline > 0 and clock >= deadline then return nil, "prepared claim expired before publication" end
   local board_id = ""
   for _, it in ipairs(before.items) do
     if item.is_parentless(it) then board_id = it.id; break end
