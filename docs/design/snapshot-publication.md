@@ -108,3 +108,16 @@ Work adapter and final compatibility checks. Use one Sol implementation
 subagent at a time. Run the repository gate and an independent adversarial
 review, and submit a draft PR. Deployment, migration, pin changes and merge
 are separate work.
+
+## Implementation evidence
+
+Stage 1 (`92a103a4d`) adds the snapshot identity, connector protocol and
+recovery core. Its eight focused test functions passed, as did scoped
+formatting, strict type checking and lint for all five new files.
+
+An independent detached checkout tested five semantic mutations: bypass the
+whole-head check, ignore the lease deadline, accept a different returned
+tree, ignore the receipt tree, and ignore the receipt message. All five
+were caught by assertion failures in the focused suites; direct source
+execution of the restored suites passed. This verifies the guards are
+exercised, beyond merely obtaining a green unmodified run.

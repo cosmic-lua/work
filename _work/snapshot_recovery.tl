@@ -201,6 +201,17 @@ local function reconcile(root: string, head: string, plan: snapshot.Plan,
   return {status = "confirmed", candidate = recovery.remote_sha, reason = ""}, ""
 end
 
+local function clear(path: string): boolean, string
+  for _, suffix in ipairs({".updating", ".candidate", ""}) do
+    local file = path .. suffix
+    if fs.is_present(file) then
+      local ok, err = fs.remove(file)
+      if not ok then return false, err end
+    end
+  end
+  return true, ""
+end
+
 local record Module
   type Recovery = Recovery
   type Status = Status
@@ -212,9 +223,10 @@ local record Module
   record_candidate: function(string, snapshot.Plan, string): Recovery | nil, string
   mark_updating: function(string, snapshot.Plan, Recovery): Recovery | nil, string
   reconcile: function(string, string, snapshot.Plan, Recovery): Status | nil, string
+  clear: function(string): boolean, string
 end
 
 local M: Module = {FORMAT = FORMAT, validate = validate, binding = binding,
   begin = begin, load = load_recovery, record_candidate = record_candidate,
-  mark_updating = mark_updating, reconcile = reconcile}
+  mark_updating = mark_updating, reconcile = reconcile, clear = clear}
 return M

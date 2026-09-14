@@ -25,6 +25,7 @@ local store = require("_work.store")
 local format = require("_work.format")
 local gitdraft = require("_work.gitdraft")
 local stateevidence = require("_work.stateevidence")
+local snapshot_workspace = require("_work.snapshot_workspace")
 
 --- Record a commit-only handover after verifying the product commit locally.
 --- The optional URL is navigation metadata and participates in no gate.
@@ -186,6 +187,12 @@ local function take_result(s: store.Store, it: item.Item, session: string,
   local id8 = it.id:sub(1, 8)
   local native, native_err = format.state_head(s.root)
   if native == nil then return gate.verdict_line("take", false, native_err) end
+  local pending, pending_err = snapshot_workspace.read(s.root)
+  if pending_err ~= "" then return gate.verdict_line("take", false, pending_err) end
+  if pending ~= nil then
+    return gate.verdict_line("take", false,
+      "REFUSED: publish and confirm the current snapshot before recording research evidence")
+  end
   if native ~= "" and gitdraft.active(s.root) ~= nil then
     return gate.verdict_line("take", false,
       "REFUSED: publish the draft before recording research evidence")

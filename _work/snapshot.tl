@@ -325,6 +325,7 @@ local record Module
   validate: function(Plan): boolean, string
   validate_local: function(string, Plan): boolean, string
   commit_identity: function(string, string): Identity | nil, string
+  message: function(string, Author): string | nil, string
   capture: function(string, string, Destination, Validator): Plan | nil, string
   collapse: function(string, tx.Frozen, string, string, string, Gate | nil,
   integer | nil): Plan | nil, string
@@ -332,5 +333,5 @@ end
 
 local M: Module = {FORMAT = FORMAT, validate = validate,
   validate_local = validate_local, commit_identity = commit_identity,
-  capture = capture, collapse = collapse}
+  message = summary_message, capture = capture, collapse = collapse}
 return M

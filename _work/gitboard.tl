@@ -20,7 +20,7 @@ local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
 local gitdone = require("_work.gitdone")
 local gitlog = require("_work.gitlog")
-local draftcli = require("_work.gitdraft_cli")
+local workspace = require("_work.snapshot_workspace")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
 local transport = require("_work.gittransport")
@@ -32,6 +32,7 @@ local refs = require("_work.refs")
 local session = require("_work.session")
 local store = require("_work.store")
 local statepublish_cli = require("_work.statepublish_cli")
+local snapshot_cli = require("_work.snapshot_cli")
 local statecli = require("_work.statecli")
 local tail = require("_work.tail")
 local vrd = require("_work.gitverdict")
@@ -152,13 +153,20 @@ local function main(...: string): integer
   end
   local remote = explicit_remote ~= "" and explicit_remote or refs.board_remote(dir)
   if d.command == "draft" then
-    return draftcli.cmd_draft(dir, d.parsed.args,
-      d.parsed.switches["print-id"] or false)
+    return gate.verdict_line("draft", false,
+      "REFUSED: named drafts are obsolete; ordinary verbs compose refs/gitboard/snapshot")
   end
-  local selected_draft, draft_err = draftcli.activate(dir, d.command,
-    d.parsed.values["draft"])
-  if selected_draft == nil then
-    return gate.verdict_line(d.command, false, "REFUSED: " .. draft_err)
+  if (d.parsed.values["draft"] or "") ~= "" then
+    return gate.verdict_line(d.command, false,
+      "REFUSED: --draft is obsolete; publish or abandon it with the older gitboard")
+  end
+  if d.command ~= "publish" and d.command ~= "refresh" and d.command ~= "snapshot" then
+    local _candidate, snapshot_err = workspace.activate(dir)
+    if snapshot_err ~= "" then
+      return gate.verdict_line(d.command, false, "REFUSED: " .. snapshot_err)
+    end
+  else
+    refs.clear_overlay(dir)
   end
   local s, serr = store.open(dir)
   if s == nil then
@@ -173,6 +181,10 @@ local function main(...: string): integer
       return 1
     end
   end
+  if d.command == "snapshot" then
+    return snapshot_cli.cmd(s.root, d.parsed.values["summary"] or "",
+      d.parsed.switches["check"] or false, d.parsed.values["abandon"] or "")
+  end
   if d.command == "next" then
     local who = session.resolve(d.parsed.values["session"])
     return view.cmd_next(s, who)
@@ -183,8 +195,16 @@ local function main(...: string): integer
   end
   if d.command == "publish" then
     local selectors = d.parsed.args
-    if #selectors == 0 and selected_draft ~= "" then selectors = {selected_draft} end
     if s.state_head ~= "" then
+      if (d.parsed.values["protocol"] or "") ~= "" then
+        local commit = selectors[1] or ""
+        if #selectors ~= 1 then return gate.verdict_line("publish", false,
+            "internal protocol requires one full snapshot COMMIT") end
+        return statepublish_cli.protocol(s, commit, remote,
+          d.parsed.values["protocol"] or "", d.parsed.values["returned-tree"] or "",
+          d.parsed.values["candidate"] or "", d.parsed.values["head"] or "",
+          d.parsed.values["recovery"] or "")
+      end
       return statepublish_cli.cmd_publish(s, selectors, remote,
         d.parsed.switches["execute"] or false, d.parsed.values["plan"] or "",
         d.parsed.values["from-plan"] or "", d.parsed.values["call"] or "",

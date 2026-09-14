@@ -9,6 +9,7 @@ local plan = require("_work.stateplan")
 local proof = require("_work.stateplan_receipts")
 local store = require("_work.store")
 local cache = require("_work.cache")
+local snapshot_publish = require("_work.snapshot_publish")
 --- The board head a publication races against: the branch itself in local
 --- mode, the tracking ref in remote mode — never a prepared local successor.
 --- @param root string The board checkout
@@ -349,7 +350,7 @@ end
 --- @param execute_push boolean | nil Whether to push now on a remote board
 --- @return boolean True on success, including "prepared, not published"
 --- @return string What happened, or `store.LOST_RACE`
-local function publish(s: store.Store, execute_push?: boolean): boolean, string
+local function _publish(s: store.Store, execute_push?: boolean): boolean, string
   if s.state_receipt == "" then return true, "" end
   local receipt, err = staging.load(s.root, s.state_receipt)
   if receipt == nil then
@@ -403,6 +404,7 @@ local record Module
   sync: function(s: store.Store, execute_fetch?: boolean, published?: staging.Receipt): boolean, string
   publish: function(s: store.Store, execute_push?: boolean): boolean, string
 end
-local M: Module = {head = head, fetch_argv = fetch_argv, build = build, push_argv = push_argv,
-  execute = execute, refresh = refresh, sync = sync, publish = publish}
+local M: Module = {head = head, fetch_argv = snapshot_publish.fetch_argv,
+  build = build, push_argv = push_argv, execute = execute, refresh = refresh,
+  sync = snapshot_publish.sync, publish = snapshot_publish.publish}
 return M

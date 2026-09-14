@@ -408,6 +408,15 @@ local CSPEC: flags.CommandSpec = {
           {long = "force", help = "append past another session's live claim "
             .. "— audited repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
+    {name = "snapshot", summary = "inspect, summarize, or abandon the local composition",
+      spec = {usage = "[--check | --summary TEXT | --abandon COMMIT] [options]",
+        summary = "inspect the one clone-local final-board composition. Set its final human "
+        .. "summary before publication, or abandon it only when unpublished or after a "
+        .. "proven conflict (the commit remains retained for recovery).",
+        flags = {dir_flag(),
+          {long = "check", help = "validate and preflight the final board"},
+          {long = "summary", arg = "TEXT", help = "replace the final commit summary"},
+          {long = "abandon", arg = "COMMIT", help = "retain and clear this conflicted snapshot"}}}},
     {name = "publish", summary = "render or execute one prepared state publication",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
         summary = "render one prepared transaction, claim set, or draft as one "
@@ -426,6 +435,10 @@ local CSPEC: flags.CommandSpec = {
           {long = "head", arg = "SHA", help = "native state: just-observed remote head required for the final call"},
           {long = "published", arg = "SHA", help = "native state: associate the connector-returned tip with this attempt"},
           {long = "repository", arg = "OWNER/REPO", help = "native state: verify connector destination identity"},
+          {long = "protocol", arg = "ACTION", help = "internal Work snapshot protocol action"},
+          {long = "returned-tree", arg = "SHA", help = "internal Work tree result"},
+          {long = "candidate", arg = "SHA", help = "internal Work commit result"},
+          {long = "recovery", arg = "FILE", help = "internal recovery-path override (tests)"},
           {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},
     {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
       spec = {summary = "confirm prepared transactions against caller-fetched "
