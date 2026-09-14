@@ -44,6 +44,9 @@ local view = require("_work.gitview")
 --- actually happened. `sync` and lane minting fetch on their own,
 --- outside this dispatch.
 local FETCH_FIRST: {string: boolean} = {}
+local READ_ONLY: {string: boolean} = {
+  next = true, brief = true, fsck = true, find = true, show = true,
+}
 
 --- Resolve one id-taking argument, whatever position it sits in: an
 --- id prefix is tried first; only when that refuses AND the input has
@@ -161,7 +164,9 @@ local function main(...: string): integer
       "REFUSED: --draft is obsolete; publish or abandon it with the older gitboard")
   end
   if d.command ~= "publish" and d.command ~= "refresh" and d.command ~= "snapshot" then
-    local _candidate, snapshot_err = workspace.activate(dir)
+    local read_only = READ_ONLY[d.command] or
+    (d.command == "log" and d.parsed.values["add"] == nil)
+    local _candidate, snapshot_err = workspace.activate(dir, read_only)
     if snapshot_err ~= "" then
       return gate.verdict_line(d.command, false, "REFUSED: " .. snapshot_err)
     end
@@ -203,7 +208,7 @@ local function main(...: string): integer
         return statepublish_cli.protocol(s, commit, remote,
           d.parsed.values["protocol"] or "", d.parsed.values["returned-tree"] or "",
           d.parsed.values["candidate"] or "", d.parsed.values["head"] or "",
-          d.parsed.values["recovery"] or "")
+          d.parsed.values["recovery"] or "", nil)
       end
       return statepublish_cli.cmd_publish(s, selectors, remote,
         d.parsed.switches["execute"] or false, d.parsed.values["plan"] or "",

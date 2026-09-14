@@ -61,70 +61,46 @@ That repository's `docs/goals.md` supplies planning context, not another
 state store.
 
 For an isolated board, use `gitboard init --dir PATH --local --format 6`.
-On a remote board, refresh, claim, confirm current authority, compose work,
-publish, and refresh again. Claims are outside drafts. A multi-item claim writes
-all members' claim files in one commit; renew retains acquisition identity,
-and drop removes the files in one commit. Expiry ends authority without
-erasing the recorded acquisition. Claim provides mutual exclusion without a
-readiness or shared-capacity gate. Public `take` records the claim holder's
-product-commit or research-result handover; it does not acquire the claim.
+On a remote board, refresh, claim, publish the claim, and confirm current
+authority before dependent work. A multi-item claim writes all members' claim
+files in one commit; renew retains acquisition identity, and drop removes the
+files in one commit. Expiry ends authority without erasing the recorded
+acquisition. Public `take` records the claim holder's product commit or
+research-result handover; it does not acquire the claim.
 
-A prepared transaction freezes one transition. A draft freezes an ordered
-chain; publication preserves every commit and advances the branch to its tip
-once. The fence records paths used to decide, including each affected item's
-subtree and claim blob. Changed dependencies refuse the whole attempt.
-Disjoint changes can rebase after bounded gates are revalidated; publication
-retries at most five times without backoff.
-
-Shell publication runs ordinary Git explicitly:
+Ordinary mutation verbs compose one clone-local final-board snapshot. Each
+command may replace that commit while retaining the fetched canonical head as
+its sole parent. Review the final change and give it one meaningful summary:
 
 ```sh
-gitboard publish TRANSACTION --execute
-gitboard refresh --execute
+gitboard snapshot --summary "Describe the complete board update"
+gitboard snapshot --check
+gitboard publish COMMIT
 ```
+
+Publication freezes that exact snapshot, advances the state branch without
+force, fetches, and confirms it. Any head advance conflicts the whole update.
+There is no named draft, automatic rebase, operation replay, or partial-prefix
+confirmation. Claim acquisition remains its own publication boundary because
+an unpublished claim grants no authority.
 
 ChatGPT Work uses its authenticated GitHub connector for writes and shell Git
-for reads. The connector does not need to provide Git with its credentials:
+for reads. Evaluate `_work/snapshot_work_runner.js` and
+`docs/work-snapshot-publish.js` in one Work execution, then call
+`runGitboardSnapshot({root, binary, commit, remote})`. The adapter invokes
+`github_create_tree`, `github_create_commit`, and `github_update_ref`; large
+deletion snapshots may add tree calls. It durably records the provider-created
+commit before the sole non-forced ref update.
 
-```sh
-gitboard publish TRANSACTION --plan attempt.literal --repository OWNER/REPO
-gitboard publish --from-plan attempt.literal --call 0 --call-json
-```
-
-Execute each indexed call from the same saved plan, resolving only results
-of preceding calls in that attempt. The JSON adapter writes only the call
-envelope to stdout. Its short tool names are `github_create_tree`,
-`github_create_commit`, and `github_update_ref`; the Work executor maps them to
-the corresponding `mcp__codex_apps__...` tools. Every call uses
-`repository_full_name`. Commit calls have no physical-author argument, and the
-final update has no connector-side expected-head or deadline argument.
-
-Record the provider-created final commit SHA before the one
-`github_update_ref` call. Immediately before rendering that final call, observe
-the remote head and supply it explicitly:
-
-```sh
-gitboard publish --from-plan attempt.literal --call FINAL_INDEX \
-  --head OBSERVED_SHA --call-json
-```
-
-The renderer checks the saved head and earliest claim deadline locally;
-`force=false` is mandatory. Substitute the recorded commit SHA into the final
-call. After an acknowledged update, attach that same SHA to the receipt:
-
-```sh
-gitboard publish --from-plan attempt.literal --published RETURNED_COMMIT_SHA
-gitboard refresh --execute
-```
-
-If the final update's outcome is unknown, refresh and inspect fetched
-first-parent history before doing anything else. A returned SHA or transaction
-trailer alone is never proof that publication landed.
-
-Confirmation checks every transition's content and logical author in fetched
-first-parent history. An old publication is not current claim authority.
-Both executors use the `Gitboard-Author` trailer because the connector chooses
-its own physical Git author. See `help native` for recovery and migration.
+Immediately before that update, the adapter fetches the exact destination and
+checks the original parent and earliest claim deadline. A lost update response
+is reconciled from fetched first-parent history. Restarting a candidate or
+updating attempt never creates another commit: only the same saved candidate
+may retry, and only while the fetched head remains its parent. Confirmation
+checks exact parent, complete tree, message, logical author, and canonical
+first-parent reachability. The connector chooses the physical Git author, so
+the canonical `Gitboard-Author` message field preserves the logical author.
+See `help native` for recovery and migration.
 
 ## Migration and release
 

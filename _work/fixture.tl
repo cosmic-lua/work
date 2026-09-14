@@ -14,7 +14,6 @@ local gitspec = require("_work.gitspec")
 local stateclaim = require("_work.stateclaim")
 local statewrite = require("_work.statewrite")
 local statepublish = require("_work.statepublish")
-local staging = require("_work.statestaging")
 local graph = require("_work.gitgraph")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
@@ -220,13 +219,13 @@ end
 --- Local fixtures already promoted their mutations and need no transport.
 local function caller_publish(s: store.Store)
   if refs.board_mode(s.root) == "local" then assert(statepublish.publish(s)); return end
-  for _, receipt in ipairs(check.must(staging.list(s.root, "prepared"))) do
-    local ok, err = statepublish.execute(s.root, receipt)
-    assert(ok, "caller push failed: " .. err)
-  end
-  fetch_state(s)
-  local synced, err = statepublish.sync(s)
-  assert(synced, "caller confirmation failed: " .. err)
+  local candidate, cerr = require("_work.snapshot_workspace").read(s.root)
+  if candidate == nil then assert(cerr == "", cerr); return end
+  local ok, err = require("_work.snapshot_publish").execute(s.root,
+    candidate.commit, refs.board_remote(s.root), nil)
+  assert(ok, "caller push failed: " .. err)
+  local synced, serr = statepublish.sync(s)
+  assert(synced, "caller confirmation failed: " .. serr)
 end
 
 --- Fetch the native state and activation marker as an explicit fixture caller,

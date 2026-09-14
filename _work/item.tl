@@ -134,6 +134,15 @@ local function is_review_or_rework(it: Item): boolean
   or (it.result or "") ~= ""
 end
 
+--- The lifecycle detail shared by board reads and publication summaries.
+local function substate(it: Item): string
+  if (it.verdict or "") == "accept" then return "accepted" end
+  if (it.verdict or "") == "request changes" then return "rework" end
+  if (it.handover_head or "") ~= "" or (it.pr or 0) ~= 0
+  or (it.result or "") ~= "" then return "review" end
+  return "building"
+end
+
 --- Whether an item is parentless — the board, in a well-formed tree,
 --- and the one shape check this file itself needs (below): a second
 --- parentless item is a fsck finding (`_work.gitfsck`), never this
@@ -416,6 +425,7 @@ local record item
   RESOLUTIONS: {string: boolean}
   is_open: function(it: Item): boolean
   is_review_or_rework: function(it: Item): boolean
+  substate: function(it: Item): string
   is_parentless: function(it: Item): boolean
   is_flagged: function(it: Item): boolean
   by_id: function(items: {Item}): Index
@@ -432,6 +442,7 @@ local M: item = {
   RESOLUTIONS = RESOLUTIONS,
   is_open = is_open,
   is_review_or_rework = is_review_or_rework,
+  substate = substate,
   is_parentless = is_parentless,
   is_flagged = is_flagged,
   by_id = by_id,

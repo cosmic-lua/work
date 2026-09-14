@@ -41,9 +41,14 @@ local function old_inflight(root: string): boolean, string
   return #found > 0, ""
 end
 
+local function recovery_present(path: string): boolean
+  return fs.is_present(path) or fs.is_present(path .. ".candidate")
+  or fs.is_present(path .. ".updating")
+end
+
 local function frozen(root: string, candidate?: Candidate): boolean, string
   local path = recovery_path(root)
-  if not fs.is_present(path) then return false, "" end
+  if not recovery_present(path) then return false, "" end
   local recovery = require("_work.snapshot_recovery")
   local state, err = recovery.load(path)
   if state == nil then return false, "cannot inspect frozen snapshot: " .. err end
@@ -61,13 +66,20 @@ end
 
 --- Select the proposal as this process's read view. A stale proposal remains
 --- publishable for conflict diagnosis, but cannot be extended.
-local function activate(root: string): Candidate | nil, string
+local function activate(root: string, allow_frozen?: boolean): Candidate | nil, string
   refs.clear_overlay(root)
   local path = recovery_path(root)
-  if fs.is_present(path) then
+  if recovery_present(path) then
     local recovery = require("_work.snapshot_recovery")
     local state, err = recovery.load(path)
     if state == nil then return nil, "frozen snapshot needs reconciliation: " .. err end
+    local candidate, cerr = read(root)
+    if candidate == nil then return nil, cerr ~= "" and cerr
+      or "frozen snapshot has no retained local composition" end
+    if state.local_commit ~= candidate.commit then
+      return nil, "a different frozen snapshot must be reconciled before composition"
+    end
+    if allow_frozen then return nil, "" end
     return nil, "snapshot " .. state.local_commit .. " is frozen for publication; reconcile it first"
   end
   local candidate, err = read(root)
@@ -177,7 +189,7 @@ local record Module
   recovery_path: function(string): string
   canonical_head: function(string): string | nil, string
   read: function(string): Candidate | nil, string
-  activate: function(string): Candidate | nil, string
+  activate: function(string, boolean | nil): Candidate | nil, string
   compose: function(string, string, string, string, {tx.Change}, string): string | nil, string
   clear: function(string, string): boolean, string
   resummary: function(string, string): string | nil, string

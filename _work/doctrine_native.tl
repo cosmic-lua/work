@@ -7,35 +7,38 @@ For an isolated local test board:
   gitboard init --dir /path/to/test-board --local --format 6
   gitboard new "Proof item" --dir /path/to/test-board
 
-On an activated remote board, the workflow remains refresh, claim, confirm,
-compose a draft, publish, refresh. Claims are outside drafts. A receipt says
-an attempt was published; the current claim record determines authority now.
+On an activated remote board, refresh before composing. Ordinary verbs replace
+one clone-local final-board snapshot whose sole parent is the fetched canonical
+head. Publish a claim and fetch its confirmation before dependent work. The
+current claim record, rather than a proposed or merely submitted commit,
+determines authority.
 
 Shell publication:
-  gitboard publish TRANSACTION --execute
-  gitboard refresh --execute
+  gitboard snapshot --check
+  gitboard publish COMMIT
 
 Connector publication:
-  gitboard publish TRANSACTION --plan attempt.literal --repository OWNER/REPO
-  gitboard publish --from-plan attempt.literal --call 0
-Render each subsequent indexed call from the same saved plan. Execute it through
-the GitHub connector, replacing symbolic prior-call SHA references with the actual
-returned values. A draft creates one tree/commit per transition and advances state
-once. Deletions rebuild the affected tree without requiring a null literal value.
-Observe the remote state head immediately before rendering the final call, and
-pass it with --head SHA. Its expected-head and deadline guards must still hold.
-These are local checks; the connector has no expected-head or deadline argument.
-A stale branch rejects the non-forced update; prepare a new attempt after
-refreshing, never combine calls from different attempts.
-  gitboard publish --from-plan attempt.literal --published RETURNED_COMMIT_SHA
-  gitboard refresh --execute
+  evaluate _work/snapshot_work_runner.js and docs/work-snapshot-publish.js
+  runGitboardSnapshot({root, binary, commit, remote})
+The adapter begins by freezing the local snapshot. It creates the final tree and
+one provider-authored commit, saves the returned commit SHA, fetches and checks
+the exact destination head and claim deadline, then makes one non-forced ref
+update. Deletions may require multiple tree chunks; small updates use exactly
+three connector calls. A changed head conflicts the entire snapshot. There is no
+automatic rebase, replay, or partial-prefix confirmation.
+
+If an update response is lost, fetch and reconcile the saved candidate before
+retrying anything. A candidate or updating restart never creates another commit.
+Only the same known candidate may retry, and only while the fetched head is the
+original parent and its claim deadline is live. Confirmation checks exact parent,
+tree, message, logical author, and canonical first-parent reachability.
 The connector chooses the physical Git author. A canonical Gitboard-Author literal
-in the commit message preserves the logical session author and is checked when
-confirming the complete ordered history.
+in the commit message preserves the logical session author and is checked during
+confirmation.
 
 Research evidence:
   gitboard take ITEM --result
-This records published item state; speculative draft state must publish first.
+This records published item state; local snapshot state must publish first.
 Verdicts and completion keep the exact evidence identity and item attribution.
 
 Migration is explicit:

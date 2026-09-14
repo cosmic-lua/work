@@ -1,4 +1,7 @@
-# Native format-6 implementation review
+# Historical native format-6 implementation review
+
+Status: archived implementation and validation evidence for PR #171. Current
+publication behavior is defined by `snapshot-publication.md`.
 
 This draft implements the storage design from PRs #169, #170 and #172.
 Normal operations use format 6 exclusively; legacy parsing is retained only

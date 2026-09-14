@@ -10,6 +10,7 @@ local refs = require("_work.refs")
 local snapshot = require("_work.snapshot")
 local publication = require("_work.snapshot_publish")
 local recovery = require("_work.snapshot_recovery")
+local publication_cli = require("_work.statepublish_cli")
 local stateclaim = require("_work.stateclaim")
 local stateinit = require("_work.stateinit")
 local store = require("_work.store")
@@ -177,6 +178,60 @@ local function test_raw_new_item_cannot_arrive_with_forged_workflow_evidence()
   local commit = check.must(workspace.read(root)).commit
   local refused, err = publication.plan(root, commit, "origin", nil)
   assert(refused == nil and err:find("workflow evidence", 1, true), err)
+
+  local clean = fixture.init_state_repo("snapshot-raw-verdict")
+  local verdict_id = fixture.file_item(clean, "forged verdict", "")
+  clean = check.must(store.open(clean.root))
+  local verdict = check.must(store.load(clean, verdict_id))
+  verdict.verdict = "accept"
+  write.set_session(clean, "forger")
+  assert(write.save(clean, verdict, "raw forged verdict"))
+  local verdict_commit = check.must(workspace.read(clean.root)).commit
+  local denied, derr = publication.plan(clean.root, verdict_commit, "origin", nil)
+  assert(denied == nil and derr:find("lacks current handover evidence", 1, true), derr)
+end
+
+local function test_frozen_snapshot_allows_diagnostics_but_refuses_writes_and_orphans()
+  local root = setup("snapshot-diagnostic-freeze")
+  local s = check.must(store.open(root))
+  local it = new_item("diagnostic")
+  write.set_session(s, "holder")
+  assert(write.save(s, it, "diagnostic candidate"))
+  local candidate = check.must(workspace.read(root))
+  local planned = check.must(publication.plan(root, candidate.commit, "origin", nil))
+  assert(recovery.begin(workspace.recovery_path(root), planned.plan))
+  assert(gitboard.main("show", "--dir", root) == 0,
+    "canonical diagnostics remain available while publication is frozen")
+  assert(gitboard.main("set", it.id, "--title", "blocked", "--dir", root) ~= 0,
+    "ordinary writes remain frozen")
+  assert(recovery.clear(workspace.recovery_path(root)))
+  assert(fs.write(workspace.recovery_path(root) .. ".candidate", "{}\n"))
+  assert(gitboard.main("set", it.id, "--title", "blocked", "--dir", root) ~= 0,
+    "an orphan sidecar cannot bypass the freeze")
+end
+
+local function test_protocol_restart_can_inspect_an_expired_frozen_claim_before_update()
+  local root = setup("snapshot-expired-restart")
+  local seed = check.must(store.open(root))
+  local it = new_item("expiring claim")
+  assert(write.save(seed, it, "create") and publication.publish(seed, nil))
+  local s = check.must(store.open(root))
+  local now = os.time()
+  local result = stateclaim.prepare(root, s.state_head,
+    {{id = it.id, product_base = string.rep("a", 40)}}, "take", "holder", now,
+    false, "")
+  write.set_session(s, "holder")
+  assert(statewrite.transition(s, result.changes, "claim by holder", result.publish_by))
+  local candidate = check.must(workspace.read(root))
+  local path = workspace.recovery_path(root)
+  assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
+      "", path, now) == 0)
+  assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
+      "", path, now + 7200) == 0,
+    "restart inspection uses the frozen historical validation instant")
+  assert(publication_cli.protocol(s, candidate.commit, "origin", "update", "", "",
+      candidate.parent, path, now + 7200) ~= 0,
+    "the current deadline remains mandatory before a new update")
 end
 
 local function test_shell_cli_publish_runs_push_fetch_and_confirmation()

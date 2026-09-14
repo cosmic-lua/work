@@ -33,10 +33,12 @@ end
 local function status(view: boardread.View, id: string, now: integer): string
   local it = view.items_by_id[id]
   if it == nil then return "removed" end
-  if not item.is_open(it) then return "done" end
+  if not item.is_open(it) then return "ended" end
   local lease = view.claims_by_id[id]
-  if lease ~= nil and claim.status(stateclaim.state(lease), now) == "active" then
-    return "doing"
+  if lease ~= nil and claim.status(stateclaim.state(lease), now) == "active"
+  or (it.handover_head or "") ~= "" or (it.pr or 0) ~= 0
+  or (it.result or "") ~= "" then
+    return item.substate(it)
   end
   return "todo"
 end
@@ -156,21 +158,27 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
         local evidence, eerr = stateevidence.verify(root, parent, new.result or "", id)
         if evidence == nil then return false, "invalid research evidence: " .. eerr end
       end
+      if verdict_changed and (new.verdict or "") ~= ""
+      and (new.verdict_head or "") == "" then
+        return false, "verdict lacks current handover evidence: " .. id
+      end
       if verdict_changed and (new.verdict_head or "") ~= "" then
-        local evidence = (new.handover_head or "") ~= "" and new.handover_head
-        or (new.result or "") ~= "" and new.result
-        or old ~= nil and ((old.handover_head or "") ~= "" and old.handover_head or old.result)
+        local product_evidence = (new.handover_head or "") ~= "" and new.handover_head
+        or old ~= nil and (old.handover_head or "") ~= "" and old.handover_head or ""
+        local research_evidence = (new.result or "") ~= "" and new.result
+        or old ~= nil and (old.result or "") ~= "" and old.result or ""
+        local evidence = product_evidence ~= "" and product_evidence or research_evidence
         if (new.verdict_head or "") ~= (evidence or "") then
           return false, "verdict does not name current handover evidence: " .. id
         end
         if not repair then
-          for _, prior in ipairs(new.builders or {}) do
+          for _, prior in ipairs(old ~= nil and old.builders or new.builders or {}) do
             if prior == author then return false, "verdict author built the item: " .. id end
           end
-          for _, prior in ipairs(new.speccers or {}) do
+          for _, prior in ipairs(old ~= nil and old.speccers or new.speccers or {}) do
             if prior == author then return false, "verdict author specified the item: " .. id end
           end
-          if (new.handover_head or "") ~= "" then
+          if product_evidence ~= "" then
             local product, rerr = repository_map.resolve(root, new.repo or "", "")
             if product == nil then return false, "cannot verify verdict: " .. rerr end
             local lineage, lerr = commit_evidence.verify_lineage(product,

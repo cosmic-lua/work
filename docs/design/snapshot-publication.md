@@ -121,3 +121,31 @@ tree, ignore the receipt tree, and ignore the receipt message. All five
 were caught by assertion failures in the focused suites; direct source
 execution of the restored suites passed. This verifies the guards are
 exercised, beyond merely obtaining a green unmodified run.
+
+Stage 2 (`82e99df14`) integrates ordinary composition, final-board validation,
+shell publication, restart recovery and the JSON protocol. Its 32 focused
+tests passed; all 316 Teal modules compiled, and scoped formatting and lint
+passed. The prerequisite follow-up (`43fdcf198`) updates the shared caller
+fixture, refresh bookkeeping, repository mappings and recovery planning.
+
+The real Work connector exercise used the isolated branch
+`validation/gitboard-snapshot-20260914`, with Teal at `43fdcf198` and the
+Work runner and callback example under development on this PR:
+
+- Creating an item and spec, editing and reverting its title, then setting
+  a summary produced one final commit over the original canonical parent.
+  Local `230cef58b8b9fa8a104050bbcf6efae09c822713` published as provider
+  commit `dd644c558dfcb40d624397062cface1870339014` in exactly three writes.
+- A second update published local
+  `617dc9120e03406d22669ec0de08b03886d83c44` as provider commit
+  `47f6c7fa597cbca2c6af4f97777220e4c53bffa0`. After the actual branch update,
+  the test injected a lost response and a failed fetch. Restart confirmed
+  that saved candidate with zero additional connector writes.
+- Independent guards checked the candidate/recovery files before each ref
+  update and restricted all writes to the isolated branch. Both confirmed
+  results reported only the affected item and empty spec-issue arrays.
+
+The broader retained suite at `43fdcf198` reports 924 passing and 135 failing
+tests across 160 files. Updating obsolete workflow assumptions and closing
+final-state validation gaps remains in progress; this is not a green final
+repository gate yet.

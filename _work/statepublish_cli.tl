@@ -21,7 +21,7 @@ end
 
 local function protocol_action(s: store.Store, commit: string, remote: string,
     action: string, returned_tree: string, candidate_sha: string,
-    observed_head: string, recovery_override: string): integer
+    observed_head: string, recovery_override: string, now?: integer): integer
   local path = recovery_override ~= "" and recovery_override or workspace.recovery_path(s.root)
   if action == "reconcile" then
     local outcome, oerr = snapshot_publish.reconcile_saved(s.root, commit,
@@ -30,11 +30,17 @@ local function protocol_action(s: store.Store, commit: string, remote: string,
     return emit(outcome)
   elseif action == "update" then
     local call, cerr = snapshot_publish.update_call(s.root, commit, remote,
-      path, observed_head, nil)
+      path, observed_head, now)
     if call == nil then return gate.verdict_line("publish", false, cerr) end
     return emit(call)
   end
-  local planned, err = snapshot_publish.plan(s.root, commit, remote, nil)
+  local planned, err: snapshot_publish.Planned | nil, string
+  if fs.is_present(path) or fs.is_present(path .. ".candidate")
+  or fs.is_present(path .. ".updating") then
+    planned, err = snapshot_publish.resume_plan(s.root, commit, remote)
+  else
+    planned, err = snapshot_publish.plan(s.root, commit, remote, now)
+  end
   if planned == nil then return gate.verdict_line("publish", false, err) end
   local plan, report = planned.plan, planned.report
   if action == "begin" then
@@ -50,8 +56,11 @@ local function protocol_action(s: store.Store, commit: string, remote: string,
       if begun == nil then return gate.verdict_line("publish", false, berr) end
       state = begun
     end
-    return emit({status = state.phase, commit = plan.local_commit, parent = plan.parent,
+    return emit({status = state.phase, candidate = state.remote_sha,
+        commit = plan.local_commit, parent = plan.parent,
         tree = plan.tree, publish_by = plan.publish_by,
+        repository = plan.destination.repository, branch = plan.destination.branch,
+        remote = plan.destination.remote,
         changed = array(report.changed as {any}), -- cast: JSON value array
         new_issues = array(report.new_issues as {any}), -- cast: JSON value array
         existing_issues = array(report.existing_issues as {any})}) -- cast: JSON value array
@@ -100,7 +109,7 @@ end
 local record Module
   cmd_publish: function(store.Store, {string}, string, boolean, ...: any): integer
   protocol: function(store.Store, string, string, string, string, string,
-  string, string): integer
+  string, string, integer | nil): integer
 end
 local M: Module = {cmd_publish = cmd_publish, protocol = protocol_action}
 return M

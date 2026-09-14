@@ -61,3 +61,6 @@ jobs:
         run: |
           bin/cosmic --make fetch
           bin/cosmic --make ci
+
+      - name: Work snapshot runner
+        run: node --test _work/snapshot_work_runner_test.js docs/work-snapshot-publish_test.js

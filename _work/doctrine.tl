@@ -26,36 +26,31 @@ local PAGES < const >: {Page} = {
   {name = "offline", title = "claim, work offline, and publish once",
     body = [[
 Gitboard keeps authentication at the caller boundary: it never discovers, stores, or
-brokers credentials. Bare transport commands prepare or print exact Git argv;
-`--execute` runs those commands through ordinary caller-configured Git.
+brokers credentials. Shell publication runs through ordinary caller-configured Git.
 Acquire the work set from caller-fetched state:
   export GITBOARD_SESSION=$(gitboard session new)
   gitboard refresh --execute
   gitboard claim A B C
-  gitboard publish TRANSACTION --execute
-  gitboard refresh --execute
+  gitboard publish COMMIT
 `claim A B C` prepares one commit writing every member's `claims/<id>` file,
 holding its acquisition identity, caller, and lease deadline. One non-forced update
 of `refs/heads/state` publishes the entire batch. Item subtrees and claim blobs
-are the dependency fences. ANY live
-overlap, including this caller's claim, rejects all. Retry a changed set as a new batch;
+are validated before composition. ANY live overlap, including this caller's claim,
+rejects all. Retry a changed set from fresh canonical state;
 use separate `renew` and `drop` for held claims. PREPARED and PUSHED grant no authority.
-Only `refresh` proving the complete commit and current claims confirms authority.
-Work offline until its deadline. A changed dependency refuses the mutation whole;
-refresh and prepare a new decision. A disjoint update can rebase after its bounded
-gates re-pass. An uncertain publication remains pending until fetched history proves
-whether it landed. See `help native` for the immutable connector call sequence.
-Chain dependent board mutations in a durable clone-local draft:
-  export GITBOARD_DRAFT=$(gitboard draft begin --print-id)
+Only fetched confirmation of the complete commit and current claims grants authority.
+Work offline until its deadline. Ordinary board verbs compose one replaceable final
+snapshot from the fetched head:
   gitboard new ...
   gitboard spec ...
   gitboard rank ...
-  gitboard draft show
-  gitboard publish "$GITBOARD_DRAFT" --execute
-  gitboard refresh --execute
-Drafts overlay a frozen snapshot and publish their ordered commit chain in one
-non-forced update. A failed dependency fence lands none. Claims stay outside drafts
-because unconfirmed coordination grants no authority. `draft abandon` is local-only.
+  gitboard snapshot --summary "Describe the final board update"
+  gitboard snapshot --check
+  gitboard publish COMMIT
+Publication freezes that exact snapshot and advances the state branch once. Any head
+advance conflicts the whole update. There is no named draft, automatic rebase, replay,
+or partial publication. An uncertain update must be fetched and reconciled before the
+same saved candidate can retry. See `help native` for the connector recovery sequence.
 ]]},
   {name = "system", title = "the board: states, order, exits, rules",
     body = [[

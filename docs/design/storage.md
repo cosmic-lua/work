@@ -1,4 +1,9 @@
-# Design — one branch is the board
+# Historical design — format-6 transition publication
+
+Status: archived after format 6 shipped. This document records the transition,
+draft, rebase, and prefix-confirmation model implemented by PR #171. The current
+snapshot publication contract is defined in `snapshot-publication.md`; archived
+implementation evidence below is intentionally unchanged.
 
 A board is one branch. Its tree is the board's state, its first-parent
 history is every mutation in the order it was published, and one

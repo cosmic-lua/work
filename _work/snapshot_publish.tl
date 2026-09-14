@@ -1,5 +1,6 @@
 --- Shell publication and refresh for one validated final-board snapshot.
 local fs = require("cosmic.fs")
+local cache = require("_work.cache")
 local prepared = require("_work.prepared")
 local refs = require("_work.refs")
 local snapshot = require("_work.snapshot")
@@ -37,8 +38,8 @@ local function plan(root: string, commit: string, remote: string,
   if identity == nil then return nil, ierr end
   local report, rerr = validate.preflight(root, identity.parent, commit, now)
   if report == nil then return nil, rerr end
-  local captured, cerr = snapshot.capture(root, commit, destination(root, remote),
-    validate.validator(now))
+  local captured, cerr = snapshot.capture_validated(root, commit,
+    destination(root, remote), report.publish_by)
   if captured == nil then return nil, cerr end
   return {plan = captured, report = report}, ""
 end
@@ -49,8 +50,9 @@ local function fetch_argv(remote: string): {string}
     "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
 end
 
-local function fetch_branch_argv(remote: string, branch: string): {string}
-  return {"git", "fetch", "--atomic", remote,
+local function fetch_branch_argv(remote: string, branch: string,
+    endpoint?: string): {string}
+  return {"git", "fetch", "--atomic", endpoint or remote,
     "+refs/heads/" .. branch .. ":refs/remotes/" .. remote .. "/state",
     "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
 end
@@ -135,9 +137,9 @@ local function update_call(root: string, commit: string, remote: string,
   return nil, "snapshot has no durable candidate to update"
 end
 
-local function observe_remote(root: string, remote: string, branch: string): string | nil, string
+local function observe_remote(root: string, endpoint: string, branch: string): string | nil, string
   local out, err = require("_work.singlehead_git").text(root,
-    {"ls-remote", "--refs", remote, "refs/heads/" .. branch})
+    {"ls-remote", "--refs", endpoint, "refs/heads/" .. branch})
   if out == nil then return nil, err end
   local sha = out:match("^([0-9a-f]+)%s")
   if sha == nil then return nil, "remote state head is missing" end
@@ -168,7 +170,8 @@ local function execute(root: string, commit: string, remote: string,
     if state.phase == "updating" then
       if refs.board_mode(root) == "remote" then
         local fetched, ferr = prepared.execute(root,
-          fetch_branch_argv(remote, frozen.destination.branch))
+          fetch_branch_argv(remote, frozen.destination.branch,
+            frozen.destination.target_url))
         if not fetched then return false, "uncertain: " .. ferr end
       end
       local head, herr = current(root, remote)
@@ -198,7 +201,8 @@ local function execute(root: string, commit: string, remote: string,
   end
   local observed: string | nil
   if retry_update or refs.board_mode(root) == "local" then observed, err = current(root, remote)
-  else observed, err = observe_remote(root, remote, frozen.destination.branch) end
+  else observed, err = observe_remote(root, frozen.destination.target_url,
+      frozen.destination.branch) end
   if observed == nil then return false, err end
   local _call: protocol.Call | nil = nil
   local aerr = ""
@@ -214,7 +218,8 @@ local function execute(root: string, commit: string, remote: string,
   end
   if refs.board_mode(root) == "remote" then
     local fetched, ferr = prepared.execute(root,
-      fetch_branch_argv(remote, frozen.destination.branch))
+      fetch_branch_argv(remote, frozen.destination.branch,
+        frozen.destination.target_url))
     if not fetched then return false, "uncertain: " .. ferr end
   end
   local loaded, lerr = recovery.load(path)
@@ -240,6 +245,15 @@ local function publish(s: store.Store, execute_now?: boolean): boolean, string
   local planned, perr = plan(s.root, candidate.commit,
     refs.board_remote(s.root))
   if planned == nil then return false, perr end
+  local head, herr = current(s.root, refs.board_remote(s.root))
+  if head == nil then return false, herr end
+  s.state_head, s.state_receipt = head, ""
+  s.state_paths, s.state_reads = {}, {}
+  s.leased_item, s.leased_sha, s.leased_ref, s.touched_at = {}, {}, {}, {}
+  s.native_view, s.native_history, s.native_history_head = nil, nil, ""
+  s.board_digest, s.fresh_lease = "", ""
+  refs.clear_overlay(s.root)
+  local _closed, _cerr = store.close(s)
   return true, "prepared " .. candidate.commit .. " " .. compact(planned.report)
   .. "\npublish: gitboard publish " .. candidate.commit
 end
@@ -248,7 +262,8 @@ local function sync(s: store.Store, execute_fetch?: boolean): boolean, string
   local remote = refs.board_remote(s.root)
   if execute_fetch and refs.board_mode(s.root) == "remote" then
     local ok, err = prepared.execute(s.root,
-      fetch_branch_argv(remote, publication_branch(s.root)))
+      fetch_branch_argv(remote, publication_branch(s.root),
+        staging.target_url(s.root, remote)))
     if not ok then return false, err end
   end
   local head, herr = current(s.root, remote)
@@ -256,7 +271,13 @@ local function sync(s: store.Store, execute_fetch?: boolean): boolean, string
   local authority, aerr = stateclaim.authority(s.root, head)
   if authority == nil then return false, aerr end
   s.state_head, s.state_receipt = head, ""
+  s.state_paths, s.state_reads = {}, {}
+  s.leased_item, s.leased_sha, s.leased_ref, s.touched_at = {}, {}, {}, {}
+  s.native_view, s.native_history, s.native_history_head = nil, nil, ""
+  s.board_digest, s.fresh_lease = "", ""
   refs.clear_overlay(s.root)
+  local _closed, _cerr = store.close(s)
+  cache.after_fetch(s.root, head)
   return true, "head=" .. head:sub(1, 12) .. "\n" .. authority
 end
 
@@ -264,8 +285,9 @@ local record Module
   type Planned = Planned
   destination: function(string, string): snapshot.Destination
   plan: function(string, string, string, integer | nil): Planned | nil, string
+  resume_plan: function(string, string, string): Planned | nil, string
   fetch_argv: function(string): {string}
-  fetch_branch_argv: function(string, string): {string}
+  fetch_branch_argv: function(string, string, string | nil): {string}
   execute: function(string, string, string, integer | nil): boolean, string
   publish: function(store.Store, boolean | nil): boolean, string
   sync: function(store.Store, boolean | nil): boolean, string
@@ -275,7 +297,8 @@ local record Module
   reconcile_saved: function(string, string, string, string,
   string): recovery.Status | nil, string
 end
-local M: Module = {destination = destination, plan = plan, fetch_argv = fetch_argv,
+local M: Module = {destination = destination, plan = plan,
+  resume_plan = historical_plan, fetch_argv = fetch_argv,
   fetch_branch_argv = fetch_branch_argv,
   execute = execute, publish = publish, sync = sync, compact = compact,
   update_call = update_call, reconcile_saved = reconcile_saved}
