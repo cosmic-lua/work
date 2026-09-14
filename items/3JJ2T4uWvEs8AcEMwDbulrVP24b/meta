@@ -1,4 +1,7 @@
 title: publish one board snapshot: ordinary Git commits, whole-head conflicts, one confirmed operation
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
+handover_head: 09cfb71f2505ba74bec082ab09ec8b1070a5f639
+external_url: https://github.com/cosmic-lua/work/pull/173
+builders: 7bdc5eeb9aef518775c073d137e71262
 touches: _work docs experiments
