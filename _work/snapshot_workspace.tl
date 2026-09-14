@@ -5,6 +5,7 @@ local git = require("_work.singlehead_git")
 local projection = require("_work.stateplan_git")
 local refs = require("_work.refs")
 local snapshot = require("_work.snapshot")
+local snapshot_lock = require("_work.snapshot_lock")
 local tx = require("_work.statetransaction")
 
 local REF < const > = "refs/gitboard/snapshot"
@@ -16,9 +17,8 @@ local record Candidate
 end
 
 local function recovery_path(root: string): string
-  local common = git.text(root, {"rev-parse", "--git-common-dir"})
+  local common = snapshot_lock.common_dir(root)
   if common == nil then return fs.join(root, ".git/gitboard/snapshot-recovery.literal") end
-  if common:sub(1, 1) ~= "/" then common = fs.join(root, common) end
   return fs.join(common, "gitboard/snapshot-recovery.literal")
 end
 
@@ -114,6 +114,9 @@ end
 
 local function compose(root: string, canonical: string, current: string,
     session: string, changes: {tx.Change}, summary: string): string | nil, string
+  local held, herr = snapshot_lock.acquire(root)
+  if held == nil then return nil, herr end
+  local _guard < close > = held
   local candidate, err = read(root)
   if err ~= "" then return nil, err end
   local locked, lerr = frozen(root, candidate)
@@ -173,6 +176,9 @@ local function clear(root: string, expected: string): boolean, string
 end
 
 local function resummary(root: string, summary: string): string | nil, string
+  local held, herr = snapshot_lock.acquire(root)
+  if held == nil then return nil, herr end
+  local _guard < close > = held
   local candidate, err = read(root)
   if candidate == nil then return nil, err ~= "" and err or "no local snapshot" end
   local locked, lerr = frozen(root, candidate)

@@ -172,6 +172,14 @@ test("a foreign canonical head conflicts before update", async () => {
   assert.equal(f.state.log.some((entry) => entry.startsWith("tool:")), false);
 });
 
+test("an early begin outcome stays structured and performs no writes", async () => {
+  const f = fixture({phase: "uncertain"});
+  const result = await runner.publish(f.options);
+  assert.equal(result.status, "uncertain");
+  assert.match(result.reason, /publication could not begin/);
+  assert.deepEqual(f.state.log, ["cli:begin"]);
+});
+
 test("an expired saved candidate is reconciled but cannot update", async () => {
   const f = fixture({phase: "candidate", expired: true});
   const result = await runner.publish(f.options);

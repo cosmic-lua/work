@@ -4,6 +4,7 @@ local gate = require("_work.gitgate")
 local recovery = require("_work.snapshot_recovery")
 local refs = require("_work.refs")
 local snapshot = require("_work.snapshot")
+local snapshot_lock = require("_work.snapshot_lock")
 local publication = require("_work.snapshot_publish")
 local workspace = require("_work.snapshot_workspace")
 
@@ -16,6 +17,12 @@ local function cmd(root: string, summary: string, check_only: boolean,
   if candidate == nil then return gate.verdict_line("snapshot", false,
       err ~= "" and err or "no local snapshot") end
   if abandon ~= "" then
+    local held, lockerr = snapshot_lock.acquire(root)
+    if held == nil then return gate.verdict_line("snapshot", false, lockerr) end
+    local _guard < close > = held
+    candidate, err = workspace.read(root)
+    if candidate == nil then return gate.verdict_line("snapshot", false,
+        err ~= "" and err or "no local snapshot") end
     if abandon ~= candidate.commit then return gate.verdict_line("snapshot", false,
         "--abandon must name the current full snapshot commit") end
     local path = workspace.recovery_path(root)

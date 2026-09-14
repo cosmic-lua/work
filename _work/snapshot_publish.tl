@@ -4,6 +4,7 @@ local cache = require("_work.cache")
 local prepared = require("_work.prepared")
 local refs = require("_work.refs")
 local snapshot = require("_work.snapshot")
+local snapshot_lock = require("_work.snapshot_lock")
 local protocol = require("_work.snapshot_protocol")
 local recovery = require("_work.snapshot_recovery")
 local staging = require("_work.statestaging")
@@ -74,9 +75,91 @@ local function current(root: string, remote: string): string | nil, string
   return refs.read_ref(root, ref)
 end
 
+local function recovery_present(path: string): boolean
+  return fs.is_present(path) or fs.is_present(path .. ".candidate")
+  or fs.is_present(path .. ".updating")
+end
+
+local function discovery_head(root: string,
+    frozen: snapshot.Plan): string | nil, string
+  local head, err = current(root, frozen.destination.remote)
+  if head == nil then return nil, err end
+  if head ~= frozen.parent and refs.board_mode(root) == "remote" then
+    local fetched, ferr = prepared.execute(root,
+      fetch_branch_argv(frozen.destination.remote, frozen.destination.branch,
+        frozen.destination.target_url))
+    if not fetched then return nil, ferr end
+    return current(root, frozen.destination.remote)
+  end
+  return head, ""
+end
+
+--- Atomically adopt an exact raw commit and freeze it.  If confirmation
+--- cleanup completed before its response reached the caller, reconstruct the
+--- candidate only from exact fetched first-parent history.
+local function start(root: string, frozen: snapshot.Plan): recovery.Recovery | nil, string
+  local held, herr = snapshot_lock.acquire(root)
+  if held == nil then return nil, herr end
+  local _guard < close > = held
+  local path = workspace.recovery_path(root)
+  if recovery_present(path) then
+    local state, lerr = recovery.load(path)
+    if state == nil then return nil, lerr end
+    local bound, berr = recovery.binding(state, frozen)
+    if not bound then return nil, berr end
+    local retained, rerr = workspace.retain(root, frozen.local_commit)
+    if not retained then return nil, rerr end
+    return state, ""
+  end
+  local retained, rerr = workspace.retain(root, frozen.local_commit)
+  if not retained then return nil, rerr end
+  local candidate = workspace.read(root)
+  if candidate == nil or candidate.commit ~= frozen.local_commit then
+    return nil, "snapshot proposal changed before publication could freeze it"
+  end
+  local head, cerr = discovery_head(root, frozen)
+  if head == nil then return nil,
+    "uncertain: cannot inspect exact publication destination: " .. cerr end
+  local discovered: recovery.Status = nil
+  if head ~= frozen.parent then
+    local outcome, oerr = recovery.discover(root, head, frozen)
+    if outcome == nil then return nil, oerr end
+    if outcome.status == "confirmed" then discovered = outcome end
+  end
+  local state, berr = recovery.begin(path, frozen)
+  if state == nil then return nil, berr end
+  if discovered ~= nil then
+    return recovery.record_candidate(path, frozen, discovered.candidate)
+  end
+  return state, ""
+end
+
+local function record_candidate(root: string, frozen: snapshot.Plan,
+    remote_sha: string): recovery.Recovery | nil, string
+  local held, herr = snapshot_lock.acquire(root)
+  if held == nil then return nil, herr end
+  local _guard < close > = held
+  local path = workspace.recovery_path(root)
+  local state, lerr = recovery.load(path)
+  if state == nil then return nil, lerr end
+  local bound, berr = recovery.binding(state, frozen)
+  if not bound then return nil, berr end
+  if state.phase ~= "prepared" then
+    return nil, "snapshot recovery already has a durable candidate"
+  end
+  return recovery.record_candidate(path, frozen, remote_sha)
+end
+
 local function finish_at(root: string, frozen: snapshot.Plan,
     state: recovery.Recovery, head: string, path: string): boolean, string
-  local outcome, oerr = recovery.reconcile(root, head, frozen, state)
+  local held, herr = snapshot_lock.acquire(root)
+  if held == nil then return false, herr end
+  local _guard < close > = held
+  local current_state, lerr = recovery.load(path)
+  if current_state == nil then return false, lerr end
+  local bound, berr = recovery.binding(state, frozen)
+  if not bound then return false, berr end
+  local outcome, oerr = recovery.reconcile(root, head, frozen, current_state)
   if outcome == nil then return false, oerr end
   if outcome.status ~= "confirmed" then return false, outcome.status .. ": " .. outcome.reason end
   local candidate = workspace.read(root)
@@ -106,6 +189,24 @@ local function historical_plan(root: string, commit: string,
   return plan(root, commit, remote, authored)
 end
 
+local function begin_plan(root: string, commit: string, remote: string,
+    now?: integer): Planned | nil, string
+  local planned, err = plan(root, commit, remote, now)
+  if planned ~= nil then return planned, "" end
+  local historical, herr = historical_plan(root, commit, remote)
+  if historical == nil then return nil, err ~= "" and err or herr end
+  local head, cerr = discovery_head(root, historical.plan)
+  if head == nil then return historical,
+    "uncertain: cannot inspect exact publication destination: " .. cerr end
+  local outcome, oerr = recovery.discover(root, head, historical.plan)
+  if outcome ~= nil and outcome.status == "confirmed" then return historical, "" end
+  if outcome ~= nil and outcome.status == "conflict" then
+    return historical, "conflict: " .. outcome.reason
+  end
+  if outcome ~= nil then return historical, "uncertain: " .. outcome.reason end
+  return historical, "uncertain: " .. oerr
+end
+
 local function reconcile_saved(root: string, commit: string, remote: string,
     path: string, head: string): recovery.Status | nil, string
   local state, lerr = recovery.load(path)
@@ -124,6 +225,9 @@ end
 
 local function update_call(root: string, commit: string, remote: string,
     path: string, head: string, now?: integer): protocol.Call | nil, string
+  local held, herr = snapshot_lock.acquire(root)
+  if held == nil then return nil, herr end
+  local _guard < close > = held
   local planned, perr = plan(root, commit, remote, now)
   if planned == nil then return nil, perr end
   local frozen = planned.plan
@@ -153,7 +257,6 @@ local function execute(root: string, commit: string, remote: string,
   local frozen: snapshot.Plan = nil
   local report: validate.Report = nil
   local err = ""
-  local retry_update = false
   if fs.is_present(path) then
     local loaded, lerr = recovery.load(path)
     if loaded == nil then return false, lerr end
@@ -167,30 +270,28 @@ local function execute(root: string, commit: string, remote: string,
     local bound, berr = recovery.binding(loaded, frozen)
     if not bound then return false, berr end
     state = loaded
-    if state.phase == "updating" then
-      if refs.board_mode(root) == "remote" then
-        local fetched, ferr = prepared.execute(root,
-          fetch_branch_argv(remote, frozen.destination.branch,
-            frozen.destination.target_url))
-        if not fetched then return false, "uncertain: " .. ferr end
-      end
-      local head, herr = current(root, remote)
-      if head == nil then return false, herr end
-      local outcome, oerr = recovery.reconcile(root, head, frozen, state)
-      if outcome == nil then return false, oerr end
-      if outcome.status == "confirmed" then return finish(root, frozen, state) end
-      if outcome.status == "conflict" then return false, "conflict: " .. outcome.reason end
-      if head ~= frozen.parent then return false, "uncertain: " .. outcome.reason end
-      retry_update = true
-    end
   else
-    local planned, perr = plan(root, commit, remote, now)
+    local planned, perr = begin_plan(root, commit, remote, now)
     if planned == nil then return false, perr end
+    if perr ~= "" then return false, perr end
     frozen, report = planned.plan, planned.report
-    local retained, rerr = workspace.retain(root, commit)
-    if not retained then return false, rerr end
-    state, err = recovery.begin(path, frozen)
+    state, err = start(root, frozen)
     if state == nil then return false, err end
+  end
+  if state.phase == "candidate" or state.phase == "updating" then
+    if refs.board_mode(root) == "remote" then
+      local fetched, ferr = prepared.execute(root,
+        fetch_branch_argv(remote, frozen.destination.branch,
+          frozen.destination.target_url))
+      if not fetched then return false, "uncertain: " .. ferr end
+    end
+    local head, herr = current(root, remote)
+    if head == nil then return false, herr end
+    local outcome, oerr = recovery.reconcile(root, head, frozen, state)
+    if outcome == nil then return false, oerr end
+    if outcome.status == "confirmed" then return finish(root, frozen, state) end
+    if outcome.status == "conflict" then return false, "conflict: " .. outcome.reason end
+    if head ~= frozen.parent then return false, "uncertain: " .. outcome.reason end
   end
   -- Current authority/deadline is rechecked for a first update or a retry. The
   -- historical validation above existed only to prove an already-landed SHA.
@@ -198,18 +299,15 @@ local function execute(root: string, commit: string, remote: string,
   if planned == nil then return false, perr end
   frozen, report = planned.plan, planned.report
   if state.phase == "prepared" then
-    state, err = recovery.record_candidate(path, frozen, frozen.local_commit)
+    state, err = record_candidate(root, frozen, frozen.local_commit)
     if state == nil then return false, err end
   end
   local observed: string | nil
-  if retry_update or refs.board_mode(root) == "local" then observed, err = current(root, remote)
+  if state.phase == "updating" or refs.board_mode(root) == "local" then observed, err = current(root, remote)
   else observed, err = observe_remote(root, frozen.destination.target_url,
       frozen.destination.branch) end
   if observed == nil then return false, err end
-  local _call: protocol.Call | nil = nil
-  local aerr = ""
-  if retry_update then _call, aerr = protocol.checked_update(frozen, state, observed, now)
-  else _call, aerr = protocol.arm_update(path, frozen, state, observed, now) end
+  local _call, aerr = update_call(root, commit, remote, path, observed, now)
   if _call == nil then return false, aerr end
   local moved, merr: boolean, string
   if refs.board_mode(root) == "local" then
@@ -294,10 +392,13 @@ local record Module
   type Planned = Planned
   destination: function(string, string): snapshot.Destination
   plan: function(string, string, string, integer | nil): Planned | nil, string
+  begin_plan: function(string, string, string, integer | nil): Planned | nil, string
   resume_plan: function(string, string, string): Planned | nil, string
   fetch_argv: function(string): {string}
   fetch_branch_argv: function(string, string, string | nil): {string}
   execute: function(string, string, string, integer | nil): boolean, string
+  start: function(string, snapshot.Plan): recovery.Recovery | nil, string
+  record_candidate: function(string, snapshot.Plan, string): recovery.Recovery | nil, string
   publish: function(store.Store, boolean | nil): boolean, string
   sync: function(store.Store, boolean | nil): boolean, string
   compact: function(validate.Report): string
@@ -307,8 +408,9 @@ local record Module
   string): recovery.Status | nil, string
 end
 local M: Module = {destination = destination, plan = plan,
-  resume_plan = historical_plan, fetch_argv = fetch_argv,
+  begin_plan = begin_plan, resume_plan = historical_plan, fetch_argv = fetch_argv,
   fetch_branch_argv = fetch_branch_argv,
-  execute = execute, publish = publish, sync = sync, compact = compact,
+  execute = execute, start = start, record_candidate = record_candidate,
+  publish = publish, sync = sync, compact = compact,
   update_call = update_call, reconcile_saved = reconcile_saved}
 return M

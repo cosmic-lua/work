@@ -166,6 +166,40 @@ local function first_parent_segment(root: string, head: string,
   return contains, reached, ""
 end
 
+local function exact_identity(root: string, candidate: string,
+    plan: snapshot.Plan): boolean
+  local identity = snapshot.commit_identity(root, candidate)
+  return identity ~= nil and identity.parent == plan.parent
+  and identity.tree == plan.tree and identity.message == plan.message
+  and same_author(identity.author, plan.author)
+end
+
+--- Recover a cleaned confirmed attempt from fetched canonical history.  This
+--- closes the response-loss window after confirmation cleanup without keeping
+--- a permanent receipt: the exact public commit is its own durable proof.
+local function discover(root: string, head: string,
+    plan: snapshot.Plan): Status | nil, string
+  local valid, verr = snapshot.validate(plan)
+  if not valid then return nil, verr end
+  if head == plan.parent then return {status = "uncertain", candidate = "",
+      reason = "publication is not yet visible"}, "" end
+  local raw, err = git.run(root,
+    {"rev-list", "--first-parent", "--parents", head})
+  if raw == nil then return nil, err end
+  for line in raw:gmatch("([^\n]+)") do
+    local sha, parent = line:match("^([0-9a-f]+)%s+([0-9a-f]+)")
+    if parent == plan.parent then
+      if exact_identity(root, sha, plan) then
+        return {status = "confirmed", candidate = sha, reason = ""}, ""
+      end
+      return {status = "conflict", candidate = "",
+        reason = "canonical head advanced without this snapshot on its first-parent chain"}, ""
+    end
+  end
+  return {status = "uncertain", candidate = "",
+    reason = "fetched first-parent history does not reach snapshot parent"}, ""
+end
+
 --- Classify only from a fetched canonical head and exact publication proof.
 local function reconcile(root: string, head: string, plan: snapshot.Plan,
     recovery: Recovery): Status | nil, string
@@ -223,10 +257,12 @@ local record Module
   record_candidate: function(string, snapshot.Plan, string): Recovery | nil, string
   mark_updating: function(string, snapshot.Plan, Recovery): Recovery | nil, string
   reconcile: function(string, string, snapshot.Plan, Recovery): Status | nil, string
+  discover: function(string, string, snapshot.Plan): Status | nil, string
   clear: function(string): boolean, string
 end
 
 local M: Module = {FORMAT = FORMAT, validate = validate, binding = binding,
   begin = begin, load = load_recovery, record_candidate = record_candidate,
-  mark_updating = mark_updating, reconcile = reconcile, clear = clear}
+  mark_updating = mark_updating, reconcile = reconcile, discover = discover,
+  clear = clear}
 return M

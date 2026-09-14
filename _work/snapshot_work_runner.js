@@ -74,9 +74,10 @@
       !SHA.test(value.parent || "") || !SHA.test(value.tree || "") ||
       typeof value.repository !== "string" || typeof value.branch !== "string" ||
       typeof value.remote !== "string" ||
-      !["prepared", "candidate", "updating"].includes(value.status))
+      !["prepared", "candidate", "updating", "conflict", "uncertain"].includes(value.status))
       fail("begin returned an invalid protocol record");
-    if (value.status !== "prepared" && !SHA.test(value.candidate || ""))
+    if (["candidate", "updating"].includes(value.status) &&
+      !SHA.test(value.candidate || ""))
       fail("begin returned no saved remote candidate");
     return value;
   }
@@ -137,6 +138,9 @@
       fail("cli, fetch, and invoke callbacks are required");
     const begin = checkBegin(cliValue(await options.cli("begin", {}), "begin"));
     if (options.commit && options.commit !== begin.commit) fail("begin returned a different commit");
+    if (begin.status === "conflict" || begin.status === "uncertain")
+      return outcome(begin, {status: begin.status, candidate: begin.candidate || "",
+        reason: begin.reason || "publication could not begin"});
 
     if (begin.status === "candidate" || begin.status === "updating") {
       let observed;

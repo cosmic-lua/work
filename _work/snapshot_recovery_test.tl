@@ -100,6 +100,15 @@ local function test_wrong_identity_and_side_branch_never_confirm()
         state(plan, wrong_author))).status == "conflict")
 
   local exact = provider_commit(root, plan.parent, plan.tree, plan.message)
+  local descendant = provider_commit(root, exact, plan.tree,
+    logical_message("later canonical change"))
+  local rediscovered = check.must(recovery.discover(root, descendant, plan))
+  assert(rediscovered.status == "confirmed" and rediscovered.candidate == exact,
+    "cleaned recovery is reconstructed from the exact first-parent child")
+  assert(check.must(recovery.discover(root, wrong_message, plan)).status == "conflict",
+    "matching parent alone cannot reconstruct a cleaned attempt")
+  assert(check.must(recovery.discover(root, other_base, plan)).status == "uncertain",
+    "history that does not reach the parent cannot prove absence")
   local unrelated = provider_commit(root, plan.parent, plan.base_tree,
     logical_message("unrelated advance"))
   local side = check.must(recovery.reconcile(root, unrelated, plan, state(plan, exact)))

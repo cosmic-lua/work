@@ -1,6 +1,6 @@
 # Snapshot publication
 
-Status: implementation in progress for board item `ulrV_P24b`.
+Status: implemented for board item `ulrV_P24b`; draft PR #173 awaits review.
 
 ## Decision
 
@@ -30,6 +30,10 @@ workflow. An edit followed by its reversal need not appear in history.
 
 Beginning publication freezes that proposal. Further work starts from a
 freshly confirmed board state; it cannot extend an in-flight snapshot.
+Composition, publication transitions, abandonment and confirmation cleanup
+share a kernel-backed lock in the clone's common Git directory. Linked
+worktrees use the same lock; process exit releases ownership without a
+stale-lock recovery protocol.
 Claim acquisition remains a publication boundary: a proposed claim grants
 no authority, and fetched confirmation is required before dependent work.
 Research handover likewise identifies published evidence.
@@ -77,6 +81,12 @@ and requires canonical first-parent reachability. A matching final tree,
 summary, returned SHA or successful provider response alone is not proof.
 An update whose response was lost can be confirmed from fetched history.
 An inaccessible remote or incomplete history remains uncertain.
+
+If confirmation cleanup succeeds but its response is lost, retrying the
+same local commit discovers its exact publication in fetched first-parent
+history. This also works after the original claim deadline: historical
+validation establishes an already-published result, while any new branch
+update still requires current authority. No permanent receipt is needed.
 
 Default output is the outcome and affected item states. Full claim listings
 and diagnostic protocol calls are explicit tools for inspection, not steps
@@ -152,7 +162,24 @@ file and directory succeeded. This local transfer proof made no connector
 writes and covers the large-response path beyond the inline publication
 exercise above.
 
-The broader retained suite at `43fdcf198` reports 924 passing and 135 failing
-tests across 160 files. Updating obsolete workflow assumptions and closing
-final-state validation gaps remains in progress; this is not a green final
-repository gate yet.
+The retained-suite repairs and final-state authority checks at `231f8cc59`
+passed the complete repository gate: 1,058 tests across 159 files, format,
+strict type checking, lint, and 84.4% coverage. GitHub CI also passed for
+the identical published tree. No coverage floors were lowered.
+
+The final concurrency/recovery implementation at `12ab3c723` passed its
+31 focused Teal tests and all 14 Node tests. Its standalone build passed
+for 350 files and one binary. A new real Work exercise used that exact
+standalone binary and committed JavaScript sources on the same isolated
+branch:
+
+- Local commit `60802b82fb5b817b79e807021fa6baf8c3719665` published as
+  `86a8030652d0fdd8e45df53aaa4b66e7d1db8ced` in exactly three connector
+  writes. The returned tree matched the local tree, and an independent
+  check proved the candidate was durably saved before the ref update.
+- The test discarded the final confirming CLI response after successful
+  cleanup. Work returned `uncertain`; the snapshot ref and all temporary
+  recovery records were absent.
+- Restarting the same local commit with every connector mutation blocked
+  returned `confirmed` for that exact provider commit, using zero extra
+  writes. Cleanup again left no proposal or recovery record.
