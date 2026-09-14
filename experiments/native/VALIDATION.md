@@ -1,4 +1,24 @@
-# Native connector validation — 2026-09-13
+# Native connector validation
+
+## Current Work schema proof — 2026-09-14 UTC
+
+The current v3 plan emitted the exact exposed tools `github_create_tree`,
+`github_create_commit`, and `github_update_ref`, using `repository_full_name`
+throughout. Eleven real connector calls published a two-transition draft,
+acquired a claim, and deleted that claim on the dedicated validation branch.
+Each final update used `force=false` after a fresh exact-head check; the claim
+also passed its frozen expiry check. Only same-attempt tool results replaced
+the saved plan's object placeholders.
+
+All three fetched receipts confirmed. Every fetched tree matched its locally
+planned tree, the draft retained both commits, and current claim authority
+changed from none to active to none. The final branch head is
+`e353b1927ef41a8dd26f8432e826805389f18709`. The audit checkout used explicit
+local mode and the existing native marker for its isolated authority projection.
+[Exact results](connector-exact-work-results.literal) record the commits,
+trees, transactions and scope. No production board ref or ruleset changed.
+
+## Earlier connector proofs — 2026-09-13
 
 Executed through the authenticated ChatGPT Work GitHub connector against only
 [`validation/gitboard-format6-20260913`](https://github.com/cosmic-lua/work/tree/validation/gitboard-format6-20260913).

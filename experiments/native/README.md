@@ -1,12 +1,14 @@
 # Native format-6 validation
 
+[Final integrated gate](FINAL_VALIDATION.md): **PASS**, 1,056/1,056 tests and
+87.1% coverage, with clean strict types, formatting and lint.
+
 [Connector validation](VALIDATION.md) records the isolated GitHub validation
-branch. [Mutation evidence](MUTATIONS.md) links the literal reports and provenance:
-the initial 12/12 claim/transaction/read mutants and 3/3 bounded-policy mutants
-killed, with passing baseline and restored controls. Those are historical runs.
-The current consolidated suite has six catalogs: main, bounded, migration,
-read, publication, and CLI. Its final integrated totals are pending and must be
-recorded from that exact checkout.
+branch. [Mutation evidence](MUTATIONS.md) links exact source provenance and
+**70/70 kills** across six catalogs: core 18, bounded 15, migration 20, read 3,
+publication 4, and CLI 10. Every baseline and restored control passed. A separate
+advanced-draft sentinel covers prefix consumption and crash ordering.
+The fresh [integrated source review](REVIEW.md) found no functional blockers.
 
 Run the semantic campaigns from the repository root:
 

@@ -50,7 +50,7 @@ return {
   own_publication_masked_by_unrelated_conflict = {
     file = "_work/statepublish.tl",
     before = "local ok, err = refresh(s.root, remote, published)",
-    after = "local ok, err = refresh(s.root, remote)",
+    after = "local ok, err = refresh(s.root, remote, published and nil)",
     test = "_work/statepublish_lifecycle_test.tl",
   },
   four_push_attempts = {

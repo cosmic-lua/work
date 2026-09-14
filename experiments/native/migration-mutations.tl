@@ -46,4 +46,16 @@ return {
     after = 'if false and (op.tree or "") ~= "" then',
     test = "_work/fastimport_test.tl",
   },
+  archive_canonical_path = {
+    file = "_work/migrate6_replay.tl",
+    before = 'if archive ~= nil then final_ops[#final_ops + 1] = modify("migration/sources", archive) end',
+    after = 'if archive ~= nil then final_ops[#final_ops + 1] = modify("migration/source", archive) end',
+    test = "_work/migrate6_test.tl",
+  },
+  archive_removed_ref = {
+    file = "_work/migrate6_archive.tl",
+    before = 'if actual[ref] == nil then out[#out + 1] = "archive: removed " .. ref',
+    after = 'if actual[ref] ~= nil then out[#out + 1] = "archive: removed " .. ref',
+    test = "_work/migrate6_freeze_test.tl",
+  },
 }

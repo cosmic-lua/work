@@ -77,8 +77,11 @@ restarted identically.
 
 Thirteen migration checks and twelve semantic mutation kills were recorded by
 the earlier isolated harness, including the previously surviving pre-snapshot
-guard. **Current integrated migration and mutation gate totals are pending** and
-will be inserted only from the final merged checkout.
+guard. The consolidated migration campaign now kills **20/20 mutants**, with
+zero surviving, invalid or error results and passing restored controls.
+[Final results](migration-final-results.literal) and
+[exact provenance](migration-final-provenance.literal) record the tested source;
+all guarded migration source and test blobs match the integrated implementation.
 
 ## Existing evidence caveat
 

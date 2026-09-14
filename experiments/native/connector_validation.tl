@@ -156,8 +156,13 @@ elseif mode == "race" then race(assert(arg[2]), assert(arg[3]), assert(arg[4]))
 elseif mode == "call" then
   local root, path, index = assert(arg[2]), assert(arg[3]), assert(math.tointeger(tonumber(arg[4])))
   local plan = checked_plan(root, path)
-  show(check.must(plans.connector_call(plan, index)))
+  local observed = arg[5]
+  if index == #plan.calls then
+    assert(observed ~= nil and observed ~= "",
+      "final call requires the remote head observed immediately before execution")
+  end
+  show(check.must(plans.connector_call(plan, index, nil, observed)))
 elseif mode == "json" then
   local value = check.must(wire.decode(check.must(fs.read(assert(arg[2])))))
   print(check.must(json.encode(value)))
-else error("usage: connector_validation seed|plan|verify|race|call|json ...") end
+else error("usage: connector_validation seed|plan|verify|race|call ROOT PLAN INDEX [OBSERVED_HEAD]|json ...") end

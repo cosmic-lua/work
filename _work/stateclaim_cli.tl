@@ -74,9 +74,8 @@ local function run(s: store.Store, ids: {string}, all: {item.Item},
   local message = stateclaim.message(action, caller, why)
   if force then message = message .. "\n\nForce-Why: " .. why end
   s.session, s.op = caller, verb
-  -- Direct claim establishes exclusion only. Pull readiness belongs to the
-  -- `take` path; a claim may deliberately reserve unranked or unspecced work
-  -- while its caller rechecks the measured facts before building.
+  -- Direct claim establishes exclusion only. Public take records handover;
+  -- neither command invokes the internal bounded pull compatibility gate.
   local ok, err = statewrite.transition(s, result.changes, message,
     result.publish_by)
   if not ok then return gate.verdict_line(verb, false, err) end

@@ -320,10 +320,10 @@ end
 --- call makes. `session`, when the caller has one, is threaded to
 --- `save` as the write's author, through the store rather than
 --- `save`'s own fixed signature. `bounded` marks a mutation whose
---- gates read the whole board before deciding (today: a NEW take
---- against the doing bound, and a lane mint) — `save` also advances
---- and leases `refs/heads/board/seq` for one of these, so two racing
---- bounded mutations cannot both land.
+--- gates read board membership before deciding, such as a lane mint or
+--- graph edit. Publication revalidates those predicates at the fetched head
+--- before its non-forced state update. Explicit bounded compatibility pulls
+--- retain their doing gate; public handovers use item and claim fences.
 --- @param s store.Store The store
 --- @param it item.Item The mutated item
 --- @param body itemtree.Spec Replacement prose, or nil to leave the `spec/` subtree alone
@@ -347,7 +347,7 @@ local function commit_and_publish(s: store.Store, it: item.Item, body: itemtree.
   storewrite.set_session(s, session or "")
   storewrite.set_op(s, verb)
   local native_bounded = s.state_head ~= "" and
-  (verb == "depend" or verb == "attach" or verb == "take")
+  (verb == "depend" or verb == "attach")
   storewrite.set_bounded(s, bounded or native_bounded)
   local saved, serr = storewrite.save(s, it, message, body, also)
   if not saved or store.is_noop(serr) then

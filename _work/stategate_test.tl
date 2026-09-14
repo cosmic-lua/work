@@ -131,3 +131,31 @@ local function test_attach_replay_preserves_containering_and_item_checks()
   local malformed, merr = stategate.check(root, head, mutation("attach", {first, retired}))
   assert(not malformed and merr:find("title", 1, true), merr)
 end
+
+-- Each endpoint is revalidated independently of the cycle walk. Even a
+-- structurally valid new edge cannot turn a completed waiter into active work.
+local function test_depend_replay_refuses_a_completed_waiter()
+  local all, first, second = seed(0)
+  first.resolution = "completed"
+  local head = snapshot(all)
+  first.depends_on = {second.id}
+  local ok, err = stategate.check(root, head, mutation("depend", {first}))
+  assert(not ok and err:find("waiter is done", 1, true), err)
+end
+
+-- The bounded replay guard also protects a stale attach whose exact parent
+-- read was omitted: moving a child must prune its old rank in the same tree.
+local function test_attach_replay_requires_old_rank_pruning()
+  local all, first, second = seed(0)
+  local old_parent = all[2]
+  old_parent.order = {first.id}
+  local head = snapshot(all)
+  first.parent = second.id
+  local transition = mutation("attach", {first})
+  local ok, err = stategate.check(root, head, transition)
+  assert(not ok and err:find("old parent still ranks moved child", 1, true), err)
+  transition.changes[#transition.changes + 1] = {path = "items/" .. old_parent.id .. "/order",
+    mode = "100644", content = "", delete = true}
+  local pruned, perr = stategate.check(root, head, transition)
+  assert(pruned, perr)
+end

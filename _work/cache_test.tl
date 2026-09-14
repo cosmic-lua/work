@@ -258,8 +258,8 @@ local function assert_cache_matches_cold_rebuild(s: store.Store, label: string)
 end
 
 -- The equality ratchet (D6): a sequence of saves in clone A — a
--- BOUNDED save (a fresh take against the doing bound), an ENDED move
--- (done), and a RANK change (an item's own `order`) — each checked
+-- internal compatibility take, a completion, and a RANK change
+-- (an item's own `order`) — each checked
 -- against a cold rebuild; then B syncs, saves of its own, and A syncs
 -- LAST, so A's cache takes the fetch path rather than the save path,
 -- checked once more.
@@ -269,13 +269,12 @@ local function test_incremental_cache_matches_a_cold_rebuild_throughout()
   fixture.give_spec(a, leaf_a)
   fixture.caller_fetch(b)
 
-  -- 1) BOUNDED: a fresh take against the doing bound leases and
-  -- advances refs/heads/board/seq.
+  -- 1) The retained internal workflow helper publishes through native state.
   assert(verbs.cmd_take(a, leaf_a, "session-a", 0, false, "") == 0)
   fixture.caller_publish(a)
-  assert_cache_matches_cold_rebuild(a, "after a bounded take")
+  assert_cache_matches_cold_rebuild(a, "after an internal compatibility take")
 
-  -- 2) ENDED: the item's ref moves from refs/heads/items to refs/heads/ended.
+  -- 2) Completion updates the item's metadata in canonical state.
   assert(verbs.cmd_done(a, leaf_a, "completed", true, "test: no PR to review") == 0)
   fixture.caller_publish(a)
   assert_cache_matches_cold_rebuild(a, "after an ended move")

@@ -279,3 +279,19 @@ local function test_blocker_done_after_depend_lands_succeeds()
   assert(#got.depends_on == 1 and got.depends_on[1] == right.id)
   assert(not item.is_open(check.must(store.load(current, right.id))))
 end
+
+-- The old parent is protected even when its order omits the mover, so the
+-- attach would write only the child's tree and change the old parent's role.
+local function test_bare_attach_refuses_a_foreign_claimed_old_parent()
+  local s = fixture.init_state_repo("gate-attach-old-parent-claim")
+  local _root, old_parent = fixture.root_with_leaf(s)
+  local destination = fixture.file_item(s, "destination outcome", "")
+  local mover = fixture.file_item(s, "unpositioned mover", "")
+  assert(graph.cmd_attach(s, mover, old_parent) == 0)
+  assert(#check.must(store.load(s, old_parent)).order == 0,
+    "the move must not write the old parent's order")
+  fixture.claim_item(s, old_parent, "old-parent-holder")
+  assert(graph.cmd_attach(s, mover, destination, nil, nil, "stranger") ~= 0)
+  assert(check.must(store.load(s, mover)).parent == old_parent)
+  assert(check.must(store.load(s, old_parent)).claim == "old-parent-holder")
+end

@@ -192,6 +192,24 @@ local function test_published_snapshot_consumes_only_the_live_draft_prefix()
   assert(store.close(disjoint_store))
   local after_disjoint = check.must(refs.read_ref(root, "refs/heads/state"))
 
+  local listed_snapshot = check.must(staging.load(root, snapshot.ref))
+  local listed_disjoint = check.must(staging.load(root, disjoint_receipt.ref))
+  local original_list, original_write = staging.list, staging.write
+  staging.list = function(_root: string, _kind?: string): {staging.Receipt} | nil, string
+    return {listed_snapshot, listed_disjoint, advanced}, ""
+  end
+  staging.write = function(_root: string, receipt: staging.Receipt,
+      _expected: string): staging.Receipt | nil, string
+    if receipt.kind == "draft" then return nil, "simulated receipt CAS failure" end
+    return original_write(_root, receipt, _expected)
+  end
+  local safe, failure = native.refresh(root, refs.board_remote(root))
+  staging.list, staging.write = original_list, original_write
+  assert(not safe and failure:find("retained whole", 1, true), failure)
+  assert(check.must(refs.read_ref(root, snapshot.ref)) == listed_snapshot.sha)
+  assert(check.must(refs.read_ref(root, disjoint_receipt.ref)) == listed_disjoint.sha,
+    "no proof receipt may retire before the draft suffix is durable")
+
   local clean, report = native.refresh(root, refs.board_remote(root))
   assert(clean and report:find("confirmed=2 pending=1 conflict=0", 1, true), report)
   assert(check.must(refs.read_ref(root, snapshot.ref)) == refs.ZERO_SHA,

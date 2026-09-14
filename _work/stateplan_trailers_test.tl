@@ -22,6 +22,18 @@ local function test_freeze_and_capture_ignore_ambient_trailer_configuration()
   local frozen: tx.Frozen = {format = tx.FORMAT, repository = "example/board", branch = "state", remote = "origin",
     transaction = "config-proof", staging_sha = base, transitions = {change}}
   local plan = check.must(plans.build(root, frozen, base))
+  assert(plans.validate_local(root, plan))
+  local tree = check.must(git.oid(root, plan.candidate .. "^{tree}"))
+  local foreign = check.must(git.text(root, {"commit-tree", tree, "-p", base},
+      plan.frozen.transitions[1].message, {
+        GIT_AUTHOR_NAME = "Other", GIT_AUTHOR_EMAIL = "other@example.test",
+        GIT_AUTHOR_DATE = "1700000000 +0000", GIT_COMMITTER_NAME = "Connector",
+        GIT_COMMITTER_EMAIL = "connector@example.test",
+        GIT_COMMITTER_DATE = "1700000000 +0000"}))
+  plan.candidate = foreign
+  local accepted, author_err = plans.validate_local(root, plan)
+  assert(not accepted and author_err:find("physical author", 1, true),
+    author_err)
   local config = fs.join(root, "hostile.gitconfig")
   assert(fs.write(config, "[trailer]\n separators = %\n where = start\n ifExists = doNothing\n[trailer \"Transaction\"]\n key = Poisoned-Transaction\n[trailer \"Gitboard-Author\"]\n key = Poisoned-Author\n[core]\n commentChar = !\n"))
   check.must(git.run(root, {"config", "trailer.separators", "%"}))

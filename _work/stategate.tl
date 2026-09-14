@@ -116,9 +116,10 @@ local function ranked(index: item.Index, it: item.Item): boolean
   return false
 end
 
---- A new acquisition rechecks the readiness facts that live outside the
---- target's own fenced item path: graph membership, outcome rank, and blocker
---- state. Spec/access are checked too so this remains the same gate as take.
+--- Compatibility validator for explicitly bounded saved/API pull transitions.
+--- Public claim establishes exclusion and public take records handover; neither
+--- invokes this readiness gate. Old bounded pulls still recheck membership,
+--- outcome rank, blockers, spec and access before publication.
 local function take_refusal(before: boardread.View, after: boardread.View,
     changed: {string: boolean}): string | nil
   local index = item.by_id(after.items)

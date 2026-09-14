@@ -1,9 +1,8 @@
---- Durable offline overlays for board mutations. A draft snapshots the
---- caller's canonical (already-fetched) board refs once, then lets dependent
---- mutations extend speculative tips without moving canonical refs. Its one
---- local ref is both the restart handle and the GC root for every staged
---- successor. Publication collapses the history to one leased update per
---- touched ref: original snapshot -> final speculative tip.
+--- Durable native overlays for board mutations. A draft starts at the fetched
+--- canonical state head and retains each speculative transition in order.
+--- Its local receipt ref is the restart handle and GC root. Publication keeps
+--- the complete commit chain behind one non-forced state update; refresh can
+--- consume an already-published prefix while preserving the remaining suffix.
 local format = require("_work.format")
 local staging = require("_work.statestaging")
 local refs = require("_work.refs")
@@ -58,8 +57,7 @@ local function open(root: string, id_or_ref: string): Draft | nil, string
   return read(root, ref)
 end
 
---- The consolidated publication transaction. It contains one update per
---- touched ref, from the begin snapshot directly to the final overlay tip.
+--- The final state update, from the draft base to its last speculative tip.
 local function plan(draft: Draft): {refs.RefUpdate}
   local out: {refs.RefUpdate} = {}
   for _, u in ipairs(draft.updates) do

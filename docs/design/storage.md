@@ -159,10 +159,12 @@ A multi-item claim is one commit writing every member's `claims/<id>`;
 `renew` rewrites them in one commit, `drop` deletes them in one. The
 batch object is gone for new writes: the commit *is* the batch.
 
-There is no `board/seq`. The bare-lease ref exists today to serialise
-the BOUNDED mutations — a new `take` against the doing bound, a lane
-mint — whose gates read the whole board. On one branch a bounded
-mutation fences the whole head instead (`## The write fence`).
+There is no `board/seq`. Whole-board decisions such as a lane mint use a
+BOUNDED transition that fences the state head (`## The write fence`). The
+`take`/`doing-bound` validator remains only for internal legacy API
+compatibility; no public acquisition path invokes it. Direct `claim` provides
+mutual exclusion without a readiness or shared-capacity gate. Public `take`
+records a claimed item's handover and uses the ordinary item and claim fences.
 
 ## The write fence
 
@@ -174,16 +176,20 @@ recorded as the zero id:
   `claims/<id>`, so an edit staged before someone else's claim lands
   loses to that claim, as the shared item ref makes it lose today;
 - a claim, renew or drop: the same two paths for every member;
-- a mutation whose gate reads beyond the items it writes — the doing
-  bound on a new `take`, a lane mint, `depend`'s cycle walk, `attach`'s
+- a mutation whose gate reads beyond the items it writes — a lane mint,
+  `depend`'s cycle walk, `attach`'s
   depth walk, `done`'s open-children check, `rank`'s parent order —
   records those paths too. In particular, `rank` fences the target's
   membership; `attach` authorizes and fences both old and new parents as
   whole-item authorities; `depend` fences and rechecks both endpoints;
-  `take` rechecks the full readiness predicate and canonical doing count;
   and completing an outcome rechecks the negative fact that it has no open
   child. These bounded checks cover membership changes even when no existing
   parent blob changed; the whole-board ones also fence the head B itself.
+
+An explicitly constructed internal compatibility transition marked `take` or
+`doing-bound` still rechecks the historical readiness predicate and canonical
+doing count. It is retained for saved/API compatibility, not as the contract
+of either public `claim` or public `take`.
 
 At publish, with the fetched head H:
 

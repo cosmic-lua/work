@@ -32,10 +32,12 @@ substitute.
 The later fresh-context review corrected narrow membership races that path-only
 fences could miss. Rank now fences its target item; attach checks and fences old
 and new parent authority even if neither parent blob changes; completing an
-outcome rechecks the absence of open children; take rechecks its full readiness
-predicate and canonical doing count; and depend rechecks both endpoints. The
-regressions cover both publication orders for rank/attach, done/attach,
-take/attach, and depend/done, plus sequential foreign claimed-parent refusal.
+outcome rechecks the absence of open children; and depend rechecks both endpoints.
+Direct claim remains exclusion-only, while public `take` records a handover with
+the ordinary item and claim fences. The `take`/`doing-bound` readiness validator
+is internal legacy API compatibility only. The regressions cover both publication
+orders for rank/attach, done/attach, take/attach, and depend/done, plus sequential
+foreign claimed-parent refusal.
 
 The draft-prefix review keeps every saved publication snapshot immutable. When
 an exact ordered prefix becomes canonical while the source draft advances,
@@ -58,6 +60,21 @@ full-board replay, synthetic publication/freeze tests, and mutation evidence.
 A test provider cannot establish that a production ruleset is active. No live
 board ref, freeze ruleset, or consumer pin was changed by this follow-up.
 
-**Current integrated gate: pending.** Final test and six-catalog mutation totals
-belong to the final merged checkout and are not inferred from these historical
-review runs.
+## Fresh integrated source review — 2026-09-14 UTC
+
+An independent source reviewer inspected through `fa3d45cd4` and found **no
+functional blockers** in the scoped native implementation. The review covered
+the exact Work protocol and final-call guards; item/claim dependencies and
+membership races; public claim/handover semantics; complete-chain receipts and
+advanced-draft crash ordering; migration source/probe witnesses; and cache
+refresh timing and speculative isolation.
+
+Focused checks passed: stateplan 7/7, receipts 3/3, publication CLI 1/1,
+lifecycle 8/8, claim capacity 1/1, handover 1/1, bounded gates 9/9, races 10/10,
+fsck 1/1, and remote cache 2/2. The review also exercised the connector cycle,
+migration 10/10, freeze 7/7, cache 11/11, and publication cache 1/1.
+
+The [final full repository gate](FINAL_VALIDATION.md) passed 1,056/1,056 tests,
+87.1% coverage, strict types, formatting and lint.
+Owner approval, release, production activation and consumer pinning remain
+separate steps; this review does not perform them.

@@ -146,16 +146,20 @@ same-holder whole-set claim refusal, deterministic trailers, bounded receipt
 lookup with explicit absence proof, exact lost-race retirement, and fail-closed
 native read errors. The final bounded review also made the implicit membership
 reads concrete: rank fences its target; attach checks and fences both parents;
-completed outcomes recheck absence of open children; take rechecks full readiness
-and the canonical doing count; and depend rechecks both endpoints. Tests cover
-both publication orders for rank/attach, done/attach, take/attach, and depend/done,
-plus foreign claimed-parent refusal.
+completed outcomes recheck absence of open children; and depend rechecks both
+endpoints. Direct claim is exclusion-only, and public `take` is a handover using
+ordinary item and claim fences. The `take`/`doing-bound` readiness validator is
+retained only for internal legacy API compatibility. Tests cover both publication
+orders for rank/attach, done/attach, take/attach, and depend/done, plus foreign
+claimed-parent refusal.
 
 `_perf/native_reads.tl` observed identical cold and warm projection counts on
 the full board: 1,430 items, 4,290 loads, 1,430 resolutions, 1,430 spec reads,
 13,761 item events, one full view read, and one full history read.
 
-**Current integrated gate: pending.** Final repository test, formatting, lint,
-CI, and six-catalog mutation totals will be inserted only from the final merged
-checkout. This draft remains subject to fresh review, the board's handover flow,
-and separately authorized release and production activation work.
+**Final integrated gate: PASS.** All 1,056 tests passed with 87.1% coverage;
+strict types, formatting and lint passed. The six semantic campaigns killed
+70/70 mutants with passing baseline/restored controls. Fresh independent review
+found no functional blockers. [Complete evidence](../../experiments/native/FINAL_VALIDATION.md)
+links the source provenance, actual Work connector proof and full-board audit.
+Owner approval, release, production activation and consumer pinning remain separate.

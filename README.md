@@ -65,7 +65,9 @@ On a remote board, refresh, claim, confirm current authority, compose work,
 publish, and refresh again. Claims are outside drafts. A multi-item claim writes
 all members' claim files in one commit; renew retains acquisition identity,
 and drop removes the files in one commit. Expiry ends authority without
-erasing the recorded acquisition.
+erasing the recorded acquisition. Claim provides mutual exclusion without a
+readiness or shared-capacity gate. Public `take` records the claim holder's
+product-commit or research-result handover; it does not acquire the claim.
 
 A prepared transaction freezes one transition. A draft freezes an ordered
 chain; publication preserves every commit and advances the branch to its tip

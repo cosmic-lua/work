@@ -4,6 +4,7 @@
 local child = require("cosmic.child")
 local check = require("cosmic.check")
 local fs = require("cosmic.fs")
+local env = require("cosmic.env")
 local literal = require("cosmic.literal")
 local proc = require("cosmic.proc")
 local rand = require("cosmic.rand")
@@ -13,23 +14,25 @@ local record Mutation
   before: string
   after: string
   test: string
+  filter: string | nil
 end
 local record Result
   outcome: string
   evidence: string
 end
 
-local function run(argv: {string}, cwd: string): child.Result
-  local result, err = child.run(argv, {cwd = cwd})
+local function run(argv: {string}, cwd: string, filter?: string): child.Result
+  local result, err = child.run(argv, {cwd = cwd,
+      env = env.list({set = {COSMIC_TEST_FILTER = filter or ""}})})
   assert(result ~= nil, err)
   return result
 end
 
 local function command(runtime: string, root: string, verb: string,
-    paths: {string}): child.Result
+    paths: {string}, filter?: string): child.Result
   local argv = {runtime, "--make", verb}
   for _, path in ipairs(paths) do argv[#argv + 1] = path end
-  return run(argv, root)
+  return run(argv, root, filter)
 end
 
 local function checked_catalog(path: string): {string: Mutation}
@@ -45,7 +48,14 @@ local function checked_catalog(path: string): {string: Mutation}
     assert(file:match("^_work/[a-z0-9_]+%.tl$") and test:match("^_work/[a-z0-9_]+_test%.tl$"),
       "mutation paths must name native single-file modules and tests")
     assert(before ~= "" and before ~= after, "mutation must change nonempty source")
-    cases[id] = {file = file, before = before, after = after, test = test}
+    local filter: string | nil
+    local raw_filter = value.filter
+    if raw_filter ~= nil then
+      assert(raw_filter is string, "mutation filter must be a string")
+      filter = raw_filter
+      assert(filter:match("^test_[a-z0-9_]+$"), "mutation filter must name an exact test function")
+    end
+    cases[id] = {file = file, before = before, after = after, test = test, filter = filter}
   end
   assert(next(cases) ~= nil, "empty mutation catalog")
   return cases
@@ -60,6 +70,19 @@ end
 
 local function test_records(root: string, test: string): string
   return fs.read(fs.join(root, "o", test .. ".test.tests")) or ""
+end
+
+local function selected(records: string, filter: string | nil): boolean
+  local count = 0
+  for line in records:gmatch("[^\n]+") do
+    local name = line:match("^(%S+)")
+    if name == nil then return false end
+    if filter == nil or name:find(filter, 1, true) ~= nil then
+      if filter ~= nil and name ~= filter then return false end
+      count = count + 1
+    end
+  end
+  return count > 0 and (filter == nil or count == 1)
 end
 
 local function clear_results(root: string, tests: {string})
@@ -91,29 +114,31 @@ end
 --- discovers tests and writes the module manifest; none of its cached verdict
 --- files contribute to this result.
 local function fresh_test(runtime: string, root: string, output: string,
-    label: string, test: string): child.Result, string
+    label: string, test: string, filter?: string): child.Result, string
   local lua, modules = generated_paths(test)
   assert(fs.is_present(fs.join(root, lua)), "test discovery did not generate Lua: " .. test)
   assert(fs.is_present(fs.join(root, modules)), "test discovery did not generate modules: " .. test)
   local prefix = fs.join(output, label .. "-" .. rand.token())
   local executed = run({runtime, "--test", prefix, runtime,
-      "--modules", modules, lua}, root)
+      "--modules", modules, lua}, root, filter)
   local evidence = executed.stdout .. executed.stderr
   .. (fs.read(prefix .. ".out") or "") .. (fs.read(prefix .. ".err") or "")
   assert(fs.write(fs.join(output, label .. "-fresh.log"), evidence))
+  local count = tonumber(evidence:match("(%d+) checks:")) or 0
+  assert(count > 0 and (filter == nil or count == 1), "fresh test selection is empty or ambiguous")
   return executed, evidence
 end
 
 local function control(runtime: string, root: string, output: string,
-    label: string, test: string)
+    label: string, test: string, filter?: string)
   clear_results(root, {test})
-  local discovered = command(runtime, root, "test", {test})
+  local discovered = command(runtime, root, "test", {test}, filter)
   assert(fs.write(fs.join(output, label .. "-discovery.log"),
       discovered.stdout .. discovered.stderr))
   local records = test_records(root, test)
-  assert(records ~= "", "test discovery produced no records: " .. test)
+  assert(selected(records, filter), "test discovery selection is empty or ambiguous: " .. test)
   assert(discovered.ok, label .. " discovery run failed: " .. test)
-  local executed = fresh_test(runtime, root, output, label, test)
+  local executed = fresh_test(runtime, root, output, label, test, filter)
   assert(executed.ok, label .. " fresh execution failed: " .. test)
 end
 
@@ -135,18 +160,18 @@ local function experiment(runtime: string, root: string, output: string,
   clear_results(root, {mutation.test})
   local compiled = fs.join(root, "o", (mutation.file:gsub("%.tl$", ".lua")))
   if fs.is_present(compiled) then assert(fs.remove(compiled)) end
-  local discovered = command(runtime, root, "test", {mutation.test})
+  local discovered = command(runtime, root, "test", {mutation.test}, mutation.filter)
   local records = test_records(root, mutation.test)
   assert(fs.write(fs.join(output, id .. "-discovery.log"),
       discovered.stdout .. discovered.stderr))
   assert(fs.write(fs.join(output, id .. "-tests.txt"), records))
   local lua, modules = generated_paths(mutation.test)
-  if records == "" or not fs.is_present(fs.join(root, lua))
+  if not selected(records, mutation.filter) or not fs.is_present(fs.join(root, lua))
   or not fs.is_present(fs.join(root, modules)) then
     assert(fs.write(path, original))
     return {outcome = "invalid", evidence = "mutant failed test compilation or discovery"}
   end
-  local executed, failure = fresh_test(runtime, root, output, id, mutation.test)
+  local executed, failure = fresh_test(runtime, root, output, id, mutation.test, mutation.filter)
   assert(fs.write(path, original))
   if executed.ok then
     return {outcome = "survived", evidence = "fresh generated-Lua execution accepted the mutant"}
@@ -159,16 +184,19 @@ end
 
 local function check_all(runtime: string, root: string, output: string,
     cases: {string: Mutation}): {string: Result}
-  local ids, paths, seen = {}, {}, {}
+  local ids, paths = {}, {}
+  local selections: {string: Mutation} = {}
   for id, case in pairs(cases) do
     ids[#ids + 1] = id
-    if not seen[case.test] then paths[#paths + 1], seen[case.test] = case.test, true end
+    local key = case.test .. ":" .. (case.filter or "")
+    if selections[key] == nil then paths[#paths + 1], selections[key] = key, case end
   end
   table.sort(ids)
   table.sort(paths)
-  for _, test in ipairs(paths) do
-    local name = test:gsub("[^A-Za-z0-9]+", "-")
-    control(runtime, root, output, "baseline-" .. name, test)
+  for _, key in ipairs(paths) do
+    local case = selections[key]
+    local name = key:gsub("[^A-Za-z0-9]+", "-")
+    control(runtime, root, output, "baseline-" .. name, case.test, case.filter)
   end
   local results: {string: Result} = {}
   for _, id in ipairs(ids) do
@@ -177,9 +205,10 @@ local function check_all(runtime: string, root: string, output: string,
   end
   -- Recompile and rerun the restored source too: stale mutant artifacts must
   -- not masquerade as a clean baseline or leak into the next run.
-  for _, test in ipairs(paths) do
-    local name = test:gsub("[^A-Za-z0-9]+", "-")
-    control(runtime, root, output, "restored-" .. name, test)
+  for _, key in ipairs(paths) do
+    local case = selections[key]
+    local name = key:gsub("[^A-Za-z0-9]+", "-")
+    control(runtime, root, output, "restored-" .. name, case.test, case.filter)
   end
   return results
 end

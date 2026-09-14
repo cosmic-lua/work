@@ -3,7 +3,7 @@ return {
     file = "_work/stateplan.tl",
     before = 'observed_head ~= plan.expected_head',
     after = 'observed_head == plan.expected_head',
-    test = "_work/stateplan_calls_test.tl",
+    test = "_work/stateplan_test.tl",
   },
   shell_physical_author = {
     file = "_work/stateplan.tl",

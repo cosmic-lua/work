@@ -14,14 +14,14 @@ end
 
 local PREPARES_ONLY < const > =
 "This verb only PREPARES: it stages the mutation and prints the exact\n"
-.. "atomic push, and the board is unchanged until `gitboard publish\n"
+.. "publication command, and the board is unchanged until `gitboard publish\n"
 .. "--execute` sends it and `gitboard refresh --execute` confirms it.\n"
 .. "There is no --execute here — claim, renew and drop carry one."
 
 local CSPEC: flags.CommandSpec = {
   name = "gitboard",
   summary = "the work board over committed item files: todo, doing, done\n\n"
-  .. "offline workflow: refresh; claim a set; run its one atomic push; "
+  .. "offline workflow: refresh; claim a set; publish its one state commit; "
   .. "refresh to gain authority;\nthen `draft begin`, compose mutations, "
   .. "`draft show`, publish once, and refresh. See `help offline`.\n\n"
   .. "ids are KSUIDs; the board renders each item by its handle, the id's last 8 "
@@ -52,20 +52,21 @@ local CSPEC: flags.CommandSpec = {
         .. "`begin` freezes the caller-fetched board view. Set GITBOARD_DRAFT "
         .. "to its id, then ordinary mutation verbs read and extend that "
         .. "speculative view without network access. `show` inspects the final "
-        .. "leased ref plan; `abandon` removes only local draft reachability. "
-        .. "`publish ID` prints one atomic push. See `help offline`.",
+        .. "state-branch publication plan; `abandon` removes only local draft reachability. "
+        .. "`publish ID` prints that plan. See `help offline`.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "select and bind begin to this canonical remote"},
           {long = "print-id", help = "for begin, print only the id for command substitution"}}}},
-    {name = "claim", summary = "prepare one all-or-nothing two-hour claim batch",
+    {name = "claim", summary = "prepare one all-or-nothing two-hour claim set",
       spec = {usage = "ID... [options]",
-        summary = "prepare one atomic, all-or-nothing two-hour claim set.\n\n"
-        .. "Every requested item is validated before anything is staged. The "
-        .. "batch publishes as one `git push --atomic`, with one exact lease per "
-        .. "item ref; any overlap rejects the whole set. PREPARED or PUSHED is "
-        .. "not authority: only a fetch followed by `gitboard refresh` confirming "
-        .. "every ref permits work. Gitboard never discovers or manages credentials.",
+        summary = "prepare one all-or-nothing two-hour claim set.\n\n"
+        .. "Every requested item and current claim is checked before anything is "
+        .. "staged. One state commit writes every member's `claims/<id>` file; any overlap rejects the "
+        .. "whole set. A direct claim establishes mutual exclusion, without a readiness "
+        .. "or shared-capacity gate. A prepared or submitted commit is not authority: "
+        .. "only a fetch followed by `gitboard refresh` confirms current authority. "
+        .. "Gitboard never discovers or manages credentials.",
         flags = {dir_flag(),
           {long = "session", arg = "ID", help = "minted per-run identity; "
             .. "default $GITBOARD_SESSION"},
@@ -79,12 +80,12 @@ local CSPEC: flags.CommandSpec = {
             .. "capturing the claim base; otherwise such a claim refuses"},
           {long = "execute", help = "explicitly run the exact rendered Git push "
             .. "and fetch argv using caller-configured authentication"}}}},
-    {name = "renew", summary = "prepare one atomic set of fresh two-hour leases",
+    {name = "renew", summary = "prepare one all-or-nothing set of fresh two-hour leases",
       spec = {usage = "ID... [options]",
         summary = "prepare one all-or-nothing renewal set for active claims held by this "
         .. "session.\n\nRenewal preserves the initial claim identity and work "
-        .. "branch. By default only exact\nleased Git instructions are printed; "
-        .. "--execute opts into running them.",
+        .. "branch. By default the prepared state publication is printed; "
+        .. "--execute opts into publishing and confirming it.",
         flags = {dir_flag(),
           {long = "session", arg = "ID", help = "minted per-run identity; "
             .. "default $GITBOARD_SESSION"},
@@ -318,8 +319,9 @@ local CSPEC: flags.CommandSpec = {
       .. "included, is untouched",
       spec = {usage = "ID [options]",
         summary = "prepare release of the whole-item claim without changing "
-        .. "workflow fields. By default Gitboard prints an exact leased push; "
-        .. "--execute runs ordinary Git using caller-owned authentication.",
+        .. "workflow fields. By default Gitboard prints the prepared state "
+        .. "publication; --execute publishes and confirms it using ordinary Git "
+        .. "with caller-owned authentication.",
         flags = {dir_flag(),
           {long = "why", arg = "REASON",
             help = "why the session lets go (a dead agent, a build out of "
@@ -406,10 +408,10 @@ local CSPEC: flags.CommandSpec = {
           {long = "force", help = "append past another session's live claim "
             .. "— audited repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
-    {name = "publish", summary = "render or execute one prepared unit's atomic push",
+    {name = "publish", summary = "render or execute one prepared state publication",
       spec = {usage = "[TRANSACTION|DRAFT] [options]",
-        summary = "render one prepared transaction, claim batch, or draft as one "
-        .. "exact atomic leased Git push.\n\nWith no selector, the sole prepared "
+        summary = "render one prepared transaction, claim set, or draft as one "
+        .. "exact state-branch publication.\n\nWith no selector, the sole prepared "
         .. "unit is selected; multiple units are refused. Nothing executes\n"
         .. "unless --execute is present; ordinary "
         .. "Git then owns all authentication behavior. An executed push exits "

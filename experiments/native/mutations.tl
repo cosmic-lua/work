@@ -3,7 +3,7 @@ return {
     file = "_work/stateclaim.tl",
     before = 'claim.take_refusal(st, caller, now, false, why)',
     after = 'claim.take_refusal(st, caller, now, force, why)',
-    test = "_work/gitverbs_test.tl",
+    test = "_work/stateclaim_test.tl",
   },
   self_overlap_acquisition = {
     file = "_work/stateclaim.tl",
@@ -25,9 +25,10 @@ return {
   },
   ignored_receipt_message = {
     file = "_work/stateplan_receipts.tl",
-    before = 'and a.message == b.message and',
-    after = 'and true and',
+    before = 'return (literal.encode(value.changes) or "") .. "\\0" .. value.message .. "\\0"\n  .. (literal.encode(value.author) or "")',
+    after = 'return (literal.encode(value.changes) or "") .. "\\0"\n  .. (literal.encode(value.author) or "")',
     test = "_work/stateplan_receipts_test.tl",
+    filter = "test_message_only_mismatch_is_not_a_receipt",
   },
   receipt_reacquisition_identity = {
     file = "_work/stateclaim_authority.tl",
@@ -91,8 +92,8 @@ return {
   },
   mutable_frozen_transaction = {
     file = "_work/statetransaction.tl",
-    before = 'local copy, cerr = decode(raw)',
-    after = 'local copy, cerr = value, raw:sub(1, 0)',
+    before = 'local copy = decoded as Frozen',
+    after = 'local copy = value',
     test = "_work/stateplan_test.tl",
   },
   local_head_as_remote_canonical = {
@@ -100,5 +101,11 @@ return {
     before = 'local snapshot, err = refs.for_each_ref(root, cachedb.WATCH_PATTERNS)',
     after = 'local snapshot, err = refs.for_each_ref_raw(root, cachedb.WATCH_PATTERNS)',
     test = "_work/stateread_test.tl",
+  },
+  direct_claim_wrongly_uses_take_gate = {
+    file = "_work/stateclaim_cli.tl",
+    before = 's.session, s.op = caller, verb',
+    after = 's.session, s.op, s.bounded = caller, verb == "claim" and "take" or verb, action == "take"',
+    test = "_work/stateclaim_cli_test.tl",
   },
 }

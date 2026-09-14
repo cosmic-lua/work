@@ -1,5 +1,5 @@
 #!/usr/bin/env cosmic
---- Real CLI acquisitions reserve capacity; a rejected set publishes no claim.
+--- Direct CLI claim sets provide exclusion without applying the pull capacity gate.
 local boardread = require("_work.boardread")
 local boardtree = require("_work.boardtree")
 local check = require("cosmic.check")
@@ -13,7 +13,7 @@ local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
 local stateinit = require("_work.stateinit")
 local flow = require("_work.flow")
-local function test_cli_claim_capacity_drop_and_reacquire()
+local function test_cli_claim_set_may_exceed_pull_capacity_and_keeps_exclusion()
   local root = fs.join(fixture.tmpdir, "native-cli-claim-capacity")
   assert(fs.remove_all(root)); assert(fs.make_dirs(root)); assert(stateinit.init(root))
   assert(refs.set_board_mode(root, "local"))
@@ -46,17 +46,29 @@ local function test_cli_claim_capacity_drop_and_reacquire()
     return ran.stdout
   end
   local acquire: {string} = {"claim"}
-  for index = 1, flow.DOING_LIMIT do acquire[#acquire + 1] = leaves[index] end
+  for _, id in ipairs(leaves) do acquire[#acquire + 1] = id end
   cli(acquire, 0)
-  local at_limit = check.must(refs.read_ref(root, "refs/heads/state"))
-  local refused = cli({"claim", leaves[#leaves]}, 1)
-  assert(refused:find("doing bound", 1, true), refused)
-  assert(check.must(refs.read_ref(root, "refs/heads/state")) == at_limit,
-    "over-capacity claim must not change canonical state")
-  assert(check.must(boardread.list(root, at_limit)).claims_by_id[leaves[#leaves]] == nil)
+  local acquired_head = check.must(refs.read_ref(root, "refs/heads/state"))
+  local acquired = check.must(boardread.list(root, acquired_head))
+  local count = 0
+  for _ in pairs(acquired.claims_by_id) do count = count + 1 end
+  assert(count == #leaves and count > flow.DOING_LIMIT,
+    "the complete direct claim set may exceed pull capacity")
+  local first_identity = acquired.claims_by_id[leaves[1]].id
+  local overlap = cli({"claim", leaves[1], leaves[#leaves]}, 1)
+  assert(overlap:find("batch rejected; no item succeeded", 1, true), overlap)
+  assert(check.must(refs.read_ref(root, "refs/heads/state")) == acquired_head,
+    "overlapping acquisition leaves the entire set unchanged")
   cli({"renew", leaves[1]}, 0)
-  cli({"drop", leaves[1], "--why", "capacity returned"}, 0)
-  cli({"claim", leaves[#leaves]}, 0)
+  local renewed = check.must(boardread.list(root, check.must(refs.read_ref(root, "refs/heads/state"))))
+  assert(renewed.claims_by_id[leaves[1]].id == first_identity)
+  cli({"drop", leaves[1], "--why", "release exclusion"}, 0)
+  local dropped = check.must(boardread.list(root, check.must(refs.read_ref(root, "refs/heads/state"))))
+  assert(dropped.claims_by_id[leaves[1]] == nil)
+  assert(dropped.claims_by_id[leaves[#leaves]].id == acquired.claims_by_id[leaves[#leaves]].id)
+  cli({"claim", leaves[1]}, 0)
   local final = check.must(boardread.list(root, check.must(refs.read_ref(root, "refs/heads/state"))))
-  assert(final.claims_by_id[leaves[1]] == nil and final.claims_by_id[leaves[#leaves]] ~= nil)
+  assert(final.claims_by_id[leaves[1]].id ~= first_identity,
+    "a new acquisition after release has a new identity")
+  assert(final.claims_by_id[leaves[#leaves]].id == acquired.claims_by_id[leaves[#leaves]].id)
 end

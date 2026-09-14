@@ -218,10 +218,40 @@ local function refresh(root: string, remote: string,
     published?: staging.Receipt): boolean, string
   local all, err = staging.list(root)
   if all == nil then return false, err end
+  local listed: {staging.Receipt} = all
   local current, herr = head(root, remote)
   if current == nil then return false, herr end
   local confirmed, pending, conflicts, lost_races = 0, 0, 0, 0
-  for _, receipt in ipairs(all) do
+  local consumed: {string: boolean} = {}
+  -- Consume every provable live-draft prefix before retiring any confirmed
+  -- snapshot. If a receipt CAS fails, every proof receipt is still present and
+  -- the next refresh can repeat the decision from durable state.
+  for _, receipt in ipairs(listed) do
+    if receipt.kind ~= "draft" or #receipt.transitions == 0 then goto next_draft end
+    local valid, verr = binding(root, receipt, remote)
+    if not valid then return false, verr end
+    local live, lerr = staging.load(root, receipt.ref)
+    if live == nil then
+      local observed, oerr = refs.read_ref(root, receipt.ref)
+      if observed == nil then return false, oerr end
+      if observed == refs.ZERO_SHA then goto next_draft end
+      return false, lerr
+    end
+    if live.sha ~= receipt.sha then goto next_draft end
+    local frozen, ferr = staging.frozen(receipt)
+    if frozen == nil then return false, ferr end
+    local status, serr = proof.inspect(root, current, frozen,
+      receipt.published ~= "" and receipt.published or nil, live.tip)
+    if status == nil then return false, serr end
+    if status.status == "prefix" then
+      local rewritten, rerr = consume_prefix(root, receipt, current, status.prefix)
+      if rewritten == nil then return false, "published draft prefix was retained whole: " .. rerr end
+      consumed[receipt.ref] = true
+    end
+    ::next_draft::
+  end
+  for _, receipt in ipairs(listed) do
+    if consumed[receipt.ref] then pending = pending + 1; goto continue end
     local valid, verr = binding(root, receipt, remote)
     if not valid then return false, verr end
     if #receipt.transitions == 0 then goto continue end
@@ -246,10 +276,6 @@ local function refresh(root: string, remote: string,
         if observed ~= refs.ZERO_SHA then pending = pending + 1; goto continue end
       end
       confirmed = confirmed + 1
-    elseif status.status == "prefix" and receipt.kind == "draft" then
-      local rewritten, rerr = consume_prefix(root, receipt, current, status.prefix)
-      if rewritten == nil then return false, "published draft prefix was retained whole: " .. rerr end
-      pending = pending + 1
     elseif status.status == "conflict" then conflicts = conflicts + 1
     elseif status.absence_proven then
       local candidate, cerr = build(root, receipt, remote)

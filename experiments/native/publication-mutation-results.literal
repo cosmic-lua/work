@@ -1,0 +1,6 @@
+return {
+  ["final_remote_head"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["publication_repository_identity"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["shell_physical_author"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+  ["tree_chunk_parent"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
+}
