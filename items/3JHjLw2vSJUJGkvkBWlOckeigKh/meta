@@ -1,4 +1,5 @@
 title: run migrate6 against the live board, confirm fsck and one full cycle on format 6
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/work
+speccers: 7bdc5eeb9aef518775c073d137e71262
 depends_on: 3JHjLu9wjswTYz7WpJco5U3nF9g
