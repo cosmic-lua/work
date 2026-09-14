@@ -1,3 +1,0 @@
-return {
-  ["ignored_receipt_message"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
-}

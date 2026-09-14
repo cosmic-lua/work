@@ -1,5 +1,0 @@
-return {
-  ["first_parent_range_boundary"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
-  ["incremental_event_sequence"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
-  ["incremental_history_range"] = {["evidence"] = "fresh generated-Lua assertion failed", ["outcome"] = "killed"},
-}
