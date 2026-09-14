@@ -1,5 +1,6 @@
 title: pin: bump bin/gitboard.pin to the release carrying migrate6 and the format-6 engine
 parent: 3JHjIHZci3VOBQhQVBOyDA5DbKm
 repo: cosmic-lua/cosmic
+speccers: 7bdc5eeb9aef518775c073d137e71262
 touches: bin/gitboard.pin
 depends_on: 3JHjLm7bX0Zt5v3yIEgGcwvr5ms 3JHjMGMKXd37OExltwx89dCMWvP 3JHjMKFiKqzkT5Ah8D9RbaKG2lv 3JI8rftr7bs8RHG43Mi0IBXw6No
