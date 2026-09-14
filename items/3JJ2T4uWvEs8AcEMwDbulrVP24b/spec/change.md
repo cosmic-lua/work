@@ -11,7 +11,7 @@ return conflict and require a newly prepared update. Intermediate command
 states and edit-then-revert operations need not survive publication.
 
 One public operation, gitboard publish COMMIT, validates the snapshot,
-publishes through shell Git or a thin ChatGPT Work connector runner,
+publishes through shell Git or direct ChatGPT Work connector calls,
 fetches, and confirms. Ordinary connector publication is one create_tree,
 one create_commit, and one non-forced update_ref; oversized tree payloads
 may require chunks. Preserve the normal readable board tree and Git log.
@@ -31,10 +31,12 @@ are reconciled before any retry and never silently duplicated. A final
 state or matching tree alone must not confirm a different publication.
 
 Work owns invocation of the exposed GitHub tools; Teal owns board semantics
-and validation. Ship a reusable dependency-free JavaScript adapter usable
-through Work code mode, with short instructions and compact structured
-results. It must exercise the actual supported connector tool schemas,
-never assume local Teal can invoke Work tools or discover credentials.
+and validation. As clarified in the PR review on 2026-09-14, Work sessions
+invoke the JSON steps from gitboard publish COMMIT --protocol ACTION and
+call the connector tools directly. Do not ship a JavaScript runner or bridge.
+Use the actual supported tool schemas; never assume local Teal can invoke
+Work tools or discover credentials. Local-mode boards auto-confirm each
+verb; remote-mode boards compose the unpublished final snapshot.
 
 Preflight compares proposed state with the parent and reports affected
 items, resulting status, and newly introduced spec issues (including
