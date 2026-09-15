@@ -3,6 +3,8 @@ parent: 3IuczDeNofnnmxUTbRHRSTvDYmH
 repo: cosmic-lua/work
 handover_head: b060402b96e7c6a779ae803b73059c9ba0ae636a
 external_url: https://github.com/cosmic-lua/work/pull/177
+verdict: request changes
+verdict_head: b060402b96e7c6a779ae803b73059c9ba0ae636a
 builders: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 speccers: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: _work/viewsummary.tl _work/gitview.tl _work/gitcommands.tl _work/gitboard.tl _work/viewsummary_test.tl
