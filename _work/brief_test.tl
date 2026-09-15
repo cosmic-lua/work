@@ -257,6 +257,48 @@ local function test_research_brief_recommends_rather_than_writes()
     "what the board cannot answer survives the fill")
 end
 
+-- The regression this guards: `facts.bounce_context` was never touched
+-- for the research kind at all, so it read as ABSENT to
+-- `briefcontext.need` and survived as the literal `<BOUNCE_CONTEXT>`
+-- token — even for a fresh (non-rework) pull with a genuine "" answer.
+local function test_research_fresh_brief_blanks_bounce_context()
+  local s = init_state_repo("brief-research-no-bounce")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  local code, out = brief_and_capture(s, "research", leaf)
+  assert(code == 0, "a specced item still earns its research brief")
+  assert(out:find("<BOUNCE_CONTEXT>", 1, true) == nil,
+    "no literal placeholder survives in the rendered body: " .. out)
+  local verdict_line = out:match("[^\n]*$")
+  assert(verdict_line:find("BOUNCE_CONTEXT", 1, true) == nil,
+    "the verdict line does not name it as a survivor: " .. verdict_line)
+end
+
+-- The other half: a research item carrying a `request changes` verdict
+-- on its research result has an actual bounce paragraph to splice, the
+-- same as `_work/brief_rework_test.tl`'s builder-kind case. Asserting
+-- only the fresh case above would pass on a fix that still never
+-- splices anything at all.
+local function test_research_rework_brief_splices_the_bounce_paragraph()
+  local s = init_state_repo("brief-research-rework")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  research_handover(s, leaf)
+  local it = check.must(store.load(s, leaf))
+  it.claim, it.verdict_head, it.verdict = "session-a", it.result, "request changes"
+  fixture.raw_seed_item(s, it,
+    ("verdict %s request changes result:%s by session-a")
+    :format(leaf:sub(1, 8), it.result:sub(1, 7)))
+  local code, out = brief_and_capture(s, "research", leaf)
+  assert(code == 0, "a rework research item still earns its research brief")
+  assert(out:find("<BOUNCE_CONTEXT>", 1, true) == nil,
+    "the placeholder is gone: " .. out)
+  assert(out:find(it.result, 1, true) ~= nil,
+    "the exact judged research result identifies the rework: " .. out)
+  assert(out:find("This is a rework, not a fresh pull", 1, true) ~= nil,
+    "the actual bounce paragraph is spliced, not just blanked: " .. out)
+end
+
 local function test_review_brief_needs_the_handover()
   local s = init_state_repo("brief-review")
   local _, leaf = root_with_leaf(s)
