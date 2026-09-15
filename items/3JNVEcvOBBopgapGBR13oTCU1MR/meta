@@ -1,4 +1,4 @@
 title: add --make fmt --write: fmt alone failed 3 of the 5 gate runs that failed, every one mechanical
-parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+parent: 3HyRdABz3YA28CsiM5alei5yM5b
 repo: cosmic-lua/cosmic
 touches: _make/verbs.tl
