@@ -1,0 +1,4 @@
+title: an item filed with no parent becomes an outcome and can never be completed; nothing warns at file time
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+touches: _work/gitgraph.tl

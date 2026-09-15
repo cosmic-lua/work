@@ -1,0 +1,4 @@
+title: a bare script path at a make root triggers a full tree build before it runs
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
+touches: _cli/run.tl

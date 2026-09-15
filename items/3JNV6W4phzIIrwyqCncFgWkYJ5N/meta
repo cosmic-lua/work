@@ -1,0 +1,4 @@
+title: extract the raw-claim-blob probe helpers into a testkit: every adversarial reviewer rebuilds them from scratch
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+touches: _work/claimprobe.tl

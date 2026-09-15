@@ -1,0 +1,4 @@
+title: request-changes leaves the claim with the reviewer, so a builder cannot rework its own item without a cross-session drop
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+touches: _work/gitverdict.tl

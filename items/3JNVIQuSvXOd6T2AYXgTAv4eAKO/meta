@@ -1,0 +1,4 @@
+title: guide.gotchas: a signature lives in two places, and the checker reports the stale one from the call site
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
+touches: docs/guides/gotchas.md

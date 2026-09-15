@@ -1,0 +1,3 @@
+title: coverage does not narrow by path the way test does, and its refusal does not say what it would accept
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
