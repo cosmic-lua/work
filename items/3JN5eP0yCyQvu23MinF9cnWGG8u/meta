@@ -5,6 +5,8 @@ handover_head: 9ae61d8b6100281964271099b058bfee567060e6
 external_url: https://github.com/cosmic-lua/work/pull/179
 verdict: accept
 verdict_head: 9ae61d8b6100281964271099b058bfee567060e6
+landed_head: 3fd0445882edc9894884ab25b5d365ac53521202
+resolution: completed
 builders: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 speccers: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: _work/stateclaim.tl _work/gitcommands.tl _work/gitboard.tl _work/gitverbs.tl _work/stateclaim_handoff_test.tl
