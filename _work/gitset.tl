@@ -30,6 +30,22 @@ local item = require("_work.item")
 local owner = require("_work.gitowner")
 local store = require("_work.store")
 
+--- What a CLI-parsed repeated list flag becomes once "flag never
+--- typed" and "flag typed with nothing after it" collapse to the same
+--- empty table — `cosmic.flags` initializes every repeated flag's
+--- list this way regardless of whether it appeared on argv, so the
+--- dispatcher cannot forward RAW as-is: this function is that
+--- boundary, honoring the "no spelling for clearing" rule above by
+--- reading an empty RAW as untyped rather than as a caller's clear.
+--- @param raw {string} A parsed repeated flag's list, never nil
+--- @return {string} | nil RAW itself when it holds any entry, else nil
+local function declared(raw: {string}): {string} | nil
+  if #raw == 0 then
+    return nil
+  end
+  return raw
+end
+
 --- @param s store.Store The store
 --- @param id string The item to repair
 --- @param title string | nil The new title, nil to leave it unchanged
@@ -125,10 +141,12 @@ local record gitset
   repo: string | nil, new_base: string | nil, claim_session?: string,
   force?: boolean, why?: string, touches?: {string},
   access?: {string}): integer
+  declared: function(raw: {string}): {string} | nil
 end
 
 local M: gitset = {
   cmd_set = cmd_set,
+  declared = declared,
 }
 
 return M

@@ -15,6 +15,7 @@ local fsck = require("_work.gitfsck")
 local gate = require("_work.gitgate")
 local gitdepend = require("_work.gitdepend")
 local gitinit = require("_work.gitinit")
+local gitset = require("_work.gitset")
 local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
@@ -335,7 +336,7 @@ local function main(...: string): integer
     if who == nil then return gate.verdict_line("new", false, "REFUSED: " .. werr) end
     return graph.cmd_new(s, title, parent, prose, d.parsed.values["repo"] or "",
       d.parsed.switches["force"], d.parsed.values["why"] or "", before, after,
-      who, d.parsed.lists["touches"], d.parsed.lists["access"])
+      who, gitset.declared(d.parsed.lists["touches"]), gitset.declared(d.parsed.lists["access"]))
   end
   local input = d.parsed.args[1] or ""
   local id, rerr = resolve_id(s, input)
@@ -393,7 +394,7 @@ local function main(...: string): integer
     return graph.cmd_set(s, id, d.parsed.values["title"],
       d.parsed.values["repo"], d.parsed.values["base"], who,
       d.parsed.switches["force"], d.parsed.values["why"] or "",
-      d.parsed.lists["touches"], d.parsed.lists["access"])
+      gitset.declared(d.parsed.lists["touches"]), gitset.declared(d.parsed.lists["access"]))
   end
   if d.command == "spec" then
     local file = d.parsed.args[2]
