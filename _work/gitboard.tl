@@ -273,12 +273,9 @@ local function main(...: string): integer
   -- ride the shared id resolution below. A missing id passes through
   -- as "" so an unknown kind refuses on the kind, not on the id.
   if d.command == "handoff" then
-    return gitreview.cmd_review(s, d.parsed.args,
+    return gitreview.cmd_review(s, d.parsed.args, remote,
       function(x: string): string | nil, string return resolve_id(s, x) end,
-      remote, d.parsed.values["session"] or "", d.parsed.values["out"] or "",
-      d.parsed.values["tree"] or "", d.parsed.values["gitboard-command"] or "",
-      d.parsed.values["gitboard-cwd"] or "", d.parsed.switches["fetch"] or false,
-      not (d.parsed.switches["no-worktree"] or false))
+      d.parsed.values, d.parsed.switches)
   end
   if d.command == "brief" then
     local target = d.parsed.args[2] or ""

@@ -112,21 +112,22 @@ end
 
 --- @param s store.Store The board
 --- @param args {string} Item ids or handles, as the caller typed them
---- @param resolve function The dispatcher's own id resolver
 --- @param remote string The remote the caller expects to publish to
---- @param explicit_session string The reviewer identity, "" to mint one
---- @param out string Where briefs are written, "" for stdout
---- @param tree string Passed to `brief --tree`
---- @param command string The caller's own gitboard invocation, for the brief
---- @param cwd string That invocation's cwd
---- @param fetch boolean Passed to `worktree --fetch`
---- @param worktrees boolean Whether the brief half creates checkouts
+--- @param resolve function The dispatcher's own id resolver
+--- @param values {string: string} Parsed option values: session, out, tree,
+--- gitboard-command, gitboard-cwd
+--- @param switches {string: boolean} Parsed switches: fetch, no-worktree
 --- @return integer The verdict line's exit status
-local function cmd_review(s: store.Store, args: {string},
+local function cmd_review(s: store.Store, args: {string}, remote: string,
     resolve: function(string): string | nil, string,
-    remote: string, explicit_session: string, out: string, tree: string,
-    command: string, cwd: string, fetch: boolean,
-    worktrees: boolean): integer
+    values: {string: string}, switches: {string: boolean}): integer
+  local explicit_session = values["session"] or ""
+  local out = values["out"] or ""
+  local tree = values["tree"] or ""
+  local command = values["gitboard-command"] or ""
+  local cwd = values["gitboard-cwd"] or ""
+  local fetch = switches["fetch"] or false
+  local worktrees = not (switches["no-worktree"] or false)
   if #args == 0 then
     return gate.verdict_line("handoff", false,
       "REFUSED: at least one ID is required")
@@ -171,10 +172,9 @@ local function cmd_review(s: store.Store, args: {string},
 end
 
 local record gitreview
-  cmd_review: function(s: store.Store, args: {string},
+  cmd_review: function(s: store.Store, args: {string}, remote: string,
   resolve: function(string): string | nil, string,
-  remote: string, explicit_session: string, out: string, tree: string,
-  command: string, cwd: string, fetch: boolean, worktrees: boolean): integer
+  values: {string: string}, switches: {string: boolean}): integer
 end
 
 local M: gitreview = {cmd_review = cmd_review}

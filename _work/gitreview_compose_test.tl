@@ -13,6 +13,8 @@ local stateclaim = require("_work.stateclaim")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
+-- These drive the composition, not the checkout: `no-worktree` keeps the
+-- brief half from building a real worktree the fixture has no product for.
 local function resolver(): function(string): string | nil, string
   return function(x: string): string | nil, string return x, "" end
 end
@@ -38,8 +40,8 @@ end
 
 local function test_handoff_transfers_when_the_caller_does_not_hold_it()
   local s, id = awaiting_review("compose-transfer")
-  local code = gitreview.cmd_review(s, {id}, resolver(), "origin",
-    flow.REVIEWER, "", "", "", "", false, false)
+  local code = gitreview.cmd_review(s, {id}, "origin", resolver(),
+    {session = flow.REVIEWER}, {["no-worktree"] = true})
   assert(code == 0 or code == 2, "prepared, got " .. tostring(code))
   assert(holder_of(s, id) == flow.REVIEWER,
     "the reviewer holds it, got " .. holder_of(s, id))
@@ -47,12 +49,11 @@ end
 
 local function test_a_set_already_held_runs_the_brief_half_not_a_transfer()
   local s, id = awaiting_review("compose-second")
-  assert(gitreview.cmd_review(s, {id}, resolver(), "origin", flow.REVIEWER,
-      "", "", "", "", false, false) ~= 1, "first call transfers")
+  assert(gitreview.cmd_review(s, {id}, "origin", resolver(), {session = flow.REVIEWER}, {["no-worktree"] = true}) ~= 1, "first call transfers")
   -- Second call with the same set: the transfer half would refuse the whole
   -- batch ("already claimed by this session"), so it must not be attempted.
-  local code = gitreview.cmd_review(s, {id}, resolver(), "origin",
-    flow.REVIEWER, "", "", "", "", false, false)
+  local code = gitreview.cmd_review(s, {id}, "origin", resolver(),
+    {session = flow.REVIEWER}, {["no-worktree"] = true})
   assert(code ~= 1, "the brief half runs instead of a refused transfer")
 end
 
@@ -70,11 +71,10 @@ local function test_a_mixed_set_still_transfers_the_ones_not_yet_held()
   local p2 = flow.product("compose-mixed-second")
   assert(flow.claim(s, second, flow.BUILDER, p2) == 0, "builder claims it")
   assert(flow.handover(s, second, flow.BUILDER, p2, p2.head) == 0, "hands over")
-  assert(gitreview.cmd_review(s, {first}, resolver(), "origin", flow.REVIEWER,
-      "", "", "", "", false, false) ~= 1, "first is transferred alone")
+  assert(gitreview.cmd_review(s, {first}, "origin", resolver(), {session = flow.REVIEWER}, {["no-worktree"] = true}) ~= 1, "first is transferred alone")
   assert(holder_of(s, first) == flow.REVIEWER, "and is held")
-  local code = gitreview.cmd_review(s, {first, second}, resolver(), "origin",
-    flow.REVIEWER, "", "", "", "", false, false)
+  local code = gitreview.cmd_review(s, {first, second}, "origin", resolver(),
+    {session = flow.REVIEWER}, {["no-worktree"] = true})
   assert(code ~= 1,
     "a mixed set is not rejected whole, got " .. tostring(code))
   assert(holder_of(s, second) == flow.REVIEWER,
@@ -83,13 +83,12 @@ end
 
 local function test_no_ids_is_refused()
   local s = flow.fresh("compose-empty")
-  assert(gitreview.cmd_review(s, {}, resolver(), "origin", flow.REVIEWER,
-      "", "", "", "", false, false) == 1, "an empty set is refused")
+  assert(gitreview.cmd_review(s, {}, "origin", resolver(), {session = flow.REVIEWER}, {["no-worktree"] = true}) == 1, "an empty set is refused")
 end
 
 local function test_an_unresolvable_id_refuses_naming_it()
   local s = flow.fresh("compose-badid")
-  local code = gitreview.cmd_review(s, {"nope"}, resolver(), "origin",
-    flow.REVIEWER, "", "", "", "", false, false)
+  local code = gitreview.cmd_review(s, {"nope"}, "origin", resolver(),
+    {session = flow.REVIEWER}, {["no-worktree"] = true})
   assert(code ~= 0, "an id that is not an item does not prepare")
 end
