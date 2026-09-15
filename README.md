@@ -155,19 +155,15 @@ replaced.
 
 ## Working on the machinery
 
-`_work/` holds the modules and `cmd/gitboard/` the binary entry.
-`bin/cosmic` fetches and verifies the pinned runtime; every build verb runs
-under that pin. Use an isolated clone so builds do not race board operations
-or another session's source changes. Avoid a shared stash.
-
-Run `bin/cosmic --make ci` before pushing. The `board` workflow runs the same
-gate. `.cosmic-coverage` is recorded in its CI environment; do not regenerate
-the whole floor from a developer's machine. A targeted adjustment changes
-only the affected rows and retains its measured basis.
-
+`_work/` holds the modules and `cmd/gitboard/` the binary entry. `bin/cosmic`
+fetches and verifies the pinned runtime; every build verb runs under that pin.
 Every push to `main` publishes the binary and `SHA256SUMS`, tagged
-`YYYY-MM-DD-<sha7>`. Consumers pin the URL and SHA-256. Product PRs target
-the repository named by their item; this repository's PRs change the machinery.
+`YYYY-MM-DD-<sha7>`. Consumers pin the URL and SHA-256.
+
+[`AGENTS.md`](AGENTS.md) is the instruction set for changing this repository:
+where things live, how to work without racing board operations, which checks
+to run, and how a change lands. It holds the single copy — this document
+describes the system, that one says how to work on it.
 
 ## Performance and semantic checks
 
