@@ -52,3 +52,22 @@ claim → handover → request-changes, advances the product repository's `main`
 past the handover, and asserts the re-claim succeeds and records the handover as
 its product base. Assert the negative too: the same advance WITHOUT a
 request-changes verdict still refuses, so the escape hatch is scoped to rework.
+
+It is a TWO-STAGE trap, not one awkward verb. The workaround for the deadlock
+records a BRANCH commit as the claim's product base, and `done` then refuses
+the completion:
+
+    gitboard done 9cnW_GG8u --landed 3fd0445882ed… --reason completed --session …
+    gitboard-done: REFUSED: landed commit 3fd0445882ed… forks from a8383e991a5a…,
+    which does not descend from claim base 6c254a380db6…
+
+Because this repository squashes on merge, NO branch commit is ever an ancestor
+of `main` (`git merge-base --is-ancestor <handover> origin/main` → false), so
+that descent check is unsatisfiable for any claim whose base came from the
+workaround — and a clean re-claim to repair the base hits the deadlock again.
+The only exit was `done --force --why`.
+
+So every reworked item in this repository needs a forced completion until this
+is fixed, and each forced completion is an audited escape recorded against work
+that was in fact landed and verified. That is the cost of leaving it open, and
+it is why this is worth more than its "one awkward verb" first reading.
