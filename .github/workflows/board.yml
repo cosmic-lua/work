@@ -47,6 +47,47 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      # Restore `o/` from the nearest previous run. Sound only because
+      # the recipe steps are content-keyed rather than mtime-keyed: a
+      # restored `o/` sits under a fresh checkout where every source's
+      # mtime is new, and each `<out>.in` record re-hashes its declared
+      # inputs against the cached bytes instead of trusting them. A test
+      # whose own file and transitive imports are unchanged restamps in
+      # milliseconds; anything that moved re-runs as if the cache were
+      # empty. Without this the gate re-runs all 161 test files cold on
+      # every push, which is 94% of its wall clock.
+      #
+      # The key is DELIBERATELY never a hit: `github.sha` is unique per
+      # run, so `key` always misses and this run always SAVES its own
+      # `o/` for the next run. The `restore-keys` prefix then finds the
+      # nearest earlier save on this branch, or along GitHub's scoping to
+      # the base branch's chain, so the chain of runs hands `o/` forward.
+      #
+      # The WORKSPACE PATH is part of the key because `.cov` hit data
+      # records absolute chunk paths: a cache restored at a different
+      # workspace would make every SKIPPED test's coverage read as 0% —
+      # wrong, and wrong in the direction that looks like a real
+      # regression. Keying on the path makes a moved workspace start cold
+      # and green instead.
+      #
+      # `bin/cosmic.pin` is in the key because `o/` is the product of one
+      # toolchain generation. This repo resolves no other pin — `fetch`
+      # reports 0 — so that one file is the whole of it. A pin bump is
+      # exactly when a name may die or a binding's shape may change, so
+      # it starts cold.
+      #
+      # Trust: an entry is a PRIOR RUN'S OWN output, since GitHub scopes
+      # cache writes to the branch that made them. A stale, evicted or
+      # corrupted entry degrades to an ordinary cold run of whatever does
+      # not match, never to a wrong result silently accepted.
+      - name: restore o/ from the previous run
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: o
+          key: o-${{ runner.os }}-${{ github.workspace }}-${{ hashFiles('bin/cosmic.pin') }}-${{ github.sha }}
+          restore-keys: |
+            o-${{ runner.os }}-${{ github.workspace }}-${{ hashFiles('bin/cosmic.pin') }}-
+
       # The store's tests build scratch repositories and commit to
       # them. Every git call the store makes carries its own committer
       # (`-c user.email`), so no global identity is needed — but git
