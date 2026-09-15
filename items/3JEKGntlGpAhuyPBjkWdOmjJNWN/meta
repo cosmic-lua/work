@@ -1,10 +1,8 @@
 title: skills/work/SKILL.md's bootstrap tells sessions to run `gitboard sync`, a deprecated no-op — a fresh sibling clone shows 0 items until `refresh --execute` runs
 parent: 3HyRdT1JQS7pCPgF3sZi2Deo66q
 repo: cosmic-lua/cosmic
-handover_head: 8d9f5b380d82fb267ea8b82bf73d5c9fa23b344c
+handover_head: fe53323d83a36b214c7839530c69510490047738
 external_url: https://github.com/cosmic-lua/cosmic/pull/1861
-verdict: request changes
-verdict_head: 8d9f5b380d82fb267ea8b82bf73d5c9fa23b344c
 builders: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: skills/work/SKILL.md skills/work/decompose.md
 access: cosmic-lua/work
