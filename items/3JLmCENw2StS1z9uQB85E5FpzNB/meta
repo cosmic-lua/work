@@ -1,0 +1,4 @@
+title: board.yml: restore o/ between runs — the gate re-runs all 161 test files cold on every push
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/work
+touches: .github/workflows/board.yml
