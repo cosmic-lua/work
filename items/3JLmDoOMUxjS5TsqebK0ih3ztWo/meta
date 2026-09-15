@@ -1,0 +1,4 @@
+title: experiments/native/*.tl are compiled, formatted and linted on every gate run despite being frozen records
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/work
+touches: .cosmicignore
