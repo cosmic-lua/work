@@ -1,4 +1,5 @@
 title: worktree resolves its checkout against the caller's cwd, so trees nest inside each other without bound
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+speccers: 410201e720f4ed05ff3f59285fb3ce5a
 touches: _work/gitworktree.tl
