@@ -1,4 +1,5 @@
 title: show: a rollup by state and repo, so "what is open" is one call instead of a render plus hand-aggregation
 parent: 3IuczDeNofnnmxUTbRHRSTvDYmH
 repo: cosmic-lua/work
+speccers: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: _work/viewsummary.tl _work/gitview.tl _work/gitcommands.tl _work/gitboard.tl _work/viewsummary_test.tl

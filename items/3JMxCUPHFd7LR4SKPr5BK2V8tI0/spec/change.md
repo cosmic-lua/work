@@ -20,7 +20,9 @@ Add a `--summary` switch to `show` that replaces the row lists with a rollup:
    label, its already-computed items, and the pullable-id set
    `status_report` builds
    (`grep -n "local pullable_ids: {string: boolean} = {}" _work/gitview.tl`),
-   and returning the rollup's lines. Grouping: one line per distinct `repo`
+   and returning the rollup's lines, plus an `emit` that appends them to a
+   report already under construction so each call site in `gitview.tl` is one
+   line rather than three. Grouping: one line per distinct `repo`
    field, descending by count, ties broken by repo name ascending; an item whose
    `repo` is `""` groups under the literal `(no repo)`, which sorts last
    regardless of count.
@@ -38,9 +40,23 @@ Add a `--summary` switch to `show` that replaces the row lists with a rollup:
    pass and the one-line refusal, nothing more.
 4. `_work/gitview.tl` — thread the flag from `cmd_status`
    (`grep -n "local function cmd_status(s: store.Store, todo_shown?: integer): integer" _work/gitview.tl`)
-   into `status_report`, and where each state's rows are emitted today, call
-   `viewsummary` instead when the flag is set. Net addition here stays under
-   ten lines, keeping the file inside the cap.
+   into `status_report` and onto the module record's `cmd_status` entry, and
+   where each state's rows are emitted today, call `viewsummary.emit` instead
+   when the flag is set. All three states roll up: doing, todo and triage.
+
+   Two checker constraints, measured during the build rather than predicted.
+   Skipping a row loop as `ipairs(summary and {} or rows)` does not type: the
+   empty literal has no element type, and the checker reports `cannot index
+   key 'it' in variable 'd' of type A (unresolved generic)`. Each skipped loop
+   therefore names a typed empty first (`local no_doing: {DoingRow} = {}`,
+   `local no_triage: {string} = {}`); todo needs none, its limit already
+   going to zero. And the module record's `cmd_status` signature must gain the
+   parameter alongside the function's, or the dispatch call fails with `wrong
+   number of arguments (given 3, expects at least 1 and at most 2)`.
+
+   Budget: this file goes 473 -> 494 of the 500-line cap, six more than the
+   ten-line estimate this spec first carried; `viewsummary.emit` is what keeps
+   it inside. `_work/gitboard.tl` goes 488 -> 493.
 
 The rendering, with today's board as the worked example:
 
