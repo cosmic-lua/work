@@ -1,0 +1,4 @@
+title: _make/project.tl: unit_label has no callers, and artifact.tl's comment still names it as a live helper
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
+touches: _make/project.tl _make/artifact.tl
