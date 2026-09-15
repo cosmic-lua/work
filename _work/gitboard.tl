@@ -254,8 +254,13 @@ local function main(...: string): integer
   -- with every other id-taking verb — `--todo` has no effect there.
   if d.command == "show" and (d.parsed.args[1] or "") == "" then
     local raw = d.parsed.values["todo"]
+    local summary = d.parsed.switches["summary"] or false
+    if summary and raw ~= nil then
+      return gate.verdict_line("show", false,
+        "--summary and --todo select different renderings; pass one")
+    end
     if raw == nil then
-      return view.cmd_status(s)
+      return view.cmd_status(s, nil, summary)
     end
     local todo_shown = math.tointeger(tonumber(raw))
     if todo_shown == nil or todo_shown < 0 then

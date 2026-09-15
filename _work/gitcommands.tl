@@ -386,11 +386,15 @@ local CSPEC: flags.CommandSpec = {
         summary = "the board (no ID), or one item: fields, spec-bar "
         .. "problems, spec, git history.\n\n"
         .. "Bare `show` renders the top of todo, 8 rows by default; "
-        .. "`--todo 0` renders every pullable row at once — the way to "
-        .. "see the whole pullable set. No effect with an ID.",
+        .. "`--todo 0` renders every todo row at once. `--summary` "
+        .. "replaces the rows with counts by repository. No effect "
+        .. "with an ID.",
         flags = {dir_flag(),
           {long = "todo", arg = "N",
             help = "how many todo rows to show (0 = all; default 8); "
+            .. "no effect with an ID"},
+          {long = "summary",
+            help = "counts by state and repository instead of rows; "
             .. "no effect with an ID"},
           {long = "raw", help = "print an ID's spec sidecar byte-exactly"}}}},
     {name = "log", summary = "one item's own commit history: every entry its "

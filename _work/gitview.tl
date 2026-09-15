@@ -23,6 +23,7 @@ local read = require("_work.read")
 local sess = require("_work.session")
 local store = require("_work.store")
 local tail = require("_work.tail")
+local viewsummary = require("_work.viewsummary")
 
 local type Index = index.Index
 
@@ -130,7 +131,8 @@ end
 --- @return {string} | nil The lines to print
 --- @return string The verdict detail, or the error on a nil first return
 local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
-    ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer):
+    ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer,
+    summary?: boolean):
   {string} | nil, string
   local aged = ages or {}
   local by_id = item.by_id(all)
@@ -156,7 +158,13 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
   end
   local out: {string} = {}
   out[#out + 1] = ("%-6s %d"):format("doing", #doing)
-  for _, d in ipairs(doing) do
+  if summary then
+    local xs: {item.Item} = {}
+    for _, d in ipairs(doing) do xs[#xs + 1] = d.it end
+    viewsummary.emit(out, xs, nil)
+  end
+  local no_doing: {DoingRow} = {}
+  for _, d in ipairs(summary and no_doing or doing) do
     local i = d.it
     local sub = flow.substate_of_stage(d.stage)
     local marks = (" [%s]"):format(sub)
@@ -198,8 +206,13 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     end
   end
   out[#out + 1] = ("%-6s %d (%d pullable)"):format("todo", #todo, pullable)
+  if summary then
+    local xs: {item.Item} = {}
+    for _, t in ipairs(todo) do xs[#xs + 1] = t.it end
+    viewsummary.emit(out, xs, pullable_ids)
+  end
   local shown = todo_shown or 8
-  local limit = shown == 0 and #todo or shown
+  local limit = summary and 0 or (shown == 0 and #todo or shown)
   for k = 1, math.min(#todo, limit) do
     local i = todo[k].it
     local marks = ""
@@ -209,7 +222,7 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     if i.repo ~= "" then marks = marks .. " [" .. i.repo .. "]" end
     out[#out + 1] = ("  %s%s"):format(tail.id_line(i), marks)
   end
-  if shown ~= 0 and #todo > shown then
+  if not summary and shown ~= 0 and #todo > shown then
     out[#out + 1] = ("  ... %d more"):format(#todo - shown)
   end
   -- Untriaged outcomes render item by item: they are not workable
@@ -219,7 +232,16 @@ local function status_report(c: Index, all: {item.Item}, specs: act.Specs,
     return nil, trerr
   end
   out[#out + 1] = ("%-6s %d"):format("triage", #triage)
-  for _, tid in ipairs(triage) do
+  if summary then
+    local xs: {item.Item} = {}
+    for _, tid in ipairs(triage) do
+      local f = by_id[tid]
+      if f ~= nil then xs[#xs + 1] = f end
+    end
+    viewsummary.emit(out, xs, nil)
+  end
+  local no_triage: {string} = {}
+  for _, tid in ipairs(summary and no_triage or triage) do
     local f = by_id[tid]
     if f ~= nil then
       out[#out + 1] = ("  %s %s"):format(tail.handle(f.id), f.title)
@@ -265,7 +287,8 @@ end
 --- Bare `show`: the whole board. Named `cmd_status` for the report it
 --- prints; the verdict line says `show`, the verb that reaches it.
 --- @param todo_shown integer | nil `--todo N`, nil for the default (8)
-local function cmd_status(s: store.Store, todo_shown?: integer): integer
+local function cmd_status(s: store.Store, todo_shown?: integer,
+    summary?: boolean): integer
   local board, aerr = list_via_cache(s)
   if board == nil then
     return verdict_line("show", false, aerr)
@@ -276,7 +299,7 @@ local function cmd_status(s: store.Store, todo_shown?: integer): integer
     return verdict_line("show", false, cerr)
   end
   local lines, verdict = status_report(c, all, read_specs(s, all),
-    stale_ages(s).claim, nil, todo_shown)
+    stale_ages(s).claim, nil, todo_shown, summary)
   if lines == nil then
     return verdict_line("show", false, verdict)
   end
@@ -439,7 +462,8 @@ local record gitview
   type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
   status_report: function(c: Index, all: {item.Item}, specs: act.Specs,
-  ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer):
+  ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer,
+  summary?: boolean):
   {string} | nil, string
   next_report: function(c: Index, all: {item.Item}, specs: act.Specs,
   session?: string, ages?: health.Ages, review_ages?: health.Ages): string, string
@@ -453,7 +477,8 @@ local record gitview
   -- `cmd_next`.
   list_via_cache: function(s: store.Store): Board | nil, string
   stale_ages: function(s: store.Store): health.StaleAges
-  cmd_status: function(s: store.Store, todo_shown?: integer): integer
+  cmd_status: function(s: store.Store, todo_shown?: integer,
+  summary?: boolean): integer
   cmd_next: function(s: store.Store, session?: string): integer
 end
 
