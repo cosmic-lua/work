@@ -1,4 +1,5 @@
 title: a format-6 bootstrap fetch leaves a checkout that reads but cannot write: the archive check reports 1,991 never-fetched legacy refs as removed, in a 130KB refusal
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+speccers: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: _work/migrate6_archive.tl _work/migrate6_archive_test.tl

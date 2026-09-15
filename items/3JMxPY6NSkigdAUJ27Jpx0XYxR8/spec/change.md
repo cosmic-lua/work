@@ -35,25 +35,48 @@ namespace therefore reports every ref in it as removed. Local absence is not
 removal: the archive is frozen upstream by ruleset, and a clone's failure to
 fetch it is evidence about the clone.
 
+`problems`'s `prefix` parameter is NOT a legacy namespace: it is the private
+namespace the migration fetched INTO, computed by the caller as `refs/heads/`
+in local mode or `refs/remotes/<remote>/` otherwise
+(`grep -n 'local prefix = refs.board_mode(root) == "local" and "refs/heads/"' _work/stateread_fsck.tl`),
+and `canonical` maps a ref under it back to a `refs/heads/...` name
+(`grep -n "local function canonical(ref: string, prefix: string)" _work/migrate6_archive.tl`).
+So the grouping is by the LEGACY namespace read off the canonical name, which
+`legacy_name` already enumerates
+(`grep -n "local function legacy_name(ref: string): boolean" _work/migrate6_archive.tl`):
+`refs/heads/items/`, `refs/heads/ended/`, `refs/heads/claim-batches/`, and the
+single ref `refs/heads/board/seq`.
+
 Distinguish the two cases in `problems`:
 
-1. Before the per-ref loop, count how many of the witness's refs under this
-   `prefix` have a local counterpart in `actual`. The prefix is already a
-   parameter (`local function problems(root: string, raw: string, prefix: string): {string}`).
-2. When that count is zero and the witness holds at least one ref under the
-   prefix, emit exactly one line instead of the per-ref lines:
-   `archive: <prefix> not fetched (N refs in witness); fetch it: git fetch --atomic <remote> '+refs/heads/<prefix>/*:refs/remotes/<remote>/<prefix>/*'`
-   — the same shape as the marker refusal, naming what to run rather than what
-   is missing.
-3. When the count is non-zero, keep today's behaviour exactly: a namespace that
-   is partly present is a genuine divergence and every removed, moved and added
-   ref is still named individually.
+1. Add `namespace_of(name: string): string | nil` returning the grouping key for
+   a canonical name: the first three patterns yield their namespace without the
+   trailing slash, and `refs/heads/board/seq` yields nil — see 4.
+2. Before the per-ref loop, bucket the witness's refs by `namespace_of` and count,
+   per bucket, how many have a local counterpart in `actual`.
+3. When a bucket's present-count is zero and it holds at least two witness refs,
+   emit exactly one line in place of that bucket's per-ref lines:
+   `archive: <namespace> not fetched — N of N witness refs absent locally; fetch it: git fetch --atomic <remote> '+<namespace>/*:<prefix><segment>/*'`
+   where `<remote>` is `refs.board_remote(root)` (add the `_work.refs` require),
+   `<prefix>` is the parameter, and `<segment>` is the namespace's last path
+   component. In local mode `prefix` is `refs/heads/`, so the remedy names a
+   fetch into the canonical names themselves; emit the same line, since a wholly
+   absent bucket is the same fact either way.
+4. `refs/heads/board/seq` is one ref, so "absent because never fetched" and
+   "absent because deleted" are indistinguishable for it. It keeps today's
+   per-ref `archive: removed` line — which is why the two-ref floor in 3 exists
+   rather than a bare zero-present test.
+5. When a bucket's present-count is non-zero, keep today's behaviour exactly: a
+   partly-present namespace is a genuine divergence and every removed, moved and
+   added ref is still named individually. `moved` and `added` are never
+   collapsed, in any bucket.
 
-With all four namespaces unfetched the refusal becomes four lines instead of
-1,991, and each one says what to do.
+With the three multi-ref namespaces unfetched the refusal becomes three lines
+plus `board/seq`'s one, instead of 1,991.
 
 `_work/migrate6_archive.tl` is 144 lines (`wc -l`), well inside the 500-line
-cap, and the change adds roughly fifteen.
+cap, and the change adds roughly thirty-five. Measure that against a formatted
+tree, not before the fmt stage runs.
 
 Regression: `_work/migrate6_archive_test.tl` (new file) builds a witness over two
 prefixes, snapshots a root where one prefix is wholly absent and the other has
