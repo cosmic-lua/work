@@ -1,4 +1,5 @@
 title: two concurrent --make runs in one worktree corrupt the shared o/ and report a bogus parse error in an untouched file
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 repo: cosmic-lua/cosmic
+resolution: not-planned
 touches: _make/converge.tl
