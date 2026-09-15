@@ -3,5 +3,7 @@ parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 repo: cosmic-lua/work
 handover_head: 35d59890713fc951b7953ae2a1100b7e0a28a219
 external_url: https://github.com/cosmic-lua/work/pull/182
+verdict: accept
+verdict_head: 35d59890713fc951b7953ae2a1100b7e0a28a219
 builders: 7098016aeae29472489f9bc4ed7b4110 8656b9ded9cba8d0e24fa0512ac4bc3e
 speccers: 410201e720f4ed05ff3f59285fb3ce5a 7098016aeae29472489f9bc4ed7b4110
