@@ -407,12 +407,14 @@ local record gitgraph
   repo: string | nil, new_base: string | nil, claim_session?: string,
   force?: boolean, why?: string, touches?: {string},
   access?: {string}): integer
+  declared: function(raw: {string}): {string} | nil
 end
 
 local M: gitgraph = {
   cmd_new = cmd_new,
   cmd_attach = cmd_attach,
   cmd_set = gitset.cmd_set,
+  declared = gitset.declared,
 }
 
 return M
