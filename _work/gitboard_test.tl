@@ -419,3 +419,47 @@ local function test_set_collects_each_declared_list_flag_occurrence()
   assert(#it.access == 1 and it.access[1] == "cosmic-lua/cosmic",
     "and --access the same: " .. table.concat(it.access, " "))
 end
+
+-- `new --spec-file` with no `--touches` used to file with no `touches`
+-- key at all: `cosmic.flags` always hands the dispatcher an empty
+-- list for an unset repeated flag, so `cmd_new` could never tell
+-- "absent" from "explicitly empty" and never derived anything. Now it
+-- derives from the Change's own backticked `.tl` path, through the
+-- real dispatcher rather than a direct `cmd_new` call.
+local function test_new_spec_file_derives_touches_through_the_dispatcher()
+  local s = init_state_repo("new-spec-file-derive")
+  local spec_path = fs.join(tmpdir, "new-spec-file-derive.md")
+  assert(fs.write(spec_path, "## Change\n\nSplit `_work/gitgraph.tl`.\n"))
+  assert(gitboard.main("new", "a cli-filed slice", "--spec-file", spec_path,
+      "--dir", s.root) == 0, "new should accept the spec file")
+  fixture.caller_fetch(s)
+  local filed: string = nil
+  for _, i in ipairs(check.must(store.list(s))) do
+    if i.title == "a cli-filed slice" then filed = i.id end
+  end
+  assert(filed ~= nil, "the item was filed")
+  local it = check.must(store.load(s, filed))
+  assert(#it.touches == 1 and it.touches[1] == "_work/gitgraph.tl",
+    "touches derived through the dispatcher: " .. table.concat(it.touches, " "))
+end
+
+-- The same "always-empty-list" bug meant `set --access` ALONE also
+-- always reached `cmd_set` with an empty `touches` list — never nil —
+-- so it silently cleared a `touches` a previous `set` had declared,
+-- reporting `touches, access updated` for a caller who typed neither.
+local function test_set_access_alone_does_not_clear_touches()
+  local s = init_state_repo("set-access-alone")
+  local root = file_item(s, "an outcome", "")
+  local leaf = file_item(s, "a slice", root)
+  assert(gitboard.main("set", leaf, "--touches", "_work/a.tl",
+      "--dir", s.root) == 0, "touches should land first")
+  fixture.caller_fetch(s)
+  assert(gitboard.main("set", leaf, "--access", "cosmic-lua/cosmic",
+      "--dir", s.root) == 0, "--access alone should parse")
+  fixture.caller_fetch(s)
+  local it = check.must(store.load(s, leaf))
+  assert(#it.touches == 1 and it.touches[1] == "_work/a.tl",
+    "touches survives an --access-only set: " .. table.concat(it.touches, " "))
+  assert(#it.access == 1 and it.access[1] == "cosmic-lua/cosmic",
+    "and access landed: " .. table.concat(it.access, " "))
+end

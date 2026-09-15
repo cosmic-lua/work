@@ -47,6 +47,27 @@ local function code_spans(text: string): {string}
   return out
 end
 
+--- The `.tl` paths a Change blob names in backticks — a caller
+--- declaring `--touches` by hand types the same backticked form, so
+--- `new` reads it back the same way when no `--touches` was typed. A
+--- span holding whitespace is a sentence or a command, not one path,
+--- and is skipped, which is also why a compound `touches: a.tl b.tl`
+--- rendering never round-trips back into a derived list.
+--- @param change string The Change blob's text
+--- @return {string} `.tl` paths, once each, in first-seen order
+local function touches_from_change(change: string): {string}
+  local seen: {string: boolean} = {}
+  local out: {string} = {}
+  for _, span in ipairs(code_spans(change)) do
+    if span:match("%.tl$") ~= nil and span:match("%s") == nil
+    and not seen[span] then
+      seen[span] = true
+      out[#out + 1] = span
+    end
+  end
+  return out
+end
+
 --- The gap a sweep-shaped Change leaves when its spec pastes no
 --- dry-run evidence: a Change naming `--apply` or `--fix` needs a
 --- fenced `rewrite:` or `applied` line somewhere in either blob — the
@@ -305,6 +326,7 @@ local record spec
   split: function(body: string): itemtree.Spec | nil, string
   ready_gaps: function(sp: itemtree.Spec | nil): {string}
   reached_repos: function(body: string): {string}
+  touches_from_change: function(change: string): {string}
 end
 
 local M: spec = {
@@ -312,6 +334,7 @@ local M: spec = {
   split = split,
   ready_gaps = ready_gaps,
   reached_repos = reached_repos,
+  touches_from_change = touches_from_change,
 }
 
 return M
