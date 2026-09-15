@@ -106,3 +106,21 @@ rather than the batch when one of them is not in `review`.
 .cosmic-coverage` returns nothing against 91 rows, `grep -c '\["_'
 .cosmic-coverage`), so none moves; a new test file may add one, measured with
 `bin/cosmic --make coverage`, that row alone, carrying its measured basis.
+
+The wall this opens, stated because it is real: `handoff` lets a session take
+a LIVE claim it does not hold, with no `--force` and no `--why`, which every
+other path refuses. `_work/snapshot_authority_test.tl`'s
+`test_raw_claim_acquisition_cannot_rotate_an_active_lease` guards exactly that
+seizure today, and this change moves which rule denies it.
+
+What bounds the widening is `handover_head`. Only the holder's own `take` sets
+it, and setting it is the builder saying "I am done, review me", so a seizure
+reaches only items whose holder has already asked for a reviewer. An item still
+being built cannot be taken. Both sides are pinned: the seizure that IS allowed
+by `test_handoff_seizes_a_live_claim_without_the_holder_consenting`, the one
+that is NOT by the authority test above, whose assertion moves from
+`item is claimed by` to `handed over nothing`.
+
+This is accepted, not worked around: without permitting the transfer the verb
+cannot exist, and the alternative — a consent token from the outgoing holder —
+is a larger design with no caller asking for it.
