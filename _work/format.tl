@@ -74,6 +74,41 @@ end
 local function known_content(sha: string): string | nil
   return CONTENT_BY_SHA[sha]
 end
+
+--- The fetch a checkout missing the board's refs needs, shell-quoted.
+---
+--- A remote board is read through REMOTE-TRACKING refs, so a checkout
+--- carrying `refs/heads/board/format` and nothing under
+--- `refs/remotes/<remote>/` still reads as having no board at all.
+--- @param dir string The state repository checkout
+--- @return string The quoted `git fetch` argv
+local function fetch_hint(dir: string): string
+  local remote = refs.board_remote(dir)
+  local argv = {"git", "fetch", "--atomic", remote,
+    "+refs/heads/state:refs/remotes/" .. remote .. "/state",
+    "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
+  local quoted: {string} = {}
+  for _, word in ipairs(argv) do
+    quoted[#quoted + 1] = "'" .. word:gsub("'", "'\"'\"'") .. "'"
+  end
+  return table.concat(quoted, " ")
+end
+
+--- What an absent format marker actually means, and the two ways out.
+---
+--- Never names one ref as missing: the marker is read from whichever
+--- namespace the caller inspected, so a checkout that HAS
+--- `refs/heads/board/format` still lands here when its remote-tracking
+--- copy is absent, and naming the local ref sends the reader to look at
+--- a ref that is sitting right there.
+--- @param dir string The state repository checkout
+--- @return string The refusal
+local function marker_missing(dir: string): string
+  return "no board format marker in this checkout — fetch it: "
+  .. fetch_hint(dir)
+  .. "; `gitboard init` is only for a board that does not exist yet"
+end
+
 local function inspect(dir: string, snapshot?: {refs.RefEntry}): Inspection | nil, string
   local found = snapshot
   if found == nil then
@@ -122,7 +157,7 @@ local function state_head(dir: string, snapshot?: {refs.RefEntry}): string | nil
   local denied = refusal(marker.content, marker.has_items)
   if denied ~= nil then return nil, denied end
   if marker.content:gsub("%s+$", "") ~= "6" then
-    return nil, "refs/heads/board/format is missing — run `gitboard init` first"
+    return nil, marker_missing(dir)
   end
   if snapshot ~= nil then
     for _, entry in ipairs(snapshot) do
@@ -136,13 +171,8 @@ local function state_head(dir: string, snapshot?: {refs.RefEntry}): string | nil
     if entry.refname == "refs/heads/state" then head = entry.sha end
   end
   if head == refs.ZERO_SHA then
-    local remote = refs.board_remote(dir)
-    local argv = {"git", "fetch", "--atomic", remote,
-      "+refs/heads/state:refs/remotes/" .. remote .. "/state",
-      "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
-    local quoted: {string} = {}
-    for _, word in ipairs(argv) do quoted[#quoted + 1] = "'" .. word:gsub("'", "'\"'\"'") .. "'" end
-    return nil, "format 6 requires refs/heads/state; fetch the native snapshot: " .. table.concat(quoted, " ")
+    return nil, "format 6 requires refs/heads/state; fetch the native snapshot: "
+    .. fetch_hint(dir)
   end
   return head, ""
 end
@@ -160,7 +190,7 @@ local function require_current(dir: string): boolean, string
     return false, err
   end
   if state.sha == refs.ZERO_SHA then
-    return false, "refs/heads/board/format is missing — run `gitboard init` first"
+    return false, marker_missing(dir)
   end
   local denied = refusal(state.content, state.has_items)
   if denied ~= nil then

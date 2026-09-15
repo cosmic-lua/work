@@ -22,7 +22,7 @@ places it, and a state or enum literal quotes the vocabulary the
 schema or record declares — a location read from memory is the
 wrong turn that feels obviously right. The same rule covers any
 bare file:line citation of quoted source text, wherever it sits —
-an `## Evidence` paragraph citing a fact as much as `## Change`
+a `## Non-goals` wall quoting a line as much as a `## Change`
 naming a function: pair the line number with a short,
 still-`grep`-able literal string from that exact line, a
 distinctive substring of the quote itself is enough, no new tooling
