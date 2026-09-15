@@ -17,9 +17,8 @@ local fixture = require("_work.fixture")
 local claim = require("_work.claim")
 local fs = require("cosmic.fs")
 local graph = require("_work.gitgraph")
-local publish = require("_work.publish")
+local item = require("_work.item")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local worktree = require("_work.gitworktree")
 
 local SESSION < const > = "11111111111111111111111111111111"
@@ -87,8 +86,8 @@ local function fresh(name: string, kind: string, script?: string): Case
   assert(graph.cmd_set(s, id, nil, "acme/widgets", "main") == 0)
   local it = check.must(store.load(s, id))
   it.handover_head = head
-  assert(storewrite.save(s, it, "fixture handover"))
-  assert(publish.publish(s))
+  assert(item.record_involvement(it.builders, SESSION))
+  fixture.raw_seed_item(s, it, "historical fixture handover")
   local identity = fixture.claim_item(s, id, SESSION, base)
   local branch = claim.branch(id, identity)
   return {s = s, id = id, root = root, base = base, head = head, branch = branch,

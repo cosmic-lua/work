@@ -46,9 +46,27 @@ end
 --- @param override string Per-command local path, "" for configured mapping
 --- @return string | nil Local Git work tree
 --- @return string Error message
+local function remember(board_root: string, repository: string,
+    path: string): boolean, string
+  if repository == "" then return false, "item has no repository identity" end
+  local escaped = repository:gsub("([^%w])", "\\%1")
+  local r, err = child.run({"git", "config", "--local", "--replace-all",
+      "gitboard.repository", repository .. "=" .. path, "^" .. escaped .. "="},
+    {cwd = board_root})
+  if r == nil then return false, err end
+  if not r.ok then return false, "cannot save repository mapping: " .. r.stderr end
+  return true, ""
+end
+
 local function resolve(board_root: string, repository: string,
     override: string): string | nil, string
-  if override ~= "" then return validate(override) end
+  if override ~= "" then
+    local selected, err = validate(override)
+    if selected == nil then return nil, err end
+    local saved, serr = remember(board_root, repository, selected)
+    if not saved then return nil, serr end
+    return selected, ""
+  end
   if repository == "" then return nil, "item has no repository identity" end
   local r, err = child.run(
     {"git", "config", "--local", "--get-all", "gitboard.repository"},
@@ -69,12 +87,15 @@ end
 
 local record repository_map
   validate: function(path: string): string | nil, string
+  remember: function(board_root: string, repository: string,
+  path: string): boolean, string
   resolve: function(board_root: string, repository: string,
   override: string): string | nil, string
 end
 
 local M: repository_map = {
   validate = validate,
+  remember = remember,
   resolve = resolve,
 }
 

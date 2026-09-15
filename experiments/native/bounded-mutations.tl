@@ -1,11 +1,4 @@
 return {
-  four_attempts_instead_of_five = {
-    file = "_work/statepublish.tl",
-    before = 'for attempt = 1, 5 do',
-    after = 'for attempt = 1, 4 do',
-    test = "_work/statepublish_lifecycle_test.tl",
-    filter = "test_five_failed_head_retries_retire_the_exact_attempt",
-  },
   missing_dependency_cycle_witness = {
     file = "_work/graphguards.tl",
     before = 'if dep == id then',

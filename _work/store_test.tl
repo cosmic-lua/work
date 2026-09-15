@@ -93,14 +93,16 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
-local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
-
---- A minimal valid workable item (under a parent the store never
---- checks — graph rules are flow's, exercised in flow_test). The
+--- A minimal valid workable item under the canonical board. The
 --- claim doubles as the mutable payload the round-trip tests edit.
-local function make_item(claim?: string): item.Item
+local function make_item(s: store.Store, claim?: string): item.Item
+  local parent = ""
+  for _, candidate in ipairs(check.must(store.list(s))) do
+    if item.is_parentless(candidate) then parent = candidate.id end
+  end
+  assert(parent ~= "")
   return check.must(item.decode({
-        id = fresh_id(), title = "an item", parent = PARENT,
+        id = fresh_id(), title = "an item", parent = parent,
         claim = claim or "",
       }))
 end
@@ -126,8 +128,8 @@ end
 local function test_resolve_prefixes()
   local root = init_state_repo("resolve")
   local s = check.must(store.open(root))
-  local a = make_item()
-  local b = make_item()
+  local a = make_item(s)
+  local b = make_item(s)
   assert(save(s, a, "new a"))
   assert(save(s, b, "new b"))
   assert(check.must(store.resolve(s, a.id)) == a.id, "full ids resolve")
@@ -148,7 +150,7 @@ end
 local function test_resolve_leases_the_load_that_follows_a_prefix()
   local root = init_state_repo("resolve-leases-load")
   local s = check.must(store.open(root))
-  local a = make_item()
+  local a = make_item(s)
   assert(save(s, a, "new a"))
   local resolved = check.must(store.resolve(s, a.id:sub(1, 26)))
   assert(resolved == a.id, "the prefix resolves")
@@ -187,19 +189,19 @@ end
 -- original incident's multiline title) can no longer even reach
 -- storage looking multiline — the line format is what refuses it now,
 -- before `item.problems` ever gets a say. The tolerance this pins is
--- the same one either way: a content-invalid item — here, a PARENTLESS
--- item hand-edited to carry a reviewer, a shape only `write_unchecked`
+-- the same one either way: a content-invalid item — here, an item
+-- hand-edited to carry a malformed access slug, a shape only `write_unchecked`
 -- can produce — must not abort `list`; the rest still reads, the bad
 -- one comes back flagged, not dropped, and write-refusal is unchanged.
 local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
   local root = init_state_repo("list-tolerant")
   local s = check.must(store.open(root))
-  local good = make_item()
+  local good = make_item(s)
   assert(save(s, good, "new good"))
-  local bad = check.must(item.decode({id = fresh_id(), title = "a root"}))
-  bad.reviewer = "session-x"
+  local bad = make_item(s)
+  bad.access = {"invalid-slug"}
   local ok, serr = store.stage(s, bad)
-  assert(not ok and serr:find("belong to worked items, never the board", 1, true) ~= nil,
+  assert(not ok and serr:find("access must be owner/name", 1, true) ~= nil,
     "stage refuses the same shape: " .. tostring(serr))
   write_unchecked(s, bad)
   local all = check.must(store.list(s))
@@ -210,7 +212,7 @@ local function test_list_tolerates_a_flagged_item_but_stage_still_refuses()
   end
   local summary = store.flagged_summary(all)
   assert(summary:find(bad.id:sub(1, 8), 1, true) and
-    summary:find("belong to worked items, never the board", 1, true), "summary: " .. summary)
+    summary:find("access must be owner/name", 1, true), "summary: " .. summary)
 end
 
 -- Repairability falls out: `set` loads through this same tolerant
@@ -218,16 +220,17 @@ end
 local function test_a_flagged_item_is_repairable_through_the_tolerant_decode()
   local root = init_state_repo("repair")
   local s = check.must(store.open(root))
-  local seed = check.must(item.decode({id = fresh_id(), title = "a root"}))
-  seed.reviewer = "session-x"
+  local seed = make_item(s)
+  seed.access = {"invalid-slug"}
   write_unchecked(s, seed)
   local loaded = check.must(store.load(s, seed.id))
   assert(item.is_flagged(loaded), "the bad record still loads, flagged")
-  loaded.reviewer = ""
-  assert(save(s, loaded, "set " .. seed.id:sub(1, 8) .. " reviewer"),
+  loaded.access = {"owner/repository"}
+  assert(save(s, loaded, "repair " .. seed.id:sub(1, 8) .. " access"),
     "the repair commits: problems(it) is now empty")
   local fixed = check.must(store.load(s, seed.id))
-  assert(not item.is_flagged(fixed) and fixed.reviewer == "", "clean")
+  assert(not item.is_flagged(fixed)
+    and fixed.access[1] == "owner/repository", "clean")
   assert(store.flagged_summary(check.must(store.list(s))) == "",
     "listing recovers: nothing left flagged")
 end

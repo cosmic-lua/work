@@ -5,12 +5,10 @@ local graphguards = require("_work.graphguards")
 local boardread = require("_work.boardread")
 local boardindex = require("_work.index")
 local flow = require("_work.flow")
-local gitready = require("_work.gitready")
 local item = require("_work.item")
 local read = require("_work.read")
-local spec = require("_work.spec")
-local projection = require("_work.stateplan_git")
 local tx = require("_work.statetransaction")
+local workflow_rules = require("_work.workflow_rules")
 
 --- Every item id this transition writes a path under — the set a re-run gate
 --- judges, rather than the whole board it reads to judge them.
@@ -89,11 +87,10 @@ local function done_refusal(before: {item.Item}, items: {item.Item},
     local previous, projected = old[id], index[id]
     if previous ~= nil and projected ~= nil and item.is_open(previous)
     and projected.resolution == "completed" then
-      for _, child in ipairs(items) do
-        if child.parent == id and item.is_open(child) then
-          return ("done gate: %s has an open child (%s) left"):format(
-            id:sub(1, 8), child.id:sub(1, 8))
-        end
+      local children = workflow_rules.child_state(items, id)
+      if children.open ~= nil then
+        return ("done gate: %s has an open child (%s) left"):format(
+          id:sub(1, 8), children.open.id:sub(1, 8))
       end
     end
   end
@@ -140,9 +137,11 @@ local function take_refusal(before: boardread.View, after: boardread.View,
         end
       end
       local prose = after.specs_by_id[id]
-      if #flow.ready_gaps(prose) > 0 then return "take gate: spec is not ready: " .. id end
-      if #gitready.undeclared_repos(it, spec.document(prose)) > 0 then
-        return "take gate: spec has undeclared read access: " .. id
+      for _, issue in ipairs(workflow_rules.readiness_issues(it, prose)) do
+        if issue:match("^spec ") then return "take gate: spec is not ready: " .. id end
+        if issue:match("^undeclared repository ") then
+          return "take gate: spec has undeclared read access: " .. id
+        end
       end
     end
   end
@@ -225,18 +224,13 @@ end
 --- @param transition tx.Transition The frozen transition and its gate name
 --- @return boolean True when the gate passes again
 --- @return string The gate's own refusal
-local function check(root: string, head: string, transition: tx.Transition): boolean, string
+local function check_views(before: boardread.View, after: boardread.View,
+    transition: tx.Transition): boolean, string
   local known = transition.gate == "take" or transition.gate == "doing-bound"
   or transition.gate == "new" or transition.gate == "lane-mint"
   or transition.gate == "depend" or transition.gate == "attach"
   or transition.gate == "rank" or transition.gate == "done"
   if not known then return false, "unknown bounded gate: " .. transition.gate end
-  local before, berr = boardread.list(root, head)
-  if before == nil then return false, berr end
-  local tree, terr = projection.apply(root, head, transition.changes)
-  if tree == nil then return false, terr end
-  local after, aerr = boardread.list(root, tree)
-  if after == nil then return false, aerr end
   if transition.gate == "take" or transition.gate == "doing-bound" then
     local previous, perr = doing_count(before.items)
     if previous == nil then return false, perr end
@@ -260,7 +254,8 @@ local function check(root: string, head: string, transition: tx.Transition): boo
 end
 
 local record stategate
-  check: function(string, string, tx.Transition): boolean, string
+  check_views: function(boardread.View, boardread.View,
+  tx.Transition): boolean, string
 end
-local M: stategate = {check = check}
+local M: stategate = {check_views = check_views}
 return M

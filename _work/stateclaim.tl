@@ -3,6 +3,7 @@ local boardread = require("_work.boardread")
 local boardtree = require("_work.boardtree")
 local claim = require("_work.claim")
 local tx = require("_work.statetransaction")
+local workflow_rules = require("_work.workflow_rules")
 local enum Action
   "take"
   "renew"
@@ -80,6 +81,7 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
           next_claim = {id = boardtree.mint_claim_id(), holder = caller,
             acquired_at = now, renewed_at = now, expires_at = now + claim.LEASE_S,
             product_base = req.product_base}
+          denial = workflow_rules.claim_acquisition_refusal(next_claim, caller, now)
         end
       end
     elseif action == "renew" then
@@ -87,6 +89,7 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
       if denial == nil and old ~= nil then
         next_claim = {id = old.id, holder = old.holder, acquired_at = old.acquired_at,
           renewed_at = now, expires_at = now + claim.LEASE_S, product_base = old.product_base}
+        denial = workflow_rules.claim_renewal_refusal(old, next_claim)
       end
     else denial = claim.drop_refusal(st, caller, now, force, why) end
     seen[req.id] = true

@@ -11,7 +11,7 @@ local boardtree = require("_work.boardtree")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitclaim_cli = require("_work.gitclaim_cli")
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 

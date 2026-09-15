@@ -6,15 +6,15 @@
 -- unpositioned X, and a done ID.
 
 local check = require("cosmic.check")
+local gitboard = require("_work.gitboard")
 local read = require("_work.read")
 local graph = require("_work.gitgraph")
 local rank = require("_work.gitrank")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 local fixture = require("_work.fixture")
-local refs = require("_work.refs")
-local staging = require("_work.statestaging")
-local native = require("_work.statepublish")
+local publication = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 local publish = require("_work.publish")
 
 local init_state_repo = fixture.init_state_repo
@@ -167,10 +167,18 @@ local function test_rank_the_same_position_is_a_noop_success()
     and seen:find("nothing to record", 1, true) ~= nil, seen)
 end
 
--- The lost-race re-run pattern (`_work/gitattach_test.tl`'s
--- `test_a_reparent_survives_a_rebase`), against the board's own
--- `order`: the board's own ref tip is the lease, no `seq` involved.
-local function test_an_outcome_rank_survives_a_rebase()
+local function conflict_and_abandon(s: store.Store)
+  local candidate = check.must(workspace.read(s.root))
+  local ok, err = publication.execute(s.root, candidate.commit, "origin", nil)
+  assert(not ok and err:find("conflict", 1, true), err)
+  assert(gitboard.main("snapshot", "--abandon", candidate.commit,
+      "--dir", s.root) == 0)
+  fixture.caller_fetch(s)
+end
+
+-- A stale rank of the board's own order conflicts as one exact snapshot.
+-- After abandonment, the verb reruns as a fresh decision and publishes.
+local function test_an_outcome_rank_conflicts_then_reruns()
   local a, b = init_shared("rank-outcome-race")
   local r1 = file_item(a, "outcome one", "")
   local r2 = file_item(a, "outcome two", "")
@@ -183,16 +191,7 @@ local function test_an_outcome_rank_survives_a_rebase()
 
   assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
     "the stale caller may prepare against its fetched snapshot")
-  local pending = check.must(staging.list(a.root))
-  assert(#pending == 1, "the stale rank has one durable transaction")
-  local pushed, perr = native.execute(a.root, pending[1])
-  assert(not pushed and perr == store.LOST_RACE,
-    "the native state fence rejects the race")
-  assert(native.sync(a), "the caller refreshes after the rejected push")
-  assert(check.must(refs.read_ref(a.root, pending[1].ref)) == refs.ZERO_SHA)
-  local quarantine = "refs/gitboard/quarantined/lost-race/" .. pending[1].id
-  assert(check.must(refs.read_ref(a.root, quarantine))
-    == pending[1].sha, "the diagnosed transaction remains inspectable")
+  conflict_and_abandon(a)
 
   assert(rank.cmd_rank(a, r2, r1, "", false) == 0,
     "the re-run lands against the merged board")
@@ -216,37 +215,27 @@ local function unpositioned_rank_race(name: string): store.Store, store.Store,
   return a, b, goal, other, target
 end
 
--- Rank writes only the old parent's order. The target item is nevertheless a
--- dependency: if an unpositioned attach moves it first, the stale rank must
--- not leave that old order naming a non-child.
-local function test_rank_prepared_before_unpositioned_attach_loses()
+-- If attach moves the target first, a stale rank conflicts wholesale and
+-- cannot leave the old order naming a non-child.
+local function test_rank_snapshot_before_unpositioned_attach_conflicts()
   local ranker, mover, _goal, other, target =
   unpositioned_rank_race("rank-before-attach")
   assert(rank.cmd_rank(ranker, target, "", "", true) == 0)
-  local pending = check.must(staging.list(ranker.root))
-  assert(#pending == 1)
   assert(graph.cmd_attach(mover, target, other) == 0)
   fixture.caller_publish(mover)
-  local ok, err = native.execute(ranker.root, pending[1])
-  assert(not ok and err == store.LOST_RACE,
-    "the target membership path is fenced: " .. err)
+  conflict_and_abandon(ranker)
+  assert(check.must(store.load(ranker, target)).parent == other)
 end
 
--- In the reverse publication order, attach's target path is disjoint from
--- rank's parent-order write. Its bounded replay must notice that the latest
--- old parent now ranks the target and refuse to strand that entry.
-local function test_unpositioned_attach_prepared_before_rank_loses()
+-- In the reverse order, a rank head advance also refuses the stale attach;
+-- disjoint paths do not authorize a replay or merge.
+local function test_unpositioned_attach_snapshot_before_rank_conflicts()
   local ranker, mover, goal, other, target =
   unpositioned_rank_race("attach-before-rank")
   assert(graph.cmd_attach(mover, target, other) == 0)
-  local pending = check.must(staging.list(mover.root))
-  assert(#pending == 1)
   assert(rank.cmd_rank(ranker, target, "", "", true) == 0)
   fixture.caller_publish(ranker)
-  local ok, err = native.execute(mover.root, pending[1])
-  assert(not ok and err == store.LOST_RACE,
-    "attach fences the old parent's membership path: " .. err)
-  fixture.caller_fetch(mover)
+  conflict_and_abandon(mover)
   assert(check.must(store.load(mover, target)).parent == goal,
     "the refused attach leaves target under the parent that ranks it")
 end

@@ -43,11 +43,23 @@ local function repair_for(all: {item.Item}, lane: string): item.Item
   return nil
 end
 
+local function with_lane_parent(name: string): store.Store
+  local s = init_state_repo(name)
+  local c = check.must(store.read(s))
+  local board_id = check.must(read.board(c))
+  local parent = check.must(item.decode({id = flow.LANE_PARENT,
+        title = "lane repair outcome", parent = board_id}))
+  assert(storewrite.save(s, parent,
+      "new " .. parent.id:sub(1, 8) .. " lane repairs"))
+  assert(publish.publish(s))
+  return s
+end
+
 -- Two red observations of the same lane mint exactly one repair item:
 -- the lane's title is what `mint` searches on
 -- before ever filing one — five red days cost one item, not five.
 local function test_mint_is_idempotent_per_lane()
-  local s = init_state_repo("mint-idempotent")
+  local s = with_lane_parent("mint-idempotent")
   assert(lanes.mint(s, RED))
   local repair = repair_for(check.must(store.list(s)), "release.yml")
   assert(repair ~= nil, "one repair item filed for the red lane")
@@ -72,7 +84,7 @@ end
 -- A lane back to green closes its UNCLAIMED repair item, as
 -- not-planned — the monitor observed a fact, it never completed work.
 local function test_green_closes_an_unclaimed_repair()
-  local s = init_state_repo("mint-closes")
+  local s = with_lane_parent("mint-closes")
   assert(lanes.mint(s, RED))
   local repair = repair_for(check.must(store.list(s)), "release.yml")
   assert(repair ~= nil and item.is_open(repair), "the repair starts open")
@@ -87,7 +99,7 @@ end
 -- A CLAIMED repair is left alone even when its lane goes green: the
 -- monitor never undoes a builder's in-flight claim.
 local function test_a_claimed_repair_is_left_alone_on_green()
-  local s = init_state_repo("mint-claimed")
+  local s = with_lane_parent("mint-claimed")
   assert(lanes.mint(s, RED))
   local repair = repair_for(check.must(store.list(s)), "release.yml")
   assert(repair ~= nil)

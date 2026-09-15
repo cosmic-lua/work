@@ -75,14 +75,19 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
-local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
-
 --- A minimal valid workable item. Claims are projected from shared
 --- native lease blobs, so these tests use ordinary item fields.
-local function make_item(title?: string): item.Item
+local function make_item(parent: string, title?: string): item.Item
   return check.must(item.decode({
-        id = fresh_id(), title = title or "an item", parent = PARENT,
+        id = fresh_id(), title = title or "an item", parent = parent,
       }))
+end
+
+local function board_id(s: store.Store): string
+  for _, candidate in ipairs(check.must(store.list(s))) do
+    if item.is_parentless(candidate) then return candidate.id end
+  end
+  error("fixture board has no canonical root", 0)
 end
 
 -- Cold native list work stays constant as the board grows. Each measurement
@@ -91,6 +96,7 @@ end
 local function test_list_process_count_is_constant_as_items_grow()
   local root = init_state_repo("process-count")
   local s = check.must(store.open(root))
+  local parent = board_id(s)
   local real_git = check.must(child.run({"sh", "-c", "command -v git"})).stdout
   real_git = (real_git:gsub("%s+$", ""))
   local wrapdir = fs.join(tmpdir, "storeref-git-wrap")
@@ -107,7 +113,7 @@ local function test_list_process_count_is_constant_as_items_grow()
   local function seed(n: integer)
     local ids: {string} = {}
     for i = 1, n do
-      local it = make_item()
+      local it = make_item(parent)
       assert(storewrite.save(s, it, ("seed %d"):format(i)))
       ids[#ids + 1] = it.id
     end
@@ -151,6 +157,7 @@ end
 local function test_whole_board_show_process_count_is_constant_as_items_grow()
   local root = init_state_repo("show-process-count")
   local s = check.must(store.open(root))
+  local parent = board_id(s)
   local real_git = check.must(child.run({"sh", "-c", "command -v git"})).stdout
   real_git = (real_git:gsub("%s+$", ""))
   local wrapdir = fs.join(tmpdir, "storeref-show-git-wrap")
@@ -164,7 +171,7 @@ local function test_whole_board_show_process_count_is_constant_as_items_grow()
 
   local function seed(n: integer)
     for i = 1, n do
-      local it = make_item()
+      local it = make_item(parent)
       assert(storewrite.save(s, it, ("seed %d"):format(i),
           {change = ("spec body for item %d\n"):format(i), non_goals = ""}))
     end
@@ -200,6 +207,7 @@ end
 local function test_show_one_item_process_count_is_constant_as_siblings_grow()
   local root = init_state_repo("show-id-process-count")
   local s = check.must(store.open(root))
+  local parent = board_id(s)
   local real_git = check.must(child.run({"sh", "-c", "command -v git"})).stdout
   real_git = (real_git:gsub("%s+$", ""))
   local wrapdir = fs.join(tmpdir, "storeref-show-id-git-wrap")
@@ -211,14 +219,14 @@ local function test_show_one_item_process_count_is_constant_as_siblings_grow()
       ("#!/bin/sh\nprintf x >> '%s'\nexec '%s' \"$@\"\n"):format(counter_file, real_git)))
   assert(fs.set_mode(fs.join(wrapdir, "git"), fs.octal("755")))
 
-  local target = make_item()
+  local target = make_item(parent)
   assert(storewrite.save(s, target, "seed target",
       {change = "do the thing\n", non_goals = ""}))
 
   --- Add `n` further open siblings, each with its own spec.
   local function seed_siblings(n: integer)
     for i = 1, n do
-      local it = make_item()
+      local it = make_item(parent)
       assert(storewrite.save(s, it, ("seed sibling %d"):format(i),
           {change = ("sibling change %d\n"):format(i), non_goals = ""}))
     end

@@ -12,7 +12,6 @@ local claimsession = require("_work.claimsession")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -56,8 +55,8 @@ local function record_handover(s: store.Store, id: string, builder: string)
   it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, builder))
-  assert(storewrite.save(s, it,
-      ("take %s by %s head:%s"):format(id:sub(1, 8), builder, HEAD:sub(1, 12))))
+  fixture.raw_seed_item(s, it,
+    ("take %s by %s head:%s"):format(id:sub(1, 8), builder, HEAD:sub(1, 12)))
 end
 
 local function test_builder_brief_names_the_exact_claim_session()

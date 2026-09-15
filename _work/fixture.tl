@@ -7,14 +7,14 @@
 --- hundred lines of git plumbing, and two copies of it drift the way
 --- any duplicate does. It is required only by `*_test.tl`.
 local check = require("cosmic.check")
+local boardtree = require("_work.boardtree")
 local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
 local stateclaim = require("_work.stateclaim")
 local statewrite = require("_work.statewrite")
-local statepublish = require("_work.statepublish")
-local staging = require("_work.statestaging")
+local statepublish = require("_work.snapshot_publish")
 local graph = require("_work.gitgraph")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
@@ -24,6 +24,7 @@ local rank = require("_work.gitrank")
 local readddl = require("_work.readddl")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local workspace = require("_work.snapshot_workspace")
 
 local tmpdir = os.getenv("TEST_TMPDIR") or "/tmp"
 
@@ -220,13 +221,13 @@ end
 --- Local fixtures already promoted their mutations and need no transport.
 local function caller_publish(s: store.Store)
   if refs.board_mode(s.root) == "local" then assert(statepublish.publish(s)); return end
-  for _, receipt in ipairs(check.must(staging.list(s.root, "prepared"))) do
-    local ok, err = statepublish.execute(s.root, receipt)
-    assert(ok, "caller push failed: " .. err)
-  end
-  fetch_state(s)
-  local synced, err = statepublish.sync(s)
-  assert(synced, "caller confirmation failed: " .. err)
+  local candidate, cerr = require("_work.snapshot_workspace").read(s.root)
+  if candidate == nil then assert(cerr == "", cerr); return end
+  local ok, err = require("_work.snapshot_publish").execute(s.root,
+    candidate.commit, refs.board_remote(s.root), nil)
+  assert(ok, "caller push failed: " .. err)
+  local synced, serr = statepublish.sync(s)
+  assert(synced, "caller confirmation failed: " .. serr)
 end
 
 --- Fetch the native state and activation marker as an explicit fixture caller,
@@ -235,6 +236,50 @@ local function caller_fetch(s: store.Store)
   if refs.board_mode(s.root) == "local" then assert(statepublish.sync(s)); return end
   fetch_state(s)
   assert(statepublish.sync(s))
+end
+
+--- Seed an intentionally historical or malformed item state for a renderer
+--- or decoder test. This is test-only Git plumbing: it bypasses snapshot
+--- publication validation so fake legacy heads can be read, while still
+--- leaving one ordinary canonical state commit and no local proposal.
+local function raw_seed_item(s: store.Store, it: item.Item, message: string)
+  local pending, perr = workspace.read(s.root)
+  assert(pending == nil and perr == "", "raw seed requires no pending snapshot")
+  local session, op, bounded = s.session, s.op, s.bounded
+  s.session, s.op, s.bounded = "fixture-seed",
+  s.op ~= "" and s.op or "fixture", false
+  local ok, err = statewrite.save(s, it, message)
+  assert(ok, err)
+  local candidate = check.must(workspace.read(s.root))
+  assert(refs.update_ref(s.root, "refs/heads/state", candidate.commit,
+      candidate.parent))
+  assert(workspace.clear(s.root, candidate.commit))
+  s.session, s.op, s.bounded = session, op, bounded
+  local synced, serr = statepublish.sync(s)
+  assert(synced, serr)
+end
+
+--- Seed an intentionally historical native claim without passing it through
+--- current publication validation. Expiry tests use this for an acquisition
+--- that really was valid in the past, then exercise current verbs normally.
+local function raw_seed_claim(s: store.Store, id: string,
+    value: boardtree.Claim, message: string)
+  local pending, perr = workspace.read(s.root)
+  assert(pending == nil and perr == "", "raw claim seed requires no pending snapshot")
+  local content, cerr = boardtree.encode_claim(value)
+  assert(content ~= nil, cerr)
+  local session, op, bounded = s.session, s.op, s.bounded
+  s.session, s.op, s.bounded = "fixture-seed", "fixture", false
+  local ok, err = statewrite.transition(s, {{path = "claims/" .. id,
+        mode = "100644", content = content, delete = false}}, message, 0)
+  assert(ok, err)
+  local candidate = check.must(workspace.read(s.root))
+  assert(refs.update_ref(s.root, "refs/heads/state", candidate.commit,
+      candidate.parent))
+  assert(workspace.clear(s.root, candidate.commit))
+  s.session, s.op, s.bounded = session, op, bounded
+  local synced, serr = statepublish.sync(s)
+  assert(synced, serr)
 end
 
 --- Point a store's origin at GitHub for READING while its pushes keep
@@ -280,7 +325,7 @@ end
 
 --- Count published board mutations on the canonical state's first-parent chain.
 local function commits(s: store.Store): integer
-  local head = check.must(statepublish.head(s.root, refs.board_remote(s.root)))
+  local head = check.must(workspace.canonical_head(s.root))
   if head == refs.ZERO_SHA then return 0 end
   local result = check.must(store.git_ok(s, {"rev-list", "--first-parent", "--count", head}))
   return math.tointeger(tonumber((result.stdout:gsub("%s+$", "")))) or -1
@@ -288,7 +333,7 @@ end
 
 --- The author email on the latest published native board commit.
 local function commit_author_email(s: store.Store): string
-  local head = check.must(statepublish.head(s.root, refs.board_remote(s.root)))
+  local head = check.must(workspace.canonical_head(s.root))
   assert(head ~= refs.ZERO_SHA, "no commits on the board yet")
   local result = check.must(store.git_ok(s, {"log", "-1", "--format=%ae", head}))
   return (result.stdout:gsub("%s+$", ""))
@@ -378,6 +423,9 @@ local record fixture
   init_shared: function(name: string): store.Store, store.Store
   caller_publish: function(s: store.Store)
   caller_fetch: function(s: store.Store)
+  raw_seed_item: function(s: store.Store, it: item.Item, message: string)
+  raw_seed_claim: function(s: store.Store, id: string,
+  value: boardtree.Claim, message: string)
   github_origin: function(s: store.Store, slug: string)
   file_item: function(s: store.Store, title: string,
   parent: string): string
@@ -402,6 +450,8 @@ local M: fixture = {
   init_shared = init_shared,
   caller_publish = caller_publish,
   caller_fetch = caller_fetch,
+  raw_seed_item = raw_seed_item,
+  raw_seed_claim = raw_seed_claim,
   github_origin = github_origin,
   file_item = file_item,
   commits = commits,

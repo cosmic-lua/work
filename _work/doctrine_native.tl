@@ -6,36 +6,47 @@ selects this layout; a partially uploaded state branch never activates it.
 For an isolated local test board:
   gitboard init --dir /path/to/test-board --local --format 6
   gitboard new "Proof item" --dir /path/to/test-board
+Local mode auto-confirms every mutation immediately against refs/heads/state.
+It retains no composition for snapshot --check or a later publish command.
 
-On an activated remote board, the workflow remains refresh, claim, confirm,
-compose a draft, publish, refresh. Claims are outside drafts. A receipt says
-an attempt was published; the current claim record determines authority now.
+On an activated remote board, refresh before composing. Ordinary verbs replace
+one clone-local final-board snapshot whose sole parent is the fetched canonical
+head. Publish a claim and fetch its confirmation before dependent work. The
+current claim record, rather than a proposed or merely submitted commit,
+determines authority.
 
 Shell publication:
-  gitboard publish TRANSACTION --execute
-  gitboard refresh --execute
+  gitboard snapshot --check
+  gitboard publish COMMIT
 
 Connector publication:
-  gitboard publish TRANSACTION --plan attempt.literal --repository OWNER/REPO
-  gitboard publish --from-plan attempt.literal --call 0
-Render each subsequent indexed call from the same saved plan. Execute it through
-the GitHub connector, replacing symbolic prior-call SHA references with the actual
-returned values. A draft creates one tree/commit per transition and advances state
-once. Deletions rebuild the affected tree without requiring a null literal value.
-Observe the remote state head immediately before rendering the final call, and
-pass it with --head SHA. Its expected-head and deadline guards must still hold.
-These are local checks; the connector has no expected-head or deadline argument.
-A stale branch rejects the non-forced update; prepare a new attempt after
-refreshing, never combine calls from different attempts.
-  gitboard publish --from-plan attempt.literal --published RETURNED_COMMIT_SHA
-  gitboard refresh --execute
+  gitboard publish COMMIT --protocol begin
+  gitboard publish COMMIT --protocol trees
+  gitboard publish COMMIT --protocol commit --returned-tree SHA
+  gitboard publish COMMIT --protocol candidate --candidate SHA
+  gitboard publish COMMIT --protocol update --head SHA
+A Work session invokes the emitted GitHub connector calls in that order. Teal
+freezes the local snapshot, saves the returned commit SHA, and checks the exact
+destination head and claim deadline before the one non-forced ref update.
+Deletions may require multiple tree calls. A changed head conflicts the entire
+snapshot. There is no automatic rebase, replay, or partial-prefix confirmation.
+The `gitboard.publicationBranch` config redirects publication and recovery for
+isolated validation branches. Leave it unset for production `state` publication.
+The `gitboard.publicationRepository` config supplies the connector repository
+identity when it cannot be derived from the configured remote URL.
+
+If an update response is lost, fetch and reconcile the saved candidate before
+retrying anything. A candidate or updating restart never creates another commit.
+Only the same known candidate may retry, and only while the fetched head is the
+original parent and its claim deadline is live. Confirmation checks exact parent,
+tree, message, logical author, and canonical first-parent reachability.
 The connector chooses the physical Git author. A canonical Gitboard-Author literal
-in the commit message preserves the logical session author and is checked when
-confirming the complete ordered history.
+in the commit message preserves the logical session author and is checked during
+confirmation.
 
 Research evidence:
   gitboard take ITEM --result
-This records published item state; speculative draft state must publish first.
+This records published item state; local snapshot state must publish first.
 Verdicts and completion keep the exact evidence identity and item attribution.
 
 Migration is explicit:

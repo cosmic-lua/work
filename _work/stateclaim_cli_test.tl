@@ -9,7 +9,7 @@ local store = require("_work.store")
 local native = require("_work.stateclaim_authority")
 local claim = require("_work.claim")
 local receipt = require("_work.preparation_receipt")
-local staging = require("_work.statestaging")
+local workspace = require("_work.snapshot_workspace")
 local boardread = require("_work.boardread")
 
 -- `claim` is mutual exclusion, so it may reserve an unranked item whose spec
@@ -85,15 +85,24 @@ local function test_native_remote_claim_publication()
   fixture.git(root, {"clone", "-q", "--bare", root, bare}); fixture.git(root, {"clone", "-q", bare, client})
   root = client
   assert(refs.set_board_mode(root, "remote"))
+  local function publish_pending()
+    local pending = check.must(workspace.read(root))
+    cli({"publish", pending.commit})
+    cli({"refresh"})
+  end
   local who = "0123456789abcdef0123456789abcdef"
   cli({"claim", id, "--session", who}, 2)
-  local pending = check.must(staging.list(root)); assert(#pending == 1)
   assert(native.current(check.must(store.open(root)), id, who) == nil)
-  cli({"publish", pending[1].id, "--execute"}, 2)
-  cli({"refresh", "--execute"})
+  publish_pending()
 
-  cli({"renew", id, "--session", who, "--execute"})
-  cli({"drop", id, "--session", who, "--why", "done", "--execute"})
+  local claimed = check.must(boardread.list(root,
+      check.must(refs.read_ref(root, "refs/remotes/origin/state"))))
+  local renewed_at = claimed.claims_by_id[id].renewed_at
+  while os.time() <= renewed_at do end
+  cli({"renew", id, "--session", who}, 2)
+  publish_pending()
+  cli({"drop", id, "--session", who, "--why", "done"}, 2)
+  publish_pending()
   local head = check.must(refs.read_ref(root, "refs/remotes/origin/state")); assert(check.must(boardread.list(root, head)).claims_by_id[id] == nil)
 
 end
@@ -122,5 +131,5 @@ local function test_mixed_self_overlap_rejects_the_complete_cli_acquisition()
   local after = check.must(boardread.list(s.root, before))
   assert(after.claims_by_id[first].id == before_claim.id)
   assert(after.claims_by_id[second] == nil)
-  assert(#check.must(staging.list(s.root)) == 0)
+  assert(workspace.read(s.root) == nil)
 end

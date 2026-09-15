@@ -14,9 +14,8 @@ local refs = require("_work.refs")
 --- @param root string The repository holding `head`
 --- @param head string The exact commit to audit
 --- @return {string} One line per problem, sorted; empty when there are none
-local function problems(root: string, head: string): {string}
-  local view, err = boardread.list(root, head)
-  if view == nil then return {err} end
+local function view_problems(root: string, head: string,
+    view: boardread.View): {string}
   local out: {string} = {}
   local queries: {string} = {head .. ":format"}
   local marks_sha = ""
@@ -81,4 +80,16 @@ local function problems(root: string, head: string): {string}
   table.sort(out)
   return out
 end
-return {problems = problems}
+
+local function problems(root: string, head: string): {string}
+  local view, err = boardread.list(root, head)
+  if view == nil then return {err} end
+  return view_problems(root, head, view)
+end
+
+local record Module
+  problems: function(string, string): {string}
+  view_problems: function(string, string, boardread.View): {string}
+end
+local M: Module = {problems = problems, view_problems = view_problems}
+return M

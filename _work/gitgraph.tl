@@ -181,6 +181,7 @@ local function cmd_new(s: store.Store, title: string, parent: string,
     id = ksuid.new(), title = title, parent = parent_id, repo = repo or "",
     order = {}, claim = "", pr = 0, verdict = "",
     verdict_head = "", resolution = "",
+    builders = {}, speccers = {},
     touches = touches or {}, access = access or {},
   }
   local bad = item.problems(it)
@@ -192,6 +193,14 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   local foreign = owner.repo_problem(s, it.repo, it.access, "")
   if foreign then
     return gate.verdict_line("new", false, "REFUSED: " .. foreign)
+  end
+  local who = claim_session or ""
+  if prose ~= nil and ((prose.change or "") ~= ""
+    or (prose.non_goals or "") ~= "") and who ~= "" then
+    local recorded, ierr = item.record_involvement(it.speccers, who)
+    if not recorded then
+      return gate.verdict_line("new", false, "REFUSED: " .. ierr)
+    end
   end
   -- Warning only, never a refusal — printed before the mint verdict so
   -- a session sees a likely duplicate before it commits to a new id.

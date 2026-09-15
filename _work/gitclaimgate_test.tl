@@ -20,12 +20,16 @@ local function test_native_list_snapshot_claim_gate_spawns_no_git()
   assert(stateinit.init(root))
   fixture.git(root, {"config", "gitboard.mode", "local"})
   local s = check.must(store.open(root))
-  local it = check.must(item.decode({id = ksuid.new(), title = "unclaimed"}))
+  local board = check.must(store.list(s))[1]
+  assert(item.is_parentless(board))
+  local it = check.must(item.decode({id = ksuid.new(), title = "unclaimed",
+        parent = board.id}))
   assert(write.save(s, it, "new") and publish.publish(s))
   local listed = check.must(store.list(s))
   assert(#listed == 2)
   local target = listed[1].id == it.id and listed[1] or listed[2]
-  local fresh = check.must(item.decode({id = ksuid.new(), title = "fresh"}))
+  local fresh = check.must(item.decode({id = ksuid.new(), title = "fresh",
+        parent = board.id}))
   assert(gate.mutation_refusal(s, fresh, "session", false, "") == nil)
   assert(s.state_reads["items/" .. fresh.id] == ("0"):rep(40)
     and s.state_reads["claims/" .. fresh.id] == ("0"):rep(40))

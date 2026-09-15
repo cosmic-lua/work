@@ -109,11 +109,11 @@ local function claimed_item(s: store.Store, leaf: string): string
   local base = git(checkout, {"rev-parse", "HEAD"})
   fixture.git(s.root, {"config", "--local", "--add", "gitboard.repository",
       "acme/widgets=" .. checkout})
-  fixture.claim_item(s, leaf, "session-a", base)
   local it = assert(store.load(s, leaf))
   it.repo = "acme/widgets"
   assert(storewrite.save(s, it, "fixture: map repo for worktree derivation"))
   assert(publish.publish(s))
+  fixture.claim_item(s, leaf, "session-a", base)
   return checkout
 end
 
@@ -128,9 +128,8 @@ local function handover_item(s: store.Store, leaf: string): string
   local it = assert(store.load(s, leaf))
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12)))
   return checkout
 end
 
@@ -150,10 +149,9 @@ local function rework_item(s: store.Store, leaf: string)
   handover_item(s, leaf)
   local it = assert(store.load(s, leaf))
   it.claim, it.verdict_head, it.verdict = "reviewer-a", HEAD, "request changes"
-  assert(storewrite.save(s, it,
-      ("verdict %s request changes head:%s by reviewer-a")
-      :format(leaf:sub(1, 8), HEAD:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("verdict %s request changes head:%s by reviewer-a")
+    :format(leaf:sub(1, 8), HEAD:sub(1, 12)))
 end
 
 -- A rework hand-back fills `<BOUNCE_CONTEXT>` with the reviewer's
@@ -322,16 +320,19 @@ local function test_review_brief_preserves_literal_template_tokens_in_spec()
   local s = init_state_repo("brief-literal-spec")
   local _, leaf = root_with_leaf(s)
   local checkout = handover_item(s, leaf)
-  reclaim_for_review(s, leaf)
   local it = assert(store.load(s, leaf))
-  local st = check.must(authority.current(s, leaf, it.claim))
-  assert(fs.make_dirs(claim.worktree(checkout, claim.branch(leaf, st.root))))
   local prose = check.must(specmod.split(
       "## Change\nKeep <CONST_NAME>, {{.field}}, and <HEAD_SHA> verbatim.\n"
       .. "## Non-goals\nNothing else.\n"))
   local spec = specmod.document(prose)
+  storewrite.set_session(s, "session-a")
+  assert(item.record_involvement(it.speccers, "session-a"))
   assert(storewrite.save(s, it, "spec literal template tokens", prose))
   assert(publish.publish(s))
+  reclaim_for_review(s, leaf)
+  it = assert(store.load(s, leaf))
+  local st = check.must(authority.current(s, leaf, it.claim))
+  assert(fs.make_dirs(claim.worktree(checkout, claim.branch(leaf, st.root))))
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "review", leaf)
       assert(code == 0, "a commit handover still earns its review brief")

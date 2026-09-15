@@ -42,7 +42,7 @@ local function test_explicit_mapping_resolves_a_local_work_tree()
 end
 test_explicit_mapping_resolves_a_local_work_tree()
 
-local function test_override_wins_without_mutating_configuration()
+local function test_override_wins_and_persists_for_publication_validation()
   local board = repo("override-board")
   local configured = repo("configured")
   local override = repo("override")
@@ -50,8 +50,10 @@ local function test_override_wins_without_mutating_configuration()
       "acme/widgets=" .. configured})
   local got, err = repository_map.resolve(board, "acme/widgets", override)
   assert(got == override, err)
+  local remembered, rerr = repository_map.resolve(board, "acme/widgets", "")
+  assert(remembered == override, rerr)
 end
-test_override_wins_without_mutating_configuration()
+test_override_wins_and_persists_for_publication_validation()
 
 local function test_selected_path_must_be_a_git_work_tree()
   local board = repo("bad-board")

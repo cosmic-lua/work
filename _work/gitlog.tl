@@ -113,7 +113,7 @@ end
 --- Append one immutable entry under items/<id>/log. Metadata and
 --- ranked children stay intact; a correction is another entry.
 ---
---- Confirmed publication patches the native cache through statepublish.sync.
+--- Confirmed publication patches the native cache during snapshot refresh.
 --- The log path attributes the event to its item without changing item metadata.
 --- @param s store.Store The store
 --- @param id string The item id, already resolved by the dispatcher

@@ -1,81 +1,49 @@
 #!/usr/bin/env cosmic
 local check = require("cosmic.check")
-local child = require("cosmic.child")
-local fs = require("cosmic.fs")
+local json = require("cosmic.json")
 local fixture = require("_work.fixture")
-local stateinit = require("_work.stateinit")
+local cli = require("_work.statepublish_cli")
+local publication = require("_work.snapshot_publish")
 local store = require("_work.store")
 local write = require("_work.storewrite")
-local publish = require("_work.publish")
-local statepublish = require("_work.statepublish")
-local cli = require("_work.statepublish_cli")
-local staging = require("_work.statestaging")
-local plans = require("_work.stateplan")
-local gitdraft = require("_work.gitdraft")
-local refs = require("_work.refs")
-local item = require("_work.item")
-local ksuid = require("_work.ksuid")
-local function test_saved_plan_survives_draft_advance()
-  local root = fs.join(fixture.tmpdir, "native-saved-plan")
-  assert(fs.remove_all(root) and fs.make_dirs(root))
-  assert(stateinit.init(root))
-  assert(check.must(child.run({"git", "config", "gitboard.mode", "local"}, {cwd = root})).ok)
-  assert(check.must(child.run({"git", "config", "gitboard.publicationRepository",
-          "example/board"}, {cwd = root})).ok)
-  local draft = check.must(gitdraft.begin(root))
-  assert(gitdraft.activate(root, draft))
-  local s = check.must(store.open(root))
-  local a = check.must(item.decode({id = ksuid.new(), title = "first"}))
-  assert(write.save(s, a, "new first") and publish.publish(s))
-  gitdraft.deactivate(root)
-  local remote = refs.board_remote(root)
-  local path = fs.join(root, "saved.literal")
-  assert(cli.cmd_publish(s, {draft.id}, remote, false, path) == 0)
-  local raw = check.must(fs.read(path))
-  local saved = check.must(plans.load(path))
-  assert(saved.frozen.repository == "example/board")
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, "0") == 0)
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, tostring(#saved.calls - 1)) ~= 0)
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, tostring(#saved.calls - 1), "", "", saved.expected_head) == 0)
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, "0", "", "", "", true) == 0)
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, "-1") ~= 0)
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, "0", "", "wrong/repository") ~= 0)
-  local opened = check.must(gitdraft.open(root, draft.id))
-  assert(gitdraft.activate(root, opened))
-  local next_store = check.must(store.open(root))
-  local changed = check.must(store.load(next_store, a.id)); changed.title = "second"
-  assert(write.save(next_store, changed, "set second") and publish.publish(next_store))
-  gitdraft.deactivate(root)
-  assert(check.must(fs.read(path)) == raw)
-  local advanced = check.must(staging.load(root, draft.staging_ref))
-  assert(#advanced.transitions == 2 and advanced.tip ~= saved.frozen.staging_sha)
-  assert(refs.update_ref(root, "refs/heads/state", saved.candidate, saved.expected_head))
-  local prepared = check.must(staging.list(root, "prepared"))
-  assert(#prepared == 1)
-  local wrong = prepared[1]
-  wrong.repository = "other/board"
-  wrong = check.must(staging.write(root, wrong, wrong.sha))
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, "", saved.candidate) ~= 0,
-    "returned SHA must bind to the exact saved receipt repository")
-  wrong.repository = saved.frozen.repository
-  assert(staging.write(root, wrong, wrong.sha))
-  assert(cli.cmd_publish(s, {}, remote, false, "", path, "", saved.candidate) == 0)
-  local refreshed, detail = statepublish.refresh(root, remote)
-  assert(refreshed, detail)
-  local kept = check.must(staging.load(root, draft.staging_ref))
-  assert(kept.sha ~= advanced.sha and kept.tip == advanced.tip)
-  assert(kept.base == saved.candidate and #kept.transitions == 1)
-  assert(kept.transitions[1].base == saved.candidate)
-  assert(kept.transitions[1].message:find("set second", 1, true))
-  assert(#check.must(staging.list(root, "prepared")) == 0)
-  assert(check.must(fs.read(path)) == raw,
-    "consuming the live prefix must not rewrite the saved A plan")
 
-  assert(cli.cmd_publish(s, {draft.id}, remote, true) == 0,
-    "the remaining B suffix stays directly publishable")
-  assert(check.must(refs.read_ref(root, draft.staging_ref)) == refs.ZERO_SHA)
-  assert(#check.must(staging.list(root, "prepared")) == 0)
-  local verified = check.must(store.open(root))
-  assert(check.must(store.load(verified, a.id)).title == "second")
-  assert(store.close(verified))
+local function capture(f: function(): integer): integer, string
+  local old_print = _G.print
+  local lines: {string} = {}
+  _G.print = function(...: any)
+    local parts: {string} = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring((select(i, ...)))
+    end
+    lines[#lines + 1] = table.concat(parts, "\t")
+  end
+  local ok, result = pcall(f)
+  _G.print = old_print
+  if not ok then error(result, 0) end
+  -- cast: pcall erases the callee's integer return type
+  return result as integer, table.concat(lines, "\n")
+end
+
+local function test_begin_emits_early_machine_outcomes()
+  local s = fixture.init_state_repo("statepublish-early-outcome")
+  local _, id = fixture.root_with_leaf(s)
+  local it = check.must(store.load(s, id)); it.title = "early outcome"
+  write.set_session(s, "holder")
+  assert(write.save(s, it, "early outcome"))
+  local commit = check.must(require("_work.snapshot_workspace").read(s.root)).commit
+  local planned = check.must(publication.plan(s.root, commit, "origin", nil))
+  local original = publication.begin_plan
+  for _, status in ipairs({"uncertain", "conflict"}) do
+    publication.begin_plan = function(_root: string, _commit: string,
+        _remote: string, _now?: integer): publication.Planned | nil, string
+      return planned, status .. ": exact destination outcome"
+    end
+    local code, out = capture(function(): integer
+        return cli.protocol(s, commit, "origin", "begin", "", "", "", nil)
+      end)
+    local decoded = check.must(json.decode_object(out))
+    assert(code == 0 and decoded.status == status
+      and decoded.reason == "exact destination outcome", out)
+  end
+  publication.begin_plan = original
 end

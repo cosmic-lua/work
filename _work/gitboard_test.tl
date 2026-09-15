@@ -209,13 +209,8 @@ local function test_help_names_the_prepare_only_verbs()
     assert(code == 0, ("help %s should exit 0, got %d"):format(verb, code))
     assert(printed:find("only PREPARES", 1, true) ~= nil,
       ("help %s should say it only PREPARES\ngot: %s"):format(verb, printed))
-    -- The constant wraps "gitboard publish" and "--execute" onto
-    -- separate rendered lines, so the two follow-ups are checked
-    -- apart rather than as one joined phrase.
-    assert(printed:find("gitboard publish", 1, true) ~= nil,
-      ("help %s should name gitboard publish\ngot: %s"):format(verb, printed))
-    assert(printed:find("gitboard refresh --execute", 1, true) ~= nil,
-      ("help %s should name gitboard refresh --execute\ngot: %s")
+    assert(printed:find("gitboard publish\nCOMMIT", 1, true) ~= nil,
+      ("help %s should name gitboard publish COMMIT\ngot: %s")
       :format(verb, printed))
   end
   local claim_code, claim_printed = gitboard_and_capture("help", "claim")

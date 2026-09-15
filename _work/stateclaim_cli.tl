@@ -7,13 +7,11 @@ local publish = require("_work.publish")
 local refs = require("_work.refs")
 local stateclaim = require("_work.stateclaim")
 local statewrite = require("_work.statewrite")
-local staging = require("_work.statestaging")
 local store = require("_work.store")
 --- `claim`, `renew` and `drop` on a native board: one commit writing every
 --- member's `claims/<id>`, refused whole when any member is refused, carrying
 --- the earliest member's expiry as the deadline the final push is checked
---- against. Claim operations are refused inside a draft overlay — a lease
---- nobody else can see is not a lease.
+--- against.
 --- @param s store.Store The open store
 --- @param ids {string} The members
 --- @param all {item.Item} The board, for resolving each member
@@ -30,9 +28,6 @@ local function run(s: store.Store, ids: {string}, all: {item.Item},
     execute: boolean, base: function(item.Item): string | nil, string): integer
   if remote ~= refs.board_remote(s.root) then
     return gate.verdict_line("claim", false, "native claim destination differs from configured board remote")
-  end
-  if staging.active(s.root) ~= nil then
-    return gate.verdict_line("claim", false, "claim operations cannot run inside a draft overlay")
   end
   local by_id = item.by_id(all)
   local now = os.time()

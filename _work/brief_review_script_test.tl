@@ -17,9 +17,7 @@ local fixture = require("_work.fixture")
 local brief = require("_work.brief")
 local gitspec = require("_work.gitspec")
 local item = require("_work.item")
-local publish = require("_work.publish")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 
 local init_state_repo = fixture.init_state_repo
 local give_spec = fixture.give_spec
@@ -129,9 +127,8 @@ local function handover_diff(s: store.Store, id: string, name: string,
   local it = check.must(store.load(s, id))
   it.repo, it.handover_head = "acme/widgets", head
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a head:%s"):format(id:sub(1, 8), head:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a head:%s"):format(id:sub(1, 8), head:sub(1, 12)))
   -- A review needs distance from the builder: drop the standing build
   -- claim (an active foreign claim refuses acquisition outright) and
   -- re-claim as the reviewer before a review brief will fill one.

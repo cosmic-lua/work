@@ -1,5 +1,5 @@
 #!/usr/bin/env cosmic
---- Every local native publication patches its warm query projection once.
+--- Every local snapshot publication patches its warm query projection once.
 local cache = require("_work.cache")
 local cachedb = require("_work.cachedb")
 local check = require("cosmic.check")

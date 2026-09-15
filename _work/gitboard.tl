@@ -1,8 +1,8 @@
 #!/usr/bin/env cosmic
---- Work board CLI over Git-backed item refs. Roles emerge from the graph;
+--- Work board CLI over one Git-backed board snapshot. Roles emerge from the graph;
 --- durable workflow facts are commit IDs, and authenticated remote actions
---- belong to the caller. Commands prepare and print exact Git instructions by
---- default; `--execute` runs only those ordinary Git commands. The command
+--- belong to the caller. Ordinary verbs compose one clone-local final commit;
+--- `publish COMMIT` validates, updates, fetches, and confirms it. The command
 --- table and help text live in `_work.gitcommands`.
 local flags = require("cosmic.flags")
 local fs = require("cosmic.fs")
@@ -20,10 +20,9 @@ local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
 local gitdone = require("_work.gitdone")
 local gitlog = require("_work.gitlog")
-local draftcli = require("_work.gitdraft_cli")
+local workspace = require("_work.snapshot_workspace")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
-local transport = require("_work.gittransport")
 local gittake = require("_work.gittake")
 local gitworktree = require("_work.gitworktree")
 local publish = require("_work.publish")
@@ -32,6 +31,8 @@ local refs = require("_work.refs")
 local session = require("_work.session")
 local store = require("_work.store")
 local statepublish_cli = require("_work.statepublish_cli")
+local statepublish = require("_work.snapshot_publish")
+local snapshot_cli = require("_work.snapshot_cli")
 local statecli = require("_work.statecli")
 local tail = require("_work.tail")
 local vrd = require("_work.gitverdict")
@@ -43,6 +44,9 @@ local view = require("_work.gitview")
 --- actually happened. `sync` and lane minting fetch on their own,
 --- outside this dispatch.
 local FETCH_FIRST: {string: boolean} = {}
+local READ_ONLY: {string: boolean} = {
+  next = true, brief = true, fsck = true, find = true, show = true,
+}
 
 --- Resolve one id-taking argument, whatever position it sits in: an
 --- id prefix is tried first; only when that refuses AND the input has
@@ -69,6 +73,14 @@ local function resolve_id(s: store.Store, input: string): string | nil, string
 end
 
 local CSPEC: flags.CommandSpec = commands.CSPEC
+
+local function refresh(s: store.Store, remote: string, execute: boolean): integer
+  if remote ~= refs.board_remote(s.root) then
+    return gate.verdict_line("refresh", false, "native refresh destination differs")
+  end
+  local ok, detail = statepublish.sync(s, execute)
+  return gate.verdict_line("refresh", ok, detail)
+end
 
 --- Resolve --before/--after into full ids, "" for a flag not given —
 --- shared by `new`, `attach`, and `rank`, whose X arguments all name
@@ -142,6 +154,10 @@ local function main(...: string): integer
       d.parsed.values["remote-name"] or "", d.parsed.values["format"])
   end
   local dir = d.parsed.values["dir"] or "."
+  if (os.getenv("GITBOARD_DRAFT") or "") ~= "" then
+    return gate.verdict_line(d.command, false,
+      "REFUSED: GITBOARD_DRAFT selects an obsolete named draft; publish or abandon it with the older gitboard")
+  end
   if d.command == "migrate6" then return statecli.migration(dir,
       d.parsed.args, d.parsed.values, d.parsed.switches) end
   local explicit_remote = d.parsed.values["remote"] or ""
@@ -151,14 +167,15 @@ local function main(...: string): integer
         selerr) end
   end
   local remote = explicit_remote ~= "" and explicit_remote or refs.board_remote(dir)
-  if d.command == "draft" then
-    return draftcli.cmd_draft(dir, d.parsed.args,
-      d.parsed.switches["print-id"] or false)
-  end
-  local selected_draft, draft_err = draftcli.activate(dir, d.command,
-    d.parsed.values["draft"])
-  if selected_draft == nil then
-    return gate.verdict_line(d.command, false, "REFUSED: " .. draft_err)
+  if d.command ~= "publish" and d.command ~= "refresh" and d.command ~= "snapshot" then
+    local read_only = READ_ONLY[d.command] or
+    (d.command == "log" and d.parsed.values["add"] == nil)
+    local _candidate, snapshot_err = workspace.activate(dir, read_only)
+    if snapshot_err ~= "" then
+      return gate.verdict_line(d.command, false, "REFUSED: " .. snapshot_err)
+    end
+  else
+    refs.clear_overlay(dir)
   end
   local s, serr = store.open(dir)
   if s == nil then
@@ -173,30 +190,36 @@ local function main(...: string): integer
       return 1
     end
   end
+  if d.command == "snapshot" then
+    return snapshot_cli.cmd(s.root, d.parsed.values["summary"] or "",
+      d.parsed.switches["check"] or false, d.parsed.values["abandon"] or "")
+  end
   if d.command == "next" then
     local who = session.resolve(d.parsed.values["session"])
     return view.cmd_next(s, who)
   end
   if d.command == "sync" then
     io.stderr:write("gitboard-sync: deprecated; use `gitboard refresh`\n")
-    return transport.cmd_refresh(s, remote, false)
+    return refresh(s, remote, false)
   end
   if d.command == "publish" then
     local selectors = d.parsed.args
-    if #selectors == 0 and selected_draft ~= "" then selectors = {selected_draft} end
     if s.state_head ~= "" then
-      return statepublish_cli.cmd_publish(s, selectors, remote,
-        d.parsed.switches["execute"] or false, d.parsed.values["plan"] or "",
-        d.parsed.values["from-plan"] or "", d.parsed.values["call"] or "",
-        d.parsed.values["published"] or "", d.parsed.values["repository"] or "",
-        d.parsed.values["head"] or "", d.parsed.switches["call-json"] or false)
+      if (d.parsed.values["protocol"] or "") ~= "" then
+        local commit = selectors[1] or ""
+        if #selectors ~= 1 then return gate.verdict_line("publish", false,
+            "internal protocol requires one full snapshot COMMIT") end
+        return statepublish_cli.protocol(s, commit, remote,
+          d.parsed.values["protocol"] or "", d.parsed.values["returned-tree"] or "",
+          d.parsed.values["candidate"] or "", d.parsed.values["head"] or "",
+          nil)
+      end
+      return statepublish_cli.cmd_publish(s, selectors, remote)
     end
-    return transport.cmd_publish(s, selectors,
-      remote,
-      d.parsed.switches["execute"] or false)
+    return statepublish_cli.cmd_publish(s, selectors, remote)
   end
   if d.command == "refresh" then
-    return transport.cmd_refresh(s, remote,
+    return refresh(s, remote,
       d.parsed.switches["execute"] or false)
   end
   if d.command == "claim" or d.command == "renew" or d.command == "drop" then

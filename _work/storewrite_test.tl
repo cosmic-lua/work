@@ -5,9 +5,9 @@
 -- what `_work.publish` builds on it: a local-only store for the
 -- save/load/spec mechanics, and a bare "remote" with clones for
 -- publish — including the case the whole design exists for, where two
--- sessions race and the loser's leased push comes back rejected: the
--- prepared successor remains reachable, and an explicit caller fetch
--- lets refresh classify it against the winner. `_work/store_test.tl` covers the read
+-- sessions race and the whole-head snapshot comparison refuses the
+-- loser while keeping its exact proposal available for reconciliation.
+-- `_work/store_test.tl` covers the read
 -- half `save` here builds on: `open`/`resolve`/`load`/`list` and the
 -- flagged-item tolerance.
 
@@ -19,8 +19,9 @@ local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local ksuid = require("_work.ksuid")
 local publish = require("_work.publish")
-local staging = require("_work.statestaging")
 local refs = require("_work.refs")
+local recovery = require("_work.snapshot_recovery")
+local workspace = require("_work.snapshot_workspace")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
 
@@ -180,22 +181,24 @@ local function fresh_id(): string
   return check.must(ksuid.encode(1700000000 + counter, ("\0"):rep(16)))
 end
 
-local PARENT = check.must(ksuid.encode(1690000000, ("\1"):rep(16)))
-
---- A minimal valid workable item (under a parent the store never
---- checks — graph rules are flow's, exercised in flow_test). Claims
---- are projected from format-4 claim batches, so store-layer tests
---- mutate ordinary persisted fields instead.
-local function make_item(title?: string): item.Item
+--- A minimal valid item under the initialized board root. Claims are
+--- projected from native claim blobs, so store-layer tests mutate ordinary
+--- persisted fields instead.
+local function make_item(s: store.Store, title?: string): item.Item
+  local parent = ""
+  for _, candidate in ipairs(check.must(store.list(s))) do
+    if item.is_parentless(candidate) then parent = candidate.id end
+  end
+  assert(parent ~= "", "initialized board has one root")
   return check.must(item.decode({
-        id = fresh_id(), title = title or "an item", parent = PARENT,
+        id = fresh_id(), title = title or "an item", parent = parent,
       }))
 end
 
 local function test_save_load_spec_and_history()
   local root = init_state_repo("roundtrip")
   local s = check.must(store.open(root))
-  local it = make_item("first title")
+  local it = make_item(s, "first title")
   local short = it.id:sub(1, 8)
   assert(save(s, it, "new " .. short, G1))
   local loaded = check.must(store.load(s, it.id))
@@ -219,7 +222,7 @@ end
 local function test_history_covers_the_spec_sidecar()
   local root = init_state_repo("sidecar-history")
   local s = check.must(store.open(root))
-  local it = make_item()
+  local it = make_item(s)
   local short = it.id:sub(1, 8)
   assert(save(s, it, "new " .. short, G1))
   assert(save(s, it, "spec " .. short,
@@ -237,10 +240,11 @@ end
 local function test_save_writes_every_touched_item_as_its_own_commit()
   local root = init_state_repo("atomic")
   local s = check.must(store.open(root))
-  local parent = make_item("claimed-looking title")
+  local parent = make_item(s, "claimed-looking title")
   assert(save(s, parent, "new parent"))
   local before = commit_count(root)
-  local kid = make_item()
+  local kid = make_item(s)
+  kid.parent = parent.id
   parent.title = "updated parent"
   assert(save(s, kid, "new kid", nil, {parent}))
   assert(commit_count(root) == before + 1,
@@ -257,7 +261,7 @@ end
 local function test_save_succeeds_on_a_no_op()
   local root = init_state_repo("noop")
   local s = check.must(store.open(root))
-  local it = make_item()
+  local it = make_item(s)
   assert(save(s, it, "new item"))
   local before = commit_count(root)
   local ok, err = save(s, check.must(store.load(s, it.id)), "take it nowhere")
@@ -273,9 +277,10 @@ end
 local function test_an_items_order_round_trips_through_save_and_load()
   local root = init_state_repo("item-order-roundtrip")
   local s = check.must(store.open(root))
-  local parent = make_item()
-  local kid1 = make_item()
-  local kid2 = make_item()
+  local parent = make_item(s)
+  local kid1 = make_item(s)
+  local kid2 = make_item(s)
+  kid1.parent, kid2.parent = parent.id, parent.id
   assert(save(s, parent, "new parent", nil, {kid1, kid2}))
   parent.order = {kid1.id, kid2.id}
   assert(save(s, parent, "rank the children"))
@@ -295,7 +300,7 @@ local function test_publish_fast_forward()
   local bare, clones = init_shared("ff", 2)
   assert(bare)
   local a = check.must(store.open(clones[1]))
-  local it = make_item("session-a title")
+  local it = make_item(a, "session-a title")
   assert(save(a, it, "new item"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
@@ -308,14 +313,13 @@ end
 -- The bounded-mutation seq lease (a take of new work, racing another
 -- across two DIFFERENT items) has its own test: `_work/storeref_test.tl`.
 
--- Two sessions edit the SAME item. The loser's prepared successor
--- remains intact after its leased push is refused; once the caller
--- fetches, refresh classifies it as a lost race and canonical reads
--- expose the winner.
+-- Two sessions edit the SAME item. The loser's exact snapshot remains
+-- retained after its whole-head update is refused; a fetch keeps
+-- canonical reads on the winner.
 local function test_publish_drops_a_lost_edit_of_the_same_item()
   local _, clones = init_shared("conflict", 2)
   local a = check.must(store.open(clones[1]))
-  local contested = make_item()
+  local contested = make_item(a)
   assert(save(a, contested, "new contested"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
@@ -346,7 +350,7 @@ end
 local function test_sync_ignores_an_unpublished_local_commit()
   local _, clones = init_shared("sync-overwrite", 2)
   local a = check.must(store.open(clones[1]))
-  local contested = make_item()
+  local contested = make_item(a)
   assert(save(a, contested, "new contested"))
   assert(publish.publish(a, true))
   local b = check.must(store.open(clones[2]))
@@ -362,17 +366,20 @@ local function test_sync_ignores_an_unpublished_local_commit()
   ib.pr = 7
   assert(save(b, ib, "hand-edit contested for session-b"))
   local synced, serr = publish.sync(b, true)
-  assert(not synced and serr == store.LOST_RACE, "refresh reports the losing staged edit")
+  assert(synced, "refresh reads canonical state despite the retained proposal: " .. serr)
   assert(check.must(store.load(b, contested.id)).title == "winner title",
     "the local unpublished commit is overwritten by the remote's")
+  local retained = check.must(workspace.read(b.root))
+  assert(retained.commit ~= retained.parent,
+    "refresh leaves the exact unpublished snapshot available for reconciliation")
 end
 
 -- The atomic multi-ref publish (a save touching two items, one
 -- contested) has its own test: `_work/storeref_test.tl`.
 
 -- A rejection with the remote unmoved is remote policy, not a race.
--- The prepared transaction stays as the durable reachability root,
--- and the remote's own words reach the caller.
+-- The exact full snapshot and its recovery record stay reachable, and
+-- retry after the policy is lifted publishes that same candidate.
 local function test_publish_keeps_the_mutation_on_a_policy_rejection()
   local bare, clones = init_shared("policy", 1)
   local a = check.must(store.open(clones[1]))
@@ -381,7 +388,7 @@ local function test_publish_keeps_the_mutation_on_a_policy_rejection()
       "#!/bin/sh\necho 'policy: board is read-only' >&2\nexit 1\n"))
   assert(fs.set_mode(hook, fs.octal("755")))
 
-  local it = make_item("session-a")
+  local it = make_item(a, "session-a")
   assert(save(a, it, "new under policy"))
   local ok, err = publish.publish(a, true)
   assert(not ok, "the rejected push must refuse")
@@ -389,13 +396,18 @@ local function test_publish_keeps_the_mutation_on_a_policy_rejection()
     "no race is claimed when the remote never moved: " .. err)
   assert(err:find("policy: board is read-only", 1, true),
     "the remote's own words reach the caller: " .. err)
-  local staged = check.must(staging.list(a.root))
-  assert(#staged == 1,
-    "the rejected successor stays reachable through its prepared transaction")
-  assert(staged[1].transitions[1].changes[1].path:find(it.id, 1, true),
-    "the retryable transition still targets the requested item")
+  local retained = check.must(workspace.read(a.root))
+  local frozen = check.must(recovery.load(workspace.recovery_path(a.root)))
+  assert(frozen.local_commit == retained.commit,
+    "the rejected full snapshot remains bound to recovery")
   local reachable = check.must(child.run(
-      {"git", "cat-file", "-e", staged[1].tip .. "^{commit}"},
+      {"git", "cat-file", "-e", retained.commit .. "^{commit}"},
       {cwd = a.root}))
-  assert(reachable.ok, "the staged successor remains reachable for retry")
+  assert(reachable.ok, "the rejected snapshot remains reachable for retry")
+  assert(fs.remove(hook))
+  assert(publish.publish(a, true), "the same retained snapshot retries after policy is lifted")
+  assert(workspace.read(a.root) == nil
+    and not fs.is_present(workspace.recovery_path(a.root)),
+    "confirmation clears the proposal and recovery state")
+  assert(check.must(store.load(a, it.id)).title == "session-a")
 end

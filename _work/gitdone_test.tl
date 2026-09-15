@@ -6,12 +6,13 @@ local check = require("cosmic.check")
 local flow = require("_work.commit_flow_fixture")
 local done = require("_work.gitdone")
 local fixture = require("_work.fixture")
+local gitboard = require("_work.gitboard")
 local graph = require("_work.gitgraph")
 local gittake = require("_work.gittake")
 local item = require("_work.item")
 local store = require("_work.store")
-local staging = require("_work.statestaging")
-local native = require("_work.statepublish")
+local publication = require("_work.snapshot_publish")
+local workspace = require("_work.snapshot_workspace")
 local verdict = require("_work.gitverdict")
 
 -- The research handover, accepted: builder hands the board state over
@@ -62,6 +63,23 @@ local function test_accepted_research_requires_a_landed_commit()
   assert((check.must(store.load(s, id)).resolution or "") == "")
 end
 
+local function test_forced_accepted_research_may_omit_the_landed_commit()
+  local s, id, p = accepted_research("done-research-forced-omit")
+  assert(done.cmd_done(s, id, "completed", true, "manual retirement",
+      "", "", p.root, flow.LANDER) == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.resolution == "completed" and (it.landed_head or "") == "")
+end
+
+local function test_forced_accepted_research_keeps_a_resolvable_override()
+  local s, id, p = accepted_research("done-research-forced-override")
+  local override = s.state_head
+  assert(done.cmd_done(s, id, "completed", true, "manual landing evidence",
+      "", override, p.root, flow.LANDER) == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.resolution == "completed" and it.landed_head == override)
+end
+
 local function outcome_membership_race(name: string): store.Store,
   store.Store, string, string, string
   local a, b = fixture.init_shared(name)
@@ -74,33 +92,39 @@ local function outcome_membership_race(name: string): store.Store,
   return a, b, outcome, evidence, newcomer
 end
 
--- Outcome completion's no-open-child decision is a negative membership read:
--- an unpositioned attach writes only the child path, so bounded replay must
--- find it even though no previously existing path could fence its absence.
-local function test_done_prepared_before_open_child_attach_is_refused()
+local function publish_conflicts_and_abandons(s: store.Store)
+  local candidate = check.must(workspace.read(s.root))
+  local ok, err = publication.execute(s.root, candidate.commit, "origin", nil)
+  assert(not ok and err:find("conflict", 1, true), err)
+  assert(gitboard.main("snapshot", "--abandon", candidate.commit,
+      "--dir", s.root) == 0)
+  fixture.caller_fetch(s)
+end
+
+-- Outcome completion's no-open-child decision is bound to its complete base
+-- snapshot. A later child attach advances the head, so the stale completion
+-- conflicts wholesale and cannot close the now-open outcome by replay.
+local function test_done_snapshot_before_open_child_attach_is_refused()
   local closer, attacher, outcome, evidence, newcomer =
   outcome_membership_race("done-before-attach")
   assert(done.cmd_done(closer, outcome, "completed", false, "", evidence) == 0)
-  local pending = check.must(staging.list(closer.root))
-  assert(#pending == 1)
   assert(graph.cmd_attach(attacher, newcomer, outcome) == 0)
   fixture.caller_publish(attacher)
-  local ok, err = native.execute(closer.root, pending[1])
-  assert(not ok and err:find("open child", 1, true), err)
+  publish_conflicts_and_abandons(closer)
+  assert((check.must(store.load(closer, outcome)).resolution or "") == "",
+    "the outcome stays open after the competing child attach")
 end
 
 -- In the reverse order, attach has observed the parent as open. Closing the
 -- outcome first moves that parent path, so the stale attach cannot turn the
 -- completed outcome into a container without an explicit fresh decision.
-local function test_open_child_attach_prepared_before_done_is_refused()
+local function test_open_child_attach_snapshot_before_done_is_refused()
   local closer, attacher, outcome, evidence, newcomer =
   outcome_membership_race("attach-before-done")
   assert(graph.cmd_attach(attacher, newcomer, outcome) == 0)
-  local pending = check.must(staging.list(attacher.root))
-  assert(#pending == 1)
   assert(done.cmd_done(closer, outcome, "completed", false, "", evidence) == 0)
   fixture.caller_publish(closer)
-  local ok, err = native.execute(attacher.root, pending[1])
-  assert(not ok and err == store.LOST_RACE,
-    "attach fenced its new parent's whole-item authority: " .. err)
+  publish_conflicts_and_abandons(attacher)
+  assert(check.must(store.load(attacher, outcome)).resolution == "completed",
+    "the completed outcome is not reopened as a container by replay")
 end

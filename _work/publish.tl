@@ -1,5 +1,5 @@
 --- Native publication and invocation-local path-attributed history.
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local store = require("_work.store")
 local refs = require("_work.refs")
 local record Event

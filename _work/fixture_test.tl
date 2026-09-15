@@ -9,8 +9,8 @@ local check = require("cosmic.check")
 local refs = require("_work.refs")
 local store = require("_work.store")
 local boardread = require("_work.boardread")
-local staging = require("_work.statestaging")
 local fixture = require("_work.fixture")
+local workspace = require("_work.snapshot_workspace")
 
 local LOCKED_STDERR < const > =
 "fatal: could not open '.git/worktrees/target/locked' for writing: " ..
@@ -122,7 +122,8 @@ local function test_native_fixtures_publish_and_refresh_claim_authority()
   local initial = fixture.commits(one)
   local id = fixture.file_item(one, "shared native fixture", "")
   assert(fixture.commits(one) == initial + 1, "one mutation makes one board commit")
-  assert(#check.must(staging.list(one.root)) == 0, "caller publication confirms its receipt")
+  assert(workspace.read(one.root) == nil,
+    "caller publication confirms and clears its snapshot")
   fixture.caller_fetch(two)
   assert(check.must(store.load(two, id)).title == "shared native fixture")
   local identity = fixture.claim_item(one, id, "fixture-holder")

@@ -19,7 +19,6 @@ local graph = require("_work.gitgraph")
 local item = require("_work.item")
 local specmod = require("_work.spec")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 local tail = require("_work.tail")
 
 local init_state_repo = fixture.init_state_repo
@@ -46,8 +45,8 @@ local function handover(s: store.Store, id: string, url?: string)
   it.handover_head = HEAD
   it.external_url = url or ""
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12))))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12)))
 end
 
 local function research_handover(s: store.Store, id: string)
@@ -55,9 +54,9 @@ local function research_handover(s: store.Store, id: string)
   it.claim = "session-a"
   assert(item.record_involvement(it.builders, "session-a"))
   it.result = hash.digest_hex("sha1", specmod.document(store.read_spec(s, id)))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a result:%s"):format(
-        id:sub(1, 8), it.result:sub(1, 7))))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a result:%s"):format(
+      id:sub(1, 8), it.result:sub(1, 7)))
 end
 
 --- Move `id`'s claim from the builder to a fresh reviewing session, the

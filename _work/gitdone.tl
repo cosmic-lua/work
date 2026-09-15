@@ -12,6 +12,7 @@ local item = require("_work.item")
 local read = require("_work.read")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
+local workflow_rules = require("_work.workflow_rules")
 
 --- @param by string | nil The completed child verifying an outcome, "" off one
 --- @param s store.Store The store
@@ -56,11 +57,6 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   -- An open PR is work mid-review: ending the item under it makes the
   -- diff vanish from the board while it still exists on GitHub. An
   -- unreviewed PR is dropped or judged first.
-  if (it.pr or 0) ~= 0 and (it.verdict or "") ~= "accept" and not force then
-    return gate.verdict_line("done", false,
-      ("REFUSED: %s has PR #%d awaiting a verdict — done after an accept, "
-        .. "or `drop` releases the handover"):format(id:sub(1, 8), it.pr))
-  end
   -- A PR-less item that was ever worked is evidence mid-review the same
   -- way: `verdict` now judges it too (re-running the spec's recorded
   -- checks in place of a diff, per skills/work/SKILL.md), so ending it
@@ -74,12 +70,19 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   -- success, so it is untouched. `--force --why` is the same repair —
   -- ending an item nothing will ever review (an obsolete slice, a
   -- duplicate) still goes through, named on the record.
-  if (it.pr or 0) == 0 and #(it.builders or {}) > 0 and (it.verdict or "") ~= "accept"
-  and not force then
-    return gate.verdict_line("done", false,
-      ("REFUSED: %s has no PR and no accept — an evidence-only item takes "
-        .. "a verdict too; record one (`gitboard verdict`), or end it "
-        .. "without review via --force --why"):format(id:sub(1, 8)))
+  local review_refusal = workflow_rules.completion_review_refusal(it, force)
+  if review_refusal ~= nil then
+    return gate.verdict_line("done", false, "REFUSED: " .. review_refusal)
+  end
+  local research_shape = workflow_rules.research_landing_refusal(it, reason,
+    landed or "", force)
+  if research_shape ~= nil then
+    return gate.verdict_line("done", false, "REFUSED: " .. research_shape)
+  end
+  local product_shape = workflow_rules.product_landing_refusal(it, reason,
+    landed or "", force)
+  if product_shape ~= nil then
+    return gate.verdict_line("done", false, "REFUSED: " .. product_shape)
   end
   -- Commit-only completion. The caller fetched the product repository and
   -- supplied the landed commit. Gitboard proves locally that the accepted
@@ -96,16 +99,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     -- resolve it. `gitverdict.verify_result` checks it the way the accept
     -- was checked: exactly `result`, still on the item's own ref, in the
     -- board checkout.
-    if (it.verdict_head or "") ~= result then
-      return gate.verdict_line("done", false,
-        "REFUSED: acceptance must name the current research handover")
-    end
-    if (landed or "") == "" then
-      if not force then
-        return gate.verdict_line("done", false,
-          "REFUSED: completed accepted work names its landed commit with --landed")
-      end
-    else
+    if (landed or "") ~= "" then
       local canonical, verr = gitverdict.verify_result(s, it, landed or "")
       if canonical == nil then
         -- The same audited repair as a product landing below: `--why`
@@ -124,16 +118,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     end
   elseif reason == "completed" and (it.verdict or "") == "accept"
   and handed ~= "" then
-    if (it.verdict_head or "") ~= handed then
-      return gate.verdict_line("done", false,
-        "REFUSED: acceptance must name the current handover commit")
-    end
-    if (landed or "") == "" then
-      if not force then
-        return gate.verdict_line("done", false,
-          "REFUSED: completed accepted work names its landed commit with --landed")
-      end
-    else
+    if (landed or "") ~= "" then
       local root, maperr = repository_map.resolve(s.root, it.repo or "",
         repo_dir or "")
       if root == nil then

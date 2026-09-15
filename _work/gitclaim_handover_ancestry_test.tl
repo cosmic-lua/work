@@ -9,7 +9,7 @@ local child = require("cosmic.child")
 local boardread = require("_work.boardread")
 local boardtree = require("_work.boardtree")
 local flow = require("_work.commit_flow_fixture")
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local store = require("_work.store")
 
 local function git(root: string, args: {string}): string

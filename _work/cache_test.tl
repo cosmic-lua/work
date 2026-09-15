@@ -18,7 +18,6 @@ local gitobj = require("_work.gitobj")
 local gitrank = require("_work.gitrank")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
-local publish = require("_work.publish")
 local projection = require("_work.stateplan_git")
 local refs = require("_work.refs")
 local sqlite = require("cosmic.sqlite")
@@ -186,9 +185,9 @@ local function test_a_corrupted_cache_meta_page_self_heals_on_open()
   check.must(cache.close(c))
 end
 
---- A deterministic, sorted dump of one table's rows: every column,
---- rendered `k=v` pairs joined and sorted, so row order — which
---- neither side promises — never causes a false mismatch.
+--- Deterministic sorted row dump. Normalize only cache_meta's projection
+--- clock; its row, every stable value, and native_valid_until remain compared.
+--- Row order itself is irrelevant.
 --- @param db sqlite.Database The connection
 --- @param table_name string The table (or FTS5 table) to dump
 --- @return {string} One rendered line per row, sorted
@@ -202,7 +201,10 @@ local function dump(db: sqlite.Database, table_name: string): {string}
     table.sort(keys)
     local parts: {string} = {}
     for _, k in ipairs(keys) do
-      parts[#parts + 1] = k .. "=" .. tostring(row[k])
+      local value = row[k]
+      if table_name == "cache_meta" and row.k == "native_projected_at"
+      and k == "v" then value = "<projection-clock>" end
+      parts[#parts + 1] = k .. "=" .. tostring(value)
     end
     out[#out + 1] = table.concat(parts, "|")
   end
@@ -210,22 +212,18 @@ local function dump(db: sqlite.Database, table_name: string): {string}
   return out
 end
 
---- Every table the cache's schema carries — `_work.index`'s own,
---- `_work.index_rank`'s and `_work.readddl`'s maintained `rank_path`
---- and `role`, `_work.find`'s search table, and `_work.cache`'s own two.
+--- Every table from the cache, rank, read-DDL, search, and lane schemas.
+--- This includes all disposable metadata and side tables.
 local CACHE_TABLES < const >: {string} = {
   "items", "ranks", "builders", "speccers", "touches", "access", "depends_on",
   "rank_path", "role", "search", "cache_meta", "lanes",
 }
 
---- Compare `s`'s LIVE, incrementally maintained cache file against a
---- fresh cold `rebuild` of the same board, table by table — the
---- equality ratchet. Reads the live file directly (never through
---- `cache.open`, which would silently repair a mismatch instead of
---- exposing one), then forces a cold rebuild, which overwrites the
---- file with the freshly built one — so the file the next incremental
---- step patches is the just-proven-equal rebuild, not a divergent
---- leftover.
+--- Compare the live incrementally maintained cache to a cold rebuild.
+--- Reading the live file directly exposes mismatches that `cache.open` would
+--- repair. Rebuild then overwrites it, so the next incremental step patches
+--- the just-proven-equal cache rather than a divergent leftover.
+--- Every table and stable value participates in the equality ratchet.
 --- @param s store.Store The store
 --- @param label string What step this check is verifying, for the message
 local function assert_cache_matches_cold_rebuild(s: store.Store, label: string)
@@ -367,51 +365,53 @@ local function cache_matches_cold_rebuild(s: store.Store): boolean
 end
 
 -- Two REAL processes, not two in-process calls: `o/bin/gitboard set`
--- against ONE clone, each renaming a DIFFERENT item, started together
--- so their guard/write/patch cycles are free to interleave inside the
--- SAME `o/board.db` file. Each mutation is unbounded (a plain `set`
--- never leases `refs/heads/board/seq`), so nothing here exercises the
--- store's own race handling — this is purely about the cache file
--- surviving two writers at once. Either outcome is correct: the two
--- incremental patches interleaved cleanly and the file matches a cold
--- rebuild outright, or one guard's before-digest went stale between
--- the two (the OTHER process's write landed in between) and that
--- patch was skipped by design, left for the next `open` to catch up
--- — which this test forces immediately rather than waiting for one.
--- `cosmic.sqlite`'s 5000ms busy timeout is what keeps a transaction
--- from ever seeing the other mid-write instead of erroring outright;
--- without it a `SQLITE_BUSY` would be a live possibility here on a
--- slower disk, caught by self-heal (`cache.open`'s wipe-and-rebuild)
--- rather than surfacing as a failure.
+-- against ONE clone, each renaming a DIFFERENT item, started together.
+-- A clone has one replaceable full-board proposal. Depending on scheduling,
+-- the processes either serialize into that proposal or one sees its CAS move;
+-- both are valid. Publish what composed, retry a refused command, and require
+-- the shared cache to equal a cold rebuild throughout.
 local function test_two_processes_racing_the_cache_never_corrupts_it()
   local s = init_state_repo("two-process")
   local id_x = file_item(s, "x, raced from process one", "")
   local id_y = file_item(s, "y, raced from process two", "")
   check.must(cache.close(check.must(cache.open(s.root))))
+  assert(store.close(s))
 
   local gitboard < const > = "o/bin/gitboard"
-  local h1 = check.must(child.start({gitboard, "set", id_x,
-        "--title", "x, renamed by process one", "--dir", s.root}))
-  local h2 = check.must(child.start({gitboard, "set", id_y,
-        "--title", "y, renamed by process two", "--dir", s.root}))
+  local argv_x = {gitboard, "set", id_x,
+    "--title", "x, renamed by process one", "--dir", s.root}
+  local argv_y = {gitboard, "set", id_y,
+    "--title", "y, renamed by process two", "--dir", s.root}
+  local h1 = check.must(child.start(argv_x))
+  local h2 = check.must(child.start(argv_y))
   local r1 = check.must(h1:wait(30000))
   local r2 = check.must(h2:wait(30000))
-  assert(r1.ok, ("process one failed (exit %s): %s%s"):format(
-      tostring(r1.code), r1.stderr, r1.stdout))
-  assert(r2.ok, ("process two failed (exit %s): %s%s"):format(
-      tostring(r2.code), r2.stderr, r2.stdout))
-
-  if not cache_matches_cold_rebuild(s) then
-    -- A skipped patch: still stale, by design, until the next open.
-    -- Force that next open now and require it to have fully caught up.
-    check.must(cache.close(check.must(cache.open(s.root))))
-    assert(cache_matches_cold_rebuild(s),
-      "the next open must fully reconcile a stale cache left by the race")
+  assert(r1.ok or r2.ok, "at least one concurrent composition succeeds")
+  if not r1.ok or not r2.ok then
+    local refused = r1.ok and r2 or r1
+    local detail = refused.stderr .. refused.stdout
+    assert(detail:find("snapshot", 1, true),
+      "a refused concurrent composition names the snapshot conflict")
   end
 
-  assert(publish.sync(s))
-  local it_x = check.must(store.load(s, id_x))
-  local it_y = check.must(store.load(s, id_y))
+  local after_race = check.must(store.open(s.root))
+  fixture.caller_publish(after_race)
+  assert(cache_matches_cold_rebuild(after_race),
+    "publication repairs any cache interleaving left by the race")
+
+  local after_retry = after_race
+  if not r1.ok or not r2.ok then
+    local retry = check.must(child.run(r1.ok and argv_y or argv_x))
+    assert(retry.ok, "the refused command retries from the confirmed head: "
+      .. retry.stderr .. retry.stdout)
+    after_retry = check.must(store.open(s.root))
+    fixture.caller_publish(after_retry)
+    assert(cache_matches_cold_rebuild(after_retry),
+      "the retry leaves the cache equal to a cold rebuild")
+  end
+
+  local it_x = check.must(store.load(after_retry, id_x))
+  local it_y = check.must(store.load(after_retry, id_y))
   assert(it_x.title == "x, renamed by process one", it_x.title)
   assert(it_y.title == "y, renamed by process two", it_y.title)
 end

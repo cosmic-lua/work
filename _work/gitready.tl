@@ -1,18 +1,17 @@
 --- The spec bar's PR-handover half: whether a pull request is worth a
 --- reviewer's time (`handover_refusal`), the one-PR-one-item rule
 --- (`pr_collision_refusal`), the undeclared-read-access check
---- (`undeclared_repos`), the unresolved dependencies that keep an item
+--- shared spec/access checks, the unresolved dependencies that keep an item
 --- from starting, and the full list of problems a `take`
 --- enforces (`ready_problems`). Split from `_work.gitgate`, which
 --- sits against the file cap; the identity, force and claim-lease
 --- refusals stay there.
-local flow = require("_work.flow")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
 local read = require("_work.read")
-local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
+local workflow_rules = require("_work.workflow_rules")
 
 --- Compatibility refusal for the removed provider-shaped PR handover.
 --- Gitboard's authoritative handover fact is now only a locally present
@@ -48,34 +47,6 @@ local function pr_collision_refusal(all: {item.Item}, id: string,
     end
   end
   return nil
-end
-
---- The repositories a spec reaches (`spec.reached_repos`, over the
---- rendered prose) that are neither the item's own `repo` field nor
---- declared in its `access` field — an undeclared source strands a
---- claim before it starts and a review just as surely, since neither
---- session's grant is anything this board can see. The item's own
---- `repo` is the one exemption that needs no declaring: it is where
---- the diff lands, not a source read on the side. What the text
---- REACHES is still read out of the prose, because that is the fact
---- the declaration was always checked against; the declaration itself
---- is the field, which `gitboard set ID --access` writes.
---- @param it item.Item The item
---- @param body string Its spec, rendered (`spec.document`)
---- @return {string} Undeclared repo slugs, in first-seen order
-local function undeclared_repos(it: item.Item, body: string): {string}
-  local declared: {string: boolean} = {}
-  for _, repo in ipairs(it.access or {}) do
-    declared[repo:lower()] = true
-  end
-  local own = (it.repo or ""):lower()
-  local out: {string} = {}
-  for _, repo in ipairs(spec.reached_repos(body)) do
-    if repo ~= own and not declared[repo] then
-      out[#out + 1] = repo
-    end
-  end
-  return out
 end
 
 --- The problems that keep an item from being taken: it must be
@@ -139,14 +110,15 @@ local function ready_problems(s: store.Store, it: item.Item,
     end
   end
   local sp = prose or store.read_spec(s, it.id)
-  for _, gap in ipairs(flow.ready_gaps(sp)) do
-    out[#out + 1] = ("spec: %s"):format(gap)
-  end
-  for _, repo in ipairs(undeclared_repos(it, spec.document(sp))) do
-    out[#out + 1] = ("spec reaches %s with no declared read access — "
-      .. "declare it (`gitboard set %s --access %s`); undeclared, it "
-      .. "strands the claim now and the review just as surely"):format(
-      repo, it.id:sub(1, 8), repo)
+  for _, issue in ipairs(workflow_rules.readiness_issues(it, sp)) do
+    local repo = issue:match("^undeclared repository (.+)$")
+    if repo == nil then out[#out + 1] = issue:gsub("^spec ", "spec: ")
+    else
+      out[#out + 1] = ("spec reaches %s with no declared read access — "
+        .. "declare it (`gitboard set %s --access %s`); undeclared, it "
+        .. "strands the claim now and the review just as surely"):format(
+        repo, it.id:sub(1, 8), repo)
+    end
   end
   return out
 end
@@ -156,7 +128,6 @@ local record gitready
   number: integer, repo: string | nil, base: string | nil): string
   pr_collision_refusal: function(all: {item.Item}, id: string,
   number: integer): string
-  undeclared_repos: function(it: item.Item, body: string): {string}
   ready_problems: function(s: store.Store, it: item.Item,
   prose?: itemtree.Spec): {string}
 end
@@ -164,7 +135,6 @@ end
 local M: gitready = {
   handover_refusal = handover_refusal,
   pr_collision_refusal = pr_collision_refusal,
-  undeclared_repos = undeclared_repos,
   ready_problems = ready_problems,
 }
 

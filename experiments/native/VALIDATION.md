@@ -1,8 +1,12 @@
 # Native connector validation
 
-## Current Work schema proof — 2026-09-14 UTC
+This is historical evidence for the transaction publication workflow. Its
+catalogs and test references should be run at their recorded source revisions.
+For snapshot publication, see the [current design and validation evidence](../../docs/design/snapshot-publication.md).
 
-The current v3 plan emitted the exact exposed tools `github_create_tree`,
+## Transaction Work schema proof — 2026-09-14 UTC
+
+The v3 plan emitted the exact exposed tools `github_create_tree`,
 `github_create_commit`, and `github_update_ref`, using `repository_full_name`
 throughout. Eleven real connector calls published a two-transition draft,
 acquired a claim, and deleted that claim on the dedicated validation branch.

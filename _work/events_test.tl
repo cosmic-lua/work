@@ -8,9 +8,7 @@ local child = require("cosmic.child")
 local events = require("_work.events")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
-local publish = require("_work.publish")
 local store = require("_work.store")
-local storewrite = require("_work.storewrite")
 
 local HEAD < const > = ("b"):rep(40)
 
@@ -40,9 +38,8 @@ local function commit_handover(s: store.Store, id: string)
   it.repo = "acme/widgets"
   it.handover_head = HEAD
   assert(item.record_involvement(it.builders, "session-a"))
-  assert(storewrite.save(s, it,
-      ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12)))
 end
 
 local function test_cache_rebuild_matches_the_git_commit_chain()
@@ -52,10 +49,9 @@ local function test_cache_rebuild_matches_the_git_commit_chain()
   commit_handover(s, leaf)
   local it = check.must(store.load(s, leaf))
   it.verdict, it.verdict_head = "request changes", HEAD
-  assert(storewrite.save(s, it,
-      ("verdict %s request changes head:%s by reviewer-a")
-      :format(leaf:sub(1, 8), HEAD:sub(1, 12))))
-  assert(publish.publish(s))
+  fixture.raw_seed_item(s, it,
+    ("verdict %s request changes head:%s by reviewer-a")
+    :format(leaf:sub(1, 8), HEAD:sub(1, 12)))
 
   local log = check.must(child.run(
       {"git", "log", "--format=%H\t%s", "--reverse", "--first-parent", s.state_head, "--", "items/" .. leaf, "claims/" .. leaf}, {cwd = s.root}))

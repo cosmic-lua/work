@@ -154,17 +154,15 @@ local function test_log_add_advances_the_stores_lease()
   assert(s.written_at > 0, "the write's own second is recorded")
 end
 
--- Draft selection is uniform across mutations, and `--add` is one: the
--- flag parses and reaches draft activation, so an unknown draft is the
--- verb's own refusal rather than an unknown option.
-local function test_log_add_accepts_draft_selection()
+-- Named draft selection was retired by snapshot publication. The removed
+-- option is refused by the current CLI instead of selecting old draft state.
+local function test_log_add_refuses_obsolete_draft_selection()
   local s = init_state_repo("log-gate-draft")
   local _root, leaf = fixture.root_with_leaf(s)
   assert(store.close(s))
-  local code, printed = gitboard_and_capture("log", tail.handle(leaf),
-    "--add", entry_file("log-gate-draft.md", "under a draft"),
-    "--session", HOLDER, "--draft", ("0"):rep(27), "--dir", s.root)
-  assert(code == 1, printed)
-  assert(printed:find("gitboard-log: REFUSED:", 1, true) ~= nil,
-    "the flag parsed and the draft was looked for: " .. printed)
+  local run = check.must(child.run({"o/bin/gitboard", "log", tail.handle(leaf),
+        "--add", entry_file("log-gate-draft.md", "under a draft"),
+        "--session", HOLDER, "--draft", ("0"):rep(27), "--dir", s.root}))
+  assert(run.code == 1 and run.stderr:find("unknown option: --draft", 1, true),
+    run.stdout .. run.stderr)
 end

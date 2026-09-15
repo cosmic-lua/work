@@ -6,7 +6,6 @@
 
 local check = require("cosmic.check")
 local gitboard = require("_work.gitboard")
-local gate = require("_work.gitgate")
 local publish = require("_work.publish")
 local read = require("_work.read")
 local store = require("_work.store")
@@ -56,9 +55,8 @@ local function test_new_parent_on_a_review_item_keeps_it_workable()
   local handed = check.must(store.load(s, leaf))
   local handover_head = ("a"):rep(40)
   handed.handover_head = handover_head
-  assert(gate.commit_and_publish(s, handed, nil,
-      ("take %s by session-a head:%s"):format(leaf:sub(1, 8),
-        handover_head:sub(1, 12)), "take", nil, "session-a"))
+  fixture.raw_seed_item(s, handed,
+    ("historical handover %s"):format(handover_head:sub(1, 12)))
 
   assert(graph.cmd_new(s, "an unrelated finding", leaf, nil, "", false,
       nil, nil, nil, "session-a") == 0)

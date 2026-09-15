@@ -13,17 +13,17 @@ local function dir_flag(): flags.Flag
 end
 
 local PREPARES_ONLY < const > =
-"This verb only PREPARES: it stages the mutation and prints the exact\n"
-.. "publication command, and the board is unchanged until `gitboard publish\n"
-.. "--execute` sends it and `gitboard refresh --execute` confirms it.\n"
+"This verb only PREPARES: it composes the final board snapshot and prints\n"
+.. "its publication command. The board is unchanged until `gitboard publish\n"
+.. "COMMIT` advances and confirms the state branch.\n"
+.. "Explicit local mode instead auto-confirms each mutation immediately.\n"
 .. "There is no --execute here — claim, renew and drop carry one."
 
 local CSPEC: flags.CommandSpec = {
   name = "gitboard",
   summary = "the work board over committed item files: todo, doing, done\n\n"
-  .. "offline workflow: refresh; claim a set; publish its one state commit; "
-  .. "refresh to gain authority;\nthen `draft begin`, compose mutations, "
-  .. "`draft show`, publish once, and refresh. See `help offline`.\n\n"
+  .. "workflow: refresh; claim a set; publish and confirm it; then ordinary\n"
+  .. "verbs compose one final snapshot for `gitboard publish COMMIT`. See `help offline`.\n\n"
   .. "ids are KSUIDs; the board renders each item by its handle, the id's last 8 "
   .. "characters\n(e.g. «d0x1_37YJ»), accepted by every verb bare or wrapped, any "
   .. "divider, any case;\nan unambiguous prefix or the full id also work "
@@ -46,18 +46,6 @@ local CSPEC: flags.CommandSpec = {
         .. "The plain output is only the new identity, suitable for "
         .. "`export GITBOARD_SESSION=$(gitboard session new)`. Gitboard "
         .. "does not derive identity from a user, host, provider, or credential."}},
-    {name = "draft", summary = "chain mutations offline, then publish final tips once",
-      spec = {usage = "begin | show [ID] | abandon [ID] [options]",
-        summary = "manage a durable, clone-local board draft.\n\n"
-        .. "`begin` freezes the caller-fetched board view. Set GITBOARD_DRAFT "
-        .. "to its id, then ordinary mutation verbs read and extend that "
-        .. "speculative view without network access. `show` inspects the final "
-        .. "state-branch publication plan; `abandon` removes only local draft reachability. "
-        .. "`publish ID` prints that plan. See `help offline`.",
-        flags = {dir_flag(),
-          {long = "remote", arg = "NAME",
-            help = "select and bind begin to this canonical remote"},
-          {long = "print-id", help = "for begin, print only the id for command substitution"}}}},
     {name = "claim", summary = "prepare one all-or-nothing two-hour claim set",
       spec = {usage = "ID... [options]",
         summary = "prepare one all-or-nothing two-hour claim set.\n\n"
@@ -408,36 +396,39 @@ local CSPEC: flags.CommandSpec = {
           {long = "force", help = "append past another session's live claim "
             .. "— audited repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
-    {name = "publish", summary = "render or execute one prepared state publication",
-      spec = {usage = "[TRANSACTION|DRAFT] [options]",
-        summary = "render one prepared transaction, claim set, or draft as one "
-        .. "exact state-branch publication.\n\nWith no selector, the sole prepared "
-        .. "unit is selected; multiple units are refused. Nothing executes\n"
-        .. "unless --execute is present; ordinary "
-        .. "Git then owns all authentication behavior. An executed push exits "
-        .. "2 until refresh confirms the fetched refs.",
+    {name = "snapshot", summary = "inspect, summarize, or abandon the local composition",
+      spec = {usage = "[--check | --summary TEXT | --abandon COMMIT] [options]",
+        summary = "inspect the one clone-local final-board composition. Set its final human "
+        .. "summary before publication, or abandon it only when unpublished or after a "
+        .. "proven conflict (the commit remains retained for recovery).",
+        flags = {dir_flag(),
+          {long = "check", help = "validate and preflight the final board"},
+          {long = "summary", arg = "TEXT", help = "replace the final commit summary"},
+          {long = "abandon", arg = "COMMIT", help = "retain and clear this conflicted snapshot"}}}},
+    {name = "publish", summary = "publish and confirm one final board snapshot",
+      spec = {usage = "COMMIT [options]",
+        summary = "publish one full snapshot commit against its exact canonical parent, "
+        .. "fetch the destination, and confirm its complete identity. Shell Git owns "
+        .. "authentication. A conflict never rebases or replays the snapshot. A Work "
+        .. "session uses the internal protocol actions to perform the connector calls.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in the push argv"},
-          {long = "plan", arg = "PLAN.literal", help = "native state: save one immutable connector publication plan"},
-          {long = "from-plan", arg = "PLAN.literal", help = "native state: inspect or execute a saved attempt"},
-          {long = "call", arg = "N", help = "native state: render zero-based call N from --from-plan"},
-          {long = "call-json", help = "native state: emit --call as a tool/arguments JSON object"},
-          {long = "head", arg = "SHA", help = "native state: just-observed remote head required for the final call"},
-          {long = "published", arg = "SHA", help = "native state: associate the connector-returned tip with this attempt"},
-          {long = "repository", arg = "OWNER/REPO", help = "native state: verify connector destination identity"},
-          {long = "execute", help = "explicitly execute the exact rendered Git argv"}}}},
+          {long = "head", arg = "SHA", help = "protocol update: destination head observed immediately before the call"},
+          {long = "protocol", arg = "ACTION", help = "internal Work snapshot protocol action"},
+          {long = "returned-tree", arg = "SHA", help = "internal Work tree result"},
+          {long = "candidate", arg = "SHA", help = "internal Work commit result"}}}},
     {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
-      spec = {summary = "confirm prepared transactions against caller-fetched "
-        .. "remote-tracking refs and rebuild\nthe disposable cache. Without "
-        .. "--execute, prints the exact fetch command but does not run it.\n"
-        .. "--execute runs that same ordinary Git argv before confirmation; "
+      spec = {summary = "confirm snapshot publication and claim authority from caller-fetched "
+        .. "remote-tracking refs, then rebuild\nthe disposable cache. Without "
+        .. "--execute, inspects the refs already fetched by the caller.\n"
+        .. "--execute fetches the configured publication destination before confirmation; "
         .. "credentials remain caller-owned. Exit 2 means publication remains "
         .. "unconfirmed; a lost lease exits 1.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote and remote-tracking namespace to inspect"},
-          {long = "execute", help = "explicitly execute the exact rendered fetch argv"}}}},
+          {long = "execute", help = "fetch the publication destination before inspection"}}}},
     {name = "sync", summary = "deprecated alias for local-only refresh",
       spec = {summary = "deprecated: use refresh. This compatibility alias never "
         .. "fetches or performs provider operations.", flags = {dir_flag()}}},
@@ -448,22 +439,7 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "TEXT... [options]", flags = {dir_flag()}}},
   },
 }
--- Draft selection is intentionally uniform across board reads and ordinary
--- mutations. Keeping the flag injection here prevents each verb declaration
--- from drifting while the environment variable keeps the common path terse.
-local DRAFTABLE < const >: {string: boolean} = {
-  next = true, brief = true, new = true, attach = true, rank = true,
-  set = true, spec = true, worktree = true, take = true, verdict = true,
-  done = true, show = true, find = true, log = true,
-}
 statecommands.extend(CSPEC)
-for _, command in ipairs(CSPEC.commands) do
-  if DRAFTABLE[command.name] then
-    command.spec.flags = command.spec.flags or {}
-    command.spec.flags[#command.spec.flags + 1] = {long = "draft", arg = "ID",
-      help = "read and stage against this durable offline draft; default $GITBOARD_DRAFT"}
-  end
-end
 local record gitcommands
   CSPEC: flags.CommandSpec
 end
