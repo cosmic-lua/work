@@ -54,9 +54,12 @@ Add a `--summary` switch to `show` that replaces the row lists with a rollup:
    parameter alongside the function's, or the dispatch call fails with `wrong
    number of arguments (given 3, expects at least 1 and at most 2)`.
 
-   Budget: this file goes 473 -> 494 of the 500-line cap, six more than the
+   Budget: this file goes 473 -> 497 of the 500-line cap, well over the
    ten-line estimate this spec first carried; `viewsummary.emit` is what keeps
-   it inside. `_work/gitboard.tl` goes 488 -> 493.
+   it inside at all. 494 of those are the change itself and the last three are
+   the formatter's own wrapping of the widened signatures, so measure this
+   against a formatted tree rather than before the fmt stage runs.
+   `_work/gitboard.tl` goes 488 -> 493.
 
 The rendering, with today's board as the worked example:
 
