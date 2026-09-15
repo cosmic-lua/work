@@ -1,10 +1,8 @@
 title: gitboard review ID: hand an item to a fresh-context reviewer in one verb — today it is twelve invocations, three refusals and two publishes
 parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
 repo: cosmic-lua/work
-handover_head: 6c254a380db669ef290c8ea24601a1381fea854e
+handover_head: 9ae61d8b6100281964271099b058bfee567060e6
 external_url: https://github.com/cosmic-lua/work/pull/179
-verdict: request changes
-verdict_head: 6c254a380db669ef290c8ea24601a1381fea854e
 builders: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 speccers: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: _work/stateclaim.tl _work/gitcommands.tl _work/gitboard.tl _work/gitverbs.tl _work/stateclaim_handoff_test.tl
