@@ -60,16 +60,31 @@ Add `gitboard review ID...`, one verb that produces reviewer-ready briefs:
    `--tree`, `--gitboard-command` and `--gitboard-cwd` carried through to
    `brief`, and `--fetch` carried through to `worktree`.
 3. `_work/gitboard.tl` — the argv dispatch branch.
-4. `_work/gitverbs.tl` — the `cmd_review` entry, which composes what a caller
-   does by hand today, in order: mint a reviewer identity when `--session` is
-   absent (the same mint `session new` performs), prepare ONE `handoff` batch
-   over every named id, print its publication command, and after the caller
-   publishes and refreshes, create each item's worktree when its brief needs
-   one and write each filled brief to `--out`.
+4. `_work/gitverbs.tl` — the `cmd_review` entry. A worktree and a brief need
+   the handoff CONFIRMED, which is only true after the caller publishes and
+   refreshes, so one invocation cannot do both halves. The verb is therefore
+   IDEMPOTENT and reads which half to do from the board:
+
+   - the named ids are not yet claimed by the caller's session: mint a reviewer
+     identity when `--session` is absent (the same mint `session new`
+     performs), prepare ONE `handoff` batch over every id, and print both the
+     publication command and the exact re-invocation to run after it, carrying
+     the minted `--session` verbatim so the caller never has to reconstruct it;
+   - the named ids are already claimed by the caller's session: create each
+     item's worktree when its brief needs one, and write each filled brief to
+     `--out`.
+
+   `--session` therefore names the REVIEWER throughout, not the caller's own
+   builder identity. `workflow_rules.distance_refusal`
+   (`grep -n "local function distance_refusal(it: item.Item, session: string)" _work/workflow_rules.tl`)
+   is the existing check the handoff reuses for "MUST NOT be a builder or
+   speccer" — the same refusal `brief review` already raises, moved one step
+   earlier so a reviewer identity cannot be handed work it may not judge.
 
 The verb PREPARES, like every other mutating verb — it does not publish. Its
 verdict line names the one publish command for the whole batch, so two items
-cost one publish instead of two.
+cost one publish instead of two, and the whole handoff is five commands
+(`review`, `publish`, `refresh`, `review --out`) against today's twelve.
 
 Line budgets (`wc -l`): `_work/stateclaim.tl` 158 and `_work/gitcommands.tl`
 451 have room. `_work/gitverbs.tl` is 379 of the 500-line cap and
