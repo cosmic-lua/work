@@ -1,0 +1,4 @@
+title: _work/gitsync.tl and _work/gitreadmany.tl are unreachable: no requirer, no test, and doc comments still name them as live
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/work
+touches: _work/gitsync.tl _work/gitreadmany.tl
