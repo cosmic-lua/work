@@ -5,6 +5,8 @@ handover_head: fe53323d83a36b214c7839530c69510490047738
 external_url: https://github.com/cosmic-lua/cosmic/pull/1861
 verdict: accept
 verdict_head: fe53323d83a36b214c7839530c69510490047738
+landed_head: 9410ba950443ba4882e35e20944082f28e154580
+resolution: completed
 builders: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: skills/work/SKILL.md skills/work/decompose.md
 access: cosmic-lua/work
