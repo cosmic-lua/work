@@ -23,9 +23,12 @@ local store = require("_work.store")
 --- @param execute boolean Whether to push now
 --- @param base function The product base to record for a member
 --- @return integer The verdict line's exit status
+--- @param label string The verb name its verdict line carries, "" to derive it;
+--- a composing verb owns the line, so `review` drives a handoff and prints
+--- one `gitboard-review:` rather than a second verb's.
 local function run(s: store.Store, ids: {string}, all: {item.Item},
     action: stateclaim.Action, caller: string, remote: string, force: boolean, why: string,
-    execute: boolean, base: function(item.Item): string | nil, string): integer
+    execute: boolean, label: string, base: function(item.Item): string | nil, string): integer
   if remote ~= refs.board_remote(s.root) then
     return gate.verdict_line("claim", false, "native claim destination differs from configured board remote")
   end
@@ -47,7 +50,8 @@ local function run(s: store.Store, ids: {string}, all: {item.Item},
     end
     requests[#requests + 1] = {id = id, product_base = product}
   end
-  local verb = action == "take" and "claim" or action
+  local verb = label ~= "" and label
+  or (action == "take" and "claim" or action)
   local result = stateclaim.prepare(s.root, s.state_head, requests, action, caller,
     now, force, why)
   for id, err in pairs(early) do result.refused[id] = err end
@@ -103,7 +107,7 @@ local function run(s: store.Store, ids: {string}, all: {item.Item},
 end
 local record Module
   run: function(store.Store, {string}, {item.Item}, stateclaim.Action, string, string, boolean, string,
-  boolean, function(item.Item): string | nil, string): integer
+  boolean, string, function(item.Item): string | nil, string): integer
 end
 local M: Module = {run = run}
 return M

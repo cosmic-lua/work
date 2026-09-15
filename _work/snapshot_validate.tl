@@ -85,6 +85,21 @@ local function claim_rules(before: boardread.View, after: boardread.View,
       local refusal = claim.drop_refusal(stateclaim.state(old), author, now,
         repair, repair and message or "")
       if refusal ~= nil then return nil, refusal .. ": " .. id end
+    elseif old ~= nil and old.holder ~= new.holder
+    and new.product_base == old.product_base
+    and claim.status(stateclaim.state(old), now) == "active" then
+      -- A review handoff: the product base stays, so the reviewer judges
+      -- the same diff, and only the holder moves. The claim ROOT is fresh,
+      -- giving the reviewer its own work branch — the builder's still
+      -- exists and `worktree` never reuses one. This case must precede the
+      -- acquisition branch (the root did change) and the renewal branch
+      -- (`renew_refusal` would reject the new holder for not being the old
+      -- one, which is the whole point of a transfer).
+      local it = after.items_by_id[id]
+      if it == nil then return nil, "handoff has no item: " .. id end
+      local shape = workflow_rules.handoff_refusal(it, old, author)
+      if shape ~= nil then return nil, shape .. ": " .. id end
+      deadline = min_deadline(deadline, new.expires_at)
     elseif old == nil or old.id ~= new.id then
       -- Acquisition never supersedes a live claim, even with repair syntax,
       -- and an active holder must use renew or drop instead of rotating the

@@ -44,6 +44,29 @@ local function distance_refusal(it: item.Item, session: string): string | nil
   return nil
 end
 
+--- Whether one claim may be transferred to `author` as a review handoff.
+---
+--- A handoff keeps the claim identity and product base and moves only the
+--- holder, so the reviewer judges the exact commit that was handed over on
+--- the exact branch it was built on. Both the proposing side
+--- (`_work.stateclaim`'s `prepare`) and the admitting side
+--- (`_work.snapshot_validate`) call this, because a published snapshot is
+--- validated independently of whatever composed it.
+--- @param it item.Item The item whose claim is moving
+--- @param old boardtree.Claim The claim as the board currently holds it
+--- @param author string The session the claim is moving to
+--- @return string | nil The refusal, nil when the transfer is allowed
+local function handoff_refusal(it: item.Item, old: boardtree.Claim,
+    author: string): string | nil
+  if old.holder == author then
+    return "item is already claimed by this session"
+  end
+  if (it.handover_head or "") == "" then
+    return "handoff is for an item awaiting review; this one has handed over nothing"
+  end
+  return distance_refusal(it, author)
+end
+
 --- Require append-only workflow attribution to name the logical author.
 local function attribution_refusal(names: {string}, author: string,
     message: string): string | nil
@@ -190,6 +213,7 @@ local record Module
   type ChildState = ChildState
   child_state: function({item.Item}, string): ChildState
   distance_refusal: function(item.Item, string): string
+  handoff_refusal: function(item.Item, boardtree.Claim, string): string
   attribution_refusal: function({string}, string, string): string
   attribute: function({string}, string): boolean, string
   claim_acquisition_refusal: function(boardtree.Claim, string, integer): string
@@ -208,6 +232,7 @@ end
 local M: Module = {
   child_state = child_state,
   distance_refusal = distance_refusal,
+  handoff_refusal = handoff_refusal,
   attribution_refusal = attribution_refusal,
   attribute = attribute,
   claim_acquisition_refusal = claim_acquisition_refusal,

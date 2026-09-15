@@ -58,10 +58,17 @@ local function test_raw_claim_acquisition_cannot_rotate_an_active_lease()
   local old = check.must(boardread.list(s.root, s.state_head)).claims_by_id[id]
   local now = old.renewed_at
 
+  -- A takeover of a live claim is still refused, but the rule that
+  -- refuses it moved: a holder change at the same product base is now
+  -- read as a review handoff, and this item has handed over nothing, so
+  -- it is the handoff's own precondition that denies it rather than the
+  -- acquisition rule. The bound this pins is that an item NOT awaiting
+  -- review cannot have its claim seized — see
+  -- `_work/stateclaim_handoff_test.tl` for the converse.
   local takeover = claim_commit(s, id, flow.OTHER,
     claim_blob(flow.OTHER, now, product.base),
     "raw takeover\n\nForce-Why: attempted repair")
-  denied(s, takeover, now, "item is claimed by")
+  denied(s, takeover, now, "handed over nothing")
   assert(workspace.clear(s.root, takeover))
 
   local new_identity = claim_commit(s, id, flow.BUILDER,
