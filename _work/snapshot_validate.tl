@@ -97,6 +97,17 @@ local function claim_rules(before: boardread.View, after: boardread.View,
       -- one, which is the whole point of a transfer).
       local it = after.items_by_id[id]
       if it == nil then return nil, "handoff has no item: " .. id end
+      -- `prepare` always mints a fresh root and a standard lease. Admitting
+      -- a snapshot that keeps the old root would hand the reviewer the
+      -- builder's own work branch, and admitting an arbitrary expiry would
+      -- mint a claim that outlives every other path's two-hour lease. Neither
+      -- shape is producible by `prepare`; both were admissible here.
+      if new.id == old.id then
+        return nil, "handoff must mint a fresh claim root: " .. id
+      end
+      if new.expires_at ~= new.renewed_at + claim.LEASE_S then
+        return nil, "handoff lease must be the standard term: " .. id
+      end
       local shape = workflow_rules.handoff_refusal(it, old, author)
       if shape ~= nil then return nil, shape .. ": " .. id end
       deadline = min_deadline(deadline, new.expires_at)

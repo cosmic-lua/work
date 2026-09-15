@@ -46,9 +46,11 @@ end
 
 --- Whether one claim may be transferred to `author` as a review handoff.
 ---
---- A handoff keeps the claim identity and product base and moves only the
---- holder, so the reviewer judges the exact commit that was handed over on
---- the exact branch it was built on. Both the proposing side
+--- A handoff keeps the PRODUCT BASE and moves the holder, so the reviewer
+--- measures the same diff as the builder did. It does NOT keep the claim
+--- identity: `_work.stateclaim` mints a fresh root so the reviewer gets its
+--- own work branch, because the builder's branch still exists and `worktree`
+--- never reuses one. Both the proposing side
 --- (`_work.stateclaim`'s `prepare`) and the admitting side
 --- (`_work.snapshot_validate`) call this, because a published snapshot is
 --- validated independently of whatever composed it.

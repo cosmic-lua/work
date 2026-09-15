@@ -29,22 +29,36 @@ local stateclaim = require("_work.stateclaim")
 local stateclaim_cli = require("_work.stateclaim_cli")
 local store = require("_work.store")
 
---- Whether every named item is already held by this session, which is what
---- makes the brief half reachable. A mixed set is the caller running the verb
---- again before publishing the whole batch, so it stays in the handoff half
---- and the refusals name which ones.
-local function all_held(s: store.Store, ids: {string}, caller: string): boolean
+--- Split the named items into those this session already holds and those
+--- still to transfer.
+---
+--- A claim batch is atomic: one member that is already the caller's own live
+--- claim refuses the WHOLE set. So a mixed set — the caller re-running the
+--- verb after publishing only part of a batch, or handing off one item and
+--- later adding another — must not be sent to `prepare` intact, or nothing
+--- moves. The held ones are already where they need to be; only the rest are
+--- proposed.
+--- @param s store.Store The board
+--- @param ids {string} Every named item
+--- @param caller string The reviewer identity
+--- @return {string} Those already held by `caller`
+--- @return {string} Those still needing a transfer
+local function partition(s: store.Store, ids: {string},
+    caller: string): {string}, {string}
+  local held: {string} = {}
+  local pending: {string} = {}
   local view = boardread.list(s.root, s.state_head)
-  if view == nil then return false end
   local now = os.time()
   for _, id in ipairs(ids) do
-    local held = view.claims_by_id[id]
-    if held == nil or held.holder ~= caller
-    or claim.status(stateclaim.state(held), now) ~= "active" then
-      return false
+    local lease = view ~= nil and view.claims_by_id[id] or nil
+    if lease ~= nil and lease.holder == caller
+    and claim.status(stateclaim.state(lease), now) == "active" then
+      held[#held + 1] = id
+    else
+      pending[#pending + 1] = id
     end
   end
-  return true
+  return held, pending
 end
 
 --- The brief half: one worktree per item that needs one, then the filled
@@ -129,8 +143,13 @@ local function cmd_review(s: store.Store, args: {string},
     caller = claimsession.mint()
     minted = true
   end
-  if all_held(s, ids, caller) then
-    return briefs(s, ids, caller, out, tree, command, cwd, fetch, worktrees)
+  local held, pending = partition(s, ids, caller)
+  if #pending == 0 then
+    return briefs(s, held, caller, out, tree, command, cwd, fetch, worktrees)
+  end
+  if #held > 0 then
+    print(("already held, not re-transferred: %s"):format(
+        table.concat(held, " ")))
   end
   if minted then
     -- A minted identity that never reaches the caller is unusable: the
@@ -140,7 +159,7 @@ local function cmd_review(s: store.Store, args: {string},
   end
   local all, aerr = store.list(s)
   if all == nil then return gate.verdict_line("handoff", false, aerr) end
-  local code = stateclaim_cli.run(s, ids, all, "handoff", caller, remote,
+  local code = stateclaim_cli.run(s, pending, all, "handoff", caller, remote,
     false, "", false, "handoff",
     function(_it: item.Item): string | nil, string return "", "" end)
   if code == 0 or code == 2 then
