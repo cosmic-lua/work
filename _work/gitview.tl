@@ -462,7 +462,8 @@ local record gitview
   type Board = Board
   lanes_row: function(facts: {string: string} | nil): string | nil
   status_report: function(c: Index, all: {item.Item}, specs: act.Specs,
-  ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer):
+  ages?: health.Ages, lane_facts?: {string: string}, todo_shown?: integer,
+  summary?: boolean):
   {string} | nil, string
   next_report: function(c: Index, all: {item.Item}, specs: act.Specs,
   session?: string, ages?: health.Ages, review_ages?: health.Ages): string, string
