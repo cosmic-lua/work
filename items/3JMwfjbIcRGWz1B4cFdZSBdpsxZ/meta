@@ -1,0 +1,4 @@
+title: refresh --execute cannot bootstrap a fresh clone: the format gate runs before the fetch, so the one verb that fetches refuses until you have already fetched
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+touches: _work/format.tl _work/gitboard.tl _work/format_fetch_argv_test.tl

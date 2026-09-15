@@ -1,0 +1,4 @@
+title: refresh prints one current-claim line per claim regardless of status — today 123 lines, all expired, zero live
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+touches: _work/stateclaim.tl _work/stateclaim_authority_test.tl

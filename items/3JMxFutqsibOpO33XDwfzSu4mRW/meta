@@ -1,0 +1,4 @@
+title: bin/gitboard and bin/cosmic re-download 20MB of pinned binaries into o/, so every fresh container pays the cold fetch twice
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
+touches: bin/gitboard bin/cosmic _cli/gitboard_root_test.tl
