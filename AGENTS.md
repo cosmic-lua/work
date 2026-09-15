@@ -71,3 +71,12 @@ Read the final `ci: PASS` or `ci: FAIL` verdict; do not hide its exit status
 behind a pipe. CI owns the full `.cosmic-coverage` floor. Change only
 affected coverage rows, with measured evidence; never regenerate the whole
 file locally.
+
+## Landing
+
+This repository is squash-only and requires the merge queue. Mark a draft
+ready, then enable auto-merge to enqueue it; never attempt a direct merge.
+With the GitHub connector, read repository merge policy before the first
+merge mutation. Monitor Actions runs or check runs on the new `merge_group`
+commit—combined commit status may be empty. After the queue completes, verify
+both that the PR merged and that `main` points to the queue commit.
