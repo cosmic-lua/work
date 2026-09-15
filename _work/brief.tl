@@ -397,10 +397,12 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     if br ~= "" then
       facts.branch = br
     end
-    local bc = bounce_context(it, br)
-    if bc ~= "" then
-      facts.bounce_context = bc
-    end
+    -- INTENTIONALLY EMPTY, like `round_context`: a fresh (non-rework)
+    -- pull has no bounce paragraph to splice, and the board can say so
+    -- outright — `facts.bounce_context` left `nil` here would read as
+    -- ABSENT to `briefcontext.need` and survive as the literal
+    -- `<BOUNCE_CONTEXT>` token instead of rendering as nothing.
+    facts.bounce_context = bounce_context(it, br)
   end
   if (it.repo or "") ~= "" then
     facts.repo = it.repo
