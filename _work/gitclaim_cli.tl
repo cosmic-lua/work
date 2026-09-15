@@ -227,7 +227,7 @@ local function cmd_claim(s: store.Store, ids: {string}, action: stateclaim.Actio
   if all == nil then
     return gate.verdict_line(verb, false, aerr)
   end
-  return stateclaim_cli.run(s, ids, all, action, caller, remote, force, why, execute,
+  return stateclaim_cli.run(s, ids, all, action, caller, remote, force, why, execute, "",
     function(it: item.Item): string | nil, string
       return product_base(s, it, "", repo_dir, fetch_base or false)
     end)

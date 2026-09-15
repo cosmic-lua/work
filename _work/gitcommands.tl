@@ -355,6 +355,31 @@ local CSPEC: flags.CommandSpec = {
             help = "minted claim identity; default $GITBOARD_SESSION"},
           {long = "force", help = "audited repair past normal completion gates"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
+    {name = "handoff", summary = "hand items to a fresh-context reviewer: "
+      .. "handoff, checkout and brief",
+      spec = {usage = "ID... [options]",
+        summary = "hand items to a fresh-context reviewer: handoff, "
+        .. "checkout and brief.\n\n"
+        .. "Idempotent, in two halves, because a brief needs the handoff "
+        .. "CONFIRMED. Items not yet held by --session get ONE handoff "
+        .. "batch prepared; publish and refresh it, then run the same "
+        .. "command again to get each item's checkout and filled brief. "
+        .. "Omit --session and one is minted and printed for the second "
+        .. "call.",
+        flags = {dir_flag(),
+          {long = "session", arg = "SESSION",
+            help = "the REVIEWER identity; omit to mint one"},
+          {long = "out", arg = "FILE",
+            help = "write briefs here; a directory when several ids are named"},
+          {long = "tree", arg = "DIR", help = "passed to `brief --tree`"},
+          {long = "no-worktree",
+            help = "skip the checkouts; briefs only"},
+          {long = "fetch", help = "passed to `worktree --fetch`"},
+          {long = "remote", arg = "NAME", help = "the board remote"},
+          {long = "gitboard-command", arg = "TEXT",
+            help = "the caller's own gitboard invocation, for the brief"},
+          {long = "gitboard-cwd", arg = "DIR",
+            help = "cwd for --gitboard-command"}}}},
     {name = "show", summary = "the board (no ID), or one item: fields, "
       .. "spec-bar problems, spec, git history",
       spec = {usage = "[ID] [options]",

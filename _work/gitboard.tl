@@ -19,6 +19,7 @@ local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
 local claimcli = require("_work.gitclaim_cli")
 local gitdone = require("_work.gitdone")
+local gitreview = require("_work.gitreview")
 local gitlog = require("_work.gitlog")
 local workspace = require("_work.snapshot_workspace")
 local graph = require("_work.gitgraph")
@@ -271,6 +272,11 @@ local function main(...: string): integer
   -- `brief`'s first argument is the KIND, not an id, so it cannot
   -- ride the shared id resolution below. A missing id passes through
   -- as "" so an unknown kind refuses on the kind, not on the id.
+  if d.command == "handoff" then
+    return gitreview.cmd_review(s, d.parsed.args, remote,
+      function(x: string): string | nil, string return resolve_id(s, x) end,
+      d.parsed.values, d.parsed.switches)
+  end
   if d.command == "brief" then
     local target = d.parsed.args[2] or ""
     if target ~= "" then

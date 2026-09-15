@@ -8,6 +8,12 @@ local enum Action
   "take"
   "renew"
   "drop"
+  --- Transfer a held claim to a reviewer in one commit. `take` cannot do
+  --- it (a live claim refuses) and drop-then-take cannot either, because
+  --- `prepare` carries ONE action for a whole set — so the review handoff
+  --- would otherwise cost two publishes and leave the item briefly
+  --- unclaimed between them.
+  "handoff"
 end
 local record Request
   id: string
@@ -90,6 +96,28 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
         next_claim = {id = old.id, holder = old.holder, acquired_at = old.acquired_at,
           renewed_at = now, expires_at = now + claim.LEASE_S, product_base = old.product_base}
         denial = workflow_rules.claim_renewal_refusal(old, next_claim)
+      end
+    elseif action == "handoff" then
+      -- The reviewer inherits the claim rather than starting one: same
+      -- product base, same work branch, so the verdict lands on the
+      -- commit that was handed over. A fresh base would judge a
+      -- different tree.
+      local it = view.items_by_id[req.id]
+      if claim.status(st, now) ~= "active" then
+        denial = "handoff needs a live claim to transfer"
+      elseif old == nil then denial = "claim has no state"
+      elseif it == nil then denial = "no such item"
+      else
+        denial = workflow_rules.handoff_refusal(it, old, caller)
+        if denial == nil then
+          -- A fresh claim root, so the reviewer gets its own work branch:
+          -- the builder's still exists and `worktree` never reuses one.
+          -- The PRODUCT BASE carries over, because that is what the diff
+          -- is measured from, and the reviewer judges the same commit.
+          next_claim = {id = boardtree.mint_claim_id(), holder = caller,
+            acquired_at = now, renewed_at = now,
+            expires_at = now + claim.LEASE_S, product_base = old.product_base}
+        end
       end
     else denial = claim.drop_refusal(st, caller, now, force, why) end
     seen[req.id] = true
