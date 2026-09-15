@@ -1,0 +1,3 @@
+title: cosmic ruleset: add `pr / compare` to the required contexts, or the reproducibility compare stops gating the queue
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
