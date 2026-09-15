@@ -44,7 +44,10 @@ local function acquire(root: string): Lock | nil, string
   local held, lerr = handle:fcntl(fd.F_SETLK, fd.F_WRLCK)
   if held == nil then
     local _closed, _cerr = handle:close()
-    return nil, "another snapshot state transition is active: " .. lerr
+    if lerr:find("EAGAIN", 1, true) or lerr:find("EACCES", 1, true) then
+      return nil, "another snapshot state transition is active: " .. lerr
+    end
+    return nil, "cannot lock snapshot state: " .. lerr
   end
   active[lock_path] = true
   local open = true

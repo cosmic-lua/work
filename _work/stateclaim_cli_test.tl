@@ -10,7 +10,6 @@ local native = require("_work.stateclaim_authority")
 local claim = require("_work.claim")
 local receipt = require("_work.preparation_receipt")
 local workspace = require("_work.snapshot_workspace")
-local staging = require("_work.statestaging")
 local boardread = require("_work.boardread")
 
 -- `claim` is mutual exclusion, so it may reserve an unranked item whose spec
@@ -132,5 +131,5 @@ local function test_mixed_self_overlap_rejects_the_complete_cli_acquisition()
   local after = check.must(boardread.list(s.root, before))
   assert(after.claims_by_id[first].id == before_claim.id)
   assert(after.claims_by_id[second] == nil)
-  assert(#check.must(staging.list(s.root)) == 0)
+  assert(workspace.read(s.root) == nil)
 end

@@ -33,7 +33,7 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    # The full 1,064-test gate needs about ten hosted minutes. Individual
+    # The full gate needs about ten hosted minutes. Individual
     # tests retain their 120-second timeout; this is whole-job headroom.
     timeout-minutes: 15
     # This job IS the .cosmic-coverage recording environment for this
@@ -62,6 +62,3 @@ jobs:
         run: |
           bin/cosmic --make fetch
           bin/cosmic --make ci
-
-      - name: Work snapshot runner
-        run: node --test _work/snapshot_work_runner_test.js docs/work-snapshot-publish_test.js

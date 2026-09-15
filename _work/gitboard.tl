@@ -159,14 +159,6 @@ local function main(...: string): integer
         selerr) end
   end
   local remote = explicit_remote ~= "" and explicit_remote or refs.board_remote(dir)
-  if d.command == "draft" then
-    return gate.verdict_line("draft", false,
-      "REFUSED: named drafts are obsolete; ordinary verbs compose refs/gitboard/snapshot")
-  end
-  if (d.parsed.values["draft"] or "") ~= "" then
-    return gate.verdict_line(d.command, false,
-      "REFUSED: --draft is obsolete; publish or abandon it with the older gitboard")
-  end
   if d.command ~= "publish" and d.command ~= "refresh" and d.command ~= "snapshot" then
     local read_only = READ_ONLY[d.command] or
     (d.command == "log" and d.parsed.values["add"] == nil)
@@ -212,13 +204,10 @@ local function main(...: string): integer
         return statepublish_cli.protocol(s, commit, remote,
           d.parsed.values["protocol"] or "", d.parsed.values["returned-tree"] or "",
           d.parsed.values["candidate"] or "", d.parsed.values["head"] or "",
-          d.parsed.values["recovery"] or "", nil)
+          nil)
       end
       return statepublish_cli.cmd_publish(s, selectors, remote,
-        d.parsed.switches["execute"] or false, d.parsed.values["plan"] or "",
-        d.parsed.values["from-plan"] or "", d.parsed.values["call"] or "",
-        d.parsed.values["published"] or "", d.parsed.values["repository"] or "",
-        d.parsed.values["head"] or "", d.parsed.switches["call-json"] or false)
+        d.parsed.switches["execute"] or false)
     end
     return transport.cmd_publish(s, selectors,
       remote,

@@ -5,6 +5,7 @@
 --- the verb boundary.
 local check = require("cosmic.check")
 local flow = require("_work.commit_flow_fixture")
+local done = require("_work.gitdone")
 local gittake = require("_work.gittake")
 local item = require("_work.item")
 local publication = require("_work.snapshot_publish")
@@ -60,7 +61,7 @@ local function test_same_snapshot_attribution_participates_in_distance_check()
   assert(item.record_involvement(it.builders, flow.REVIEWER))
   it.verdict, it.verdict_head = "accept", product.head
   local commit = proposed(s, it, flow.REVIEWER, "raw self attribution")
-  denied(s, commit, "verdict author built")
+  denied(s, commit, "verdict needs a fresh context")
 end
 
 local function test_existing_accept_cannot_be_rewritten_by_raw_commit()
@@ -110,4 +111,35 @@ local function test_research_completion_names_its_published_result()
   it.resolution, it.landed_head = "completed", product.head
   local commit = proposed(s, it, flow.LANDER, "raw research completion")
   denied(s, commit, "does not name published result")
+end
+
+local function test_forced_native_completion_passes_raw_publication_policy()
+  local s, id, product = flow.fresh("snapshot-forced-completion")
+  assert(flow.claim(s, id, flow.BUILDER, product) == 0)
+  check.must(store.list(s))
+  local worked = check.must(store.load(s, id))
+  assert(item.record_involvement(worked.builders, flow.BUILDER))
+  assert(gittake.take_result(s, worked, flow.BUILDER, 0) == 0)
+  assert(done.cmd_done(s, id, "completed", true, "retire without review",
+      "", "", product.root, flow.BUILDER) == 0)
+  local completed = check.must(store.load(s, id))
+  assert(completed.resolution == "completed" and (completed.result or "") ~= ""
+    and (completed.verdict or "") == "" and (completed.landed_head or "") == "")
+end
+
+local function test_research_handover_spec_rule_matches_native_and_raw_paths()
+  local s, id, product = flow.fresh("snapshot-research-spec-parity")
+  local it = check.must(store.load(s, id))
+  assert(write.save(s, it, "clear spec", {change = "", non_goals = ""}))
+  assert(publication.publish(s, nil))
+  assert(flow.claim(s, id, flow.BUILDER, product) == 0)
+  check.must(store.list(s))
+  it = check.must(store.load(s, id))
+  assert(item.record_involvement(it.builders, flow.BUILDER))
+  assert(gittake.take_result(s, it, flow.BUILDER, 0) ~= 0,
+    "the native handover refuses an empty spec")
+  it.result = s.leased_sha[id] or ""
+  assert(it.result ~= "")
+  local commit = proposed(s, it, flow.BUILDER, "raw research handover")
+  denied(s, commit, "has no spec")
 end

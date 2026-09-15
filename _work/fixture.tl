@@ -14,7 +14,7 @@ local fs = require("cosmic.fs")
 local gitspec = require("_work.gitspec")
 local stateclaim = require("_work.stateclaim")
 local statewrite = require("_work.statewrite")
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local graph = require("_work.gitgraph")
 local idxmod = require("_work.index")
 local irank = require("_work.index_rank")
@@ -325,7 +325,7 @@ end
 
 --- Count published board mutations on the canonical state's first-parent chain.
 local function commits(s: store.Store): integer
-  local head = check.must(statepublish.head(s.root, refs.board_remote(s.root)))
+  local head = check.must(workspace.canonical_head(s.root))
   if head == refs.ZERO_SHA then return 0 end
   local result = check.must(store.git_ok(s, {"rev-list", "--first-parent", "--count", head}))
   return math.tointeger(tonumber((result.stdout:gsub("%s+$", "")))) or -1
@@ -333,7 +333,7 @@ end
 
 --- The author email on the latest published native board commit.
 local function commit_author_email(s: store.Store): string
-  local head = check.must(statepublish.head(s.root, refs.board_remote(s.root)))
+  local head = check.must(workspace.canonical_head(s.root))
   assert(head ~= refs.ZERO_SHA, "no commits on the board yet")
   local result = check.must(store.git_ok(s, {"log", "-1", "--format=%ae", head}))
   return (result.stdout:gsub("%s+$", ""))

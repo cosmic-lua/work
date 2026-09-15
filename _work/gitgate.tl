@@ -24,6 +24,7 @@ local read = require("_work.read")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
+local workflow_rules = require("_work.workflow_rules")
 
 local type Index = index.Index
 
@@ -181,24 +182,7 @@ end
 --- @param session string The session asking
 --- @return string | nil The refusal
 local function distance_refusal(it: item.Item, session: string): string | nil
-  if (session or "") == "" then
-    return nil
-  end
-  for _, name in ipairs(it.builders or {}) do
-    if name == session then
-      return ("REFUSED: %s built/specced %s — the verdict needs a fresh "
-        .. "context; recording it anyway needs --force --why"):format(
-        session, it.id:sub(1, 8))
-    end
-  end
-  for _, name in ipairs(it.speccers or {}) do
-    if name == session then
-      return ("REFUSED: %s built/specced %s — the verdict needs a fresh "
-        .. "context; recording it anyway needs --force --why"):format(
-        session, it.id:sub(1, 8))
-    end
-  end
-  return nil
+  return workflow_rules.distance_refusal(it, session)
 end
 
 --- Whether `i`'s own recorded CI observation keeps it out of the debt

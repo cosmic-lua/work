@@ -10,7 +10,7 @@ local gitclaim_cli = require("_work.gitclaim_cli")
 local graph = require("_work.gitgraph")
 local product_fixture = require("_work.commit_flow_fixture")
 local stateclaim = require("_work.stateclaim")
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local statewrite = require("_work.statewrite")
 local store = require("_work.store")
 

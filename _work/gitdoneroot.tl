@@ -11,6 +11,7 @@
 local index = require("_work.index")
 local item = require("_work.item")
 local read = require("_work.read")
+local workflow_rules = require("_work.workflow_rules")
 
 local type Index = index.Index
 
@@ -46,11 +47,10 @@ local function done_refusal(c: Index, all: {item.Item}, it: item.Item,
     end
     return nil, ""
   end
-  for _, i in ipairs(all) do
-    if i.parent == it.id and item.is_open(i) then
-      return ("%s has an open child (%s) left — a verified outcome "
-        .. "has none"):format(it.id:sub(1, 8), i.id:sub(1, 8)), ""
-    end
+  local children = workflow_rules.child_state(all, it.id)
+  if children.open ~= nil then
+    return ("%s has an open child (%s) left — a verified outcome "
+      .. "has none"):format(it.id:sub(1, 8), children.open.id:sub(1, 8)), ""
   end
   if by == "" then
     return "a verified outcome names its evidence — pass --by CHILD, the "

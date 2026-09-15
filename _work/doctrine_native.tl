@@ -6,6 +6,8 @@ selects this layout; a partially uploaded state branch never activates it.
 For an isolated local test board:
   gitboard init --dir /path/to/test-board --local --format 6
   gitboard new "Proof item" --dir /path/to/test-board
+Local mode auto-confirms every mutation immediately against refs/heads/state.
+It retains no composition for snapshot --check or a later publish command.
 
 On an activated remote board, refresh before composing. Ordinary verbs replace
 one clone-local final-board snapshot whose sole parent is the fetched canonical
@@ -18,14 +20,18 @@ Shell publication:
   gitboard publish COMMIT
 
 Connector publication:
-  evaluate _work/snapshot_work_runner.js and docs/work-snapshot-publish.js
-  runGitboardSnapshot({root, binary, commit, remote})
-The adapter begins by freezing the local snapshot. It creates the final tree and
-one provider-authored commit, saves the returned commit SHA, fetches and checks
-the exact destination head and claim deadline, then makes one non-forced ref
-update. Deletions may require multiple tree chunks; small updates use exactly
-three connector calls. A changed head conflicts the entire snapshot. There is no
-automatic rebase, replay, or partial-prefix confirmation.
+  gitboard publish COMMIT --protocol begin
+  gitboard publish COMMIT --protocol trees
+  gitboard publish COMMIT --protocol commit --returned-tree SHA
+  gitboard publish COMMIT --protocol candidate --candidate SHA
+  gitboard publish COMMIT --protocol update --head SHA
+A Work session invokes the emitted GitHub connector calls in that order. Teal
+freezes the local snapshot, saves the returned commit SHA, and checks the exact
+destination head and claim deadline before the one non-forced ref update.
+Deletions may require multiple tree calls. A changed head conflicts the entire
+snapshot. There is no automatic rebase, replay, or partial-prefix confirmation.
+The `gitboard.publicationBranch` config redirects publication and recovery for
+isolated validation branches. Leave it unset for production `state` publication.
 
 If an update response is lost, fetch and reconcile the saved candidate before
 retrying anything. A candidate or updating restart never creates another commit.

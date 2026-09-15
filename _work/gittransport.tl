@@ -1,5 +1,5 @@
 --- Caller-owned native publication and confirmation commands.
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local statepublish_cli = require("_work.statepublish_cli")
 local gate = require("_work.gitgate")
 local refs = require("_work.refs")

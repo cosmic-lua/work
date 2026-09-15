@@ -1,9 +1,8 @@
-# Historical design — format-6 transition publication
+# Native format-6 storage
 
-Status: archived after format 6 shipped. This document records the transition,
-draft, rebase, and prefix-confirmation model implemented by PR #171. The current
-snapshot publication contract is defined in `snapshot-publication.md`; archived
-implementation evidence below is intentionally unchanged.
+Status: live storage, reading, evidence, and migration contract. The transition,
+draft, rebase, and prefix-confirmation passages are retained as labelled history;
+the current write contract is defined in `snapshot-publication.md`.
 
 A board is one branch. Its tree is the board's state, its first-parent
 history is every mutation in the order it was published, and one
@@ -20,18 +19,13 @@ mutation makes.
 
 ## What carries over from the single-head proof of concept
 
-work#167 answered a connector-only environment — a GitHub connector
-that can write a tree and advance one branch, with no credential for
-shell git — by archiving the ref layout as base64 packs inside one
-branch. Its packs are a storage choice this design replaces; its
-protocol is not. Four invariants carry over verbatim into the
-connector path:
+work#167 answered a connector-only environment by archiving the old ref layout
+as base64 packs inside one branch. Format 6 replaces that envelope while
+retaining four publication invariants:
 
-- **One immutable attempt.** A plan is frozen once, bound to one
-  destination repository and branch, and every call is rendered from
-  that saved plan — never from a draft ref that may have moved, never
-  spliced with another attempt (`_work/stateplan_calls.tl`'s
-  saved-plan schema and indexed `call` rendering).
+- **One immutable attempt.** The final snapshot commit is frozen once and
+  bound to one destination repository and branch. Every Work call is emitted
+  from that commit and its one recovery record.
 - **The deadline is checked at the final call.** A multi-item claim carries
   the earliest member's expiry as `publish_by`; the non-forced
   `update_ref` is refused past it on both paths. A client check, not a
@@ -43,14 +37,12 @@ connector path:
   provider mints the commit; the returned sha is what confirmation
   records.
 
-What does not carry over is what exists only because the envelope
-held packs: chunk uploads, hydration, validation of inherited chunks,
-and the manifest of receipts every publication rewrote. On a tree whose
-fence is per path, a blob every writer touches makes every pair of
-writers conflict, so the receipt is the commit itself, verified by its
-content (`## Drafts and prepared transactions`). New structured records
-— the claim blob, the marks map, the prepared manifest — are
-`cosmic.literal`, through `_work/singlehead_literal.tl`.
+Pack uploads, hydration, inherited-chunk validation, saved transaction plans,
+and prepared manifests do not carry over. The complete state head is the
+snapshot publication fence, and the public commit is verified by exact parent,
+tree, message, logical author, destination, and first-parent reachability. Claim
+blobs, migration marks, and recovery state use `cosmic.literal` through
+`_work/singlehead_literal.tl`.
 
 ## What the ref layout costs
 
@@ -135,23 +127,19 @@ $ git update-ref refs/heads/state HEAD
 
 ## One commit, one mutation
 
-A mutation is one commit. Its parent is the staging base — the fetched
-`refs/remotes/<remote>/state`. Its author is the session, its
-committer gitboard, its subject the verb grammar `_work/events.tl`'s
-`parse_subject` already reads (verb, ` by ` session, `head:`), which
-classifies nothing it cannot parse rather than refusing. The
-`Op: <verb>` trailer stays exactly as it is, and two trailers are
-added. `Transaction: <id>` is the prepared transaction's id, read back
-with `git interpret-trailers --parse` and never by text search; it
-locates a candidate, and what proves the attempt landed is its content
-(`## Drafts and prepared transactions`). `Gitboard-Author: <literal>`
-carries the session as `{name, email, date}`: the connector cannot set
-a git author, so the trailer is the author of record on BOTH executors
-— history and receipts read it, never the commit header — which is what
-makes one transition's message identical whichever executor publishes
-it. On the shell path the commit header carries the same session too.
-The two trailers occur once, in the final contiguous trailer block,
+A final board update is one commit whose sole parent is the fetched canonical
+state head. Its message is the human summary supplied for the complete composed
+update. Historical one-verb subjects and `Op` trailers remain readable through
+`_work/events.tl`; a current summary need not encode each intermediate verb.
+`Gitboard-Author: <literal>` carries the session as `{name, email, date}`: the connector cannot set
+a git author, so the trailer is the author of record on both executors
+— history reads it rather than relying on the provider-selected commit
+header. On the shell path the commit header carries the same session too.
+The trailer occurs once, in the final contiguous trailer block,
 parsed independently of ambient git config; imports keep their authors.
+The retired transition publisher also wrote `Transaction: <id>`; current
+snapshot publication rejects that trailer because the final commit is the
+publication identity.
 
 A `log --add` entry writes `items/<id>/log/<ksuid>.md` **and** carries
 the same text in the commit body, so `git log -- items/<id>` and the
@@ -164,14 +152,18 @@ A multi-item claim is one commit writing every member's `claims/<id>`;
 `renew` rewrites them in one commit, `drop` deletes them in one. The
 batch object is gone for new writes: the commit *is* the batch.
 
-There is no `board/seq`. Whole-board decisions such as a lane mint use a
-BOUNDED transition that fences the state head (`## The write fence`). The
+There is no `board/seq`. Whole-board decisions such as a lane mint fence the
+state head. The
 `take`/`doing-bound` validator remains only for internal legacy API
 compatibility; no public acquisition path invokes it. Direct `claim` provides
 mutual exclusion without a readiness or shared-capacity gate. Public `take`
 records a claimed item's handover and uses the ordinary item and claim fences.
 
-## The write fence
+## Historical write fence (superseded)
+
+The following path-level retry and rebase algorithm belonged to the retired
+transition publisher. Current snapshots use the complete canonical head as a
+single compare-and-swap fence and never rebase or replay after a conflict.
 
 A mutation records, at its staging base B, the object id of every path
 it READ to decide, not only the paths it writes — an absent path
@@ -274,17 +266,20 @@ PUBLISHED commit — `store.list` reads the tracking ref — so its sha is
 stable, and `verdict`'s lineage check becomes: the recorded commit is
 an ancestor of the fetched head and is an event of item `<id>` under
 the reader's own attribution — its diff names `items/<id>/` or
-`claims/<id>`, so a result recorded on a claim bridge (the item's tip
-right after `claim`) still resolves once the bridge replays as a
-claim-only write. A speculative commit is never evidence: `take --result` under a draft is
-refused until the draft is published, because a draft commit's sha
-changes when its chain is rebased.
+`claims/<id>`, so a result recorded on a claim boundary still resolves once
+that claim-only snapshot is published. A local composed snapshot is never
+evidence; research evidence must name published board state.
 
 The migration rewrites every commit, so those three fields are
 rewritten through the marks map (`## The migration`), which
 `migration/marks` keeps readable in the tree afterwards.
 
-## Drafts and prepared transactions
+## Historical drafts and prepared transactions (superseded)
+
+This section records the retired format-6 transition workflow. Current remote
+mutations compose only `refs/gitboard/snapshot`; explicit local mode confirms
+each mutation immediately. Legacy prepared and draft refs are detected solely
+so current code can refuse to reinterpret an in-flight old attempt.
 
 A prepared transaction is a local ref `refs/gitboard/prepared/<id>`
 naming the staged commit, and `_work/prepared.tl`'s manifest keeps the
@@ -319,7 +314,11 @@ and only a confirmed attempt retires its local ref. Claim authority is
 reported separately, from the current `claims/<id>` blobs, never from
 the fact of publication.
 
-## A connector-only environment
+## Historical connector plan (superseded)
+
+This section records the retired indexed saved-plan protocol. Current Work
+sessions follow the snapshot JSON actions emitted by `gitboard publish COMMIT
+--protocol ACTION`; there is no `--call-json` or saved transaction plan.
 
 The v3 native saved plan records changed paths —
 `{head, base_tree, changes, message, publish_by}`, a change being
@@ -427,11 +426,13 @@ explicitly fetched retired refs with the durable `migration/sources` witness;
 no native write past the activation commit, and refuses otherwise,
 naming the ref for a hand reconciliation.
 
-## Validation
+## Historical release validation
 
-Before the release that carries the cutover, the following are held by
-tests in the tree, each with at least one semantic mutant shown to make
-it fail (the shared `experiments/native/mutation_check.tl` campaign):
+The following list records the format-6 cutover campaign as it stood before
+the snapshot publication design replaced rebasing writers and saved plans.
+It is archived evidence, not a claim about the current test tree. Live storage
+invariants are specified above; current publication validation is recorded in
+`docs/design/snapshot-publication.md` and `experiments/native/`.
 
 - two disjoint writers from one base both land, the second by rebase;
 - the same-item writer, the edit racing a claim, and two bounded
@@ -455,7 +456,7 @@ it fail (the shared `experiments/native/mutation_check.tl` campaign):
   `id` still names its existing work branch; `depend` racing an edit
   of an item on its cycle path is refused.
 
-## Plan
+## Historical implementation plan
 
 Format 6 lands as ONE change, cosmic-lua/work#171, carrying the engine
 (codec, reader, writer and prepared transactions, claims, drafts and

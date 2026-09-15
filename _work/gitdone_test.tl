@@ -63,6 +63,23 @@ local function test_accepted_research_requires_a_landed_commit()
   assert((check.must(store.load(s, id)).resolution or "") == "")
 end
 
+local function test_forced_accepted_research_may_omit_the_landed_commit()
+  local s, id, p = accepted_research("done-research-forced-omit")
+  assert(done.cmd_done(s, id, "completed", true, "manual retirement",
+      "", "", p.root, flow.LANDER) == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.resolution == "completed" and (it.landed_head or "") == "")
+end
+
+local function test_forced_accepted_research_keeps_a_resolvable_override()
+  local s, id, p = accepted_research("done-research-forced-override")
+  local override = s.state_head
+  assert(done.cmd_done(s, id, "completed", true, "manual landing evidence",
+      "", override, p.root, flow.LANDER) == 0)
+  local it = check.must(store.load(s, id))
+  assert(it.resolution == "completed" and it.landed_head == override)
+end
+
 local function outcome_membership_race(name: string): store.Store,
   store.Store, string, string, string
   local a, b = fixture.init_shared(name)

@@ -1,7 +1,7 @@
 --- Native board store over one immutable state head per invocation.
 --- Git objects remain truth; SQLite is a disposable query projection.
 --- Item and history reads are memoized by head; caller Items are independent copies.
---- Native transitions are prepared by statewrite and published by statepublish.
+--- Native transitions are composed by statewrite and published as snapshots.
 local stateread_start = require("_work.stateread_start")
 local boardhistory = require("_work.boardhistory")
 local stateread_clock = require("_work.stateread_clock")

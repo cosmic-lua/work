@@ -22,16 +22,28 @@ local function recovery_path(root: string): string
   return fs.join(common, "gitboard/snapshot-recovery.literal")
 end
 
-local function read(root: string): Candidate | nil, string
+local function read_candidate(root: string, inspect_claims: boolean): Candidate | nil, string
   local commit, err = refs.read_ref(root, REF)
   if commit == nil then return nil, err end
   if commit == refs.ZERO_SHA then return nil, "" end
   local identity, ierr = snapshot.commit_identity(root, commit)
   if identity == nil then return nil, "invalid local snapshot: " .. ierr end
-  local same, _out, derr = git.probe(root,
-    {"diff", "--quiet", identity.parent, commit, "--", "claims"})
-  if derr ~= "" then return nil, derr end
-  return {commit = commit, parent = identity.parent, claims_changed = not same}, ""
+  local changed = false
+  if inspect_claims then
+    local same, _out, derr = git.probe(root,
+      {"diff", "--quiet", identity.parent, commit, "--", "claims"})
+    if derr ~= "" then return nil, derr end
+    changed = not same
+  end
+  return {commit = commit, parent = identity.parent, claims_changed = changed}, ""
+end
+
+local function read(root: string): Candidate | nil, string
+  return read_candidate(root, false)
+end
+
+local function read_with_claims(root: string): Candidate | nil, string
+  return read_candidate(root, true)
 end
 
 local function old_inflight(root: string): boolean, string
@@ -59,15 +71,10 @@ local function retain(root: string, commit: string): boolean, string
   return refs.update_ref(root, REF, commit, refs.ZERO_SHA)
 end
 
-local function recovery_present(path: string): boolean
-  return fs.is_present(path) or fs.is_present(path .. ".candidate")
-  or fs.is_present(path .. ".updating")
-end
-
 local function frozen(root: string, candidate?: Candidate): boolean, string
   local path = recovery_path(root)
-  if not recovery_present(path) then return false, "" end
   local recovery = require("_work.snapshot_recovery")
+  if not recovery.present(path) then return false, "" end
   local state, err = recovery.load(path)
   if state == nil then return false, "cannot inspect frozen snapshot: " .. err end
   if candidate == nil or state.local_commit ~= candidate.commit then
@@ -76,9 +83,9 @@ local function frozen(root: string, candidate?: Candidate): boolean, string
   return true, ""
 end
 
-local function canonical_head(root: string): string | nil, string
+local function canonical_head(root: string, remote?: string): string | nil, string
   local ref = refs.board_mode(root) == "local" and "refs/heads/state"
-  or "refs/remotes/" .. refs.board_remote(root) .. "/state"
+  or "refs/remotes/" .. (remote or refs.board_remote(root)) .. "/state"
   return refs.read_ref(root, ref)
 end
 
@@ -87,8 +94,9 @@ end
 local function activate(root: string, allow_frozen?: boolean): Candidate | nil, string
   refs.clear_overlay(root)
   local path = recovery_path(root)
-  if recovery_present(path) then
-    local recovery = require("_work.snapshot_recovery")
+  local recovery = require("_work.snapshot_recovery")
+  if recovery.present(path) then
+    if allow_frozen then return nil, "" end
     local state, err = recovery.load(path)
     if state == nil then return nil, "frozen snapshot needs reconciliation: " .. err end
     local candidate, cerr = read(root)
@@ -97,10 +105,9 @@ local function activate(root: string, allow_frozen?: boolean): Candidate | nil, 
     if state.local_commit ~= candidate.commit then
       return nil, "a different frozen snapshot must be reconciled before composition"
     end
-    if allow_frozen then return nil, "" end
     return nil, "snapshot " .. state.local_commit .. " is frozen for publication; reconcile it first"
   end
-  local candidate, err = read(root)
+  local candidate, err = read_with_claims(root)
   if candidate == nil then return nil, err end
   -- A locally proposed lease is never authority. Keep every ordinary reader on
   -- the fetched canonical state until that claim snapshot is confirmed.
@@ -117,7 +124,7 @@ local function compose(root: string, canonical: string, current: string,
   local held, herr = snapshot_lock.acquire(root)
   if held == nil then return nil, herr end
   local _guard < close > = held
-  local candidate, err = read(root)
+  local candidate, err = read_with_claims(root)
   if err ~= "" then return nil, err end
   local locked, lerr = frozen(root, candidate)
   if lerr ~= "" then return nil, lerr end
@@ -134,7 +141,8 @@ local function compose(root: string, canonical: string, current: string,
       return nil, "claim publication must be fetched and confirmed before dependent work"
     end
     if candidate.parent ~= canonical or candidate.commit ~= current then
-      return nil, "canonical head or local snapshot changed; reopen the board"
+      return nil, "canonical head or local snapshot changed; run snapshot --abandon "
+      .. candidate.commit .. " and reopen the board"
     end
   end
   local tree, terr = projection.apply(root, current, changes)
@@ -157,6 +165,7 @@ local function compose(root: string, canonical: string, current: string,
     if identity == nil then return nil, ierr end
     if identity.author.name ~= author.name or identity.author.email ~= author.email then
       return nil, "snapshot composition belongs to " .. identity.author.name
+      .. "; pass the same --session or set GITBOARD_SESSION"
     end
   end
   local message, merr = snapshot.message(summary, author)
@@ -202,8 +211,19 @@ end
 
 local function retain_conflict(root: string, candidate: Candidate): boolean, string
   local ref = "refs/gitboard/conflicts/" .. candidate.commit
-  local kept, err = refs.update_ref(root, ref, candidate.commit, refs.ZERO_SHA)
-  if not kept then return false, err end
+  local existing, err = refs.read_ref(root, ref)
+  if existing == nil then return false, err end
+  if existing == refs.ZERO_SHA then
+    local kept, kerr = refs.update_ref(root, ref, candidate.commit, refs.ZERO_SHA)
+    if not kept then return false, kerr end
+  elseif existing ~= candidate.commit then
+    return false, "conflict retention ref points at a different commit"
+  end
+  local current, cerr = read(root)
+  if current == nil then return cerr == "", cerr end
+  if current.commit ~= candidate.commit then
+    return false, "a different local snapshot proposal exists"
+  end
   return clear(root, candidate.commit)
 end
 
@@ -211,8 +231,9 @@ local record Module
   type Candidate = Candidate
   REF: string
   recovery_path: function(string): string
-  canonical_head: function(string): string | nil, string
+  canonical_head: function(root: string, remote?: string): string | nil, string
   read: function(string): Candidate | nil, string
+  read_with_claims: function(string): Candidate | nil, string
   retain: function(string, string): boolean, string
   activate: function(string, boolean | nil): Candidate | nil, string
   compose: function(string, string, string, string, {tx.Change}, string): string | nil, string
@@ -221,7 +242,8 @@ local record Module
   retain_conflict: function(string, Candidate): boolean, string
 end
 local M: Module = {REF = REF, recovery_path = recovery_path,
-  canonical_head = canonical_head, read = read, retain = retain,
+  canonical_head = canonical_head, read = read, read_with_claims = read_with_claims,
+  retain = retain,
   activate = activate, compose = compose, clear = clear,
   resummary = resummary, retain_conflict = retain_conflict}
 return M

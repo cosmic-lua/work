@@ -1,10 +1,8 @@
 --- One validated ordinary commit as a complete native-board publication.
 ---
---- This module owns no transport and accepts no unvalidated commit.  A caller
---- either supplies the board validator that also derives the claim deadline,
---- or uses `collapse` as the temporary bridge from the format-6 transaction
---- staging model.  In both cases the resulting plan is one immutable,
---- single-parent local Git commit.
+--- This module owns no transport and accepts only a final-board commit whose
+--- caller has already run the board validator and derived the claim deadline.
+--- The resulting plan is one immutable, single-parent local Git commit.
 local git = require("_work.singlehead_git")
 local literal = require("_work.singlehead_literal")
 local objects = require("_work.stateplan_objects")
@@ -47,12 +45,6 @@ local record Plan
   entries: {{string: any}}
   complete_tree: boolean
 end
-
---- The validator is the integration boundary for board rules and authority.
---- It returns the minimum deadline derived from the validated resulting board
---- and its claims; zero means the validated update has no lease deadline.
-local type Validator = function(string, string, string): integer | nil, string
-local type Gate = function(string, string, tx.Transition): boolean, string
 
 local function destination_ok(value: Destination): boolean, string
   if objects.checked_repository(value.repository) ~= value.repository
@@ -136,6 +128,28 @@ end
 
 local function same_author(a: Author, b: Author): boolean
   return a.name == b.name and a.email == b.email and a.date == b.date
+end
+
+local function author_time(author: Author): integer | nil, string
+  local authored = math.tointeger(tonumber(author.date:match("^(%-?%d+)")))
+  if authored == nil then return nil, "snapshot author date is invalid" end
+  return authored, ""
+end
+
+local function identity_matches(root: string, candidate: string,
+    plan: Plan): boolean, string
+  local identity, err = commit_identity(root, candidate)
+  if identity == nil then return false, err end
+  if identity.parent ~= plan.parent or identity.tree ~= plan.tree
+  or identity.message ~= plan.message or not same_author(identity.author, plan.author) then
+    return false, "saved publication candidate differs from frozen snapshot"
+  end
+  return true, ""
+end
+
+local function object_present(root: string, sha: string): boolean
+  local ok = git.probe(root, {"cat-file", "-e", sha .. "^{commit}"})
+  return ok
 end
 
 local function validate(plan: Plan): boolean, string
@@ -241,19 +255,6 @@ local function capture_validated(root: string, local_commit: string,
   return plan, ""
 end
 
---- Capture an existing ordinary commit only after board/authority validation.
-local function capture(root: string, local_commit: string,
-    destination: Destination, validator: Validator): Plan | nil, string
-  local parent = git.text(root, {"show", "-s", "--format=%P", local_commit})
-  if parent == nil or parent:match("^[0-9a-f]+$") == nil then
-    return nil, "snapshot commit must have exactly one parent"
-  end
-  local publish_by, err = validator(root, parent, local_commit)
-  if publish_by == nil then return nil, err ~= "" and err or "snapshot board validation failed" end
-  if publish_by < 0 then return nil, "snapshot validator returned invalid deadline" end
-  return capture_validated(root, local_commit, destination, publish_by)
-end
-
 local function summary_message(summary: string, author: Author): string | nil, string
   if summary == "" or summary:find("%z") then return nil, "snapshot summary is empty or invalid" end
   local parsed, err = trailers.parse(summary)
@@ -270,77 +271,26 @@ local function summary_message(summary: string, author: Author): string | nil, s
   .. encoded:gsub("\n$", "") .. "\n", ""
 end
 
---- Collapse a validated legacy transition chain to one final-state commit.
-local function collapse(root: string, frozen: tx.Frozen, head: string,
-    target_url: string, summary: string, gate?: Gate, now?: integer): Plan | nil, string
-  local copy, err = tx.freeze(frozen)
-  if copy == nil then return nil, err end
-  if not objects.checked_sha(head, false) or copy.transitions[1].base ~= head then
-    return nil, "snapshot chain does not start at canonical head"
-  end
-  local first_author = copy.transitions[1].author
-  local author: Author = {name = first_author.name, email = first_author.email,
-    date = first_author.date}
-  local current, final_tree, deadline = head, "", 0
-  for _, transition in ipairs(copy.transitions) do
-    if transition.base ~= current then return nil, "snapshot transition chain is not contiguous" end
-    if author.name ~= transition.author.name or author.email ~= transition.author.email then
-      return nil, "snapshot transitions have different logical authors"
-    end
-    -- Separate commands naturally have separate author instants.  The final
-    -- command's date becomes the immutable snapshot author's date.
-    author.date = transition.author.date
-    for _, dependency in ipairs(transition.dependencies) do
-      local actual, derr = projection.path_id(root, current, dependency.path)
-      if actual == nil then return nil, derr end
-      if actual ~= dependency.id then return nil, "LOST_RACE: " .. dependency.path end
-    end
-    if transition.bounded then
-      if gate == nil then return nil, "bounded transition requires gate validation" end
-      local allowed, gerr = gate(root, current, transition)
-      if not allowed then return nil, gerr end
-    end
-    if transition.publish_by > 0 and (deadline == 0 or transition.publish_by < deadline) then
-      deadline = transition.publish_by
-    end
-    if deadline > 0 and (now or os.time()) >= deadline then return nil, "prepared claim expired" end
-    final_tree, err = projection.apply(root, current, transition.changes)
-    if final_tree == nil then return nil, err end
-    current, err = projection.commit(root, current, final_tree, transition)
-    if current == nil then return nil, err end
-  end
-  local message, merr = summary_message(summary, author)
-  if message == nil then return nil, merr end
-  local candidate, cerr = git.text(root, {"commit-tree", final_tree, "-p", head}, message, {
-      GIT_AUTHOR_NAME = author.name, GIT_AUTHOR_EMAIL = author.email,
-      GIT_AUTHOR_DATE = author.date, GIT_COMMITTER_NAME = "gitboard",
-      GIT_COMMITTER_EMAIL = "gitboard@localhost", GIT_COMMITTER_DATE = author.date})
-  if candidate == nil then return nil, cerr end
-  local destination: Destination = {repository = copy.repository, branch = copy.branch,
-    remote = copy.remote, target_url = target_url}
-  return capture_validated(root, candidate, destination, deadline)
-end
-
 local record Module
   type Destination = Destination
   type Author = Author
   type Identity = Identity
   type Plan = Plan
-  type Validator = Validator
-  type Gate = Gate
   FORMAT: string
   validate: function(Plan): boolean, string
   validate_local: function(string, Plan): boolean, string
   commit_identity: function(string, string): Identity | nil, string
+  author_time: function(Author): integer | nil, string
+  identity_matches: function(string, string, Plan): boolean, string
+  object_present: function(string, string): boolean
   message: function(string, Author): string | nil, string
-  capture: function(string, string, Destination, Validator): Plan | nil, string
   capture_validated: function(string, string, Destination, integer): Plan | nil, string
-  collapse: function(string, tx.Frozen, string, string, string, Gate | nil,
-  integer | nil): Plan | nil, string
 end
 
 local M: Module = {FORMAT = FORMAT, validate = validate,
   validate_local = validate_local, commit_identity = commit_identity,
-  message = summary_message, capture = capture,
-  capture_validated = capture_validated, collapse = collapse}
+  author_time = author_time, identity_matches = identity_matches,
+  object_present = object_present,
+  message = summary_message,
+  capture_validated = capture_validated}
 return M

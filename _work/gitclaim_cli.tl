@@ -7,7 +7,6 @@ local claimsession = require("_work.claimsession")
 local commit_evidence = require("_work.commit_evidence")
 local gate = require("_work.gitgate")
 local stateclaim = require("_work.stateclaim")
-local gitdraft = require("_work.gitdraft")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
@@ -214,11 +213,6 @@ local function cmd_claim(s: store.Store, ids: {string}, action: stateclaim.Actio
   if #ids == 0 then
     return gate.verdict_line(verb, false,
       "REFUSED: at least one ID is required")
-  end
-  if gitdraft.active(s.root) ~= nil then
-    return gate.verdict_line(verb, false,
-      "REFUSED: claim operations cannot run inside a draft overlay; "
-      .. "publish or discard the draft first")
   end
   local caller, cerr = resolve_caller(explicit_session)
   if caller == nil then

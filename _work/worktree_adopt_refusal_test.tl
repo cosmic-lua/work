@@ -13,7 +13,6 @@ local fs = require("cosmic.fs")
 local hash = require("cosmic.hash")
 local claim = require("_work.claim")
 local fixture = require("_work.fixture")
-local gitdraft = require("_work.gitdraft")
 local graph = require("_work.gitgraph")
 local receipt = require("_work.preparation_receipt")
 local refsmod = require("_work.refs")
@@ -45,7 +44,7 @@ end
 
 local function fresh(name: string, body: function(Case), kind?: string)
   local keys = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM", "GIT_AUTHOR_NAME",
-    "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GITBOARD_DRAFT", "GITBOARD_WORKTREE_BOOTSTRAP"}
+    "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GITBOARD_WORKTREE_BOOTSTRAP"}
   local prior: {string: string} = {}
   for _, key in ipairs(keys) do prior[key] = env.get(key); assert(env.unset(key)) end
   local run, print_saved, time, write = child.run, _G.print, os.time, fs.write
@@ -92,7 +91,6 @@ local function fresh(name: string, body: function(Case), kind?: string)
     end)
   child.run, _G.print, os.time, fs.write = run, print_saved, time, write
   if opened ~= nil then
-    gitdraft.deactivate(opened.root)
     refsmod.clear_overlay(opened.root)
     assert(store.close(opened))
   end

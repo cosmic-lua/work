@@ -3,7 +3,9 @@ local boardread = require("_work.boardread")
 local claim = require("_work.claim")
 local commit_evidence = require("_work.commit_evidence")
 local gitready = require("_work.gitready")
+local index = require("_work.index")
 local item = require("_work.item")
+local read = require("_work.read")
 local snapshot = require("_work.snapshot")
 local stateclaim = require("_work.stateclaim")
 local stateread_fsck = require("_work.stateread_fsck")
@@ -13,6 +15,7 @@ local repository_map = require("_work.repository_map")
 local spec = require("_work.spec")
 local stateevidence = require("_work.stateevidence")
 local tx = require("_work.statetransaction")
+local workflow_rules = require("_work.workflow_rules")
 
 local record Changed
   id: string
@@ -23,6 +26,10 @@ local record Report
   existing_issues: {string}
   new_issues: {string}
   publish_by: integer
+  before: boardread.View
+  after: boardread.View
+  item_ids: {string: boolean}
+  claim_ids: {string: boolean}
 end
 
 local function forced(message: string): boolean
@@ -30,17 +37,14 @@ local function forced(message: string): boolean
   or message:find("\nForce%-Why:%s*%S", 1, false) ~= nil
 end
 
-local function status(view: boardread.View, id: string, now: integer): string
+local function status(view: boardread.View, derived: index.Index,
+    id: string): string | nil, string
   local it = view.items_by_id[id]
-  if it == nil then return "removed" end
-  if not item.is_open(it) then return "ended" end
-  local lease = view.claims_by_id[id]
-  if lease ~= nil and claim.status(stateclaim.state(lease), now) == "active"
-  or (it.handover_head or "") ~= "" or (it.pr or 0) ~= 0
-  or (it.result or "") ~= "" then
-    return item.substate(it)
-  end
-  return "todo"
+  if it == nil then return "removed", "" end
+  local current, err = read.state(derived, id)
+  if current == nil then return nil, err end
+  if current ~= "doing" then return current, "" end
+  return read.substate(derived, id)
 end
 
 local function issue_set(view: boardread.View, board_id: string): {string: boolean}
@@ -51,9 +55,6 @@ local function issue_set(view: boardread.View, board_id: string): {string: boole
       for _, gap in ipairs(spec.ready_gaps(prose)) do
         out[it.id .. ": spec " .. gap] = true
       end
-      if not (prose.non_goals or ""):match("%S") then
-        out[it.id .. ": spec Non-goals is missing or empty"] = true
-      end
       local body = spec.document(prose)
       for _, repo in ipairs(gitready.undeclared_repos(it, body)) do
         out[it.id .. ": undeclared repository " .. repo] = true
@@ -61,20 +62,6 @@ local function issue_set(view: boardread.View, board_id: string): {string: boole
     end
   end
   return out
-end
-
-local function migrations(view: boardread.View): {string: string}
-  local out: {string: string} = {}
-  for _, entry in ipairs(view.entries) do
-    if entry.path:match("^migration/") then out[entry.path] = entry.sha end
-  end
-  return out
-end
-
-local function same_map(a: {string: string}, b: {string: string}): boolean
-  for key, value in pairs(a) do if b[key] ~= value then return false end end
-  for key, value in pairs(b) do if a[key] ~= value then return false end end
-  return true
 end
 
 local function min_deadline(current: integer, value: integer): integer
@@ -167,6 +154,16 @@ local function authority_rules(before: boardread.View, after: boardread.View,
     return nil, "prepared claim expired before publication"
   end
   return deadline, ""
+end
+
+local function recheck(report: Report, author: string, message: string,
+    now?: integer): integer | nil, string
+  local clock = now or os.time()
+  local refusal = claim_clock_refusal(report.before, clock)
+  or claim_clock_refusal(report.after, clock)
+  if refusal ~= nil then return nil, refusal end
+  return authority_rules(report.before, report.after, report.item_ids,
+    report.claim_ids, author, message, clock)
 end
 
 local function semantic_gates(root: string, parent: string, changes: {tx.Change},
@@ -287,12 +284,8 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
           return false, "verdict does not name current handover evidence: " .. id
         end
         if not repair then
-          for _, prior in ipairs(new.builders or {}) do
-            if prior == author then return false, "verdict author built the item: " .. id end
-          end
-          for _, prior in ipairs(new.speccers or {}) do
-            if prior == author then return false, "verdict author specified the item: " .. id end
-          end
+          local distance = workflow_rules.distance_refusal(new, author)
+          if distance ~= nil then return false, distance end
           if product_evidence ~= "" then
             local product, rerr = repository_map.resolve(root, new.repo or "", "")
             if product == nil then return false, "cannot verify verdict: " .. rerr end
@@ -306,9 +299,14 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
           end
         end
       end
-      if landing_changed and new.resolution == "completed"
-      and (new.builders or {})[1] ~= nil and new.verdict ~= "accept" then
-        return false, "completed worked item lacks accepted verdict: " .. id
+      if handover_changed and (new.result or "") ~= "" then
+        local spec_refusal = workflow_rules.research_spec_refusal(id,
+          after.specs_by_id[id])
+        if spec_refusal ~= nil then return false, spec_refusal end
+      end
+      if landing_changed and new.resolution == "completed" then
+        local review_refusal = workflow_rules.completion_review_refusal(new, repair)
+        if review_refusal ~= nil then return false, review_refusal end
       end
       if landing_changed and new.resolution == "completed"
       and not repair and (new.handover_head or "") ~= "" then
@@ -320,25 +318,22 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
       end
       if landing_changed and new.resolution == "completed"
       and (new.handover_head or "") == "" and (new.result or "") ~= "" then
-        if (new.verdict_head or "") ~= new.result then
-          return false, "acceptance does not name current research evidence: " .. id
-        end
+        local landing_refusal = workflow_rules.research_landing_refusal(new,
+          "completed", new.landed_head or "", repair)
+        if landing_refusal ~= nil then return false, landing_refusal .. ": " .. id end
         local verified, eerr = stateevidence.verify(root, parent,
           new.result or "", id)
         if verified == nil then return false, "invalid research landing evidence: " .. eerr end
-        if (new.landed_head or "") ~= new.result then
-          return false, "research landing does not name published result: " .. id
+        if repair and (new.landed_head or "") ~= ""
+        and new.landed_head ~= new.result then
+          local resolved, rerr = commit_evidence.commit_id(root,
+            new.landed_head or "")
+          if resolved == nil then return false, "invalid repaired research landing: " .. rerr end
         end
       end
       if landing_changed and new.resolution == "completed" then
-        local has_child, completed_child = false, false
-        for _, child in ipairs(after.items) do
-          if child.parent == id then
-            has_child = true
-            if child.resolution == "completed" then completed_child = true end
-          end
-        end
-        if has_child and not completed_child then
+        local children = workflow_rules.child_state(after.items, id)
+        if children.any and not children.completed then
           return false, "completed outcome lacks completed child evidence: " .. id
         end
       end
@@ -348,7 +343,7 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
     local transition: tx.Transition = {base = parent, dependencies = {}, changes = changes,
       message = "snapshot validation", author = {name = "validator", email = "validator@board", date = "1 +0000"},
       publish_by = 0, bounded = true, gate = gate}
-    local ok, err = stategate.check(root, parent, transition)
+    local ok, err = stategate.check_views(before, after, transition)
     if not ok then return false, err end
   end
   return true, ""
@@ -364,11 +359,6 @@ local function preflight(root: string, parent: string, commit: string,
   if before == nil then return nil, berr end
   local after, aerr = boardread.list(root, commit, clock)
   if after == nil then return nil, aerr end
-  local problems = stateread_fsck.problems(root, commit)
-  if #problems > 0 then return nil, "invalid final board: " .. table.concat(problems, "; ") end
-  if not same_map(migrations(before), migrations(after)) then
-    return nil, "immutable migration evidence changed"
-  end
   local observed, oerr = projection.capture(root, parent, commit, {})
   if observed == nil then return nil, oerr end
   local item_ids: {string: boolean} = {}
@@ -378,19 +368,23 @@ local function preflight(root: string, parent: string, commit: string,
     local cid = change.path:match("^claims/([^/]+)$")
     if iid ~= nil then item_ids[iid] = true end
     if cid ~= nil then claim_ids[cid] = true end
+    if change.path:match("^migration/") then
+      return nil, "immutable migration evidence changed: " .. change.path
+    end
     if iid == nil and cid == nil and change.path ~= "format" then
       return nil, "snapshot changes undeclared board path: " .. change.path
     end
   end
+  local problems = stateread_fsck.view_problems(root, commit, after)
+  if #problems > 0 then return nil, "invalid final board: " .. table.concat(problems, "; ") end
   if next(item_ids) ~= nil and next(claim_ids) ~= nil then
     return nil, "claim acquisition/release is a separate publication boundary"
   end
   local deadline, cerr = authority_rules(before, after, item_ids, claim_ids,
     identity.author.name, identity.message, clock)
   if deadline == nil then return nil, cerr end
-  local authored = math.tointeger(tonumber(
-      identity.author.date:match("^(%-?%d+)")))
-  if authored == nil then return nil, "snapshot author date is invalid" end
+  local authored, authored_err = snapshot.author_time(identity.author)
+  if authored == nil then return nil, authored_err end
   if authored ~= clock then
     local historical_refusal = claim_clock_refusal(before, authored)
     or claim_clock_refusal(after, authored)
@@ -408,9 +402,23 @@ local function preflight(root: string, parent: string, commit: string,
     if item.is_parentless(it) then board_id = it.id; break end
   end
   local prior, final = issue_set(before, board_id), issue_set(after, board_id)
-  local report: Report = {changed = {}, existing_issues = {}, new_issues = {}, publish_by = deadline}
-  for id in pairs(item_ids) do report.changed[#report.changed + 1] = {id = id, status = status(after, id, clock)} end
-  for id in pairs(claim_ids) do if not item_ids[id] then report.changed[#report.changed + 1] = {id = id, status = status(after, id, clock)} end end
+  local report: Report = {changed = {}, existing_issues = {}, new_issues = {},
+    publish_by = deadline, before = before, after = after,
+    item_ids = item_ids, claim_ids = claim_ids}
+  local derived, derr = index.open(after.items)
+  if derived == nil then return nil, derr end
+  for id in pairs(item_ids) do
+    local lifecycle, lerr = status(after, derived, id)
+    if lifecycle == nil then local _ok, _err = index.close(derived); return nil, lerr end
+    report.changed[#report.changed + 1] = {id = id, status = lifecycle}
+  end
+  for id in pairs(claim_ids) do if not item_ids[id] then
+      local lifecycle, lerr = status(after, derived, id)
+      if lifecycle == nil then local _ok, _err = index.close(derived); return nil, lerr end
+      report.changed[#report.changed + 1] = {id = id, status = lifecycle}
+    end end
+  local closed, close_err = index.close(derived)
+  if not closed then return nil, close_err end
   table.sort(report.changed, function(a: Changed, b: Changed): boolean return a.id < b.id end)
   for issue in pairs(final) do
     if prior[issue] then report.existing_issues[#report.existing_issues + 1] = issue
@@ -420,19 +428,11 @@ local function preflight(root: string, parent: string, commit: string,
   return report, ""
 end
 
-local function validator(now?: integer): snapshot.Validator
-  return function(root: string, parent: string, commit: string): integer | nil, string
-    local report, err = preflight(root, parent, commit, now)
-    if report == nil then return nil, err end
-    return report.publish_by, ""
-  end
-end
-
 local record Module
   type Changed = Changed
   type Report = Report
   preflight: function(string, string, string, integer | nil): Report | nil, string
-  validator: function(integer | nil): snapshot.Validator
+  recheck: function(Report, string, string, integer | nil): integer | nil, string
 end
-local M: Module = {preflight = preflight, validator = validator}
+local M: Module = {preflight = preflight, recheck = recheck}
 return M

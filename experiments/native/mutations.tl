@@ -11,24 +11,11 @@ return {
     after = 'if held and false then denial = "item is already claimed by this session; use renew or drop" end',
     test = "_work/stateclaim_cli_test.tl",
   },
-  speculative_research_result = {
-    file = "_work/gittake.tl",
-    before = 'if native ~= "" and gitdraft.active(s.root) ~= nil then',
-    after = 'if native == "" and gitdraft.active(s.root) ~= nil then',
-    test = "_work/stateresult_cli_test.tl",
-  },
   padded_sequence_indices_are_decimal = {
     file = "_work/singlehead_literal.tl",
     before = 'local index = tonumber(key, 10)',
     after = 'local index = tonumber(key)',
     test = "_work/boardtree_test.tl",
-  },
-  ignored_receipt_message = {
-    file = "_work/stateplan_receipts.tl",
-    before = 'return (literal.encode(value.changes) or "") .. "\\0" .. value.message .. "\\0"\n  .. (literal.encode(value.author) or "")',
-    after = 'return (literal.encode(value.changes) or "") .. "\\0"\n  .. (literal.encode(value.author) or "")',
-    test = "_work/stateplan_receipts_test.tl",
-    filter = "test_message_only_mismatch_is_not_a_receipt",
   },
   receipt_reacquisition_identity = {
     file = "_work/stateclaim_authority.tl",
@@ -65,36 +52,6 @@ return {
     before = 'next_claim = {id = old.id, holder = old.holder, acquired_at = old.acquired_at,',
     after = 'next_claim = {id = boardtree.mint_claim_id(), holder = old.holder, acquired_at = old.acquired_at,',
     test = "_work/stateclaim_test.tl",
-  },
-  omitted_claim_read_fence = {
-    file = "_work/stateplan.tl",
-    before = 'if actual ~= dependency.id then return false, "LOST_RACE: " .. dependency.path end',
-    after = 'if actual ~= dependency.id and false then return false, "LOST_RACE: " .. dependency.path end',
-    test = "_work/stateplan_test.tl",
-  },
-  final_connector_deadline_boundary = {
-    file = "_work/stateplan.tl",
-    before = 'if plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then\n      return nil, "prepared claim expired before publication"',
-    after = 'if plan.publish_by > 0 and (now or os.time()) > plan.publish_by then\n      return nil, "prepared claim expired before publication"',
-    test = "_work/stateplan_test.tl",
-  },
-  local_publication_deadline_boundary = {
-    file = "_work/stateplan.tl",
-    before = 'if plan.publish_by > 0 and (now or os.time()) >= plan.publish_by then return nil, "prepared claim expired before publication" end',
-    after = 'if plan.publish_by > 0 and (now or os.time()) > plan.publish_by then return nil, "prepared claim expired before publication" end',
-    test = "_work/stateplan_test.tl",
-  },
-  tip_only_receipt = {
-    file = "_work/stateplan_receipts.tl",
-    before = 'for index = #normalized.transitions, 1, -1 do',
-    after = 'for index = #normalized.transitions, #normalized.transitions, -1 do',
-    test = "_work/stateplan_receipts_test.tl",
-  },
-  mutable_frozen_transaction = {
-    file = "_work/statetransaction.tl",
-    before = 'local copy = decoded as Frozen',
-    after = 'local copy = value',
-    test = "_work/stateplan_test.tl",
   },
   local_head_as_remote_canonical = {
     file = "_work/stateread_start.tl",

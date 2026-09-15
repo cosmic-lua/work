@@ -25,8 +25,8 @@ board record.
 | --- | --- | --- |
 | Canonical item, claim, mark encoding and history | `boardtree`, `boardread`, `boardhistory` | `boardtree_test` |
 | Marker activation, canonical remote reads, cache and fsck | `format`, `refs`, `stateread*`, existing read/cache adapters | `stateread_test`, `stateinit_test` |
-| Frozen transitions, path fences, candidate chains, receipts | `statetransaction`, `stateplan*`, `stategate` | `stateplan_test`, `stategate_test` |
-| Ordinary writes, durable drafts, shell and connector publication | `statewrite`, `statestaging`, `statepublish*` | `statewrite_test`, `statepublish_cli_test` |
+| Current composition and publication | `statewrite`, `snapshot*` | `statewrite_test`, `snapshot_*test` |
+| Retired transition planning retained only as history | historical evidence under `experiments/native/` | source revisions named by that evidence |
 | Claims, current authority, worktree receipts | `stateclaim*`, `preparation_receipt` | `stateclaim_test`, `stateclaim_cli_test` |
 | Research result identity and item attribution | `stateevidence`, `gittake`, `gitverdict` | `stateinit_test` |
 | Legacy replay, resumable checkpoints, guarded activation | `migrate6*` | `migrate6_test`, `migrate6_logs_test` |
@@ -37,53 +37,9 @@ item-tree encoding. There is no Python implementation or embedded Git pack
 envelope in the native path. Per-item-ref live transport, claim batches,
 board/seq live writes and the pack-envelope transport have been retired.
 
-## Connector constraints
+## Historical connector constraints (retired)
 
-The connector exposes tree creation, commit creation, and a non-forced branch
-update. V3 plans emit the short names `github_create_tree`,
-`github_create_commit`, and `github_update_ref`; the Work executor maps each to
-the corresponding `mcp__codex_apps__...` tool. Every call uses
-`repository_full_name`. These names describe the tested Work connector mapping,
-not a universal GitHub MCP vocabulary.
-
-A saved attempt freezes the complete ordered transition chain. The final
-branch update is the publication point. A disjoint change may produce a new
-attempt against the current head; an overlapping dependency refuses replay.
-Refresh verifies the complete published chain rather than treating a transaction
-trailer or an old receipt as current claim authority.
-
-If an advanced draft's exact ordered prefix lands, its saved publication
-snapshot stays immutable. Refresh may compare the canonical first-parent chain
-with the live draft and, after exact proper-prefix proof, CAS-rewrite only the
-live draft receipt to the remaining suffix. That suffix is rebased from the
-fetched head, including disjoint intervening commits, has no returned-publication
-marker, and remains pending. A malformed or non-exact chain is a conflict;
-truncated or unknown searches remain pending.
-
-The available commit tool cannot set the Git author. Native commits therefore
-carry a canonical `Gitboard-Author` literal trailer preserving the logical author;
-receipt matching checks it and history rendering uses it. The provider chooses
-the physical Git author. Shell publication additionally verifies the physical
-author against the logical trailer; connector receipts permit the provider author.
-
-Literal storage has no JSON null. A deletion plan builds a complete root tree
-without deleted entries, retaining unchanged leaves by SHA. It does not render
-an unsupported deletion field. The caller executes indexed connector calls from
-the same saved plan and substitutes returned object SHAs. `--call-json` writes
-only the ephemeral tool envelope to stdout. Immediately before the final call,
-the caller observes the remote head and must supply `--head SHA` to the indexed
-renderer, which checks the saved expected head and deadline. Neither value is a
-tool argument, and the commit call has no physical-author argument. The server
-enforces `force=false`. The provider-created final commit SHA is recorded before
-the sole ref update and later attached to the receipt for confirmation. If the
-update outcome is unknown, refresh must prove the complete chain from fetched
-history before any retry decision.
-
-A connector exposing only `push_files` is not currently supported. Publishing
-each draft transition with a separate `push_files` call would expose a partial
-draft before the final transition. An adapter must preserve the entire ordered
-commit chain and publish its tip once; merely reaching the same final tree does
-not satisfy that contract.
+The v3 saved transaction plans, durable drafts, prefix confirmation, indexed calls, --call-json, and --head renderer described by the original implementation review have been retired. Current remote writes compose one final snapshot commit and Work follows the JSON actions emitted by gitboard publish COMMIT --protocol ACTION. Explicit local mode auto-confirms each mutation immediately. See snapshot-publication.md for the live publication contract.
 
 ## Migration and rollout boundary
 
@@ -133,10 +89,10 @@ refs remain available as archive.
 
 ## Validation and review follow-up
 
-[Connector validation](../../experiments/native/VALIDATION.md) records real
-publication on the synthetic `validation/gitboard-format6-20260913` branch.
-The v3 planner revalidates those publications with unchanged frozen transaction
-bytes; older saved plan schemas require explicit regeneration.
+[Connector validation](../../experiments/native/VALIDATION.md) records the
+retired v3 planner's publication on the synthetic
+`validation/gitboard-format6-20260913` branch. Those results belong to the
+recorded source revision; the planner and its saved schemas are no longer live.
 
 [Migration validation](../../experiments/native/MIGRATION_VALIDATION.md) records
 the exact frozen source inventory, replay and evidence limits.

@@ -408,19 +408,18 @@ local CSPEC: flags.CommandSpec = {
       spec = {usage = "COMMIT [options]",
         summary = "publish one full snapshot commit against its exact canonical parent, "
         .. "fetch the destination, and confirm its complete identity. Shell Git owns "
-        .. "authentication. A conflict never rebases or replays the snapshot. The Work "
-        .. "adapter uses the internal protocol flags below as one operation.",
+        .. "authentication. A conflict never rebases or replays the snapshot. A Work "
+        .. "session uses the internal protocol actions to perform the connector calls.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote named in the push argv"},
-          {long = "head", arg = "SHA", help = "native state: just-observed remote head required for the final call"},
+          {long = "head", arg = "SHA", help = "protocol update: destination head observed immediately before the call"},
           {long = "protocol", arg = "ACTION", help = "internal Work snapshot protocol action"},
           {long = "returned-tree", arg = "SHA", help = "internal Work tree result"},
-          {long = "candidate", arg = "SHA", help = "internal Work commit result"},
-          {long = "recovery", arg = "FILE", help = "internal recovery-path override (tests)"}}}},
+          {long = "candidate", arg = "SHA", help = "internal Work commit result"}}}},
     {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
-      spec = {summary = "confirm prepared transactions against caller-fetched "
-        .. "remote-tracking refs and rebuild\nthe disposable cache. Without "
+      spec = {summary = "confirm snapshot publication and claim authority from caller-fetched "
+        .. "remote-tracking refs, then rebuild\nthe disposable cache. Without "
         .. "--execute, prints the exact fetch command but does not run it.\n"
         .. "--execute runs that same ordinary Git argv before confirmation; "
         .. "credentials remain caller-owned. Exit 2 means publication remains "

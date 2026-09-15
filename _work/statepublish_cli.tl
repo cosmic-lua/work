@@ -1,8 +1,8 @@
 --- Snapshot publication CLI and the compact JSON protocol used by Work.
-local fs = require("cosmic.fs")
 local json = require("cosmic.json")
 local gate = require("_work.gitgate")
 local protocol = require("_work.snapshot_protocol")
+local recovery = require("_work.snapshot_recovery")
 local snapshot_publish = require("_work.snapshot_publish")
 local store = require("_work.store")
 local workspace = require("_work.snapshot_workspace")
@@ -40,11 +40,7 @@ end
 
 local function protocol_action(s: store.Store, commit: string, remote: string,
     action: string, returned_tree: string, candidate_sha: string,
-    observed_head: string, recovery_override: string, now?: integer): integer
-  if recovery_override ~= "" then
-    return gate.verdict_line("publish", false,
-      "REFUSED: --recovery is not supported; snapshot recovery has one clone-wide location")
-  end
+    observed_head: string, now?: integer): integer
   local path = workspace.recovery_path(s.root)
   if action == "reconcile" then
     local outcome, oerr = snapshot_publish.reconcile_saved(s.root, commit,
@@ -58,8 +54,7 @@ local function protocol_action(s: store.Store, commit: string, remote: string,
     return emit(call)
   end
   local planned, err: snapshot_publish.Planned | nil, string
-  if fs.is_present(path) or fs.is_present(path .. ".candidate")
-  or fs.is_present(path .. ".updating") then
+  if recovery.present(path) then
     planned, err = snapshot_publish.resume_plan(s.root, commit, remote)
   elseif action == "begin" then
     planned, err = snapshot_publish.begin_plan(s.root, commit, remote, now)
@@ -100,15 +95,7 @@ local function protocol_action(s: store.Store, commit: string, remote: string,
 end
 
 local function cmd_publish(s: store.Store, selectors: {string}, remote: string,
-    _execute: boolean, ...: any): integer
-  local options = {...}
-  local plan_path, from_plan, call_index = options[1], options[2], options[3]
-  local published_sha = options[4]
-  if (from_plan or "") ~= "" or (call_index or "") ~= ""
-  or (published_sha or "") ~= "" or (plan_path or "") ~= "" then
-    return gate.verdict_line("publish", false,
-      "REFUSED: format-6 saved transaction plans are obsolete and are not snapshot plans")
-  end
+    _execute: boolean): integer
   local commit = selectors[1] or ""
   if commit == "" then
     local candidate, err = workspace.read(s.root)
@@ -127,7 +114,7 @@ end
 local record Module
   cmd_publish: function(store.Store, {string}, string, boolean, ...: any): integer
   protocol: function(store.Store, string, string, string, string, string,
-  string, string, integer | nil): integer
+  string, integer | nil): integer
 end
 local M: Module = {cmd_publish = cmd_publish, protocol = protocol_action}
 return M

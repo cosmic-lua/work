@@ -36,11 +36,8 @@ local function setup(name: string, deadline?: integer): string, snapshot.Plan
   local destination: snapshot.Destination = {repository = "example/board",
     branch = "state", remote = "origin",
     target_url = "https://github.com/example/board.git"}
-  local function validate(_root: string, _parent: string,
-      _commit: string): integer | nil, string
-    return deadline or 0, ""
-  end
-  return root, check.must(snapshot.capture(root, local_commit, destination, validate))
+  return root, check.must(snapshot.capture_validated(root, local_commit,
+      destination, deadline or 0))
 end
 
 local function provider_commit(root: string, parent: string, tree: string,
@@ -170,8 +167,9 @@ local function test_recovery_binding_io_head_and_deadline_refusals()
   check.must(recovery.record_candidate(broken_path, plan, broken_remote))
   assert(fs.remove(broken_path))
   local broken, berr = recovery.load(broken_path)
-  assert(broken == nil and berr ~= "",
-    "a phase sidecar cannot stand without its prepared record")
+  assert(broken ~= nil and berr == "" and broken.phase == "candidate"
+    and broken.remote_sha == broken_remote,
+    "a valid orphan phase remains recoverable without blind deletion")
 
   local foreign_path = fs.join(root, "foreign.literal")
   check.must(recovery.begin(foreign_path, plan))

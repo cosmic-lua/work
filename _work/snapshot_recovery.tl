@@ -12,6 +12,13 @@ local git = require("_work.singlehead_git")
 
 local FORMAT < const > = "gitboard-snapshot-recovery-v1"
 
+local function present(path: string): boolean
+  return fs.is_present(path) or fs.is_present(path .. ".candidate")
+  or fs.is_present(path .. ".updating")
+end
+
+local function base_present(path: string): boolean return fs.is_present(path) end
+
 local record Recovery
   format: string
   phase: string
@@ -93,14 +100,19 @@ local function same_attempt(a: Recovery, b: Recovery): boolean
 end
 
 local function load_recovery(path: string): Recovery | nil, string
-  local prepared, err = decode_file(path)
-  if prepared == nil then return nil, err end
-  if prepared.phase ~= "prepared" then return nil, "snapshot recovery base is not prepared" end
-  local current = prepared
+  local prepared: Recovery = nil
+  if fs.is_present(path) then
+    local value, err = decode_file(path)
+    if value == nil then return nil, err end
+    if value.phase ~= "prepared" then return nil, "snapshot recovery base is not prepared" end
+    prepared = value
+  end
+  local current: Recovery = prepared
   if fs.is_present(path .. ".candidate") then
     local candidate, cerr = decode_file(path .. ".candidate")
     if candidate == nil then return nil, cerr end
-    if candidate.phase ~= "candidate" or not same_attempt(prepared, candidate) then
+    if candidate.phase ~= "candidate"
+    or (prepared ~= nil and not same_attempt(prepared, candidate)) then
       return nil, "snapshot candidate recovery does not continue prepared attempt"
     end
     current = candidate
@@ -108,13 +120,15 @@ local function load_recovery(path: string): Recovery | nil, string
   if fs.is_present(path .. ".updating") then
     local updating, uerr = decode_file(path .. ".updating")
     if updating == nil then return nil, uerr end
-    if current.phase ~= "candidate" or updating.phase ~= "updating"
-    or not same_attempt(current, updating)
-    or current.remote_sha ~= updating.remote_sha then
+    if updating.phase ~= "updating"
+    or (current ~= nil and not same_attempt(current, updating))
+    or (current ~= nil and current.phase == "candidate"
+      and current.remote_sha ~= updating.remote_sha) then
       return nil, "snapshot updating recovery does not continue candidate attempt"
     end
     current = updating
   end
+  if current == nil then return nil, "snapshot recovery record is missing" end
   return current, ""
 end
 
@@ -149,10 +163,6 @@ local function mark_updating(path: string, plan: snapshot.Plan,
   return value, ""
 end
 
-local function same_author(a: snapshot.Author, b: snapshot.Author): boolean
-  return a.name == b.name and a.email == b.email and a.date == b.date
-end
-
 local function first_parent_segment(root: string, head: string,
     base: string, candidate: string): boolean, boolean, string
   local raw, err = git.run(root, {"rev-list", "--first-parent", "--parents", head})
@@ -168,10 +178,8 @@ end
 
 local function exact_identity(root: string, candidate: string,
     plan: snapshot.Plan): boolean
-  local identity = snapshot.commit_identity(root, candidate)
-  return identity ~= nil and identity.parent == plan.parent
-  and identity.tree == plan.tree and identity.message == plan.message
-  and same_author(identity.author, plan.author)
+  local exact = snapshot.identity_matches(root, candidate, plan)
+  return exact
 end
 
 --- Recover a cleaned confirmed attempt from fetched canonical history.  This
@@ -220,18 +228,9 @@ local function reconcile(root: string, head: string, plan: snapshot.Plan,
       reason = "fetched first-parent history does not reach snapshot parent"}, "" end
   if not on_chain then return {status = "conflict", candidate = recovery.remote_sha,
       reason = "canonical head advanced without this snapshot on its first-parent chain"}, "" end
-  local identity, ierr = snapshot.commit_identity(root, recovery.remote_sha)
-  if identity == nil then
-    return {status = "conflict", candidate = recovery.remote_sha, reason = ierr}, ""
-  end
-  if identity.parent ~= plan.parent then return {status = "conflict", candidate = recovery.remote_sha,
-      reason = "published snapshot has different parent"}, "" end
-  if identity.tree ~= plan.tree then return {status = "conflict", candidate = recovery.remote_sha,
-      reason = "published snapshot has different tree"}, "" end
-  if identity.message ~= plan.message then return {status = "conflict", candidate = recovery.remote_sha,
-      reason = "published snapshot has different message"}, "" end
-  if not same_author(identity.author, plan.author) then return {status = "conflict", candidate = recovery.remote_sha,
-      reason = "published snapshot has different logical author"}, "" end
+  local exact, ierr = snapshot.identity_matches(root, recovery.remote_sha, plan)
+  if not exact then return {status = "conflict", candidate = recovery.remote_sha,
+      reason = ierr}, "" end
   return {status = "confirmed", candidate = recovery.remote_sha, reason = ""}, ""
 end
 
@@ -250,6 +249,8 @@ local record Module
   type Recovery = Recovery
   type Status = Status
   FORMAT: string
+  present: function(string): boolean
+  base_present: function(string): boolean
   validate: function(Recovery): boolean, string
   binding: function(Recovery, snapshot.Plan): boolean, string
   begin: function(string, snapshot.Plan): Recovery | nil, string
@@ -261,7 +262,8 @@ local record Module
   clear: function(string): boolean, string
 end
 
-local M: Module = {FORMAT = FORMAT, validate = validate, binding = binding,
+local M: Module = {FORMAT = FORMAT, present = present, base_present = base_present,
+  validate = validate, binding = binding,
   begin = begin, load = load_recovery, record_candidate = record_candidate,
   mark_updating = mark_updating, reconcile = reconcile, discover = discover,
   clear = clear}

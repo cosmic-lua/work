@@ -5,7 +5,6 @@ local claim = require("_work.claim")
 local native = require("_work.stateclaim_authority")
 local claimcli = require("_work.gitclaim_cli")
 local claimsession = require("_work.claimsession")
-local gitdraft = require("_work.gitdraft")
 local item = require("_work.item")
 local ksuid = require("_work.ksuid")
 local refs = require("_work.refs")
@@ -119,8 +118,8 @@ end
 --- @return claim.State | nil The current, fully confirmed active claim
 --- @return string Refusal
 local function confirmed(s: store.Store, it: item.Item, session: string): claim.State | nil, string
-  if refs.has_overlay(s.root) or gitdraft.active(s.root) ~= nil then
-    return nil, "preparation receipts refuse draft/overlay state"
+  if refs.has_overlay(s.root) then
+    return nil, "preparation receipts refuse overlay state"
   end
   if not claimsession.is_id(session) then return nil, "receipt needs a minted session" end
   local st, err = active_claim(s, it, session)

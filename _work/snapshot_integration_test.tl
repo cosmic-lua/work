@@ -86,8 +86,8 @@ local function test_any_head_advance_conflicts_and_can_be_abandoned()
   assert(refs.update_ref(root, "refs/heads/state", moved, candidate.parent))
   local ok, err = publication.execute(root, candidate.commit, "origin", nil)
   assert(not ok and err:find("advanced", 1, true), err)
-  assert(check.must(recovery.load(workspace.recovery_path(root))).phase == "candidate",
-    "the stale-head refusal never armed an update")
+  assert(not recovery.present(workspace.recovery_path(root)),
+    "a known stale-head conflict does not freeze publication")
   assert(gitboard.main("snapshot", "--abandon", candidate.commit,
       "--dir", root) == 0)
   local absent = workspace.read(root)
@@ -144,7 +144,7 @@ local function test_protocol_begin_retains_a_raw_commit_for_recovery()
   local candidate = check.must(workspace.read(root))
   assert(workspace.clear(root, candidate.commit))
   assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
-      "", "", nil) == 0)
+      "", nil) == 0)
   assert(check.must(workspace.read(root)).commit == candidate.commit)
   assert(recovery.clear(workspace.recovery_path(root)))
   assert(workspace.clear(root, candidate.commit))
@@ -214,9 +214,8 @@ local function test_preflight_distinguishes_new_and_existing_spec_issues()
   assert(write.save(seed, old, "create old issue"))
   local first = check.must(workspace.read(root)).commit
   local planned, err = publication.plan(root, first, "origin", nil)
-  assert(planned ~= nil and #planned.report.new_issues == 2, err)
-  assert(planned.report.new_issues[1]:find("Change is missing", 1, true)
-    and planned.report.new_issues[2]:find("Non-goals is missing", 1, true),
+  assert(planned ~= nil and #planned.report.new_issues == 1, err)
+  assert(planned.report.new_issues[1]:find("Change is missing", 1, true),
     table.concat(planned.report.new_issues, "\n"))
   local published, puberr = publication.publish(seed, nil)
   assert(published, "publish failed: " .. tostring(puberr))
@@ -227,9 +226,22 @@ local function test_preflight_distinguishes_new_and_existing_spec_issues()
   local second = check.must(workspace.read(root)).commit
   local after, aerr = publication.plan(root, second, "origin", nil)
   assert(after ~= nil and #after.report.new_issues == 0
-    and #after.report.existing_issues == 2,
+    and #after.report.existing_issues == 1,
     aerr .. " new=" .. tostring(after and #after.report.new_issues)
     .. " existing=" .. tostring(after and #after.report.existing_issues))
+end
+
+local function test_preflight_allows_an_empty_non_goals_with_adequate_change()
+  local root = setup("snapshot-preflight-empty-non-goals")
+  local s = check.must(store.open(root))
+  local it = new_item(s, "adequate change")
+  assert(write.save(s, it, "add specified item", {
+        change = "Deliver the requested behavior.", non_goals = ""}))
+  local commit = check.must(workspace.read(root)).commit
+  local planned, err = publication.plan(root, commit, "origin", nil)
+  assert(planned ~= nil, err)
+  assert(#planned.report.new_issues == 0,
+    table.concat(planned.report.new_issues, "\n"))
 end
 
 local function test_preflight_reports_new_undeclared_access_with_old_gaps()
@@ -244,7 +256,7 @@ local function test_preflight_reports_new_undeclared_access_with_old_gaps()
         non_goals = "No unrelated work."}))
   local commit = check.must(workspace.read(root)).commit
   local planned, err = publication.plan(root, commit, "origin", nil)
-  assert(planned ~= nil and #planned.report.existing_issues == 2
+  assert(planned ~= nil and #planned.report.existing_issues == 1
     and #planned.report.new_issues == 1, err)
   assert(planned.report.new_issues[1]:find("undeclared repository", 1, true),
     planned.report.new_issues[1])
@@ -338,26 +350,13 @@ local function test_protocol_restart_can_inspect_an_expired_frozen_claim_before_
   assert(statewrite.transition(s, result.changes, "claim by holder", result.publish_by))
   local candidate = check.must(workspace.read(root))
   assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
-      "", "", now) == 0)
+      "", now) == 0)
   assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
-      "", "", now + 7200) == 0,
+      "", now + 7200) == 0,
     "restart inspection uses the frozen historical validation instant")
   assert(publication_cli.protocol(s, candidate.commit, "origin", "update", "", "",
-      candidate.parent, "", now + 7200) ~= 0,
+      candidate.parent, now + 7200) ~= 0,
     "the current deadline remains mandatory before a new update")
-end
-
-local function test_protocol_refuses_a_custom_recovery_path()
-  local root = setup("snapshot-custom-recovery")
-  local s = check.must(store.open(root))
-  local it = new_item(s, "custom recovery")
-  write.set_session(s, "holder")
-  assert(write.save(s, it, "custom recovery candidate"))
-  local candidate = check.must(workspace.read(root))
-  local custom = fs.join(root, "custom-recovery.literal")
-  assert(publication_cli.protocol(s, candidate.commit, "origin", "begin", "", "",
-      "", custom, nil) ~= 0)
-  assert(not fs.is_present(custom) and not fs.is_present(custom .. ".candidate"))
 end
 
 local function test_publication_freeze_is_shared_across_linked_worktrees()
@@ -375,7 +374,7 @@ local function test_publication_freeze_is_shared_across_linked_worktrees()
     "linked worktrees use the clone-wide recovery location")
   local observer = check.must(store.open(linked))
   assert(publication_cli.protocol(observer, candidate.commit, "origin", "begin", "", "",
-      "", "", nil) == 0)
+      "", nil) == 0)
   it.title = "composition after freeze"
   local saved, err = write.save(s, it, "must remain frozen")
   assert(not saved and err:find("reconcile", 1, true), err)

@@ -42,7 +42,7 @@ it. The CLI doctrine describes building, review, rework, and acceptance.
 
 ## Using the board
 
-Consumers normally use the pinned binary and a refs-only clone at `o/board`.
+Consumers normally use the pinned binary and a board checkout at `o/board`.
 To build the machinery from source:
 
 ```sh
@@ -61,6 +61,15 @@ That repository's `docs/goals.md` supplies planning context, not another
 state store.
 
 For an isolated board, use `gitboard init --dir PATH --local --format 6`.
+Local mode is a simulation and migration exception: each mutation immediately
+auto-confirms against `refs/heads/state`, so there is no retained snapshot to
+inspect or publish later. For example:
+
+```sh
+gitboard new "Proof item" --dir PATH
+# confirmed ...
+```
+
 On a remote board, refresh, claim, publish the claim, and confirm current
 authority before dependent work. A multi-item claim writes all members' claim
 files in one commit; renew retains acquisition identity, and drop removes the
@@ -68,7 +77,7 @@ files in one commit. Expiry ends authority without erasing the recorded
 acquisition. Public `take` records the claim holder's product commit or
 research-result handover; it does not acquire the claim.
 
-Ordinary mutation verbs compose one clone-local final-board snapshot. Each
+On remote boards, ordinary mutation verbs compose one clone-local final-board snapshot. Each
 command may replace that commit while retaining the fetched canonical head as
 its sole parent. Review the final change and give it one meaningful summary:
 
@@ -85,12 +94,12 @@ confirmation. Claim acquisition remains its own publication boundary because
 an unpublished claim grants no authority.
 
 ChatGPT Work uses its authenticated GitHub connector for writes and shell Git
-for reads. Evaluate `_work/snapshot_work_runner.js` and
-`docs/work-snapshot-publish.js` in one Work execution, then call
-`runGitboardSnapshot({root, binary, commit, remote})`. The adapter invokes
-`github_create_tree`, `github_create_commit`, and `github_update_ref`; large
-deletion snapshots may add tree calls. It durably records the provider-created
-commit before the sole non-forced ref update.
+for reads. `gitboard publish COMMIT --protocol ACTION` emits each tree, commit,
+candidate-recording, guarded-update, and reconciliation step as JSON. The Work
+session invokes `github_create_tree`, `github_create_commit`, and
+`github_update_ref` as directed; large deletion snapshots may add tree calls.
+Teal durably records the provider-created commit before the sole non-forced ref
+update.
 
 Immediately before that update, the adapter fetches the exact destination and
 checks the original parent and earliest claim deadline. A lost update response
@@ -159,10 +168,9 @@ full-board audit. Both cold and warm runs observed 1,430 items, 4,290 loads,
 1,430 resolutions, 1,430 spec reads, and 13,761 item events through one full
 view read and one full history read.
 
-The legacy catalogs under `experiments/native/` record checks of the prior
-transaction publication workflow. Reproduce those results at their recorded
-source revisions; some referenced tests are retired on this branch. Current
-snapshot validation and actual Work connector evidence are described in
+The historical records under `experiments/native/` preserve checks of the prior
+transaction publication workflow at their recorded source revisions. Current
+snapshot behavior is defined in
 [`docs/design/snapshot-publication.md`](docs/design/snapshot-publication.md).
 A semantic mutation kill requires a fresh assertion failure with passing
 baseline and restored-source controls. Reports distinguish local API

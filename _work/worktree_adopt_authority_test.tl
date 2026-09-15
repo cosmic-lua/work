@@ -14,7 +14,6 @@ local gitboard = require("_work.gitboard")
 local stateclaim = require("_work.stateclaim")
 local statewrite = require("_work.statewrite")
 local authority = require("_work.stateclaim_authority")
-local gitdraft = require("_work.gitdraft")
 local graph = require("_work.gitgraph")
 local receipt = require("_work.preparation_receipt")
 local refsmod = require("_work.refs")
@@ -45,7 +44,7 @@ end
 
 local function fresh(name: string, body: function(Case), kind?: string)
   local keys = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM", "GIT_AUTHOR_NAME",
-    "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GITBOARD_DRAFT", "GITBOARD_WORKTREE_BOOTSTRAP"}
+    "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GITBOARD_WORKTREE_BOOTSTRAP"}
   local prior: {string: string} = {}
   for _, key in ipairs(keys) do prior[key] = env.get(key); assert(env.unset(key)) end
   local run, print_saved, time, write = child.run, _G.print, os.time, fs.write
@@ -92,7 +91,6 @@ local function fresh(name: string, body: function(Case), kind?: string)
     end)
   child.run, _G.print, os.time, fs.write = run, print_saved, time, write
   if opened ~= nil then
-    gitdraft.deactivate(opened.root)
     refsmod.clear_overlay(opened.root)
     assert(store.close(opened))
   end
@@ -129,15 +127,11 @@ local function good(c: Case, adopting?: boolean)
 end
 
 local function test_live_authority_refuses_draft_overlay_wrong_holder_expiry_and_pending()
-  for _, fault in ipairs({"draft", "overlay", "holder", "expired", "pending", "unconfirmed"}) do
+  for _, fault in ipairs({"overlay", "holder", "expired", "pending", "unconfirmed"}) do
     fresh("authority-" .. fault, function(c: Case)
         good(c)
         local old = check.must(fs.read(c.file))
-        if fault == "draft" then
-          local d = check.must(gitdraft.begin(c.s.root))
-          assert(env.set("GITBOARD_DRAFT", d.id))
-          assert(gitdraft.activate(c.s.root, d))
-        elseif fault == "overlay" then
+        if fault == "overlay" then
           refsmod.set_overlay(c.s.root, check.must(refsmod.for_each_ref(c.s.root, {"refs/heads"})))
         elseif fault == "holder" then
           fixture.drop_claim(c.s, c.id, SESSION, "different holder")

@@ -7,7 +7,7 @@ local claim = require("_work.claim")
 local fixture = require("_work.fixture")
 local gitboard = require("_work.gitboard")
 local stateclaim = require("_work.stateclaim")
-local statepublish = require("_work.statepublish")
+local statepublish = require("_work.snapshot_publish")
 local statewrite = require("_work.statewrite")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -42,7 +42,7 @@ local function prepare_set(s: store.Store, ids: {string}, caller: string,
   or action == "drop" and "drop" or "claim"
   assert(statewrite.transition(s, result.changes, "claim set",
       result.publish_by))
-  return result, check.must(workspace.read(s.root))
+  return result, check.must(workspace.read_with_claims(s.root))
 end
 
 local function remote_head(s: store.Store): string
@@ -83,7 +83,7 @@ local function test_any_head_advance_rejects_a_claim_set_then_retry_lands()
   assert(gitboard.main("snapshot", "--abandon", overlap.commit,
       "--dir", loser.root) == 0)
   fixture.caller_fetch(loser)
-  local head = check.must(statepublish.head(loser.root, "origin"))
+  local head = check.must(workspace.canonical_head(loser.root))
   local view = check.must(boardread.list(loser.root, head))
   assert(view.claims_by_id[a] ~= nil and view.claims_by_id[b] ~= nil)
   assert(view.claims_by_id[c] == nil,
@@ -93,7 +93,7 @@ local function test_any_head_advance_rejects_a_claim_set_then_retry_lands()
   local _, disjoint = prepare_set(loser, {c, d}, BOB)
   assert(publication.execute(loser.root, disjoint.commit, "origin", nil))
   fixture.caller_fetch(loser)
-  head = check.must(statepublish.head(loser.root, "origin"))
+  head = check.must(workspace.canonical_head(loser.root))
   view = check.must(boardread.list(loser.root, head))
   assert(view.claims_by_id[c] ~= nil and view.claims_by_id[d] ~= nil)
 end
@@ -117,7 +117,7 @@ local function test_an_ordinary_item_write_fences_a_prepared_claim_set()
   assert(gitboard.main("snapshot", "--abandon", pending.commit,
       "--dir", claimant.root) == 0)
   fixture.caller_fetch(claimant)
-  local head = check.must(statepublish.head(claimant.root, "origin"))
+  local head = check.must(workspace.canonical_head(claimant.root))
   local view = check.must(boardread.list(claimant.root, head))
   assert(view.claims_by_id[raced] == nil)
   assert(view.claims_by_id[untouched] == nil,

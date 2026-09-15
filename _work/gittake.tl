@@ -23,9 +23,9 @@ local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
 local format = require("_work.format")
-local gitdraft = require("_work.gitdraft")
 local stateevidence = require("_work.stateevidence")
 local snapshot_workspace = require("_work.snapshot_workspace")
+local workflow_rules = require("_work.workflow_rules")
 
 --- Record a commit-only handover after verifying the product commit locally.
 --- The optional URL is navigation metadata and participates in no gate.
@@ -193,10 +193,6 @@ local function take_result(s: store.Store, it: item.Item, session: string,
     return gate.verdict_line("take", false,
       "REFUSED: publish and confirm the current snapshot before recording research evidence")
   end
-  if native ~= "" and gitdraft.active(s.root) ~= nil then
-    return gate.verdict_line("take", false,
-      "REFUSED: publish the draft before recording research evidence")
-  end
   if (pr or 0) ~= 0 then
     return gate.verdict_line("take", false,
       "REFUSED: --pr and --result together — a deliverable is a diff or "
@@ -217,10 +213,9 @@ local function take_result(s: store.Store, it: item.Item, session: string,
         .. "first"):format(id8, holder))
   end
   local body = store.read_spec(s, it.id)
-  if body.change == "" and body.non_goals == "" then
-    return gate.verdict_line("take", false,
-      ("REFUSED: %s has no spec — a research handover hands the "
-        .. "spec over, and there is none"):format(id8))
+  local spec_refusal = workflow_rules.research_spec_refusal(it.id, body)
+  if spec_refusal ~= nil then
+    return gate.verdict_line("take", false, "REFUSED: " .. spec_refusal)
   end
   -- The tip `store.list` hydrated for this item: the commit the applied
   -- recommendation sits on. Refuse rather than record an empty sha —

@@ -17,6 +17,7 @@ end
 local record PushSpec
   ref: string
   old: string
+  source: string | nil
 end
 
 --- One compare-and-swap in a prepared board transaction.
@@ -35,9 +36,7 @@ end
 --- The two deliberately distinct board modes. Remote-backed boards
 --- read confirmed state only from remote-tracking refs. Local boards
 --- are an explicit simulation/testing mode and read local heads.
---- A process-local view selected by `GITBOARD_DRAFT`. The durable source of
---- truth is the draft manifest; this table only lets the existing read stack
---- consume its frozen ref snapshot without learning about draft encoding.
+--- A process-local view of a composed snapshot for the existing read stack.
 local OVERLAY_BY_ROOT: {string: {RefEntry}} = {}
 
 local function overlay_entries(root: string): {RefEntry} | nil
@@ -321,15 +320,18 @@ end
 --- @return boolean True when the rejection names a lost race (stale
 --- lease); meaningless when the push succeeded
 --- @return string Error message; git's own text on a real rejection
-local function push_atomic(root: string, specs: {PushSpec}): boolean, boolean, string
+local function push_atomic(root: string, specs: {PushSpec},
+    destination?: string): boolean, boolean, string
   local argv: {string} = {"git", "-c", "push.negotiate=false", "-c",
     "core.createObject=rename", "push", "--atomic"}
   for _, spec in ipairs(specs) do
     argv[#argv + 1] = ("--force-with-lease=%s:%s"):format(spec.ref, spec.old)
   end
-  argv[#argv + 1] = config.board_remote(root)
+  argv[#argv + 1] = destination or config.board_remote(root)
   for _, spec in ipairs(specs) do
-    argv[#argv + 1] = spec.ref
+    argv[#argv + 1] = (spec.source or "") ~= ""
+    and (spec.source or "") .. ":" .. spec.ref
+    or spec.ref
   end
   local r, err = child.run(argv, {cwd = root})
   if r == nil then
@@ -371,7 +373,7 @@ local function fetch_prune(root: string): boolean, string
 end
 
 --- Legacy namespace mirrors tolerate absent refs. Native transport requests
---- exact state and board/format refs together through statepublish.fetch_argv;
+--- exact state and board/format refs together through snapshot publication;
 --- installing an exact state refspec here would break legacy boards without it,
 --- while a state* wildcard would also mirror unrelated state-prefixed branches.
 local function fetch_refspecs(remote: string): {string}
@@ -445,7 +447,8 @@ local record refs
   update_ref: function(root: string, ref: string, new_sha: string,
   old_sha: string): boolean, string
   is_ancestor: function(root: string, ancestor: string, descendant: string): boolean
-  push_atomic: function(root: string, specs: {PushSpec}): boolean, boolean, string
+  push_atomic: function(root: string, specs: {PushSpec}, destination?: string):
+  boolean, boolean, string
   fetch_prune: function(root: string): boolean, string
 end
 

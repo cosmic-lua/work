@@ -40,7 +40,7 @@ end
 
 local function isolated(f: function())
   local keys = {"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME",
-    "GIT_COMMITTER_EMAIL", "GITBOARD_SESSION", "GITBOARD_WORKTREE_BOOTSTRAP", "GITBOARD_DRAFT"}
+    "GIT_COMMITTER_EMAIL", "GITBOARD_SESSION", "GITBOARD_WORKTREE_BOOTSTRAP"}
   local saved: {string: string} = {}
   for _, key in ipairs(keys) do saved[key] = env.get(key); assert(env.unset(key)) end
   local old_print, old_run, old_time = _G.print, child.run, os.time
@@ -313,22 +313,6 @@ local function test_receipt_option_failures_and_explicit_skip()
     end)
 end
 
-local function test_legacy_draft_environment_refuses_before_brief_output()
-  isolated(function()
-      local c = fresh("draft", false)
-      acquire(c)
-      assert(create(c) == 0)
-      assert(env.set("GITBOARD_DRAFT", "obsolete-draft"))
-      local output = fs.join(c.s.root, "draft-brief.md")
-      local code, out = capture(function(): integer
-          return gitboard.main("brief", "builder", c.id, "--dir", c.s.root,
-            "--receipt", c.file, "--session", c.session, "--out", output)
-        end)
-      assert(code ~= 0 and not fs.is_file(output), out)
-      assert(store.close(c.s))
-    end)
-end
-
 local function test_unrelated_checkout_cannot_substitute_identical_head_and_branch()
   isolated(function()
       local c = ready("unrelated")
@@ -376,7 +360,7 @@ local function test_unconfirmed_native_claim_set_refuses_preparation()
       git(c.s.root, {"update-ref", "refs/heads/state", c.s.state_head})
       assert(create(c) ~= 0 and not fs.is_dir(c.path), "unfetched local state is not authority")
       assert(check.must(boardread.list(c.s.root, canonical)).claims_by_id[c.id] == nil)
-      assert(check.must(workspace.read(c.s.root)).claims_changed,
+      assert(check.must(workspace.read_with_claims(c.s.root)).claims_changed,
         "the claim is one unpublished snapshot")
       fixture.caller_publish(c.s)
       local current = check.must(boardread.list(c.s.root, c.s.state_head))
