@@ -403,6 +403,11 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     -- ABSENT to `briefcontext.need` and survive as the literal
     -- `<BOUNCE_CONTEXT>` token instead of rendering as nothing.
     facts.bounce_context = bounce_context(it, br)
+  elseif kind == "research" then
+    -- Same shape as the builder kind above, unconditionally: a fresh
+    -- research pull has no bounce paragraph, and a `request changes`
+    -- verdict on the research result does have one to splice.
+    facts.bounce_context = bounce_context(it, claim_branch(s, it))
   end
   if (it.repo or "") ~= "" then
     facts.repo = it.repo
