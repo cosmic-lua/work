@@ -1,0 +1,4 @@
+title: pr.yml: build and repro cold-build concurrently — the gate was never the critical path (521s -> 265s)
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
+touches: .github/workflows/pr.yml
