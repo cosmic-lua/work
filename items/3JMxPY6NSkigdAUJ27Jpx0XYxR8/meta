@@ -5,6 +5,8 @@ handover_head: b2d5a4bcc09d9f5e3efd29990c9ed79688bd9399
 external_url: https://github.com/cosmic-lua/work/pull/178
 verdict: accept
 verdict_head: b2d5a4bcc09d9f5e3efd29990c9ed79688bd9399
+landed_head: 194d458a0ca0442aab91515e62820ed253f12416
+resolution: completed
 builders: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 speccers: 69a0b7ceb41e3d43f2c33cdc79ac93e3
 touches: _work/migrate6_archive.tl _work/migrate6_archive_test.tl
