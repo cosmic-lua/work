@@ -190,9 +190,11 @@ local function test_bar_requires_an_anchor_string_for_any_file_line_citation()
     "the bar topic extends the grep-hit requirement past function/string "
     .. "placements to every file:line citation")
   assert(flat:find(
-      "an `## Evidence` paragraph citing a fact as much as `## Change` "
+      "a `## Non-goals` wall quoting a line as much as a `## Change` "
       .. "naming a function", 1, true) ~= nil,
-    "the bar topic names ## Evidence explicitly, not only ## Change")
+    "the bar topic's example section is one the spec gate accepts")
+  assert(flat:find("## Evidence", 1, true) == nil,
+    "the bar topic never names ## Evidence: `spec` refuses that section")
   assert(flat:find(
       "Before: `_work/example.tl:54-56` beside the quoted sentence. "
       .. "After: the same quote plus "
