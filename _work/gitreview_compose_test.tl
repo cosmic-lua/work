@@ -92,3 +92,23 @@ local function test_an_unresolvable_id_refuses_naming_it()
     {session = flow.REVIEWER}, {["no-worktree"] = true})
   assert(code ~= 0, "an id that is not an item does not prepare")
 end
+
+local function test_a_refusal_names_the_item_not_the_batch()
+  -- The spec asks for this by name: when one member of a set is not in
+  -- review, the caller must learn WHICH. `stateclaim_cli` prints one
+  -- `refused <id>: <why>` line per member, so the batch verdict never
+  -- swallows the identity of the member that blocked it.
+  local s, ready = awaiting_review("compose-named")
+  local _root, unready = fixture.root_with_leaf(s)
+  fixture.give_spec(s, unready)
+  local it = check.must(store.load(s, unready))
+  it.repo, it.base = "acme/widgets", "main"
+  assert(storewrite.save(s, it, "set product repository"))
+  fixture.caller_publish(s)
+  -- `unready` has no handover, so it is not awaiting review.
+  local code = gitreview.cmd_review(s, {ready, unready}, "origin", resolver(),
+    {session = flow.REVIEWER}, {["no-worktree"] = true})
+  assert(code ~= 0, "a set carrying a non-review member does not prepare")
+  assert(holder_of(s, ready) ~= flow.REVIEWER,
+    "and the batch is atomic: the ready member did not move either")
+end

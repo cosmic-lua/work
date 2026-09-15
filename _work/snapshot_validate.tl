@@ -108,6 +108,15 @@ local function claim_rules(before: boardread.View, after: boardread.View,
       if new.expires_at ~= new.renewed_at + claim.LEASE_S then
         return nil, "handoff lease must be the standard term: " .. id
       end
+      -- The author is the only identity the rules below can judge, so the
+      -- claim must install the author and nobody else. `prepare` cannot
+      -- decouple them (it sets holder = caller), but a raw blob can: without
+      -- this, a session that passes `distance_refusal` itself could install
+      -- a BUILDER of the item as the reviewer — the one recipient the
+      -- fresh-context rule exists to exclude.
+      if new.holder ~= author then
+        return nil, "handoff installs a holder other than its author: " .. id
+      end
       local shape = workflow_rules.handoff_refusal(it, old, author)
       if shape ~= nil then return nil, shape .. ": " .. id end
       deadline = min_deadline(deadline, new.expires_at)

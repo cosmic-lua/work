@@ -210,3 +210,53 @@ local function test_lost_response_still_confirms_after_real_lease_expiry()
     path, commit)
   assert(outcome ~= nil and outcome.status == "confirmed", err)
 end
+
+--- An item its builder has handed over, so the admit side reads a holder
+--- change at the same product base as a review handoff.
+local function handed_over(name: string): store.Store, string, flow.Product,
+  integer
+  local s, id, product = flow.fresh(name)
+  assert(flow.claim(s, id, flow.BUILDER, product) == 0, "builder claims it")
+  assert(flow.handover(s, id, flow.BUILDER, product, product.head) == 0,
+    "and hands over")
+  local held = check.must(boardread.list(s.root, s.state_head)).claims_by_id[id]
+  return s, id, product, held.renewed_at
+end
+
+local function test_handoff_cannot_install_a_holder_other_than_its_author()
+  -- The rules the admit side applies — the fresh-context distance check
+  -- above all — judge the commit's AUTHOR. `prepare` can never decouple
+  -- author from new holder, but a raw blob can, and then a session that
+  -- passes the distance check itself could install a BUILDER of the item
+  -- as its reviewer: exactly the recipient the rule exists to exclude.
+  local s, id, product, now = handed_over("handoff-holder-binding")
+  local decoupled = claim_commit(s, id, flow.OTHER,
+    claim_blob(flow.LANDER, now, product.base), "raw decoupled handoff")
+  denied(s, decoupled, now, "installs a holder other than its author")
+  assert(workspace.clear(s.root, decoupled))
+end
+
+local function test_handoff_cannot_reuse_the_outgoing_claim_root()
+  -- A preserved root names the BUILDER's own work branch, which `worktree`
+  -- refuses to reuse, leaving the reviewer nothing to check out.
+  local s, id, product, now = handed_over("handoff-root-reuse")
+  local old = check.must(boardread.list(s.root, s.state_head)).claims_by_id[id]
+  local reused = claim_commit(s, id, flow.REVIEWER,
+    claim_blob(flow.REVIEWER, now, product.base, old.id), "raw root reuse")
+  denied(s, reused, now, "must mint a fresh claim root")
+  assert(workspace.clear(s.root, reused))
+end
+
+local function test_handoff_cannot_mint_a_nonstandard_lease()
+  -- Every other claim path pins the term exactly; a handoff that did not
+  -- would be a claim outliving every lease the board knows how to expire.
+  local s, id, product, now = handed_over("handoff-lease-term")
+  local forever = check.must(boardtree.encode_claim({
+        id = boardtree.mint_claim_id(), holder = flow.REVIEWER,
+        acquired_at = now, renewed_at = now,
+        expires_at = now + claim.LEASE_S * 100, product_base = product.base}))
+  local stretched = claim_commit(s, id, flow.REVIEWER, forever,
+    "raw stretched lease")
+  denied(s, stretched, now, "lease must be the standard term")
+  assert(workspace.clear(s.root, stretched))
+end
