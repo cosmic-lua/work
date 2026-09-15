@@ -2,6 +2,7 @@
 --- any fresh clone. Names are canonical refs/heads names, independent of the
 --- private prefix the migration fetched into; this module never fetches.
 local probes = require("_work.migrate6_probes")
+local boardrefs = require("_work.refs")
 local source = require("_work.migrate6_source")
 local wire = require("_work.singlehead_literal")
 
@@ -110,8 +111,32 @@ local function build(sources: {string: string}, prefix: string,
   return encoded, ""
 end
 
+--- The grouping key for a canonical legacy name: the namespace a wholly
+--- absent bucket can be reported and re-fetched as one unit.
+---
+--- `refs/heads/board/seq` is a single ref, so "absent because never fetched"
+--- and "absent because deleted" are indistinguishable for it; it returns nil
+--- and keeps its per-ref line rather than claiming a cause it cannot know.
+--- @param name string A canonical refs/heads name from the witness
+--- @return string | nil The namespace without its trailing slash, or nil
+local function namespace_of(name: string): string | nil
+  for _, ns in ipairs({"refs/heads/items", "refs/heads/ended",
+      "refs/heads/claim-batches"}) do
+    if name:sub(1, #ns + 1) == ns .. "/" then return ns end
+  end
+  return nil
+end
+
 --- Compare a locally fetched legacy namespace with the durable witness. Every
 --- missing, moved or added ref is named; exact absent probes are additions too.
+---
+--- A namespace with no local counterpart for ANY of its witness refs was never
+--- fetched into this clone: the archive is frozen upstream by ruleset, so mass
+--- deletion is not what a clone-local absence means. Such a bucket collapses to
+--- one line naming the fetch, rather than one line per ref — a fresh checkout
+--- would otherwise report every archived ref as removed. A bucket with even one
+--- ref present is a genuine divergence and stays per-ref, and `moved` and
+--- `added` are never collapsed.
 local function problems(root: string, raw: string, prefix: string): {string}
   local witness, err = decode(raw)
   if witness == nil then return {"migration/sources: " .. err} end
@@ -122,9 +147,30 @@ local function problems(root: string, raw: string, prefix: string): {string}
     local name = canonical(ref, prefix)
     if name ~= nil then actual[name] = tip end
   end
+  local total: {string: integer} = {}
+  local present: {string: integer} = {}
+  for ref in pairs(witness.refs) do
+    local ns = namespace_of(ref)
+    if ns ~= nil then
+      total[ns] = (total[ns] or 0) + 1
+      present[ns] = (present[ns] or 0) + (actual[ref] ~= nil and 1 or 0)
+    end
+  end
+  local unfetched: {string: boolean} = {}
   local out: {string} = {}
+  local remote = boardrefs.board_remote(root)
+  for ns, count in pairs(total) do
+    if present[ns] == 0 and count >= 2 then
+      unfetched[ns] = true
+      out[#out + 1] = ("archive: %s not fetched — %d of %d witness refs absent locally; fetch it: git fetch --atomic %s '+%s/*:%s%s/*'")
+      :format(ns, count, count, remote, ns, prefix, ns:match("([^/]+)$"))
+    end
+  end
   for ref, tip in pairs(witness.refs) do
-    if actual[ref] == nil then out[#out + 1] = "archive: removed " .. ref
+    local ns = namespace_of(ref)
+    if ns ~= nil and unfetched[ns] then
+      -- Its namespace already reported, as one line for the whole bucket.
+    elseif actual[ref] == nil then out[#out + 1] = "archive: removed " .. ref
     elseif actual[ref] ~= tip then out[#out + 1] = "archive: moved " .. ref end
   end
   for ref in pairs(actual) do
