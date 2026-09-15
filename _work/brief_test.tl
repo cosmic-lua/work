@@ -193,14 +193,20 @@ local function test_builder_brief_carries_the_item_and_names_the_rest()
   assert(out:find("Do exactly this.", 1, true) ~= nil,
     "the spec sidecar rides verbatim")
   assert(out:find("<WORKTREE>", 1, true) ~= nil
-    and out:find("<BOUNCE_CONTEXT>", 1, true) ~= nil
     and out:find("<BRANCH>", 1, true) ~= nil,
     "an unclaimed item has no branch to derive either, so it too "
     .. "survives the fill rather than naming a guessed identifier: " .. out)
+  assert(out:find("<BOUNCE_CONTEXT>", 1, true) == nil,
+    "a fresh (non-rework) item has no bounce paragraph to splice — the "
+    .. "board answers it with \"\", so it renders as nothing rather than "
+    .. "surviving as the literal placeholder: " .. out)
   assert(out:find("fill <", 1, true) ~= nil
     and out:find("<WORKTREE>", #out - 400, true) ~= nil
     and out:find("<BRANCH>", #out - 400, true) ~= nil,
     "the verdict line names the survivors: " .. out:sub(#out - 200))
+  assert(out:sub(#out - 200):find("BOUNCE_CONTEXT", 1, true) == nil,
+    "the verdict line does not name BOUNCE_CONTEXT as a survivor: "
+    .. out:sub(#out - 200))
 end
 
 --- The bug this guards: a builder brief once named the item id's

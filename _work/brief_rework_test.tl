@@ -174,6 +174,31 @@ local function test_builder_rework_brief_uses_only_the_judged_commit()
     "the rework brief reconstructs no provider state: " .. out)
 end
 
+-- The regression this guards: a fresh (non-rework) pull once left
+-- `facts.bounce_context` unset rather than "" — ABSENT to
+-- `briefcontext.need`, not INTENTIONALLY EMPTY — so it rendered as the
+-- literal `<BOUNCE_CONTEXT>` token and the verdict line named it as a
+-- survivor, even though the board has a real answer ("no bounce
+-- paragraph") and not just a missing one.
+local function test_builder_fresh_brief_blanks_bounce_context()
+  local s = init_state_repo("brief-fresh-no-bounce")
+  local _, leaf = root_with_leaf(s)
+  local checkout = handover_item(s, leaf)
+  local it = assert(store.load(s, leaf))
+  local st = check.must(authority.current(s, leaf, it.claim))
+  assert(fs.make_dirs(claim.worktree(checkout, claim.branch(leaf, st.root))))
+  with_product_root(function(): boolean
+      local code, out = brief_and_capture(s, "builder", leaf)
+      assert(code == 0, "a fresh (non-rework) item still earns its builder brief")
+      assert(out:find("<BOUNCE_CONTEXT>", 1, true) == nil,
+        "no literal placeholder survives in the rendered body: " .. out)
+      local verdict_line = out:match("[^\n]*$")
+      assert(verdict_line:find("BOUNCE_CONTEXT", 1, true) == nil,
+        "the verdict line does not name it as a survivor: " .. verdict_line)
+      return true
+    end)
+end
+
 -- Unrelated to rework — kept here rather than in `_work/brief_test.tl`
 -- for the same reason this file split off it: room under the file
 -- cap. The sibling-reuse bootstrap sets GITBOARD_DIR to a sibling
