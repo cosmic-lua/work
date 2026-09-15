@@ -26,6 +26,23 @@ The only exit is `gitboard snapshot --abandon <mixed-commit>`, which the
 refusal never mentions. A session that does not already know that verb is
 wedged with no path forward and no diagnostic naming one.
 
+A SECOND instance of the same shape, same session, different verb:
+
+```
+gitboard new "..." --spec-file F        # prepares, unpublished
+gitboard attach <NEW> <PARENT>          # "read: no such item: <NEW>"
+```
+
+`attach` resolves its argument against the PUBLISHED board, so an item
+still sitting in the local composition does not exist to it. It printed
+that refusal — and composed the attach anyway. The snapshot commit
+advanced (`a5858c45` to `40deeb3f`), and after publishing, `show` reported
+the item already carrying the intended parent, while a second `attach`
+answered `nothing to record: ... leaves the board unchanged`. The refusal
+was cosmetic; the mutation landed. Here it happened to land the RIGHT
+edge, which is worse, not better: the same path could as easily compose an
+edge the caller was told was rejected.
+
 Two defects, both in scope:
 
 1. The boundary check runs after composition rather than before it. Move it
