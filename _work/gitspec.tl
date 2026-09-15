@@ -20,9 +20,9 @@
 --- canonical render, which is a difference the tree cannot hold.
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
-local item = require("_work.item")
 local spec = require("_work.spec")
 local store = require("_work.store")
+local workflow_rules = require("_work.workflow_rules")
 
 --- Split text into its lines, with no trailing empty entry for a final
 --- newline — "" splits to no lines at all.
@@ -129,7 +129,7 @@ local function cmd_spec(s: store.Store, id: string, file: string,
   end
   local who = session or ""
   if who ~= "" then
-    local recorded, ierr = item.record_involvement(it.speccers, who)
+    local recorded, ierr = workflow_rules.attribute(it.speccers, who)
     if not recorded then
       return gate.verdict_line("spec", false, "REFUSED: " .. ierr)
     end

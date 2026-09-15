@@ -2,7 +2,6 @@
 local boardread = require("_work.boardread")
 local claim = require("_work.claim")
 local commit_evidence = require("_work.commit_evidence")
-local gitready = require("_work.gitready")
 local index = require("_work.index")
 local item = require("_work.item")
 local read = require("_work.read")
@@ -12,7 +11,6 @@ local stateread_fsck = require("_work.stateread_fsck")
 local stategate = require("_work.stategate")
 local projection = require("_work.stateplan_git")
 local repository_map = require("_work.repository_map")
-local spec = require("_work.spec")
 local stateevidence = require("_work.stateevidence")
 local tx = require("_work.statetransaction")
 local workflow_rules = require("_work.workflow_rules")
@@ -30,6 +28,8 @@ local record Report
   after: boardread.View
   item_ids: {string: boolean}
   claim_ids: {string: boolean}
+  identity: snapshot.Identity
+  changes: {tx.Change}
 end
 
 local function forced(message: string): boolean
@@ -51,13 +51,9 @@ local function issue_set(view: boardread.View, board_id: string): {string: boole
   local out: {string: boolean} = {}
   for _, it in ipairs(view.items) do
     if it.id ~= board_id then
-      local prose = view.specs_by_id[it.id]
-      for _, gap in ipairs(spec.ready_gaps(prose)) do
-        out[it.id .. ": spec " .. gap] = true
-      end
-      local body = spec.document(prose)
-      for _, repo in ipairs(gitready.undeclared_repos(it, body)) do
-        out[it.id .. ": undeclared repository " .. repo] = true
+      for _, issue in ipairs(workflow_rules.readiness_issues(it,
+          view.specs_by_id[it.id])) do
+        out[it.id .. ": " .. issue] = true
       end
     end
   end
@@ -99,21 +95,14 @@ local function claim_rules(before: boardread.View, after: boardread.View,
         refusal = "item is already claimed by this session; use renew or drop"
       end
       if refusal ~= nil then return nil, refusal .. ": " .. id end
-      if new.holder ~= author or new.acquired_at ~= new.renewed_at
-      or new.expires_at ~= new.renewed_at + claim.LEASE_S
-      or new.renewed_at > now + claim.FUTURE_SKEW_S
-      or #new.product_base ~= 40 or not new.product_base:match("^[0-9a-f]+$") then
-        return nil, "invalid claim acquisition: " .. id
-      end
+      local shape = workflow_rules.claim_acquisition_refusal(new, author, now)
+      if shape ~= nil then return nil, shape .. ": " .. id end
       deadline = min_deadline(deadline, new.expires_at)
     else
       local refusal = claim.renew_refusal(stateclaim.state(old), author, now)
       if refusal ~= nil then return nil, refusal .. ": " .. id end
-      if new.holder ~= old.holder or new.acquired_at ~= old.acquired_at
-      or new.product_base ~= old.product_base or new.renewed_at < old.renewed_at
-      or new.expires_at ~= new.renewed_at + claim.LEASE_S then
-        return nil, "invalid claim renewal: " .. id
-      end
+      local shape = workflow_rules.claim_renewal_refusal(old, new)
+      if shape ~= nil then return nil, shape .. ": " .. id end
       deadline = min_deadline(deadline, old.expires_at)
     end
   end
@@ -217,13 +206,9 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
       local spec_changed = old_spec.change ~= new_spec.change
       or old_spec.non_goals ~= new_spec.non_goals
       if spec_changed and author ~= "gitboard" then
-        local attributed = false
-        for _, prior in ipairs(new.speccers or {}) do
-          if prior == author then attributed = true end
-        end
-        if not attributed then
-          return false, "spec change lacks author attribution: " .. id
-        end
+        local refusal = workflow_rules.attribution_refusal(new.speccers or {},
+          author, "spec change lacks author attribution")
+        if refusal ~= nil then return false, refusal .. ": " .. id end
       end
       if old ~= nil and old.verdict == "accept" and verdict_changed then
         local new_product_handover = (new.handover_head or "") ~= ""
@@ -250,9 +235,9 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
         or new.claim_batch ~= lease.id then
           return false, "handover lacks canonical claim evidence: " .. id
         end
-        local built = false
-        for _, prior in ipairs(new.builders or {}) do if prior == author then built = true end end
-        if not built then return false, "handover lacks builder attribution: " .. id end
+        local refusal = workflow_rules.attribution_refusal(new.builders or {},
+          author, "handover lacks builder attribution")
+        if refusal ~= nil then return false, refusal .. ": " .. id end
       end
       if handover_changed and (new.handover_head or "") ~= "" and not repair then
         local product, rerr = repository_map.resolve(root, new.repo or "", "")
@@ -275,27 +260,35 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
         or lease.holder ~= author then
           return false, "verdict belongs to canonical claim holder: " .. id
         end
-        local product_evidence = (new.handover_head or "") ~= "" and new.handover_head
-        or old ~= nil and (old.handover_head or "") ~= "" and old.handover_head or ""
-        local research_evidence = (new.result or "") ~= "" and new.result
-        or old ~= nil and (old.result or "") ~= "" and old.result or ""
-        local evidence = product_evidence ~= "" and product_evidence or research_evidence
-        if (new.verdict_head or "") ~= (evidence or "") then
-          return false, "verdict does not name current handover evidence: " .. id
-        end
+        local evidence_item = new
+        local current_evidence = workflow_rules.handover_evidence(evidence_item)
+        if current_evidence == "" and old ~= nil then evidence_item = old end
         if not repair then
           local distance = workflow_rules.distance_refusal(new, author)
           if distance ~= nil then return false, distance end
-          if product_evidence ~= "" then
-            local product, rerr = repository_map.resolve(root, new.repo or "", "")
-            if product == nil then return false, "cannot verify verdict: " .. rerr end
-            local lineage, lerr = commit_evidence.verify_lineage(product,
-              new.claim_base or "", new.verdict_head or "")
-            if lineage == nil then return false, "invalid verdict evidence: " .. lerr end
-          else
-            local verified, eerr = stateevidence.verify(root, parent,
-              new.verdict_head or "", id)
-            if verified == nil then return false, "invalid verdict evidence: " .. eerr end
+          local function resolve_evidence(current: item.Item, kind: string,
+              named: string): string | nil, string
+            if kind == "product" then
+              local product, rerr = repository_map.resolve(root,
+                current.repo or "", "")
+              if product == nil then return nil, "cannot verify verdict: " .. rerr end
+              local lineage, lerr = commit_evidence.verify_lineage(product,
+                current.claim_base or "", named)
+              if lineage == nil then return nil, "invalid verdict evidence: " .. lerr end
+              return lineage.head, ""
+            end
+            local verified, eerr = stateevidence.verify(root, parent, named, id)
+            if verified == nil then return nil, "invalid verdict evidence: " .. eerr end
+            return named, ""
+          end
+          local verified, verr = workflow_rules.verdict_evidence(evidence_item,
+            new.verdict_head or "", resolve_evidence,
+            "verdict does not name current handover evidence: " .. id)
+          if verified == nil then return false, verr end
+        else
+          local evidence = workflow_rules.handover_evidence(evidence_item)
+          if (new.verdict_head or "") ~= evidence then
+            return false, "verdict does not name current handover evidence: " .. id
           end
         end
       end
@@ -310,6 +303,9 @@ local function semantic_gates(root: string, parent: string, changes: {tx.Change}
       end
       if landing_changed and new.resolution == "completed"
       and not repair and (new.handover_head or "") ~= "" then
+        local shape = workflow_rules.product_landing_refusal(new, "completed",
+          new.landed_head or "", false)
+        if shape ~= nil then return false, shape .. ": " .. id end
         local product, rerr = repository_map.resolve(root, new.repo or "", "")
         if product == nil then return false, "cannot verify landing: " .. rerr end
         local landed, lerr = commit_evidence.verify_landing(product,
@@ -404,7 +400,8 @@ local function preflight(root: string, parent: string, commit: string,
   local prior, final = issue_set(before, board_id), issue_set(after, board_id)
   local report: Report = {changed = {}, existing_issues = {}, new_issues = {},
     publish_by = deadline, before = before, after = after,
-    item_ids = item_ids, claim_ids = claim_ids}
+    item_ids = item_ids, claim_ids = claim_ids, identity = identity,
+    changes = observed.changes}
   local derived, derr = index.open(after.items)
   if derived == nil then return nil, derr end
   for id in pairs(item_ids) do

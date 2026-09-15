@@ -1,7 +1,5 @@
 # Snapshot publication
 
-Status: implemented.
-
 ## Decision
 
 One meaningful board update is one ordinary Git commit. Its sole parent is
@@ -14,11 +12,6 @@ The complete board head is the concurrency fence. Publication either
 advances that exact parent or reports a conflict. Unrelated writes also
 conflict. There is no automatic rebase, operation replay, dependency-set
 merge, or partial-prefix confirmation.
-
-This replaces the format-6 implementation's one-commit-per-transition
-publication contract. Existing published history stays readable and is
-never rewritten. Old in-flight publication formats must be identified and
-refused explicitly rather than reinterpreted as snapshots.
 
 ## Composition
 
@@ -79,6 +72,10 @@ used by publication and recovery. It exists for isolated validation branches;
 production boards leave it unset so publication targets `state`. Local mode
 always targets `refs/heads/state`.
 
+`gitboard.publicationRepository` supplies the connector's repository identity
+when the configured remote URL does not encode it. It does not change the Git
+endpoint, branch, or authentication path.
+
 ## Outcomes and recovery
 
 - **Confirmed:** the exact proposed publication is in canonical history.
@@ -101,22 +98,3 @@ update still requires current authority. No permanent receipt is needed.
 Default output is the outcome and affected item states. Full claim listings
 and diagnostic protocol calls are explicit tools for inspection, not steps
 the caller must orchestrate on every successful update.
-
-## Validation
-
-The regression suite covers:
-
-- Multi-command composition yields one published commit and three small
-  connector calls; edit/revert requires no operation log.
-- Any head advance conflicts, including a write to an unrelated item.
-- Wrong parent, tree, message, logical author, destination, or side-branch
-  candidate cannot be confirmed.
-- Foreign claims and expired authority cannot be used to publish changes.
-- The remote SHA is recorded before branch advancement; crashes and lost
-  responses reconcile without duplicate publication.
-- Restart loads the same frozen proposal and rejects further composition.
-- New spec problems are distinguished from existing readiness issues.
-- Existing published format-6 history, claims and evidence remain readable;
-  legacy in-flight attempts are refused with actionable guidance.
-- An isolated real Work connector publication confirms the installed API
-  contract. It does not mutate the production board to test new code.

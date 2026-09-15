@@ -6,6 +6,11 @@ a promise that every old harness remains runnable. The JavaScript Work adapter
 described in the record was retired after owner review; Work sessions now
 perform the Teal-emitted protocol calls directly.
 
+The named source revisions and the retired JavaScript and mutation harnesses are
+not present in the rebased repository. Their results below are a historical
+record, not evidence reproducible from this tree. The provider commits on the
+isolated validation branch remain independently inspectable.
+
 ## Delivery
 
 Implement and review the core, then CLI/composition integration, then the

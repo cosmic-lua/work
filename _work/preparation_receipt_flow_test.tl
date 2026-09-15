@@ -360,7 +360,7 @@ local function test_unconfirmed_native_claim_set_refuses_preparation()
       git(c.s.root, {"update-ref", "refs/heads/state", c.s.state_head})
       assert(create(c) ~= 0 and not fs.is_dir(c.path), "unfetched local state is not authority")
       assert(check.must(boardread.list(c.s.root, canonical)).claims_by_id[c.id] == nil)
-      assert(check.must(workspace.read_with_claims(c.s.root)).claims_changed,
+      assert(check.must(workspace.activate(c.s.root)).claims_changed,
         "the claim is one unpublished snapshot")
       fixture.caller_publish(c.s)
       local current = check.must(boardread.list(c.s.root, c.s.state_head))

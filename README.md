@@ -101,8 +101,8 @@ session invokes `github_create_tree`, `github_create_commit`, and
 Teal durably records the provider-created commit before the sole non-forced ref
 update.
 
-Immediately before that update, the adapter fetches the exact destination and
-checks the original parent and earliest claim deadline. A lost update response
+Immediately before that update, the Work session re-observes the exact destination;
+Teal checks the original parent and earliest claim deadline. A lost update response
 is reconciled from fetched first-parent history. Restarting a candidate or
 updating attempt never creates another commit: only the same saved candidate
 may retry, and only while the fetched head remains its parent. Confirmation

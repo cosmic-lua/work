@@ -16,6 +16,7 @@ local PREPARES_ONLY < const > =
 "This verb only PREPARES: it composes the final board snapshot and prints\n"
 .. "its publication command. The board is unchanged until `gitboard publish\n"
 .. "COMMIT` advances and confirms the state branch.\n"
+.. "Explicit local mode instead auto-confirms each mutation immediately.\n"
 .. "There is no --execute here — claim, renew and drop carry one."
 
 local CSPEC: flags.CommandSpec = {
@@ -420,14 +421,14 @@ local CSPEC: flags.CommandSpec = {
     {name = "refresh", summary = "inspect fetched refs; claims gain authority only here",
       spec = {summary = "confirm snapshot publication and claim authority from caller-fetched "
         .. "remote-tracking refs, then rebuild\nthe disposable cache. Without "
-        .. "--execute, prints the exact fetch command but does not run it.\n"
-        .. "--execute runs that same ordinary Git argv before confirmation; "
+        .. "--execute, inspects the refs already fetched by the caller.\n"
+        .. "--execute fetches the configured publication destination before confirmation; "
         .. "credentials remain caller-owned. Exit 2 means publication remains "
         .. "unconfirmed; a lost lease exits 1.",
         flags = {dir_flag(),
           {long = "remote", arg = "NAME",
             help = "Git remote and remote-tracking namespace to inspect"},
-          {long = "execute", help = "explicitly execute the exact rendered fetch argv"}}}},
+          {long = "execute", help = "fetch the publication destination before inspection"}}}},
     {name = "sync", summary = "deprecated alias for local-only refresh",
       spec = {summary = "deprecated: use refresh. This compatibility alias never "
         .. "fetches or performs provider operations.", flags = {dir_flag()}}},

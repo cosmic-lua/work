@@ -33,20 +33,8 @@ local function parse(message: string): string | nil, string
   return run(message, {"--parse"})
 end
 
---- @param message string The commit message to rewrite
---- @param id string The prepared transaction's id
---- @param author string The canonical single-line logical-author literal
---- @return string | nil The message carrying exactly one of each trailer
---- @return string Error message
-local function bind(message: string, id: string, author: string): string | nil, string
-  return run(message, {"--if-exists", "replace", "--trailer", "Transaction: " .. id,
-      "--trailer", "Gitboard-Author: " .. author})
-end
-
 local record Module
-  terminated: function(string): string
   parse: function(string): string | nil, string
-  bind: function(string, string, string): string | nil, string
 end
-local M: Module = {terminated = terminated, parse = parse, bind = bind}
+local M: Module = {parse = parse}
 return M

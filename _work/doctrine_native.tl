@@ -32,6 +32,8 @@ Deletions may require multiple tree calls. A changed head conflicts the entire
 snapshot. There is no automatic rebase, replay, or partial-prefix confirmation.
 The `gitboard.publicationBranch` config redirects publication and recovery for
 isolated validation branches. Leave it unset for production `state` publication.
+The `gitboard.publicationRepository` config supplies the connector repository
+identity when it cannot be derived from the configured remote URL.
 
 If an update response is lost, fetch and reconcile the saved candidate before
 retrying anything. A candidate or updating restart never creates another commit.

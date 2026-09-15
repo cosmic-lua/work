@@ -4,23 +4,6 @@ local tx = require("_work.statetransaction")
 local fs = require("cosmic.fs")
 local literal = require("_work.singlehead_literal")
 local trailer_codec = require("_work.stateplan_trailers")
-local ZERO < const > = string.rep("0", 40)
---- The object id one path holds at `head`, the zero id when absent — the fence
---- reads every recorded path through here, so an invalid path is refused rather
---- than resolved by git in some other way.
---- @param root string The repository holding `head`
---- @param head string The exact commit to read
---- @param path string The path to resolve
---- @return string | nil The object id, the zero id when the path is absent
---- @return string Error message
-local function path_id(root: string, head: string, path: string): string | nil, string
-  if not tx.path_ok(path) then return nil, "invalid dependency path" end
-  local raw, err = git.run(root, {"--literal-pathspecs", "ls-tree", "-z", head, "--", path})
-  if raw == nil then return nil, err end
-  if raw == "" then return ZERO, "" end
-  local id = raw:match("^%d+ %w+ ([0-9a-f]+)\t")
-  return id, id and "" or "malformed tree entry"
-end
 --- The tree `head` becomes once these changes are applied, computed in a
 --- private index file so nothing touches the checkout's own — which is what lets
 --- a rebase and a bounded gate re-run happen with no working tree at all.
@@ -53,21 +36,6 @@ local function apply(root: string, head: string, changes: {tx.Change}): string |
   local tree, terr = git.text(root, {"write-tree"}, nil, set)
   local _removed, _rerr = fs.remove_all(dir)
   return tree, terr
-end
---- One transition as a commit on `parent`: the author is the session the
---- transition froze, the committer gitboard, and the message the frozen one with
---- its trailers already bound.
---- @param root string The repository to write the commit in
---- @param parent string The commit to parent it on
---- @param tree string The tree it carries
---- @param transition tx.Transition The frozen transition
---- @return string | nil The commit id
---- @return string Error message
-local function commit(root: string, parent: string, tree: string, transition: tx.Transition): string | nil, string
-  return git.text(root, {"commit-tree", tree, "-p", parent}, transition.message, {
-      GIT_AUTHOR_NAME = transition.author.name, GIT_AUTHOR_EMAIL = transition.author.email,
-      GIT_AUTHOR_DATE = transition.author.date, GIT_COMMITTER_NAME = "gitboard",
-      GIT_COMMITTER_EMAIL = "gitboard@localhost", GIT_COMMITTER_DATE = transition.author.date})
 end
 --- @param head Exact candidate tree whose complete leaf list must be preserved.
 --- @param changes Frozen changed blobs to inline instead of referencing their SHA.
@@ -154,11 +122,9 @@ local function capture(root: string, base: string, tip: string, dependencies: {t
     bounded = bounded or false, gate = gate or ""}, ""
 end
 local record Module
-  path_id: function(string, string, string): string | nil, string
   apply: function(string, string, {tx.Change}): string | nil, string
-  commit: function(string, string, string, tx.Transition): string | nil, string
   snapshot: function(string, string, {tx.Change}): {{string: any}} | nil, string
   capture: function(root: string, base: string, tip: string, dependencies: {tx.Dependency}, publish_by?: integer, bounded?: boolean, gate?: string): tx.Transition | nil, string
 end
-local M: Module = {path_id = path_id, apply = apply, commit = commit, capture = capture, snapshot = snapshot}
+local M: Module = {apply = apply, capture = capture, snapshot = snapshot}
 return M

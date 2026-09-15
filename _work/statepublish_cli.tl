@@ -94,8 +94,7 @@ local function protocol_action(s: store.Store, commit: string, remote: string,
     "protocol action must be begin, trees, commit, candidate, update, or reconcile")
 end
 
-local function cmd_publish(s: store.Store, selectors: {string}, remote: string,
-    _execute: boolean): integer
+local function cmd_publish(s: store.Store, selectors: {string}, remote: string): integer
   local commit = selectors[1] or ""
   if commit == "" then
     local candidate, err = workspace.read(s.root)
@@ -112,7 +111,7 @@ local function cmd_publish(s: store.Store, selectors: {string}, remote: string,
 end
 
 local record Module
-  cmd_publish: function(store.Store, {string}, string, boolean, ...: any): integer
+  cmd_publish: function(store.Store, {string}, string): integer
   protocol: function(store.Store, string, string, string, string, string,
   string, integer | nil): integer
 end

@@ -20,6 +20,11 @@ local tx = require("_work.statetransaction")
 local write = require("_work.storewrite")
 local workspace = require("_work.snapshot_workspace")
 
+local function lock_path(root: string): string
+  return fs.join(check.must(snapshot_lock.common_dir(root)),
+    "gitboard/snapshot.lock")
+end
+
 local function proposal(name: string): store.Store, string
   local s, id, _product = flow.fresh(name)
   local it = check.must(store.load(s, id))
@@ -63,7 +68,7 @@ local function test_linked_worktree_processes_contend_on_one_kernel_lock()
   assert(fs.remove_all(linked))
   fixture.git(s.root, {"worktree", "add", "-q", "--detach", linked,
       "refs/heads/state"})
-  assert(check.must(snapshot_lock.path(s.root)) == check.must(snapshot_lock.path(linked)))
+  assert(lock_path(s.root) == lock_path(linked))
   local ready = fs.join(fixture.tmpdir, "snapshot-lock-ready")
   local release = fs.join(fixture.tmpdir, "snapshot-lock-release")
   if fs.is_present(ready) then assert(fs.remove(ready)) end
@@ -91,7 +96,7 @@ local function test_linked_worktree_processes_contend_on_one_kernel_lock()
   local result = check.must(handle:wait(10000))
   assert(result.ok, result.stderr)
   local after = check.must(workspace.resummary(s.root, "serialized resummary"))
-  assert(after ~= before and fs.is_present(check.must(snapshot_lock.path(s.root))),
+  assert(after ~= before and fs.is_present(lock_path(s.root)),
     "the persistent inode remains while kernel ownership was released")
   assert(workspace.clear(s.root, after))
 end

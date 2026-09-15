@@ -11,12 +11,12 @@ local check = require("cosmic.check")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
-local ready = require("_work.gitready")
 local specmod = require("_work.spec")
 local graph = require("_work.gitgraph")
 local owner = require("_work.gitowner")
 local refs = require("_work.refs")
 local store = require("_work.store")
+local workflow_rules = require("_work.workflow_rules")
 
 --- A board that reads its origin as `cosmic-lua/cosmic`, with one
 --- placed root to file under.
@@ -192,10 +192,9 @@ local function test_the_ready_bar_reads_the_access_field()
   local it: item.Item = {id = "x", title = "t", repo = "cosmic-lua/work",
     access = {}, touches = {}, depends_on = {}, builders = {}, speccers = {},
     order = {}}
-  local body = specmod.document(reaching)
-  assert(#ready.undeclared_repos(it, body) == 1,
+  assert(#workflow_rules.undeclared_repos(it, reaching) == 1,
     "undeclared, the reached repo is reported")
   it.access = {"whilp/cosmopolitan"}
-  assert(#ready.undeclared_repos(it, body) == 0,
+  assert(#workflow_rules.undeclared_repos(it, reaching) == 0,
     "declared as a field, it is not")
 end

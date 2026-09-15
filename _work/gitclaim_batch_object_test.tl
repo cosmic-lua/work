@@ -42,7 +42,7 @@ local function prepare_set(s: store.Store, ids: {string}, caller: string,
   or action == "drop" and "drop" or "claim"
   assert(statewrite.transition(s, result.changes, "claim set",
       result.publish_by))
-  return result, check.must(workspace.read_with_claims(s.root))
+  return result, check.must(workspace.activate(s.root))
 end
 
 local function remote_head(s: store.Store): string

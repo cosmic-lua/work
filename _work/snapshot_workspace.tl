@@ -233,16 +233,15 @@ local record Module
   recovery_path: function(string): string
   canonical_head: function(root: string, remote?: string): string | nil, string
   read: function(string): Candidate | nil, string
-  read_with_claims: function(string): Candidate | nil, string
   retain: function(string, string): boolean, string
-  activate: function(string, boolean | nil): Candidate | nil, string
+  activate: function(string, allow_frozen?: boolean): Candidate | nil, string
   compose: function(string, string, string, string, {tx.Change}, string): string | nil, string
   clear: function(string, string): boolean, string
   resummary: function(string, string): string | nil, string
   retain_conflict: function(string, Candidate): boolean, string
 end
 local M: Module = {REF = REF, recovery_path = recovery_path,
-  canonical_head = canonical_head, read = read, read_with_claims = read_with_claims,
+  canonical_head = canonical_head, read = read,
   retain = retain,
   activate = activate, compose = compose, clear = clear,
   resummary = resummary, retain_conflict = retain_conflict}

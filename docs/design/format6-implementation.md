@@ -1,23 +1,16 @@
 # Historical native format-6 implementation review
 
-Status: archived implementation and validation evidence for PR #171. Current
-publication behavior is defined by `snapshot-publication.md`.
-
-This draft implements the storage design from PRs #169, #170 and #172.
+This record describes the original native format-6 implementation.
+Current publication behavior is defined by `snapshot-publication.md`.
 Normal operations use format 6 exclusively; legacy parsing is retained only
 for migration and archive auditing. Start an isolated
 native board with `gitboard init --local --format 6`; run `gitboard help native`
 for the publication and migration workflow. [Review decisions and scope](../../experiments/native/REVIEW.md)
 records the response to the two implementation reviews.
 
-The code is tracked under board container `3JHjIHZci3VOBQhQVBOyDA5DbKm`
-(`«yDA5_DbKm»`). This integrated draft covers the implementation and proof
-components and legacy transport retirement. Release, migration execution,
-production activation, and the consumer pin remain separate work. Board
-handover and acceptance of the individual children must be recorded through
-the board's review flow; this PR's existence does not close them. The
-independent area reviews are part of that review, not a substitute for the
-board record.
+The implementation covered the native storage and proof components plus legacy
+transport retirement. Release, migration execution, production activation, and
+the consumer pin remained separate operations.
 
 ## Review map
 
@@ -116,9 +109,6 @@ claimed-parent refusal.
 the full board: 1,430 items, 4,290 loads, 1,430 resolutions, 1,430 spec reads,
 13,761 item events, one full view read, and one full history read.
 
-**Final integrated gate: PASS.** All 1,056 tests passed with 87.1% coverage;
-strict types, formatting and lint passed. The six semantic campaigns killed
-70/70 mutants with passing baseline/restored controls. Fresh independent review
-found no functional blockers. [Complete evidence](../../experiments/native/FINAL_VALIDATION.md)
-links the source provenance, actual Work connector proof and full-board audit.
-Owner approval, release, production activation and consumer pinning remain separate.
+[Complete evidence](../../experiments/native/FINAL_VALIDATION.md) records the
+source provenance, Work connector proof, and full-board audit for that historical
+implementation.

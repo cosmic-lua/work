@@ -1,9 +1,9 @@
 # Snapshot review follow-up validation
 
-PR #173 review follow-up, 2026-09-15. The implementation tested here is
-`60ced5f000f754ae6ce1bf86acda52f2108e1135`; the subsequent evidence commit
-only adds this record. Earlier adapter-based runs are historical evidence
-in `SNAPSHOT_PUBLICATION_EVIDENCE.md`.
+Review follow-up, 2026-09-15. The tested checkpoint and its mutation harnesses
+are not present after the repository rebase, so the counts and timings below
+are historical results rather than a campaign reproducible from this tree.
+Earlier adapter-based runs are recorded in `SNAPSHOT_PUBLICATION_EVIDENCE.md`.
 
 ## Repository gate
 

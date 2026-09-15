@@ -1,9 +1,5 @@
 # Native format-6 storage
 
-Status: live storage, reading, evidence, and migration contract. The transition,
-draft, rebase, and prefix-confirmation passages are retained as labelled history;
-the current write contract is defined in `snapshot-publication.md`.
-
 A board is one branch. Its tree is the board's state, its first-parent
 history is every mutation in the order it was published, and one
 non-forced push of that one ref is the only write.
@@ -19,7 +15,7 @@ mutation makes.
 
 ## What carries over from the single-head proof of concept
 
-work#167 answered a connector-only environment by archiving the old ref layout
+A single-head proof of concept answered a connector-only environment by archiving the old ref layout
 as base64 packs inside one branch. Format 6 replaces that envelope while
 retaining four publication invariants:
 
@@ -458,15 +454,13 @@ invariants are specified above; current publication validation is recorded in
 
 ## Historical implementation plan
 
-Format 6 lands as ONE change, cosmic-lua/work#171, carrying the engine
+Format 6 landed as one change carrying the engine
 (codec, reader, writer and prepared transactions, claims, drafts and
 log entries, `fsck` and `init`), the connector plan, `migrate6` with
 its `publish` verb, and the retire — the ref-layout reader and writer,
 `claim-batches`, `board/seq`, the pack-specific single-head code and
-its guide under `experiments/`, the README's `no items/ directory`
-line. It is brought to this record by its reviews (two on the PR, the
-findings consolidated) and judged as a whole by one fresh-context
-review before the owner approves it. Format-5 decoding, ref enumeration, and
+its guide under `experiments/`, and the README's `no items/ directory`
+line. Format-5 decoding, ref enumeration, and
 fast-import survive only inside `migrate6`; ordinary operations cannot select
 the retired per-item, claim-batch, sequence, or pack transports.
 

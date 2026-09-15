@@ -5,11 +5,8 @@ local graphguards = require("_work.graphguards")
 local boardread = require("_work.boardread")
 local boardindex = require("_work.index")
 local flow = require("_work.flow")
-local gitready = require("_work.gitready")
 local item = require("_work.item")
 local read = require("_work.read")
-local spec = require("_work.spec")
-local projection = require("_work.stateplan_git")
 local tx = require("_work.statetransaction")
 local workflow_rules = require("_work.workflow_rules")
 
@@ -140,9 +137,11 @@ local function take_refusal(before: boardread.View, after: boardread.View,
         end
       end
       local prose = after.specs_by_id[id]
-      if #flow.ready_gaps(prose) > 0 then return "take gate: spec is not ready: " .. id end
-      if #gitready.undeclared_repos(it, spec.document(prose)) > 0 then
-        return "take gate: spec has undeclared read access: " .. id
+      for _, issue in ipairs(workflow_rules.readiness_issues(it, prose)) do
+        if issue:match("^spec ") then return "take gate: spec is not ready: " .. id end
+        if issue:match("^undeclared repository ") then
+          return "take gate: spec has undeclared read access: " .. id
+        end
       end
     end
   end
@@ -254,20 +253,9 @@ local function check_views(before: boardread.View, after: boardread.View,
   return refusal == nil, refusal or ""
 end
 
-local function check(root: string, head: string, transition: tx.Transition): boolean, string
-  local before, berr = boardread.list(root, head)
-  if before == nil then return false, berr end
-  local tree, terr = projection.apply(root, head, transition.changes)
-  if tree == nil then return false, terr end
-  local after, aerr = boardread.list(root, tree)
-  if after == nil then return false, aerr end
-  return check_views(before, after, transition)
-end
-
 local record stategate
-  check: function(string, string, tx.Transition): boolean, string
   check_views: function(boardread.View, boardread.View,
   tx.Transition): boolean, string
 end
-local M: stategate = {check = check, check_views = check_views}
+local M: stategate = {check_views = check_views}
 return M

@@ -79,7 +79,7 @@ local function test_one_snapshot_contains_the_whole_set()
   local b = fixture.file_item(s, "recover b", "")
   local result = prepare(s, {a, b})
   stage(s, result)
-  local candidate = check.must(workspace.read_with_claims(s.root))
+  local candidate = check.must(workspace.activate(s.root))
   assert(candidate.commit == s.state_head and candidate.claims_changed)
   local view = check.must(boardread.list(s.root, candidate.commit))
   assert(view.claims_by_id[a] ~= nil and view.claims_by_id[b] ~= nil,

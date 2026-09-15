@@ -185,10 +185,12 @@ local function validate(plan: Plan): boolean, string
 end
 
 --- Re-read the local object and prove every saved publication byte.
-local function validate_local(root: string, plan: Plan): boolean, string
+local function validate_local(root: string, plan: Plan, known_identity?: Identity,
+    known_changes?: {tx.Change}): boolean, string
   local ok, err = validate(plan)
   if not ok then return false, err end
-  local identity, ierr = commit_identity(root, plan.local_commit)
+  local identity, ierr = known_identity, ""
+  if identity == nil then identity, ierr = commit_identity(root, plan.local_commit) end
   if identity == nil then return false, ierr end
   if identity.parent ~= plan.parent then return false, "snapshot local commit has different parent" end
   if identity.tree ~= plan.tree then return false, "snapshot local commit has different tree" end
@@ -203,15 +205,20 @@ local function validate_local(root: string, plan: Plan): boolean, string
   if name ~= plan.author.name or email ~= plan.author.email or date ~= plan.author.date then
     return false, "snapshot local physical author differs from logical author"
   end
-  local observed, oerr = projection.capture(root, plan.parent, plan.local_commit, {})
-  if observed == nil then return false, oerr end
+  local changes, oerr = known_changes, ""
+  if changes == nil then
+    local observed: tx.Transition | nil
+    observed, oerr = projection.capture(root, plan.parent, plan.local_commit, {})
+    if observed == nil then return false, oerr end
+    changes = observed.changes
+  end
   local entries = literal.sequence() as {{string: any}} -- cast: connector sequence
   if plan.complete_tree then
-    local captured, eerr = projection.snapshot(root, plan.local_commit, observed.changes)
+    local captured, eerr = projection.snapshot(root, plan.local_commit, changes)
     if captured == nil then return false, eerr end
     entries = captured
   else
-    for _, change in ipairs(observed.changes) do
+    for _, change in ipairs(changes) do
       if change.delete then return false, "delta snapshot cannot carry a deletion" end
       entries[#entries + 1] = {path = change.path, mode = change.mode,
         type = "blob", content = change.content}
@@ -224,21 +231,28 @@ local function validate_local(root: string, plan: Plan): boolean, string
 end
 
 local function capture_validated(root: string, local_commit: string,
-    destination: Destination, publish_by: integer): Plan | nil, string
-  local identity, err = commit_identity(root, local_commit)
+    destination: Destination, publish_by: integer, known_identity?: Identity,
+    known_changes?: {tx.Change}): Plan | nil, string
+  local identity, err = known_identity, ""
+  if identity == nil then identity, err = commit_identity(root, local_commit) end
   if identity == nil then return nil, err end
-  local observed, oerr = projection.capture(root, identity.parent, local_commit, {})
-  if observed == nil then return nil, oerr end
-  if #observed.changes == 0 then return nil, "snapshot has no meaningful final-state change" end
+  local changes, oerr = known_changes, ""
+  if changes == nil then
+    local observed: tx.Transition | nil
+    observed, oerr = projection.capture(root, identity.parent, local_commit, {})
+    if observed == nil then return nil, oerr end
+    changes = observed.changes
+  end
+  if #changes == 0 then return nil, "snapshot has no meaningful final-state change" end
   local complete = false
-  for _, change in ipairs(observed.changes) do if change.delete then complete = true end end
+  for _, change in ipairs(changes) do if change.delete then complete = true end end
   local entries = literal.sequence() as {{string: any}} -- cast: connector sequence
   if complete then
-    local captured, eerr = projection.snapshot(root, local_commit, observed.changes)
+    local captured, eerr = projection.snapshot(root, local_commit, changes)
     if captured == nil then return nil, eerr end
     entries = captured
   else
-    for _, change in ipairs(observed.changes) do
+    for _, change in ipairs(changes) do
       entries[#entries + 1] = {path = change.path, mode = change.mode,
         type = "blob", content = change.content}
     end
@@ -250,7 +264,7 @@ local function capture_validated(root: string, local_commit: string,
     tree = identity.tree, message = identity.message, author = identity.author,
     publish_by = publish_by,
     entries = entries, complete_tree = complete}
-  local ok, verr = validate_local(root, plan)
+  local ok, verr = validate_local(root, plan, identity, changes)
   if not ok then return nil, verr end
   return plan, ""
 end
@@ -278,13 +292,15 @@ local record Module
   type Plan = Plan
   FORMAT: string
   validate: function(Plan): boolean, string
-  validate_local: function(string, Plan): boolean, string
+  validate_local: function(string, Plan, known_identity?: Identity,
+  known_changes?: {tx.Change}): boolean, string
   commit_identity: function(string, string): Identity | nil, string
   author_time: function(Author): integer | nil, string
   identity_matches: function(string, string, Plan): boolean, string
   object_present: function(string, string): boolean
   message: function(string, Author): string | nil, string
-  capture_validated: function(string, string, Destination, integer): Plan | nil, string
+  capture_validated: function(string, string, Destination, integer,
+  known_identity?: Identity, known_changes?: {tx.Change}): Plan | nil, string
 end
 
 local M: Module = {FORMAT = FORMAT, validate = validate,

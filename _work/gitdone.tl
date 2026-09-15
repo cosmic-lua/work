@@ -79,6 +79,11 @@ local function cmd_done(s: store.Store, id: string, reason: string,
   if research_shape ~= nil then
     return gate.verdict_line("done", false, "REFUSED: " .. research_shape)
   end
+  local product_shape = workflow_rules.product_landing_refusal(it, reason,
+    landed or "", force)
+  if product_shape ~= nil then
+    return gate.verdict_line("done", false, "REFUSED: " .. product_shape)
+  end
   -- Commit-only completion. The caller fetched the product repository and
   -- supplied the landed commit. Gitboard proves locally that the accepted
   -- commit is in its ancestry or that a bounded first-parent suffix carries
@@ -113,16 +118,7 @@ local function cmd_done(s: store.Store, id: string, reason: string,
     end
   elseif reason == "completed" and (it.verdict or "") == "accept"
   and handed ~= "" then
-    if (it.verdict_head or "") ~= handed then
-      return gate.verdict_line("done", false,
-        "REFUSED: acceptance must name the current handover commit")
-    end
-    if (landed or "") == "" then
-      if not force then
-        return gate.verdict_line("done", false,
-          "REFUSED: completed accepted work names its landed commit with --landed")
-      end
-    else
+    if (landed or "") ~= "" then
       local root, maperr = repository_map.resolve(s.root, it.repo or "",
         repo_dir or "")
       if root == nil then

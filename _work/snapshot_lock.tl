@@ -69,9 +69,8 @@ end
 local record Module
   type Lock = Lock
   common_dir: function(string): string | nil, string
-  path: function(string): string | nil, string
   acquire: function(string): Lock | nil, string
 end
 
-local M: Module = {common_dir = common_dir, path = path, acquire = acquire}
+local M: Module = {common_dir = common_dir, acquire = acquire}
 return M

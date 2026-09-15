@@ -355,8 +355,8 @@ local function push_atomic(root: string, specs: {PushSpec},
 end
 
 --- Fetch the configured board remote's refs, pruning any local ref it no
---- longer holds. This compatibility helper still performs I/O; new CLI paths
---- render equivalent caller-owned transport through `_work.gittransport`.
+--- longer holds. This compatibility helper still performs I/O; native snapshot
+--- publication uses its explicit fetch-and-confirm path instead.
 --- @param root string The repository root
 --- @return boolean True on success
 --- @return string Error message

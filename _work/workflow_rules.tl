@@ -1,6 +1,9 @@
 --- Pure workflow rules shared by native verbs and raw snapshot validation.
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
+local boardtree = require("_work.boardtree")
+local claim = require("_work.claim")
+local spec = require("_work.spec")
 
 local record ChildState
   any: boolean
@@ -39,6 +42,63 @@ local function distance_refusal(it: item.Item, session: string): string | nil
     end
   end
   return nil
+end
+
+--- Require append-only workflow attribution to name the logical author.
+local function attribution_refusal(names: {string}, author: string,
+    message: string): string | nil
+  if author == "gitboard" then return nil end
+  for _, name in ipairs(names) do if name == author then return nil end end
+  return message
+end
+
+--- Record attribution through the same identity rule the validator checks.
+local function attribute(names: {string}, author: string): boolean, string
+  return item.record_involvement(names, author)
+end
+
+local function claim_acquisition_refusal(value: boardtree.Claim,
+    author: string, now: integer): string | nil
+  if value.holder ~= author or value.acquired_at ~= value.renewed_at
+  or value.expires_at ~= value.renewed_at + claim.LEASE_S
+  or value.renewed_at > now + claim.FUTURE_SKEW_S
+  or #value.product_base ~= 40
+  or not value.product_base:match("^[0-9a-f]+$") then
+    return "invalid claim acquisition"
+  end
+  return nil
+end
+
+local function claim_renewal_refusal(old: boardtree.Claim,
+    new: boardtree.Claim): string | nil
+  if new.holder ~= old.holder or new.acquired_at ~= old.acquired_at
+  or new.product_base ~= old.product_base or new.renewed_at < old.renewed_at
+  or new.expires_at ~= new.renewed_at + claim.LEASE_S then
+    return "invalid claim renewal"
+  end
+  return nil
+end
+
+--- The authoritative deliverable a verdict judges; product wins if both exist.
+local function handover_evidence(it: item.Item): string, string
+  if (it.handover_head or "") ~= "" then
+    return it.handover_head or "", "product"
+  end
+  if (it.result or "") ~= "" then return it.result or "", "research" end
+  return "", ""
+end
+
+local type EvidenceResolver = function(item.Item, string, string): string | nil, string
+
+--- Resolve the named deliverable and require it to be the current handover.
+local function verdict_evidence(it: item.Item, named: string,
+    resolve: EvidenceResolver, mismatch: string): string | nil, string
+  local evidence, kind = handover_evidence(it)
+  if evidence == "" then return nil, "item has no commit handover to judge" end
+  local canonical, err = resolve(it, kind, named)
+  if canonical == nil then return nil, err end
+  if canonical ~= evidence then return nil, mismatch:format(canonical, evidence) end
+  return canonical, ""
 end
 
 --- A research handover must have some specification to hand over.
@@ -87,20 +147,78 @@ local function research_landing_refusal(it: item.Item, reason: string,
   return nil
 end
 
+--- Pure shape of a completed accepted product landing; ancestry is caller-owned.
+local function product_landing_refusal(it: item.Item, reason: string,
+    landed: string, force: boolean): string | nil
+  local handed = it.handover_head or ""
+  if reason ~= "completed" or (it.verdict or "") ~= "accept"
+  or handed == "" then return nil end
+  if (it.verdict_head or "") ~= handed then
+    return "acceptance must name the current handover commit"
+  end
+  if landed == "" and not force then
+    return "completed accepted work names its landed commit with --landed"
+  end
+  return nil
+end
+
+--- Repositories reached by the spec but absent from the item's access grant.
+local function undeclared_repos(it: item.Item, prose: itemtree.Spec): {string}
+  local declared: {string: boolean} = {}
+  for _, repo in ipairs(it.access or {}) do declared[repo:lower()] = true end
+  local own = (it.repo or ""):lower()
+  local out: {string} = {}
+  for _, repo in ipairs(spec.reached_repos(spec.document(prose))) do
+    if repo ~= own and not declared[repo] then out[#out + 1] = repo end
+  end
+  return out
+end
+
+--- Spec-bar and declared-access issues shared by take and snapshot preflight.
+local function readiness_issues(it: item.Item, prose: itemtree.Spec): {string}
+  local out: {string} = {}
+  for _, gap in ipairs(spec.ready_gaps(prose)) do
+    out[#out + 1] = "spec " .. gap
+  end
+  for _, repo in ipairs(undeclared_repos(it, prose)) do
+    out[#out + 1] = "undeclared repository " .. repo
+  end
+  return out
+end
+
 local record Module
   type ChildState = ChildState
   child_state: function({item.Item}, string): ChildState
   distance_refusal: function(item.Item, string): string
+  attribution_refusal: function({string}, string, string): string
+  attribute: function({string}, string): boolean, string
+  claim_acquisition_refusal: function(boardtree.Claim, string, integer): string
+  claim_renewal_refusal: function(boardtree.Claim, boardtree.Claim): string
+  handover_evidence: function(item.Item): string, string
+  verdict_evidence: function(item.Item, string, EvidenceResolver, string): string | nil, string
   research_spec_refusal: function(string, itemtree.Spec): string
   completion_review_refusal: function(item.Item, boolean): string
   research_landing_refusal: function(item.Item, string, string,
   boolean): string
+  product_landing_refusal: function(item.Item, string, string,
+  boolean): string
+  undeclared_repos: function(item.Item, itemtree.Spec): {string}
+  readiness_issues: function(item.Item, itemtree.Spec): {string}
 end
 local M: Module = {
   child_state = child_state,
   distance_refusal = distance_refusal,
+  attribution_refusal = attribution_refusal,
+  attribute = attribute,
+  claim_acquisition_refusal = claim_acquisition_refusal,
+  claim_renewal_refusal = claim_renewal_refusal,
+  handover_evidence = handover_evidence,
+  verdict_evidence = verdict_evidence,
   research_spec_refusal = research_spec_refusal,
   completion_review_refusal = completion_review_refusal,
   research_landing_refusal = research_landing_refusal,
+  product_landing_refusal = product_landing_refusal,
+  undeclared_repos = undeclared_repos,
+  readiness_issues = readiness_issues,
 }
 return M

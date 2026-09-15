@@ -23,7 +23,6 @@ local gitlog = require("_work.gitlog")
 local workspace = require("_work.snapshot_workspace")
 local graph = require("_work.gitgraph")
 local gitspec = require("_work.gitspec")
-local transport = require("_work.gittransport")
 local gittake = require("_work.gittake")
 local gitworktree = require("_work.gitworktree")
 local publish = require("_work.publish")
@@ -32,6 +31,7 @@ local refs = require("_work.refs")
 local session = require("_work.session")
 local store = require("_work.store")
 local statepublish_cli = require("_work.statepublish_cli")
+local statepublish = require("_work.snapshot_publish")
 local snapshot_cli = require("_work.snapshot_cli")
 local statecli = require("_work.statecli")
 local tail = require("_work.tail")
@@ -73,6 +73,14 @@ local function resolve_id(s: store.Store, input: string): string | nil, string
 end
 
 local CSPEC: flags.CommandSpec = commands.CSPEC
+
+local function refresh(s: store.Store, remote: string, execute: boolean): integer
+  if remote ~= refs.board_remote(s.root) then
+    return gate.verdict_line("refresh", false, "native refresh destination differs")
+  end
+  local ok, detail = statepublish.sync(s, execute)
+  return gate.verdict_line("refresh", ok, detail)
+end
 
 --- Resolve --before/--after into full ids, "" for a flag not given —
 --- shared by `new`, `attach`, and `rank`, whose X arguments all name
@@ -192,7 +200,7 @@ local function main(...: string): integer
   end
   if d.command == "sync" then
     io.stderr:write("gitboard-sync: deprecated; use `gitboard refresh`\n")
-    return transport.cmd_refresh(s, remote, false)
+    return refresh(s, remote, false)
   end
   if d.command == "publish" then
     local selectors = d.parsed.args
@@ -206,15 +214,12 @@ local function main(...: string): integer
           d.parsed.values["candidate"] or "", d.parsed.values["head"] or "",
           nil)
       end
-      return statepublish_cli.cmd_publish(s, selectors, remote,
-        d.parsed.switches["execute"] or false)
+      return statepublish_cli.cmd_publish(s, selectors, remote)
     end
-    return transport.cmd_publish(s, selectors,
-      remote,
-      d.parsed.switches["execute"] or false)
+    return statepublish_cli.cmd_publish(s, selectors, remote)
   end
   if d.command == "refresh" then
-    return transport.cmd_refresh(s, remote,
+    return refresh(s, remote,
       d.parsed.switches["execute"] or false)
   end
   if d.command == "claim" or d.command == "renew" or d.command == "drop" then

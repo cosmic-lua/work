@@ -63,7 +63,7 @@ local function take_handover(s: store.Store, it: item.Item, session: string,
       ("%s already hands over %s"):format(id8, canonical:sub(1, 12)))
   end
   it.handover_head = canonical
-  local recorded, ierr = item.record_involvement(it.builders, session)
+  local recorded, ierr = workflow_rules.attribute(it.builders, session)
   if not recorded then
     return gate.verdict_line("take", false, "REFUSED: " .. ierr)
   end

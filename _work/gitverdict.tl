@@ -7,6 +7,7 @@ local ghland = require("_work.ghland")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
 local store = require("_work.store")
+local workflow_rules = require("_work.workflow_rules")
 local stateevidence = require("_work.stateevidence")
 local format = require("_work.format")
 
@@ -103,38 +104,23 @@ local function cmd_verdict_commit(s: store.Store, id: string, kind: string,
   -- base), research hands over board state (`result`, verified in the
   -- board checkout against the item's own ref). With both recorded the
   -- product commit is the handover, as `take --head` itself decides.
-  local handed = it.handover_head or ""
-  local result = it.result or ""
-  local canonical = ""
-  if handed ~= "" then
-    local claim_base = it.claim_base or ""
+  local function resolve_evidence(current: item.Item, evidence_kind: string,
+      named: string): string | nil, string
+    if evidence_kind == "research" then return verify_result(s, current, named) end
+    local claim_base = current.claim_base or ""
     if claim_base == "" then
-      return gate.verdict_line("verdict", false,
-        ("REFUSED: %s's claim has no product base commit"):format(id:sub(1, 8)))
+      return nil, ("%s's claim has no product base commit"):format(id:sub(1, 8))
     end
-    local root, rerr = repository_map.resolve(s.root, it.repo or "", repo_dir)
-    if root == nil then
-      return gate.verdict_line("verdict", false, "REFUSED: " .. rerr)
-    end
-    local lineage, verr = commit_evidence.verify_lineage(root, claim_base, head)
-    if lineage == nil then
-      return gate.verdict_line("verdict", false, "REFUSED: " .. verr)
-    end
-    canonical = lineage.head
-    if canonical ~= handed then
-      return gate.verdict_line("verdict", false,
-        ("REFUSED: verdict names %s, but the handover is %s")
-        :format(canonical, handed))
-    end
-  elseif result ~= "" then
-    local judged, jerr = verify_result(s, it, head)
-    if judged == nil then
-      return gate.verdict_line("verdict", false, "REFUSED: " .. jerr)
-    end
-    canonical = judged
-  else
-    return gate.verdict_line("verdict", false,
-      ("REFUSED: %s has no commit handover to judge"):format(id:sub(1, 8)))
+    local root, rerr = repository_map.resolve(s.root, current.repo or "", repo_dir)
+    if root == nil then return nil, rerr end
+    local lineage, verr = commit_evidence.verify_lineage(root, claim_base, named)
+    if lineage == nil then return nil, verr end
+    return lineage.head, ""
+  end
+  local canonical, evidence_err = workflow_rules.verdict_evidence(it, head,
+    resolve_evidence, "verdict names %s, but the handover is %s")
+  if canonical == nil then
+    return gate.verdict_line("verdict", false, "REFUSED: " .. evidence_err)
   end
   if (it.verdict_head or "") == canonical and (it.verdict or "") == kind then
     return gate.verdict_line("verdict", false,

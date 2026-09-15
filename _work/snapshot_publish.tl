@@ -38,7 +38,8 @@ local function plan_at(root: string, commit: string, target: snapshot.Destinatio
   if identity == nil then return nil, ierr end
   local report, rerr = validate.preflight(root, identity.parent, commit, now)
   if report == nil then return nil, rerr end
-  local captured, cerr = snapshot.capture_validated(root, commit, target, report.publish_by)
+  local captured, cerr = snapshot.capture_validated(root, commit, target,
+    report.publish_by, report.identity, report.changes)
   if captured == nil then return nil, cerr end
   return {plan = captured, report = report}, ""
 end
@@ -142,7 +143,7 @@ local function record_candidate(root: string, frozen: snapshot.Plan,
   return recovery.record_candidate(path, frozen, remote_sha)
 end
 local function finish_at(root: string, frozen: snapshot.Plan,
-    _state: recovery.Recovery, head: string, path: string): boolean, string
+    head: string, path: string): boolean, string
   local held, herr = snapshot_lock.acquire(root)
   if held == nil then return false, herr end
   local _guard < close > = held
@@ -163,11 +164,10 @@ local function finish_at(root: string, frozen: snapshot.Plan,
   refs.clear_overlay(root)
   return true, "confirmed " .. outcome.candidate
 end
-local function finish(root: string, frozen: snapshot.Plan,
-    state: recovery.Recovery): boolean, string
+local function finish(root: string, frozen: snapshot.Plan): boolean, string
   local head, herr = workspace.canonical_head(root, frozen.destination.remote)
   if head == nil then return false, herr end
-  return finish_at(root, frozen, state, head, workspace.recovery_path(root))
+  return finish_at(root, frozen, head, workspace.recovery_path(root))
 end
 local function historical_plan(root: string, commit: string,
     remote: string): Planned | nil, string
@@ -212,7 +212,7 @@ local function reconcile_saved(root: string, commit: string, remote: string,
   local outcome, oerr = recovery.reconcile(root, head, frozen, state)
   if outcome == nil then return nil, oerr end
   if outcome.status == "confirmed" then
-    local ok, ferr = finish_at(root, frozen, state, head, path)
+    local ok, ferr = finish_at(root, frozen, head, path)
     if not ok then return nil, ferr end
   end
   return outcome, ""
@@ -281,7 +281,7 @@ local function execute(root: string, commit: string, remote: string,
     if head == nil then return false, herr end
     local outcome, oerr = recovery.reconcile(root, head, frozen, state)
     if outcome == nil then return false, oerr end
-    if outcome.status == "confirmed" then return finish(root, frozen, state) end
+    if outcome.status == "confirmed" then return finish(root, frozen) end
     if outcome.status == "conflict" then return false, "conflict: " .. outcome.reason end
     if head ~= frozen.parent then return false, "uncertain: " .. outcome.reason end
   end
@@ -344,9 +344,7 @@ local function execute(root: string, commit: string, remote: string,
         frozen.destination.target_url))
     if not fetched then return false, "uncertain: " .. ferr end
   end
-  local loaded, lerr = recovery.load(path)
-  if loaded == nil then return false, lerr end
-  local confirmed, detail = finish(root, frozen, loaded)
+  local confirmed, detail = finish(root, frozen)
   if confirmed then return true, detail .. " " .. compact(report) end
   if not moved then return false, detail .. (merr ~= "" and ": " .. merr or "") end
   return false, detail
