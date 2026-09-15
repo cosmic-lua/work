@@ -1,6 +1,9 @@
 title: gitboard brief: BOUNCE_CONTEXT is left unset (not blanked) on a fresh no-bounce pull, surviving as a literal unfilled placeholder — a WyFa_GL3c regression
 parent: 3IvL2Xf1S1Bgv7pgQ31mHDUd37y
 repo: cosmic-lua/work
+handover_head: 5a06d12eab0a0c560017602646077c3c78b727e7
+external_url: https://github.com/cosmic-lua/work/pull/180
+builders: ac6189c481c341af628c1851d7a91f59
 speccers: 6141b568-f7a6-5a55-b674-7af59f6e37ac
 touches: _work/brief.tl _work/brief_test.tl _work/brief_review_script_test.tl
 access: cosmic-lua/cosmic
