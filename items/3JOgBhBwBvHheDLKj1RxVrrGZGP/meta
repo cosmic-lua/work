@@ -2,4 +2,6 @@ title: gitboard claim: the documented --fetch-base refusal never fires, so a sta
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
 handover_head: f5fc69d86905bbbcf0e14e8c52d20ee251d2de03
+verdict: accept
+verdict_head: f5fc69d86905bbbcf0e14e8c52d20ee251d2de03
 builders: 19a63416c1c8275808baa34227f22648
