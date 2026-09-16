@@ -322,17 +322,20 @@ local function test_the_review_script_verdict_is_checkout_free()
     "the full review's diff posture must retain its worktree placeholder")
 end
 
--- A freshly made review checkout has no `o/3p` cache — the same gap
--- `worktree ID` already closes for a builder — so both review
--- templates must send a reviewer to `--make fetch` (and, for any
--- test, `--make build`) before that checkout's first test runs.
-local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
+-- A review checkout `handoff --fetch` made already carries an `o/3p`
+-- cache; one made without `--fetch` does not — the brief cannot assume
+-- either way, so both review templates must condition the bootstrap
+-- plan (`--make fetch` and, for any test, `--make build`) on the
+-- checkout actually lacking the cache, never assert it outright.
+local function test_the_checkout_note_conditions_the_bootstrap_plan()
   for _, tmpl in ipairs({POSTURE_DIFF, REVIEW_SCRIPT}) do
     assert(tmpl:find(
-        "That checkout has no `o/3p` cache yet — run "
+        "If this checkout has no `o/3p` cache yet, run "
         .. "{{.bootstrap_phrase}}", 1, true) ~= nil,
-      "the checkout note must send a reviewer to the resolved bootstrap "
-      .. "plan before running any test: " .. tmpl)
+      "the checkout note must condition the resolved bootstrap plan on "
+      .. "the checkout actually being cold: " .. tmpl)
+    assert(tmpl:find("That checkout has no `o/3p` cache yet", 1, true) == nil,
+      "the checkout note must never assert the checkout is cold outright: " .. tmpl)
   end
 end
 
@@ -403,6 +406,37 @@ local function test_where_to_work_warns_the_worktree_is_shared()
       1, true) ~= nil,
     "Where to work must forbid investigating or undoing a change in "
     .. "the worktree the builder did not make")
+end
+
+-- A partial version of this countermeasure — background plus a wait
+-- loop, but no explicit timeout on the polling call itself — still
+-- lost a turn's work, because the poll got auto-backgrounded. The
+-- timeout requirement must be explicit, not implied by "poll it".
+local function test_where_to_work_requires_an_explicit_timeout_on_the_wait()
+  assert(BUILDER:find(
+      "run a gate in the foreground with an explicit long timeout, or, "
+      .. "if it runs in the background, poll it to completion inside "
+      .. "the same turn using an explicit timeout on the poll call "
+      .. "itself — a poll with no timeout of its own gets "
+      .. "auto-backgrounded, which loses the result the same way the "
+      .. "unwatched command did.", 1, true) ~= nil,
+    "Where to work must require an explicit long timeout in the "
+    .. "foreground, or an explicit timeout on the poll call itself "
+    .. "when backgrounded")
+end
+
+-- The repo's own AGENTS.md says to read the verdict line and guard
+-- against a laundered exit status; the brief did not carry either.
+local function test_where_to_work_requires_reading_the_verdict_line()
+  assert(BUILDER:find(
+      "Read the gate's own final verdict line rather than inferring "
+      .. "the result any other way, and if its output is piped "
+      .. "through `tail` or `grep`, put `set -o pipefail` first — a "
+      .. "truncated pipe can otherwise hide a failing exit code.",
+      1, true) ~= nil,
+    "Where to work must require reading the gate's final verdict "
+    .. "line and using set -o pipefail before piping through tail "
+    .. "or grep")
 end
 
 -- A request-changes verdict names the tempting unsafe fix and the

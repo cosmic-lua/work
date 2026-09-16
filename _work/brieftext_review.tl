@@ -193,7 +193,7 @@ in it. Your worktree is the only tree.
 credential lookup, check read, merge, or provider write. The caller owns
 those operations, and so does watching them: never poll or subscribe to a
 provider event yourself. This review is claimed under session `{{.review_session}}` —
-you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 {{.bootstrap_phrase}}
 
 GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
@@ -385,7 +385,7 @@ those operations, and so does watching them: never poll or subscribe to a
 provider event yourself. Read the diff with `git fetch origin <branch>` and
 `git show <head>:<path>` in the product checkout at `{{.product_root}}`; you
 create no worktree. This review is claimed under session `{{.review_session}}`
-— you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+— you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 {{.bootstrap_phrase}}
 
 GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact

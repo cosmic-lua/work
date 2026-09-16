@@ -222,11 +222,11 @@ local function test_unresolvable_repo_falls_back_to_the_literal_text()
     "the two-branch (cosmic, work) test-file sentence must survive "
     .. "unresolved exactly as base commit 1a31ae33 wrote it: " .. rout)
   assert(flat_rout:find(
-      "That checkout has no `o/3p` cache yet — run "
+      "If this checkout has no `o/3p` cache yet, run "
       .. "`bin/cosmic --make fetch` before its first test, and "
       .. "`--make build` once if you run any test.",
       1, true) ~= nil,
-    "the fresh-checkout bootstrap sentence must survive unresolved "
-    .. "exactly as base commit 1a31ae33 wrote it, fetch-then-build "
-    .. "phrasing included, not the resolved-kind paraphrase: " .. rout)
+    "the fresh-checkout bootstrap sentence must survive unresolved, "
+    .. "fetch-then-build phrasing included, not the resolved-kind "
+    .. "paraphrase: " .. rout)
 end

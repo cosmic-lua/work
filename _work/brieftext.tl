@@ -60,8 +60,15 @@ bug, and never undo it — no `git reset --hard`, no `git revert`, no
 force-push. Read what is there with `git log` and `git status`, build on
 top of it, and name the commits that are not yours in your final report.
 Avoid needing any of this by never ending a turn with a long command
-still running in the background: poll it to completion inside the turn
-that started it.
+still running in the background: run a gate in the foreground with an
+explicit long timeout, or, if it runs in the background, poll it to
+completion inside the same turn using an explicit timeout on the poll
+call itself — a poll with no timeout of its own gets auto-backgrounded,
+which loses the result the same way the unwatched command did. Read
+the gate's own final verdict line rather than inferring the result any
+other way, and if its output is piped through `tail` or `grep`, put
+`set -o pipefail` first — a truncated pipe can otherwise hide a failing
+exit code.
 
 ## The item
 
