@@ -52,3 +52,18 @@ independent of where the verb was run from.
 Regression: a test that runs `cmd_worktree` with the process cwd set inside an
 unrelated worktree and asserts the resulting path is under the product root,
 not under the cwd.
+
+A second route in, found live after this item was filed: the anchor can be a
+worktree even when the caller's cwd is not. Running `take ID --repo-dir
+<a build worktree>` leaves that worktree recorded as the item's product
+checkout; a later `handoff` then resolves its own `worktree` call against it
+and produces
+`/home/user/wt/work/E0cKTZFH/wt/work/E0cKTZFH/abf90ab2c6e6` — the intended
+relative path appended to the build worktree rather than to the repository
+root. The caller's cwd was the cosmic checkout at the time, so a fix that
+only normalises cwd would leave this path open.
+
+So the resolution to fix is "whatever the checkout is anchored to", of which
+cwd is one source and a recorded `--repo-dir` is another. A regression for
+this route belongs beside the cwd one: record a worktree as the product
+checkout, then assert the next checkout still lands under the product root.
