@@ -405,6 +405,37 @@ local function test_where_to_work_warns_the_worktree_is_shared()
     .. "the worktree the builder did not make")
 end
 
+-- A partial version of this countermeasure — background plus a wait
+-- loop, but no explicit timeout on the polling call itself — still
+-- lost a turn's work, because the poll got auto-backgrounded. The
+-- timeout requirement must be explicit, not implied by "poll it".
+local function test_where_to_work_requires_an_explicit_timeout_on_the_wait()
+  assert(BUILDER:find(
+      "run a gate in the foreground with an explicit long timeout, or, "
+      .. "if it runs in the background, poll it to completion inside "
+      .. "the same turn using an explicit timeout on the poll call "
+      .. "itself — a poll with no timeout of its own gets "
+      .. "auto-backgrounded, which loses the result the same way the "
+      .. "unwatched command did.", 1, true) ~= nil,
+    "Where to work must require an explicit long timeout in the "
+    .. "foreground, or an explicit timeout on the poll call itself "
+    .. "when backgrounded")
+end
+
+-- The repo's own AGENTS.md says to read the verdict line and guard
+-- against a laundered exit status; the brief did not carry either.
+local function test_where_to_work_requires_reading_the_verdict_line()
+  assert(BUILDER:find(
+      "Read the gate's own final verdict line rather than inferring "
+      .. "the result any other way, and if its output is piped "
+      .. "through `tail` or `grep`, put `set -o pipefail` first — a "
+      .. "truncated pipe can otherwise hide a failing exit code.",
+      1, true) ~= nil,
+    "Where to work must require reading the gate's final verdict "
+    .. "line and using set -o pipefail before piping through tail "
+    .. "or grep")
+end
+
 -- A request-changes verdict names the tempting unsafe fix and the
 -- invariant it risks, so the rework builder bounces on an unclear
 -- correction envelope rather than widening scope to find one.
