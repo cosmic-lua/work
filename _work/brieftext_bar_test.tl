@@ -74,7 +74,7 @@ end
 -- into the prose, or ask for a pasted command's output.
 local function test_no_template_asks_for_pasted_measurement()
   for _, t in ipairs({BUILDER, REWORK, RESEARCH, REFINE, DECOMPOSE,
-      REVIEW_SCRIPT}) do
+      REVIEW, REVIEW_SCRIPT}) do
     assert(t:find("measured with the command", 1, true) == nil,
       "no template may ask for a tree-fact measured with its command: "
       .. t)
