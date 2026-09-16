@@ -129,7 +129,7 @@ local function report_for(it: item.Item, all: {item.Item}, body: string,
     end
   end
   return show.show_report(it, role, rank_line, state, body, events, problems,
-    children_lines, overlaps, nil, ci_state, ci_head, ci_age_s)
+    children_lines, overlaps, ci_state, ci_head, ci_age_s)
 end
 
 local function test_show_prints_fields_role_and_history()

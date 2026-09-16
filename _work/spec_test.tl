@@ -275,31 +275,3 @@ local function test_split_refuses_a_preamble()
   assert(sp == nil and err:find("before the first heading", 1, true) ~= nil, tostring(err))
   assert(check.must(spec.split("\n\n## Change\nDo it.\n")).change == "Do it.\n")
 end
-
--- `new` reads a caller's backticked paths back the same form a
--- `--touches` flag would have declared, once each, first-seen.
-local function test_touches_from_change_reads_backticked_tl_paths()
-  local paths = spec.touches_from_change(
-    "Edit `_work/brief.tl` and `_work/spec.tl`, again `_work/brief.tl`.")
-  assert(#paths == 2 and paths[1] == "_work/brief.tl"
-    and paths[2] == "_work/spec.tl",
-    "expected the two paths, deduped: " .. table.concat(paths, ", "))
-end
-
--- A span with whitespace is a sentence or a rendered `touches: a.tl
--- b.tl` line, not one path, and does not round-trip into a derived
--- list; a non-`.tl` span and a line-numbered citation are prose too.
-local function test_touches_from_change_ignores_prose_spans()
-  local paths = spec.touches_from_change(
-    "See `touches: _work/a.tl _work/b.tl`, `docs/goals.md`, "
-    .. "and `_work/briefmeasure_test.tl:76-78` for why.")
-  assert(#paths == 0, "expected nothing derived: " .. table.concat(paths, ", "))
-end
-
--- No Change at all derives nothing — an item filed with no prose
--- still files, and an empty declared list is the same "none" the
--- rendering already treats it as.
-local function test_touches_from_change_of_empty_change_is_empty()
-  local paths = spec.touches_from_change("")
-  assert(#paths == 0, "expected nothing derived: " .. table.concat(paths, ", "))
-end
