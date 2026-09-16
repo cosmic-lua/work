@@ -4,5 +4,7 @@ repo: cosmic-lua/work
 handover_head: 746b5af1e253afc6900cae5ccfb497e890d4b6b3
 verdict: accept
 verdict_head: 746b5af1e253afc6900cae5ccfb497e890d4b6b3
+landed_head: e8e606f2a335f125eb9c429120baa243260a8847
+resolution: completed
 builders: 0d1ddd7fce0ef5ac114113994d674ace
 touches: _work/stateclaim.tl _work/stateclaim_authority_test.tl
