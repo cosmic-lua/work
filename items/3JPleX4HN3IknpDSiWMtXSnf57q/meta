@@ -1,3 +1,6 @@
 title: Activate current gitboard briefs before the serialized countermeasure pass
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/cosmic
+handover_head: 17326626da49a54261c593868de0387bff884aae
+external_url: https://github.com/cosmic-lua/cosmic/pull/1864
+builders: 447f53e4d60148380e854eb18f57025e
