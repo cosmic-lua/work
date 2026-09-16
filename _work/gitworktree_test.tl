@@ -205,6 +205,9 @@ local function test_worktree_bootstrap_stub_skips_execution()
     error(err, 0)
   end
   local out = table.concat(lines, "\n")
+  local head = assert(child.run({"git", "rev-parse", "HEAD"}, {cwd = checkout}))
+  assert(out:find("base: " .. head.stdout:gsub("%s+$", ""), 1, true) ~= nil,
+    "the verdict must name the exact commit used to create the checkout: " .. out)
   assert(out:find("bootstrap: cosmic (skipped: GITBOARD_WORKTREE_BOOTSTRAP=0)", 1, true) ~= nil,
     "the verdict still names the detected tree kind: " .. out)
   assert(not fs.is_file(fs.join(base, "bootstrap_ran")),

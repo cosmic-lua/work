@@ -406,8 +406,8 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
         adopt ~= nil and "retained" or "created", path, referr, recovery))
   end
   return gate.verdict_line("worktree", true,
-    ("%s at %s on %s (bootstrap: %s)"):format(handle, path, branch,
-      bootstrapped))
+    ("%s at %s on %s (base: %s; bootstrap: %s)"):format(handle, path, branch,
+      base_sha, bootstrapped))
 end
 
 local record gitworktree
