@@ -105,3 +105,11 @@ The queue validates a newly created `merge_group` commit. Read the check runs
 on that commit — for Actions the combined commit status can be empty. Once the
 queue completes, verify both that the pull request merged and that `main`
 points at the queue commit.
+
+## Command examples
+
+`_work/prosecommands_test.tl` checks rendered help and brief command examples
+against the CLI option tables. The work skill in cosmic-lua/cosmic must defer
+verb and flag mechanics to `gitboard help <topic>` and `gitboard help <verb>`;
+it must not restate command recipes. Keep those examples here so this gate
+can validate them with the tool that owns them.
