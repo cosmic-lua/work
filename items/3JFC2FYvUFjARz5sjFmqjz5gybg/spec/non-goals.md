@@ -1,5 +1,5 @@
-Not changing either review script's text, not changing what a reviewer is
-asked to do once a kind is chosen, and not adding a third kind. Not
-changing the 20-line threshold itself. Not touching the `<PRODUCT_ROOT>`
-resolution `«WsH8_pWpE»` fixed — that is landed and separate, though it
-is the same brief.
+No new kind, changes to either review script's text or reviewer duties,
+threshold change, network fetches, source-extension registry, new Make
+advertisement, changes to range resolution, or changes to product-root
+resolution. The existing script's condition still holds for the narrower
+set selected; this item changes selection, not its review procedure.
