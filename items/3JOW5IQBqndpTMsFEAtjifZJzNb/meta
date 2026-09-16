@@ -2,5 +2,7 @@ title: review brief tells every reviewer their prepared checkout has no o/3p cac
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
 handover_head: 10edd10201e008056f80fef4077fac9844569555
+verdict: accept
+verdict_head: 10edd10201e008056f80fef4077fac9844569555
 builders: 707f134c9deee4d875c126cbe0e9f139
 speccers: d449323b3b4076befdbb73dcb1a5e563
