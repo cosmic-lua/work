@@ -16,12 +16,24 @@ spec names as a first check rather than as a repeat of one already done.
 This is `refine`, `research`, `decompose` and `builder`; check `review` too,
 in case it asks a reviewer to confirm pasted evidence that no longer exists.
 
-The file is near its own line cap and its tests are substantial, so expect
-this to be a real change rather than a search-and-replace, and split if the
-cap forces it.
+`_work/guidance.tl` carries the same retired language in a second place, and
+it is live in what `gitboard next` prints: the `pull` kind's note tells a
+taker to "re-run its measured commands before building", and the `refine`
+kind's note asks for "every tree-fact measured, with its command". Bring
+those into line too. Their tests assert width, terseness and structure but
+never content, so a regression here needs a test that would actually go red
+if the retired phrasing came back.
 
-While there: the templates and the doctrine say the same thing twice, in two
-places that have now drifted apart once. Say in your report whether a
-template could quote the doctrine topic rather than restate it, and what
-that would cost — do not build it, but record the judgement so the next
-drift has an answer waiting.
+Beyond those two modules, satisfy yourself that nothing else in the tree
+still states the retired rule — two separate places drifted, so a third is
+worth ruling out rather than assuming.
+
+The brief file is near its own line cap and its tests are substantial, so
+expect this to be a real change rather than a search-and-replace, and split
+if the cap forces it.
+
+While there: the templates, the guidance notes and the doctrine now say the
+same thing in three places, and two of them have already drifted apart once.
+Say in your report whether a template or a guidance note could quote the
+doctrine topic rather than restate it, and what that would cost — do not
+build it, but record the judgement so the next drift has an answer waiting.
