@@ -48,16 +48,16 @@ local NOTES < const >: {string: {string}} = {
     "The highest-placed todo item passing the spec bar with nothing blocking "
     .. "it. `take ID` is the claim and the lock; the lock is a lease, and a "
     .. "claim idle past it is anyone's again.",
-    "Then `show ID`: the spec sidecar is the spec; re-run its measured "
-    .. "commands before building.",
+    "Then `show ID`: the spec sidecar is the spec; re-run what it names "
+    .. "before building — the first check, not a repeat of one already done.",
   },
   ["refine"] = {
     "Drive the highest-placed todo item toward the spec bar: `show ID` names "
     .. "the gaps, `spec ID FILE --base BASE` writes the refinement back.",
     "Decompose rather than pad: a spec that needs the word \"and\" between two "
     .. "independent changes is two items (`new \"child\" --parent ID`).",
-    "Every tree-fact measured, with its command, so the taker re-runs it in "
-    .. "seconds.",
+    "Every tree-fact stands as direction, not a citation — the taker "
+    .. "confirms it against the tree in seconds.",
   },
   ["triage"] = {
     "An unranked outcome awaits a decision. `rank ID --before X | --after "

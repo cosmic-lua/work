@@ -34,8 +34,8 @@ local function test_research_drafts_a_capture_to_the_gates_own_bar()
   -- closed, where before it was only named.
   assert(RESEARCH:find(
       "meeting the ready bar (`## Change`, every tree-fact it names "
-      .. "measured with the command that produced it, plus "
-      .. "`## Non-goals` where a wall is at stake — and NO other "
+      .. "as direction for the taker to confirm against the tree, "
+      .. "plus `## Non-goals` where a wall is at stake — and NO other "
       .. "section: a write refuses one, and a repository the spec's own "
       .. "text reaches is a declared fact on the item, reported by the "
       .. "ready bar rather than written as prose)", 1, true) ~= nil,
@@ -66,6 +66,20 @@ local function test_refine_names_the_whole_bar_and_no_retired_section()
     "the refine brief forbids a Goal section")
   assert(REFINE:find("## Acceptance", 1, true) == nil,
     "and names no Acceptance section at all: nothing reads one")
+end
+
+-- The bar dropped pasted measurement from a spec (`help bar`:
+-- "Direction, not measurement"); no template may still tell a refiner
+-- or a builder that a tree-fact must be measured, with its command,
+-- into the prose, or ask for a pasted command's output.
+local function test_no_template_asks_for_pasted_measurement()
+  for _, t in ipairs({BUILDER, REWORK, RESEARCH, REFINE, DECOMPOSE}) do
+    assert(t:find("measured with the command", 1, true) == nil,
+      "no template may ask for a tree-fact measured with its command: "
+      .. t)
+    assert(t:find("pasted output", 1, true) == nil,
+      "no template may ask for a claim's pasted output: " .. t)
+  end
 end
 
 local function test_no_template_teaches_a_goal_or_enablement_section()
