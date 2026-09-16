@@ -22,7 +22,7 @@ end
 local function fresh(name: string, body: function(Case), script?: string)
   local run, link, move, remove, open, mode = child.run, fs.link, fs.move, fs.remove, fd.open, fs.set_mode
   local print_saved, write, stat = _G.print, fs.write, fs.stat_fd
-  local keys = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM"}
+  local keys = {"XDG_CACHE_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM"}
   local saved: {string: string} = {}
   for _, key in ipairs(keys) do saved[key] = env.get(key) end
   local ok, err = pcall(function()
@@ -30,6 +30,7 @@ local function fresh(name: string, body: function(Case), script?: string)
       assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
       assert(env.unset("GIT_CONFIG_SYSTEM"))
       local dir = check.must(fs.temp_dir(fs.join(fixture.tmpdir, "runtime-" .. name .. "-XXXXXX")))
+      assert(env.set("XDG_CACHE_HOME", fs.join(dir, "cache")))
       local source, root = fs.join(dir, "source"), fs.join(dir, "target")
       assert(fs.make_dirs(fs.join(source, "bin")))
       fixture.git(source, {"init", "-q"})

@@ -11,7 +11,8 @@ set -e
 #
 #     kernel -> this script -> one pin -> everything else
 #
-# with POSIX sh, curl, sha256sum and od the whole host surface.
+# with POSIX sh, curl, a SHA-256 tool and standard host file utilities
+# (including mktemp, link, wc and od) as the host surface.
 #
 #     bin/cosmic --make ci        run the gate
 #     bin/cosmic --make build     build the binaries
@@ -94,12 +95,84 @@ download() {
     mv -f "${dest_tmp}" "${dest}"
 }
 
+# Cache candidates are data until a private copy passes the pin again.
+bounded_regular() {
+    [ ! -L "$1" ] && [ -f "$1" ] &&
+        [ "$(wc -c < "$1")" -le 268435456 ]
+}
+
+cache_ancestors() {
+    cache_parent=$(dirname "$shared")
+    while [ "$cache_parent" != / ]; do
+        if [ -L "$cache_parent" ] || { [ -e "$cache_parent" ] && [ ! -d "$cache_parent" ]; }; then
+            echo "unsafe cache ancestor: $cache_parent" >&2
+            return 1
+        fi
+        cache_parent=$(dirname "$cache_parent")
+    done
+}
+
+shared_path() {
+    shared=
+    case "${XDG_CACHE_HOME:-}" in
+        /*) cache_base=$XDG_CACHE_HOME ;;
+        *) case "${HOME:-}" in
+            /*) cache_base=$HOME/.cache ;;
+            *) echo "runtime shared caching unavailable: no absolute cache base" >&2; return ;;
+        esac ;;
+    esac
+    shared=$cache_base/cosmic/runtime/$sha256/cosmic.ape
+}
+
+copy_candidate() {
+    if bounded_regular "$1" && cp "$1" "$ape_tmp" &&
+        bounded_regular "$ape_tmp" && verify_sha256 "$ape_tmp" "$sha256"; then
+        return 0
+    fi
+    echo "runtime rejected $1: not a bounded regular file or sha256 mismatch" >&2
+    rm -f "$ape_tmp"
+    return 1
+}
+
+publish_shared() {
+    [ -n "$shared" ] || return 0
+    cache_ancestors || return 1
+    mkdir -p "$(dirname "$shared")" || return 1
+    cache_ancestors || return 1
+    if [ ! -e "$shared" ] && [ ! -L "$shared" ]; then
+        cache_tmp=$(mktemp "$(dirname "$shared")/.cosmic-XXXXXXXXXX") || return 1
+        if ! cp "$ape_tmp" "$cache_tmp" || ! bounded_regular "$cache_tmp" ||
+            ! verify_sha256 "$cache_tmp" "$sha256"; then
+            rm "$cache_tmp" || return 1
+            return 1
+        fi
+        # POSIX link names the exact destination, including a directory winner.
+        # C-locale errno is the diagnostic suffix, never arbitrary path text.
+        if link_error=$(LC_ALL=C link "$cache_tmp" "$shared" 2>&1); then
+            :
+        else
+            case "$link_error" in
+                *": File exists") : ;;
+                *) echo "$link_error" >&2; rm "$cache_tmp" || return 1; return 1 ;;
+            esac
+        fi
+        rm "$cache_tmp" || return 1
+    fi
+    # Inspect a private snapshot even for an existing/concurrent winner.
+    cache_check=$(mktemp "$(dirname "$shared")/.cosmic-XXXXXXXXXX") || return 1
+    if ! bounded_regular "$shared" || ! cp "$shared" "$cache_check" ||
+        ! bounded_regular "$cache_check" || ! verify_sha256 "$cache_check" "$sha256"; then
+        echo "runtime cache publication rejected $shared" >&2
+    fi
+    rm "$cache_check" || return 1
+}
+
 ensure_bootstrap() {
-    # Download, verify against the pin, keep the pristine download as
+    # Reuse or download, verify against the pin, keep pristine bytes as
     # `${BOOTSTRAP}.ape`, assimilate a COPY to a native ELF at
     # `${BOOTSTRAP}`, and stamp which pin produced the pair. The stamp
     # is a string compare on the hot path rather than a hash, and it is
-    # what makes a pin bump re-download (and re-assimilate) both files
+    # what makes a pin bump reacquire (and re-assimilate) both files
     # instead of leaving local trees running the previous release.
     url="$(sed -n 's/^url *= *//p' "${PIN}")"
     sha256="$(sed -n 's/^sha256 *= *//p' "${PIN}")"
@@ -111,18 +184,31 @@ ensure_bootstrap() {
         [ "$(cat "${BOOTSTRAP}.pin" 2>/dev/null)" = "${sha256}" ]; then
         return 0
     fi
-    echo "Downloading pinned cosmic..." >&2
     mkdir -p "${ROOT}/o/bootstrap"
-    ape_tmp="${BOOTSTRAP}.ape.tmp.$$"
-    download "${url}" "${ape_tmp}" || exit 1
-    if ! verify_sha256 "${ape_tmp}" "${sha256}"; then
-        echo "pinned cosmic checksum verification failed; refusing to run" >&2
-        rm -f "${ape_tmp}"
+    private=$(mktemp -d "${ROOT}/o/bootstrap/.cosmic-XXXXXXXXXX")
+    trap 'rm -rf "$private"' EXIT HUP INT TERM
+    ape_tmp=$private/cosmic.ape
+    shared_path
+    if copy_candidate "${BOOTSTRAP}.ape"; then
+        :
+    elif [ -n "$shared" ] && cache_ancestors && copy_candidate "$shared"; then
+        :
+    else
+        echo "Downloading pinned cosmic..." >&2
+        download "${url}" "${ape_tmp}" || exit 1
+        if ! bounded_regular "$ape_tmp" || ! verify_sha256 "$ape_tmp" "$sha256"; then
+            echo "pinned cosmic checksum verification failed; refusing to run" >&2
+            exit 1
+        fi
+    fi
+    publish_shared || { echo "runtime cache publication failed" >&2; exit 1; }
+    chmod +x "${ape_tmp}"
+    boot_tmp=$private/cosmic.boot
+    cp "${ape_tmp}" "${boot_tmp}"
+    if ! bounded_regular "$boot_tmp" || ! verify_sha256 "$boot_tmp" "$sha256"; then
+        echo "private runtime checksum verification failed" >&2
         exit 1
     fi
-    chmod +x "${ape_tmp}"
-    boot_tmp="${BOOTSTRAP}.boot.$$"
-    cp "${ape_tmp}" "${boot_tmp}"
     "${boot_tmp}" --assimilate
     if [ "$(head -c 4 "${boot_tmp}" | od -An -tx1 | tr -d ' \n')" != "7f454c46" ]; then
         echo "assimilation failed: still an APE — sandboxed rules need a native ELF (no loader grants)" >&2
@@ -132,6 +218,8 @@ ensure_bootstrap() {
     mv -f "${boot_tmp}" "${BOOTSTRAP}"
     mv -f "${ape_tmp}" "${BOOTSTRAP}.ape"
     printf '%s\n' "${sha256}" > "${BOOTSTRAP}.pin"
+    rm -rf "$private"
+    trap - EXIT HUP INT TERM
 }
 
 cd "${ROOT}"

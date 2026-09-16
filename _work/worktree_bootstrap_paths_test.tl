@@ -42,7 +42,7 @@ end
 --- A hermetic git checkout carrying the pinned coldbuild fixture, the
 --- same shape `worktree_runtime_test.tl`'s own `fresh` builds.
 local function fresh(name: string, body: function(Case))
-  local keys = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM"}
+  local keys = {"XDG_CACHE_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM"}
   local saved: {string: string} = {}
   for _, key in ipairs(keys) do saved[key] = env.get(key) end
   local ok, err = pcall(function()
@@ -50,6 +50,7 @@ local function fresh(name: string, body: function(Case))
       assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
       assert(env.unset("GIT_CONFIG_SYSTEM"))
       local dir = check.must(fs.temp_dir(fs.join(fixture.tmpdir, "coldbuild-" .. name .. "-XXXXXX")))
+      assert(env.set("XDG_CACHE_HOME", fs.join(dir, "cache")))
       local source, root = fs.join(dir, "source"), fs.join(dir, "target")
       assert(fs.make_dirs(fs.join(source, "bin")))
       fixture.git(source, {"init", "-q"})

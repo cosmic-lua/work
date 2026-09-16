@@ -2,7 +2,7 @@
 local child = require("cosmic.child")
 local fd = require("cosmic.fd")
 local fs = require("cosmic.fs")
-local hash = require("cosmic.hash")
+local shared = require("_work.runtime_cache")
 local rand = require("cosmic.rand")
 local profile = require("_work.repoprofile")
 
@@ -16,38 +16,13 @@ local record Runtime
   prefix: {string}
   pin: Pin
 end
-local LIMIT < const > = 268435456
+local bytes = shared.bytes
+local verified = shared.verified
 local PROBE < const > = 'io.write("gitboard-runtime-probe-v1\\n")'
 
 local function git_failure(r: child.Result | nil, err: string): string
   if r == nil then return "could not run git: " .. err end
   return ("git failed (signal=%s, exit=%s): %s"):format(tostring(r.signal), tostring(r.code), r.stderr)
-end
-
---- Read a bounded snapshot from one regular, non-symlink descriptor.
-local function bytes(path: string, limit: integer): string | nil, string
-  local h, err = fd.open(path, fd.O_RDONLY | fd.O_NOFOLLOW | fd.O_NONBLOCK)
-  if h == nil then return nil, err end
-  local st, serr = fs.stat_fd(h:fd())
-  if st == nil or not st:is_file() or st:size() > limit then
-    local _ok, _err = h:close()
-    return nil, serr ~= "" and serr or "not a bounded regular file"
-  end
-  local parts: {string} = {}
-  local size = 0
-  while size <= limit do
-    local part, rerr = h:read(math.min(65536, limit + 1 - size))
-    if part == nil then
-      local closed, cerr = h:close()
-      if rerr ~= nil and rerr ~= "" then return nil, rerr end
-      if not closed then return nil, cerr end
-      return table.concat(parts), ""
-    end
-    size = size + #part
-    parts[#parts + 1] = part
-  end
-  local _ok, _err = h:close()
-  return nil, "file exceeds size limit"
 end
 
 local function parse(text: string): Pin | nil, string
@@ -95,13 +70,6 @@ local function inspect(path: string, commit: string): Pin | nil, string
   if current == nil then return nil, "cannot read working pin: " .. cerr end
   if current ~= blob.stdout then return nil, "working pin differs from target commit" end
   return parse(current)
-end
-
-local function verified(path: string, digest: string): string | nil, string
-  local text, err = bytes(path, LIMIT)
-  if text == nil then return nil, err end
-  if hash.sha256_hex(text) ~= digest then return nil, "sha256 mismatch" end
-  return text, ""
 end
 
 local function output_refusal(root: string, path: string, directory: boolean): string
@@ -311,6 +279,13 @@ local function prepare(source: string, root: string, pin: Pin, fetch: boolean,
       rejection(path, err)
     end
   end
+  local entry, unavailable = shared.entry(pin.digest)
+  if unavailable ~= "" then print(unavailable) end
+  if not fetch and snapshot == nil and entry ~= nil then
+    local text, cerr = shared.read(entry, pin.digest)
+    if text ~= nil then snapshot = text; print(("runtime cache hit %q"):format(entry))
+    else rejection(entry, cerr) end
+  end
   local out = fs.join(root, "o")
   local err = directory(root, out)
   if err ~= "" then return nil, err end
@@ -342,6 +317,10 @@ local function prepare(source: string, root: string, pin: Pin, fetch: boolean,
   if err ~= "" then return nil, err end
   err = publish(root, pin, snapshot)
   if err ~= "" then return nil, err end
+  if entry ~= nil then
+    err = shared.publish(entry, pin.digest, snapshot)
+    if err ~= "" then return nil, err end
+  end
   err = probe(runtime, root)
   if err ~= "" then return nil, err end
   for _, plan in ipairs(plans) do
