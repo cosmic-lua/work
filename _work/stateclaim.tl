@@ -150,7 +150,7 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
 end
 --- Refresh reports current authority independently of historical publication proof.
 --- An expired lease confers no authority, so it is counted rather than listed.
-local function authority(root: string, head: string): string | nil, string
+local function claim_report(root: string, head: string): string | nil, string
   local view, err = boardread.list(root, head)
   if view == nil then return nil, err end
   local ids: {string} = {}
@@ -185,10 +185,10 @@ local record Module
   type Request = Request
   type Member = Member
   type Result = Result
-  authority: function(string, string): string | nil, string
+  claim_report: function(string, string): string | nil, string
   message: function(Action, string, string): string
   state: function(boardtree.Claim | nil): claim.State | nil
   prepare: function(string, string, {Request}, Action, string, integer, boolean, string): Result
 end
-local M: Module = {state = state, prepare = prepare, authority = authority, message = message}
+local M: Module = {state = state, prepare = prepare, claim_report = claim_report, message = message}
 return M

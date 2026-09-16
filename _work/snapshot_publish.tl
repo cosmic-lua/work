@@ -462,7 +462,7 @@ local function sync(s: store.Store, execute_fetch?: boolean): boolean, string
   end
   local head, herr = workspace.canonical_head(s.root, remote)
   if head == nil then return false, herr end
-  local authority, aerr = stateclaim.authority(s.root, head)
+  local authority, aerr = stateclaim.claim_report(s.root, head)
   if authority == nil then return false, aerr end
   reset_store(s, head)
   local _closed, _cerr = store.close(s)
