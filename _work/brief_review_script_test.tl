@@ -106,20 +106,30 @@ end
 --- @param lines integer How many lines the change adds
 --- @return string The product checkout the change lives in
 local function handover_diff(s: store.Store, id: string, name: string,
-    path: string, lines: integer): string
+    path: string, lines: integer, kind?: string, mixed?: boolean, removed?: integer): string
   local root = fs.join(os.getenv("TEST_TMPDIR") or "/tmp",
     "brief-review-product-" .. name)
   assert(fs.remove_all(root) and fs.make_dirs(root))
   git(root, {"init", "-q"})
+  if kind == "cosmic" then
+    assert(fs.make_dirs(fs.join(root, "bin")))
+    assert(fs.write(fs.join(root, "bin/cosmic"), ""))
+  elseif kind == "make" then
+    assert(fs.write(fs.join(root, "Makefile"), ".PHONY: gate\n"))
+  elseif kind == "unknown" then
+    assert(fs.write(fs.join(root, "Makefile"), "all:\n"))
+  end
   assert(fs.make_dirs(fs.dirname(fs.join(root, path))))
-  assert(fs.write(fs.join(root, path), "base\n"))
-  git(root, {"add", path})
+  assert(fs.write(fs.join(root, path), "base\n" .. ("old\n"):rep(removed or 0)))
+  git(root, {"add", "."})
   git(root, {"commit", "-q", "-m", "base"})
   local base = git(root, {"rev-parse", "HEAD"})
   local body = "base\n"
   for n = 1, lines do body = body .. ("line %d\n"):format(n) end
   assert(fs.write(fs.join(root, path), body))
-  git(root, {"commit", "-q", "-am", "change"})
+  if mixed then assert(fs.write(fs.join(root, "product.tl"), "product\n")) end
+  git(root, {"add", "."})
+  git(root, {"commit", "-q", "-m", "change"})
   local head = git(root, {"rev-parse", "HEAD"})
   git(s.root, {"config", "--local", "--add", "gitboard.repository",
       "acme/widgets=" .. root})
@@ -137,22 +147,42 @@ local function handover_diff(s: store.Store, id: string, name: string,
   return root
 end
 
--- The selection rule is the spec's own, checked at both ends: a
--- 2-line pin diff (well under 20 changed lines, regardless of the
--- one file's own `.tl` extension) earns the numbered script; a
--- 200-line `.tl` diff outside `*_test.tl` keeps the full adversarial
--- `REVIEW`.
+-- Real committed diffs exercise both the profile proof and the unchanged
+-- additions + deletions threshold through the rendered review selection.
+local record DiffCase
+  name: string
+  kind: string
+  path: string
+  lines: integer
+  removed: integer
+  mixed: boolean
+  script: boolean
+end
+
 local function test_diff_shape_picks_the_review_template()
-  for _, case in ipairs({
-      {name = "pin", path = "3p/cosmos/cosmos_pin.tl", lines = 2,
-        script = true},
-      {name = "tl", path = "cosmic/example.tl", lines = 200,
-        script = false},
-    }) do
+  local cases: {DiffCase} = {
+    {name = "pin", path = "3p/cosmos/cosmos_pin.tl", lines = 2, script = true},
+    {name = "cosmic19", kind = "cosmic", path = "product.tl", lines = 19, script = true},
+    {name = "cosmic20", kind = "cosmic", path = "product.tl", lines = 20, script = false},
+    {name = "make19", kind = "make", path = "product.c", lines = 19, script = true},
+    {name = "make20", kind = "make", path = "product.c", lines = 20, script = false},
+    {name = "sum19", kind = "make", path = "product.c", lines = 9, removed = 10, script = true},
+    {name = "sum20", kind = "make", path = "product.c", lines = 10, removed = 10, script = false},
+    {name = "tests", kind = "cosmic", path = "nested/a_test.tl", lines = 200, script = true},
+    {name = "source", kind = "cosmic", path = "product.tl", lines = 200, script = false},
+    {name = "header", kind = "make", path = "product.h", lines = 200, script = false},
+    {name = "assembly", kind = "make", path = "product.S", lines = 200, script = false},
+    {name = "make-tests", kind = "make", path = "a_test.tl", lines = 200, script = false},
+    {name = "mixed", kind = "cosmic", path = "a_test.tl", lines = 19, mixed = true, script = false},
+    {name = "docs", kind = "cosmic", path = "README.md", lines = 200, script = false},
+    {name = "absent", path = "a_test.tl", lines = 200, script = false},
+    {name = "unknown", kind = "unknown", path = "a_test.tl", lines = 200, script = false},
+  }
+  for _, case in ipairs(cases) do
     local s = init_state_repo("brief-review-script-" .. case.name)
     local _, leaf = root_with_leaf(s)
     give_spec(s, leaf)
-    handover_diff(s, leaf, case.name, case.path, case.lines)
+    handover_diff(s, leaf, case.name, case.path, case.lines, case.kind, case.mixed, case.removed)
     local code, out = brief_and_capture(s, leaf)
     assert(code == 0, ("%s: a local commit diff earns the brief: %s")
       :format(case.name, out))
@@ -161,7 +191,7 @@ local function test_diff_shape_picks_the_review_template()
       "both review scripts freeze the resolved target with three dots")
     if case.script then
       assert(out:find("git show", 1, true) ~= nil,
-        ("%s: a small diff selects the numbered script: %s")
+        ("%s: a proven mechanical diff selects the numbered script: %s")
         :format(case.name, out))
       assert(flat_text(out):find(flat_text(stale_board_sentence(s)), 1, true) ~= nil,
         ("%s: REVIEW_SCRIPT names the stale board checkout and fills its path: %s")
@@ -171,7 +201,7 @@ local function test_diff_shape_picks_the_review_template()
         :format(case.name, out))
     else
       assert(out:find("fresh-context code reviewer", 1, true) ~= nil,
-        ("%s: a big .tl diff keeps the adversarial REVIEW: %s")
+        ("%s: an unproven large diff keeps the adversarial REVIEW: %s")
         :format(case.name, out))
       assert(out:find("How to review — a numbered script", 1, true) == nil,
         ("%s: REVIEW never carries the script's own heading: %s")
