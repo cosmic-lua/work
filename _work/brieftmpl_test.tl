@@ -343,7 +343,7 @@ in it. Your worktree is the only tree.
 `verdict` verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
 those operations. This review is claimed under session `sess-1` —
-you MUST use that exact string. That checkout has no `o/3p` cache yet — run
+you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 `fetch` before you run any test.
 
 GitBoard invocation for this review: `bin/gitboard` — the exact
