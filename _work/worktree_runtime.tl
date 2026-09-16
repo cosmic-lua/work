@@ -298,14 +298,18 @@ local function prepare(source: string, root: string, pin: Pin, fetch: boolean,
     verbose: boolean): Runtime | nil, string
   local plans = profile.resolve(root).bootstrap
   local snapshot: string
-  for _, path in ipairs({fs.join(root, "o/bootstrap/cosmic.ape"), fs.join(root, "o/bootstrap/cosmic"),
-      fs.join(source, "o/bootstrap/cosmic.ape"), fs.join(source, "o/bootstrap/cosmic")}) do
-    local text, err = verified(path, pin.digest)
-    if text ~= nil then snapshot = text; print(("runtime cache hit %q"):format(path)); break end
-    rejection(path, err)
-  end
-  if snapshot == nil and not fetch then
-    return nil, "no verified runtime for sha256 " .. pin.digest .. "; use --fetch for explicit acquisition"
+  -- `--fetch` means "acquire even if a cached runtime looks usable", so a
+  -- cache scan that would only find that runtime and short-circuit
+  -- acquisition never runs while `fetch` is set. Without `--fetch`, a scan
+  -- that finds nothing no longer refuses: a missing or rejected cache takes
+  -- the same acquisition path below that `--fetch` always took.
+  if not fetch then
+    for _, path in ipairs({fs.join(root, "o/bootstrap/cosmic.ape"), fs.join(root, "o/bootstrap/cosmic"),
+        fs.join(source, "o/bootstrap/cosmic.ape"), fs.join(source, "o/bootstrap/cosmic")}) do
+      local text, err = verified(path, pin.digest)
+      if text ~= nil then snapshot = text; print(("runtime cache hit %q"):format(path)); break end
+      rejection(path, err)
+    end
   end
   local out = fs.join(root, "o")
   local err = directory(root, out)

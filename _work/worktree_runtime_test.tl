@@ -92,7 +92,13 @@ local function test_target_pin_and_order_ignore_source_pin_stamps_and_assimilate
     end)
 end
 
-local function test_missing_corrupt_symlink_cache_never_executes_or_downloads_without_fetch()
+--- A missing, corrupt, symlinked, or directory cache candidate is no
+--- longer a refusal: `prepare` rejects the candidate exactly as before,
+--- then falls through to the same acquisition (download) path a caller
+--- passing `--fetch` always took, with no flag required. The rejected
+--- bytes are still never executed or trusted; only the freshly acquired,
+--- verified snapshot is.
+local function test_missing_corrupt_symlink_cache_acquires_without_fetch()
   for _, kind in ipairs({"missing", "corrupt", "symlink", "directory"}) do
     fresh(kind, function(c: Case)
         if kind == "corrupt" then cache(c.source, nil, "touch invalid-runtime-marker")
@@ -100,14 +106,20 @@ local function test_missing_corrupt_symlink_cache_never_executes_or_downloads_wi
           assert(fs.make_dirs(fs.join(c.source, "o/bootstrap")))
           assert(fs.symlink(fs.join(c.source, "fixture-runtime"), fs.join(c.source, "o/bootstrap/cosmic")))
         elseif kind == "directory" then assert(fs.make_dirs(fs.join(c.source, "o/bootstrap/cosmic"))) end
-        local original = child.run
+        local original, downloaded = child.run, false
         child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
-          assert(argv[1] == "git", "no execution/acquisition on an unverified cache miss")
+          if argv[1] == "curl" then
+            downloaded = true
+            assert(fs.write(argv[22], SCRIPT))
+            return {ok = true, code = 0, stdout = "", stderr = ""}, ""
+          end
           return original(argv, opts)
         end
-        failed(c, "--fetch")
-        assert(not fs.is_present(fs.join(c.root, "invalid-runtime-marker")))
-        assert(not fs.is_present(fs.join(c.root, "o")))
+        local r = prepare(c)
+        assert(downloaded, "an unverified cache candidate must acquire, not refuse, without --fetch")
+        assert(check.must(fs.read(r.path)) == SCRIPT)
+        assert(not fs.is_present(fs.join(c.root, "invalid-runtime-marker")),
+          "the rejected candidate must never be executed")
       end)
   end
 end
@@ -254,7 +266,11 @@ local function test_probe_native_shell_fallback_and_failures()
   end
 end
 
-local function test_download_exact_bounded_argv_and_cache_hit_before_fetch()
+--- `--fetch` means "acquire even if a cached runtime looks usable": the
+--- cache scan never runs while `fetch` is set, so `kind == "cached"` must
+--- download exactly like every other kind here, never short-circuiting on
+--- the hit the way it did before the cache scan was made conditional.
+local function test_download_exact_bounded_argv_and_fetch_skips_cache()
   for _, kind in ipairs({"download", "mismatch", "cached", "failed"}) do
     fresh(kind, function(c: Case)
         if kind == "cached" then cache(c.source) end
@@ -267,12 +283,11 @@ local function test_download_exact_bounded_argv_and_cache_hit_before_fetch()
               "--retry", "0", "--max-filesize", "268435456", "--output", argv[22], c.pin.url}
             assert(table.concat(argv, "\0") == table.concat(expected, "\0") and opts.cwd == c.root)
             assert(table.concat(c.lines):find("runtime product download", 1, true))
+            assert(not table.concat(c.lines):find("runtime cache hit", 1, true),
+              "fetch must skip the cache scan even when a verified runtime is present")
             if kind == "failed" then return nil, "download spawn failure" end
             assert(fs.write(argv[22], kind == "mismatch" and "corrupt download" or SCRIPT))
             return {ok = true, code = 0, stdout = "", stderr = ""}, ""
-          end
-          if argv[#argv] == "fetch" then
-            assert(kind ~= "cached" or table.concat(c.lines):find("runtime cache hit", 1, true))
           end
           return original(argv, opts)
         end
@@ -282,7 +297,7 @@ local function test_download_exact_bounded_argv_and_cache_hit_before_fetch()
           prepare(c, true)
           assert(check.must(fs.read(fs.join(c.root, "o/steps"))) == "--make fetch\n--make build\n")
         end
-        assert(downloads == (kind == "cached" and 0 or 1))
+        assert(downloads == 1)
       end)
   end
 end
@@ -402,7 +417,17 @@ local function test_bounded_cache_and_staged_hash_checks_are_real()
   fresh("bounded", function(c: Case)
       cache(c.source)
       assert(fs.truncate(fs.join(c.source, "o/bootstrap/cosmic"), 268435457))
-      failed(c, "--fetch")
+      local original = child.run
+      child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
+        if argv[1] == "curl" then
+          assert(fs.write(argv[22], SCRIPT))
+          return {ok = true, code = 0, stdout = "", stderr = ""}, ""
+        end
+        return original(argv, opts)
+      end
+      prepare(c)
+      assert(table.concat(c.lines):find("not a bounded regular file", 1, true) ~= nil,
+        "an oversized cache candidate must be rejected, not treated as a hit, before acquisition")
     end)
   fresh("staged-hash", function(c: Case)
       cache(c.source)
