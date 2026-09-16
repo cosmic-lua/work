@@ -9,6 +9,7 @@
 --- and the `cmd_` half owns the store reads: what a session reads is
 --- the contract, and a report that returns its lines can be asserted
 --- on without capturing stdout.
+local direction = require("_work.direction")
 local cache = require("_work.cache")
 local find = require("_work.find")
 local gate = require("_work.gitgate")
@@ -249,6 +250,10 @@ local function show_report(it: item.Item, role: string, rank_line: string,
   -- too (`set --title` and friends fix it, but only once seen).
   for _, p in ipairs(it.decode_problems or {}) do
     out[#out + 1] = "flagged: " .. p
+  end
+  local prose = spec.split(body)
+  for _, line in ipairs(direction.hints(prose)) do
+    out[#out + 1] = line
   end
   -- Another open item naming the same file under its own `## Change`
   -- is a collision an orchestrator would otherwise find only by

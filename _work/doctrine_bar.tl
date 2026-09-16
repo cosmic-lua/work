@@ -76,6 +76,22 @@ rows it expects to add, so the builder's first gate is its last —
 that is direction about what to expect, not a measurement to
 re-derive.
 
+When relying on a quantified scope or an existing fact, name a set/source
+pointer: where should the builder look? Builders enumerate and verify
+against the current tree. Refinement requires no inventories, counts,
+pasted commands/output or line citations.
+
+`new` and ordinary `show` offer a bounded direction-advisory hint for
+"every spawned agent", "all callers", "all the callers", "each template",
+"every template", "all templates", "already knows", "already records",
+"already recorded", and "the caller has it" in Change. Examples in fences,
+quotes and blockquotes are ignored. A recognizable path, identifier or
+introduced named set/list anywhere in Change suppresses the hints. These
+are conservative textual pointers, not semantic proof: a hint does not
+establish unbounded scope or a missing field, and silence does not certify
+completeness. Hints are advisory only and never affect filing, claiming,
+taking or publishing; raw show preserves the spec bytes.
+
 A precondition is a DEPENDENCY, not prose. A Change whose earliest
 valid start waits on a fact outside the tree — a release having
 shipped, a lane gone green, a pin bumped — waits on the ITEM that
