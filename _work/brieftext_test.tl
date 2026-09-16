@@ -36,9 +36,13 @@ local function test_builder_requires_a_committed_migration_and_caller_report()
 end
 
 local function test_step_one_requires_reproducing_behavioral_claims()
-  assert(BUILDER:find("Re-run any measured commands the spec names",
+  assert(BUILDER:find(
+      "Verify what the spec names against the current tree — this is "
+      .. "where its claims are checked for the first time, not a "
+      .. "repeat of a check already done at spec time (`help bar`).",
       1, true) ~= nil,
-    "step 1 must still tell a builder to re-run the spec's measured commands")
+    "step 1 must tell a builder its re-run is the first check, not a "
+    .. "repeat of one already done at spec time")
   assert(BUILDER:find(
       "When the spec's Evidence asserts a BEHAVIOR (\"X refuses Y\", "
       .. "\"Z is unreachable\", \"the check fires when...\") rather than "

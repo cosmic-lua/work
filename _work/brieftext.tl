@@ -79,10 +79,12 @@ and nothing less:
 
 ## What to do
 
-1. Re-run any measured commands the spec names, against the current
-   tree — a moved number is fine (refresh your understanding, don't
-   stop over it alone); a fact that breaks the Change's shape is a
-   real blocker: STOP and report it (see below). When the spec's
+1. Verify what the spec names against the current tree — this is
+   where its claims are checked for the first time, not a repeat of
+   a check already done at spec time (`help bar`). A moved number is
+   fine (refresh your understanding, don't stop over it alone); a
+   fact that breaks the Change's shape is a real blocker: STOP and
+   report it (see below). When the spec's
    Evidence asserts a BEHAVIOR ("X refuses Y", "Z is unreachable",
    "the check fires when...") rather than a static fact (a line count,
    a file's existence), reproduce that behavior against the current
@@ -243,8 +245,8 @@ Bootstrap it per its own AGENTS.md (for cosmic: `bin/cosmic --make
 fetch`, and `export SSL_USE_SYSTEM_CERTS=1` if any TLS call fails
 with a cert-trust error; for cosmopolitan: `make -j$(nproc)
 o//tool/lua/test` to build what the spec's probes run against). You
-will not commit or push here — the clone exists so the spec's
-measured commands have something to run against.
+will not commit or push here — the clone exists so what the spec
+names has a tree to check it against.
 
 ## The item
 
@@ -262,11 +264,12 @@ more and nothing less:
 
 ## What to do
 
-1. Re-run every measured command the spec names, against the current
-   tree, and record what it returns now — a moved number is fine
-   (refresh your understanding, don't stop over it alone); a fact
-   that breaks the Change's shape is a real blocker: STOP and report
-   it (see below).
+1. Verify what the spec names against the current tree, and record
+   what it shows now — this is where its claims are checked for the
+   first time, not a repeat of a check already done at spec time
+   (`help bar`). A moved number is fine (refresh your understanding,
+   don't stop over it alone); a fact that breaks the Change's shape
+   is a real blocker: STOP and report it (see below).
 2. Do exactly the `## Change`'s research — classify, measure, and
    gather evidence per its instructions, to the evidence standard it
    states. Touch no repo file: this slice writes no diff, so there
@@ -274,12 +277,12 @@ more and nothing less:
 3. For every finding the spec says gets filed as its own item ("file
    one capture per binding", a raise-candidate, and similar): do not
    file it. Draft it in full instead — title, a complete spec body
-   meeting the ready bar (`## Change`, every tree-fact it names
-   measured with the command that produced it, plus `## Non-goals`
-   where a wall is at stake — and NO other section: a write refuses
-   one, and a repository the spec's own text reaches is a declared
-   fact on the item, reported by the ready bar rather than written as
-   prose), the parent it
+   meeting the ready bar (`## Change`, every tree-fact it names as
+   direction for the taker to confirm against the tree, plus
+   `## Non-goals` where a wall is at stake — and NO other section: a
+   write refuses one, and a repository the spec's own text reaches is
+   a declared fact on the item, reported by the ready bar rather than
+   written as prose), the parent it
    attaches under, and any rank against a sibling — precise enough
    that the orchestrator can run `gitboard new`/`attach`/`rank` from
    it verbatim, with no judgment call of its own left to make. No
@@ -359,11 +362,11 @@ section, and a repository the spec reaches is a declared fact on the
 item, not prose) so a competent, literal-minded session —
 nothing beyond the spec and the repo's AGENTS.md — could not get it
 wrong. Run `bin/gitboard help bar` for the full bar; the short form:
-every tree-fact measured during THIS refinement with the command
-that produced it (a behavioural claim needs the command AND its
-pasted output), bounds land as tests in the diff-to-be, size for one
-PR one session holds in its head, and an "and" between independent
-changes means cut it into siblings. Do NOT write a `## Goal` section
+every tree-fact named as direction for the builder to find and
+confirm against the tree, never a fact the spec itself certifies,
+bounds land as tests in the diff-to-be, size for one PR one session
+holds in its head, and an "and" between independent changes means
+cut it into siblings. Do NOT write a `## Goal` section
 — goal context is the parent chain.
 
 Write the new spec to a file holding ONLY the spec, then:

@@ -49,6 +49,22 @@ local function test_lines_fit_the_indented_width()
   end
 end
 
+-- The bar dropped pasted measurement from a spec (`help bar`:
+-- "Direction, not measurement"): `next` must not tell a taker to
+-- re-run "measured commands" or ask a refiner for a tree-fact
+-- "measured ... with its command" — a spec names direction, and the
+-- taker confirms it against the tree.
+local function test_guidance_does_not_ask_for_pasted_measurement()
+  local pull = table.concat(guidance.lines("pull"), " ")
+  assert(pull:find("measured", 1, true) == nil,
+    "pull guidance must not ask a taker to re-run \"measured\" "
+    .. "commands: " .. pull)
+  local refine = table.concat(guidance.lines("refine"), " ")
+  assert(refine:find("measured", 1, true) == nil,
+    "refine guidance must not ask for a tree-fact \"measured\" with "
+    .. "its command: " .. refine)
+end
+
 --- An unknown kind renders nothing at all rather than a blank block:
 --- a caller appends what it is given, so "no guidance" has to be an
 --- empty list.
