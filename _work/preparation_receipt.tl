@@ -182,7 +182,8 @@ end
 local function read(s: store.Store, it: item.Item, kind: string, file: string,
     caller: string, tree: string): {string: string}, string
   if file == "" then
-    if caller ~= "" then return {}, "--session requires a builder --receipt" end
+    if caller ~= "" then return {}, "--session on brief names the receipt caller, not the claim; "
+      .. "the claim's session is found automatically — drop the flag, or pass a builder --receipt with it" end
     return {}, ""
   end
   if kind ~= "builder" then return {}, "--receipt supports builders only" end

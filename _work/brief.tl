@@ -273,7 +273,8 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   end
   if receipt_file == "" then return gate.verdict_line("brief", false, "empty --receipt") end
   if caller ~= nil and receipt_file == nil then
-    return gate.verdict_line("brief", false, "--session requires a builder --receipt")
+    return gate.verdict_line("brief", false, "--session on brief names the receipt caller, not the claim; "
+      .. "the claim's session is found automatically — drop the flag, or pass a builder --receipt with it")
   end
   local prep, perr = receipt.read(s, it, kind, receipt_file or "", caller or "", tree)
   if perr ~= "" then return gate.verdict_line("brief", false, perr) end

@@ -183,6 +183,40 @@ local function test_public_remote_flow_preserves_all_fields_and_spec()
     end)
 end
 
+local function test_brief_session_without_receipt_explains_meaning_and_remedies()
+  isolated(function()
+      local c = ready("session-remedies")
+      local before = value(c.s.root, "show-ref")
+      local output = fs.join(c.s.root, "refused-brief.md")
+      local code, out = capture(function(): integer
+          return gitboard.main("brief", "builder", c.id, "--dir", c.s.root,
+            "--session", c.session, "--out", output)
+        end)
+      local explanation = "--session on brief names the receipt caller, not the claim; "
+      .. "the claim's session is found automatically — drop the flag, or pass a builder --receipt with it"
+      assert(code == 1 and out == "gitboard-brief: " .. explanation,
+        "brief session refusal explains receipt caller, automatic claim, and both remedies: " .. out)
+      assert(not fs.is_file(output), "refusal must not write a brief")
+      local it = check.must(store.load(c.s, c.id))
+      local fields, err = receipt.read(c.s, it, "builder", "", c.session, "")
+      assert(next(fields) == nil and err == explanation,
+        "receipt reader gives the same session explanation: " .. err)
+      local legacy, text = capture(function(): integer
+          return gitboard.main("brief", "builder", c.id, "--dir", c.s.root)
+        end)
+      assert(legacy == 0 and text:find("claimed under session " .. c.session, 1, true) ~= nil,
+        "dropping the flag discovers the claim automatically: " .. text)
+      local prepared, body = capture(function(): integer
+          return gitboard.main("brief", "builder", c.id, "--dir", c.s.root,
+            "--session", c.session, "--receipt", c.file)
+        end)
+      assert(prepared == 0 and body:find("prepared session " .. c.session, 1, true) ~= nil,
+        "supplying the builder receipt validates the caller: " .. body)
+      assert(value(c.s.root, "show-ref") == before, "brief remedies remain read-only")
+      assert(store.close(c.s))
+    end)
+end
+
 local function test_receipt_rejects_mismatched_live_claim_fields()
   isolated(function()
       local c = ready("mismatch")
