@@ -1,0 +1,4 @@
+title: worktree_paths.primary refuses a --separate-git-dir product checkout, so every verb that resolves the repository refuses it
+parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+speccers: 2753b98fb6d083201c08a7327e5e67a1
