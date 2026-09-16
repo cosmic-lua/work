@@ -64,15 +64,56 @@ local function test_same_session_guidance_and_frozen_summary_cli()
   local owner = claimsession.mint()
   assert(capture("new", "owned", "--session", owner, "--dir", a.root) == 0)
   local candidate = check.must(workspace.read(a.root))
+  local canonical = check.must(workspace.canonical_head(a.root))
+  local path = workspace.recovery_path(a.root)
+  assert(not recovery.present(path))
+  local subject = check.must(snapshot.commit_identity(a.root, candidate.commit)).message
+  :match("^[^\n]*")
   local code, out = capture("new", "wrong session", "--session",
     claimsession.mint(), "--dir", a.root)
-  assert(code ~= 0 and out:find("--session", 1, true)
-    and out:find("GITBOARD_SESSION", 1, true), out)
+  assert(code == 1 and out:find("gitboard-new: snapshot composition belongs to " .. owner, 1, true)
+    and out:find("pass the same --session or set GITBOARD_SESSION", 1, true), out)
+  assert(subject ~= nil and out:find('pending ' .. candidate.commit .. ' subject "'
+      .. subject .. '"', 1, true), "refusal identifies the pending commit and subject: " .. out)
+  assert(not out:find("wrong session", 1, true), out)
+  assert(out:find("inspect: gitboard snapshot;", 1, true)
+    and out:find("publish: gitboard publish " .. candidate.commit, 1, true)
+    and out:find("abandon: gitboard snapshot --abandon " .. candidate.commit, 1, true), out)
+  assert(check.must(refs.read_ref(a.root, workspace.REF)) == candidate.commit)
+  assert(check.must(workspace.canonical_head(a.root)) == canonical)
+  assert(not recovery.present(path), "owner refusal leaves recovery absent")
   local planned = check.must(publication.plan(a.root, candidate.commit, "origin", nil))
   assert(recovery.begin(workspace.recovery_path(a.root), planned.plan))
   code, out = capture("snapshot", "--summary", "changed", "--dir", a.root)
   assert(code ~= 0 and out:find("immutable", 1, true), out)
   assert(recovery.clear(workspace.recovery_path(a.root)))
+end
+
+local function test_owner_refusal_escapes_only_the_first_message_line()
+  local a, _b = fixture.init_shared("feedback-subject-controls")
+  local owner = claimsession.mint()
+  assert(capture("new", "original", "--session", owner, "--dir", a.root) == 0)
+  local subject, escaped = '-"quoted"\\title', '-\\"quoted\\"\\\\title'
+  for byte = 1, 31 do
+    if byte ~= 10 then
+      subject = subject .. string.char(byte)
+      escaped = escaped .. ("\\x%02X"):format(byte)
+    end
+  end
+  subject = subject .. string.char(127)
+  escaped = escaped .. "\\x7F"
+  local commit = check.must(workspace.resummary(a.root,
+      subject .. "\nprivate body must not leak"))
+  local canonical = check.must(workspace.canonical_head(a.root))
+  local code, out = capture("new", "refused title", "--session",
+    claimsession.mint(), "--dir", a.root)
+  assert(code ~= 0 and out:find('pending ' .. commit .. ' subject "' .. escaped .. '"',
+      1, true), "owner refusal escapes the first physical line: " .. out)
+  assert(not out:find("[%z\1-\31\127]"), "refusal contains no literal control bytes")
+  assert(not out:find("private body", 1, true) and not out:find("Gitboard-Author", 1, true), out)
+  assert(check.must(refs.read_ref(a.root, workspace.REF)) == commit)
+  assert(check.must(workspace.canonical_head(a.root)) == canonical)
+  assert(not recovery.present(workspace.recovery_path(a.root)))
 end
 
 local function test_draft_selectors_are_explicitly_refused()
