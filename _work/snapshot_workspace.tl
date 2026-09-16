@@ -119,6 +119,15 @@ local function activate(root: string, allow_frozen?: boolean): Candidate | nil, 
   return candidate, ""
 end
 
+local function quoted_subject(message: string): string
+  local line = message:match("^[^\n]*") or ""
+  local escaped = line:gsub('[%z\1-\31\127\\"]', function(byte: string): string
+      if byte == '"' or byte == "\\" then return "\\" .. byte end
+      return ("\\x%02X"):format(string.byte(byte))
+    end)
+  return '"' .. escaped .. '"'
+end
+
 local function compose(root: string, canonical: string, current: string,
     session: string, changes: {tx.Change}, summary: string): string | nil, string
   local held, herr = snapshot_lock.acquire(root)
@@ -166,6 +175,9 @@ local function compose(root: string, canonical: string, current: string,
     if identity.author.name ~= author.name or identity.author.email ~= author.email then
       return nil, "snapshot composition belongs to " .. identity.author.name
       .. "; pass the same --session or set GITBOARD_SESSION"
+      .. "; pending " .. candidate.commit .. " subject " .. quoted_subject(identity.message)
+      .. "; inspect: gitboard snapshot; publish: gitboard publish " .. candidate.commit
+      .. "; abandon: gitboard snapshot --abandon " .. candidate.commit
     end
   end
   local message, merr = snapshot.message(summary, author)
