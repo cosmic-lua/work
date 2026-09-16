@@ -173,81 +173,89 @@ local function test_bar_forbids_a_change_with_two_mechanisms()
     "the bar topic bars a Change that offers two mechanisms")
 end
 
-local function test_bar_requires_a_grep_hit_for_a_named_location()
-  local page = doctrine.page("bar")
-  assert(page ~= nil, "the bar topic renders")
-  assert(page:find("quotes the `grep -n` hit", 1, true) ~= nil,
-    "the bar topic requires a grep -n hit for a named function or string")
-end
-
-local function test_bar_requires_an_anchor_string_for_any_file_line_citation()
+-- The bar gives DIRECTION for a named location, not a fact the spec
+-- itself certifies — no grep -n hit, no anchor-string citation, no
+-- before/after worked example: those decayed, and are gone with the
+-- rule that asked for them.
+local function test_bar_treats_a_named_location_as_direction_not_a_citation()
   local page = doctrine.page("bar")
   assert(page ~= nil, "the bar topic renders")
   local flat = page:gsub("%s+", " ")
-  assert(flat:find(
-      "The same rule covers any bare file:line citation of quoted "
-      .. "source text, wherever it sits", 1, true) ~= nil,
-    "the bar topic extends the grep-hit requirement past function/string "
-    .. "placements to every file:line citation")
-  assert(flat:find(
-      "a `## Non-goals` wall quoting a line as much as a `## Change` "
-      .. "naming a function", 1, true) ~= nil,
-    "the bar topic's example section is one the spec gate accepts")
+  assert(flat:find("as DIRECTION for the builder", 1, true) ~= nil,
+    "the bar topic names a location as direction to confirm: " .. flat)
+  assert(flat:find("quotes the `grep -n` hit", 1, true) == nil,
+    "the grep -n hit requirement is gone: " .. flat)
+  assert(flat:find("anchor string", 1, true) == nil,
+    "the anchor-string citation rule is gone: " .. flat)
+  assert(flat:find("_work/example.tl:54-56", 1, true) == nil,
+    "the before/after worked example is gone: " .. flat)
   assert(flat:find("## Evidence", 1, true) == nil,
     "the bar topic never names ## Evidence: `spec` refuses that section")
+end
+
+-- The prescriptive lists — the three named wiring files, the
+-- PATTERN-and-printed-count requirement for a multi-site Change — are
+-- gone: the bar says what the change is for and leaves the sites to
+-- the builder.
+local function test_bar_drops_the_wiring_files_and_match_count_lists()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find("lists its three wiring files", 1, true) == nil,
+    "the wiring-files enumeration is gone: " .. page)
+  assert(page:find("_work/gitcommands.tl", 1, true) == nil,
+    "the named wiring files are gone: " .. page)
+  assert(page:find("cosmic --find PATTERN", 1, true) == nil,
+    "the printed --find count requirement is gone: " .. page)
+  assert(page:find("lets the builder find them", 1, true) ~= nil,
+    "a multi-site Change says what it is for and leaves sites to the "
+    .. "builder: " .. page)
+end
+
+-- The sweep gap check enforced pasted dry-run evidence; it is gone,
+-- mechanism and doctrine both.
+local function test_bar_drops_the_sweep_paste_requirement()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  assert(page:find("no pasted dry-run", 1, true) == nil,
+    "the sweep paste requirement is gone: " .. page)
+  assert(page:find("`applied`/`refused` line", 1, true) == nil,
+    "the applied/refused paste example is gone: " .. page)
+end
+
+-- The rule that dropped pasted evidence says so, in the doctrine
+-- itself, so the next refiner does not read the missing paste as an
+-- oversight and reintroduce it.
+local function test_bar_explains_why_measurement_moved_to_build_time()
+  local page = doctrine.page("bar")
+  assert(page ~= nil, "the bar topic renders")
+  local flat = page:gsub("%s+", " ")
+  assert(flat:find("Direction, not measurement", 1, true) ~= nil,
+    "the bar topic names the replacement rule: " .. flat)
+  assert(flat:find("every one of those facts decays", 1, true) ~= nil,
+    "and states why the old rule failed: " .. flat)
+  assert(flat:find("`help build` tells the", 1, true) ~= nil
+    and flat:find("re-run", 1, true) ~= nil,
+    "and names where verification now happens: " .. flat)
   assert(flat:find(
-      "Before: `_work/example.tl:54-56` beside the quoted sentence. "
-      .. "After: the same quote plus "
-      .. "`grep -n \"the quoted phrase\" _work/example.tl`", 1, true) ~= nil,
-    "the bar topic gives a before/after worked example")
-  assert(flat:find(
-      "A citation with a number but no anchor string is under the bar "
-      .. "the same way an unmeasured claim already is", 1, true) ~= nil,
-    "a number-only citation is under the bar like an unmeasured claim")
+      "so the next refiner does not read the missing paste as an "
+      .. "oversight and put it back", 1, true) ~= nil,
+    "and says so plainly, against reintroduction: " .. flat)
+  assert(flat:find("nothing in it requires a pasted command, a pasted "
+      .. "output, a match count, or a citation paired with a line "
+      .. "number", 1, true) ~= nil,
+    "and states the requirement is gone, not merely relaxed: " .. flat)
 end
 
-local function test_bar_requires_the_three_wiring_files_named()
-  local page = doctrine.page("bar")
-  assert(page ~= nil, "the bar topic renders")
-  assert(page:find("lists its three wiring files", 1, true) ~= nil,
-    "the bar topic requires a verb or flag Change to name its wiring files")
-end
-
-local function test_bar_requires_the_pattern_and_its_find_count()
-  local page = doctrine.page("bar")
-  assert(page ~= nil, "the bar topic renders")
-  assert(page:find(
-      "A Change over N sites states the PATTERN that\n"
-      .. "selects them and the count `cosmic --find PATTERN [PATH...]` printed\n"
-      .. "— never a list of file:line pairs a builder re-derives.",
-      1, true) ~= nil,
-    "the bar topic states the PATTERN and its --find count, unconditionally")
-end
-
-local function test_bar_requires_a_sweeps_own_pasted_dry_run_output()
-  local page = doctrine.page("bar")
-  assert(page ~= nil, "the bar topic renders")
-  assert(page:find(
-      "A Change\nwhose acceptance is a sweep — a `--rewrite … --apply`, a `--fix`,\n"
-      .. "any command whose output is the diff — pastes that command's own\n"
-      .. "output from a dry run at spec time: the `applied`/`refused` line, or\n"
-      .. "the refusal, not only the `--find` count that named its sites.",
-      1, true) ~= nil,
-    "the bar topic requires a sweep Change to paste its own dry-run output")
-  assert(page:find(
-      "A\npaste of `0 applied` or a refusal is itself proof the spec is not\n"
-      .. "ready — the sweep found nothing to change, or would not run at all.",
-      1, true) ~= nil,
-    "the bar topic treats a 0-applied or refused paste as not ready")
-end
-
-local function test_build_rechecks_the_measured_commands()
+local function test_build_verifies_the_specs_claims_for_the_first_time()
   local page = doctrine.page("build")
   assert(page ~= nil, "the build topic renders")
-  assert(page:find(
-      "Re-run the spec's measured commands before\n   building",
-      1, true) ~= nil,
-    "step 2 makes direct claim callers recheck the spec's facts")
+  local flat = page:gsub("%s+", " ")
+  assert(flat:find("Re-run what the spec names before building", 1, true) ~= nil,
+    "step 2 makes direct claim callers recheck the spec's claims: " .. flat)
+  assert(flat:find(
+      "this is where its claims are checked for the first time, not a "
+      .. "repeat of a check already done at spec time", 1, true) ~= nil,
+    "and states the re-run is load-bearing, not a courtesy repeat: " .. flat)
   assert(page:find("Ready when", 1, true) == nil,
     "and names no Ready-when convention: a precondition is a dependency")
 end
