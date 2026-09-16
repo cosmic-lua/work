@@ -1,2 +1,3 @@
 title: gitboard claim: the documented --fetch-base refusal never fires, so a stale local main silently becomes four builders' base
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
