@@ -1,4 +1,7 @@
 title: gitboard worktree re-downloads the pinned runtime per worktree instead of caching it by its pin sha256
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+handover_head: 691d0cf84bfb32f1cb6bbb7e70c6394422cb977e
+external_url: https://github.com/cosmic-lua/work/pull/203
+builders: 8d8c59b29ca3603599a4f77acddadab1
 speccers: 4ba65225ae1fc5ecc01ba8f2b79bd306
