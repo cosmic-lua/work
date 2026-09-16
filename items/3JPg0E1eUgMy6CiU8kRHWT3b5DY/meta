@@ -1,2 +1,4 @@
 title: the snapshot-slot refusal names the owning session but not what is pending, how to inspect it, or how to discard it
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+speccers: e0e54baa7e68a089c0c85f50cb7c3077

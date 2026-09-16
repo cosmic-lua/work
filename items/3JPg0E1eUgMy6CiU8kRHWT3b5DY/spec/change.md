@@ -1,26 +1,25 @@
-A composing verb that is never published leaves the clone-local snapshot slot
-occupied. Every later composing verb then refuses with:
+Extend the owner-mismatch refusal in _work/snapshot_workspace.tl compose()
+to identify the pending snapshot by its full commit SHA and a clearly quoted
+or labeled one-line subject from that commit's existing identity.message.
+Use the pending commit's message, not the summary of the refused operation.
+The current snapshot CLI prints the SHA and publication report rather than
+this subject; no new Git read or summary API is needed.
 
-    gitboard-<verb>: snapshot composition belongs to <session>; pass the same
-    --session or set GITBOARD_SESSION
+Preserve the existing owner name and "pass the same --session or set
+GITBOARD_SESSION" remedy. Add concrete inspect, publish and abandon commands:
+gitboard snapshot, gitboard publish FULL_SHA, and gitboard snapshot --abandon
+FULL_SHA. The commands use the validated pending SHA only, never summary
+text as an argument. Preserve the caller's existing verdict prefix/status.
 
-That message names the owning session and nothing else: not what the pending
-snapshot would do, not how to look, not how to discard it. A caller who does
-not remember composing anything has to discover `gitboard snapshot --check`,
-then find the commit, then read it, before it can decide whether to publish or
-abandon.
+Render only the first physical message line. Escape ASCII control bytes
+0 through 31 and 127, including CR, TAB and ESC, so the displayed subject
+cannot add lines or terminal controls. Do not print commit body or logical
+author trailers. Keep the diagnostic data readable even when the subject
+contains quotes, backslashes or a dash-leading title.
 
-Make the refusal carry the pending snapshot's identity and its one-line
-summary — the same summary `snapshot` already renders — plus the two exits:
-
-    gitboard-done: REFUSED: a snapshot is already composed by <session>:
-      <sha> "new 3JOpng1c --a title starting with dashes"
-      publish it (gitboard publish <sha>) or discard it
-      (gitboard snapshot --abandon <sha>)
-
-Where the owning session is the caller's own, the existing "pass the same
---session" advice still applies and should still be shown.
-
-Regression: compose a snapshot under one session, invoke a composing verb
-under another, and assert the refusal names the snapshot's sha and summary and
-both exits.
+Extend _work/snapshot_feedback_test.tl's existing cross-session composing
+refusal test. Assert pending full SHA and subject, owner and session remedy,
+and the three valid commands. Assert refusal leaves the snapshot ref,
+canonical head and publication recovery state unchanged. Add a case with a
+multiline message and control characters to prove a one-line escaped subject
+and no body/trailer leak. Retain the existing frozen-summary checks.
