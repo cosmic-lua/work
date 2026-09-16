@@ -4,4 +4,6 @@ repo: cosmic-lua/work
 handover_head: 497b2d69ba4e4decf10676b574ea2c4e9f976c83
 verdict: accept
 verdict_head: 497b2d69ba4e4decf10676b574ea2c4e9f976c83
+landed_head: c73c0c6b72c99bd00b00612ef121cd35e871d2e1
+resolution: completed
 builders: 633c930f2e0388ce9ef55b7f51edb11e
