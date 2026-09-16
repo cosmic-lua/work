@@ -1,0 +1,4 @@
+title: brief templates never tell a spawned agent how to wait for a gate, so a turn ends with no verdict
+parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
+repo: cosmic-lua/work
+speccers: d449323b3b4076befdbb73dcb1a5e563
