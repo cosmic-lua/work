@@ -1,2 +1,3 @@
 title: gitboard worktree resolves its path from ambient cwd, so a checkout intermittently nests inside another item's worktree
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
