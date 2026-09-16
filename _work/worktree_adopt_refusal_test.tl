@@ -158,7 +158,7 @@ local function test_every_adoption_checkout_refusal_preserves_refs_config_and_re
             return {ok = false, code = -1, signal = 15, stdout = "", stderr = ""}, ""
           end
           if fault == "registration" and argv[2] == "worktree" and argv[3] == "list" then
-            return {ok = true, code = 0, stdout = "", stderr = ""}, ""
+            return {ok = true, code = 0, stdout = "worktree " .. c.source .. "\0HEAD " .. c.base .. "\0\0", stderr = ""}, ""
           end
           if fault == "common" and opts ~= nil and opts.cwd == c.path and argv[4] == "--git-common-dir" then
             return {ok = true, code = 0, stdout = "/unrelated/.git\n", stderr = ""}, ""

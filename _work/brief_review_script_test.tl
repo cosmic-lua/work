@@ -125,7 +125,7 @@ local function handover_diff(s: store.Store, id: string, name: string,
       "acme/widgets=" .. root})
   fixture.claim_item(s, id, "session-a", base)
   local it = check.must(store.load(s, id))
-  it.repo, it.handover_head = "acme/widgets", head
+  it.repo, it.handover_head, it.base = "acme/widgets", head, base
   assert(item.record_involvement(it.builders, "session-a"))
   fixture.raw_seed_item(s, it,
     ("take %s by session-a head:%s"):format(id:sub(1, 8), head:sub(1, 12)))
@@ -156,6 +156,9 @@ local function test_diff_shape_picks_the_review_template()
     local code, out = brief_and_capture(s, leaf)
     assert(code == 0, ("%s: a local commit diff earns the brief: %s")
       :format(case.name, out))
+    local recorded = check.must(store.load(s, leaf))
+    assert(out:find("Review `" .. (recorded.base or "") .. "..." .. (recorded.handover_head or "") .. "`", 1, true),
+      "both review scripts freeze the resolved target with three dots")
     if case.script then
       assert(out:find("git show", 1, true) ~= nil,
         ("%s: a small diff selects the numbered script: %s")

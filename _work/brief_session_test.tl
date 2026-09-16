@@ -8,6 +8,7 @@
 
 local check = require("cosmic.check")
 local brief = require("_work.brief")
+local product_fixture = require("_work.brief_product_fixture")
 local claimsession = require("_work.claimsession")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
@@ -18,7 +19,7 @@ local give_spec = fixture.give_spec
 local root_with_leaf = fixture.root_with_leaf
 
 local BASE < const > = ("a"):rep(40)
-local HEAD < const > = ("b"):rep(40)
+local HEAD = ("b"):rep(40)
 
 --- Run brief.cmd_brief and capture exactly what it prints via
 --- print() — the same swap-and-restore pattern `_work.brief_test` uses.
@@ -53,7 +54,7 @@ end
 local function record_handover(s: store.Store, id: string, builder: string)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
-  it.handover_head = HEAD
+  HEAD = product_fixture.prepare(s, it)
   assert(item.record_involvement(it.builders, builder))
   fixture.raw_seed_item(s, it,
     ("take %s by %s head:%s"):format(id:sub(1, 8), builder, HEAD:sub(1, 12)))

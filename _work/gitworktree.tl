@@ -23,6 +23,7 @@
 --- out the handed-over commit. `--verbose` applies identically.
 local child = require("cosmic.child")
 local claim = require("_work.claim")
+local paths = require("_work.worktree_paths")
 local receipt = require("_work.preparation_receipt")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -264,6 +265,8 @@ local function cmd_worktree_review(s: store.Store, it: item.Item,
   if checkout == nil then return gate.verdict_line("worktree", false, maperr) end
   local branch = claim.branch(it.id, st.root)
   local path = claim.worktree(checkout, branch)
+  local nested = paths.refusal(checkout, path)
+  if nested ~= nil then return gate.verdict_line("worktree", false, nested) end
   if fs.is_dir(path) or fs.is_file(path) then
     return gate.verdict_line("worktree", false,
       ("%s already exists — never reused"):format(path))
@@ -355,6 +358,8 @@ local function cmd_worktree(s: store.Store, id: string, session: string,
   local branch = claim.branch(id, st.root)
   local path = claim.worktree(checkout, branch)
   if adopt == nil then
+    local nested = paths.refusal(checkout, path)
+    if nested ~= nil then return gate.verdict_line("worktree", false, nested) end
     if fs.is_dir(path) or fs.is_file(path) then
       return gate.verdict_line("worktree", false,
         ("%s already exists — never reused"):format(path))

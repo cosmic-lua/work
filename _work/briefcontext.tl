@@ -86,6 +86,7 @@ local record Facts
   review_session: string
   round_context: string
   claim_base: string
+  review_target: string
   change_source: string
   gitboard_cmd: string
 end
@@ -278,7 +279,7 @@ local function reviewing(tr: Tracker, f: Facts): string
       })
   end
   return tmpl_reviewing_diff.render({
-      claim_base = f.claim_base,
+      review_target = f.review_target,
       head_sha = head_sha,
     })
 end
@@ -362,7 +363,7 @@ local function review_script(f: Facts, cmds: briefcommands.Commands): string, {s
     title = f.title,
     change_source = f.change_source,
     board_dir = f.board_dir,
-    claim_base = f.claim_base,
+    review_target = f.review_target,
     head_sha = need(tr, "<HEAD_SHA>", f.head_sha),
     spec = f.spec,
     product_root = need(tr, "<PRODUCT_ROOT>", f.product_root),

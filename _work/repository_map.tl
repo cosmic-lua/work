@@ -9,6 +9,7 @@
 --- consulted here.
 local child = require("cosmic.child")
 local fs = require("cosmic.fs")
+local paths = require("_work.worktree_paths")
 
 --- Check that a selected path is a local Git work tree.
 --- @param path string Candidate local repository
@@ -63,6 +64,8 @@ local function resolve(board_root: string, repository: string,
   if override ~= "" then
     local selected, err = validate(override)
     if selected == nil then return nil, err end
+    selected, err = paths.primary(selected)
+    if selected == nil then return nil, err end
     local saved, serr = remember(board_root, repository, selected)
     if not saved then return nil, serr end
     return selected, ""
@@ -78,7 +81,11 @@ local function resolve(board_root: string, repository: string,
   end
   for line in r.stdout:gmatch("([^\n]+)") do
     local identity, path = line:match("^([^=]+)=(.+)$")
-    if identity == repository then return validate(path) end
+    if identity == repository then
+      local selected, verr = validate(path)
+      if selected == nil then return nil, verr end
+      return paths.primary(selected)
+    end
   end
   return nil, ("no local repository mapped for %s — configure one with "
     .. "`git config --local --add gitboard.repository %s=/absolute/path` "
