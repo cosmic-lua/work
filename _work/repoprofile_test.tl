@@ -375,3 +375,24 @@ local function test_default_base_exact_argv_and_failure_grammar()
   child.run = original
   assert(ok, tostring(err))
 end
+
+local function test_non_product_proof_requires_cosmic_and_nonempty_test_paths()
+  local root = directory()
+  local absent_profile = resolve(root)
+  write(root, "Makefile", "all:\n")
+  local unknown = resolve(root)
+  write(root, "Makefile", ".PHONY: gate\n")
+  local make = resolve(root)
+  assert(fs.make_dirs(fs.join(root, "bin")))
+  write(root, "bin/cosmic", "")
+  local cosmic = resolve(root)
+  for _, p in ipairs({absent_profile, unknown, make, cosmic}) do
+    assert(not repoprofile.proves_non_product(p, {}), "empty paths never prove test-only")
+    assert(repoprofile.proves_non_product(p, {"a_test.tl", "nested/b_test.tl"})
+      == (p.kind == "cosmic"), "only cosmic owns a test-only proof")
+    for _, path in ipairs({"", "product.tl", "a.c", "a.h", "a.S", "README.md", "unknown"}) do
+      assert(not repoprofile.proves_non_product(p, {path}), "unknown/product path fails closed")
+      assert(not repoprofile.proves_non_product(p, {"a_test.tl", path}), "mixed paths fail closed")
+    end
+  end
+end

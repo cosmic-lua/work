@@ -114,14 +114,26 @@ local function default_base(checkout: string): string
   return branch
 end
 
+--- Only cosmic's test naming convention currently proves non-product paths.
+--- Empty or unknown evidence cannot earn the large-diff review shortcut.
+local function proves_non_product(p: Profile, files: {string}): boolean
+  if p.kind ~= "cosmic" or #files == 0 then return false end
+  for _, path in ipairs(files) do
+    if path:match("_test%.tl$") == nil then return false end
+  end
+  return true
+end
+
 local record repoprofile
   type Kind = Kind
   type Profile = Profile
+  proves_non_product: function(p: Profile, files: {string}): boolean
   resolve: function(checkout: string): Profile
   default_base: function(checkout: string): string
 end
 
 local M: repoprofile = {
+  proves_non_product = proves_non_product,
   resolve = resolve,
   default_base = default_base,
 }

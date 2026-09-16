@@ -41,6 +41,7 @@ local gate = require("_work.gitgate")
 local gitreadlog = require("_work.gitreadlog")
 local item = require("_work.item")
 local repository_map = require("_work.repository_map")
+local repoprofile = require("_work.repoprofile")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -58,27 +59,6 @@ local KINDS < const >: {string: boolean} = {
 
 --- The kind names, alphabetical, for refusals and help.
 local KIND_LIST < const > = "builder, decompose, refine, research, review"
-
---- Whether a diff is small and mechanical enough to earn
---- `brieftext_review.REVIEW_SCRIPT`'s numbered script instead of
---- `REVIEW`'s full adversarial prompt: every changed `.tl` file is a
---- `*_test.tl` file, or the diff totals fewer than 20 changed lines.
---- @param files {string} The PR's changed file paths
---- @param additions integer The PR's added line count
---- @param deletions integer The PR's removed line count
---- @return boolean True when the numbered script applies
-local function is_mechanical_diff(files: {string}, additions: integer,
-    deletions: integer): boolean
-  if additions + deletions < 20 then
-    return true
-  end
-  for _, f in ipairs(files) do
-    if f:match("%.tl$") ~= nil and f:match("_test%.tl$") == nil then
-      return false
-    end
-  end
-  return true
-end
 
 --- Inspect a handed-over change using only the caller-managed local
 --- product checkout; a failed mapping merely selects the full review.
@@ -103,7 +83,8 @@ local function local_mechanical_diff(s: store.Store, it: item.Item): boolean
     if ai == nil or di == nil then return false end
     additions, deletions = additions + ai, deletions + di
   end
-  return is_mechanical_diff(files, additions, deletions)
+  return additions + deletions < 20
+  or repoprofile.proves_non_product(repoprofile.resolve(root), files)
 end
 
 --- The findings a research handover hands over: the message body of
