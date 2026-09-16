@@ -3,4 +3,6 @@ parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
 handover_head: 7ddccf70e2a846cba87dbf9ee9dadd59f2fafd2a
 external_url: https://github.com/cosmic-lua/work/pull/200
+verdict: accept
+verdict_head: 7ddccf70e2a846cba87dbf9ee9dadd59f2fafd2a
 builders: c769c6ff0d907b1b11a3d3a4a1f1bf62
