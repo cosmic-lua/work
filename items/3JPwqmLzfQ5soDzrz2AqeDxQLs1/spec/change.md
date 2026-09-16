@@ -1,0 +1,3 @@
+Replace the deprecated sync instructions in _work/brieftext.tl's REFINE and DECOMPOSE templates with refresh. Spell executable examples bin/gitboard refresh --execute so they actually fetch current board state; update the surrounding bare-verb steps to match. Preserve the templates' sequence and other instructions. Regenerate the paired committed renderers. Extend existing rendered-brief coverage to require refresh --execute and reject the retired sync examples in these two roles.
+
+This is the prerequisite correction for avg8_gj1q's deprecated-command gate. That item's non-goal forbids correcting text in its own PR.
