@@ -291,7 +291,7 @@ end
 -- plan a diff review cannot answer are its survivors, in the rendered
 -- brief's own order, and a research review owes neither — only the
 -- product checkout it reproduces from.
-local DIFF_POSTURE < const > = [[
+local DIFF_POSTURE_A < const > = [[
 
 
 ## How to review — the posture is ADVERSARIAL
@@ -342,7 +342,9 @@ in it. Your worktree is the only tree.
 
 `verdict` verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
-those operations. This review is claimed under session `sess-1` —
+]]
+
+local DIFF_POSTURE_B < const > = [[
 you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 `fetch` before you run any test.
 
@@ -390,8 +392,14 @@ local function test_the_review_posture_follows_the_deliverable()
   assert(#dleft == 0, "a diff review answers everything: " .. table.concat(dleft, " "))
   assert(diff_body:sub(1, #DIFF_OPENING) == DIFF_OPENING,
     "the diff opening is byte for byte what the review always carried: " .. diff_body)
-  assert(diff_body:find(DIFF_POSTURE, 1, true) ~= nil,
+  assert(diff_body:find(DIFF_POSTURE_A, 1, true) ~= nil,
     "the diff posture is byte for byte what the review always carried: " .. diff_body)
+  assert(diff_body:find(DIFF_POSTURE_B, 1, true) ~= nil,
+    "the diff posture is byte for byte what the review always carried: " .. diff_body)
+  assert(diff_body:find("those operations, and so does watching them: never poll or "
+      .. "subscribe to a\nprovider event yourself. This review is claimed under "
+      .. "session `sess-1` —\n", 1, true) ~= nil,
+    "the caller alone watches provider state, never the reviewer: " .. diff_body)
   assert(diff_body:find("There is no diff here", 1, true) == nil, diff_body)
   f.findings = "The probe held: three of four."
   local research_body, rleft = briefcontext.review(f, full_commands())

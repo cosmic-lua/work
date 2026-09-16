@@ -209,7 +209,12 @@ fact nobody finishes.
 4. Build exactly the `## Change`; its stated walls hold. A scope
    question the spec cannot answer goes back to the board, never
    into the diff — having written the spec is not permission to
-   reinterpret it mid-build.
+   reinterpret it mid-build. A step that depends on slow-to-settle
+   external state beyond this item's own PR/CI gate — a separate
+   workflow run, a release publish, another team's webhook — is never
+   yours to wait on: report it and stop there, never poll or
+   subscribe to it yourself. The orchestrator resumes you, fresh or
+   as-is, once that state has already changed (`help orchestrate`).
 5. Hand over the exact local product commit with `take ID --head SHA`
    (optionally `--url URL` for navigation). If the caller opens a pull
    request or inspects checks, it does so with its own authenticated tooling;
@@ -348,6 +353,17 @@ checkout or push rights to this board repository:
   release the claim (`drop ID --why`, a worker-side reason) so the
   item is pullable again. Still running: leave it. Then the PRs are
   yours to watch — the agents are gone.
+- No spawned agent — builder, research, or review — ever polls or
+  subscribes to external state, GitHub's own events included. A step
+  that outlives the item's own PR/CI gate — triggering and awaiting a
+  separate workflow run, a release publish, another team's webhook,
+  GitHub Actions completion — is the orchestrator's alone: check it
+  with a cheap, targeted call, or a scheduled check-in for a
+  genuinely long wait, and invoke the agent (fresh, or resumed) only
+  once that state has already changed and there is real work for it
+  to do next. A spawned agent's session ends at its final report, so
+  a subscription it opened wakes nothing that is still listening —
+  only the orchestrator's own persistent session may hold one.
 - Gate a review on its own SHA before spawning one. A normal code handover
   reviews only once mechanical checks are green on the exact handed-over
   commit: push, open, or update its pull request; confirm the PR head

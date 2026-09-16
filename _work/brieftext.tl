@@ -318,8 +318,11 @@ orchestrator files it.
 Never touch a product tree with a commit, never open a PR, never run
 a `gitboard` command yourself, however plainly the item's own spec
 asks for one — board state is the orchestrator's job here, same as
-a builder's PR is. A gap you cannot resolve from the tree and the
-repo's AGENTS.md alone is not yours to guess past.
+a builder's PR is. Never poll or subscribe to a provider event
+yourself, however slow-to-settle the state the spec asks you to
+measure is: the orchestrator triggers and watches it, and resumes
+you once it has already changed. A gap you cannot resolve from the
+tree and the repo's AGENTS.md alone is not yours to guess past.
 
 ## Final report
 
