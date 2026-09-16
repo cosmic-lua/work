@@ -133,8 +133,6 @@ local function main(...: string): integer
   local d, derr = flags.command(CSPEC, argv)
   if d == nil then
     io.stderr:write(tostring(derr) .. "\n")
-    io.stderr:write(flags.command_help(CSPEC)
-      .. "\n\n" .. doctrine.listing() .. "\n")
     return 1
   end
   if d.help or d.command == nil then
