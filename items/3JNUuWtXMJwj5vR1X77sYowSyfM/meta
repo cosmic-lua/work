@@ -5,6 +5,8 @@ handover_head: d7d1e1606d089055ab52e51731106da7c9ac4a98
 external_url: https://github.com/cosmic-lua/work/pull/184
 verdict: accept
 verdict_head: d7d1e1606d089055ab52e51731106da7c9ac4a98
+landed_head: c79acc26a8624340cd6162885cd37fa6817b70df
+resolution: completed
 builders: 274b41cbb7742826e86ce84dc4263248
 speccers: 274b41cbb7742826e86ce84dc4263248
 touches: _work/worktree_runtime.tl _work/worktree_runtime_test.tl _work/gitworktree.tl
