@@ -361,9 +361,9 @@ or fewer than 20 changed lines in total. Four fixed moves, in order:
 1. Confirm you are reading exactly `{{.head_sha}}`. If the caller supplies
    external checks, confirm they name that SHA; red or running means stop and
    record nothing. Never infer check state from the board.
-2. Verify the one measured fact the spec names, against the diff's
-   real effect. A moved number is a finding to quote, not by itself
-   a reason to stop.
+2. Verify what the spec names against the diff's real effect. A
+   moved number is a finding to quote, not by itself a reason to
+   stop.
 3. Break the guard in a scratch copy: `git show <head>:<file>` the
    file the diff's own test guards into the scratchpad, mutate the
    copy (replace a matched needle with unrelated text, flip a

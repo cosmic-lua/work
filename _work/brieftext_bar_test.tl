@@ -73,12 +73,20 @@ end
 -- or a builder that a tree-fact must be measured, with its command,
 -- into the prose, or ask for a pasted command's output.
 local function test_no_template_asks_for_pasted_measurement()
-  for _, t in ipairs({BUILDER, REWORK, RESEARCH, REFINE, DECOMPOSE}) do
+  for _, t in ipairs({BUILDER, REWORK, RESEARCH, REFINE, DECOMPOSE,
+      REVIEW_SCRIPT}) do
     assert(t:find("measured with the command", 1, true) == nil,
       "no template may ask for a tree-fact measured with its command: "
       .. t)
     assert(t:find("pasted output", 1, true) == nil,
       "no template may ask for a claim's pasted output: " .. t)
+    -- `POSTURE_RESEARCH` legitimately keeps "measured claim" — a
+    -- research handover's deliverable IS recorded evidence with its
+    -- command — but it is not one of the templates iterated here, so
+    -- this catches the narrower phrase without touching that doctrine.
+    assert(t:find("measured fact", 1, true) == nil,
+      "no template may ask a reviewer or builder to verify a spec-named "
+      .. "fact as measured: " .. t)
   end
 end
 
