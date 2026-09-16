@@ -1,0 +1,5 @@
+title: cosmic launcher: reuse verified pristine runtime bytes before cold download
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/cosmic
+speccers: f8833b4ac330e4b473f286921f860a8e
+touches: bin/cosmic
