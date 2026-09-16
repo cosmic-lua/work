@@ -76,3 +76,23 @@ local function test_imported_identity_preserved()
   head = check.must(refs.read_ref(root, "HEAD"))
   assert(prepare(root, head, "renew", ALICE, NOW + 1).members[1].claim_root == BASE)
 end
+local function test_authority_omits_expired_claims_and_counts_them()
+  local root, head = setup("authority-expiry")
+  assert(fs.make_dirs(root .. "/items/c"))
+  assert(fs.write(root .. "/items/c/meta", "kind: task\ntitle: C\n"))
+  local now = os.time()
+  local function claim_for(item_id: string, expires_at: integer): boardtree.Claim
+    return {id = string.rep(item_id, 40):sub(1, 40), holder = ALICE, acquired_at = expires_at - 7200,
+      renewed_at = expires_at - 7200, expires_at = expires_at, product_base = BASE}
+  end
+  assert(fs.write(root .. "/claims/a", check.must(boardtree.encode_claim(claim_for("a", now + 7200)))))
+  assert(fs.write(root .. "/claims/b", check.must(boardtree.encode_claim(claim_for("b", now - 1)))))
+  assert(fs.write(root .. "/claims/c", check.must(boardtree.encode_claim(claim_for("c", now - 1)))))
+  fixture.git(root, {"add", "."}); fixture.git(root, {"commit", "-qm", "mixed claims"})
+  head = check.must(refs.read_ref(root, "HEAD"))
+  local report = check.must(native.authority(root, head))
+  assert(report:find("^current%-claim a status=active"), "active claim line missing: " .. report)
+  assert(not report:find("current%-claim b"), "expired claim b must not be listed: " .. report)
+  assert(not report:find("current%-claim c"), "expired claim c must not be listed: " .. report)
+  assert(report:find("expired%-claims=2$"), "expired count missing: " .. report)
+end
