@@ -87,7 +87,7 @@ local M: brieftmpl_fields = {
     "<TITLE>",
     "<CHANGE_SOURCE>",
     "<BOARD_DIR>",
-    "<CLAIM_BASE>",
+    "<REVIEW_TARGET>",
     "<HEAD_SHA>",
     "<SPEC>",
     "<PRODUCT_ROOT>",
@@ -102,7 +102,7 @@ local M: brieftmpl_fields = {
     "<REPO>",
   },
   reviewing_diff = {
-    "<CLAIM_BASE>",
+    "<REVIEW_TARGET>",
     "<HEAD_SHA>",
   },
   reviewing_research = {

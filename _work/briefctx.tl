@@ -100,7 +100,7 @@ local record briefctx
     title: string
     change_source: string
     board_dir: string
-    claim_base: string
+    review_target: string
     head_sha: string
     spec: string
     product_root: string
@@ -119,7 +119,7 @@ local record briefctx
   --- `_work.brieftext_review`'s `REVIEWING_DIFF`: a diff handover's
   --- "what you're reviewing" section — the product commit range.
   record ReviewingDiff
-    claim_base: string
+    review_target: string
     head_sha: string
   end
 

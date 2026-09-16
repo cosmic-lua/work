@@ -118,7 +118,7 @@ from a distance from the researcher. Everything you need is below.
 
 local REVIEWING_DIFF < const > = [[
 The caller has made this exact commit available in your local checkout.
-Review `{{.claim_base}}..{{.head_sha}}`; never substitute a branch tip or provider
+Review `{{.review_target}}...{{.head_sha}}`; never substitute a branch tip or provider
 state for either commit. The spec below is authoritative. External checks,
 when used, must be inspected by the caller on this exact SHA.
 
@@ -345,7 +345,7 @@ The caller has made this exact commit available in your local checkout.
 The checkout that holds the board worktree (`{{.board_dir}}/..`) is the
 orchestrator's and is stale by construction; never read, grep or build
 in it. Your worktree is the only tree.
-Review `{{.claim_base}}..{{.head_sha}}`; never substitute a branch tip or provider
+Review `{{.review_target}}...{{.head_sha}}`; never substitute a branch tip or provider
 state for either commit. The spec below is authoritative. External checks,
 when used, must be inspected by the caller on this exact SHA.
 

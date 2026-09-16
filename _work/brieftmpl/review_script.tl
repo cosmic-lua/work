@@ -28,9 +28,9 @@ local function render(d: briefctx.ReviewScript): string
   parts[#parts + 1] = v6
   parts[#parts + 1] = "/..`) is the\norchestrator's and is stale by construction; never read, grep or build\nin it. Your worktree is the only tree.\nReview `"
   -- review_script:15
-  local v7: string = d.claim_base
+  local v7: string = d.review_target
   parts[#parts + 1] = v7
-  parts[#parts + 1] = ".."
+  parts[#parts + 1] = "..."
   -- review_script:15
   local v8: string = d.head_sha
   parts[#parts + 1] = v8

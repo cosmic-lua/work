@@ -9,6 +9,7 @@ local hash = require("cosmic.hash")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
+local product_fixture = require("_work.brief_product_fixture")
 local brieftext_friction = require("_work.brieftext_friction")
 local claim = require("_work.claim")
 local fixture = require("_work.fixture")
@@ -27,7 +28,7 @@ local PRODUCT_ROOT < const > = fs.join(os.getenv("TEST_TMPDIR") or "/tmp", "brie
 assert(fs.make_dirs(fs.join(PRODUCT_ROOT, "bin")) and fs.write(fs.join(PRODUCT_ROOT, "bin/gitboard"), ""))
 
 local BASE < const > = ("a"):rep(40)
-local HEAD < const > = ("b"):rep(40)
+local HEAD = ("b"):rep(40)
 
 --- Put an item in the v3 commit-handover shape without involving a provider.
 --- `it.claim`/`it.claim_base` are projected from the current native claim
@@ -39,7 +40,7 @@ local function handover(s: store.Store, id: string, url?: string)
   fixture.claim_item(s, id, "session-a", BASE)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
-  it.handover_head = HEAD
+  HEAD = product_fixture.prepare(s, it)
   it.external_url = url or ""
   assert(item.record_involvement(it.builders, "session-a"))
   fixture.raw_seed_item(s, it,

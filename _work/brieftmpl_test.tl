@@ -48,7 +48,7 @@ local function full_facts(): briefcontext.Facts
     current_spec = "## Change\n\nDo the thing.\n",
     review_session = "sess-1",
     round_context = "",
-    claim_base = "fedcba9876543210",
+    claim_base = "fedcba9876543210", review_target = "fedcba9876543210",
     change_source = "Commit: `0123456789abcdef`",
     gitboard_cmd = "bin/gitboard",
   }
@@ -252,7 +252,7 @@ local function test_the_review_section_follows_the_deliverable()
   local diff_body, dleft = briefcontext.review(f, full_commands())
   assert(#dleft == 0, "a diff review answers everything: " .. table.concat(dleft, " "))
   assert(diff_body:find("The caller has made this exact commit available in your local checkout.\n"
-      .. "Review `fedcba9876543210..0123456789abcdef`;", 1, true) ~= nil, diff_body)
+      .. "Review `fedcba9876543210...0123456789abcdef`;", 1, true) ~= nil, diff_body)
   assert(diff_body:find("## The spec this PR is supposed to satisfy (verbatim)\n\n---\n"
       .. "## Change\n\nDo the thing.\n\n---", 1, true) ~= nil, diff_body)
   assert(diff_body:find("This is a research handover", 1, true) == nil, diff_body)

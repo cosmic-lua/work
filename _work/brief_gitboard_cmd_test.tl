@@ -11,13 +11,14 @@ local check = require("cosmic.check")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
+local product_fixture = require("_work.brief_product_fixture")
 local gitboard = require("_work.gitboard")
 local gitinvocation = require("_work.gitinvocation")
 local item = require("_work.item")
 local store = require("_work.store")
 
 local BASE < const > = ("a"):rep(40)
-local HEAD < const > = ("b"):rep(40)
+local HEAD = ("b"):rep(40)
 
 local TMP < const > = os.getenv("TEST_TMPDIR") or "/tmp"
 -- The absolute board executable: outside the product worktree, shaped like
@@ -43,7 +44,7 @@ local function handover(s: store.Store, id: string)
   fixture.claim_item(s, id, "session-a", BASE)
   local it = check.must(store.load(s, id))
   it.repo = "acme/widgets"
-  it.handover_head = HEAD
+  HEAD = product_fixture.prepare(s, it)
   assert(item.record_involvement(it.builders, "session-a"))
   fixture.raw_seed_item(s, it,
     ("take %s by session-a head:%s"):format(id:sub(1, 8), HEAD:sub(1, 12)))

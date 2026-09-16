@@ -8,6 +8,7 @@
 -- refuses as it always did. This sibling keeps brief_test's existing
 -- cases below the 500-line cap.
 local brief = require("_work.brief")
+local product_fixture = require("_work.brief_product_fixture")
 local brieftext_review = require("_work.brieftext_review")
 local check = require("cosmic.check")
 local hash = require("cosmic.hash")
@@ -35,7 +36,6 @@ local function save(s: store.Store, it: item.Item, message: string, body?: itemt
 end
 
 local BASE < const > = ("a"):rep(40)
-local HEAD < const > = ("b"):rep(40)
 local FINDINGS < const > = [[
 ## Findings
 
@@ -293,12 +293,12 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   -- A product commit recorded beside it is the handover: the brief
   -- judges that commit and carries no findings.
   it = check.must(store.load(s, id))
-  it.handover_head = HEAD
+  local product_head = product_fixture.prepare(s, it)
   fixture.raw_seed_item(s, it, ("take %s by session-a head:%s"):format(
-      id:sub(1, 8), HEAD:sub(1, 12)))
+      id:sub(1, 8), product_head:sub(1, 12)))
   local both_code, both = capture(s, "review", id)
   assert(both_code == 0, both)
-  assert_exact_review(both, HEAD)
+  assert_exact_review(both, product_head)
   assert(both:find(FINDINGS, 1, true) == nil
     and both:find("This is a research handover", 1, true) == nil
     and both:find("The caller has made this exact commit available", 1, true) ~= nil,
@@ -461,6 +461,6 @@ commit's message body verbatim beside the spec it answers.]], 1, true) ~= nil, p
     "the research posture has no worktree, no --repo-dir and no mutation step")
   assert(brieftext_review.REVIEWING_RESEARCH:find("{{.findings}}", 1, true) ~= nil,
     "the research wording carries the findings")
-  assert(brieftext_review.REVIEWING_DIFF:find("{{.claim_base}}..{{.head_sha}}", 1, true) ~= nil,
+  assert(brieftext_review.REVIEWING_DIFF:find("{{.review_target}}...{{.head_sha}}", 1, true) ~= nil,
     "the diff wording carries the product commit range")
 end

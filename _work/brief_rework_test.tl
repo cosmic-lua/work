@@ -11,6 +11,7 @@ local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
+local product_fixture = require("_work.brief_product_fixture")
 local claim = require("_work.claim")
 local authority = require("_work.stateclaim_authority")
 local fixture = require("_work.fixture")
@@ -74,7 +75,7 @@ local function brief_and_capture(s: store.Store, kind: string,
 end
 
 local BASE < const > = ("a"):rep(40)
-local HEAD < const > = ("b"):rep(40)
+local HEAD = ("b"):rep(40)
 
 --- One git command in `root`, failing loudly — fixture setup. Mirrors
 --- `_work/brief_review_script_test.tl`'s own local `git` helper.
@@ -126,7 +127,7 @@ local function handover_item(s: store.Store, leaf: string): string
   give_spec(s, leaf)
   local checkout = claimed_item(s, leaf)
   local it = assert(store.load(s, leaf))
-  it.handover_head = HEAD
+  HEAD = product_fixture.prepare(s, it)
   assert(item.record_involvement(it.builders, "session-a"))
   fixture.raw_seed_item(s, it,
     ("take %s by session-a head:%s"):format(leaf:sub(1, 8), HEAD:sub(1, 12)))

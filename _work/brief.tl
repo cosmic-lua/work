@@ -33,6 +33,7 @@ local gitinvocation = require("_work.gitinvocation")
 local receipt = require("_work.preparation_receipt")
 local brieftext_friction = require("_work.brieftext_friction")
 local child = require("cosmic.child")
+local reviewrange = require("_work.reviewrange")
 local claim = require("_work.claim")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
@@ -316,10 +317,14 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   -- whose message body is the findings). With both recorded the
   -- product commit is the handover, as `take --head` itself decides.
   local head_sha = ""
+  local review_target = ""
   local mechanical = false
   local findings: string | nil = nil
   if kind == "review" then
     if (it.handover_head or "") ~= "" then
+      local target, rerr = reviewrange.resolve(s.root, it)
+      if target == nil then return gate.verdict_line("brief", false, rerr) end
+      review_target = target
       head_sha = it.handover_head or ""
       mechanical = local_mechanical_diff(s, it)
     elseif (it.result or "") ~= "" then
@@ -365,6 +370,7 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
     review_session = label,
     round_context = "",
     claim_base = prep["product-base"] or it.claim_base or "",
+    review_target = review_target,
     change_source = (it.external_url or "") ~= ""
     and (("Commit: `%s`\nExternal link (navigation only): %s")
       :format(head_sha, it.external_url or ""))

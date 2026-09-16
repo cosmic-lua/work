@@ -4,9 +4,9 @@ local function render(d: briefctx.ReviewingDiff): string
   local parts: {string} = {}
   parts[#parts + 1] = "The caller has made this exact commit available in your local checkout.\nReview `"
   -- reviewing_diff:2
-  local v1: string = d.claim_base
+  local v1: string = d.review_target
   parts[#parts + 1] = v1
-  parts[#parts + 1] = ".."
+  parts[#parts + 1] = "..."
   -- reviewing_diff:2
   local v2: string = d.head_sha
   parts[#parts + 1] = v2
