@@ -1,3 +1,6 @@
 title: stateclaim.tl's authority function and the stateclaim_authority.tl module share a name and test different things — the collision already misdirected one spec
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+handover_head: 4d37b47d07812efb40365834140d3e83b71b6967
+external_url: https://github.com/cosmic-lua/work/pull/202
+builders: 5e4cfc8c8bb57913e5650c25f687a959
