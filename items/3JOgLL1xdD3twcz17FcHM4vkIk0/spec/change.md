@@ -1,24 +1,41 @@
-Add a rule to the spec bar (`gitboard help bar`, and the check `new`/`show`
-run against a spec): a `## Change` may not leave an unbounded quantifier or an
-unsourced existence claim for the builder to resolve.
+Add a nonblocking direction advisory for the two phrase families below to
+`new` and ordinary `show`. Keep it separate from spec.ready_gaps,
+workflow_rules.readiness_issues and every admission check. Direction hints
+must not change whether an otherwise valid item can be filed, claimed,
+taken or published. Preserve show --raw exactly.
 
-Two shapes, both of which a builder must go and settle empirically before it
-can make the first edit:
+Use a pure helper over only the Change section. Ignore fenced code,
+blockquotes, and single/double quoted examples when detecting phrases.
+Match case-insensitively at word boundaries, permitting ordinary whitespace.
+Quantifier candidates: "every spawned agent", "all callers", "all the
+callers", "each template", "every template", "all templates".
+Existence candidates: "already knows", "already records", "already recorded",
+"the caller has it". Emit at most one hint per family.
 
-1. **An unbounded quantifier.** "every spawned agent", "all the callers",
-   "each template" — where the spec does not name the set. The bar should
-   require the set be named, or the quantifier be scoped to something the
-   builder can enumerate from the spec alone.
+Suppress these hints when the Change contains a recognizable direction
+anchor, including one in a later paragraph: a source-like path, a backticked
+identifier or qualified identifier, an unquoted qualified/underscore field
+identifier, or an explicitly introduced named set/list. Define the limited
+anchor forms in the helper and its tests; this is a conservative textual
+hint, not semantic proof. Ignore anchors inside fenced or quoted examples.
+Do not broaden detection to the words every/all/each alone. In particular,
+"every changed line" must not be flagged.
 
-2. **An unsourced existence claim.** "the tool already knows X", "this is
-   already recorded", "the caller has it" — where the spec does not name the
-   field, file, or function that holds X. The bar should require the citation.
+Print the hints under a distinct direction-advisory label rather than bar:
+or flagged:. Wording names the matched phrase and the lack of a RECOGNIZED
+direction anchor, asks where the builder should look, and says the hint is
+advisory. It must not assert that the scope actually is unbounded, that a
+field does not exist, or that absence of a hint proves a spec complete.
 
-These are the same defect: the spec asserts something is determinate without
-saying where the determination lives, so the builder does the research the
-spec bar exists to have already done.
+Update help bar to ask for a set/source pointer when relying on a quantified
+scope or an existing fact, while preserving direction-not-measurement:
+builders enumerate and verify against the current tree. Explain the bounded
+hint and its limits. No inventories, counts, pasted commands/output or line
+citations are required at refinement time.
 
-Both are cheap to check mechanically enough to be useful — a spec whose Change
-contains "every"/"all"/"each" or "already knows"/"already records" without a
-path-like or field-like token nearby is at least worth flagging — but the rule
-is worth stating in `help bar` even if the check stays advisory.
+Test both warning families; anchors in the same and later paragraphs;
+qualified fields, paths and explicit lists; harmless changed-line wording;
+phrases only in Non-goals/fences/quotes/blockquotes; and per-family deduping.
+Integration tests must prove warnings appear in new/show without blocking
+filing or claim admission, and raw show remains unchanged. Preserve existing
+syntax-only readiness and no-measurement doctrine regressions.
