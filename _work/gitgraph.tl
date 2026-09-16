@@ -25,6 +25,7 @@
 --- `new` with no `--parent` files under the board — the one
 --- parentless item — the same position `attach` never needs to move
 --- an item TO, since only `init` creates it.
+local direction = require("_work.direction")
 local graphguards = require("_work.graphguards")
 local cachequery = require("_work.cachequery")
 local gate = require("_work.gitgate")
@@ -208,6 +209,9 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   -- `s.board_digest` is the snapshot `store.list` above already took —
   -- passed through so this open never re-reads it fresh.
   for _, line in ipairs(cachequery.similar_lines(s.root, title, s.board_digest)) do
+    print(line)
+  end
+  for _, line in ipairs(direction.hints(prose)) do
     print(line)
   end
   -- No gate: a filed child always enters `todo`, which is unbounded
