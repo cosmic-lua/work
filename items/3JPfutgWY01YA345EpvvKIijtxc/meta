@@ -1,2 +1,4 @@
 title: gitboard brief: derive the worktree path from the item's claim when the receipt has lapsed, instead of emitting the <WORKTREE> placeholder
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
+repo: cosmic-lua/work
+speccers: f8833b4ac330e4b473f286921f860a8e
