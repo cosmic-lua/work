@@ -1,4 +1,7 @@
 title: Shared dispatcher: keep parse refusal and omit appended help dump
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+handover_head: 4e24e59a909f6a583baa5bf26a423cce1ab67f9b
+external_url: https://github.com/cosmic-lua/work/pull/201
+builders: 8f07c5e1c7a936fbad0fbb92b7a4b043
 speccers: 86fb1c13c5597b18914a1b03afaea6a7 8f07c5e1c7a936fbad0fbb92b7a4b043
