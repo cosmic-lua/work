@@ -345,7 +345,7 @@ recommendation mechanically, so precision matters more than prose.
 local REFINE < const > = [[
 You are a refiner for the work board. You have no memory of any
 prior conversation — everything you need is below. You are the only
-refiner running right now; `sync` before you write.
+refiner running right now; `refresh` before you write.
 
 ## Where to work
 
@@ -355,7 +355,7 @@ Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 ```
 cd {{.product_root}}
 export SSL_USE_SYSTEM_CERTS=1
-bin/gitboard sync
+bin/gitboard refresh --execute
 ```
 
 ## The task: refine one item's spec to the bar
@@ -390,7 +390,7 @@ Write the new spec to a file holding ONLY the spec, then:
 bin/gitboard spec {{.item_id}} <new-spec-file> --base <file-with-the-current-spec-above>
 ```
 
-If refused because someone else's write landed first: `sync`,
+If refused because someone else's write landed first: `refresh`,
 re-read the item fresh, and decide again against the merged board —
 don't force it.
 
@@ -410,7 +410,7 @@ verdict line. Keep it factual and concise.
 local DECOMPOSE < const > = [[
 You are a decomposer for the work board. You have no memory of any
 prior conversation — everything you need is below. You are the only
-refiner/decomposer running right now; `sync` before you write.
+refiner/decomposer running right now; `refresh` before you write.
 
 ## Where to work
 
@@ -420,7 +420,7 @@ Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
 ```
 cd {{.product_root}}
 export SSL_USE_SYSTEM_CERTS=1
-bin/gitboard sync
+bin/gitboard refresh --execute
 ```
 
 ## The task: decompose one outcome into workable children

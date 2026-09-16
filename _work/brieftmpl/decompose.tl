@@ -2,11 +2,11 @@ local briefctx = require("_work.briefctx")
 
 local function render(d: briefctx.Decompose): string
   local parts: {string} = {}
-  parts[#parts + 1] = "You are a decomposer for the work board. You have no memory of any\nprior conversation — everything you need is below. You are the only\nrefiner/decomposer running right now; `sync` before you write.\n\n## Where to work\n\n`bin/gitboard` in the product checkout fetches its own pinned release.\nExport SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.\n\n```\ncd "
+  parts[#parts + 1] = "You are a decomposer for the work board. You have no memory of any\nprior conversation — everything you need is below. You are the only\nrefiner/decomposer running right now; `refresh` before you write.\n\n## Where to work\n\n`bin/gitboard` in the product checkout fetches its own pinned release.\nExport SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.\n\n```\ncd "
   -- decompose:11
   local v1: string = d.product_root
   parts[#parts + 1] = v1
-  parts[#parts + 1] = "\nexport SSL_USE_SYSTEM_CERTS=1\nbin/gitboard sync\n```\n\n## The task: decompose one outcome into workable children\n\nOutcome item id: `"
+  parts[#parts + 1] = "\nexport SSL_USE_SYSTEM_CERTS=1\nbin/gitboard refresh --execute\n```\n\n## The task: decompose one outcome into workable children\n\nOutcome item id: `"
   -- decompose:18
   local v2: string = d.item_id
   parts[#parts + 1] = v2
