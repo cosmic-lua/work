@@ -176,6 +176,12 @@ local CSPEC: flags.CommandSpec = {
     {name = "spec", summary = "replace ID's spec sidecar with FILE",
       spec = {usage = "ID FILE [options]",
         summary = "replace ID's spec sidecar with FILE.\n\n"
+        .. "Also re-derives `touches` from the new Change's backticked "
+        .. "`.tl` paths, the same way `new` derives it at file time — "
+        .. "deliberately, even over an explicit `set --touches` list: "
+        .. "the derived list follows the prose it derives from rather "
+        .. "than surviving a respec that moved it. `set --touches` "
+        .. "restates an explicit list right after.\n\n"
         .. PREPARES_ONLY,
         flags = {dir_flag(),
           {long = "base", arg = "FILE",

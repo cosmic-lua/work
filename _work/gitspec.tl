@@ -18,6 +18,16 @@
 --- report a spurious stale base, or a spurious write, the moment an
 --- author's heading spelling or blank lines differed from the
 --- canonical render, which is a difference the tree cannot hold.
+---
+--- Every landed write also RE-DERIVES `touches` from the new Change,
+--- the same way `new` derives it at file time
+--- (`spec.touches_from_change`) — deliberately, over leaving an
+--- explicit `set --touches` list standing across a respec: re-deriving
+--- can discard a hand-typed list, but the alternative reproduces the
+--- staleness this verb exists to fix, worst exactly when a respec
+--- moves the files nobody has looked at yet. `set --touches` remains
+--- available right after a `spec` write to restate a list the new
+--- prose does not itself name.
 local fs = require("cosmic.fs")
 local gate = require("_work.gitgate")
 local spec = require("_work.spec")
@@ -134,6 +144,18 @@ local function cmd_spec(s: store.Store, id: string, file: string,
       return gate.verdict_line("spec", false, "REFUSED: " .. ierr)
     end
   end
+  -- Re-derive `touches` from the NEW Change, the same way `new` derives
+  -- it at file time (`_work.gitgraph`'s `cmd_new`) — this verb replaces
+  -- the whole sidecar, so the derived list follows the prose it derives
+  -- from rather than surviving a respec that moved it. This is the
+  -- deliberate choice over the alternative (leaving an explicitly
+  -- `set --touches` list alone across a respec): re-deriving can
+  -- silently discard a hand-typed list, but not re-deriving reproduces
+  -- the staleness this verb exists to fix, and does so exactly when a
+  -- respec matters most — when the files nobody has looked at yet moved.
+  -- `set --touches` remains available immediately afterwards to restate
+  -- an explicit list the new prose does not itself name.
+  it.touches = spec.touches_from_change(body.change or "")
   local ok, err = gate.commit_and_publish(s, it, body,
     ("spec %s%s"):format(id:sub(1, 8), gate.forced_suffix(frc, rsn)),
     "spec", nil, session, false, frc, rsn)

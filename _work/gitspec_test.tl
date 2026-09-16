@@ -377,3 +377,53 @@ local function test_next_carries_the_last_drops_why()
   assert(report:find("the builder session hit its budget", 1, true) ~= nil,
     report)
 end
+
+-- The reproduced incident: a respec that moves which files the Change
+-- names must move `touches` with it, the way `store.load`'s callers
+-- (`show`'s path measurement, a builder brief's `## Measured at brief
+-- time` section) read it — or those stay silent about the file nobody
+-- has looked at yet and keep measuring the one the respec moved away
+-- from.
+local function test_spec_rederives_touches_from_the_respecced_change()
+  local s = init_state_repo("respec-touches")
+  local _, leaf = root_with_leaf(s)
+  local first = spec_file("respec-first",
+    "## Change\n\nTouch `_work/a.tl`.\n\n## Non-goals\n\nNothing else.\n")
+  assert(gitspec.cmd_spec(s, leaf, first) == 0)
+  local it_first = check.must(store.load(s, leaf))
+  assert(#it_first.touches == 1 and it_first.touches[1] == "_work/a.tl",
+    "the first spec derives A: " .. table.concat(it_first.touches, " "))
+  local second = spec_file("respec-second",
+    "## Change\n\nTouch `_work/b.tl`.\n\n## Non-goals\n\nNothing else.\n")
+  assert(gitspec.cmd_spec(s, leaf, second, first) == 0)
+  local it_second = check.must(store.load(s, leaf))
+  assert(#it_second.touches == 1 and it_second.touches[1] == "_work/b.tl",
+    "the respec derives B, and A no longer reports: "
+    .. table.concat(it_second.touches, " "))
+end
+
+-- The judgement call this item settled: `spec` re-derives `touches` on
+-- every landed write, even over a list a caller set by hand with
+-- `set --touches` — the alternative (leaving a hand-set list standing
+-- across a respec) reproduces the exact staleness this verb exists to
+-- fix. `set --touches` remains available right after a `spec` write to
+-- restate an explicit list the new prose does not itself name.
+local function test_spec_rederivation_overrides_a_hand_set_touches_list()
+  local s = init_state_repo("respec-overrides-handset")
+  local _, leaf = root_with_leaf(s)
+  give_spec(s, leaf)
+  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, nil, nil,
+      {"_work/hand_set.tl"}) == 0, "a caller declares touches by hand")
+  fixture.caller_publish(s)
+  local hand = check.must(store.load(s, leaf))
+  assert(#hand.touches == 1 and hand.touches[1] == "_work/hand_set.tl",
+    "the hand-set list stands before any respec")
+  local base = spec_file("handset-base", raw(s, leaf))
+  local rewrite = spec_file("handset-rewrite",
+    "## Change\n\nTouch `_work/derived.tl`.\n\n## Non-goals\n\nNothing else.\n")
+  assert(gitspec.cmd_spec(s, leaf, rewrite, base) == 0)
+  local it = check.must(store.load(s, leaf))
+  assert(#it.touches == 1 and it.touches[1] == "_work/derived.tl",
+    "the respec's derivation wins over the earlier hand-set list: "
+    .. table.concat(it.touches, " "))
+end
