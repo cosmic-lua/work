@@ -143,10 +143,15 @@ local function test_public_cli_fresh_then_adoption_and_receipt_backed_brief()
       assert(fs.write(fs.join(c.path, "o/warm-artifact"), "keep warm"))
       local before = value(c.s.root, "show-ref")
       local config = check.must(fs.read(fs.join(c.source, ".git/config")))
-      local original, adds = child.run, 0
+      local original, adds, downloads, allow_curl = child.run, 0, 0, false
       child.run = function(argv: {string}, opts?: child.Options): child.Result | nil, string
         if argv[1] == "git" and argv[2] == "worktree" and argv[3] == "add" then adds = adds + 1 end
-        assert(argv[1] ~= "curl")
+        if argv[1] == "curl" then
+          downloads = downloads + 1
+          assert(allow_curl, "adopt without --fetch must reuse the published cache, not acquire")
+          assert(fs.write(argv[22], SCRIPT))
+          return {ok = true, code = 0, stdout = "", stderr = ""}, ""
+        end
         return original(argv, opts)
       end
       code, out = capture(function(): integer return public(true) end)
@@ -156,8 +161,13 @@ local function test_public_cli_fresh_then_adoption_and_receipt_backed_brief()
       assert(check.must(fs.read(fs.join(c.path, "o/warm-artifact"))) == "keep warm")
       assert(check.must(fs.read(fs.join(c.path, "o/steps"))) == "--make build\n--make build\n")
       assert(check.must(fs.read(c.file)) == old)
+      -- `--fetch` acquires even though the earlier calls already published a
+      -- usable cache: adoption's `--fetch` is the same "acquire anyway"
+      -- meaning `prepare` gives every caller.
+      allow_curl = true
       code, out = capture(function(): integer return public(true, true) end)
       assert(code == 0, out)
+      assert(downloads == 1, "--adopt --fetch must still acquire despite a usable published cache")
       assert(check.must(fs.read(fs.join(c.path, "o/steps"))) == "--make build\n--make build\n--make fetch\n--make build\n")
       code, out = capture(function(): integer
           return brief.cmd_brief(c.s, "builder", c.id, nil, c.path, c.file, SESSION)
