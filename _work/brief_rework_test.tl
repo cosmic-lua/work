@@ -250,7 +250,8 @@ local function test_builder_brief_fills_worktree_once_it_exists()
   local it = assert(store.load(s, leaf))
   local st = check.must(authority.current(s, leaf, it.claim))
   local wt = claim.worktree(checkout, claim.branch(leaf, st.root))
-  assert(fs.make_dirs(wt))
+  git(checkout, {"worktree", "add", "-b", claim.branch(leaf, st.root), wt})
+  git(wt, {"commit", "--allow-empty", "-qm", "resumed HEAD advanced"})
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "builder", leaf)
       assert(code == 0, "a spec-bearing item still earns its builder brief")
@@ -258,6 +259,9 @@ local function test_builder_brief_fills_worktree_once_it_exists()
         "WORKTREE fills once worktree ID made the checkout: " .. out)
       assert(out:find("<WORKTREE>", 1, true) == nil,
         "the placeholder is gone: " .. out)
+      local verdict_line = out:match("[^\n]*$")
+      assert(verdict_line:find("nothing left to fill", 1, true) ~= nil,
+        "a resumed builder without a receipt has no remaining placeholders: " .. verdict_line)
       return true
     end)
 end
@@ -269,13 +273,17 @@ local function test_builder_brief_leaves_worktree_unfilled_before_worktree_id_ru
   local s = init_state_repo("brief-wt-builder-missing")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)
+  local checkout = claimed_item(s, leaf)
+  local it = assert(store.load(s, leaf))
+  local st = check.must(authority.current(s, leaf, it.claim))
+  assert(not fs.is_dir(claim.worktree(checkout, claim.branch(leaf, st.root))))
   with_product_root(function(): boolean
       local code, out = brief_and_capture(s, "builder", leaf)
       assert(code == 0)
       assert(out:find("<WORKTREE>", 1, true) ~= nil,
         "no worktree on disk yet, so the placeholder survives: " .. out)
       local verdict_line = out:match("[^\n]*$")
-      assert(verdict_line:find("WORKTREE", 1, true) ~= nil,
+      assert(verdict_line:find("<WORKTREE>", 1, true) ~= nil,
         "the verdict line names it as still owed: " .. verdict_line)
       return true
     end)
