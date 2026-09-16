@@ -273,13 +273,13 @@ local function test_build_and_orchestrate_ban_agent_polling_and_subscribing()
     "the build topic tells a builder never to poll or subscribe: " .. build)
   assert(build:find("The orchestrator resumes you", 1, true) ~= nil,
     "and that the orchestrator resumes it once external state has settled: "
-      .. build)
+    .. build)
   assert(orchestrate:find(
       "No spawned agent — builder, research, or review — ever polls or "
       .. "subscribes to external state, GitHub's own events included.",
       1, true) ~= nil,
     "the orchestrate topic states the hard rule for every agent shape: "
-      .. orchestrate)
+    .. orchestrate)
   assert(orchestrate:find(
       "only the orchestrator's own persistent session may hold one",
       1, true) ~= nil,
