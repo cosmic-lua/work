@@ -1,0 +1,2 @@
+title: gitboard worktree resolves its path from ambient cwd, so a checkout intermittently nests inside another item's worktree
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
