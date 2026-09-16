@@ -160,6 +160,15 @@ end
 --- An item already carrying a recorded handover additionally requires the
 --- resolved base to still reach it, so a review claim never recaptures a
 --- base the handover cannot descend from (see `handover_ancestry_refusal`).
+---
+--- A REWORK claim — the item already carries a `handover_head` and was
+--- judged `request changes` — is neither of those cases: it continues from
+--- the handover, not from `main`, so the handover itself is the base, and
+--- neither the tracking-staleness check nor the ancestry check applies.
+--- The handover is immutable board state, not a local ref that can go
+--- stale, and `main` may have moved past it for reasons unrelated to this
+--- item entirely (routine, since other items land while this one is in
+--- review) without that advance meaning anything about the rework's base.
 local function product_base(s: store.Store, it: item.Item, _source_ref: string,
     repo_dir: string, fetch_base: boolean): string | nil, string
   if (it.repo or "") == "" then
@@ -167,6 +176,10 @@ local function product_base(s: store.Store, it: item.Item, _source_ref: string,
   end
   local root, err = repository_map.resolve(s.root, it.repo, repo_dir)
   if root == nil then return nil, err end
+  local handover = it.handover_head or ""
+  if handover ~= "" and (it.verdict or "") == "request changes" then
+    return commit_evidence.commit_id(root, handover)
+  end
   local base = default_base(it.repo, it.base or "")
   local local_sha, lerr = rev_commit(root, "refs/heads/" .. base)
   if local_sha == nil then return nil, lerr end
