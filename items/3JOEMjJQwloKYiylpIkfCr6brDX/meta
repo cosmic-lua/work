@@ -1,4 +1,7 @@
 title: the spec bar asks for direction, not measurements: drop pasted output, verified locators and the sweep check
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
+handover_head: abb3ccedc4d1a375bbfb5b32b60fd047cad5e6a3
+external_url: https://github.com/cosmic-lua/work/pull/187
+builders: b269a564224dc990963eb071ec8fd191
 speccers: 410201e720f4ed05ff3f59285fb3ce5a
