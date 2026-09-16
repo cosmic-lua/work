@@ -148,9 +148,14 @@ and nothing less:
    checkout-restore used to undo the mutation cannot wipe it too.
    Mutation-test at least one guard the change adds or preserves:
    break what it guards, confirm the diff's own test catches it,
-   restore it exactly. A real break changes the outcome the test
-   reads, never just the text around it: replace a matched needle
-   with unrelated text rather than extending it, flip a boolean
+   restore it exactly. For generated code, mutate the SOURCE, never
+   the artifact: if the build rewrites your edit, you mutated an output.
+   A green build that regenerated away the mutation is INCONCLUSIVE.
+   After a source mutation, the first generator refusal is not a catch:
+   rerun after regeneration until the named test assertion actually
+   fails; a generator/build refusal does not count. A real break changes
+   the outcome the test reads, never just the text around it: replace a
+   matched needle with unrelated text rather than extending it, flip a boolean
    rather than renaming it, and if the test stays green the guard is
    decoration.
 5. Commit with a clear, descriptive message. No model name or

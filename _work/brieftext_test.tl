@@ -25,6 +25,17 @@ local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 local POSTURE_DIFF < const > = flat(brieftext_review.POSTURE_DIFF)
 
+local function test_builder_requires_generated_source_mutation_and_assertion_failure()
+  assert(BUILDER:find(
+      "For generated code, mutate the SOURCE, never the artifact: "
+      .. "if the build rewrites your edit, you mutated an output. "
+      .. "A green build that regenerated away the mutation is INCONCLUSIVE. "
+      .. "After a source mutation, the first generator refusal is not a catch: "
+      .. "rerun after regeneration until the named test assertion actually "
+      .. "fails; a generator/build refusal does not count.", 1, true) ~= nil,
+    "generated-code mutation must reach the named test assertion, not stop at regeneration")
+end
+
 local function test_builder_requires_a_committed_migration_and_caller_report()
   assert(BUILDER:find(
       "When `## Change` alters a committed tracking file's shape, follow "
