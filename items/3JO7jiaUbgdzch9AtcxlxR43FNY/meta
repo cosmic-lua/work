@@ -1,0 +1,4 @@
+title: worktree --fetch: help text and module doc still say 'on a miss', which stopped being true when it began skipping the cache scan
+parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+repo: cosmic-lua/work
+speccers: 410201e720f4ed05ff3f59285fb3ce5a
