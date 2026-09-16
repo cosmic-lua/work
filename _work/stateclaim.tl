@@ -149,6 +149,7 @@ local function prepare(root: string, head: string, requests: {Request}, action: 
   return out
 end
 --- Refresh reports current authority independently of historical publication proof.
+--- An expired lease confers no authority, so it is counted rather than listed.
 local function authority(root: string, head: string): string | nil, string
   local view, err = boardread.list(root, head)
   if view == nil then return nil, err end
@@ -157,12 +158,19 @@ local function authority(root: string, head: string): string | nil, string
   table.sort(ids)
   local lines: {string} = {}
   local now = os.time()
+  local expired_claims = 0
   for _, id in ipairs(ids) do
     local value = view.claims_by_id[id]
-    lines[#lines + 1] = ("current-claim %s status=%s holder=%s claim=%s branch=%s expires=%d")
-    :format(id, claim.status(state(value), now), value.holder, value.id,
-      claim.branch(id, value.id), value.expires_at)
+    local status = claim.status(state(value), now)
+    if status == "expired" then
+      expired_claims = expired_claims + 1
+    else
+      lines[#lines + 1] = ("current-claim %s status=%s holder=%s claim=%s branch=%s expires=%d")
+      :format(id, status, value.holder, value.id,
+        claim.branch(id, value.id), value.expires_at)
+    end
   end
+  if expired_claims > 0 then lines[#lines + 1] = ("expired-claims=%d"):format(expired_claims) end
   return #lines > 0 and table.concat(lines, "\n") or "current-claims=0", ""
 end
 --- Keep acquisition, renewal and release recognizable in item history.
