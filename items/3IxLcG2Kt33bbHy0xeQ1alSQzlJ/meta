@@ -5,6 +5,8 @@ base: main
 handover_head: e7e9f2567b143b6f9adb3e077eb2ec45400fd109
 verdict: accept
 verdict_head: e7e9f2567b143b6f9adb3e077eb2ec45400fd109
+landed_head: ac215d021a3b565e85621cb65085408f0c2f0e39
+resolution: completed
 builders: 292c34b4c0a7ac4bae2b43dc97b43a81
 speccers: 420d657f-02df-5fbc-a892-9a8a603df39b
 touches: skills/work/SKILL.md
