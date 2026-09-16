@@ -322,17 +322,20 @@ local function test_the_review_script_verdict_is_checkout_free()
     "the full review's diff posture must retain its worktree placeholder")
 end
 
--- A freshly made review checkout has no `o/3p` cache — the same gap
--- `worktree ID` already closes for a builder — so both review
--- templates must send a reviewer to `--make fetch` (and, for any
--- test, `--make build`) before that checkout's first test runs.
-local function test_the_checkout_note_sends_a_reviewer_to_fetch_first()
+-- A review checkout `handoff --fetch` made already carries an `o/3p`
+-- cache; one made without `--fetch` does not — the brief cannot assume
+-- either way, so both review templates must condition the bootstrap
+-- plan (`--make fetch` and, for any test, `--make build`) on the
+-- checkout actually lacking the cache, never assert it outright.
+local function test_the_checkout_note_conditions_the_bootstrap_plan()
   for _, tmpl in ipairs({POSTURE_DIFF, REVIEW_SCRIPT}) do
     assert(tmpl:find(
-        "That checkout has no `o/3p` cache yet — run "
+        "If this checkout has no `o/3p` cache yet, run "
         .. "{{.bootstrap_phrase}}", 1, true) ~= nil,
-      "the checkout note must send a reviewer to the resolved bootstrap "
-      .. "plan before running any test: " .. tmpl)
+      "the checkout note must condition the resolved bootstrap plan on "
+      .. "the checkout actually being cold: " .. tmpl)
+    assert(tmpl:find("That checkout has no `o/3p` cache yet", 1, true) == nil,
+      "the checkout note must never assert the checkout is cold outright: " .. tmpl)
   end
 end
 

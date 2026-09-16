@@ -22,7 +22,7 @@ local function render(d: briefctx.PostureDiff): string
   -- posture_diff:49
   local v5: string = d.review_session
   parts[#parts + 1] = v5
-  parts[#parts + 1] = "` —\nyou MUST use that exact string. That checkout has no `o/3p` cache yet — run\n"
+  parts[#parts + 1] = "` —\nyou MUST use that exact string. If this checkout has no `o/3p` cache yet, run\n"
   -- posture_diff:51
   local v6: string = d.bootstrap_phrase
   parts[#parts + 1] = v6

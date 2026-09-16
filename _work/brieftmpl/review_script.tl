@@ -50,7 +50,7 @@ local function render(d: briefctx.ReviewScript): string
   -- review_script:53
   local v12: string = d.review_session
   parts[#parts + 1] = v12
-  parts[#parts + 1] = "` — you\nMUST use that exact string. That checkout has no `o/3p` cache yet — run\n"
+  parts[#parts + 1] = "` — you\nMUST use that exact string. If this checkout has no `o/3p` cache yet, run\n"
   -- review_script:55
   local v13: string = d.bootstrap_phrase
   parts[#parts + 1] = v13
