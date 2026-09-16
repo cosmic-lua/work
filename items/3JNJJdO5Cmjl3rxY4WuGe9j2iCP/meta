@@ -5,5 +5,7 @@ handover_head: c8f2651d67f68322778ba977af42fa5ddcb76dfd
 external_url: https://github.com/cosmic-lua/work/pull/183
 verdict: accept
 verdict_head: c8f2651d67f68322778ba977af42fa5ddcb76dfd
+landed_head: 28e4d582cad666c7abfe7ef7d8a203fbe397b5d6
+resolution: completed
 builders: 0e8fd8b590caa29e032ef5e58b5f7eae
 touches: _work/gitclaim_cli.tl _work/gitclaim_rework_base_test.tl
