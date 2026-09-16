@@ -260,6 +260,32 @@ local function test_build_verifies_the_specs_claims_for_the_first_time()
     "and names no Ready-when convention: a precondition is a dependency")
 end
 
+-- A spawned agent never polls or subscribes to external events —
+-- that is the orchestrator's job, always. The build page tells a
+-- builder to stop and hand back rather than wait itself; the
+-- orchestrate page states the rule for every agent shape and names
+-- why a subagent's own subscription would be pointless (its session
+-- is gone by the time an event could wake it).
+local function test_build_and_orchestrate_ban_agent_polling_and_subscribing()
+  local build = assert(doctrine.page("build")):gsub("%s+", " ")
+  local orchestrate = assert(doctrine.page("orchestrate")):gsub("%s+", " ")
+  assert(build:find("never poll or subscribe to it yourself", 1, true) ~= nil,
+    "the build topic tells a builder never to poll or subscribe: " .. build)
+  assert(build:find("The orchestrator resumes you", 1, true) ~= nil,
+    "and that the orchestrator resumes it once external state has settled: "
+      .. build)
+  assert(orchestrate:find(
+      "No spawned agent — builder, research, or review — ever polls or "
+      .. "subscribes to external state, GitHub's own events included.",
+      1, true) ~= nil,
+    "the orchestrate topic states the hard rule for every agent shape: "
+      .. orchestrate)
+  assert(orchestrate:find(
+      "only the orchestrator's own persistent session may hold one",
+      1, true) ~= nil,
+    "and that only the orchestrator may hold a subscription: " .. orchestrate)
+end
+
 --- The first paragraph of a `---`-commented module header: lines up
 --- to the first bare `---` separator, the `--- ` prefix stripped and
 --- rewrapped onto one line — so it compares to a doctrine page's own
