@@ -185,11 +185,13 @@ fact nobody finishes.
    then read `show ID` — the sidecar is the
    spec, and the item's verdict/pr fields carry any standing review
    state.
-2. Re-run the spec's measured commands before
-   building — the queue ages faster than the tree stands still, and a
-   direct claim proves exclusivity rather than readiness. Numbers moved
-   but the shape holds: refresh them in place
-   (`spec ID FILE --base BASE`) and proceed. A fresh fact that
+2. Re-run what the spec names before
+   building — the spec carries direction, not proof, so this is
+   where its claims are checked for the first time, not a repeat of a
+   check already done at spec time (`help bar`). The queue ages
+   faster than the tree stands still, and a direct claim proves
+   exclusivity rather than readiness. A detail moved but the shape
+   holds: that is fine, proceed. A fact that
    breaks the shape or reopens a decision: file the question as a
    sibling and record it as this item's dependency (`new`, then
    `depend <ID> <NEW>`), then drop the claim — this item is not

@@ -1,7 +1,6 @@
 --- The spec bar's grammar over the two blobs an item's `spec/`
 --- subtree holds (`_work.itemtree`'s `Spec`): whether the Change says
---- anything at all, and whether a sweep-shaped Change pastes its own
---- dry-run evidence. Also the read-access half of the bar's input:
+--- anything at all. Also the read-access half of the bar's input:
 --- the repositories a spec's own text REACHES (a `github.com` URL,
 --- wherever it sits), which `_work.gitready.undeclared_repos` checks
 --- against the item's declared `access` field, so a claim or a review
@@ -29,56 +28,17 @@ local itemtree = require("_work.itemtree")
 --- caller with no record to hand passes for one.
 local NO_PROSE < const >: itemtree.Spec = {change = "", non_goals = ""}
 
---- The code spans in `text` — inline `` `...` `` runs and fenced
---- ```...``` blocks — the only place a sweep's own pasted dry-run
---- output can honestly live: prose that merely mentions "applied" is
---- not evidence, a pasted command's own output is.
---- @param text string Any spec text
---- @return {string} Each span's inner text, in order
-local function code_spans(text: string): {string}
-  local out: {string} = {}
-  for fence in text:gmatch("```(.-)```") do
-    out[#out + 1] = fence
-  end
-  local without_fences = (text:gsub("```.-```", ""))
-  for inline in without_fences:gmatch("`([^`\n]+)`") do
-    out[#out + 1] = inline
-  end
-  return out
-end
-
---- The gap a sweep-shaped Change leaves when its spec pastes no
---- dry-run evidence: a Change naming `--apply` or `--fix` needs a
---- fenced `rewrite:` or `applied` line somewhere in either blob — the
---- command's own dry-run output (the `applied`/`refused` line, or the
---- refusal), not only the `--find` count that named its sites. A
---- spec whose sweep command was never run at spec time is the wrong
---- turn this exists to catch. The flag is read from the Change blob
---- alone; the paste may sit in either.
---- @param sp itemtree.Spec The two blobs
---- @return {string} Zero or one gap
-local function sweep_gaps(sp: itemtree.Spec): {string}
-  local change = sp.change or ""
-  if not (change:find("%-%-apply%f[%A]") or change:find("%-%-fix%f[%A]")) then
-    return {}
-  end
-  for _, blob in ipairs({change, sp.non_goals or ""}) do
-    for _, span in ipairs(code_spans(blob)) do
-      if span:find("rewrite:", 1, true) or span:find("applied", 1, true) then
-        return {}
-      end
-    end
-  end
-  return {"Change names a sweep (--apply/--fix) with no pasted dry-run "
-    .. "output — paste the command's own `rewrite:`/`applied` (or "
-    .. "refusal) line, not only the --find count"}
-end
-
 --- Spec-bar lint: the gaps that keep a record from being buildable,
 --- each as one readable line. The Change blob counts as filled only
 --- when it carries at least one non-blank line, so a pasted template
 --- with a hollow Change still fails. No heading is scanned: the blob
---- IS the section.
+--- IS the section. This is the one mechanical check the bar makes:
+--- everything past "is there a Change" — whether its direction is
+--- concrete, whether a wall is real, whether a claim in it still
+--- holds against the tree — is judgment a machine cannot honestly
+--- make, and belongs to the builder who verifies against the tree
+--- before building (`help build`) and the reviewer who reads the
+--- diff against it, not to a pattern match over the prose.
 --- @param sp itemtree.Spec | nil The two blobs; nil reads as no prose
 --- @return {string} Gap descriptions, possibly empty
 local function ready_gaps(sp: itemtree.Spec | nil): {string}
@@ -86,9 +46,6 @@ local function ready_gaps(sp: itemtree.Spec | nil): {string}
   local gaps: {string} = {}
   if not (prose.change or ""):match("%S") then
     gaps[#gaps + 1] = "Change is missing or empty"
-  end
-  for _, gap in ipairs(sweep_gaps(prose)) do
-    gaps[#gaps + 1] = gap
   end
   return gaps
 end

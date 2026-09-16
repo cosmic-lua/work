@@ -1,12 +1,14 @@
 #!/usr/bin/env cosmic
 -- The spec bar's grammar over the two blobs an item's `spec/` subtree
--- holds: a Change with something in it, and a sweep-shaped Change
--- with its own dry-run paste. Non-goals rides along unjudged. There
--- is no heading to scan and no Acceptance section to lint: the blob
--- IS the section, and the CI gate is the one acceptance, so the bar
--- has nothing to say about how an item proves itself. `document` and
--- `split`, the two directions between the blobs and the one markdown
--- file an author edits, are pinned below.
+-- holds: a Change with something in it. Non-goals rides along
+-- unjudged. There is no heading to scan and no Acceptance section to
+-- lint: the blob IS the section, and the CI gate is the one
+-- acceptance, so the bar has nothing to say about how an item proves
+-- itself — and, past "is there a Change", nothing to say mechanically
+-- about whether it is a GOOD one either; that judgment is the
+-- builder's and the reviewer's, never a pattern match over the prose.
+-- `document` and `split`, the two directions between the blobs and
+-- the one markdown file an author edits, are pinned below.
 local check = require("cosmic.check")
 local itemtree = require("_work.itemtree")
 local spec = require("_work.spec")
@@ -71,91 +73,20 @@ local function test_ready_gaps_blank_change_counts()
     "a blank Change is a gap: " .. table.concat(gaps, ", "))
 end
 
--- A sweep-shaped Change (`--apply`) with no pasted dry-run evidence
--- in either blob is refused, naming the missing paste.
-local function test_sweep_apply_without_pasted_evidence_is_a_gap()
-  local gaps = spec.ready_gaps(
-    with_change("Run `--rewrite '$F:^test_()' '' --apply` over 12 files.\n"))
-  assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
-  assert(gaps[1]:find("no pasted dry-run", 1, true) ~= nil,
-    "gap should name the missing paste: " .. gaps[1])
-end
-
--- The same, for `--fix` rather than `--apply` — the sentence covers
--- any sweep tool, not only cosmic's own --rewrite.
-local function test_sweep_fix_without_pasted_evidence_is_a_gap()
-  local gaps = spec.ready_gaps(with_change("Run `eslint --fix` over the tree.\n"))
-  assert(#gaps == 1, "expected 1 gap, got " .. table.concat(gaps, ", "))
-  assert(gaps[1]:find("no pasted dry-run", 1, true) ~= nil,
-    "gap should name the missing paste: " .. gaps[1])
-end
-
--- A pasted `applied` line, fenced in the Change itself, clears the gap.
-local function test_sweep_apply_with_pasted_applied_line_is_ready()
-  local gaps = spec.ready_gaps(with_change(table.concat({
-          "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.", "",
-          "Dry run: `rewrite: 12 applied, 0 refused in 12 file(s)`", "",
-        }, "\n")))
-  assert(#gaps == 0, "pasted applied line should clear the gap: "
-    .. table.concat(gaps, ", "))
-end
-
--- The paste may sit in the OTHER blob: both are read for it, only the
--- Change is read for the flag.
-local function test_sweep_paste_in_non_goals_is_ready()
-  local gaps = spec.ready_gaps({
-      change = "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.\n",
-      non_goals = "No second pass: `rewrite: 12 applied, 0 refused in 12 "
-      .. "file(s)` is the whole sweep.\n",
-    })
-  assert(#gaps == 0, "a paste in Non-goals clears the gap: "
-    .. table.concat(gaps, ", "))
-end
-
--- A `--apply` that appears only in Non-goals is a wall, not a sweep:
--- the flag is read from the Change alone.
-local function test_sweep_flag_in_non_goals_is_not_a_sweep()
-  local gaps = spec.ready_gaps({
-      change = "Add the verb.\n",
-      non_goals = "No `--apply` pass over the tree.\n",
-    })
-  assert(#gaps == 0, "a wall naming --apply is not a sweep: "
-    .. table.concat(gaps, ", "))
-end
-
--- A pasted refusal is evidence too — the sweep ran and refused, which
--- is still the command's own output, not only its --find count.
-local function test_sweep_apply_with_pasted_refusal_is_ready()
-  local gaps = spec.ready_gaps(with_change(table.concat({
-          "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.", "",
-          "`rewrite: refused: testdata/ excluded by the project model`", "",
-        }, "\n")))
-  assert(#gaps == 0, "a pasted refusal should clear the gap: "
-    .. table.concat(gaps, ", "))
-end
-
--- Prose that merely mentions "applied" outside a code span is not a
--- paste of the command's own output.
-local function test_sweep_apply_with_prose_mention_still_gaps()
-  local gaps = spec.ready_gaps(
-    with_change("Run `--apply` once applied it should show 0.\n"))
-  assert(#gaps == 1, "an unfenced mention of \"applied\" is not evidence: "
-    .. table.concat(gaps, ", "))
-end
-
--- A Change with no sweep flag at all is unaffected — the gap only
--- fires when the Change itself names --apply or --fix.
-local function test_non_sweep_change_has_no_sweep_gap()
-  local gaps = spec.ready_gaps(with_change("Add the verb.\n"))
-  assert(#gaps == 0, "a non-sweep Change should not gap: "
-    .. table.concat(gaps, ", "))
-end
-
--- A word like `--fixture` is not the `--fix` flag; the frontier check
--- must not false-positive on it.
-local function test_sweep_word_boundary_on_fix()
-  local gaps = spec.ready_gaps(with_change("Add a new --fixture flag.\n"))
-  assert(#gaps == 0, "--fixture is not --fix: " .. table.concat(gaps, ", "))
+-- A Change naming a sweep flag (`--apply`, `--fix`) is unaffected by
+-- any of that: the bar has nothing mechanical to say about a sweep
+-- past "is there a Change" — proving it ran is the builder's, at
+-- build time, against the tree they actually have.
+local function test_sweep_change_has_no_mechanical_gap()
+  for _, change in ipairs({
+      "Run `--rewrite '$F:^test_()' '' --apply` over 12 files.\n",
+      "Run `eslint --fix` over the tree.\n",
+      "Add a new --fixture flag.\n",
+    }) do
+    local gaps = spec.ready_gaps(with_change(change))
+    assert(#gaps == 0, "a sweep-shaped Change is not mechanically gapped: "
+      .. change .. "; got " .. table.concat(gaps, ", "))
+  end
 end
 
 -- `reached_repos` reads a `github.com` URL wherever it sits in the

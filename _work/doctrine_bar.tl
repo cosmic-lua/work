@@ -17,37 +17,17 @@ in each, every decision made. Imperative and concrete — never
 — "either X or Y, the builder's call" hands a fresh window the
 refiner's own decision plus the reading it took to make it; pick,
 and put the alternative in `## Non-goals` or nowhere. A Change
-that names a function or a string quotes the `grep -n` hit that
-places it, and a state or enum literal quotes the vocabulary the
-schema or record declares — a location read from memory is the
-wrong turn that feels obviously right. The same rule covers any
-bare file:line citation of quoted source text, wherever it sits —
-a `## Non-goals` wall quoting a line as much as a `## Change`
-naming a function: pair the line number with a short,
-still-`grep`-able literal string from that exact line, a
-distinctive substring of the quote itself is enough, no new tooling
-and no new section. A sibling item landing between refinement and
-pull moves line numbers but rarely rewrites the line itself, so the
-string still finds what the number alone would strand. Before:
-`_work/example.tl:54-56` beside the quoted sentence. After: the
-same quote plus `grep -n "the quoted phrase" _work/example.tl` —
-the number may go stale, the grep hit does not. A citation with a
-number but no anchor string is under the bar the same way an
-unmeasured claim already is. A Change that adds a verb or
-a flag lists its three wiring files by name — `_work/gitcommands.tl`
-(the declaration), `_work/gitboard.tl` (the argv dispatch branch),
-`_work/gitverbs.tl` (the `cmd_<verb>` entry) — because a builder that
-finds them unnamed reads the whole dispatcher to decide whether it
-may touch them. A Change over N sites states the PATTERN that
-selects them and the count `cosmic --find PATTERN [PATH...]` printed
-— never a list of file:line pairs a builder re-derives. A Change
-whose acceptance is a sweep — a `--rewrite … --apply`, a `--fix`,
-any command whose output is the diff — pastes that command's own
-output from a dry run at spec time: the `applied`/`refused` line, or
-the refusal, not only the `--find` count that named its sites. A
-paste of `0 applied` or a refusal is itself proof the spec is not
-ready — the sweep found nothing to change, or would not run at all.
-When the
+names what to change and where to look — a file, a function, an
+error string, a state or enum literal — as DIRECTION for the builder
+to find and confirm against the tree, never as a location the spec
+itself certifies: a `grep -n` hit or a line number quoted at
+refinement time is a photograph of a tree that has already moved by
+the time anyone reads it, and the builder re-finds the real thing in
+seconds regardless of whether the spec quoted it. A Change that adds
+a verb or a flag says what it does; the builder finds the wiring it
+touches. A Change that reaches many sites says what the change is
+FOR and lets the builder find them — `grep` or `cosmic --find` is the
+builder's tool at build time, not a count the spec carries. When the
 change sits near a frozen contract (a C boundary, error strings
 and return shapes, verdict-line formats), name the wall — there,
 or in an optional `## Non-goals` section. Walls are stated where
@@ -64,24 +44,37 @@ with the change.
 The caller checks this before building; a missing plan means stop
 and refine the spec, not invent a bridge.
 
-Measured, not inferred: every tree-fact the spec relies on (a
-file's headroom under a line cap, a pattern's match count, a
-function's callers) is measured during refinement and written into
-the prose WITH the command that produced it, so the puller re-runs
-it in seconds and the reviewer can check the claim. A claim about
-BEHAVIOUR — what a verb prints, which branch a condition selects,
-what a gate refuses — is a prediction until a command has produced
-it: reading the source is inference, and the wrong turns are never
-guesses, they are readings that felt obviously true. So a
-behavioural claim carries its command AND the pasted output.
-Absence is behavioural too: a grep returning nothing establishes
-that the PATTERN matched nothing, never that the thing is absent —
-widen it, or name what the narrow one could miss. The same rule
-covers removals: a Change that relocates or deletes a mechanism
-names the sweep it ran for sites still asserting the old one. A
-Change that adds a cast, a nil-admitting return, or a new source
-file names the ratchet rows it will add, so the builder's first
-gate is its last.
+Direction, not measurement: this rule used to require every
+tree-fact the spec relied on (a file's headroom under a line cap, a
+pattern's match count, a function's callers) measured during
+refinement and written into the prose WITH the command that produced
+it, on the theory that a spec asserting things from memory is a real
+and expensive failure mode — true, and still the reason a Change
+names concrete direction rather than "improve" or "investigate". But
+the rule wrote a snapshot of the tree into a document read hours or
+weeks later, and every one of those facts decays: a stale count, a
+stale line number, a moved file, a pasted `applied` line describing
+a sweep that would now do something else. The verification it wanted
+already happens, at the right time, for free: `help build` tells the
+builder to re-run what the spec names before building, against the
+tree they actually have, in seconds — and that re-run is now the
+whole check, not a courtesy repeat of one already done at spec time.
+A claim about BEHAVIOUR — what a verb prints, which branch a
+condition selects, what a gate refuses — is still a claim to VERIFY,
+never inferred from reading the source alone; it is verified there,
+at build time, not carried into the spec as a paste. So a spec names
+a file, a function, an error string, a behaviour as a pointer for
+the builder to confirm — direction, never a fact the spec itself
+certifies — and nothing in it requires a pasted command, a pasted
+output, a match count, or a citation paired with a line number.
+Spec-time measurement was the redundant half of a check that ran
+twice; it is the half that rotted, so it is gone — say this plainly
+here, so the next refiner does not read the missing paste as an
+oversight and put it back. A Change that adds a cast, a
+nil-admitting return, or a new source file still names the ratchet
+rows it expects to add, so the builder's first gate is its last —
+that is direction about what to expect, not a measurement to
+re-derive.
 
 A precondition is a DEPENDENCY, not prose. A Change whose earliest
 valid start waits on a fact outside the tree — a release having
