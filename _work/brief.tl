@@ -28,7 +28,6 @@
 --- A read, not a mutation: nothing here writes the board.
 local briefcommands = require("_work.briefcommands")
 local briefcontext = require("_work.briefcontext")
-local briefmeasure = require("_work.briefmeasure")
 local brieftext = require("_work.brieftext")
 local gitinvocation = require("_work.gitinvocation")
 local receipt = require("_work.preparation_receipt")
@@ -437,16 +436,6 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   else
     body, left = briefcontext.decompose(facts)
   end
-  local measured = false
-  if tree ~= "" and (kind == "builder" or kind == "review") then
-    local section, merr = briefmeasure.measure(it.touches or {}, tree)
-    if section == nil then
-      return gate.verdict_line("brief", false,
-        ("could not measure --tree '%s': %s"):format(tree, merr))
-    end
-    body = body .. "\n\n" .. section
-    measured = true
-  end
   body = body .. "\n\n" .. brieftext_friction.ASK
   -- An unclaimed item's brief (builder, research, refine, decompose) has
   -- no session to name, so it carries no clause and no minted stand-in.
@@ -464,9 +453,6 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
       tail_note = ("fill %s, then read it whole, it is your brief verbatim"):format(
         table.concat(left, ", "))
     end
-    if measured then
-      tail_note = tail_note .. ("; measured touches under %s"):format(tree)
-    end
     tail_note = label == "" and (mint_note .. tail_note) or tail_note
     return gate.verdict_line("brief",
       true, ("%s brief for %s written to %s%s — %s"):format(
@@ -477,9 +463,6 @@ local function cmd_brief(s: store.Store, kind: string, id: string,
   if #left > 0 then
     tail_note = ("fill %s, then paste the body verbatim"):format(
       table.concat(left, ", "))
-  end
-  if measured then
-    tail_note = tail_note .. ("; measured touches under %s"):format(tree)
   end
   tail_note = label == "" and (mint_note .. tail_note) or tail_note
   return gate.verdict_line("brief",

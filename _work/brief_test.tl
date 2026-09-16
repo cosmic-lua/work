@@ -6,7 +6,6 @@
 
 local check = require("cosmic.check")
 local hash = require("cosmic.hash")
-local child = require("cosmic.child")
 local env = require("cosmic.env")
 local fs = require("cosmic.fs")
 local brief = require("_work.brief")
@@ -14,8 +13,6 @@ local brieftext_friction = require("_work.brieftext_friction")
 local claim = require("_work.claim")
 local fixture = require("_work.fixture")
 local gitinvocation = require("_work.gitinvocation")
-local gitspec = require("_work.gitspec")
-local graph = require("_work.gitgraph")
 local item = require("_work.item")
 local specmod = require("_work.spec")
 local store = require("_work.store")
@@ -124,49 +121,10 @@ local function branch_of(s: store.Store, id: string): string
   return claim.branch(id, it.claim_batch or "")
 end
 
-local function test_tree_measurement_appends_to_builder_and_review()
-  local s = init_state_repo("brief-tree")
-  local _, leaf = root_with_leaf(s)
-  local path = fs.join(s.root, "-probe.tl")
-  assert(fs.write(path, ("line\n"):rep(490)))
-  local spec_file = fs.join(s.root, "tree-spec.md")
-  assert(fs.write(spec_file, [[
-## Change
-Measure the declared list.
-## Non-goals
-No refusal.
-]]))
-  assert(gitspec.cmd_spec(s, leaf, spec_file) == 0)
-  -- The measured paths are the item's declared `touches`, not prose:
-  -- one present and tight, one absent.
-  assert(graph.cmd_set(s, leaf, nil, nil, nil, nil, nil, nil,
-      {"-probe.tl", "absent.tl"}) == 0, "the declared list is set")
-  fixture.caller_publish(s)
-  local add = check.must(child.run({"git", "add", "--", "-probe.tl"}, {cwd = s.root}))
-  assert(add.ok, "the measurement fixture is staged: " .. add.stderr)
-  local commit = check.must(child.run({"git", "-c", "user.email=test@example.com",
-        "-c", "user.name=test", "commit", "-q", "-m", "measurement fixture"},
-      {cwd = s.root}))
-  assert(commit.ok, "the measurement fixture has a HEAD: " .. commit.stderr)
-  local code, out = brief_and_capture(s, "builder", leaf, s.root)
-  assert(code == 0, "tree measurement earns a builder brief: " .. out)
-  assert(out:find("## Measured at brief time (" .. s.root .. ", ", 1, true) ~= nil,
-    "the measured section names the tree and HEAD: " .. out)
-  assert(out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
-    "the measured file carries its headroom: " .. out)
-  assert(out:find("absent.tl  absent", 1, true) ~= nil,
-    "the missing declared path is explicit: " .. out)
-  assert(out:find("measured touches under " .. s.root, 1, true) ~= nil,
-    "the verdict names what was measured: " .. out)
-  handover(s, leaf)
-  reclaim(s, leaf, "session-b")
-  local review_code, review_out = brief_and_capture(s, "review", leaf, s.root)
-  assert(review_code == 0, "tree measurement earns a review brief: " .. review_out)
-  assert(review_out:find("-probe.tl  490 lines (10 under the 500 cap)", 1, true) ~= nil,
-    "review carries the measured section: " .. review_out)
-end
-
-local function test_tree_measurement_refuses_a_non_directory()
+-- `--tree` still gates on being a real directory — the check runs
+-- ahead of, and independent from, whatever else a builder or review
+-- brief does with it (validating a `--receipt`'s recorded worktree).
+local function test_tree_flag_refuses_a_non_directory()
   local s = init_state_repo("brief-tree-refusal")
   local _, leaf = root_with_leaf(s)
   give_spec(s, leaf)

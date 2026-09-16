@@ -76,7 +76,7 @@ local function report_with(outcome: string, body: string): {string}
     {sha = "abc1234", at = "2026-08-17T00:00:00Z", subject = "new " .. leaf:sub(1, 8)},
   }
   local lines = show.show_report(it, role, rank_line, state, body, events, {},
-    {}, {}, {}, nil, nil, nil, outcome)
+    {}, {}, nil, nil, nil, outcome)
   return lines
 end
 

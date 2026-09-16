@@ -20,7 +20,6 @@ local ksuid = require("_work.ksuid")
 local overlap = require("_work.overlap")
 local publish = require("_work.publish")
 local read = require("_work.read")
-local repository_map = require("_work.repository_map")
 local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
@@ -164,8 +163,6 @@ end
 --- @param children_lines {string} Its own open children, rank order,
 --- one rendered line each (`_work.read.children`)
 --- @param overlaps {string} `_work.overlap`'s pre-rendered lines, possibly empty
---- @param headroom {string} `_work.overlap.headroom_lines`'s pre-rendered
---- lines, possibly empty — a warning, never a `take` refusal
 --- @param ci_state string | nil Retired compatibility argument; ignored
 --- @param ci_head string | nil Retired compatibility argument; ignored
 --- @param ci_age_s integer | nil Retired compatibility argument; ignored
@@ -177,7 +174,7 @@ end
 --- @return string The verdict detail
 local function show_report(it: item.Item, role: string, rank_line: string,
     state: string, body: string, events: {publish.Event}, problems: {string},
-    children_lines: {string}, overlaps?: {string}, headroom?: {string},
+    children_lines: {string}, overlaps?: {string},
     _ci_state?: string, _ci_head?: string, _ci_age_s?: integer,
     outcome?: string): {string}, string
   local out: {string} = {("%s %s [%s]"):format(tail.handle(it.id), it.title,
@@ -257,15 +254,6 @@ local function show_report(it: item.Item, role: string, rank_line: string,
   -- is a collision an orchestrator would otherwise find only by
   -- reading every candidate's spec by hand — see `_work.overlap`.
   for _, line in ipairs(overlaps or {}) do
-    out[#out + 1] = line
-  end
-  -- A Change-section path already tight against the 500-line cap is a
-  -- warning, not a `bar:` refusal — a refiner or builder plans a
-  -- repacking or split before pulling instead of hitting the cap live,
-  -- mid-implementation; a relative path resolves against the item's
-  -- OWN repo, not this process's cwd (see
-  -- `_work.overlap.headroom_lines`).
-  for _, line in ipairs(headroom or {}) do
     out[#out + 1] = line
   end
   if body ~= "" then
@@ -363,7 +351,6 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
   end
   local problems: {string} = {}
   local overlaps: {string} = {}
-  local headroom: {string} = {}
   local body = ""
   if item.is_open(it) then
     -- Every OTHER open item's declared `touches`, off the same cache
@@ -395,15 +382,6 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     -- query's own limit (see `find.similar`'s own doc comment).
     local hits, _simerr = find.similar(c, it.title, it.id)
     overlaps = overlap_and_similar_lines(overlap.collisions(it.id, touches), hits or {})
-    -- The item's OWN repo, resolved to a local checkout the same way
-    -- `gitboard worktree` already does — never this process's own
-    -- working directory, which may hold a checkout of a different
-    -- repo entirely — and read at the item's claim base, or that
-    -- repo's default-branch tip, rather than at whatever the checkout's
-    -- working tree currently holds (see `_work.overlap.headroom_lines`).
-    local checkout, _checkerr = repository_map.resolve(s.root, it.repo or "", "")
-    headroom = overlap.headroom_lines(it.touches or {}, checkout or "",
-      it.repo or "", it.claim_base or "")
   else
     body = spec.document(store.read_spec(s, id))
   end
@@ -431,7 +409,7 @@ local function cmd_show(s: store.Store, id: string, raw?: boolean): integer
     end
   end
   local lines, verdict = show_report(it, role, rank_line, state, body, events,
-    problems, children_lines, overlaps, headroom, nil, nil, nil, outcome)
+    problems, children_lines, overlaps, nil, nil, nil, outcome)
   for _, line in ipairs(lines) do
     print(line)
   end
@@ -446,7 +424,7 @@ local record gitshow
   show_report: function(it: item.Item, role: string, rank_line: string,
   state: string, body: string,
   events: {publish.Event}, problems: {string}, children_lines: {string},
-  overlaps?: {string}, headroom?: {string}, ci_state?: string, ci_head?: string,
+  overlaps?: {string}, ci_state?: string, ci_head?: string,
   ci_age_s?: integer, outcome?: string): {string}, string
   cmd_show: function(s: store.Store, id: string, raw?: boolean): integer
 end

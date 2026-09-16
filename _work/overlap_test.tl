@@ -5,10 +5,6 @@
 -- declare the same file — the fact an orchestrator would otherwise
 -- only find by reading every candidate's list by hand and comparing
 -- them.
---
--- `overlap.headroom_lines` — the spec bar's own path check, which needs
--- a git checkout per case rather than this file's plain scratch
--- directory — is covered by `_work/overlap_headroom_test.tl`.
 
 local find = require("_work.find")
 local fixture = require("_work.fixture")

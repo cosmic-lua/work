@@ -240,7 +240,7 @@ local CSPEC: flags.CommandSpec = {
             help = "write the filled body to FILE instead of stdout, "
             .. "immune to a channel that decodes escapes"},
           {long = "tree", arg = "DIR",
-            help = "measure Teal paths named by ## Change beneath DIR"},
+            help = "validate DIR against a --receipt's recorded worktree"},
           {long = "receipt", arg = "FILE", help = "validate a v1 builder preparation receipt"},
           {long = "session", arg = "SESSION", help = "receipt caller; default $GITBOARD_SESSION"},
           {long = "gitboard-command", arg = "TEXT",

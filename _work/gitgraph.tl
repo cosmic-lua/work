@@ -36,7 +36,6 @@ local gitset = require("_work.gitset")
 local owner = require("_work.gitowner")
 local rank = require("_work.gitrank")
 local read = require("_work.read")
-local spec = require("_work.spec")
 local store = require("_work.store")
 local tail = require("_work.tail")
 
@@ -131,11 +130,8 @@ end
 --- @param after string | nil Place it immediately after this sibling
 --- under `parent`; at most one of before/after
 --- @param touches {string} | nil The files the change is expected to
---- touch, declared at file time; nil with a `prose` Change derives it
---- from the Change's own backticked `.tl` paths
---- (`_work.spec.touches_from_change`), the same list a caller typing
---- `--touches` by hand would have declared; nil with no Change, or an
---- explicit empty list either way, files none
+--- touch, declared at file time; nil or an explicit empty list either
+--- way files none
 --- @param access {string} | nil The repositories this work needs
 --- beyond `repo`, as owner/name slugs, on the same rule as `touches`
 --- @return integer 0 on success, 1 otherwise
@@ -182,20 +178,12 @@ local function cmd_new(s: store.Store, title: string, parent: string,
   if parent_role == nil then
     return gate.verdict_line("new", false, prerr)
   end
-  -- No `--touches` given: derive it from the Change's own backticked
-  -- `.tl` paths, once, at file time — the same list a caller would
-  -- have typed by hand. A later respec does not re-derive; `set
-  -- --touches` is how the field moves after this.
-  local declared_touches = touches
-  if declared_touches == nil and prose ~= nil then
-    declared_touches = spec.touches_from_change(prose.change or "")
-  end
   local it: item.Item = {
     id = ksuid.new(), title = title, parent = parent_id, repo = repo or "",
     order = {}, claim = "", pr = 0, verdict = "",
     verdict_head = "", resolution = "",
     builders = {}, speccers = {},
-    touches = declared_touches or {}, access = access or {},
+    touches = touches or {}, access = access or {},
   }
   local bad = item.problems(it)
   if #bad > 0 then
