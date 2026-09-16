@@ -7,7 +7,9 @@ applies to parse errors for every verb, not only new.
 Regression tests through the actual dispatcher must cover unknown options
 on new and take, a missing option value on snapshot, and an unknown command.
 Assert failure status, empty stdout, and the preserved diagnostic alone on
-stderr, with no appended usage or topic listing. Explicit top-level and
-verb help, doctrine help and no-argument help retain their current successful
-output. Preserve new's existing -- terminator handling for dash-leading
+stderr, with no appended usage or topic listing. No-argument invocation is
+also a parser error: preserve its expected-a-command diagnostic, empty stdout
+and failure status while omitting the dump. Explicit top-level --help, verb
+help and doctrine help retain their current successful output. Preserve
+new's existing -- terminator handling for dash-leading
 titles; retain or add a regression proving storage is verbatim.
