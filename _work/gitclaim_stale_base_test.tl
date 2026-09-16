@@ -11,6 +11,7 @@ local boardtree = require("_work.boardtree")
 local fixture = require("_work.fixture")
 local fs = require("cosmic.fs")
 local gitclaim_cli = require("_work.gitclaim_cli")
+local product = require("_work.product")
 local statepublish = require("_work.snapshot_publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -108,4 +109,70 @@ local function test_an_up_to_date_target_claims_without_fetch_base()
     checkout, false, "", false)
   assert(rc == 0, "an already-current target claims normally")
   assert(fact(s, id).product_base == head)
+end
+
+local function test_unconfigured_upstream_cannot_silently_capture_stale_base()
+  local checkout = stale_checkout("unconfigured")
+  git(checkout, {"branch", "--unset-upstream", "main"})
+  local s, id = claiming_item("unconfigured")
+  local rc = gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+    checkout, false, "", false)
+  assert(rc ~= 0, "fetched target refs require an explicit upstream before claiming")
+end
+
+local function test_missing_configured_tracking_ref_refuses_even_with_fetch_base()
+  for _, fetch_base in ipairs({false, true}) do
+    local name = "missing-ref-" .. tostring(fetch_base)
+    local checkout, old_head = stale_checkout(name)
+    git(checkout, {"update-ref", "-d", "refs/remotes/origin/main"})
+    local s, id = claiming_item(name)
+    assert(gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+        checkout, false, "", false, fetch_base) ~= 0)
+    assert(git(checkout, {"rev-parse", "refs/heads/main"}) == old_head)
+    assert((check.must(store.load(s, id)).claim or "") == "")
+  end
+end
+
+local function test_truly_local_target_still_claims()
+  local checkout, old_head = stale_checkout("local-only")
+  git(checkout, {"remote", "remove", "origin"})
+  local s, id = claiming_item("local-only")
+  assert(gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+      checkout, false, "", false) == 0)
+  assert(fact(s, id).product_base == old_head)
+end
+
+local function test_same_board_product_target_requires_verified_upstream()
+  for _, configured in ipairs({false, true}) do
+    for _, fetch_base in ipairs({false, true}) do
+      local name = "same-board-" .. tostring(configured) .. "-" .. tostring(fetch_base)
+      local checkout, old_head, new_head = stale_checkout(name)
+      local s, id = claiming_item(name)
+      -- The board and product are the SAME checkout, selected by mapping.
+      git(s.root, {"remote", "add", "origin", checkout})
+      git(s.root, {"fetch", "origin", "refs/remotes/origin/main:refs/remotes/origin/main"})
+      git(s.root, {"update-ref", "refs/heads/main", old_head})
+      if configured then
+        git(s.root, {"branch", "--set-upstream-to=origin/main", "main"})
+      end
+      -- Keep --fetch-base's explicit fetch at the fetched advanced value.
+      git(checkout, {"update-ref", "refs/heads/main", new_head})
+      git(s.root, {"config", "--local", "--replace-all", "gitboard.repository",
+          product.BOARD_REPO .. "=" .. s.root})
+      local it = check.must(store.load(s, id))
+      it.repo = product.BOARD_REPO
+      assert(storewrite.save(s, it, "use board as product"))
+      assert(statepublish.publish(s))
+      local rc = gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+        "", false, "", false, fetch_base)
+      if configured and fetch_base then
+        assert(rc == 0)
+        assert(fact(s, id).product_base == new_head)
+      else
+        assert(rc ~= 0, "same-board product must not bypass upstream verification")
+        assert((check.must(store.load(s, id)).claim or "") == "")
+        assert(git(s.root, {"rev-parse", "refs/heads/main"}) == old_head)
+      end
+    end
+  end
 end

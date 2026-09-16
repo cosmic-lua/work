@@ -65,16 +65,33 @@ end
 --- Whether `local_sha` is a strict ancestor of `tracking`'s current value —
 --- the shape a checkout whose local target branch never fast-forwarded past
 --- an upstream advance takes. Returns "" (nothing wrong) when the branch
---- tracks nothing, the tracking ref is not itself fetched yet, or the two
---- already agree; a non-"" candidate value names what the tracking ref
+--- is truly local or the two already agree. Missing upstream configuration
+--- with fetched target refs, or a missing configured ref, refuses verification.
+--- A non-"" candidate value names what the tracking ref
 --- currently resolves to, for the caller to act on.
 local function stale_target(root: string, base: string,
     local_sha: string): string, string
   local tracking, terr = tracking_ref(root, base)
   if tracking == nil then return "", terr end
-  if tracking == "" then return "", "" end
-  local remote_sha, _rerr = rev_commit(root, tracking)
-  if remote_sha == nil then return "", "" end
+  if tracking == "" then
+    local refs, err = child.run({"git", "for-each-ref", "--format=%(refname)",
+        "refs/remotes/*/" .. base}, {cwd = root})
+    if refs == nil then return "", err end
+    if not refs.ok then return "", "cannot inspect fetched target refs: " .. refs.stderr end
+    if refs.stdout ~= "" then
+      return "", ("cannot verify local %s in %s: fetched target refs exist but "
+        .. "no upstream is configured; select the intended remote-tracking ref "
+        .. "and run `git -C %q branch --set-upstream-to=<remote>/<branch> %q`, "
+        .. "then retry claim"):format(base, root, root, base)
+    end
+    return "", ""
+  end
+  local remote_sha, rerr = rev_commit(root, tracking)
+  if remote_sha == nil then
+    return "", ("cannot verify local %s against configured upstream %s: %s; "
+      .. "fetch its configured remote explicitly, then retry claim")
+    :format(base, tracking, rerr)
+  end
   if remote_sha == local_sha then return "", "" end
   local r, err = child.run({"git", "merge-base", "--is-ancestor", local_sha,
       remote_sha}, {cwd = root})
