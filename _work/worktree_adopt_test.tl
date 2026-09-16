@@ -42,7 +42,7 @@ local function value(root: string, ...: string): string
 end
 
 local function fresh(name: string, body: function(Case), kind?: string)
-  local keys = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM", "GIT_AUTHOR_NAME",
+  local keys = {"XDG_CACHE_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_SYSTEM", "GIT_AUTHOR_NAME",
     "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GITBOARD_WORKTREE_BOOTSTRAP"}
   local prior: {string: string} = {}
   for _, key in ipairs(keys) do prior[key] = env.get(key); assert(env.unset(key)) end
@@ -53,6 +53,7 @@ local function fresh(name: string, body: function(Case), kind?: string)
       assert(env.set("GIT_CONFIG_NOSYSTEM", "1"))
       local s = fixture.init_state_repo("adopt-" .. name)
       opened = s
+      assert(env.set("XDG_CACHE_HOME", fs.join(s.root, "runtime-cache")))
       local _, id = fixture.root_with_leaf(s)
       local source = fs.join(s.root, "product")
       assert(fs.make_dirs(fs.join(source, "bin")))
