@@ -1,5 +1,4 @@
-Not changing the mechanical/full review split (`«qjz5_gybg»` owns that),
-the `<PRODUCT_ROOT>` resolution (`«WsH8_pWpE»`, landed), or either review
-script's text. Not changing what `take` records, and not fetching: the
-brief resolves against refs the caller has already made local, as it does
-today.
+No classifier policy changes (qjz5_gybg), changes to take's handover commit,
+network fetches, worktree naming/bootstrap changes, relocation of existing
+worktrees, or automatic recovery from an already-deleted recorded mapping.
+No changes to existing claim_base facts. Keep explicit override recovery.
