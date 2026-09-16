@@ -1,4 +1,5 @@
 title: gitboard worktree fails on a cold runtime cache and only then names the flags that would have worked
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+speccers: 274b41cbb7742826e86ce84dc4263248
 touches: _work/gitworktree.tl
