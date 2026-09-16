@@ -1,4 +1,7 @@
 title: re-claiming after request-changes is deadlocked: two guards whose remedies are each other's cause
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
+handover_head: c8f2651d67f68322778ba977af42fa5ddcb76dfd
+external_url: https://github.com/cosmic-lua/work/pull/183
+builders: 0e8fd8b590caa29e032ef5e58b5f7eae
 touches: _work/gitclaim_cli.tl _work/gitclaim_rework_base_test.tl
