@@ -2,5 +2,9 @@ title: brief templates never tell a spawned agent how to wait for a gate, so a t
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
 handover_head: 0e4e60dcfa185aff3f3939079e83cbdd79c323a9
+verdict: accept
+verdict_head: 0e4e60dcfa185aff3f3939079e83cbdd79c323a9
+landed_head: 6fbc7d86364fb56767259324574c5afc4e740ac2
+resolution: completed
 builders: d1cb90c10e78b3d2fdf9763c0d4537c7
 speccers: d449323b3b4076befdbb73dcb1a5e563
