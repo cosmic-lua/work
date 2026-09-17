@@ -82,11 +82,11 @@ against the current tree. Refinement requires no inventories, counts,
 pasted commands/output or line citations.
 
 `new` and ordinary `show` offer a bounded direction-advisory hint for
-"every spawned agent", "all callers", "all the callers", "each template",
-"every template", "all templates", "already knows", "already records",
-"already recorded", and "the caller has it" in Change. Examples in fences,
-quotes and blockquotes are ignored. A recognizable path, identifier or
-introduced named set/list anywhere in Change suppresses the hints. These
+two phrase families in Change — unbounded quantifiers and unsourced
+existence claims — whose exact phrases the helper in
+`_work/direction.tl` holds. Examples in fences, quotes and blockquotes
+are ignored. A recognizable path, identifier or introduced named
+set/list anywhere in Change suppresses the hints. These
 are conservative textual pointers, not semantic proof: a hint does not
 establish unbounded scope or a missing field, and silence does not certify
 completeness. Hints are advisory only and never affect filing, claiming,

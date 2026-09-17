@@ -30,17 +30,50 @@ local function prose_only(change: string): string
 end
 
 -- Limited anchors: an inline backticked identifier (possibly qualified),
--- a slash path or filename with an ordinary source extension, a dotted or
--- underscore identifier, or the introduction `set NAME:` / `list NAME:`.
--- These are pointers only: none establishes that a referent exists.
+-- a slash path that ends in a source extension or starts at the tree's
+-- root, a dotted or underscore identifier with at least two identifier
+-- characters on each side of every separator, or the introduction
+-- `set NAME:` / `list NAME:`. These are pointers only: none establishes
+-- that a referent exists.
+local SOURCE_EXTENSIONS < const >: {string: boolean} = {tl = true, lua = true,
+  md = true, c = true, h = true, mk = true, yml = true, sh = true}
+local TREE_ROOTS < const > = {"_work/", "cosmic/", "_cli/", "_make/", "docs/",
+  "skills/", "cmd/", "bin/"}
+
+local function path_anchor(token: string): boolean
+  token = token:gsub("%.+$", "")
+  if not token:find("/", 1, true) then return false end
+  if token:match("^[_/]") or token:match("^%./") then return true end
+  for _, root in ipairs(TREE_ROOTS) do
+    if token:sub(1, #root) == root then return true end
+  end
+  local extension = token:match("%.(%w+)$")
+  return extension ~= nil and SOURCE_EXTENSIONS[extension] == true
+end
+
+local function identifier_anchor(token: string): boolean
+  token = token:gsub("^%.+", ""):gsub("%.+$", "")
+  local separator = token:find(".", 1, true) and "." or "_"
+  if not token:find(separator, 1, true) then return false end
+  for part in (token .. separator):gmatch("([^" .. separator .. "]*)" .. separator) do
+    if separator == "." then
+      if not part:match("^[%a_][%w_]+$") then return false end
+    elseif not part:match("^%a%w+$") then
+      return false
+    end
+  end
+  return true
+end
+
 local function anchored(text: string): boolean
   if text:match("`[%a_][%w_%.:]*`")
   or text:match("`[%w_.%-]+/[%w_./%-]*`") then return true end
   local plain = text:gsub("`[^`]*`", " ")
-  if plain:match("[%w_.%-]+/[%w_./%-]+")
-  or plain:match("%f[%a_][%a_][%w_]*%.[%a_][%w_]*%f[^%w_]")
-  or plain:match("%f[%a_][%a_][%w_]*_[%w_]+%f[^%w_]") then
-    return true
+  for token in plain:gmatch("%f[%w_./%-][%w_./%-]+") do
+    if path_anchor(token) then return true end
+  end
+  for token in plain:gmatch("%f[%w_.][%w_.]+") do
+    if identifier_anchor(token) then return true end
   end
   local lower = plain:lower()
   return lower:match("%f[%a]set%s+[%a_][%w_%-]*%s*:") ~= nil
