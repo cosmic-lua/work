@@ -216,6 +216,56 @@ local function test_bare_verb_spans_and_indented_commands_after_prose()
   end
 end
 
+-- Independently transcribed from doctrine's build/review/offline pages, plus
+-- nearby prose that a reader would not treat as a command. Keep literal
+-- expectations: enumerating snippets from live pages cannot reveal omissions.
+-- The PR212 bare-span/indentation seed regressions above remain separate.
+local record ExtractionCase
+  label: string
+  text: string
+  examples: {string}
+  commands: integer
+end
+
+local function test_independent_doctrine_extraction_corpus()
+  local cases: {ExtractionCase} = {
+    {label = "build dependency example", text = "record its dependency (`new`, then `depend <ID> <NEW>`)",
+      examples = {"gitboard depend <ID> <NEW>"}, commands = 1},
+    {label = "review wrapped bare example", text = "findings are a `log ID --add\nFILE` entry",
+      examples = {"gitboard log ID --add FILE"}, commands = 1},
+    {label = "offline exported session", text = "Acquire the work set:\n"
+      .. "  export GITBOARD_SESSION=$(gitboard session new)",
+      examples = {"  export GITBOARD_SESSION=$(gitboard session new)"}, commands = 1},
+    {label = "offline quoted summary after prose", text = "Prepare the final snapshot\n"
+      .. '  gitboard snapshot --summary "Describe the final board update"',
+      examples = {'  gitboard snapshot --summary "Describe the final board update"'}, commands = 1},
+    {label = "quoted inline command", text = 'The example is "`gitboard done ID --landed SHA`".',
+      examples = {"gitboard done ID --landed SHA"}, commands = 1},
+    {label = "fenced publication sequence", text = "```sh\ngitboard snapshot --check\n"
+      .. "gitboard publish COMMIT\n```",
+      examples = {"gitboard snapshot --check\ngitboard publish COMMIT\n"}, commands = 2},
+    {label = "tilde fenced continuation", text = "~~~sh\ngitboard verdict ID accept \\\n"
+      .. "  --head SHA\n~~~",
+      examples = {"gitboard verdict ID accept  --head SHA\n"}, commands = 1},
+    {label = "doctrine pointers and verb names", text = "Use separate `renew` and `drop`; "
+      .. "read `claims/<id>` and `refs/heads/state`.", examples = {}, commands = 0},
+    {label = "ordinary shell and slash prose", text = "Use `git status` and `set -e`; "
+      .. "new/show and e.g. cosmic-lua/work describe navigation.", examples = {}, commands = 0},
+    {label = "gitboard prose after paragraph", text = "Publication stays caller-owned.\n"
+      .. "gitboard stores no provider fact and performs no provider request.", examples = {}, commands = 0},
+  }
+  for _, case in ipairs(cases) do
+    local actual = snippets(case.text)
+    assert(#actual == #case.examples, "independent extraction count: " .. case.label)
+    for i, expected in ipairs(case.examples) do
+      assert(actual[i] == expected, "independent extracted example: " .. case.label)
+    end
+    local errors, count = check_text(case.text)
+    assert(count == case.commands, "independent checked command count: " .. case.label)
+    assert(#errors == 0, case.label .. ": " .. table.concat(errors, "\n"))
+  end
+end
+
 local function assert_page(label: string, text: string): integer
   local errors, count = check_text(text)
   assert(#errors == 0, label .. ": " .. table.concat(errors, "\n"))
