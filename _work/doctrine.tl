@@ -223,6 +223,16 @@ fact nobody finishes.
 6. Rejoin the loop. Never merge unreviewed work, and never accept
    your own: the verdict comes from a fresh-context review.
 
+For behavioral fixes, distinguish in the handoff the reported scenario,
+the reproduced condition, and the condition repaired. Reproduce from the
+caller's starting state before setup can repair or hide the fault, and
+carry that scenario into a regression. A nearby repair with the reported
+scenario still unproven is partial: have the caller retain the unresolved
+incident as explicit follow-up work, never silently discharge that scope.
+An unavailable historical environment need not block a useful bounded fix
+from landing with its limitation explicit. This adds no blanket regression
+requirement for nonbehavioral edits.
+
 Out-of-scope findings (a real defect, a stale doc, a gap the item
 sits next to but does not own): search first — `gitboard find '<phrase>'`
 in the board checkout answers "already
@@ -271,6 +281,19 @@ a review that only reads has verified nothing:
 6. It is the least thing — name any surplus concretely (a helper
    with one caller, generality nobody asked for) and have it
    removed before merge.
+
+For behavioral fixes, distinguish the reported scenario, the reproduced
+condition, and the condition repaired. Compare the fixture setup with the
+reported incident: does setup repair or hide the fault before the test?
+Check that the regression carries the caller's starting state. Work PR194
+followed by PR207 shows why: a fetched tracking-ref fixture does not model
+a never-fetched clone whose local and tracking refs agree while both are stale.
+If a nearby defect is repaired but the reported scenario remains unproven,
+report the change as partial and ask the caller to retain the unresolved
+incident as explicit follow-up work; never silently discharge that scope.
+An unavailable historical environment need not block a useful bounded fix
+from landing with its limitation explicit; it does not prove incident closure.
+This adds no blanket regression requirement for nonbehavioral edits.
 
 The diff review's own step: mutation-test at least one guard the
 change adds — break what it guards, watch the test go red, restore

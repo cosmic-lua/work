@@ -142,6 +142,19 @@ tip, a later entry, or any product commit for `{{.head_sha}}`.
 ]]
 
 local POSTURE_DIFF < const > = [[
+For behavioral fixes, distinguish the reported scenario, the reproduced
+condition, and the condition repaired. Compare the fixture setup with the
+reported incident: does setup repair or hide the fault before the test?
+Check that the regression carries the caller's starting state. Work PR194
+followed by PR207 shows why: a fetched tracking-ref fixture does not model
+a never-fetched clone whose local and tracking refs agree while both are stale.
+If a nearby defect is repaired but the reported scenario remains unproven,
+report the change as partial and ask the caller to retain the unresolved
+incident as explicit follow-up work; never silently discharge that scope.
+An unavailable historical environment need not block a useful bounded fix
+from landing with its limitation explicit; it does not prove incident closure.
+This adds no blanket regression requirement for nonbehavioral edits.
+
 ## How to review — the posture is ADVERSARIAL
 
 Your job is to try to make this diff fail, not to confirm it looks
@@ -349,6 +362,19 @@ when used, must be inspected by the caller on this exact SHA.
 ---
 {{.spec}}
 ---
+
+For behavioral fixes, distinguish the reported scenario, the reproduced
+condition, and the condition repaired. Compare the fixture setup with the
+reported incident: does setup repair or hide the fault before the test?
+Check that the regression carries the caller's starting state. Work PR194
+followed by PR207 shows why: a fetched tracking-ref fixture does not model
+a never-fetched clone whose local and tracking refs agree while both are stale.
+If a nearby defect is repaired but the reported scenario remains unproven,
+report the change as partial and ask the caller to retain the unresolved
+incident as explicit follow-up work; never silently discharge that scope.
+An unavailable historical environment need not block a useful bounded fix
+from landing with its limitation explicit; it does not prove incident closure.
+This adds no blanket regression requirement for nonbehavioral edits.
 
 ## How to review — a numbered script
 

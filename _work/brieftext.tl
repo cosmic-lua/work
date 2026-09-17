@@ -86,6 +86,20 @@ and nothing less:
 
 ## What to do
 
+For behavioral fixes, distinguish in the handoff the reported scenario,
+the reproduced condition, and the condition repaired. Reproduce from the
+caller's starting state before setup can repair or hide the fault, and
+carry that scenario into a regression. Work PR194 followed by PR207 shows
+why: a fetched tracking-ref fixture does not model a never-fetched clone
+whose local and tracking refs agree while both are stale.
+If a nearby defect is repaired but the reported scenario remains unproven,
+report the change as partial and ask the caller to retain the unresolved
+incident as explicit follow-up work; never silently discharge that scope.
+An unavailable historical environment is not itself a STOP: a useful
+bounded fix may land with that limitation and follow-up explicit. The
+premise STOP below still applies to a contradicted premise of that fix.
+This adds no blanket regression requirement for nonbehavioral edits.
+
 1. Verify what the spec names against the current tree — this is
    where its claims are checked for the first time, not a repeat of
    a check already done at spec time (`help bar`). A moved number is
