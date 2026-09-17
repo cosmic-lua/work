@@ -2,5 +2,7 @@ title: direction advisory: any a/b token, e.g., or snake_case word anchors the w
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
 handover_head: 4a221e0aafbbe1fb87b43a0b045655baaa027422
+verdict: accept
+verdict_head: 4a221e0aafbbe1fb87b43a0b045655baaa027422
 builders: c7f2d6867ad4d1255e2d360bde446cd0
 speccers: 2753b98fb6d083201c08a7327e5e67a1
