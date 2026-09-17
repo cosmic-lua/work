@@ -1,6 +1,6 @@
 title: gitboard snapshot: count pre-existing spec issues by default, list them only under --issues
 parent: 3IvL2pULntijSOkEjBUc70tCOiw
 repo: cosmic-lua/work
-handover_head: 72da366babb6ad4190194a29fd9cae85ca355793
+handover_head: 403c8ae03bb7a49812ae19130128fc33ce24047f
 builders: 43d0c273c81b1b8c8979165e0d3355c7
 speccers: 2753b98fb6d083201c08a7327e5e67a1
