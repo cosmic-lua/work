@@ -2,6 +2,7 @@ local cache = require("_work.cache")
 local prepared = require("_work.prepared")
 local refs = require("_work.refs")
 local snapshot = require("_work.snapshot")
+local snapshot_fetch = require("_work.snapshot_fetch")
 local snapshot_lock = require("_work.snapshot_lock")
 local protocol = require("_work.snapshot_protocol")
 local recovery = require("_work.snapshot_recovery")
@@ -47,17 +48,6 @@ local function plan(root: string, commit: string, remote: string,
     now?: integer): Planned | nil, string
   return plan_at(root, commit, destination(root, remote), now)
 end
-local function fetch_argv(remote: string): {string}
-  return {"git", "fetch", "--atomic", remote,
-    "+refs/heads/state:refs/remotes/" .. remote .. "/state",
-    "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
-end
-local function fetch_branch_argv(remote: string, branch: string,
-    endpoint?: string): {string}
-  return {"git", "fetch", "--atomic", endpoint or remote,
-    "+refs/heads/" .. branch .. ":refs/remotes/" .. remote .. "/state",
-    "+refs/heads/board/format:refs/remotes/" .. remote .. "/board/format"}
-end
 local function compact(report: validate.Report): string
   local rows: {string} = {}
   for _, changed in ipairs(report.changed) do
@@ -71,7 +61,7 @@ end
 local function discovery_head(root: string, frozen: snapshot.Plan): string | nil, string
   if refs.board_mode(root) == "remote" then
     local fetched, ferr = prepared.execute(root,
-      fetch_branch_argv(frozen.destination.remote, frozen.destination.branch,
+      snapshot_fetch.fetch_branch_argv(frozen.destination.remote, frozen.destination.branch,
         frozen.destination.target_url))
     if not fetched then return nil, ferr end
   end
@@ -273,7 +263,7 @@ local function execute(root: string, commit: string, remote: string,
   if state.phase == "candidate" or state.phase == "updating" then
     if refs.board_mode(root) == "remote" then
       local fetched, ferr = prepared.execute(root,
-        fetch_branch_argv(remote, frozen.destination.branch,
+        snapshot_fetch.fetch_branch_argv(remote, frozen.destination.branch,
           frozen.destination.target_url))
       if not fetched then return false, "uncertain: " .. ferr end
     end
@@ -340,7 +330,7 @@ local function execute(root: string, commit: string, remote: string,
   end
   if refs.board_mode(root) == "remote" then
     local fetched, ferr = prepared.execute(root,
-      fetch_branch_argv(remote, frozen.destination.branch,
+      snapshot_fetch.fetch_branch_argv(remote, frozen.destination.branch,
         frozen.destination.target_url))
     if not fetched then return false, "uncertain: " .. ferr end
   end
@@ -370,7 +360,7 @@ local function abandon(root: string, commit: string): boolean, string
     if planned == nil then return false, lerr end
     if (state.phase == "updating" or orphaned) and not saved_local then
       local fetched, ferr = prepared.execute(root,
-        fetch_branch_argv(state.remote, state.branch, state.target_url))
+        snapshot_fetch.fetch_branch_argv(state.remote, state.branch, state.target_url))
       if not fetched then return false, "uncertain: " .. ferr end
     end
   end
@@ -456,7 +446,7 @@ local function sync(s: store.Store, execute_fetch?: boolean): boolean, string
   local remote = refs.board_remote(s.root)
   if execute_fetch and refs.board_mode(s.root) == "remote" then
     local ok, err = prepared.execute(s.root,
-      fetch_branch_argv(remote, publication_branch(s.root),
+      snapshot_fetch.refresh_argv(s.root, remote, publication_branch(s.root),
         staging.target_url(s.root, remote)))
     if not ok then return false, err end
   end
@@ -490,8 +480,9 @@ local record Module
   string): recovery.Status | nil, string
 end
 local M: Module = {destination = destination, plan = plan,
-  begin_plan = begin_plan, resume_plan = historical_plan, fetch_argv = fetch_argv,
-  fetch_branch_argv = fetch_branch_argv,
+  begin_plan = begin_plan, resume_plan = historical_plan,
+  fetch_argv = snapshot_fetch.fetch_argv,
+  fetch_branch_argv = snapshot_fetch.fetch_branch_argv,
   execute = execute, start = start, record_candidate = record_candidate,
   abandon = abandon, publish = publish, sync = sync, compact = compact,
   update_call = update_call, reconcile_saved = reconcile_saved}

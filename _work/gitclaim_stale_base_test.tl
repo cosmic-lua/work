@@ -60,6 +60,38 @@ local function stale_checkout(name: string): string, string, string
   return checkout, old_head, new_head
 end
 
+--- The same upstream-plus-clone pair, but nothing has fetched since the
+--- clone: local `main` and `refs/remotes/origin/main` agree with each other
+--- and are both behind the upstream. `stale_checkout` fetches right after
+--- cloning, which lands the advance in the tracking ref and so masks this
+--- shape; a session harness supplies exactly this never-fetched clone, and
+--- only a fetch inside the claim itself can tell it apart from a current one.
+local function unfetched_checkout(name: string): string, string, string
+  local base = fs.join(fixture.tmpdir, "stale-base-" .. name)
+  assert(fs.remove_all(base))
+  assert(fs.make_dirs(base))
+  local upstream = fs.join(base, "upstream")
+  assert(fs.make_dirs(upstream))
+  git(upstream, {"init", "-q", "-b", "main"})
+  assert(fs.write(fs.join(upstream, "main.txt"), "base\n"))
+  git(upstream, {"add", "main.txt"})
+  git(upstream, {"commit", "-q", "-m", "base"})
+  local old_head = git(upstream, {"rev-parse", "HEAD"})
+
+  local checkout = fs.join(base, "checkout")
+  git(base, {"clone", "-q", upstream, checkout})
+
+  assert(fs.write(fs.join(upstream, "main.txt"), "base\nadvanced\n"))
+  git(upstream, {"add", "main.txt"})
+  git(upstream, {"commit", "-q", "-m", "advance"})
+  local new_head = git(upstream, {"rev-parse", "HEAD"})
+
+  assert(git(checkout, {"rev-parse", "refs/heads/main"}) == old_head)
+  assert(git(checkout, {"rev-parse", "refs/remotes/origin/main"}) == old_head,
+    "a never-fetched clone's tracking ref must still agree with its branch")
+  return checkout, old_head, new_head
+end
+
 local function claiming_item(name: string): store.Store, string
   local s = fixture.init_state_repo("stale-base-" .. name)
   local _, id = fixture.root_with_leaf(s)
@@ -120,17 +152,64 @@ local function test_unconfigured_upstream_cannot_silently_capture_stale_base()
   assert(rc ~= 0, "fetched target refs require an explicit upstream before claiming")
 end
 
-local function test_missing_configured_tracking_ref_refuses_even_with_fetch_base()
-  for _, fetch_base in ipairs({false, true}) do
-    local name = "missing-ref-" .. tostring(fetch_base)
-    local checkout, old_head = stale_checkout(name)
-    git(checkout, {"update-ref", "-d", "refs/remotes/origin/main"})
-    local s, id = claiming_item(name)
-    assert(gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
-        checkout, false, "", false, fetch_base) ~= 0)
-    assert(git(checkout, {"rev-parse", "refs/heads/main"}) == old_head)
-    assert((check.must(store.load(s, id)).claim or "") == "")
-  end
+local function test_missing_configured_tracking_ref_refuses_without_fetch_base()
+  local checkout, old_head = stale_checkout("missing-ref-refuse")
+  git(checkout, {"update-ref", "-d", "refs/remotes/origin/main"})
+  local s, id = claiming_item("missing-ref-refuse")
+  assert(gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+      checkout, false, "", false) ~= 0,
+    "a configured tracking ref that does not resolve cannot be verified offline")
+  assert(git(checkout, {"rev-parse", "refs/heads/main"}) == old_head)
+  assert((check.must(store.load(s, id)).claim or "") == "")
+end
+
+-- A fetch that recreates the missing tracking ref is what --fetch-base is
+-- for: the recreated ref is real fetched evidence, verified before the
+-- branch moves, not a bypass of the offline refusal above.
+local function test_missing_configured_tracking_ref_is_refetched_with_fetch_base()
+  local checkout, _, new_head = stale_checkout("missing-ref-fetch")
+  git(checkout, {"update-ref", "-d", "refs/remotes/origin/main"})
+  local s, id = claiming_item("missing-ref-fetch")
+  local rc = gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+    checkout, false, "", false, true)
+  assert(rc == 0, "--fetch-base must fetch, verify and claim the recreated ref")
+  assert(git(checkout, {"rev-parse", "refs/remotes/origin/main"}) == new_head,
+    "the fetch must recreate the tracking ref at the upstream tip")
+  assert(git(checkout, {"rev-parse", "refs/heads/main"}) == new_head)
+  s = check.must(store.open(s.root))
+  assert(fact(s, id).product_base == new_head)
+end
+
+-- The never-fetched shape: nothing distinguishes it from a current checkout
+-- without a network call, and a claim without --fetch-base makes none. That
+-- it records the local base is the documented limit of the offline
+-- comparison, asserted here so a later change that adds a network call to
+-- the default claim is deliberate rather than accidental.
+local function test_never_fetched_clone_records_the_local_base_without_fetch_base()
+  local checkout, old_head = unfetched_checkout("unfetched-offline")
+  local s, id = claiming_item("unfetched-offline")
+  local rc = gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+    checkout, false, "", false)
+  assert(rc == 0, "an offline claim cannot see past the tracking ref as last fetched")
+  assert(git(checkout, {"rev-parse", "refs/heads/main"}) == old_head)
+  assert(git(checkout, {"rev-parse", "refs/remotes/origin/main"}) == old_head,
+    "a claim without --fetch-base must not fetch")
+  assert(fact(s, id).product_base == old_head)
+end
+
+local function test_never_fetched_clone_is_caught_by_fetch_base()
+  local checkout, _, new_head = unfetched_checkout("unfetched-fetch")
+  local s, id = claiming_item("unfetched-fetch")
+  local rc = gitclaim_cli.cmd_claim(s, {id}, "take", CALLER, "origin",
+    checkout, false, "", false, true)
+  assert(rc == 0, "--fetch-base must fetch before comparing, then fast-forward")
+  assert(git(checkout, {"rev-parse", "refs/remotes/origin/main"}) == new_head,
+    "--fetch-base must fetch even when the local branch and tracking ref agree")
+  assert(git(checkout, {"rev-parse", "refs/heads/main"}) == new_head,
+    "--fetch-base must fast-forward the local branch to the fetched tip")
+  s = check.must(store.open(s.root))
+  assert(fact(s, id).product_base == new_head,
+    "the claim base must be the upstream tip, never the never-fetched one")
 end
 
 local function test_truly_local_target_still_claims()
