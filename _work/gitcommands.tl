@@ -245,8 +245,9 @@ local CSPEC: flags.CommandSpec = {
           {long = "session", arg = "SESSION", help = "receipt caller; default $GITBOARD_SESSION"},
           {long = "gitboard-command", arg = "TEXT",
             help = "the caller's own exact GitBoard invocation (loader plus absolute "
-            .. "executable), rendered verbatim as the prefix for every board command "
-            .. "the brief prints; requires --gitboard-cwd. A builder brief with "
+            .. "executable), accepted with --gitboard-cwd and carried as a brief "
+            .. "fact; no brief body renders it — a reviewer reports a verdict "
+            .. "envelope and the caller records it. A builder brief with "
             .. "--receipt uses the receipt's recorded invocation instead when this "
             .. "is omitted"},
           {long = "gitboard-cwd", arg = "DIR",

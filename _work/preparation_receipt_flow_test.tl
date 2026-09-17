@@ -167,10 +167,10 @@ local function test_public_remote_flow_preserves_all_fields_and_spec()
       assert(out:find("claim it as", 1, true) == nil)
       assert(out:find("It is already bootstrapped", 1, true) == nil)
       assert(out:find("not verified", 1, true) ~= nil and out:find("are unverified", 1, true) ~= nil)
-      assert(out:find(("cd %s && env X='a=b' sh /caller\\tool take %s"):format(c.s.root, c.id),
-          1, true) ~= nil,
-        "the builder brief's own take-command line carries the receipt's "
-        .. "exact caller-supplied invocation and cwd: " .. out)
+      assert(out:find("env X='a=b' sh /caller\\tool", 1, true) == nil
+        and out:find(("`take %s --head SHA [--url URL]` itself"):format(c.id), 1, true) ~= nil,
+        "the receipt's invocation is carried as a fact, never rendered: the builder "
+        .. "reports the commit id and the caller runs take: " .. out)
       assert(value(c.s.root, "show-ref") == before)
       assert(store.close(c.s))
       local coldcode, coldout = emit(c)

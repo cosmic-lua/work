@@ -86,8 +86,8 @@ local function test_review_brief_fills_a_claim_off_its_builders()
   assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
     "the placeholder is filled from the claim, not left for the caller")
   assert(claimsession.is_id(reviewer), "the reviewing session is a minted 32-hex id")
-  assert(out:find("--session " .. reviewer, 1, true) ~= nil,
-    "the verdict command in the body carries that same id: " .. out)
+  assert(out:find("session=" .. reviewer, 1, true) ~= nil,
+    "the verdict envelope in the body carries that same id: " .. out)
   assert(out:find("claimed under session " .. reviewer, 1, true) ~= nil,
     "and the closing verdict line repeats it: " .. out)
 end

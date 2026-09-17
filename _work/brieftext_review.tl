@@ -19,7 +19,7 @@
 --- `REVIEWING_DIFF` and `POSTURE_DIFF` are a diff handover's: a code
 --- reviewer, a product commit range read in a checkout, the adversarial
 --- list over that diff, the mutation step run from the reviewer's own
---- worktree, verdict lines carrying `--repo-dir`, a landing the caller
+--- worktree, the verdict envelope, a landing the caller
 --- records with `done --landed`, and a report naming the mutation run.
 --- `OPENING_RESEARCH`, `REVIEWING_RESEARCH` and `POSTURE_RESEARCH` are
 --- a research handover's, whose commit is board state: the message body
@@ -32,7 +32,7 @@
 --- from the measurements and not past them, that nothing the spec asked
 --- to be measured is missing, and that the findings are prospective
 --- evidence for the parent chain, not a narrative. No diff to list, no
---- guard to mutate, verdict lines naming no `--repo-dir`, and a `done`
+--- guard to mutate, the same verdict envelope, and a `done`
 --- line whose `--landed` is the board commit itself: a research item
 --- lands nothing. Which set a review takes follows from the item's
 --- deliverable (`_work.brief`), never from anything in this text.
@@ -63,7 +63,7 @@
 --- resolver cannot place the item's repo.
 ---
 --- `{{.product_root}}` is the reviewer's own local product checkout — where the
---- diff is read, in `REVIEW_SCRIPT` the `--repo-dir` the caller passes, and in
+--- diff is read (`REVIEW_SCRIPT`, having no worktree, names it outright), and in
 --- `POSTURE_RESEARCH` the checkout a reproduction worktree is added from;
 --- `_work.brief` resolves it from the ITEM's own repository through the
 --- `gitboard.repository` map, so it names the tree the diff's files live
@@ -71,15 +71,14 @@
 --- repository, and falls back to that checkout only for a diff review
 --- whose item's repo is not mapped here — `POSTURE_RESEARCH` calls the
 --- path the map's placement, so there an unmapped repo leaves the token
---- unresolved instead. It is never the invocation gitboard itself runs
---- through: that is `{{.gitboard_cmd}}`, the caller's own exact loader-plus-
---- executable prefix (`_work.brief` resolves it from a builder's `--receipt`
---- or from `--gitboard-command`/`--gitboard-cwd` given directly to this
---- brief), rendered once and reused before every verb below. Unresolved —
---- no caller command supplied — renders as an explicit sentinel, never a
---- guessed `bin/gitboard` that would strand a fresh reviewer behind a
---- product-checkout network bootstrap. Verdict records the exact
---- handed-over commit and performs no provider or authenticated operation.
+--- unresolved instead. No posture renders a board command line: a
+--- reviewer never runs `verdict`. It ends its final report with one line
+--- in a fixed envelope — `verdict: accept|request-changes|reject
+--- head=<sha> session=<review session>` — followed by its findings, and
+--- the caller records that under the review session with `verdict ID
+--- KIND --head SHA --session S`. The caller's own invocation
+--- (`--gitboard-command`/`--gitboard-cwd`, or a builder's `--receipt`)
+--- is still accepted and carried as a fact, never rendered in a body.
 ---
 --- `{{.round_context}}` (`REVIEW` only, between the spec block and "How
 --- to review") is where a SECOND (or later) review round's own context
@@ -189,31 +188,26 @@ in it. Your worktree is the only tree.
 
 ## Recording your verdict
 
-`verdict` verifies and records one local commit id. It performs no fetch,
+You do not run `verdict` — no spawned agent runs a board verb. The caller
+records your verdict with `verdict ID KIND --head SHA --session S`, which
+verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
 those operations, and so does watching them: never poll or subscribe to a
 provider event yourself. This review is claimed under session `{{.review_session}}` —
 you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 {{.bootstrap_phrase}}
 
-GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
-loader and absolute executable the caller runs board commands through.
-Use it verbatim as the prefix below; never guess a product-checkout
-substitute of your own, and never bootstrap one yourself.
+Your final report carries exactly one verdict line, in this fixed envelope,
+and your findings follow it:
 
 ```
-{{.gitboard_cmd}} verdict {{.item_id}} accept \
-  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
-{{.gitboard_cmd}} verdict {{.item_id}} request-changes \
-  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
-{{.gitboard_cmd}} verdict {{.item_id}} reject \
-  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.worktree}}
+verdict: accept|request-changes|reject head={{.head_sha}} session={{.review_session}}
 ```
 
-Run exactly the one line matching your judgment. The board stores the SHA,
+Write exactly the one kind matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`{{.gitboard_cmd}} done {{.item_id}} --landed SHA`.
+`done {{.item_id}} --landed SHA`.
 
 ## Final report
 
@@ -269,34 +263,29 @@ in it.
 
 ## Recording your verdict
 
-`verdict` verifies and records one local commit id — here the board
-commit itself, judged in the board clone, so the lines below name no
-product checkout. It performs no fetch, credential lookup, check read,
-merge, or provider write. The caller owns those operations, and so does
-watching them: never poll or subscribe to a provider event yourself.
-This review is claimed under session `{{.review_session}}` — you MUST
-use that exact string.
+You do not run `verdict` — no spawned agent runs a board verb. The caller
+records your verdict with `verdict ID KIND --head SHA --session S`, which
+verifies and records one local commit id — here the board commit itself,
+judged in the board clone, so the record names no product checkout. It
+performs no fetch, credential lookup, check read, merge, or provider
+write. The caller owns those operations, and so does watching them: never
+poll or subscribe to a provider event yourself. This review is claimed
+under session `{{.review_session}}` — you MUST use that exact string. You
+run no board command, so never bootstrap a `bin/gitboard` loader yourself —
+the reproduction worktree above is the one tree you bootstrap.
 
-GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
-loader and absolute executable the caller runs board commands through.
-Use it verbatim as the prefix below; never substitute a `bin/gitboard`
-from a product checkout, and never bootstrap that loader yourself — the
-reproduction worktree above is the one tree you bootstrap.
+Your final report carries exactly one verdict line, in this fixed envelope,
+and your findings follow it:
 
 ```
-{{.gitboard_cmd}} verdict {{.item_id}} accept \
-  --head {{.head_sha}} --session {{.review_session}}
-{{.gitboard_cmd}} verdict {{.item_id}} request-changes \
-  --head {{.head_sha}} --session {{.review_session}}
-{{.gitboard_cmd}} verdict {{.item_id}} reject \
-  --head {{.head_sha}} --session {{.review_session}}
+verdict: accept|request-changes|reject head={{.head_sha}} session={{.review_session}}
 ```
 
-Run exactly the one line matching your judgment. The board stores the SHA,
+Write exactly the one kind matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item, and a research item lands
 nothing — its deliverable is the board commit itself — so the caller runs
-`{{.gitboard_cmd}} done {{.item_id}} --landed {{.head_sha}}`.
+`done {{.item_id}} --landed {{.head_sha}}`.
 
 ## Final report
 
@@ -379,7 +368,9 @@ never in a worktree, and confirm the refusal.
 
 ## Recording your verdict
 
-`verdict` verifies and records one local commit id. It performs no fetch,
+You do not run `verdict` — no spawned agent runs a board verb. The caller
+records your verdict with `verdict ID KIND --head SHA --session S`, which
+verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
 those operations, and so does watching them: never poll or subscribe to a
 provider event yourself. Read the diff with `git fetch origin <branch>` and
@@ -388,24 +379,17 @@ create no worktree. This review is claimed under session `{{.review_session}}`
 — you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 {{.bootstrap_phrase}}
 
-GitBoard invocation for this review: `{{.gitboard_cmd}}` — the exact
-loader and absolute executable the caller runs board commands through.
-Use it verbatim as the prefix below; never guess a product-checkout
-substitute of your own, and never bootstrap one yourself.
+Your final report carries exactly one verdict line, in this fixed envelope,
+and your findings follow it:
 
 ```
-{{.gitboard_cmd}} verdict {{.item_id}} accept \
-  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.product_root}}
-{{.gitboard_cmd}} verdict {{.item_id}} request-changes \
-  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.product_root}}
-{{.gitboard_cmd}} verdict {{.item_id}} reject \
-  --head {{.head_sha}} --session {{.review_session}} --repo-dir {{.product_root}}
+verdict: accept|request-changes|reject head={{.head_sha}} session={{.review_session}}
 ```
 
-Run exactly the one line matching your judgment. The board stores the SHA,
+Write exactly the one kind matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`{{.gitboard_cmd}} done {{.item_id}} --landed SHA`.
+`done {{.item_id}} --landed SHA`.
 
 ## Final report
 

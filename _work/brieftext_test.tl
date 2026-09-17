@@ -158,10 +158,9 @@ end
 local function test_the_builder_hands_over_a_commit_id()
   assert(BUILDER:find("create_pull_request", 1, true) == nil,
     "the builder brief must not send a builder to a provider API")
-  assert(BUILDER:find("{{.gitboard_cmd}} take {{.item_id}} --head SHA [--url URL]",
+  assert(BUILDER:find("run `take {{.item_id}} --head SHA [--url URL]` itself.",
       1, true) ~= nil,
-    "the builder reports the commit-only handover command, prefixed with "
-    .. "the caller's own exact GitBoard invocation")
+    "the builder reports the commit id and names the take the CALLER runs")
 end
 
 -- `verdict` performs only local Git verification and a board mutation.
@@ -172,12 +171,10 @@ local function test_the_review_brief_records_only_the_commit()
     and REVIEW:find("enable auto-merge", 1, true) == nil,
     "the review brief must not instruct a reviewer to enable auto-merge "
     .. "itself")
-  assert(POSTURE_DIFF:find("{{.gitboard_cmd}} verdict {{.item_id}} accept", 1, true) ~= nil,
-    "the accept line runs the caller's own GitBoard invocation, not a "
-    .. "guessed bin/gitboard")
-  assert(POSTURE_DIFF:find(
-      "{{.gitboard_cmd}} verdict {{.item_id}} request-changes", 1, true)
-    ~= nil, "request-changes records the same commit id")
+  assert(POSTURE_DIFF:find("verdict: accept|request-changes|reject "
+      .. "head={{.head_sha}} session={{.review_session}}", 1, true) ~= nil,
+    "the reviewer reports one envelope line naming the head and the session; "
+    .. "the caller records it")
   assert(REVIEW:find("--body FILE", 1, true) == nil
     and REVIEW:find("--pr", 1, true) == nil,
     "review prose and provider ids are not board evidence")
@@ -331,6 +328,9 @@ local function test_the_review_script_verdict_is_checkout_free()
     "the full review's diff posture must retain its own checkout wording")
   assert(POSTURE_DIFF:find("{{.worktree}}", 1, true) ~= nil,
     "the full review's diff posture must retain its worktree placeholder")
+  assert(REVIEW_SCRIPT:find("verdict: accept|request-changes|reject "
+      .. "head={{.head_sha}} session={{.review_session}}", 1, true) ~= nil,
+    "the script verdict is the same reported envelope, never a command to run")
 end
 
 -- A review checkout `handoff --fetch` made already carries an `o/3p`

@@ -18,74 +18,26 @@ local function render(d: briefctx.PostureResearch): string
   -- posture_research:41
   local v4: string = d.board_dir
   parts[#parts + 1] = v4
-  parts[#parts + 1] = "/..`) is the\norchestrator's and is stale by construction; never read, grep or build\nin it.\n\n## Recording your verdict\n\n`verdict` verifies and records one local commit id — here the board\ncommit itself, judged in the board clone, so the lines below name no\nproduct checkout. It performs no fetch, credential lookup, check read,\nmerge, or provider write. The caller owns those operations, and so does\nwatching them: never poll or subscribe to a provider event yourself.\nThis review is claimed under session `"
-  -- posture_research:52
+  parts[#parts + 1] = "/..`) is the\norchestrator's and is stale by construction; never read, grep or build\nin it.\n\n## Recording your verdict\n\nYou do not run `verdict` — no spawned agent runs a board verb. The caller\nrecords your verdict with `verdict ID KIND --head SHA --session S`, which\nverifies and records one local commit id — here the board commit itself,\njudged in the board clone, so the record names no product checkout. It\nperforms no fetch, credential lookup, check read, merge, or provider\nwrite. The caller owns those operations, and so does watching them: never\npoll or subscribe to a provider event yourself. This review is claimed\nunder session `"
+  -- posture_research:54
   local v5: string = d.review_session
   parts[#parts + 1] = v5
-  parts[#parts + 1] = "` — you MUST\nuse that exact string.\n\nGitBoard invocation for this review: `"
-  -- posture_research:55
-  local v6: string = d.gitboard_cmd
+  parts[#parts + 1] = "` — you MUST use that exact string. You\nrun no board command, so never bootstrap a `bin/gitboard` loader yourself —\nthe reproduction worktree above is the one tree you bootstrap.\n\nYour final report carries exactly one verdict line, in this fixed envelope,\nand your findings follow it:\n\n```\nverdict: accept|request-changes|reject head="
+  -- posture_research:62
+  local v6: string = d.head_sha
   parts[#parts + 1] = v6
-  parts[#parts + 1] = "` — the exact\nloader and absolute executable the caller runs board commands through.\nUse it verbatim as the prefix below; never substitute a `bin/gitboard`\nfrom a product checkout, and never bootstrap that loader yourself — the\nreproduction worktree above is the one tree you bootstrap.\n\n```\n"
+  parts[#parts + 1] = " session="
   -- posture_research:62
-  local v7: string = d.gitboard_cmd
+  local v7: string = d.review_session
   parts[#parts + 1] = v7
-  parts[#parts + 1] = " verdict "
-  -- posture_research:62
+  parts[#parts + 1] = "\n```\n\nWrite exactly the one kind matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item, and a research item lands\nnothing — its deliverable is the board commit itself — so the caller runs\n`done "
+  -- posture_research:69
   local v8: string = d.item_id
   parts[#parts + 1] = v8
-  parts[#parts + 1] = " accept \\\n  --head "
-  -- posture_research:63
+  parts[#parts + 1] = " --landed "
+  -- posture_research:69
   local v9: string = d.head_sha
   parts[#parts + 1] = v9
-  parts[#parts + 1] = " --session "
-  -- posture_research:63
-  local v10: string = d.review_session
-  parts[#parts + 1] = v10
-  parts[#parts + 1] = "\n"
-  -- posture_research:64
-  local v11: string = d.gitboard_cmd
-  parts[#parts + 1] = v11
-  parts[#parts + 1] = " verdict "
-  -- posture_research:64
-  local v12: string = d.item_id
-  parts[#parts + 1] = v12
-  parts[#parts + 1] = " request-changes \\\n  --head "
-  -- posture_research:65
-  local v13: string = d.head_sha
-  parts[#parts + 1] = v13
-  parts[#parts + 1] = " --session "
-  -- posture_research:65
-  local v14: string = d.review_session
-  parts[#parts + 1] = v14
-  parts[#parts + 1] = "\n"
-  -- posture_research:66
-  local v15: string = d.gitboard_cmd
-  parts[#parts + 1] = v15
-  parts[#parts + 1] = " verdict "
-  -- posture_research:66
-  local v16: string = d.item_id
-  parts[#parts + 1] = v16
-  parts[#parts + 1] = " reject \\\n  --head "
-  -- posture_research:67
-  local v17: string = d.head_sha
-  parts[#parts + 1] = v17
-  parts[#parts + 1] = " --session "
-  -- posture_research:67
-  local v18: string = d.review_session
-  parts[#parts + 1] = v18
-  parts[#parts + 1] = "\n```\n\nRun exactly the one line matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item, and a research item lands\nnothing — its deliverable is the board commit itself — so the caller runs\n`"
-  -- posture_research:74
-  local v19: string = d.gitboard_cmd
-  parts[#parts + 1] = v19
-  parts[#parts + 1] = " done "
-  -- posture_research:74
-  local v20: string = d.item_id
-  parts[#parts + 1] = v20
-  parts[#parts + 1] = " --landed "
-  -- posture_research:74
-  local v21: string = d.head_sha
-  parts[#parts + 1] = v21
   parts[#parts + 1] = "`.\n\n## Final report\n\nThe verdict you recorded (or why you could not), each measured claim you\nre-ran and whether it reproduced, and any concrete gaps quoted from the\nfindings' own text. Keep it factual and concise.\n"
   return table.concat(parts)
 end

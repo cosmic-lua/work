@@ -1,11 +1,12 @@
 #!/usr/bin/env cosmic
 -- `brief --gitboard-command`/`--gitboard-cwd`, exercised end to end through
--- `gitboard.main`: a fresh delegated agent — a builder or a reviewer, either
--- with no receipt in play — gets the caller's own exact invocation rendered
--- as the prefix for every board command the brief prints, never a guessed
--- product-checkout `bin/gitboard`. The fixture models the real shape this
--- item exists for: an APE run through `sh`, at an absolute path outside the
--- product worktree, invoked from a cwd also outside that worktree.
+-- `gitboard.main`: the caller's own exact invocation is accepted — for a
+-- builder or a reviewer, either with no receipt in play — and carried as a
+-- brief fact, but no brief body renders it: a reviewer reports a verdict
+-- envelope and a builder a commit id, and the caller runs the board verb.
+-- The fixture models the real shape: an APE run through `sh`, at an
+-- absolute path outside the product worktree, invoked from a cwd also
+-- outside that worktree.
 
 local check = require("cosmic.check")
 local env = require("cosmic.env")
@@ -75,7 +76,7 @@ local function capture(f: function(): integer): integer, string
   return code, table.concat(lines, "\n")
 end
 
-local function test_review_renders_the_exact_ape_invocation_and_cwd()
+local function test_review_accepts_the_caller_invocation_and_never_renders_it()
   local s = fixture.init_state_repo("brief-gitboard-cmd-review")
   local _, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
@@ -88,24 +89,22 @@ local function test_review_renders_the_exact_ape_invocation_and_cwd()
     end)
   assert(env.unset("GITBOARD_SESSION"))
   assert(code == 0, out)
-  local prefix = "cd " .. BOARD_CWD .. " && " .. COMMAND
-  for _, verb in ipairs({"accept", "request-changes", "reject"}) do
-    assert(out:find(prefix .. " verdict " .. leaf .. " " .. verb, 1, true) ~= nil,
-      ("the %s line carries the exact caller-supplied invocation and cwd: %s")
-      :format(verb, out))
-  end
-  assert(out:find(prefix .. " done " .. leaf .. " --landed SHA", 1, true) ~= nil,
-    "the reported done-command also carries the exact invocation: " .. out)
+  assert(out:find(COMMAND, 1, true) == nil and out:find(BOARD_CWD, 1, true) == nil,
+    "the caller's invocation is accepted but never rendered in the body: " .. out)
+  assert(out:find("verdict " .. leaf, 1, true) == nil,
+    "no verdict command line renders for the reviewer to run: " .. out)
+  assert(out:find("verdict: accept|request-changes|reject head=" .. HEAD
+      .. " session=f00dcafe00001234dead", 1, true) ~= nil,
+    "the reviewer reports the verdict envelope for the caller to record: " .. out)
   assert(out:find("cd <PRODUCT_ROOT>", 1, true) == nil,
     "no guessed product-checkout bootstrap cd survives: " .. out)
   assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil,
-    "a caller-supplied invocation is never rendered unresolved: " .. out)
+    "nothing renders the unresolved sentinel: " .. out)
   assert(out:find(PRODUCT_WORKTREE, 1, true) == nil,
-    "the invocation and cwd never reference the (unrelated) product worktree: "
-    .. out)
+    "the brief never references the (unrelated) product worktree: " .. out)
 end
 
-local function test_review_with_no_caller_command_is_labeled_unresolved()
+local function test_review_with_no_caller_command_renders_no_sentinel()
   local s = fixture.init_state_repo("brief-gitboard-cmd-unresolved")
   local _, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
@@ -117,17 +116,18 @@ local function test_review_with_no_caller_command_is_labeled_unresolved()
     end)
   assert(env.unset("GITBOARD_SESSION"))
   assert(code == 0, out)
-  assert(out:find(gitinvocation.UNRESOLVED .. " verdict " .. leaf .. " accept", 1, true) ~= nil,
-    "no caller command was given, so the fallback names itself unresolved: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil,
+    "no caller command was given, and no brief body renders the sentinel: " .. out)
+  assert(out:find("verdict " .. leaf, 1, true) == nil
+    and out:find("verdict: accept|request-changes|reject head=" .. HEAD, 1, true) ~= nil,
+    "the envelope replaces every verdict command line: " .. out)
   assert(out:find("bin/gitboard", 1, true) == nil,
-    "unresolved never falls back to a guessed product-checkout bin/gitboard: "
-    .. out)
+    "and never a guessed product-checkout bin/gitboard: " .. out)
   assert(out:find("cd <PRODUCT_ROOT>", 1, true) == nil,
-    "unresolved never directs the agent to bootstrap from a product checkout: "
-    .. out)
+    "nor a product-checkout bootstrap: " .. out)
 end
 
-local function test_builder_direct_flags_need_no_receipt()
+local function test_builder_direct_flags_are_accepted_and_never_rendered()
   local s = fixture.init_state_repo("brief-gitboard-cmd-builder")
   local _, leaf = fixture.root_with_leaf(s)
   fixture.give_spec(s, leaf)
@@ -136,9 +136,11 @@ local function test_builder_direct_flags_need_no_receipt()
         "--gitboard-command", COMMAND, "--gitboard-cwd", BOARD_CWD)
     end)
   assert(code == 0, out)
-  assert(out:find(("cd %s && %s take %s --head SHA"):format(BOARD_CWD, COMMAND, leaf),
-      1, true) ~= nil,
-    "a builder with no receipt still gets the direct invocation, unguessed: " .. out)
+  assert(out:find(COMMAND, 1, true) == nil
+    and out:find(gitinvocation.UNRESOLVED, 1, true) == nil,
+    "a builder brief renders neither the invocation nor the sentinel: " .. out)
+  assert(out:find("`take " .. leaf .. " --head SHA [--url URL]` itself", 1, true) ~= nil,
+    "the builder reports the commit id; the caller runs take: " .. out)
 end
 
 local function test_gitboard_command_and_cwd_are_refused_alone()
