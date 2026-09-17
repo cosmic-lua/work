@@ -177,5 +177,7 @@ local function test_all_rendered_help_and_brief_commands_are_current()
     assert(not rendered:find("{{", 1, true), "unrendered template " .. unit.name)
     brief_count = brief_count + assert_page("brief " .. unit.name, rendered)
   end
-  assert(brief_count >= 25, "brief extraction must cover rendered examples")
+  -- Review postures render no board command line (the reviewer reports a
+  -- verdict envelope), so the live examples are the builder-side ones.
+  assert(brief_count >= 13, "brief extraction must cover rendered examples")
 end

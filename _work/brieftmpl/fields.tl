@@ -37,7 +37,6 @@ local M: brieftmpl_fields = {
     "<TEST_CMD>",
     "<GATE_CMD>",
     "<BOOTSTRAP_CMD>",
-    "<GITBOARD_CMD>",
   },
   rework = {
     "<JUDGED_HEAD>",
@@ -93,7 +92,6 @@ local M: brieftmpl_fields = {
     "<PRODUCT_ROOT>",
     "<REVIEW_SESSION>",
     "<BOOTSTRAP_PHRASE>",
-    "<GITBOARD_CMD>",
   },
   opening_diff = {
     "<REPO>",
@@ -117,7 +115,6 @@ local M: brieftmpl_fields = {
     "<BOARD_DIR>",
     "<REVIEW_SESSION>",
     "<BOOTSTRAP_PHRASE>",
-    "<GITBOARD_CMD>",
     "<ITEM_ID>",
   },
   posture_research = {
@@ -126,7 +123,6 @@ local M: brieftmpl_fields = {
     "<REPO>",
     "<BOARD_DIR>",
     "<REVIEW_SESSION>",
-    "<GITBOARD_CMD>",
     "<ITEM_ID>",
   },
   round = {

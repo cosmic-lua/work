@@ -16,6 +16,7 @@ local fs = require("cosmic.fs")
 local fixture = require("_work.fixture")
 local brief = require("_work.brief")
 local gitspec = require("_work.gitspec")
+local gitinvocation = require("_work.gitinvocation")
 local item = require("_work.item")
 local store = require("_work.store")
 
@@ -335,8 +336,11 @@ local function test_review_names_the_items_own_repository_checkout()
   assert(code == 0, "the recorded commit unlocks the review brief: " .. out)
   assert(out:find("product checkout at `" .. product .. "`", 1, true) ~= nil,
     "the prose sends the reviewer to the item's own checkout: " .. out)
-  assert(out:find("--repo-dir " .. product, 1, true) ~= nil,
-    "and every verdict line records against it: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil
+    and out:find("verdict " .. leaf, 1, true) == nil,
+    "and the script posture renders no verdict command line, sentinel or otherwise: " .. out)
+  assert(out:find("verdict: accept|request-changes|reject head=", 1, true) ~= nil,
+    "it asks for the verdict envelope instead: " .. out)
   assert(out:find(PRODUCT_ROOT, 1, true) == nil,
     "the running gitboard's own checkout is never named: " .. out)
 end

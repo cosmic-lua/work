@@ -245,7 +245,9 @@ item's own builders/speccers, so the claim must exist first and must
 not be theirs. The brief then names that same claim on its own
 verdict line for the caller to spawn under; either way the reviewer's
 session reads the spec off the board and the diff from local Git, and
-records the verdict itself.
+reports its verdict as one envelope line — `verdict: KIND head=SHA
+session=S` — which the caller records under the review session with
+`verdict ID KIND --head SHA --session S`.
 
 The posture is adversarial — the job is to make the diff fail, and
 a review that only reads has verified nothing:

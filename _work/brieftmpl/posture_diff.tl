@@ -18,86 +18,26 @@ local function render(d: briefctx.PostureDiff): string
   -- posture_diff:41
   local v4: string = d.board_dir
   parts[#parts + 1] = v4
-  parts[#parts + 1] = "/..`) is the\norchestrator's and is stale by construction; never read, grep or build\nin it. Your worktree is the only tree.\n\n## Recording your verdict\n\n`verdict` verifies and records one local commit id. It performs no fetch,\ncredential lookup, check read, merge, or provider write. The caller owns\nthose operations, and so does watching them: never poll or subscribe to a\nprovider event yourself. This review is claimed under session `"
-  -- posture_diff:50
+  parts[#parts + 1] = "/..`) is the\norchestrator's and is stale by construction; never read, grep or build\nin it. Your worktree is the only tree.\n\n## Recording your verdict\n\nYou do not run `verdict` — no spawned agent runs a board verb. The caller\nrecords your verdict with `verdict ID KIND --head SHA --session S`, which\nverifies and records one local commit id. It performs no fetch,\ncredential lookup, check read, merge, or provider write. The caller owns\nthose operations, and so does watching them: never poll or subscribe to a\nprovider event yourself. This review is claimed under session `"
+  -- posture_diff:52
   local v5: string = d.review_session
   parts[#parts + 1] = v5
   parts[#parts + 1] = "` —\nyou MUST use that exact string. If this checkout has no `o/3p` cache yet, run\n"
-  -- posture_diff:52
+  -- posture_diff:54
   local v6: string = d.bootstrap_phrase
   parts[#parts + 1] = v6
-  parts[#parts + 1] = "\n\nGitBoard invocation for this review: `"
-  -- posture_diff:54
-  local v7: string = d.gitboard_cmd
+  parts[#parts + 1] = "\n\nYour final report carries exactly one verdict line, in this fixed envelope,\nand your findings follow it:\n\n```\nverdict: accept|request-changes|reject head="
+  -- posture_diff:60
+  local v7: string = d.head_sha
   parts[#parts + 1] = v7
-  parts[#parts + 1] = "` — the exact\nloader and absolute executable the caller runs board commands through.\nUse it verbatim as the prefix below; never guess a product-checkout\nsubstitute of your own, and never bootstrap one yourself.\n\n```\n"
+  parts[#parts + 1] = " session="
   -- posture_diff:60
-  local v8: string = d.gitboard_cmd
+  local v8: string = d.review_session
   parts[#parts + 1] = v8
-  parts[#parts + 1] = " verdict "
-  -- posture_diff:60
+  parts[#parts + 1] = "\n```\n\nWrite exactly the one kind matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item; after landing, the caller runs\n`done "
+  -- posture_diff:66
   local v9: string = d.item_id
   parts[#parts + 1] = v9
-  parts[#parts + 1] = " accept \\\n  --head "
-  -- posture_diff:61
-  local v10: string = d.head_sha
-  parts[#parts + 1] = v10
-  parts[#parts + 1] = " --session "
-  -- posture_diff:61
-  local v11: string = d.review_session
-  parts[#parts + 1] = v11
-  parts[#parts + 1] = " --repo-dir "
-  -- posture_diff:61
-  local v12: string = d.worktree
-  parts[#parts + 1] = v12
-  parts[#parts + 1] = "\n"
-  -- posture_diff:62
-  local v13: string = d.gitboard_cmd
-  parts[#parts + 1] = v13
-  parts[#parts + 1] = " verdict "
-  -- posture_diff:62
-  local v14: string = d.item_id
-  parts[#parts + 1] = v14
-  parts[#parts + 1] = " request-changes \\\n  --head "
-  -- posture_diff:63
-  local v15: string = d.head_sha
-  parts[#parts + 1] = v15
-  parts[#parts + 1] = " --session "
-  -- posture_diff:63
-  local v16: string = d.review_session
-  parts[#parts + 1] = v16
-  parts[#parts + 1] = " --repo-dir "
-  -- posture_diff:63
-  local v17: string = d.worktree
-  parts[#parts + 1] = v17
-  parts[#parts + 1] = "\n"
-  -- posture_diff:64
-  local v18: string = d.gitboard_cmd
-  parts[#parts + 1] = v18
-  parts[#parts + 1] = " verdict "
-  -- posture_diff:64
-  local v19: string = d.item_id
-  parts[#parts + 1] = v19
-  parts[#parts + 1] = " reject \\\n  --head "
-  -- posture_diff:65
-  local v20: string = d.head_sha
-  parts[#parts + 1] = v20
-  parts[#parts + 1] = " --session "
-  -- posture_diff:65
-  local v21: string = d.review_session
-  parts[#parts + 1] = v21
-  parts[#parts + 1] = " --repo-dir "
-  -- posture_diff:65
-  local v22: string = d.worktree
-  parts[#parts + 1] = v22
-  parts[#parts + 1] = "\n```\n\nRun exactly the one line matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item; after landing, the caller runs\n`"
-  -- posture_diff:71
-  local v23: string = d.gitboard_cmd
-  parts[#parts + 1] = v23
-  parts[#parts + 1] = " done "
-  -- posture_diff:71
-  local v24: string = d.item_id
-  parts[#parts + 1] = v24
   parts[#parts + 1] = " --landed SHA`.\n\n## Final report\n\nThe verdict you recorded (or why you could not), the mutation-test\nyou ran and its result, and any concrete findings quoted with\nfile:line. Keep it factual and concise.\n"
   return table.concat(parts)
 end

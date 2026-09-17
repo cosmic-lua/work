@@ -16,6 +16,7 @@ local claim = require("_work.claim")
 local authority = require("_work.stateclaim_authority")
 local fixture = require("_work.fixture")
 local item = require("_work.item")
+local gitinvocation = require("_work.gitinvocation")
 local publish = require("_work.publish")
 local store = require("_work.store")
 local storewrite = require("_work.storewrite")
@@ -173,6 +174,9 @@ local function test_builder_rework_brief_uses_only_the_judged_commit()
   assert(out:find("GitHub", 1, true) == nil
     and out:find("pull request", 1, true) == nil,
     "the rework brief reconstructs no provider state: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil
+    and out:find("verdict " .. leaf, 1, true) == nil,
+    "the rework brief renders no board command line, sentinel or otherwise: " .. out)
 end
 
 -- The regression this guards: a fresh (non-rework) pull once left

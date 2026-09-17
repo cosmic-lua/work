@@ -20,6 +20,7 @@ local fixture = require("_work.fixture")
 local flow = require("_work.commit_flow_fixture")
 local fs = require("cosmic.fs")
 local gittake = require("_work.gittake")
+local gitinvocation = require("_work.gitinvocation")
 local gitverdict = require("_work.gitverdict")
 local item = require("_work.item")
 local itemtree = require("_work.itemtree")
@@ -118,11 +119,11 @@ end
 
 local function assert_exact_review(body: string, head: string)
   local commands = 0
-  for actual in body:gmatch("%-%-head (%x+)") do
-    assert(actual == head, "every verdict must judge the handover SHA")
+  for actual in body:gmatch("verdict: accept|request%-changes|reject head=(%x+) session=") do
+    assert(actual == head, "the verdict envelope must judge the handover SHA")
     commands = commands + 1
   end
-  assert(commands == 3, "accept, request-changes, and reject must all name a head")
+  assert(commands == 1, "exactly one verdict envelope names the head")
   local flat = body:gsub("%s+", " ")
   assert(flat:find("stale by construction; never read, grep or build", 1, true) ~= nil, body)
   assert(flat:find("The captures landed", 1, true) == nil, body)
@@ -247,7 +248,7 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   -- The rest of the review follows the deliverable too: what a findings
   -- review checks, and no diff-shaped instruction a research reviewer
   -- cannot carry out — no diff to list, no guard to mutate, no worktree,
-  -- and verdict lines naming no `--repo-dir`.
+  -- and a verdict envelope naming no `--repo-dir`.
   for _, diff_only in ipairs({"The diff is the Change", "cosmic --find",
       "Mutation-test at least one guard", "fresh checkout", "<WORKTREE>",
       "--repo-dir", "o/3p", "no product worktree"}) do
@@ -277,8 +278,8 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
   assert(out:find("Bootstrap that worktree the way the product\n"
       .. "   repository's own instructions (its AGENTS.md) bootstrap a new\n"
       .. "   checkout, before the first re-run.", 1, true) ~= nil
-    and out:find("never bootstrap that loader yourself — the\n"
-      .. "reproduction worktree above is the one tree you bootstrap.", 1, true) ~= nil
+    and out:find("never bootstrap a `bin/gitboard` loader yourself —\n"
+      .. "the reproduction worktree above is the one tree you bootstrap.", 1, true) ~= nil
     and out:find("never bootstrap one yourself", 1, true) == nil,
     "and says how that tree is bootstrapped, and that the loader is not: " .. out)
   for _, wanted in ipairs({"names its command, and the command reproduces",
@@ -288,8 +289,11 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
     assert(out:find(wanted, 1, true) ~= nil,
       "a research review says what a findings review checks: " .. wanted .. "\n" .. out)
   end
-  assert(out:find("--head " .. result .. " --session session-b\n", 1, true) ~= nil,
-    "the verdict lines name the board commit and the session, nothing more: " .. out)
+  assert(out:find("head=" .. result .. " session=session-b\n", 1, true) ~= nil,
+    "the verdict envelope names the board commit and the session, nothing more: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil
+    and out:find("verdict " .. id, 1, true) == nil,
+    "the research posture renders no verdict command line, sentinel or otherwise: " .. out)
   -- A product commit recorded beside it is the handover: the brief
   -- judges that commit and carries no findings.
   it = check.must(store.load(s, id))
@@ -304,8 +308,8 @@ local function test_a_research_handover_earns_the_full_review_of_its_findings()
     and both:find("The caller has made this exact commit available", 1, true) ~= nil,
     "both recorded, the product commit is what the review judges: " .. both)
   assert(both:find("Mutation-test at least one guard", 1, true) ~= nil
-    and both:find("--repo-dir", 1, true) ~= nil,
-    "and takes the diff posture, mutation step and --repo-dir included: " .. both)
+    and both:find("fresh checkout at `", 1, true) ~= nil,
+    "and takes the diff posture, mutation step and own checkout included: " .. both)
   -- Neither recorded refuses exactly as before.
   it = check.must(store.load(s, id))
   it.handover_head, it.result = "", ""
@@ -453,8 +457,8 @@ commit's message body verbatim beside the spec it answers.]], 1, true) ~= nil, p
     and brieftext_review.REVIEW:find("Mutation-test", 1, true) == nil
     and brieftext_review.REVIEW:find("{{.worktree}}", 1, true) == nil,
     "the full review splices its posture rather than carrying one wording")
-  assert(brieftext_review.POSTURE_DIFF:find("--repo-dir {{.worktree}}", 1, true) ~= nil,
-    "the diff posture mutates from the reviewer's worktree and records against it")
+  assert(brieftext_review.POSTURE_DIFF:find("fresh checkout at `{{.worktree}}`", 1, true) ~= nil,
+    "the diff posture mutates from the reviewer's worktree")
   assert(brieftext_review.POSTURE_RESEARCH:find("{{.worktree}}", 1, true) == nil
     and brieftext_review.POSTURE_RESEARCH:find("--repo-dir", 1, true) == nil
     and brieftext_review.POSTURE_RESEARCH:find("Mutation-test", 1, true) == nil,

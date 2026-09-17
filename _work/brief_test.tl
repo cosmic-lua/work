@@ -166,6 +166,10 @@ local function test_builder_brief_carries_the_item_and_names_the_rest()
   assert(out:sub(#out - 200):find("BOUNCE_CONTEXT", 1, true) == nil,
     "the verdict line does not name BOUNCE_CONTEXT as a survivor: "
     .. out:sub(#out - 200))
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil
+    and out:find("verdict " .. leaf, 1, true) == nil
+    and out:find("`take " .. leaf .. " --head SHA [--url URL]` itself", 1, true) ~= nil,
+    "the builder brief renders no board command line; the caller runs take: " .. out)
 end
 
 --- The bug this guards: a builder brief once named the item id's
@@ -279,8 +283,12 @@ local function test_review_brief_needs_the_handover()
   assert(out:find("bin/gitboard", 1, true) == nil,
     "no caller-supplied invocation, so no guessed product-checkout "
     .. "bin/gitboard either: " .. out)
-  assert(out:find(gitinvocation.UNRESOLVED .. " verdict", 1, true) ~= nil,
-    "the verdict command uses the explicit unresolved sentinel instead: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil
+    and out:find("verdict " .. leaf, 1, true) == nil,
+    "no verdict command line renders, sentinel-prefixed or otherwise: " .. out)
+  assert(out:find("verdict: accept|request-changes|reject head=" .. HEAD
+      .. " session=session-b", 1, true) ~= nil,
+    "the reviewer reports the verdict envelope instead: " .. out)
   assert(out:find("<PRODUCT_ROOT>", 1, true) == nil,
     "the review no longer carries a PRODUCT_ROOT-based invocation at all: " .. out)
   assert(out:find("<REVIEW_SESSION>", 1, true) == nil,
@@ -288,8 +296,8 @@ local function test_review_brief_needs_the_handover()
   local label = "session-b"
   assert(out:find("session `" .. label .. "`", 1, true) ~= nil,
     "the review is told the exact session it is claimed under: " .. out)
-  assert(out:find("--session " .. label, 1, true) ~= nil,
-    "and records its verdict under the same string")
+  assert(out:find("session=" .. label, 1, true) ~= nil,
+    "and its verdict envelope carries the same string")
   assert(out:find("claimed under session " .. label, 1, true) ~= nil,
     "the verdict line repeats it, so the reviewer reads the exact claim "
     .. "the board already holds")
@@ -300,9 +308,8 @@ end
 -- `<root>/o/board` before handing off to the pinned binary. This fixture
 -- configures no `gitboard.repository` mapping for "acme/widgets", so
 -- `<WORKTREE>` cannot be derived and survives — PRODUCT_ROOT resolving
--- is independent of that. It no longer supplies the GitBoard invocation
--- itself either — that is `<GITBOARD_CMD>`, unresolved here since no
--- caller command was given.
+-- is independent of that. No caller invocation was given, and none would
+-- render anyway: the reviewer reports an envelope and the caller records it.
 local function test_product_root_fills_from_gitboard_dir()
   local s = init_state_repo("brief-product-root")
   local _, leaf = root_with_leaf(s)
@@ -322,8 +329,8 @@ local function test_product_root_fills_from_gitboard_dir()
     .. "be derived and the placeholder survives: " .. out)
   assert(out:find("bin/gitboard", 1, true) == nil,
     "still no guessed product-checkout bin/gitboard: " .. out)
-  assert(out:find(gitinvocation.UNRESOLVED, 1, true) ~= nil,
-    "GITBOARD_CMD is unresolved on its own — no caller command was given: " .. out)
+  assert(out:find(gitinvocation.UNRESOLVED, 1, true) == nil,
+    "and no unresolved-invocation sentinel either — no body renders one: " .. out)
 end
 
 -- A brief trusts the exact handover commit and never reads provider check

@@ -42,90 +42,30 @@ local function render(d: briefctx.ReviewScript): string
   -- review_script:30
   local v10: string = d.head_sha
   parts[#parts + 1] = v10
-  parts[#parts + 1] = "`. If the caller supplies\n   external checks, confirm they name that SHA; red or running means stop and\n   record nothing. Never infer check state from the board.\n2. Verify what the spec names against the diff's real effect. A\n   moved number is a finding to quote, not by itself a reason to\n   stop.\n3. Break the guard in a scratch copy: `git show <head>:<file>` the\n   file the diff's own test guards into the scratchpad, mutate the\n   copy (replace a matched needle with unrelated text, flip a\n   boolean — never just reword the text around it), run the diff's\n   own test file against the mutated copy, and watch it refuse.\n4. Record your verdict.\n\nMutation-test at least one guard the change adds or preserves: break\nthe guard in a copy of the file taken with `git show <head>:<path>`,\nnever in a worktree, and confirm the refusal.\n\n## Recording your verdict\n\n`verdict` verifies and records one local commit id. It performs no fetch,\ncredential lookup, check read, merge, or provider write. The caller owns\nthose operations, and so does watching them: never poll or subscribe to a\nprovider event yourself. Read the diff with `git fetch origin <branch>` and\n`git show <head>:<path>` in the product checkout at `"
-  -- review_script:53
+  parts[#parts + 1] = "`. If the caller supplies\n   external checks, confirm they name that SHA; red or running means stop and\n   record nothing. Never infer check state from the board.\n2. Verify what the spec names against the diff's real effect. A\n   moved number is a finding to quote, not by itself a reason to\n   stop.\n3. Break the guard in a scratch copy: `git show <head>:<file>` the\n   file the diff's own test guards into the scratchpad, mutate the\n   copy (replace a matched needle with unrelated text, flip a\n   boolean — never just reword the text around it), run the diff's\n   own test file against the mutated copy, and watch it refuse.\n4. Record your verdict.\n\nMutation-test at least one guard the change adds or preserves: break\nthe guard in a copy of the file taken with `git show <head>:<path>`,\nnever in a worktree, and confirm the refusal.\n\n## Recording your verdict\n\nYou do not run `verdict` — no spawned agent runs a board verb. The caller\nrecords your verdict with `verdict ID KIND --head SHA --session S`, which\nverifies and records one local commit id. It performs no fetch,\ncredential lookup, check read, merge, or provider write. The caller owns\nthose operations, and so does watching them: never poll or subscribe to a\nprovider event yourself. Read the diff with `git fetch origin <branch>` and\n`git show <head>:<path>` in the product checkout at `"
+  -- review_script:55
   local v11: string = d.product_root
   parts[#parts + 1] = v11
   parts[#parts + 1] = "`; you\ncreate no worktree. This review is claimed under session `"
-  -- review_script:54
+  -- review_script:56
   local v12: string = d.review_session
   parts[#parts + 1] = v12
   parts[#parts + 1] = "`\n— you MUST use that exact string. If this checkout has no `o/3p` cache yet, run\n"
-  -- review_script:56
+  -- review_script:58
   local v13: string = d.bootstrap_phrase
   parts[#parts + 1] = v13
-  parts[#parts + 1] = "\n\nGitBoard invocation for this review: `"
-  -- review_script:58
-  local v14: string = d.gitboard_cmd
+  parts[#parts + 1] = "\n\nYour final report carries exactly one verdict line, in this fixed envelope,\nand your findings follow it:\n\n```\nverdict: accept|request-changes|reject head="
+  -- review_script:64
+  local v14: string = d.head_sha
   parts[#parts + 1] = v14
-  parts[#parts + 1] = "` — the exact\nloader and absolute executable the caller runs board commands through.\nUse it verbatim as the prefix below; never guess a product-checkout\nsubstitute of your own, and never bootstrap one yourself.\n\n```\n"
+  parts[#parts + 1] = " session="
   -- review_script:64
-  local v15: string = d.gitboard_cmd
+  local v15: string = d.review_session
   parts[#parts + 1] = v15
-  parts[#parts + 1] = " verdict "
-  -- review_script:64
+  parts[#parts + 1] = "\n```\n\nWrite exactly the one kind matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item; after landing, the caller runs\n`done "
+  -- review_script:70
   local v16: string = d.item_id
   parts[#parts + 1] = v16
-  parts[#parts + 1] = " accept \\\n  --head "
-  -- review_script:65
-  local v17: string = d.head_sha
-  parts[#parts + 1] = v17
-  parts[#parts + 1] = " --session "
-  -- review_script:65
-  local v18: string = d.review_session
-  parts[#parts + 1] = v18
-  parts[#parts + 1] = " --repo-dir "
-  -- review_script:65
-  local v19: string = d.product_root
-  parts[#parts + 1] = v19
-  parts[#parts + 1] = "\n"
-  -- review_script:66
-  local v20: string = d.gitboard_cmd
-  parts[#parts + 1] = v20
-  parts[#parts + 1] = " verdict "
-  -- review_script:66
-  local v21: string = d.item_id
-  parts[#parts + 1] = v21
-  parts[#parts + 1] = " request-changes \\\n  --head "
-  -- review_script:67
-  local v22: string = d.head_sha
-  parts[#parts + 1] = v22
-  parts[#parts + 1] = " --session "
-  -- review_script:67
-  local v23: string = d.review_session
-  parts[#parts + 1] = v23
-  parts[#parts + 1] = " --repo-dir "
-  -- review_script:67
-  local v24: string = d.product_root
-  parts[#parts + 1] = v24
-  parts[#parts + 1] = "\n"
-  -- review_script:68
-  local v25: string = d.gitboard_cmd
-  parts[#parts + 1] = v25
-  parts[#parts + 1] = " verdict "
-  -- review_script:68
-  local v26: string = d.item_id
-  parts[#parts + 1] = v26
-  parts[#parts + 1] = " reject \\\n  --head "
-  -- review_script:69
-  local v27: string = d.head_sha
-  parts[#parts + 1] = v27
-  parts[#parts + 1] = " --session "
-  -- review_script:69
-  local v28: string = d.review_session
-  parts[#parts + 1] = v28
-  parts[#parts + 1] = " --repo-dir "
-  -- review_script:69
-  local v29: string = d.product_root
-  parts[#parts + 1] = v29
-  parts[#parts + 1] = "\n```\n\nRun exactly the one line matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item; after landing, the caller runs\n`"
-  -- review_script:75
-  local v30: string = d.gitboard_cmd
-  parts[#parts + 1] = v30
-  parts[#parts + 1] = " done "
-  -- review_script:75
-  local v31: string = d.item_id
-  parts[#parts + 1] = v31
   parts[#parts + 1] = " --landed SHA`.\n\n## Final report\n\nThe verdict you recorded (or why you could not), the mutation-test\nyou ran and its result, and any concrete findings quoted with\nfile:line. Keep it factual and concise.\n\nA request-changes verdict names five labeled facts, not a fix: the\nexact reproducer; the smallest permitted correction boundary; the\ntempting unsafe repair, when one is visible; the adjacent invariant\nthat repair could violate; and the focused regression plus every\nnamed boundary guard the corrected head must rerun. Do not design\nthe correction: when no safe envelope is established, name the\nuncertainty and let the rework builder bounce rather than widening\nscope to find one.\n"
   return table.concat(parts)
 end

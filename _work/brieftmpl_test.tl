@@ -274,10 +274,10 @@ local function test_the_review_section_follows_the_deliverable()
     .. table.concat(hleft, " "))
 end
 
--- The full review's "how to review" section, verdict lines, `done` line
+-- The full review's "how to review" section, verdict envelope, `done` line
 -- and final report follow the deliverable the same way: `findings` nil
 -- is a diff — the adversarial list over the diff, the mutation step
--- from the reviewer's own worktree, `--repo-dir` on every verdict line,
+-- from the reviewer's own worktree, the verdict envelope,
 -- `done --landed SHA` after landing, the mutation run in the report,
 -- byte for byte what the review always carried, pinned here as rendered
 -- through the first line of the paragraph the review still carries
@@ -285,7 +285,7 @@ end
 -- brief's first byte through the first line the review carries itself —
 -- and `findings` set is research: what a findings review
 -- checks, reproduced in a worktree added from the product checkout, no
--- diff to list, no guard to mutate, verdict lines naming no checkout,
+-- diff to list, no guard to mutate, the same verdict envelope,
 -- `--landed` the board commit itself, the re-run claims in the report.
 -- Spliced with the review's own tracker, so the worktree and bootstrap
 -- plan a diff review cannot answer are its survivors, in the rendered
@@ -340,7 +340,9 @@ in it. Your worktree is the only tree.
 
 ## Recording your verdict
 
-`verdict` verifies and records one local commit id. It performs no fetch,
+You do not run `verdict` — no spawned agent runs a board verb. The caller
+records your verdict with `verdict ID KIND --head SHA --session S`, which
+verifies and records one local commit id. It performs no fetch,
 credential lookup, check read, merge, or provider write. The caller owns
 ]]
 
@@ -348,24 +350,17 @@ local DIFF_POSTURE_B < const > = [[
 you MUST use that exact string. If this checkout has no `o/3p` cache yet, run
 `fetch` before you run any test.
 
-GitBoard invocation for this review: `bin/gitboard` — the exact
-loader and absolute executable the caller runs board commands through.
-Use it verbatim as the prefix below; never guess a product-checkout
-substitute of your own, and never bootstrap one yourself.
+Your final report carries exactly one verdict line, in this fixed envelope,
+and your findings follow it:
 
 ```
-bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H accept \
-  --head 0123456789abcdef --session sess-1 --repo-dir /wt/work/abcd
-bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H request-changes \
-  --head 0123456789abcdef --session sess-1 --repo-dir /wt/work/abcd
-bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H reject \
-  --head 0123456789abcdef --session sess-1 --repo-dir /wt/work/abcd
+verdict: accept|request-changes|reject head=0123456789abcdef session=sess-1
 ```
 
-Run exactly the one line matching your judgment. The board stores the SHA,
+Write exactly the one kind matching your judgment. The board stores the SHA,
 not review prose. Put concrete gaps in your final report for the caller. An
 accept does not merge or complete the item; after landing, the caller runs
-`bin/gitboard done 3JEQZ7UEoFtzblNFG29uOsCKV6H --landed SHA`.
+`done 3JEQZ7UEoFtzblNFG29uOsCKV6H --landed SHA`.
 
 ## Final report
 
@@ -423,29 +418,24 @@ local function test_the_review_posture_follows_the_deliverable()
       .. "   in that checkout itself. Bootstrap that worktree the way the product\n"
       .. "   repository's own instructions (its AGENTS.md) bootstrap a new\n"
       .. "   checkout, before the first re-run.",
-      "never substitute a `bin/gitboard`\nfrom a product checkout, and never bootstrap "
-      .. "that loader yourself — the\nreproduction worktree above is the one tree you "
-      .. "bootstrap.",
+      "You\nrun no board command, so never bootstrap a `bin/gitboard` loader yourself —\n"
+      .. "the reproduction worktree above is the one tree you bootstrap.",
       "follows from the measurements and not past them",
       "Nothing the spec asked to be measured is missing",
       "prospective evidence for the item's parent chain",
       "stale by construction; never read, grep or build",
       "a research item lands\nnothing — its deliverable is the board commit itself — "
-      .. "so the caller runs\n`bin/gitboard done 3JEQZ7UEoFtzblNFG29uOsCKV6H "
+      .. "so the caller runs\n`done 3JEQZ7UEoFtzblNFG29uOsCKV6H "
       .. "--landed 0123456789abcdef`.\n\n## Final report\n\n"
       .. "The verdict you recorded (or why you could not), each measured claim you\n"
       .. "re-ran and whether it reproduced,"}) do
     assert(research_body:find(wanted, 1, true) ~= nil,
       "what a findings review checks: " .. wanted .. "\n" .. research_body)
   end
-  assert(research_body:find("```\nbin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H accept \\\n"
-      .. "  --head 0123456789abcdef --session sess-1\n"
-      .. "bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H request-changes \\\n"
-      .. "  --head 0123456789abcdef --session sess-1\n"
-      .. "bin/gitboard verdict 3JEQZ7UEoFtzblNFG29uOsCKV6H reject \\\n"
-      .. "  --head 0123456789abcdef --session sess-1\n```\n\n"
-      .. "Run exactly the one line matching your judgment.", 1, true) ~= nil,
-    "the research verdict lines name the board commit and the session, nothing more: "
+  assert(research_body:find("```\nverdict: accept|request-changes|reject "
+      .. "head=0123456789abcdef session=sess-1\n```\n\n"
+      .. "Write exactly the one kind matching your judgment.", 1, true) ~= nil,
+    "the research envelope names the board commit and the session, nothing more: "
     .. research_body)
   f.worktree = nil
   f.head_sha = nil
