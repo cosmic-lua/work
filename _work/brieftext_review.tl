@@ -397,6 +397,11 @@ or fewer than 20 changed lines in total. Four fixed moves, in order:
 Mutation-test at least one guard the change adds or preserves: break
 the guard in a copy of the file taken with `git show <head>:<path>`,
 never in a worktree, and confirm the refusal.
+For generated code, mutate the SOURCE, never the artifact: if the build
+rewrites your edit, you mutated an output. A green build that regenerated
+away the mutation is INCONCLUSIVE. After a source mutation, the first
+generator refusal is not a catch: rerun after regeneration until the named
+test assertion actually fails; a generator/build refusal does not count.
 
 ## Recording your verdict
 

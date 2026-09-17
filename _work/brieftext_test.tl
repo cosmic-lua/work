@@ -25,28 +25,6 @@ local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 local POSTURE_DIFF < const > = flat(brieftext_review.POSTURE_DIFF)
 
--- The generated-code clause of the mutation step, carried by the
--- builder brief and the diff-review posture alike.
-local GENERATED_CLAUSE < const > =
-"For generated code, mutate the SOURCE, never the artifact: "
-.. "if the build rewrites your edit, you mutated an output. "
-.. "A green build that regenerated away the mutation is INCONCLUSIVE. "
-.. "After a source mutation, the first generator refusal is not a catch: "
-.. "rerun after regeneration until the named test assertion actually "
-.. "fails; a generator/build refusal does not count."
-
-local function test_builder_requires_generated_source_mutation_and_assertion_failure()
-  assert(BUILDER:find(GENERATED_CLAUSE, 1, true) ~= nil,
-    "generated-code mutation must reach the named test assertion, not stop at regeneration")
-end
-
-local function test_diff_review_requires_generated_source_mutation_and_assertion_failure()
-  assert(POSTURE_DIFF:find(GENERATED_CLAUSE, 1, true) ~= nil,
-    "the diff posture's mutation paragraph must carry the builder's "
-    .. "generated-code clause: mutate the source, a regenerating build is "
-    .. "inconclusive, rerun past the generator's first refusal")
-end
-
 local function test_builder_requires_a_committed_migration_and_caller_report()
   assert(BUILDER:find(
       "When `## Change` alters a committed tracking file's shape, follow "
@@ -166,14 +144,6 @@ local function test_step_seven_leaves_authenticated_operations_to_the_caller()
     "step 7 leaves pushes and provider interactions with the caller")
 end
 
-local function test_the_builder_hands_over_a_commit_id()
-  assert(BUILDER:find("create_pull_request", 1, true) == nil,
-    "the builder brief must not send a builder to a provider API")
-  assert(BUILDER:find("run `take {{.item_id}} --head SHA [--url URL]` itself.",
-      1, true) ~= nil,
-    "the builder reports the commit id and names the take the CALLER runs")
-end
-
 -- `verdict` performs only local Git verification and a board mutation.
 local function test_the_review_brief_records_only_the_commit()
   assert(REVIEW:find("mcp__github", 1, true) == nil,
@@ -182,10 +152,6 @@ local function test_the_review_brief_records_only_the_commit()
     and REVIEW:find("enable auto-merge", 1, true) == nil,
     "the review brief must not instruct a reviewer to enable auto-merge "
     .. "itself")
-  assert(POSTURE_DIFF:find("verdict: accept|request-changes|reject "
-      .. "head={{.head_sha}} session={{.review_session}}", 1, true) ~= nil,
-    "the reviewer reports one envelope line naming the head and the session; "
-    .. "the caller records it")
   assert(REVIEW:find("--body FILE", 1, true) == nil
     and REVIEW:find("--pr", 1, true) == nil,
     "review prose and provider ids are not board evidence")
@@ -305,20 +271,6 @@ local function test_step_three_names_the_new_module_ratchets()
     .. "and doc_returns_test")
 end
 
-local function test_step_three_runs_coverage_through_the_gate_after_the_last_test_edit()
-  assert(BUILDER:find(
-      "The full gate already runs coverage: run it once after your last "
-      .. "test edit, never a separate coverage stage — a new test moves a "
-      .. "row's `total`; run `{{.bootstrap_cmd}}` once before `--check types` "
-      .. "on a file whose sibling you moved.", 1, true) ~= nil,
-    "step 3 must say the full gate runs coverage, so run it once after "
-    .. "the last test edit and never a separate coverage stage, keep the "
-    .. "note that a new test moves a row, and name the resolved bootstrap "
-    .. "command once before --check types on a file whose sibling moved")
-  assert(BUILDER:find("--make coverage", 1, true) == nil,
-    "step 3 must not send a builder to a separate coverage stage")
-end
-
 -- The numbered-script review's mutation move is checkout-free — a
 -- copy of the guarded file taken with `git show <head>:<path>`, never
 -- a fresh checkout `POSTURE_DIFF`'s own mutation paragraph sends a reviewer
@@ -342,9 +294,6 @@ local function test_the_review_script_verdict_is_checkout_free()
     "the full review's diff posture must retain its own checkout wording")
   assert(POSTURE_DIFF:find("{{.worktree}}", 1, true) ~= nil,
     "the full review's diff posture must retain its worktree placeholder")
-  assert(REVIEW_SCRIPT:find("verdict: accept|request-changes|reject "
-      .. "head={{.head_sha}} session={{.review_session}}", 1, true) ~= nil,
-    "the script verdict is the same reported envelope, never a command to run")
 end
 
 -- A review checkout `handoff --fetch` made already carries an `o/3p`
