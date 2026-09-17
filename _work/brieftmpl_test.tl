@@ -318,10 +318,19 @@ fine.
    contracts unmoved.
 4. Conventions hold: the repo's AGENTS.md binds. Anything a gate
    should have caught but did not is itself a finding to report.
-5. It serves the outcome: judge the diff against the item's parent
-   chain, not just the letter of `## Change`. A green gate on a
-   change that misses the point means the SPEC was wrong — say so,
-   never wave the diff through.
+5. Challenge the acceptance model before reading the builder's test rationale:
+   derive a plausible failure case from the supplied problem, full spec and
+   parent outcome, then compare it with the diff's actual fixtures, setup
+   steps, exclusions and assertions. If material parent context is missing,
+   report that uncertainty; do not invent it. Where material uncertainty
+   remains, run one focused discriminating check and report whether the
+   reported scenario is covered or remains unresolved. Keep findings about
+   the requested outcome and within the permitted correction boundary.
+   Mutating an existing assertion alone does not challenge its acceptance
+   model. Keep relevant evidence available. No extra round, full gate or second
+   mutation is mandatory;
+   the same focused check may also satisfy the mutation step below.
+   A pure rename or pin-only change requires no invented counterexample.
 6. It is the least thing: name any surplus concretely and treat it
    as a gap to quote.
 
