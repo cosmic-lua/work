@@ -429,12 +429,14 @@ local CSPEC: flags.CommandSpec = {
             .. "— audited repair only"},
           {long = "why", arg = "REASON", help = "why --force was needed"}}}},
     {name = "snapshot", summary = "inspect, summarize, or abandon the local composition",
-      spec = {usage = "[--check | --summary TEXT | --abandon COMMIT] [options]",
+      spec = {usage = "[--check | --summary TEXT | --abandon COMMIT] [--issues] [options]",
         summary = "inspect the one clone-local final-board composition. Set its final human "
         .. "summary before publication, or abandon it only when unpublished or after a "
-        .. "proven conflict (the commit remains retained for recovery).",
+        .. "proven conflict (the commit remains retained for recovery). Pre-existing spec "
+        .. "issues are counted on the report line and listed only under --issues.",
         flags = {dir_flag(),
           {long = "check", help = "validate and preflight the final board"},
+          {long = "issues", help = "list each pre-existing spec issue, not just the count"},
           {long = "summary", arg = "TEXT", help = "replace the final commit summary"},
           {long = "abandon", arg = "COMMIT", help = "retain and clear this conflicted snapshot"}}}},
     {name = "publish", summary = "publish and confirm one final board snapshot",

@@ -191,7 +191,8 @@ local function main(...: string): integer
   end
   if d.command == "snapshot" then
     return snapshot_cli.cmd(s.root, d.parsed.values["summary"] or "",
-      d.parsed.switches["check"] or false, d.parsed.values["abandon"] or "")
+      d.parsed.switches["check"] or false, d.parsed.values["abandon"] or "",
+      d.parsed.switches["issues"] or false)
   end
   if d.command == "next" then
     local who = session.resolve(d.parsed.values["session"])

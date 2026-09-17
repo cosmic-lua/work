@@ -5,7 +5,7 @@ local publication = require("_work.snapshot_publish")
 local workspace = require("_work.snapshot_workspace")
 
 local function cmd(root: string, summary: string, check_only: boolean,
-    abandon: string): integer
+    abandon: string, list_issues: boolean): integer
   if summary ~= "" and (check_only or abandon ~= "") then
     return gate.verdict_line("snapshot", false, "select only one action")
   end
@@ -27,7 +27,11 @@ local function cmd(root: string, summary: string, check_only: boolean,
   if planned == nil then return gate.verdict_line("snapshot", false, perr) end
   print(candidate.commit .. " " .. publication.compact(planned.report))
   for _, issue in ipairs(planned.report.new_issues) do print("new-spec-issue " .. issue) end
-  for _, issue in ipairs(planned.report.existing_issues) do print("existing-spec-issue " .. issue) end
+  if list_issues then
+    for _, issue in ipairs(planned.report.existing_issues) do
+      print("existing-spec-issue " .. issue)
+    end
+  end
   return gate.verdict_line("snapshot", true,
     check_only and "valid final board" or "local composition; publish this commit")
 end

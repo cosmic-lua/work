@@ -369,3 +369,21 @@ local function test_composition_requires_the_canonical_start()
   local tip, err = workspace.compose(s.root, parent, wrong, "session", {}, "wrong")
   assert(tip == nil and err:find("did not start at canonical", 1, true), err)
 end
+
+local function test_snapshot_counts_existing_spec_issues_and_lists_them_under_issues()
+  local a, _b = fixture.init_shared("feedback-snapshot-issues")
+  local owner = claimsession.mint()
+  assert(capture("new", "old gap", "--session", owner, "--dir", a.root) == 0)
+  local seeded = check.must(workspace.read(a.root))
+  assert(capture("publish", seeded.commit, "--dir", a.root) == 0)
+  assert(capture("new", "fresh gap", "--session", owner, "--dir", a.root) == 0)
+  local code, out = capture("snapshot", "--dir", a.root)
+  assert(code == 0 and out:find(" existing-spec-issues=1", 1, true)
+    and out:find(" new-spec-issues=1", 1, true), out)
+  assert(out:find("\nnew-spec-issue ", 1, true), out)
+  assert(not out:find("\nexisting-spec-issue ", 1, true),
+    "default output counts pre-existing issues without listing them: " .. out)
+  code, out = capture("snapshot", "--issues", "--dir", a.root)
+  assert(code == 0 and out:find("\nnew-spec-issue ", 1, true)
+    and out:find("\nexisting-spec-issue ", 1, true), out)
+end
