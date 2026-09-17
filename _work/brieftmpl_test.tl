@@ -328,10 +328,16 @@ fine.
 Mutation-test at least one guard the change adds or relies on: break
 what it guards, confirm the diff's own test catches it — run the ONE
 test file that guards it (`test <file>`), not the suite —
-restore it exactly. A real break changes the outcome the test reads,
-never just the text around it: replace a matched needle with
-unrelated text rather than extending it, flip a boolean rather than
-renaming it, and if the test stays green the guard is decoration.
+restore it exactly. For generated code, mutate the SOURCE, never the
+artifact: if the build rewrites your edit, you mutated an output. A
+green build that regenerated away the mutation is INCONCLUSIVE. After
+a source mutation, the first generator refusal is not a catch: rerun
+after regeneration until the named test assertion actually fails; a
+generator/build refusal does not count. A real break changes the
+outcome the test reads, never just the text around it: replace a
+matched needle with unrelated text rather than extending it, flip a
+boolean rather than renaming it, and if the test stays green the guard
+is decoration.
 Do this from your own fresh checkout at `/wt/work/abcd` — never reuse
 another agent's worktree.
 The checkout that holds the board worktree (`/src/work/o/board/..`) is the

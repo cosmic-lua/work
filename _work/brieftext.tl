@@ -140,8 +140,9 @@ and nothing less:
    diff, not scope creep: say so in the PR body. Run the repo's gate
    locally and confirm it is green ({{.gate_cmd}}). This run is
    for you, to catch a red head before it burns a review round; it is
-   never pasted into the PR. Run `--make coverage` after your last
-   test edit, not before — a new test moves a row's `total`; run
+   never pasted into the PR. The full gate already runs coverage:
+   run it once after your last test edit, never a separate coverage
+   stage — a new test moves a row's `total`; run
    `{{.bootstrap_cmd}}` once before `--check types` on a file whose sibling
    you moved.
 4. Commit the real change before mutation-testing it, so a
