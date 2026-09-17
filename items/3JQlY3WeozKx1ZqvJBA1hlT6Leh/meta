@@ -1,4 +1,6 @@
 title: prose-command gate: check bare backticked verb examples and indented commands after prose
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
+handover_head: 6d4df025424e882b8b4376e06ab28180f90301b3
+builders: 89979854bf513ffb8af1dd1628d2c9bb
 speccers: 2753b98fb6d083201c08a7327e5e67a1 89979854bf513ffb8af1dd1628d2c9bb
