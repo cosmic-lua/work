@@ -1,0 +1,1 @@
+No additional review agent, round, full gate, mandatory second mutation, or speculative search for unrelated bugs. Do not hide relevant evidence from reviewers or require a counterexample for a pure rename or pin-only change. Preserve the rule that findings concern the requested outcome and bounded correction scope.

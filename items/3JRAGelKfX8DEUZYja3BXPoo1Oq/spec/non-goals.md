@@ -1,0 +1,1 @@
+No new review rounds, generic natural-language contradiction detector, change to classifier routing, or enforcement of unrelated prose style. No reimplementation of the PR208/PR210 fixes. Preserve role-specific differences and the existing template registry as the membership authority.

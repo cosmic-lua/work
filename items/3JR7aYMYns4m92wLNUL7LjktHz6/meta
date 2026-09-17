@@ -1,8 +1,10 @@
 title: Activate latest cosmic and gitboard consumer pins
-parent: 3IvHv59hv3R2ACeWQYKqg8GrU1X
+parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/cosmic
 handover_head: 0e07af8bc60fc06d19d7eacdcfc2829e57cef729
 external_url: https://github.com/cosmic-lua/cosmic/pull/1866
 verdict: accept
 verdict_head: 0e07af8bc60fc06d19d7eacdcfc2829e57cef729
+landed_head: 96da34e70c1b20ed9106bec6a0627eb17bfc38f5
+resolution: completed
 builders: cc32ffc6526d9076923e921ef05732bd

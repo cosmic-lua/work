@@ -1,0 +1,1 @@
+No requirement for spec-time pasted commands, counts, or measurements. No new board schema, completion override, extra review round, or blanket test requirement for nonbehavioral edits. Evidence belongs in tests and handoffs; the instruction must not require reproducing an unavailable historical environment before a useful bounded fix can land.
