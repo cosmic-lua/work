@@ -10,9 +10,12 @@ Extend `snippets`:
 
 1. An inline span whose first token is a registered command name
    (`gitcommands.CSPEC.commands`, deprecated ones included) is checked as
-   `gitboard <span>` when it has a second token, or when the span is exactly
-   a deprecated verb's name. A single-token span naming a live verb
-   (`next`, `show`) is prose and is skipped.
+   `gitboard <span>` when a later token is a long `--flag` or an all-uppercase
+   placeholder (`ID`, `SHA`, `X`, `FILE`), or when the span is exactly a
+   deprecated verb's name. A single-token span naming a live verb (`next`,
+   `show`) is prose, and so is a shell line whose first word merely collides
+   with a verb (`set -o pipefail` in the builder brief): neither has a long
+   flag or a placeholder.
 2. A line indented by two or more spaces that starts with `gitboard <word>`
    is a command when `<word>` is a registered name, whatever the previous
    line was; a line whose word after `gitboard` is not a registered name
@@ -21,7 +24,7 @@ Extend `snippets`:
 Keep every existing extraction and `check_command` as they are. Add a
 table-driven unit case over `snippets`/`check_text` covering: a
 bare-backtick example with flags, a bare backticked `sync`, a single live
-verb skipped, an indented command after a prose line, a prose line starting
+verb skipped, `set -o pipefail` skipped, an indented command after a prose line, a prose line starting
 with `gitboard`. The live corpus's bare examples are expected to be valid
 today; one the extended gate turns red is a finding to report in the final
 message, not a wording change to make here.
