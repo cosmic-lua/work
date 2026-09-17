@@ -179,10 +179,19 @@ fine.
    contracts unmoved.
 4. Conventions hold: the repo's AGENTS.md binds. Anything a gate
    should have caught but did not is itself a finding to report.
-5. It serves the outcome: judge the diff against the item's parent
-   chain, not just the letter of `## Change`. A green gate on a
-   change that misses the point means the SPEC was wrong — say so,
-   never wave the diff through.
+5. Challenge the acceptance model before reading the builder's test rationale:
+   derive a plausible failure case from the supplied problem, full spec and
+   parent outcome, then compare it with the diff's actual fixtures, setup
+   steps, exclusions and assertions. If material parent context is missing,
+   report that uncertainty; do not invent it. Where material uncertainty
+   remains, run one focused discriminating check and report whether the
+   reported scenario is covered or remains unresolved. Keep findings about
+   the requested outcome and within the permitted correction boundary.
+   Mutating an existing assertion alone does not challenge its acceptance
+   model. Keep relevant evidence available. No extra round, full gate or second
+   mutation is mandatory;
+   the same focused check may also satisfy the mutation step below.
+   A pure rename or pin-only change requires no invented counterexample.
 6. It is the least thing: name any surplus concretely and treat it
    as a gap to quote.
 
@@ -384,9 +393,20 @@ or fewer than 20 changed lines in total. Four fixed moves, in order:
 1. Confirm you are reading exactly `{{.head_sha}}`. If the caller supplies
    external checks, confirm they name that SHA; red or running means stop and
    record nothing. Never infer check state from the board.
-2. Verify what the spec names against the diff's real effect. A
-   moved number is a finding to quote, not by itself a reason to
-   stop.
+2. Verify what the spec names against the diff's real effect. A moved
+   number alone is no reason to stop. When this changes a behavioral guard,
+   before reading the builder's test rationale, derive a plausible failure
+   case from the supplied problem, full spec and parent outcome; compare it
+   with the actual fixtures, setup steps, exclusions and assertions. Report
+   missing material parent context as uncertainty. Where material uncertainty
+   remains, run one focused discriminating check and report whether the
+   reported scenario is covered or remains unresolved. Keep findings about
+   the requested outcome and within the permitted correction boundary.
+   Mutating an existing assertion alone does not challenge its acceptance
+   model. Keep relevant evidence available. No extra round, full gate or second
+   mutation is mandatory;
+   the same focused check may also satisfy move 3. A pure rename or pin-only
+   change requires no invented counterexample.
 3. Break the guard in a scratch copy: `git show <head>:<file>` the
    file the diff's own test guards into the scratchpad, mutate the
    copy (replace a matched needle with unrelated text, flip a

@@ -42,28 +42,28 @@ local function render(d: briefctx.ReviewScript): string
   -- review_script:43
   local v10: string = d.head_sha
   parts[#parts + 1] = v10
-  parts[#parts + 1] = "`. If the caller supplies\n   external checks, confirm they name that SHA; red or running means stop and\n   record nothing. Never infer check state from the board.\n2. Verify what the spec names against the diff's real effect. A\n   moved number is a finding to quote, not by itself a reason to\n   stop.\n3. Break the guard in a scratch copy: `git show <head>:<file>` the\n   file the diff's own test guards into the scratchpad, mutate the\n   copy (replace a matched needle with unrelated text, flip a\n   boolean — never just reword the text around it), run the diff's\n   own test file against the mutated copy, and watch it refuse.\n4. Record your verdict.\n\nMutation-test at least one guard the change adds or preserves: break\nthe guard in a copy of the file taken with `git show <head>:<path>`,\nnever in a worktree, and confirm the refusal.\nFor generated code, mutate the SOURCE, never the artifact: if the build\nrewrites your edit, you mutated an output. A green build that regenerated\naway the mutation is INCONCLUSIVE. After a source mutation, the first\ngenerator refusal is not a catch: rerun after regeneration until the named\ntest assertion actually fails; a generator/build refusal does not count.\n\n## Recording your verdict\n\nYou do not run `verdict` — no spawned agent runs a board verb. The caller\nrecords your verdict with `verdict ID KIND --head SHA --session S`, which\nverifies and records one local commit id. It performs no fetch,\ncredential lookup, check read, merge, or provider write. The caller owns\nthose operations, and so does watching them: never poll or subscribe to a\nprovider event yourself. Read the diff with `git fetch origin <branch>` and\n`git show <head>:<path>` in the product checkout at `"
-  -- review_script:73
+  parts[#parts + 1] = "`. If the caller supplies\n   external checks, confirm they name that SHA; red or running means stop and\n   record nothing. Never infer check state from the board.\n2. Verify what the spec names against the diff's real effect. A moved\n   number alone is no reason to stop. When this changes a behavioral guard,\n   before reading the builder's test rationale, derive a plausible failure\n   case from the supplied problem, full spec and parent outcome; compare it\n   with the actual fixtures, setup steps, exclusions and assertions. Report\n   missing material parent context as uncertainty. Where material uncertainty\n   remains, run one focused discriminating check and report whether the\n   reported scenario is covered or remains unresolved. Keep findings about\n   the requested outcome and within the permitted correction boundary.\n   Mutating an existing assertion alone does not challenge its acceptance\n   model. Keep relevant evidence available. No extra round, full gate or second\n   mutation is mandatory;\n   the same focused check may also satisfy move 3. A pure rename or pin-only\n   change requires no invented counterexample.\n3. Break the guard in a scratch copy: `git show <head>:<file>` the\n   file the diff's own test guards into the scratchpad, mutate the\n   copy (replace a matched needle with unrelated text, flip a\n   boolean — never just reword the text around it), run the diff's\n   own test file against the mutated copy, and watch it refuse.\n4. Record your verdict.\n\nMutation-test at least one guard the change adds or preserves: break\nthe guard in a copy of the file taken with `git show <head>:<path>`,\nnever in a worktree, and confirm the refusal.\nFor generated code, mutate the SOURCE, never the artifact: if the build\nrewrites your edit, you mutated an output. A green build that regenerated\naway the mutation is INCONCLUSIVE. After a source mutation, the first\ngenerator refusal is not a catch: rerun after regeneration until the named\ntest assertion actually fails; a generator/build refusal does not count.\n\n## Recording your verdict\n\nYou do not run `verdict` — no spawned agent runs a board verb. The caller\nrecords your verdict with `verdict ID KIND --head SHA --session S`, which\nverifies and records one local commit id. It performs no fetch,\ncredential lookup, check read, merge, or provider write. The caller owns\nthose operations, and so does watching them: never poll or subscribe to a\nprovider event yourself. Read the diff with `git fetch origin <branch>` and\n`git show <head>:<path>` in the product checkout at `"
+  -- review_script:84
   local v11: string = d.product_root
   parts[#parts + 1] = v11
   parts[#parts + 1] = "`; you\ncreate no worktree. This review is claimed under session `"
-  -- review_script:74
+  -- review_script:85
   local v12: string = d.review_session
   parts[#parts + 1] = v12
   parts[#parts + 1] = "`\n— you MUST use that exact string. If this checkout has no `o/3p` cache yet, run\n"
-  -- review_script:76
+  -- review_script:87
   local v13: string = d.bootstrap_phrase
   parts[#parts + 1] = v13
   parts[#parts + 1] = "\n\nYour final report carries exactly one verdict line, in this fixed envelope,\nand your findings follow it:\n\n```\nverdict: accept|request-changes|reject head="
-  -- review_script:82
+  -- review_script:93
   local v14: string = d.head_sha
   parts[#parts + 1] = v14
   parts[#parts + 1] = " session="
-  -- review_script:82
+  -- review_script:93
   local v15: string = d.review_session
   parts[#parts + 1] = v15
   parts[#parts + 1] = "\n```\n\nWrite exactly the one kind matching your judgment. The board stores the SHA,\nnot review prose. Put concrete gaps in your final report for the caller. An\naccept does not merge or complete the item; after landing, the caller runs\n`done "
-  -- review_script:88
+  -- review_script:99
   local v16: string = d.item_id
   parts[#parts + 1] = v16
   parts[#parts + 1] = " --landed SHA`.\n\n## Final report\n\nThe verdict you recorded (or why you could not), the mutation-test\nyou ran and its result, and any concrete findings quoted with\nfile:line. Keep it factual and concise.\n\nA request-changes verdict names five labeled facts, not a fix: the\nexact reproducer; the smallest permitted correction boundary; the\ntempting unsafe repair, when one is visible; the adjacent invariant\nthat repair could violate; and the focused regression plus every\nnamed boundary guard the corrected head must rerun. Do not design\nthe correction: when no safe envelope is established, name the\nuncertainty and let the rework builder bounce rather than widening\nscope to find one.\n"

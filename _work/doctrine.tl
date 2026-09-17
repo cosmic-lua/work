@@ -245,9 +245,9 @@ to cover a finding.
     body = [[
 Nothing merges without a verdict from a review at a DISTANCE from
 the builder: a subagent whose context window never held the build.
-Its brief carries the item id, the exact handed-over commit, and the process — not
-the builder's reasoning, and not a summary of intent, which would
-hand back the commitment a fresh window exists to be without. Claim
+Its brief carries the item id, full spec, immutable review range and process.
+Keep relevant evidence available; derive the acceptance case before reading
+the builder's test rationale, not by hiding it. Claim
 the item under a fresh `gitboard session new` identity BEFORE
 spawning the reviewing agent — `brief review ID` refuses outright when
 the item carries no active claim, or when the claim belongs to the
@@ -274,10 +274,18 @@ a review that only reads has verified nothing:
    spec states untouched.
 4. Conventions hold — the repo's AGENTS.md binds; anything a gate
    should have caught but did not is itself a finding to file.
-5. It serves the outcome — walk the parent chain to the outcome and
-   judge the diff against it. A green gate on a change that misses
-   the point means the SPEC was wrong: fix the spec, never wave the
-   diff through.
+5. Challenge the acceptance model before reading the builder's test rationale:
+   derive a plausible failure case from the supplied problem, full spec and
+   parent outcome; compare actual fixtures, setup steps, exclusions and
+   assertions. Report missing material parent context as uncertainty. Where
+   material uncertainty remains, run one focused discriminating check and
+   report whether the reported scenario is covered or remains unresolved.
+   Findings concern the requested outcome and bounded correction scope.
+   Apply this proportionately to mechanical changes to a behavioral guard;
+   pure renames and pin-only changes need no invented counterexample.
+   Mutating an existing assertion alone is insufficient; the same check may
+   serve both steps, with no extra round, full gate or mandatory second mutation.
+   Research review retains its measured-claim evidence reproduction.
 6. It is the least thing — name any surplus concretely (a helper
    with one caller, generality nobody asked for) and have it
    removed before merge.
