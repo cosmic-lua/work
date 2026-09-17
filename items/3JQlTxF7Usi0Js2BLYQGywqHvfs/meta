@@ -2,5 +2,7 @@ title: review briefs: the reviewer reports a verdict envelope and the caller rec
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
 handover_head: b62e35b11fa60dde126dca21eee0fc5d64ad518f
+verdict: accept
+verdict_head: b62e35b11fa60dde126dca21eee0fc5d64ad518f
 builders: ce98f75e8143deb1280a8bed94888174
 speccers: 2753b98fb6d083201c08a7327e5e67a1
