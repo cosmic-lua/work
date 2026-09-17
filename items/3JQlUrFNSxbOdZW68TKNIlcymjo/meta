@@ -1,4 +1,6 @@
 title: builder brief: the full gate already runs coverage; review brief: mutate the source of generated code
 parent: 3IvL3Om3O0G4wl3qhBbOhr9FVlS
 repo: cosmic-lua/work
+handover_head: ee6517a1b26ac294565d86d6bf69fa792a9bbc1e
+builders: 5cd241d4815564351a08f330accac82d
 speccers: 2753b98fb6d083201c08a7327e5e67a1
