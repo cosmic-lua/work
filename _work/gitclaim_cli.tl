@@ -64,11 +64,14 @@ end
 
 --- Whether `local_sha` is a strict ancestor of `tracking`'s current value —
 --- the shape a checkout whose local target branch never fast-forwarded past
---- an upstream advance takes. Returns "" (nothing wrong) when the branch
---- is truly local or the two already agree. Missing upstream configuration
---- with fetched target refs, or a missing configured ref, refuses verification.
---- A non-"" candidate value names what the tracking ref
---- currently resolves to, for the caller to act on.
+--- an upstream advance takes. The comparison is against the tracking ref
+--- AS LAST FETCHED: it makes no network call, so a clone nothing has
+--- fetched since cloning, whose branch and tracking ref agree and are both
+--- behind the remote, reads as current here. Returns "" (nothing wrong)
+--- when the branch is truly local or the two already agree. Missing
+--- upstream configuration with fetched target refs, or a missing configured
+--- ref, refuses verification. A non-"" candidate value names what the
+--- tracking ref currently resolves to, for the caller to act on.
 local function stale_target(root: string, base: string,
     local_sha: string): string, string
   local tracking, terr = tracking_ref(root, base)
@@ -103,25 +106,33 @@ local function stale_target(root: string, base: string,
   return remote_sha, ""
 end
 
---- Fetch the branch's configured remote and fast-forward the local branch to
---- match, only ever moving it to a value the fetch itself proves current.
---- Requires the branch's tracking configuration to name a remote (an
---- explicit `--repo-dir`/mapping override with no such configuration cannot
---- be resolved this way).
-local function fetch_forward(root: string, base: string, local_sha: string,
-    expected: string): string | nil, string
+--- Fetch the branch's configured remote, so the tracking ref `stale_target`
+--- compares against is current rather than as last fetched. Requires the
+--- branch's tracking configuration to name a remote (an explicit
+--- `--repo-dir`/mapping override with no such configuration cannot be
+--- resolved this way). A fetch that recreates a locally missing tracking
+--- ref is the intended outcome, not a bypass: the ref is verified after.
+local function fetch_remote(root: string, base: string): boolean, string
   local remote_r, err = child.run({"git", "config", "--local", "--get",
       "branch." .. base .. ".remote"}, {cwd = root})
-  if remote_r == nil then return nil, err end
+  if remote_r == nil then return false, err end
   if not remote_r.ok then
-    return nil, ("%s has no configured remote to fetch"):format(base)
+    return false, ("%s has no configured remote to fetch"):format(base)
   end
   local remote = remote_r.stdout:gsub("%s+$", "")
   local fetched = child.run({"git", "fetch", remote}, {cwd = root})
   if fetched == nil or not fetched.ok then
-    return nil, ("git fetch %s failed: %s"):format(remote,
+    return false, ("git fetch %s failed: %s"):format(remote,
       fetched ~= nil and fetched.stderr or "could not run git")
   end
+  return true, ""
+end
+
+--- Fast-forward the local branch to its tracking ref, only ever moving it
+--- to a value the fetch that just ran proves current: the tracking ref must
+--- still descend from `expected`, the candidate the comparison saw.
+local function fast_forward(root: string, base: string, local_sha: string,
+    expected: string): string | nil, string
   local tracking, terr = tracking_ref(root, base)
   if tracking == nil or tracking == "" then
     return nil, terr ~= "" and terr or ("%s lost its tracking configuration"):format(base)
@@ -171,9 +182,11 @@ end
 
 --- Product base recorded by an acquisition. Repo-less work uses the board
 --- item commit itself; ordinary work uses an already-fetched product base.
---- A local target branch behind its own configured remote-tracking ref is
---- never captured silently: it is refused with the exact commands that
---- resolve it, unless `fetch_base` explicitly authorizes running them here.
+--- A local target branch behind its own configured remote-tracking ref, as
+--- last fetched, is never captured silently: it is refused with the exact
+--- commands that resolve it, unless `fetch_base` explicitly authorizes
+--- running them here — in which case the fetch runs FIRST, before the
+--- comparison, so a clone nothing has fetched since cloning is caught too.
 --- An item already carrying a recorded handover additionally requires the
 --- resolved base to still reach it, so a review claim never recaptures a
 --- base the handover cannot descend from (see `handover_ancestry_refusal`).
@@ -200,18 +213,23 @@ local function product_base(s: store.Store, it: item.Item, _source_ref: string,
   local base = default_base(it.repo, it.base or "")
   local local_sha, lerr = rev_commit(root, "refs/heads/" .. base)
   if local_sha == nil then return nil, lerr end
+  if fetch_base then
+    local fetched, ferr = fetch_remote(root, base)
+    if not fetched then return nil, ferr end
+  end
   local candidate, serr = stale_target(root, base, local_sha)
   if serr ~= "" then return nil, serr end
   local resolved = local_sha
   if candidate ~= "" then
     if not fetch_base then
-      return nil, ("local %s (%s) is behind its tracking ref (%s) — run "
-        .. "`git -C %s fetch` then `git -C %s update-ref refs/heads/%s %s`, "
-        .. "or re-run claim with --fetch-base to do it here"):format(
+      return nil, ("local %s (%s) is behind its tracking ref (%s) as last "
+        .. "fetched — run `git -C %s fetch` then `git -C %s update-ref "
+        .. "refs/heads/%s %s`, or re-run claim with --fetch-base to fetch "
+        .. "before comparing and fast-forward here"):format(
         base, local_sha:sub(1, 12), candidate:sub(1, 12), root, root, base,
         candidate)
     end
-    local forwarded, ferr = fetch_forward(root, base, local_sha, candidate)
+    local forwarded, ferr = fast_forward(root, base, local_sha, candidate)
     if forwarded == nil then return nil, ferr end
     resolved = forwarded
   end
