@@ -57,3 +57,14 @@ local function test_examples_are_neither_phrases_nor_anchors()
   assert(#direction.hints(prose) == 0, "only Change is scanned")
   assert(#direction.hints({change = "all callers", non_goals = "src/work.tl"}) == 1)
 end
+
+local function test_unquoted_anchor_shapes()
+  local claim = "All callers already know; the caller has it. "
+  for _, plain in ipairs({"and/or", "new/show", "cosmic-lua/work", "e.g.", "i.e.", "a_b"}) do
+    assert(#direction.hints({change = claim .. plain}) == 2, "does not anchor: " .. plain)
+  end
+  for _, anchor in ipairs({"_work/x.tl", "docs/guide.md", "spec.ready_gaps",
+      "ready_gaps", "`verb`"}) do
+    assert(#direction.hints({change = claim .. anchor}) == 0, "anchors: " .. anchor)
+  end
+end
