@@ -68,3 +68,57 @@ local function test_unquoted_anchor_shapes()
     assert(#direction.hints({change = claim .. anchor}) == 0, "anchors: " .. anchor)
   end
 end
+
+-- Whole Change examples chosen for their meaning, not harvested from hints.
+-- PR211's token-level slash/abbreviation regressions above stay intact; these
+-- pair realistic unanchored prose with pointers and quoted counterexamples.
+local record DirectionCase
+  label: string
+  change: string
+  phrases: {string}
+end
+
+local function test_independent_change_decision_corpus()
+  local cases: {DirectionCase} = {
+    {label = "ordinary slash prose cannot supply direction",
+      change = "Update all callers to show read/write status and pass/fail results. "
+      .. "The caller has it after review.", phrases = {"all callers", "the caller has it"}},
+    {label = "abbreviations cannot supply direction",
+      change = "Each template must show the same status, e.g. pending, i.e. not finished. "
+      .. "The caller already records the result.", phrases = {"each template", "already records"}},
+    {label = "actual scanner source pointer",
+      change = "Update all callers of the scanner in _work/direction.tl. "
+      .. "The caller already knows the result.", phrases = {}},
+    {label = "actual doctrine pointer across paragraphs",
+      change = "Every template must carry the same direction.\n\n"
+      .. "Use _work/doctrine_bar.tl for the wording.", phrases = {}},
+    {label = "explicit set names the reach",
+      change = "Update all templates. Set Templates: builder, reviewer.", phrases = {}},
+    {label = "quoted source is only an example",
+      change = 'Update every template; the caller has it. The example says '
+      .. '"inspect _work/direction.tl".', phrases = {"every template", "the caller has it"}},
+    {label = "blockquoted source is only an example",
+      change = "All callers must expose the status.\n> Inspect _work/spec.tl.\n"
+      .. "The caller already recorded the decision.", phrases = {"all callers", "already recorded"}},
+    {label = "fenced pointer cannot hide following instruction",
+      change = "Example:\n~~~~tl\n_work/direction.tl\n~~~~\n"
+      .. "Update every spawned agent; the caller has it.",
+      phrases = {"every spawned agent", "the caller has it"}},
+    {label = "quoted family does not add a second hint",
+      change = 'Update all callers. Replace the words "the caller has it" in the example.',
+      phrases = {"all callers"}},
+    {label = "inline example does not become an instruction",
+      change = "Explain why `all callers already knows` is vague.", phrases = {}},
+    {label = "ordinary change outside bounded phrase policy",
+      change = "Show a helpful status for each operation and preserve the current output.", phrases = {}},
+  }
+  for _, case in ipairs(cases) do
+    local parsed = check.must(spec.split("## Change\n" .. case.change .. "\n"))
+    local hints = direction.hints(parsed)
+    assert(#hints == #case.phrases, "independent direction decision: " .. case.label)
+    for i, phrase in ipairs(case.phrases) do
+      assert(hints[i]:find('"' .. phrase .. '"', 1, true) ~= nil,
+        "independent direction phrase: " .. case.label .. ": " .. phrase)
+    end
+  end
+end
