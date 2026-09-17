@@ -25,15 +25,26 @@ local REVIEW < const > = flat(brieftext_review.REVIEW)
 local REVIEW_SCRIPT < const > = flat(brieftext_review.REVIEW_SCRIPT)
 local POSTURE_DIFF < const > = flat(brieftext_review.POSTURE_DIFF)
 
+-- The generated-code clause of the mutation step, carried by the
+-- builder brief and the diff-review posture alike.
+local GENERATED_CLAUSE < const > =
+"For generated code, mutate the SOURCE, never the artifact: "
+.. "if the build rewrites your edit, you mutated an output. "
+.. "A green build that regenerated away the mutation is INCONCLUSIVE. "
+.. "After a source mutation, the first generator refusal is not a catch: "
+.. "rerun after regeneration until the named test assertion actually "
+.. "fails; a generator/build refusal does not count."
+
 local function test_builder_requires_generated_source_mutation_and_assertion_failure()
-  assert(BUILDER:find(
-      "For generated code, mutate the SOURCE, never the artifact: "
-      .. "if the build rewrites your edit, you mutated an output. "
-      .. "A green build that regenerated away the mutation is INCONCLUSIVE. "
-      .. "After a source mutation, the first generator refusal is not a catch: "
-      .. "rerun after regeneration until the named test assertion actually "
-      .. "fails; a generator/build refusal does not count.", 1, true) ~= nil,
+  assert(BUILDER:find(GENERATED_CLAUSE, 1, true) ~= nil,
     "generated-code mutation must reach the named test assertion, not stop at regeneration")
+end
+
+local function test_diff_review_requires_generated_source_mutation_and_assertion_failure()
+  assert(POSTURE_DIFF:find(GENERATED_CLAUSE, 1, true) ~= nil,
+    "the diff posture's mutation paragraph must carry the builder's "
+    .. "generated-code clause: mutate the source, a regenerating build is "
+    .. "inconclusive, rerun past the generator's first refusal")
 end
 
 local function test_builder_requires_a_committed_migration_and_caller_report()
@@ -294,15 +305,18 @@ local function test_step_three_names_the_new_module_ratchets()
     .. "and doc_returns_test")
 end
 
-local function test_step_three_orders_coverage_after_the_last_test_edit()
+local function test_step_three_runs_coverage_through_the_gate_after_the_last_test_edit()
   assert(BUILDER:find(
-      "Run `--make coverage` after your last test edit, not before — "
-      .. "a new test moves a row's `total`; run `{{.bootstrap_cmd}}` once "
-      .. "before `--check types` on a file whose sibling you moved.",
-      1, true) ~= nil,
-    "step 3 must say to run --make coverage after the last test edit, "
-    .. "not before, and the resolved bootstrap command once before "
-    .. "--check types on a file whose sibling moved")
+      "The full gate already runs coverage: run it once after your last "
+      .. "test edit, never a separate coverage stage — a new test moves a "
+      .. "row's `total`; run `{{.bootstrap_cmd}}` once before `--check types` "
+      .. "on a file whose sibling you moved.", 1, true) ~= nil,
+    "step 3 must say the full gate runs coverage, so run it once after "
+    .. "the last test edit and never a separate coverage stage, keep the "
+    .. "note that a new test moves a row, and name the resolved bootstrap "
+    .. "command once before --check types on a file whose sibling moved")
+  assert(BUILDER:find("--make coverage", 1, true) == nil,
+    "step 3 must not send a builder to a separate coverage stage")
 end
 
 -- The numbered-script review's mutation move is checkout-free — a
