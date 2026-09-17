@@ -120,11 +120,13 @@ local function mutation_contract(role: string, body: string, mode: string)
   require_text(role, body, "a generator/build refusal does not count")
 end
 
+local CALLER_TAKE < const > = "so it can fetch/push it and run `take item-contract --head SHA [--url URL]` itself"
+
 local function board_contract(role: string, body: string)
   assert(not has(body, "CALLER_INVOCATION_MUST_NOT_RENDER"), role .. " renders caller invocation")
   if role:match("^builder") then
     require_text(role, body, "Do NOT run any `gitboard` command")
-    require_text(role, body, "so it can fetch/push it and run `take item-contract --head SHA [--url URL]` itself")
+    require_text(role, body, CALLER_TAKE)
   elseif role:match("^review") then
     require_text(role, body, "You do not run `verdict`")
     require_text(role, body, "The caller records your verdict")
@@ -150,6 +152,13 @@ local function gate_contract(role: string, body: string, mode: string)
 end
 
 local function no_conflicts(role: string, body: string)
+  -- Exempt only the caller-attributed example, not other builder take commands.
+  if role:match("^builder") then
+    local first, last = body:find(CALLER_TAKE, 1, true)
+    if first and last then
+      body = body:sub(1, first - 1) .. body:sub(last + 1)
+    end
+  end
   -- Bounded historical/tempting counterinstructions, not a prose classifier.
   for _, forbidden in ipairs({"mutate the artifact", "mutate the generated output",
       "a generator/build refusal counts", "regenerated away the mutation is conclusive",
@@ -159,10 +168,7 @@ local function no_conflicts(role: string, body: string)
       "run `bin/gitboard help bar`", "Run `bin/gitboard help bar`",
       "Run `gitboard take", "Run `gitboard verdict", "Run `gitboard spec",
       "run `take item-contract", "run `verdict item-contract"}) do
-    -- Builder's caller-attributed take sentence is a legitimate example.
-    if forbidden ~= "run `take item-contract" or not role:match("^builder") then
-      assert(not has(body, forbidden), role .. " conflicting workflow instruction: " .. forbidden)
-    end
+    assert(not has(body, forbidden), role .. " conflicting workflow instruction: " .. forbidden)
   end
 end
 
