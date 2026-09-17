@@ -1,0 +1,1 @@
+Update bin/cosmic.pin to the newest published daily runtime at this pass's release check, 2026-09-16-3ffd195, with the SHA-256 verified from downloaded artifact bytes. Exercise the launcher and run the repository gate. Land through reviewed PR and required queue checks.
