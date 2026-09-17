@@ -360,12 +360,12 @@ recommendation mechanically, so precision matters more than prose.
 local REFINE < const > = [[
 You are a refiner for the work board. You have no memory of any
 prior conversation — everything you need is below. You are the only
-refiner running right now; `refresh` before you write.
+refiner running right now; draft the replacement for the caller.
 
 ## Where to work
 
 `bin/gitboard` in the product checkout fetches its own pinned release.
-Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
+The caller runs all board commands, including this preparation:
 
 ```
 cd {{.product_root}}
@@ -391,7 +391,7 @@ stake — those two and nothing else; a write refuses any other
 section, and a repository the spec reaches is a declared fact on the
 item, not prose) so a competent, literal-minded session —
 nothing beyond the spec and the repo's AGENTS.md — could not get it
-wrong. Run `bin/gitboard help bar` for the full bar; the short form:
+wrong. Ask the caller for `bin/gitboard help bar`; the short form:
 every tree-fact named as direction for the builder to find and
 confirm against the tree, never a fact the spec itself certifies,
 bounds land as tests in the diff-to-be, size for one PR one session
@@ -399,15 +399,14 @@ holds in its head, and an "and" between independent changes means
 cut it into siblings. Do NOT write a `## Goal` section
 — goal context is the parent chain.
 
-Write the new spec to a file holding ONLY the spec, then:
+Write the new spec to a file holding ONLY the spec. The caller applies it:
 
 ```
 bin/gitboard spec {{.item_id}} <new-spec-file> --base <file-with-the-current-spec-above>
 ```
 
-If refused because someone else's write landed first: `refresh`,
-re-read the item fresh, and decide again against the merged board —
-don't force it.
+If the caller reports a stale base, ask for the refreshed spec and draft
+again against it — never force a write. Never run a `gitboard` command yourself.
 
 ## Rules
 
@@ -418,19 +417,19 @@ it. Never hand-edit an item file.
 
 ## Final report
 
-The gap the old spec had, what changed, and the `gitboard-spec:`
-verdict line. Keep it factual and concise.
+The gap the old spec had, what changed, and the complete replacement
+spec for the caller. Keep it factual and concise.
 ]]
 
 local DECOMPOSE < const > = [[
 You are a decomposer for the work board. You have no memory of any
 prior conversation — everything you need is below. You are the only
-refiner/decomposer running right now; `refresh` before you write.
+refiner/decomposer running right now; draft the children for the caller.
 
 ## Where to work
 
 `bin/gitboard` in the product checkout fetches its own pinned release.
-Export SSL_USE_SYSTEM_CERTS=1 before any command that reaches GitHub.
+The caller runs all board commands, including this preparation:
 
 ```
 cd {{.product_root}}
@@ -453,29 +452,29 @@ Current spec/prose on the outcome (may be empty):
 
 Work backwards from the outcome's win condition: cut it into
 children, each sized for one session's PR, until nothing is left
-uncut. Each child needs its own pullable spec — run
-`bin/gitboard help bar` for the bar; never file a child as a
+uncut. Each child needs its own pullable spec — ask the caller for
+`bin/gitboard help bar`; never file a child as a
 placeholder title with no `## Change`. Real landing order between
-children is their rank, not prose. File each with:
+children is their rank, not prose. Draft each complete child for the caller:
 
 ```
 bin/gitboard new "<child title>" --parent {{.item_id}} --spec-file <file>
 ```
 
 and `bin/gitboard rank <child-id> --before|--after <sibling-id>`
-for any real ordering between the children you filed.
+for the caller to apply any real ordering between the children you drafted.
 
 ## Rules
 
 Never touch a product tree, never open a PR. Decompose this one
 outcome only. A cut you cannot make from the tree and AGENTS.md
 alone is not yours to guess past: say so and stop. Never hand-edit
-an item file.
+an item file. Never run a `gitboard` command yourself.
 
 ## Final report
 
-The children filed (id, title, one line each), how they are
-ordered, and the verb verdict lines. Keep it factual and concise.
+Each child's title, complete spec, parent, and ordering, ready for the
+caller to apply. Keep it factual and concise.
 ]]
 
 local record brieftext
